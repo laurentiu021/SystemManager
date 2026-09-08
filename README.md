@@ -1052,8 +1052,10 @@ offers, "rate us" prompts:
   SysManager accepts command-line flags and runs headless (no window), writing its
   output to the launching console
 - Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup,
-  never follows junctions), `--trim-ram` (purge the standby list), plus `--version`,
-  `--help`, and `--list`
+  never follows junctions), `--purge-standby` (purge the standby list), plus `--version`,
+  `--help`, and `--list`. `--trim-ram` still works as an alias for `--purge-standby`,
+  so an existing scheduled task keeps running; new scripts should use the current name,
+  which says which of the two memory operations it is
 - `--json` emits machine-readable output; `--silent` suppresses chatter for
   scripting; conventional **exit codes** (0 success · 1 error · 2 usage) let a script
   branch on the result

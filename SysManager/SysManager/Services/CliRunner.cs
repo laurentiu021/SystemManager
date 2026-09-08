@@ -33,7 +33,14 @@ public sealed class CliRunner
     // route to their own startup branches and never get treated as a CLI command.
     private static readonly HashSet<string> CliVerbs = new(StringComparer.OrdinalIgnoreCase)
     {
-        "--help", "-h", "-?", "/?", "--version", "-v", "--list", "--health", "--cleanup", "--trim-ram",
+        "--help", "-h", "-?", "/?", "--version", "-v", "--list", "--health", "--cleanup",
+        // --trim-ram is a RETAINED ALIAS, not a second verb: a maintenance schedule registered before the
+        // rename has "--trim-ram --silent" baked into a Windows scheduled task's argument string on the
+        // user's machine (#1524). The arm in Parse is what keeps it working; this list does not, because
+        // IsCliToken below also accepts anything starting with - or /, which every entry here does. So
+        // the set decides nothing it is asked and reads as an allowlist it is not — worth removing on its
+        // own rather than inside a rename. Do not add a verb here and assume that made it work.
+        "--purge-standby", "--trim-ram",
     };
 
     // Internal startup sentinels that LOOK like CLI flags but are handled by their own
@@ -82,7 +89,8 @@ public sealed class CliRunner
                 case "--list": command = Pick(command, CliCommand.List); break;
                 case "--health": command = Pick(command, CliCommand.Health); break;
                 case "--cleanup": command = Pick(command, CliCommand.Cleanup); break;
-                case "--trim-ram": command = Pick(command, CliCommand.TrimRam); break;
+                case "--purge-standby" or "--trim-ram":
+                    command = Pick(command, CliCommand.PurgeStandby); break;
                 default:
                     // An unrecognized option flag is a usage error; bare tokens are ignored.
                     if (arg.StartsWith('-') || arg.StartsWith('/'))
@@ -108,7 +116,8 @@ public sealed class CliRunner
         ("--list", "List the available CLI commands."),
         ("--health", "Print a system health score (read-only)."),
         ("--cleanup", "Delete temporary files from user and Windows TEMP (safe, never follows junctions)."),
-        ("--trim-ram", "Purge the standby memory list (non-destructive; needs administrator)."),
+        ("--purge-standby", "Purge the standby memory list (non-destructive; needs administrator). "
+                          + "Also accepted as --trim-ram, its former name."),
         ("--json", "Modifier: emit machine-readable JSON instead of text."),
         ("--silent, -s", "Modifier: suppress non-essential output."),
     ];
@@ -126,7 +135,7 @@ public sealed class CliRunner
             CliCommand.Version => new CliResult(CliResult.Ok, request.Json ? Json(new { version = Version }) : Version),
             CliCommand.Health => await RunHealthAsync(request, ct).ConfigureAwait(false),
             CliCommand.Cleanup => await RunCleanupAsync(request, ct).ConfigureAwait(false),
-            CliCommand.TrimRam => RunTrimRam(request),
+            CliCommand.PurgeStandby => RunPurgeStandby(request),
             CliCommand.Unknown => new CliResult(CliResult.UsageError, request.Json
                 ? Json(new { error = $"Unknown option '{request.UnknownArg}'." })
                 : $"Unknown option '{request.UnknownArg}'.\n\n{BuildHelp(false)}"),
@@ -174,13 +183,13 @@ public sealed class CliRunner
         }
     }
 
-    private static CliResult RunTrimRam(CliRequest request)
+    private static CliResult RunPurgeStandby(CliRequest request)
     {
         var svc = new StandbyMemoryService();
         var before = svc.GetMemoryStatus();
         bool ok = svc.TryPurgeStandbyList(out var error);
         if (!ok)
-            return new CliResult(CliResult.Error, request.Json ? Json(new { error }) : $"Standby trim failed: {error}");
+            return new CliResult(CliResult.Error, request.Json ? Json(new { error }) : $"Standby purge failed: {error}");
 
         var after = svc.GetMemoryStatus();
         return request.Json

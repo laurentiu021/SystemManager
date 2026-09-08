@@ -251,6 +251,25 @@ public sealed class SafetyLevelToTextConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Maps a <see cref="MaintenanceAction"/> to the plain-language label the user should see.
+/// </summary>
+/// <remarks>
+/// The Scheduled Maintenance action picker binds a list of enum values, so without this it rendered
+/// each one's <c>ToString()</c> — the dropdown offered "Cleanup" and "TrimRam" while the confirmation
+/// dialog that followed said "Purge standby memory" (#1524). Delegates to
+/// <see cref="MaintenanceSchedule.LabelFor"/> so the picker and the dialog cannot disagree; the label
+/// text itself lives in the model, once.
+/// </remarks>
+public sealed class MaintenanceActionToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is MaintenanceAction action ? MaintenanceSchedule.LabelFor(action) : "Unknown";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 // ── Process provenance (Process Manager) ─────────────────────────────────────────────────────
 // Deliberately SEPARATE from the SafetyLevel* converters above. Those switch on the
 // Models.SafetyLevel enum (Safe/Caution/Critical) used by Services and Windows Features;

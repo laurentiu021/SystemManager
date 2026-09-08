@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.5] - 2026-09-08
+
+Scheduled Maintenance offered you "TrimRam" in its dropdown and then asked you to confirm "Purge standby
+memory" — two names, one step apart, for the same thing. Worse, "Trim RAM" is the name of a *different*
+button in Performance Mode that does a different job, so scheduling it looked like scheduling that.
+
+### Changed
+- **The Scheduled Maintenance dropdown now reads "Clean temporary files" and "Purge standby memory"**,
+  which is what the confirmation has always said. It was showing internal names.
+- **The command line calls it `--purge-standby`**, because that is what it does. `--trim-ram` still works,
+  so any schedule you already set keeps running — but the two memory features now have two names. Purging
+  the standby list needs administrator rights; Performance Mode's Trim RAM does not, and the old shared
+  name hid that difference.
+
+### Added
+- **Checks that a picker cannot show internal names again**, and that an action's command line is one the
+  app actually recognises — the failure being a nightly task that runs, reports success, and does nothing.
+
 ## [1.78.4] - 2026-09-08
 
 Ten places in SysManager updated the screen by handing the work to the window and then standing still until

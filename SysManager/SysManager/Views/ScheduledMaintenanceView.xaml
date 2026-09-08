@@ -74,8 +74,18 @@
                 <WrapPanel Orientation="Horizontal">
                     <StackPanel Margin="0,0,20,12">
                         <TextBlock Text="ACTION" Style="{StaticResource SectionLabel}"/>
+                        <!-- ItemTemplate, so the list shows the plain-language label instead of each
+                             enum value's ToString(). Without it the dropdown read "Cleanup" and
+                             "TrimRam" while the confirmation dialog that followed said "Purge standby
+                             memory" — two names for one thing, one step apart. -->
                         <ComboBox ItemsSource="{Binding Actions}" SelectedItem="{Binding SelectedAction}"
-                                  Width="200" Margin="0,4,0,0" AutomationProperties.Name="Maintenance action"/>
+                                  Width="200" Margin="0,4,0,0" AutomationProperties.Name="Maintenance action">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Converter={StaticResource MaintenanceActionText}}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
                     <StackPanel Margin="0,0,20,12">
                         <TextBlock Text="FREQUENCY" Style="{StaticResource SectionLabel}"/>

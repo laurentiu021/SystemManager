@@ -560,7 +560,8 @@ Key services:
   two reads let a setting move in between and appear settled while it had changed.
 - `CliRunner` — the headless command-line entry point (dispatched from `App.OnStartup`
   before the single-instance mutex, attaching to the parent console). Exposes only
-  read-only/safe verbs (`--health`, `--cleanup`, `--trim-ram`, `--version/--help/--list`)
+  read-only/safe verbs (`--health`, `--cleanup`, `--purge-standby` — with `--trim-ram`
+  retained as an alias for schedules registered under the old name — `--version/--help/--list`)
   with `--json`/`--silent` modifiers and conventional exit codes (0/1/2). `Parse` and
   `ExecuteAsync` are pure/return-value-based, so the whole CLI is unit-tested without
   launching the process; `IsCliInvocation` is strict so the elevation/update-applier args

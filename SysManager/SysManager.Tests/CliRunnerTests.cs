@@ -24,9 +24,30 @@ public class CliRunnerTests
     [InlineData("--list", CliCommand.List)]
     [InlineData("--health", CliCommand.Health)]
     [InlineData("--cleanup", CliCommand.Cleanup)]
-    [InlineData("--trim-ram", CliCommand.TrimRam)]
+    [InlineData("--purge-standby", CliCommand.PurgeStandby)]
     public void Parse_RecognizesVerbs(string arg, CliCommand expected)
         => Assert.Equal(expected, CliRunner.Parse([arg]).Command);
+
+    /// <summary>
+    /// <c>--trim-ram</c> still resolves to the standby purge. This is a compatibility promise, not a
+    /// duplicate of the row above.
+    /// </summary>
+    /// <remarks>
+    /// The verb was renamed to <c>--purge-standby</c> because <c>--trim-ram</c> named Performance Mode's
+    /// operation while doing Standby List Cleaner's (#1524). The old spelling has to keep working: a
+    /// maintenance schedule registered before the rename has <c>"--trim-ram --silent"</c> baked into a
+    /// Windows scheduled task's argument string on the user's machine, and an unrecognised flag routes to
+    /// <c>Unknown</c> — so dropping the alias would leave that task running <c>--help</c> nightly and
+    /// reporting success while doing nothing.
+    /// <para>Asserted here rather than as another <c>[InlineData]</c> row so that deleting the alias
+    /// fails a test whose name says what broke, instead of one that reads like a parser typo.</para>
+    /// </remarks>
+    [Fact]
+    public void Parse_StillAcceptsTheFormerTrimRamSpelling()
+    {
+        Assert.Equal(CliCommand.PurgeStandby, CliRunner.Parse(["--trim-ram"]).Command);
+        Assert.Equal(CliCommand.PurgeStandby, CliRunner.Parse(["--TRIM-RAM"]).Command);
+    }
 
     [Fact]
     public void Parse_IsCaseInsensitive()

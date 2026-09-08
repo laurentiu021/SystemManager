@@ -155,7 +155,10 @@ What the app can and cannot do by design:
   update flow. If you run SysManager elevated, only run a build you obtained
   from the official Releases page and verified. A machine-scope installed
   build under `Program Files` (not user-writable) is planned alongside code
-  signing once a certificate is available.
+  signing once a certificate is available — see
+  [ROADMAP.md](ROADMAP.md#trust-and-distribution) for why the two are sequenced
+  together, and the README for
+  [why the app ships portable at all](README.md#why-portable-and-why-there-is-no-installer).
 
 ## Privacy
 

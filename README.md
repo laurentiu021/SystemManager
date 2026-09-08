@@ -42,11 +42,12 @@ winget install laurentiu021.SysManager
 - [Features](#features) — all 58 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
+  - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
   - [Verifying the download](#verifying-the-download)
 - [Uninstalling](#uninstalling)
 - [Build from source](#build-from-source)
 - [First-time flow](#first-time-flow)
-- [Documentation](#documentation)
+- [Documentation](#documentation) — including the [roadmap](ROADMAP.md)
 - [Reporting bugs and requesting features](#reporting-bugs-and-requesting-features)
 - [Tech stack](#tech-stack)
 - [Privacy](#privacy)
@@ -1249,6 +1250,37 @@ runtime required.
 > every checksum file — and a human verifying a download takes both. Treat the badge as
 > traffic, not as an install base.
 
+### Why portable, and why there is no installer
+
+The only build is a portable `.exe`. That is a decision, not an omission, and it has a cost
+worth stating alongside the benefit.
+
+**What you get.** Nothing is written outside `%LocalAppData%\SysManager` unless you ask for
+it. There is no service, no scheduled task you did not create, no uninstaller to trust, and
+no registry footprint to clean up — delete the exe and the app is gone. You can run it from
+a USB stick on a machine you are fixing for someone else, which is a large part of what this
+tool is for.
+
+**What it costs.** A portable exe lives in a user-writable location, so another process
+running under your account could replace it on disk. That is inherent to any portable app
+and has nothing to do with SysManager's update flow. If you run SysManager elevated, run a
+build you got from the Releases page and verified. A machine-scope build under
+`Program Files`, which is not user-writable, is on the [roadmap](ROADMAP.md) alongside code
+signing — the two belong together, because an installed build people trust should be a
+signed one.
+
+**No Microsoft Store build.** The Store sandbox forbids most of what this app does: reading
+other processes' working sets, writing the hosts file, changing services and scheduled
+tasks, purging the standby list. A Store version would be a different, much smaller app
+wearing the same name.
+
+**Unsigned, for now.** Windows shows a warning on first launch and some antivirus engines
+flag an unknown publisher. Both are explained below, along with how to check the download
+yourself: [First launch](#first-launch-windows-will-warn-you) ·
+[Verifying the download](#verifying-the-download) ·
+[If your antivirus flags the download](#if-your-antivirus-flags-the-download) ·
+[Code signing](#code-signing).
+
 ### Verifying the download
 
 Each release ships a matching `SysManager-v<version>.exe.sha256`. Verify before running
@@ -1485,6 +1517,7 @@ Windows 10 / 11 x64 machine.
 
 ## Documentation
 
+- [ROADMAP.md](ROADMAP.md) — what is being worked towards, and what is deliberately not
 - [ARCHITECTURE.md](ARCHITECTURE.md) — project structure and key design decisions
 - [TESTING.md](TESTING.md) — how the test suite is organised and run
 - [CHANGELOG.md](CHANGELOG.md) — release notes

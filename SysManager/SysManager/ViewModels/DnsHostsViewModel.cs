@@ -90,19 +90,13 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         try
         {
             string dns = await _dnsService.GetCurrentDnsAsync(_cts.Token).ConfigureAwait(false);
-            if (Application.Current?.Dispatcher is { } dispatcher)
-                dispatcher.Invoke(() => CurrentDns = dns);
-            else
-                CurrentDns = dns;
+            UiThread.Post(() => CurrentDns = dns);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Log.Warning(ex, "Failed to read current DNS");
-            if (Application.Current?.Dispatcher is { } d)
-                d.Invoke(() => CurrentDns = "Unable to detect");
-            else
-                CurrentDns = "Unable to detect";
+            UiThread.Post(() => CurrentDns = "Unable to detect");
         }
     }
 
@@ -446,34 +440,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         UpdateCanRestorePreviousDns();
     }
 
-    private void UpdateCanRestorePreviousDns()
-    {
-        void Update() => CanRestorePreviousDns = _dnsUndo is not null;
+    // The three setters below are called from both threads and marshal a single property assignment.
+    // They post rather than wait: no caller reads the value back, and successive posts run in the
+    // order they were queued, so a status line still ends on the last message set (#2152).
+    private void UpdateCanRestorePreviousDns() =>
+        UiThread.Post(() => CanRestorePreviousDns = _dnsUndo is not null);
 
-        if (Application.Current?.Dispatcher is { } dispatcher)
-            dispatcher.Invoke(Update);
-        else
-            Update();
-    }
+    private void SetStatusMessage(string value) => UiThread.Post(() => StatusMessage = value);
 
-    private void SetStatusMessage(string value)
-    {
-        void Update() => StatusMessage = value;
-
-        if (Application.Current?.Dispatcher is { } dispatcher)
-            dispatcher.Invoke(Update);
-        else
-            Update();
-    }
-    private void SetDnsApplying(bool value)
-    {
-        void Update() => IsDnsApplying = value;
-
-        if (Application.Current?.Dispatcher is { } dispatcher)
-            dispatcher.Invoke(Update);
-        else
-            Update();
-    }
+    private void SetDnsApplying(bool value) => UiThread.Post(() => IsDnsApplying = value);
 
     // ── Hosts Commands ───────────────────────────────────────────────────
 

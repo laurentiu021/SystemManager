@@ -108,8 +108,11 @@ public sealed partial class ServicesViewModel : ViewModelBase
             RehydratePreviousStartTypes();
             // Ensure collection updates happen on the UI thread to prevent
             // cross-thread exceptions when navigating during concurrent scans (#154).
+            // Awaited rather than posted: the finally below clears IsBusy, and posting would stop the
+            // spinner before the list it is waiting for had appeared. Awaiting a DispatcherOperation
+            // keeps that order without parking this thread the way Invoke did (#2152).
             if (Application.Current?.Dispatcher is { } d && !d.CheckAccess())
-                d.Invoke(ApplyFilterCore);
+                await d.InvokeAsync(ApplyFilterCore);
             else
                 ApplyFilterCore();
         }

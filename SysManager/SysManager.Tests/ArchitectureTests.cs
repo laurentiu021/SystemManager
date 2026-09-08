@@ -8506,6 +8506,129 @@ public partial class ArchitectureTests
     private static partial Regex BlockingWaitInDispose();
 
     /// <summary>
+    /// Nothing marshals to the dispatcher with the synchronous <c>Invoke</c>. Post it, or await
+    /// <c>InvokeAsync</c> when the next statement reads what the action wrote.
+    /// </summary>
+    /// <remarks>
+    /// Ten sites across six files did, each behind <c>if (Application.Current?.Dispatcher is { } d)</c> —
+    /// a guard that asks whether an <see cref="System.Windows.Application"/> EXISTS, which is not the
+    /// question. An <c>Application</c> can exist while nothing pumps its dispatcher, and a synchronous
+    /// <c>Invoke</c> then waits on a queue no one drains, forever. A hang dump from the integration suite
+    /// showed ten threads parked exactly there and seven more waiting on a <c>DispatcherOperation</c>
+    /// (#2152). In the app the UI thread does pump, so these normally returned — which is what made it a
+    /// latent deadlock rather than a visible bug.
+    /// <para><b>Two receiver shapes, because catching only one catches nothing.</b> The obvious form names
+    /// the dispatcher at the call (<c>Application.Current.Dispatcher.Invoke(…)</c>). The form this
+    /// codebase actually used binds it to a short local first — <c>is { } d</c>, then <c>d.Invoke(…)</c> —
+    /// and a pattern keyed on the word "Dispatcher" walks straight past it. So dispatcher-bearing locals
+    /// are collected per file and their names checked too. The mutation that binds a differently-named
+    /// local is the one that proves this half is load-bearing.</para>
+    /// <para><b>Comments stripped first.</b> <c>Helpers/UiThread.cs</c> documents the pattern it replaced
+    /// by quoting it, and the remarks you are reading do the same. A guard that reads its own prose as
+    /// code goes red on a clean tree.</para>
+    /// <para><b>Both floors are measured, not guessed.</b> 351 source files and 29 asynchronous marshals
+    /// today. The second floor is the one that matters: if the receiver patterns silently stop matching
+    /// real code, "no offenders" is indistinguishable from "nothing was read", and only a population
+    /// count separates them.</para>
+    /// </remarks>
+    [Fact]
+    public void NothingMarshalsToTheDispatcherSynchronously()
+    {
+        var appDir = FindAppProjectDir();
+        var files = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+
+        var offenders = new List<string>();
+        var asyncMarshals = 0;
+
+        foreach (var file in files)
+        {
+            // Comments stripped BEFORE matching, per the remarks above.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+            var name = Path.GetFileName(file);
+
+            asyncMarshals += AsyncMarshal().Matches(code).Count;
+
+            foreach (var hit in NamedDispatcherInvoke().Matches(code).Cast<Match>())
+                offenders.Add($"{name} — {hit.Value.Trim()}");
+
+            // The short-local form: bind the dispatcher to a name, then call Invoke on the name.
+            foreach (var local in DispatcherLocal().Matches(code).Cast<Match>()
+                         .Select(m => m.Groups["name"].Value)
+                         .Where(n => n.Length > 0)
+                         .Distinct(StringComparer.Ordinal))
+            {
+                // `[?!]?` and not `\??`: the null-forgiving `ui!.Invoke(…)` is the same blocking call, and
+                // a pattern that only allows `?` walks past it. The mutation that writes it that way is
+                // what found this — the first version of this guard passed on it.
+                var alias = new Regex($@"(?<![A-Za-z0-9_]){Regex.Escape(local)}\s*[?!]?\s*\.\s*Invoke\s*\(",
+                                      RegexOptions.CultureInvariant);
+                if (alias.IsMatch(code))
+                    offenders.Add($"{name} — {local}.Invoke(…), where {local} holds a Dispatcher");
+            }
+        }
+
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} source files enumerated, out of 351 measured — this guard is reading the "
+            + "wrong folder.");
+        Assert.True(asyncMarshals >= 25,
+            $"only {asyncMarshals} asynchronous dispatcher marshals found, out of 29 measured. The receiver "
+            + "patterns have stopped matching real code, so a clean result here proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "A synchronous Dispatcher.Invoke blocks the calling thread until the UI thread runs the "
+            + "action. If nothing is pumping that dispatcher the wait never ends, and if the UI thread is "
+            + "itself waiting on this work, both sides wait forever. Post it with UiThread.Post, or "
+            + "`await dispatcher.InvokeAsync(…)` when the next statement reads what the action wrote — an "
+            + "un-resumed continuation costs nothing, a blocked thread costs a thread:\n  "
+            + string.Join("\n  ", offenders));
+
+        // Positive controls: every receiver shape that appeared in this codebase has to be recognised, and
+        // the asynchronous forms have to be left alone.
+        Assert.Matches(NamedDispatcherInvoke(), "Application.Current?.Dispatcher.Invoke(Update);");
+        Assert.Matches(NamedDispatcherInvoke(), "App.Current?.Dispatcher.Invoke(() => { });");
+        Assert.Matches(NamedDispatcherInvoke(), "dispatcher.Invoke(Update);");
+        Assert.Matches(NamedDispatcherInvoke(), "Dispatcher?.Invoke(Update);");
+        Assert.Matches(NamedDispatcherInvoke(), "Dispatcher!.Invoke(Update);");
+        Assert.DoesNotMatch(NamedDispatcherInvoke(), "dispatcher.InvokeAsync(Update);");
+        Assert.DoesNotMatch(NamedDispatcherInvoke(), "Dispatcher.BeginInvoke(action);");
+        Assert.DoesNotMatch(NamedDispatcherInvoke(), "ToastRequested?.Invoke(title, detail);");
+        Assert.Equal("d", DispatcherLocal().Match("if (Application.Current?.Dispatcher is { } d)")
+                                           .Groups["name"].Value);
+        Assert.Equal("ui", DispatcherLocal().Match("var ui = Application.Current.Dispatcher;")
+                                            .Groups["name"].Value);
+    }
+
+    /// <summary>
+    /// A synchronous <c>Invoke</c> on a receiver expression that names the dispatcher. <c>InvokeAsync</c>
+    /// and <c>BeginInvoke</c> are excluded by requiring the call to be <c>Invoke</c> exactly.
+    /// </summary>
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])(?:[A-Za-z_][A-Za-z0-9_.?!]*\.)?[Dd]ispatcher\s*[?!]?\s*\.\s*Invoke\s*\(",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex NamedDispatcherInvoke();
+
+    /// <summary>
+    /// A local or field that holds a dispatcher: the <c>is { } name</c> pattern form, a
+    /// <c>var name = …Dispatcher</c> assignment, or a <c>Dispatcher name</c> declaration.
+    /// </summary>
+    [GeneratedRegex(@"[Dd]ispatcher\s+is\s*\{\s*\}\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)"
+                    + @"|var\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^;]*[Dd]ispatcher"
+                    + @"|(?<![A-Za-z0-9_])Dispatcher\??\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*[;=,)]",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex DispatcherLocal();
+
+    /// <summary>An asynchronous marshal: the forms this codebase is supposed to use.</summary>
+    [GeneratedRegex(@"InvokeAsync\s*\(|BeginInvoke\s*\(|UiThread\.Post\s*\(",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex AsyncMarshal();
+
+    /// <summary>
     /// A documentation comment that describes parameters, a return value or a thrown exception must also
     /// carry a <c>&lt;summary&gt;</c>. Those tags describe the pieces and never say what the member is
     /// for, which is the half a reader needs first.

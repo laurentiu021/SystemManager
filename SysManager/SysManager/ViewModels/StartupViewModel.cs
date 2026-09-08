@@ -94,21 +94,21 @@ public sealed partial class StartupViewModel : ViewModelBase
                 item.Icon = IconExtractorService.GetIcon(exePath ?? item.Command);
             }
 
-            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
-            {
-                dispatcher.Invoke(() =>
-                {
-                    _allEntries.Clear();
-                    _allEntries.AddRange(sorted);
-                    ApplyFilter();
-                });
-            }
-            else
+            void Publish()
             {
                 _allEntries.Clear();
                 _allEntries.AddRange(sorted);
                 ApplyFilter();
             }
+
+            // Awaited rather than posted, because the next line reads _allEntries.Count. Awaiting a
+            // DispatcherOperation keeps that ordering without parking this thread the way the previous
+            // synchronous Invoke did: if nothing ever pumps the dispatcher, an un-resumed continuation
+            // costs nothing while a blocked thread costs a thread (#2152).
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+                await dispatcher.InvokeAsync(Publish);
+            else
+                Publish();
 
             StatusMessage = $"Found {_allEntries.Count} startup items.";
             ToastService.Instance.Show("Scan complete", $"{_allEntries.Count} startup items found");

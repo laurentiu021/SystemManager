@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.78.6] - 2026-09-08
+
+If your antivirus happened to be reading one of SysManager's own settings files at the exact moment
+SysManager tried to save it, the save was abandoned — and nothing told you. Your previous settings were
+never damaged, but the change you had just made was gone. It now waits a moment and tries again.
+
+### Fixed
+- **A save is no longer lost because something else had the file open for a fraction of a second.** This
+  affects everything SysManager remembers for you: volume presets, gaming profiles, scheduled maintenance,
+  activity history, speed-test history. Antivirus scanners, backup tools and Windows Search all open files
+  briefly as they go, and a save that landed in one of those windows was simply dropped. Three quick
+  retries over about a sixth of a second cover it. A file that is genuinely locked still fails, and still
+  leaves your previous settings exactly as they were — that part has not changed.
+
 ## [1.78.5] - 2026-09-08
 
 Scheduled Maintenance offered you "TrimRam" in its dropdown and then asked you to confirm "Purge standby

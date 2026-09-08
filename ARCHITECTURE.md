@@ -599,6 +599,14 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `FlushOntoDevice` alone, because replacing the app's own executable must not
   inherit the outgoing build's attributes. A fitness function asserts nobody
   swaps a file into place without one of the two.
+  The swap retries a refused attempt three times over ~155 ms, because
+  `File.Replace` has to delete the destination and anything holding that file
+  open — an antivirus scanner mid-read, a backup agent, Windows Search — refuses
+  it. Without the retry a lock that would be gone in 50 ms lost the save
+  silently. Only `IOException` is retried: a permission failure will not improve
+  on a second attempt. After the budget the exception propagates exactly as
+  before and the previous file is intact, so the class's promise is unchanged.
+  The pause is a parameter so the retry can be tested without sleeping.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that
   suppresses change notifications during bulk add/remove for UI performance
   (in `ObservableCollectionExtensions.cs`).

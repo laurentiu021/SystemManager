@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -82,8 +81,7 @@ public class TracerouteHopTests
     public void PropertyChanges_RaiseEvents()
     {
         var h = new TracerouteHop();
-        var raised = new List<string?>();
-        ((INotifyPropertyChanged)h).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        var raised = h.RecordPropertyChanges();
         h.HopNumber = 5;
         h.Address = "1.2.3.4";
         h.LatencyMs = 12;

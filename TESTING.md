@@ -174,6 +174,17 @@ collection definitions (all defined in `TestCollections.cs`, each with
   Requires `[Collection("ProcessWideStatics")]`.
 - `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
   progress assertions need no `Task.Delay`.
+- `PropertyChangeRecorder` — records what an `INotifyPropertyChanged` raises, into a collection that
+  is safe to read while it is still being written: `var changed = vm.RecordPropertyChanges();` for the
+  property NAMES, and `var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);` for the
+  VALUES a named property took — which is the only way to assert "the bar went up and came down" on an
+  operation too fast to sample. **Never record into a plain `List`.** A view model whose constructor
+  started `InitializeAsync` is still raising notifications on the thread pool, so an `Assert.Contains`
+  can enumerate a collection being appended to (#2169). `ArchitectureTests`
+  `.NoTest_AppendsPropertyChangesToANonConcurrentCollection` fails the build on that shape; a
+  hand-written handler is still allowed where a subscription must be removed by hand, provided its
+  collection is concurrent. One file, compiled into both test projects rather than copied — the two
+  helpers that were copied instead have since drifted (#2183).
 - `StaHelper` — **`SysManager.IntegrationTests` only**, since it exists for tests that instantiate
   views. It queues a delegate onto **one** background STA thread shared by the whole suite and waits
   for it, rethrowing whatever the delegate threw. One thread rather than one per call because the

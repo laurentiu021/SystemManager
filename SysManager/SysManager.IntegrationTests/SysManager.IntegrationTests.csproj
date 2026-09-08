@@ -23,7 +23,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Compiled in from the unit project rather than copied. Both suites record PropertyChanged names,
+         and the two other helpers this project shares by name with the unit one, StaHelper and
+         TestCollections, are separate files that have since DRIFTED apart (#2183) — StaHelper's copies are
+         now different designs. One source cannot. It stays in namespace SysManager.Tests, so a consumer
+         here needs `using SysManager.Tests;`, which is the visible price of not having two of them. -->
+    <Compile Include="..\SysManager.Tests\PropertyChangeRecorder.cs"
+             Link="PropertyChangeRecorder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
+    <!-- For the linked PropertyChangeRecorder below, which keeps its own project's namespace. A global
+         using rather than one per file: it imports nothing else, because the only type compiled into THIS
+         assembly under SysManager.Tests is that one linked file. -->
+    <Using Include="SysManager.Tests" />
   </ItemGroup>
 
   <ItemGroup>

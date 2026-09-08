@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Models;
 
 namespace SysManager.IntegrationTests;
@@ -26,11 +25,7 @@ public class DiskHealthReportTests
     public void PropertyChanged_FiresForAllFields()
     {
         var r = new DiskHealthReport();
-        var raised = new HashSet<string>();
-        ((INotifyPropertyChanged)r).PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName != null) raised.Add(e.PropertyName);
-        };
+        var raised = r.RecordPropertyChanges();
         r.FriendlyName = "NVMe";
         r.MediaType = "SSD";
         r.BusType = "NVMe";

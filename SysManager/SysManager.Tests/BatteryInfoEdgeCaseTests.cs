@@ -104,8 +104,7 @@ public class BatteryInfoEdgeCaseTests
     public void PropertyChanged_FiredOnChargePercentChange()
     {
         var info = new BatteryInfo();
-        var changes = new List<string>();
-        info.PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
+        var changes = info.RecordPropertyChanges();
 
         info.ChargePercent = 75;
 
@@ -185,8 +184,7 @@ public class BatteryInfoEdgeCaseTests
     public void Display_RaisesPropertyChanged_WhenCapacityArrives()
     {
         var info = new BatteryInfo();
-        var changed = new List<string>();
-        info.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? "");
+        var changed = info.RecordPropertyChanges();
 
         info.FullChargeCapacityMWh = 45000;
 

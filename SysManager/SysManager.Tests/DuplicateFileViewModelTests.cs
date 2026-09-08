@@ -177,8 +177,7 @@ public class DuplicateFileViewModelTests
     public void DuplicateFileEntry_PropertyChange_Notifies()
     {
         var entry = new DuplicateFileEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.Name = "test.bin";
         entry.Path = @"C:\test.bin";
@@ -197,8 +196,7 @@ public class DuplicateFileViewModelTests
     public void DuplicateFileGroup_PropertyChange_Notifies()
     {
         var group = new DuplicateFileGroup();
-        var changed = new List<string>();
-        group.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = group.RecordPropertyChanges();
 
         group.Hash = "ABC123";
         group.FileSize = 2048;

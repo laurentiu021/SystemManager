@@ -1,6 +1,7 @@
 // SysManager · OperationLockServiceEdgeCaseTests
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
+using System.Collections.Concurrent;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -119,8 +120,13 @@ public class OperationLockServiceEdgeCaseTests
     [Fact]
     public void PropertyChanged_FiredOnAcquire()
     {
-        var changed = new List<string>();
-        void handler(object? _, System.ComponentModel.PropertyChangedEventArgs e) => changed.Add(e.PropertyName!);
+        // The one recorder in the suite that does NOT use PropertyChangeRecorder, because the source is a
+        // process-wide singleton that outlives the test: the helper never unsubscribes, which is correct for
+        // a source the test created and drops with it, and a leak here would keep every later acquire
+        // enqueueing into a finished test's collection. So the handler stays named and the `-=` below stays
+        // load-bearing — but the collection is concurrent, which is the property that actually matters.
+        var changed = new ConcurrentQueue<string>();
+        void handler(object? _, System.ComponentModel.PropertyChangedEventArgs e) => changed.Enqueue(e.PropertyName!);
         Service.PropertyChanged += handler;
 
         try

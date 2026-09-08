@@ -108,8 +108,7 @@ public class TracerouteViewModelTests
         // rendering the old state even though the value changed.
         using var shared = NewShared();
         using var vm = new TracerouteViewModel(shared);
-        var raised = new List<string>();
-        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName ?? "");
+        var raised = vm.RecordPropertyChanges();
 
         shared.IsAutoTraceRunning = true;
 

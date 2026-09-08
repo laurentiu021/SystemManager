@@ -36,8 +36,7 @@ public class DiskHealthReportTests
     public void PropertyChanged_FiresOnVerdictChange()
     {
         var r = new DiskHealthReport();
-        var changed = new List<string>();
-        r.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = r.RecordPropertyChanges();
         r.Verdict = "Healthy";
         Assert.Contains("Verdict", changed);
     }
@@ -46,8 +45,7 @@ public class DiskHealthReportTests
     public void PropertyChanged_FiresOnColorChange()
     {
         var r = new DiskHealthReport();
-        var changed = new List<string>();
-        r.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = r.RecordPropertyChanges();
         r.VerdictColorHex = StatusColors.Good;
         Assert.Contains("VerdictColorHex", changed);
     }

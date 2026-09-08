@@ -241,8 +241,7 @@ public class DiskHealthReportEdgeCaseTests
     public void PropertyChanged_FiredOnWearPercentChange()
     {
         var report = new DiskHealthReport();
-        var changed = new List<string>();
-        report.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = report.RecordPropertyChanges();
 
         report.WearPercent = 50;
 

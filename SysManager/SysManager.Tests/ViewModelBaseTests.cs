@@ -33,8 +33,7 @@ public class ViewModelBaseTests
     public void IsBusy_RaisesPropertyChanged()
     {
         var vm = new TestVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
         vm.IsBusy = true;
         Assert.Contains("IsBusy", changed);
     }
@@ -43,8 +42,7 @@ public class ViewModelBaseTests
     public void StatusMessage_RaisesPropertyChanged()
     {
         var vm = new TestVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
         vm.StatusMessage = "Loading...";
         Assert.Contains("StatusMessage", changed);
     }
@@ -53,8 +51,7 @@ public class ViewModelBaseTests
     public void Progress_RaisesPropertyChanged()
     {
         var vm = new TestVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
         vm.Progress = 50;
         Assert.Contains("Progress", changed);
     }
@@ -63,8 +60,7 @@ public class ViewModelBaseTests
     public void IsProgressIndeterminate_RaisesPropertyChanged()
     {
         var vm = new TestVm();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
         vm.IsProgressIndeterminate = true;
         Assert.Contains("IsProgressIndeterminate", changed);
     }

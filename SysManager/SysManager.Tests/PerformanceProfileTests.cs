@@ -120,8 +120,7 @@ public class PerformanceProfileTests
     public void PropertyChange_Notifies()
     {
         var p = new PerformanceProfile();
-        var changed = new List<string>();
-        p.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = p.RecordPropertyChanges();
 
         p.ActivePlanName = "Test";
         p.VisualEffectsReduced = true;

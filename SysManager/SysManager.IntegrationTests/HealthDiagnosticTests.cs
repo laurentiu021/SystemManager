@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -27,11 +26,7 @@ public class HealthDiagnosticTests
     public void PropertyChanged_FiresForAllFields()
     {
         var d = new HealthDiagnostic();
-        var raised = new HashSet<string>();
-        ((INotifyPropertyChanged)d).PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName != null) raised.Add(e.PropertyName);
-        };
+        var raised = d.RecordPropertyChanges();
         d.Verdict = HealthVerdict.Good;
         d.Headline = "Healthy";
         d.Detail = "All good";

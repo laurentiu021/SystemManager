@@ -113,11 +113,7 @@ public class StandbyMemoryTests
         var vm = NewVm(temp.Path);
         Assert.True(vm.IsElevated, "the scope must reach the view-model's constructor");
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.PurgeCommand.ExecuteAsync(null);
 
@@ -140,11 +136,7 @@ public class StandbyMemoryTests
         var vm = NewVm(temp.Path);
         Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.PurgeCommand.ExecuteAsync(null);
 

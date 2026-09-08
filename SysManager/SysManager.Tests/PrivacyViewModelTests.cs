@@ -234,11 +234,7 @@ public class PrivacyViewModelTests
     {
         var vm = NewVm();
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsBusy)) seen.Add(vm.IsBusy);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);
 
         await vm.RefreshCommand.ExecuteAsync(null);
 
@@ -255,11 +251,7 @@ public class PrivacyViewModelTests
         // would read as "stalled".
         var vm = NewVm();
 
-        var seen = new List<bool>();
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.IsProgressIndeterminate)) seen.Add(vm.IsProgressIndeterminate);
-        };
+        var seen = vm.RecordChangesOf(nameof(vm.IsProgressIndeterminate), () => vm.IsProgressIndeterminate);
 
         await vm.RefreshCommand.ExecuteAsync(null);
 

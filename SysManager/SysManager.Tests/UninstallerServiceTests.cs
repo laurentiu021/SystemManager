@@ -427,8 +427,7 @@ public class UninstallerServiceTests
     public void InstalledApp_PropertyChange_Notifies()
     {
         var app = new InstalledApp();
-        var changed = new List<string>();
-        app.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = app.RecordPropertyChanges();
 
         app.IsSelected = true;
         app.Name = "Test";

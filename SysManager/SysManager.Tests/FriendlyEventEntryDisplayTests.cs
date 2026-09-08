@@ -54,8 +54,7 @@ public class FriendlyEventEntryDisplayTests
     public void Entry_SupportsPropertyChange()
     {
         var entry = new FriendlyEventEntry();
-        var changed = new List<string>();
-        entry.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = entry.RecordPropertyChanges();
 
         entry.Explanation = "Test explanation";
         entry.Recommendation = "Test recommendation";

@@ -29,8 +29,7 @@ public class HealthDiagnosticTests
     public void PropertyChanged_FiresOnVerdictChange()
     {
         var h = new HealthDiagnostic();
-        var changed = new List<string>();
-        h.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = h.RecordPropertyChanges();
         h.Verdict = HealthVerdict.Good;
         Assert.Contains("Verdict", changed);
     }
@@ -39,8 +38,7 @@ public class HealthDiagnosticTests
     public void PropertyChanged_FiresOnHeadlineChange()
     {
         var h = new HealthDiagnostic();
-        var changed = new List<string>();
-        h.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = h.RecordPropertyChanges();
         h.Headline = "All good";
         Assert.Contains("Headline", changed);
     }

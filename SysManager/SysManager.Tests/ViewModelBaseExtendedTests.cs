@@ -68,8 +68,7 @@ public class ViewModelBaseExtendedTests
     public void IsBusy_RaisesPropertyChanged()
     {
         var vm = new TestViewModel();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.IsBusy = true;
 
@@ -80,8 +79,7 @@ public class ViewModelBaseExtendedTests
     public void StatusMessage_RaisesPropertyChanged()
     {
         var vm = new TestViewModel();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.StatusMessage = "Working...";
 
@@ -92,8 +90,7 @@ public class ViewModelBaseExtendedTests
     public void Progress_RaisesPropertyChanged()
     {
         var vm = new TestViewModel();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.Progress = 50;
 
@@ -104,8 +101,7 @@ public class ViewModelBaseExtendedTests
     public void IsProgressIndeterminate_RaisesPropertyChanged()
     {
         var vm = new TestViewModel();
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.IsProgressIndeterminate = true;
 
@@ -117,8 +113,7 @@ public class ViewModelBaseExtendedTests
     {
         var vm = new TestViewModel();
         vm.Progress = 50;
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.Progress = 50;
 
@@ -130,8 +125,7 @@ public class ViewModelBaseExtendedTests
     {
         var vm = new TestViewModel();
         vm.IsBusy = false;
-        var changed = new List<string>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName!);
+        var changed = vm.RecordPropertyChanges();
 
         vm.IsBusy = false;
 

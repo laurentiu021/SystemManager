@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -14,11 +13,7 @@ public class FriendlyEventEntryExtendedTests
     public void PropertyChangedFires_ForAllFields()
     {
         var e = new FriendlyEventEntry();
-        var raised = new HashSet<string>();
-        ((INotifyPropertyChanged)e).PropertyChanged += (_, ev) =>
-        {
-            if (ev.PropertyName != null) raised.Add(ev.PropertyName);
-        };
+        var raised = e.RecordPropertyChanges();
         // A fixed date, not DateTime.Now: the generated setter skips PropertyChanged when the new
         // value equals the current one, so reading the wall clock made this assertion depend on
         // machine time rather than on a value the test controls.

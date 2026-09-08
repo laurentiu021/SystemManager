@@ -168,7 +168,14 @@ collection definitions (all defined in `TestCollections.cs`, each with
   Requires `[Collection("ProcessWideStatics")]`.
 - `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
   progress assertions need no `Task.Delay`.
-- `StaHelper` — runs a delegate on an STA thread for WPF-dependent types.
+- `StaHelper` — **`SysManager.IntegrationTests` only**, since it exists for tests that instantiate
+  views. It queues a delegate onto **one** background STA thread shared by the whole suite and waits
+  for it, rethrowing whatever the delegate threw. One thread rather than one per call because the
+  `Application`'s resources are `DispatcherObject`s owned by whichever thread created them, and a
+  thread-per-call helper let that thread exit underneath every later view (#2156). It drains a work
+  queue and deliberately does **not** pump a dispatcher, so `DispatcherTimer` and `InvokeAsync` do not
+  run under it — a pumping dispatcher schedules real layout, which reaches DirectWrite and dies on a
+  headless runner. The unit project has no view-instantiating test and so needs no copy of this.
 
 ### Testing an admin-gated path
 

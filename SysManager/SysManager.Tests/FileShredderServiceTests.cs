@@ -141,18 +141,6 @@ public class FileShredderServiceTests
         }
     }
 
-    /// <summary>
-    /// Synchronous <see cref="IProgress{T}"/> that records reports on the calling
-    /// thread. Unlike <see cref="Progress{T}"/> (which marshals callbacks via the
-    /// captured SynchronizationContext asynchronously), this captures every report
-    /// deterministically by the time the awaited call returns — no timing race.
-    /// </summary>
-    private sealed class SyncProgress : IProgress<int>
-    {
-        public List<int> Reports { get; } = [];
-        public void Report(int value) => Reports.Add(value);
-    }
-
     [Fact]
     public async Task ShredFileAsync_Thorough_MultiPass_OverwritesAndDeletes()
     {
@@ -182,7 +170,7 @@ public class FileShredderServiceTests
         var svc = NewService();
         var file = Path.Combine(Path.GetTempPath(), "smtest_progress_" + Guid.NewGuid().ToString("N") + ".dat");
         await File.WriteAllTextAsync(file, "some bytes");
-        var progress = new SyncProgress();
+        var progress = new SyncProgress<int>();
 
         try
         {

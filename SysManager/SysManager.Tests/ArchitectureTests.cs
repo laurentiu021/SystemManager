@@ -3366,8 +3366,24 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"^\s*Changed\b", RegexOptions.Compiled)]
     private static partial Regex PartialChangedHook();
 
-    /// <summary>A class or record declaration, capturing the type name.</summary>
-    [GeneratedRegex(@"(?:class|record)\s+(\w+)", RegexOptions.Compiled)]
+    /// <summary>A type declaration at the start of a line, capturing the declared name.</summary>
+    /// <remarks>
+    /// Anchored at line start and modifier-aware, because the previous form —
+    /// <c>(?:class|record)\s+(\w+)</c> — captured a word out of PROSE whenever a comment reached it first,
+    /// and <see cref="EveryModelProperty_IsEitherWrittenOrShown"/> takes the first match as the declaring
+    /// type. It read <c>PrivacyAccessEntry</c> as "of" and <c>SpeedVerdict</c> as "rather" from their
+    /// comments, then used that word in a cross-file "is this type referenced" test that any file
+    /// containing the word "of" satisfies — silently exempting both models from the guard. Anchoring also
+    /// means a generic constraint (<c>where T : class where …</c>) cannot be read as a type called "where".
+    /// <para><c>record class</c> and <c>record struct</c> are matched as a unit and listed FIRST, or the
+    /// alternation stops at <c>record</c> and captures the second keyword: <c>MemoryStatus</c>, a
+    /// <c>readonly record struct</c>, was read as a type called "struct" for the same reason.</para>
+    /// <para>Enums are deliberately absent — no caller wants one, and the callers that skip an empty
+    /// capture were already skipping enum-only files.</para>
+    /// </remarks>
+    [GeneratedRegex(@"^[ \t]*(?:(?:public|internal|private|protected|file|sealed|static|abstract|partial|readonly|ref|unsafe)[ \t]+)*"
+                    + @"(?:record[ \t]+(?:class|struct)|class|record|struct|interface)[ \t]+(\w+)",
+                    RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex TypeDeclaration();
 
     /// <summary>An <c>[ObservableProperty]</c> backing field, capturing the field name without its underscore.</summary>
@@ -9116,5 +9132,109 @@ public partial class ArchitectureTests
     /// </remarks>
     [GeneratedRegex(@"\b(?:case|or)\s+""([^""]+)""", RegexOptions.CultureInvariant)]
     private static partial Regex CaseLabelLiteral();
+
+    /// <summary>
+    /// <see cref="TypeDeclaration"/> must read the DECLARED type name, not a word that happens to follow
+    /// "class" or "record" in prose or in a compound declaration keyword.
+    /// </summary>
+    /// <remarks>
+    /// These three files are the reason the pattern is anchored and modifier-aware. The previous form read
+    /// them as "struct", "of" and "rather" — and nothing failed, because
+    /// <see cref="EveryModelProperty_IsEitherWrittenOrShown"/> feeds that word into a cross-file "is this
+    /// type referenced anywhere" test that any file containing the word "of" satisfies, so both models were
+    /// quietly exempt from the guard that was supposed to cover them. A regex whose failure mode is a
+    /// PASS needs its own test.
+    /// <para>Asserted against the real files rather than typed-out snippets, so the three shapes stay the
+    /// ones the repo actually contains. The assertion is the correct answer, not the surrounding prose, so
+    /// rewording a comment cannot break it — it only stops that file from being an interesting case.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("MemoryStatus.cs", "MemoryStatus")]              // readonly record struct
+    [InlineData("PrivacyAccessEntry.cs", "PrivacyAccessEntry")]  // a comment reaches "class" first
+    [InlineData("SpeedVerdict.cs", "SpeedVerdict")]              // a comment reaches "record" first
+    public void TypeDeclaration_ReadsTheDeclaredName(string file, string expected)
+    {
+        var path = Path.Combine(FindAppProjectDir(), "Models", file);
+        Assert.True(File.Exists(path),
+            $"{file} is gone, so this case no longer covers anything — replace it with a model that has "
+            + "the same declaration shape rather than deleting the row.");
+
+        Assert.Equal(expected, TypeDeclaration().Match(File.ReadAllText(path)).Groups[1].Value);
+    }
+
+    /// <summary>
+    /// A test project's shared helper must not be shadowed by a second type of the same name declared
+    /// inside a test file, because the copy is invisible to everyone reading the other one.
+    /// </summary>
+    /// <remarks>
+    /// <c>FileShredderServiceTests</c> declared a private <c>SyncProgress : IProgress&lt;int&gt;</c> while
+    /// <c>SyncProgress.cs</c> sat next to it holding the shared, TESTING.md-documented
+    /// <c>SyncProgress&lt;T&gt;</c> — same name, same namespace, same purpose (#2183). It compiled because
+    /// the shared one is generic and a nested type shadows inside its own class, so neither the compiler
+    /// nor a reviewer reading either file had any signal that the other existed.
+    /// <para>A helper file is identified by declaring a type named after itself and containing no test
+    /// attribute, which is the shape every one of them already has. A shadow is any OTHER file in the SAME
+    /// project declaring that name. Per-project on purpose: the integration project's <c>StaHelper</c> and
+    /// <c>TestCollections</c> are legitimately its own, and a cross-project rule would flag them.</para>
+    /// <para>Deliberately narrow. The general form — every type declared in a test project is referenced
+    /// somewhere — would have caught the other half of #2183, a dead <c>StaHelper</c> copy in the unit
+    /// project with zero call sites, and would also need an exception list and a reference analysis this
+    /// cannot do from source text. This checks the one thing that needs no judgement.</para>
+    /// <para>The declaration pattern is anchored at line start so a generic constraint (<c>where T :
+    /// class where …</c>) cannot be read as declaring a type called "where". Nested types sit on their own
+    /// line, so anchoring costs nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTestFile_ShadowsAHelperItsOwnProjectAlreadyShares()
+    {
+        var root = Directory.GetParent(FindAppProjectDir())!.FullName;
+        var offenders = new List<string>();
+        var helperCount = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var directory = Path.Combine(root, project);
+            Assert.True(Directory.Exists(directory),
+                $"{project} was not found under {root}. If a test project was renamed or removed, update "
+                + "this guard with it rather than letting it silently check one project fewer.");
+
+            var sources = Directory.GetFiles(directory, "*.cs")
+                .OrderBy(p => p, StringComparer.Ordinal)
+                .ToDictionary(p => Path.GetFileName(p)!, p => WithoutComments(File.ReadAllText(p)),
+                              StringComparer.Ordinal);
+
+            // A helper file declares a type named after the file and holds no tests of its own.
+            var helpers = sources
+                .Where(kv => !TestMethodAttribute().IsMatch(kv.Value)
+                             && TypeDeclaration().Matches(kv.Value)
+                                 .Any(m => m.Groups[1].Value == Path.GetFileNameWithoutExtension(kv.Key)))
+                .ToDictionary(kv => Path.GetFileNameWithoutExtension(kv.Key), kv => kv.Key,
+                              StringComparer.Ordinal);
+            helperCount += helpers.Count;
+
+            foreach (var (file, source) in sources)
+                foreach (var declared in TypeDeclaration().Matches(source).Select(m => m.Groups[1].Value))
+                    if (helpers.TryGetValue(declared, out var owner) && owner != file)
+                        offenders.Add($"{project}/{file} declares {declared}, which {owner} already shares");
+        }
+
+        // Nine when measured, across the three projects. A collapse means the declaration pattern or the
+        // "names itself and holds no tests" rule stopped matching, and a clean result would prove nothing.
+        Assert.True(helperCount >= 8,
+            $"only {helperCount} shared test helpers were recognised — the pattern is out of date, so this "
+            + "guard is checking almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These test files declare a type that their own project already provides as a shared helper. "
+            + "The local copy compiles and shadows the shared one, so a reader of either file cannot tell "
+            + "the other exists — use the shared helper, or rename the local type to something that says "
+            + "what makes it different:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({helperCount} shared helpers across the test projects)");
+    }
+
+    /// <summary>Any xUnit test-method attribute, including the STA variants this suite uses.</summary>
+    [GeneratedRegex(@"\[(?:Fact|Theory|StaFact|StaTheory)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex TestMethodAttribute();
 
 }

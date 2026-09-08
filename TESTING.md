@@ -137,7 +137,13 @@ project, including the extension options its packages contribute.
 
 ### Parallelism
 
-Unit tests run in parallel by default (`parallelizeTestCollections: true`).
+Each project's `xunit.runner.json` sets its own mode. Unit tests run collections in parallel
+(`"parallelMode": "collections"`); the integration project runs strictly serially
+(`"parallelMode": "none"`, `"maxParallelThreads": 1`) because its tests touch the live system.
+`parallelMode` replaced v2's `parallelizeTestCollections` boolean, which xUnit v3 ignores — the runner
+prints the mode it resolved at startup, so a config key that stopped being read is visible there rather
+than silently reverting to the default.
+
 Tests that share state or touch OS resources are isolated via xUnit
 collection definitions (all defined in `TestCollections.cs`, each with
 `DisableParallelization = true`):

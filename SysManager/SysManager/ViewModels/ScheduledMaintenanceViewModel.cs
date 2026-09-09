@@ -35,11 +35,37 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     [ObservableProperty] private int _selectedMinute = 0;
     [ObservableProperty] private bool _isWeekly = true;
 
+    /// <summary>
+    /// Whether the task may start while the machine is on battery. Defaults to true, which is a CHANGE from
+    /// what Windows applied before: New-ScheduledTaskSettingsSet leaves AllowStartIfOnBatteries false, so on
+    /// an unplugged laptop the schedule quietly never started while this tab displayed a Next run time
+    /// (#1578). The maintenance verbs this tab can schedule are cheap and non-destructive, so running them
+    /// unplugged is the behaviour a user asking for automatic maintenance expects.
+    /// </summary>
+    [ObservableProperty] private bool _runOnBattery = true;
+
+    /// <summary>
+    /// Whether the task waits until the machine is idle. Off by default, deliberately: it reintroduces the
+    /// "never ran" failure on a PC that is always in use, so it is the user's choice to make rather than a
+    /// default they would have to discover.
+    /// </summary>
+    [ObservableProperty] private bool _onlyWhenIdle;
+
     [ObservableProperty] private bool _isScheduled;
     [ObservableProperty] private string _currentSummary = "";
     [ObservableProperty] private string _lastRun = "";
     [ObservableProperty] private string _nextRun = "";
     [ObservableProperty] private string _lastResult = "";
+
+    /// <summary>
+    /// Windows' own count of scheduled runs that did not happen, in words, or empty when there are none.
+    /// </summary>
+    /// <remarks>
+    /// The missing half of the story. There is no LastTaskResult code for "skipped because the conditions were
+    /// not met" — Windows just does not run — so a stale Last run beside a confident Next run was everything
+    /// the user got. NumberOfMissedRuns is the signal that does exist.
+    /// </remarks>
+    [ObservableProperty] private string _missedRunsWarning = "";
 
     public ScheduledMaintenanceViewModel(MaintenanceSchedulerService service)
     {
@@ -49,7 +75,18 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     }
 
     partial void OnSelectedFrequencyChanged(MaintenanceFrequency value)
-        => IsWeekly = value == MaintenanceFrequency.Weekly;
+    {
+        IsWeekly = value == MaintenanceFrequency.Weekly;
+        OnPropertyChanged(nameof(PendingSummary));
+    }
+
+    // PendingSummary is computed from six of these, so each one has to announce it. A [NotifyPropertyChangedFor]
+    // on every field would say the same thing six times; one hook per field keeps it where the field is.
+    partial void OnSelectedDayChanged(DayOfWeek value) => OnPropertyChanged(nameof(PendingSummary));
+    partial void OnSelectedHourChanged(int value) => OnPropertyChanged(nameof(PendingSummary));
+    partial void OnSelectedMinuteChanged(int value) => OnPropertyChanged(nameof(PendingSummary));
+    partial void OnRunOnBatteryChanged(bool value) => OnPropertyChanged(nameof(PendingSummary));
+    partial void OnOnlyWhenIdleChanged(bool value) => OnPropertyChanged(nameof(PendingSummary));
 
     /// <summary>Gate for the async commands so a second click can't start an overlapping
     /// Save/Remove/Refresh while one is in flight (which would race IsBusy + the read-back).</summary>
@@ -66,7 +103,18 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     }
 
     private MaintenanceSchedule BuildSchedule() =>
-        new(SelectedAction, SelectedFrequency, SelectedHour, SelectedMinute, SelectedDay);
+        new(SelectedAction, SelectedFrequency, SelectedHour, SelectedMinute, SelectedDay,
+            RunOnBattery, OnlyWhenIdle);
+
+    /// <summary>
+    /// What the schedule about to be saved will actually do, conditions included.
+    /// </summary>
+    /// <remarks>
+    /// Bound live in the Configure card, so ticking a condition shows its consequence in words before the
+    /// user commits — the tab previously promised the time unconditionally and never mentioned the policy
+    /// Windows would apply.
+    /// </remarks>
+    public string PendingSummary => BuildSchedule().Summary;
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
@@ -91,12 +139,13 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             LastRun = status.LastRun is { } lr ? lr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
             NextRun = status.NextRun is { } nr ? nr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
             LastResult = status.LastResultDescription ?? "";
+            MissedRunsWarning = status.MissedRunsWarning ?? "";
             StatusMessage = "A maintenance task is registered. You can update or remove it below.";
         }
         else
         {
             CurrentSummary = "No maintenance is scheduled yet.";
-            LastRun = NextRun = LastResult = "";
+            LastRun = NextRun = LastResult = MissedRunsWarning = "";
             StatusMessage = "Pick an action and time, then Save schedule to automate it.";
         }
         RemoveScheduleCommand.NotifyCanExecuteChanged();

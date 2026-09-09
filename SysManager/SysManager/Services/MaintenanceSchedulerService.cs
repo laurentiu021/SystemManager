@@ -43,17 +43,9 @@ public sealed class MaintenanceSchedulerService
 
         try
         {
-            var parameters = new Dictionary<string, object?>
-            {
-                ["Exe"] = exePath,
-                ["Args"] = schedule.CliArguments,
-                ["Folder"] = TaskFolder,
-                ["Name"] = TaskName,
-                ["Daily"] = schedule.Frequency == MaintenanceFrequency.Daily,
-                ["At"] = $"{schedule.Hour:D2}:{schedule.Minute:D2}",
-                ["DayOfWeek"] = schedule.DayOfWeek.ToString(),
-            };
-            Collection<PSObject> results = await _ps.RunAsync(RegisterScript, parameters, ct).ConfigureAwait(false);
+            Collection<PSObject> results = await _ps
+                .RunAsync(RegisterScript, RegisterParameters(schedule, exePath), ct)
+                .ConfigureAwait(false);
             // The script emits the registered task's state; one row back == success.
             return results.Count == 1 && Str(results[0], "State") is not null;
         }
@@ -64,6 +56,28 @@ public sealed class MaintenanceSchedulerService
         }
     }
 
+    /// <summary>
+    /// The parameters <see cref="RegisterScript"/> is invoked with, for a schedule and an executable path.
+    /// </summary>
+    /// <remarks>
+    /// Pure and <c>internal</c> so a test can assert that a schedule's power and idle policy actually reaches
+    /// the script. The alternative — calling <c>RegisterAsync</c> — registers a real Windows scheduled task on
+    /// the machine running the test, which is not something a unit suite may do to a developer's PC.
+    /// </remarks>
+    internal static Dictionary<string, object?> RegisterParameters(MaintenanceSchedule schedule, string exePath)
+        => new()
+        {
+            ["Exe"] = exePath,
+            ["Args"] = schedule.CliArguments,
+            ["Folder"] = TaskFolder,
+            ["Name"] = TaskName,
+            ["Daily"] = schedule.Frequency == MaintenanceFrequency.Daily,
+            ["At"] = $"{schedule.Hour:D2}:{schedule.Minute:D2}",
+            ["DayOfWeek"] = schedule.DayOfWeek.ToString(),
+            ["OnBattery"] = schedule.RunOnBattery,
+            ["OnlyIfIdle"] = schedule.OnlyWhenIdle,
+        };
+
     /// <summary>Reads the current state of the maintenance task (Exists=false if not registered).</summary>
     public async Task<MaintenanceStatus> GetStatusAsync(CancellationToken ct = default)
     {
@@ -71,7 +85,7 @@ public sealed class MaintenanceSchedulerService
         {
             var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = TaskName };
             Collection<PSObject> results = await _ps.RunAsync(StatusScript, parameters, ct).ConfigureAwait(false);
-            if (results.Count == 0) return new MaintenanceStatus(false, null, null, null, null);
+            if (results.Count == 0) return MaintenanceStatus.NotRegistered;
 
             var row = results[0];
             return new MaintenanceStatus(
@@ -79,12 +93,13 @@ public sealed class MaintenanceSchedulerService
                 State: Str(row, "State"),
                 LastRun: Date(row, "LastRunTime"),
                 NextRun: Date(row, "NextRunTime"),
-                LastResultDescription: DescribeResult(row));
+                LastResultDescription: DescribeResult(row),
+                MissedRuns: Count(row, "MissedRunsCount"));
         }
         catch (RuntimeException ex)
         {
             Log.Debug("Maintenance status read failed: {Error}", ex.Message);
-            return new MaintenanceStatus(false, null, null, null, null);
+            return MaintenanceStatus.NotRegistered;
         }
     }
 
@@ -114,16 +129,33 @@ public sealed class MaintenanceSchedulerService
     // principal — so it needs no admin to register and runs only when that user is logged on,
     // never with elevation. (Previously this relied on the cmdlet's default principal; the
     // explicit principal makes the security posture deliberate rather than implicit.)
-    private const string RegisterScript = """
+    internal const string RegisterScript = """
         param([string]$Exe, [string]$Args, [string]$Folder, [string]$Name,
-              [bool]$Daily, [string]$At, [string]$DayOfWeek)
+              [bool]$Daily, [string]$At, [string]$DayOfWeek,
+              [bool]$OnBattery, [bool]$OnlyIfIdle)
         $action = New-ScheduledTaskAction -Execute $Exe -Argument $Args
         if ($Daily) {
             $trigger = New-ScheduledTaskTrigger -Daily -At $At
         } else {
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At
         }
-        $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
+        # Splatted from typed [bool] parameters, so the policy is still a whitelisted value and never
+        # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
+        # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,
+        # and -StartWhenAvailable then fired it late, whenever the condition next cleared.
+        # [TimeSpan]::FromHours, not New-TimeSpan: the runner's runspace is InitialSessionState.CreateDefault2,
+        # which loads Microsoft.PowerShell.Core only — a Utility cmdlet here cannot be relied on.
+        $settingsArgs = @{
+            StartWhenAvailable = $true
+            DontStopOnIdleEnd  = $true
+            ExecutionTimeLimit = [TimeSpan]::FromHours(1)
+        }
+        if ($OnBattery) {
+            $settingsArgs['AllowStartIfOnBatteries'] = $true
+            $settingsArgs['DontStopIfGoingOnBatteries'] = $true
+        }
+        if ($OnlyIfIdle) { $settingsArgs['RunOnlyIfIdle'] = $true }
+        $settings = New-ScheduledTaskSettingsSet @settingsArgs
         $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
         Register-ScheduledTask -TaskName $Name -TaskPath $Folder -Action $action -Trigger $trigger `
             -Settings $settings -Principal $principal -Description "SysManager automated maintenance." `
@@ -139,10 +171,11 @@ public sealed class MaintenanceSchedulerService
         if ($null -eq $task) { return }
         $info = Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Folder -ErrorAction SilentlyContinue
         [PSCustomObject]@{
-            State          = [string]$task.State
-            LastRunTime    = $info.LastRunTime
-            NextRunTime    = $info.NextRunTime
-            LastTaskResult = $info.LastTaskResult
+            State           = [string]$task.State
+            LastRunTime     = $info.LastRunTime
+            NextRunTime     = $info.NextRunTime
+            LastTaskResult  = $info.LastTaskResult
+            MissedRunsCount = $info.NumberOfMissedRuns
         }
         """;
 
@@ -178,6 +211,24 @@ public sealed class MaintenanceSchedulerService
     }
 
     private static string? Str(PSObject? obj, string property) => obj?.Properties[property]?.Value?.ToString();
+
+    /// <summary>
+    /// Reads a count Windows reports as one of several integral CIM types, or null when it is absent.
+    /// </summary>
+    /// <remarks>
+    /// <c>NumberOfMissedRuns</c> comes back as <c>uint</c> from the CIM layer but as <c>int</c> through some
+    /// hosts, and the existing <c>DescribeResult</c> already has to handle both for <c>LastTaskResult</c> —
+    /// so a single-type cast here would silently read null on whichever host disagreed.
+    /// </remarks>
+    private static int? Count(PSObject? obj, string property) => obj?.Properties[property]?.Value switch
+    {
+        int value => value,
+        uint value => (int)Math.Min(value, int.MaxValue),
+        long value => (int)Math.Clamp(value, 0, int.MaxValue),
+        string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            => parsed,
+        _ => null,
+    };
 
     private static DateTime? Date(PSObject? obj, string property) => obj?.Properties[property]?.Value switch
     {

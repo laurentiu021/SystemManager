@@ -601,7 +601,15 @@ Key services:
   `IPowerShellRunner` seam. Registered in the current-user context (no admin); only ever
   touches its own task — never enumerates or modifies others. The command is built from a
   fixed argument whitelist (`MaintenanceSchedule.CliArguments`), so no free-form input reaches
-  the scheduler; result-code description is a pure, unit-tested helper.
+  the scheduler; result-code description is a pure, unit-tested helper. The task's power and idle
+  policy is splatted into `New-ScheduledTaskSettingsSet` from typed `[bool]` parameters, so it is
+  still a whitelisted value rather than free-form text; `RegisterParameters` is a pure `internal`
+  helper precisely so a test can assert the policy reaches the script without registering a real
+  task on the machine running it. `AllowStartIfOnBatteries` defaults to `$false` in that cmdlet,
+  and inheriting the default is what kept an unplugged laptop from ever running the schedule —
+  the settings block now opts in unless the user unticks it. The status read also selects
+  `NumberOfMissedRuns`, because Windows expresses "the conditions blocked this run" by simply not
+  running: there is no result code for it, so the count is the only honest explanation available.
 - `TweaksHubService` — thin orchestrator behind the Tweaks Hub tab: loads `PrivacyService`
   toggles as tier-classified `TweakItem`s, applies/reverts a selected set via the same
   reversible `PrivacyService.ApplyToggle`, and takes the shared `ISessionRestorePoint` snapshot

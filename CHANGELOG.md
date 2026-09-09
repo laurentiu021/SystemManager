@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.84.0] - 2026-09-09
+
+Scheduled maintenance now actually runs on a laptop that is not plugged in. Windows refuses to start a
+scheduled task on battery unless it is told otherwise, and SysManager had never told it — so on any laptop
+used unplugged, the Scheduled Maintenance tab showed a confident "Next run" time and then quietly did
+nothing, sometimes for weeks. The tab now also lets you ask for the opposite, waiting until you are away
+from the PC, tells you in words what the settings you picked will do, and shows Windows' own count of runs
+that never happened.
+
+### Fixed
+
+- **Maintenance on battery.** The scheduled task is now created with permission to start on battery, and to
+  keep running if you unplug mid-way. This is the whole bug: the tab promised "no need to remember it
+  yourself" while the run it promised was being skipped, and Windows reports a skipped run as nothing at
+  all — no error, no result code, just a Last run that never moves.
+
+### Added
+
+- **"Only run when I'm not using the PC".** Off by default, deliberately: waiting for an idle machine
+  brings back the same "never ran" problem on a PC that is always in use, so it is a choice you make rather
+  than a default you have to discover.
+- **A plain sentence describing the schedule you are about to save**, conditions included — "Every day at
+  03:00, only while plugged in" — updated as you change the settings, so the consequence of a tick is
+  visible before you commit to it.
+- **A warning when Windows has skipped runs.** It shows the count Windows recorded and the likely reasons
+  (the PC was off, asleep, or blocked by one of the conditions). This is the only signal Windows gives for
+  a run that was skipped, and it stays hidden when there is nothing to report rather than announcing a
+  reassuring zero.
+- **A one-hour cap on a maintenance run**, so a wedged background run cannot sit in the scheduler forever.
+
 ## [1.83.0] - 2026-09-09
 
 The taskbar button now shows how far a long job has got. Start an SFC scan, a bulk install or a deep

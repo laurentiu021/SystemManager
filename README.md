@@ -157,6 +157,10 @@ long-running operation, so you always know which tab is working.
 A palette button in the top-right corner opens an appearance popup with:
 - **Dark mode** — 6 curated presets (Midnight Indigo, Deep Ocean, Dark Forest, Neon Rose, Violet Night, Warm Ember)
 - **Light mode** — 6 curated presets (Clean Indigo, Sky Breeze, Warm Sand, Mint Fresh, Soft Blossom, Lavender)
+- **Auto mode** — follow the Windows light/dark setting, and keep following it. It changes with Windows
+  while the app is open, whether you flip it by hand, on a Windows schedule, or from SysManager's own
+  Dark Mode tab. Your colour family is kept across the switch: on Warm Ember, going light gives you
+  Warm Sand rather than the default. Picking any preset turns Auto off
 - **Custom mode** — free hex input for accent, background, surface, and text colors
 - Background shade slider for fine-tuning lightness/darkness
 - **Reset to default theme** — one click back to the shipped dark theme and shade, from any mode

@@ -230,6 +230,102 @@ public class ThemeServiceTests : IDisposable
             "the corrected panel must still be lighter than the background it sits on");
     }
 
+    // ---------- following the Windows light/dark setting (#1631) ----------
+
+    [Theory]
+    [InlineData(true, "midnight-indigo")]
+    [InlineData(false, "clean-indigo")]
+    public void FollowWindows_ResolvesTheArmWindowsIsOn(bool windowsIsDark, string expected)
+    {
+        var svc = new ThemeService(_dir, () => windowsIsDark);
+        svc.FollowWindows();
+
+        Assert.Equal(expected, svc.CurrentPresetId);
+    }
+
+    [Fact]
+    public void FollowWindows_StaysOnAutoRatherThanPinningTheArmItResolved()
+    {
+        // The whole point of the mode. Resolving through SetPreset would set CurrentMode from the preset's own
+        // IsDark, so "auto" would become "dark" the instant it was chosen and the next OS change would be
+        // ignored — with the mode pill jumping on its own to show it.
+        var svc = new ThemeService(_dir, () => true);
+        svc.FollowWindows();
+
+        Assert.Equal(ThemeService.AutoMode, svc.CurrentMode);
+    }
+
+    [Fact]
+    public void FollowWindows_KeepsTheChosenPresetFamilyAcrossTheSwitch()
+    {
+        // Warm Ember becomes Warm Sand, not the default. The pairing table already existed for the Dark/Light
+        // pills; auto resolves through the same one.
+        var svc = new ThemeService(_dir, () => false);
+        svc.SetPreset("warm-ember");
+        svc.FollowWindows();
+
+        Assert.Equal("warm-sand", svc.CurrentPresetId);
+    }
+
+    [Fact]
+    public void PickingAPresetLeavesAutoMode()
+    {
+        // The issue's own risk note: auto must not silently overwrite a deliberate preset choice. SetPreset
+        // already takes the mode from the preset it is handed, so choosing one is how you leave.
+        var svc = new ThemeService(_dir, () => true);
+        svc.FollowWindows();
+        Assert.Equal(ThemeService.AutoMode, svc.CurrentMode);
+
+        svc.SetPreset("clean-indigo");
+
+        Assert.Equal("light", svc.CurrentMode);
+        Assert.Equal("clean-indigo", svc.CurrentPresetId);
+    }
+
+    [Fact]
+    public void AutoMode_ReResolvesOnStartupRatherThanRestoringTheSavedArm()
+    {
+        // A persisted auto theme has to answer to what Windows is on NOW. Saved while Windows was dark, loaded
+        // on a machine that is light: without the re-resolve, Initialize would restore the dark preset and the
+        // app would open out of step with the desktop until something else changed.
+        new ThemeService(_dir, () => true).FollowWindows();
+
+        var reloaded = new ThemeService(_dir, () => false);
+        reloaded.Initialize();
+
+        Assert.Equal(ThemeService.AutoMode, reloaded.CurrentMode);
+        Assert.Equal("clean-indigo", reloaded.CurrentPresetId);
+        Assert.False(reloaded.CurrentTheme.IsDark);
+    }
+
+    [Fact]
+    public void AutoMode_SurvivesARestartAsAMode()
+    {
+        // Distinct from the test above: that one proves the ARM is re-resolved, this one proves the MODE itself
+        // persists. If "auto" were saved as the arm it resolved to, the mode would silently degrade to a pinned
+        // preset on the first restart and never follow Windows again.
+        new ThemeService(_dir, () => true).FollowWindows();
+
+        var reloaded = new ThemeService(_dir, () => true);
+        reloaded.Initialize();
+
+        Assert.Equal(ThemeService.AutoMode, reloaded.CurrentMode);
+    }
+
+    [Fact]
+    public void ResetToDefault_AlsoLeavesAutoMode()
+    {
+        // Reset means the shipped theme, which is a pinned dark preset. Leaving the mode on auto would make the
+        // reset conditional on what Windows happens to be doing.
+        var svc = new ThemeService(_dir, () => false);
+        svc.FollowWindows();
+
+        svc.ResetToDefault();
+
+        Assert.Equal("dark", svc.CurrentMode);
+        Assert.Equal(ThemeService.DefaultPresetId, svc.CurrentPresetId);
+    }
+
     public static TheoryData<string> AllPresetIds()
     {
         var data = new TheoryData<string>();

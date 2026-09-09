@@ -30,12 +30,21 @@
                     <!-- Mode switcher -->
                     <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}" Padding="3"
                             BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,0,16">
-                        <UniformGrid Columns="3">
+                        <UniformGrid Columns="4">
                             <RadioButton x:Name="DarkMode" Content="Dark" GroupName="Mode"
                                          AutomationProperties.Name="Dark mode"
                                          Style="{StaticResource ModePill}" IsChecked="True"/>
                             <RadioButton x:Name="LightMode" Content="Light" GroupName="Mode"
                                          AutomationProperties.Name="Light mode"
+                                         Style="{StaticResource ModePill}"/>
+                            <!-- The app already reads the Windows light/dark setting, and the Dark Mode tab
+                                 can put Windows itself on a schedule — while the app refused to follow it, so a
+                                 user who turned that schedule on watched SysManager desync from their desktop
+                                 every evening (#1631). Picking a preset leaves this mode, because SetPreset
+                                 takes the mode from the preset it was handed. -->
+                            <RadioButton x:Name="FollowWindowsMode" Content="Auto" GroupName="Mode"
+                                         AutomationProperties.Name="Auto mode, follow Windows"
+                                         ToolTip="Follow the Windows light/dark setting, and change with it."
                                          Style="{StaticResource ModePill}"/>
                             <RadioButton x:Name="CustomMode" Content="Custom" GroupName="Mode"
                                          AutomationProperties.Name="Custom mode"

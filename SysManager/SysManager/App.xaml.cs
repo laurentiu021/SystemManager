@@ -243,6 +243,11 @@ public partial class App : Application
         _pipeCts?.Cancel();
         _pipeCts?.Dispose();
         _trayService?.Dispose();
+        // Releases the SystemEvents subscription that keeps "Follow Windows" live. SystemEvents holds
+        // handlers statically, so the handler could otherwise fire during shutdown, after the dispatcher
+        // has stopped taking work. Through Instance, not the container: ThemeService is a static
+        // singleton and is NOT registered, so a GetService here would resolve null and skip silently.
+        ThemeService.Instance.Shutdown();
         try { (Services as IDisposable)?.Dispose(); }
         catch (ObjectDisposedException ex) { LogService.Logger?.Debug(ex, "Service provider already disposed at exit"); }
         LogService.Shutdown();

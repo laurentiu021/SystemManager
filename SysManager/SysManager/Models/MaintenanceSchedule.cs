@@ -42,7 +42,9 @@ public sealed record MaintenanceSchedule(
     int Hour,
     int Minute,
     // Day of week for weekly schedules (ignored for daily). Sunday = 0.
-    DayOfWeek DayOfWeek = DayOfWeek.Sunday)
+    DayOfWeek DayOfWeek = DayOfWeek.Sunday,
+    bool RunOnBattery = true,
+    bool OnlyWhenIdle = false)
 {
     /// <summary>The CLI argument string this schedule runs (whitelisted, no user text).</summary>
     public string CliArguments => Action switch
@@ -70,10 +72,33 @@ public sealed record MaintenanceSchedule(
 
     public string ActionLabel => LabelFor(Action);
 
-    /// <summary>A plain-language summary of when this runs (e.g. "Every Sunday at 03:00").</summary>
-    public string Summary => Frequency == MaintenanceFrequency.Daily
-        ? $"Every day at {Hour:D2}:{Minute:D2}"
-        : $"Every {DayOfWeek} at {Hour:D2}:{Minute:D2}";
+    /// <summary>
+    /// A plain-language summary of when this runs, including the conditions that can stop it
+    /// (e.g. "Every Sunday at 03:00, only while plugged in and only when you are not using the PC").
+    /// </summary>
+    /// <remarks>
+    /// The conditions belong in the sentence because they decide whether the schedule happens at all, and
+    /// the tab used to promise the time unconditionally while Windows quietly applied a policy nobody had
+    /// been shown (#1578). A summary that states the time and hides the conditions is the part that made
+    /// "it says next run 03:00 but it never ran" possible.
+    /// </remarks>
+    public string Summary
+    {
+        get
+        {
+            var when = Frequency == MaintenanceFrequency.Daily
+                ? $"Every day at {Hour:D2}:{Minute:D2}"
+                : $"Every {DayOfWeek} at {Hour:D2}:{Minute:D2}";
+
+            // Only the RESTRICTIONS are named. "Even on battery" is the default and adds nothing a user
+            // needs to plan around; "only while plugged in" is the one that explains a run that never came.
+            List<string> conditions = [];
+            if (!RunOnBattery) conditions.Add("only while plugged in");
+            if (OnlyWhenIdle) conditions.Add("only when you are not using the PC");
+
+            return conditions.Count == 0 ? when : $"{when}, {string.Join(" and ", conditions)}";
+        }
+    }
 }
 
 /// <summary>The live state of the registered maintenance task, read back from Windows.</summary>
@@ -82,4 +107,29 @@ public sealed record MaintenanceStatus(
     string? State,
     DateTime? LastRun,
     DateTime? NextRun,
-    string? LastResultDescription);
+    string? LastResultDescription,
+    // How many scheduled runs Windows recorded as missed.
+    int? MissedRuns = null)
+{
+    /// <summary>No task is registered — the same shape every failure path returns.</summary>
+    /// <remarks>
+    /// A named value rather than five nulls at three call sites. Adding a field to this record previously
+    /// meant editing each of them, and a missed one is a compile error only because every field happens to
+    /// be nullable.
+    /// </remarks>
+    public static MaintenanceStatus NotRegistered { get; } = new(false, null, null, null, null);
+
+    /// <summary>
+    /// How Windows says the schedule is not firing, or null when there is nothing to report.
+    /// </summary>
+    /// <remarks>
+    /// There is no <c>LastTaskResult</c> code for "skipped because the conditions were not met" — Windows
+    /// expresses that by simply not running, which is exactly why a stale Last run and a confident Next run
+    /// were all the user got (#1578). <c>NumberOfMissedRuns</c> is the signal that does exist, so this is the
+    /// honest version of the explanation rather than an invented result code.
+    /// </remarks>
+    public string? MissedRunsWarning => MissedRuns is > 0
+        ? $"{MissedRuns} scheduled run{(MissedRuns == 1 ? "" : "s")} did not happen — the PC was probably "
+          + "off, asleep, or blocked by one of the conditions below."
+        : null;
+}

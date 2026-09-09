@@ -64,6 +64,16 @@
                         </StackPanel>
                     </Border>
                 </Grid>
+
+                <!-- Windows' own count of runs that did not happen. There is no LastTaskResult code for
+                     "skipped because the conditions were not met" — it just does not run — so without this
+                     a stale LAST RUN beside a confident NEXT RUN was the whole story. Collapses when the
+                     count is zero rather than showing a reassuring "0 missed", which would be noise. -->
+                <Border Style="{StaticResource CardInner}" Margin="0,12,0,0"
+                        Visibility="{Binding MissedRunsWarning, Converter={StaticResource FlexVis}}">
+                    <TextBlock Text="{Binding MissedRunsWarning}" FontSize="13" TextWrapping="Wrap"
+                               Foreground="{DynamicResource WarningText}"/>
+                </Border>
             </StackPanel>
         </Border>
 
@@ -108,7 +118,28 @@
                                   Width="70" Margin="0,4,0,0" AutomationProperties.Name="Minute"/>
                     </StackPanel>
                 </WrapPanel>
+
+                <!-- The conditions Windows applies, made visible and changeable. AllowStartIfOnBatteries
+                     defaults to FALSE in New-ScheduledTaskSettingsSet, so an unplugged laptop simply never
+                     ran the schedule while this tab showed a Next run time and promised "no need to remember
+                     it yourself" (#1578). Content is the label, so the accessible name leads with the same
+                     words — EveryLabelledControl_IsAnnouncedWithTheWordsPrintedOnIt holds that. -->
                 <WrapPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <CheckBox Content="Run even when on battery" IsChecked="{Binding RunOnBattery}"
+                              VerticalAlignment="Center" Margin="0,0,20,0"
+                              AutomationProperties.Name="Run even when on battery"
+                              ToolTip="On by default. With this off, Windows skips the run whenever the PC is unplugged — and it does not tell you it skipped, so the tab would show an old Last run beside a future Next run."/>
+                    <CheckBox Content="Only run when I'm not using the PC" IsChecked="{Binding OnlyWhenIdle}"
+                              VerticalAlignment="Center" Margin="0,0,20,0"
+                              AutomationProperties.Name="Only run when I'm not using the PC"
+                              ToolTip="Off by default. Waiting for the PC to be idle keeps maintenance out of your way, but on a machine that is always in use it can mean the schedule never runs at all."/>
+                </WrapPanel>
+
+                <!-- What the settings above add up to, in the same words the saved schedule will report. -->
+                <TextBlock Text="{Binding PendingSummary}" Style="{StaticResource Subtle}"
+                           TextWrapping="Wrap" Margin="0,10,0,0"/>
+
+                <WrapPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="Save schedule" Command="{Binding SaveScheduleCommand}"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
                             AutomationProperties.Name="Save schedule — the maintenance schedule"/>

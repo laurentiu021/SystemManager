@@ -681,6 +681,15 @@ a confirmation before it runs:
   runs SysManager in the background (via its CLI) to clean temporary files or purge
   standby memory, daily or weekly at a time you pick
 - See the **last run, next run, and last result** of the task at a glance
+- **Runs on battery too.** Windows will not start a scheduled task on battery unless it is
+  told to, so on an unplugged laptop the schedule would silently never fire — it now starts
+  regardless, and keeps going if you unplug mid-run. Untick it if you would rather it waited
+  for mains power.
+- **Optional "only when I'm not using the PC"** condition, off by default
+- **The schedule you are about to save is spelled out in words**, conditions included, and
+  updates as you change the settings
+- **Windows' own count of skipped runs is shown** when it is not zero — the only signal
+  Windows gives for a run its conditions blocked
 - Update or remove the schedule any time, each with a confirmation
 - Runs in your user context (no admin required) and only ever touches its own task
   at `\SysManager\Scheduled Maintenance` — no other scheduled tasks are affected

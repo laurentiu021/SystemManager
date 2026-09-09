@@ -6444,20 +6444,38 @@ public partial class ArchitectureTests
     /// answer the app already had. This is SysManager's most persistent defect class: state that is
     /// implemented, unit-tested, and bound by nothing, which neither the compiler nor a view-model test
     /// can see — only an assertion against the shipped XAML.</para>
+    /// <para>Both tabs that query the Windows task store are in scope. The Scheduled Maintenance tab is the
+    /// second instance: its status script selected <c>NumberOfMissedRuns</c>, which is the ONLY signal
+    /// Windows gives for "the conditions blocked the run" — there is no result code for a skipped run — so
+    /// without it on screen a stale Last run beside a confident Next run was the whole story a user got
+    /// (#1578). Widened here rather than copied into a second guard, because it is the same question.</para>
     /// </summary>
     [Fact]
     public void EveryScheduledTaskFieldTheQueryFetches_IsBoundInTheView()
     {
-        var service = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "TaskSchedulerService.cs"));
-        var view = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Views", "TaskSchedulerView.xaml"));
+        var appDir = FindAppProjectDir();
 
         // XAML comments are stripped before matching. A comment in the view that merely NAMES a property
         // would otherwise satisfy the check — the first draft of this guard stayed green with the "Next
         // run" column deleted, because the comment above it mentioned NextRunDisplay. Only a real binding
         // counts.
-        var bindings = XmlComment().Replace(view, string.Empty);
+        var services = new Dictionary<string, string>(StringComparer.Ordinal);
+        var views = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        string Service(string file)
+        {
+            if (!services.TryGetValue(file, out var text))
+                services[file] = text = File.ReadAllText(Path.Combine(appDir, "Services", file));
+            return text;
+        }
+
+        string Bindings(string file)
+        {
+            if (!views.TryGetValue(file, out var text))
+                views[file] = text = XmlComment().Replace(
+                    File.ReadAllText(Path.Combine(appDir, "Views", file)), string.Empty);
+            return text;
+        }
 
         // Only assert on fields the service genuinely asks Windows for — otherwise this guard drifts into
         // demanding UI for data that is not collected.
@@ -6468,9 +6486,10 @@ public partial class ArchitectureTests
         // could not fail however the query changed. Found by an adversarial audit of this guard. A
         // selection fragment cannot be supplied by a comment, and stripping comments is not enough here —
         // the field genuinely appears in prose too.
-        (string Fetched, string Bound)[] contract =
+        (string ServiceFile, string ViewFile, string Fetched, string Bound)[] contract =
         [
-            ("@{ n='State'; e={ [string]$_.State } }, Author, Description", "{Binding AuthorDisplay}"),
+            ("TaskSchedulerService.cs", "TaskSchedulerView.xaml",
+             "@{ n='State'; e={ [string]$_.State } }, Author, Description", "{Binding AuthorDisplay}"),
             // DescriptionDisplay, not the raw field: most Windows tasks carry no description, and the
             // raw binding rendered those rows as an empty cell.
             //
@@ -6479,19 +6498,28 @@ public partial class ArchitectureTests
             // substring check would be satisfied by the tooltip alone, and the column could quietly go
             // back to the raw field while this guard stayed green. A tooltip is `Value="`, a column is
             // `Binding="`; only the latter is the cell. Caught by mutating exactly that.
-            ("Author, Description", "Binding=\"{Binding DescriptionDisplay}\""),
-            ("Select-Object LastRunTime, NextRunTime", "{Binding NextRunDisplay}"),
-            ("Select-Object LastRunTime, NextRunTime", "{Binding LastRunDisplay}"),
+            ("TaskSchedulerService.cs", "TaskSchedulerView.xaml",
+             "Author, Description", "Binding=\"{Binding DescriptionDisplay}\""),
+            ("TaskSchedulerService.cs", "TaskSchedulerView.xaml",
+             "Select-Object LastRunTime, NextRunTime", "{Binding NextRunDisplay}"),
+            ("TaskSchedulerService.cs", "TaskSchedulerView.xaml",
+             "Select-Object LastRunTime, NextRunTime", "{Binding LastRunDisplay}"),
+            // MissedRunsWarning, not the raw count: a bare "0" is noise on a tab that already shows three
+            // status fields, so the view model turns the count into a sentence and an empty string when
+            // there is nothing to report. The binding drives the warning card's Visibility as well as its
+            // text, which is a real use of the value.
+            ("MaintenanceSchedulerService.cs", "ScheduledMaintenanceView.xaml",
+             "MissedRunsCount = $info.NumberOfMissedRuns", "{Binding MissedRunsWarning}"),
         ];
 
         var notFetched = new List<string>();
         var notBound = new List<string>();
-        foreach (var (fetched, bound) in contract)
+        foreach (var (serviceFile, viewFile, fetched, bound) in contract)
         {
-            if (!service.Contains(fetched, StringComparison.Ordinal))
-                notFetched.Add(fetched);
-            else if (!bindings.Contains(bound, StringComparison.Ordinal))
-                notBound.Add($"{fetched} -> expected a real '{bound}' in TaskSchedulerView.xaml");
+            if (!Service(serviceFile).Contains(fetched, StringComparison.Ordinal))
+                notFetched.Add($"{serviceFile}: {fetched}");
+            else if (!Bindings(viewFile).Contains(bound, StringComparison.Ordinal))
+                notBound.Add($"{fetched} -> expected a real '{bound}' in {viewFile}");
         }
 
         // Vacuity floor: if the service stopped selecting these, the loop above would silently check
@@ -6501,10 +6529,72 @@ public partial class ArchitectureTests
             + $"fix the guard rather than trusting its pass:\n  {string.Join("\n  ", notFetched)}");
 
         Assert.True(notBound.Count == 0,
-            "the Task Scheduler query pays to fetch these fields on every scan and the view displays "
-            + "none of them, so the work is thrown away and the user cannot see data the app already "
+            "these queries pay to fetch a field on every scan and the matching view displays none of "
+            + "them, so the work is thrown away and the user cannot see data the app already "
             + $"holds:\n  {string.Join("\n  ", notBound)}");
     }
+
+    /// <summary>
+    /// Every condition a maintenance schedule can carry has a control the user can actually tick.
+    /// </summary>
+    /// <remarks>
+    /// A near miss of the unreachable-surface family that the existing guards do not cover.
+    /// <see cref="EveryViewModelProperty_IsShownOrRead"/> asks "is it shown or read", and both of these are
+    /// READ — <c>BuildSchedule()</c> passes them straight into the record — so deleting a checkbox leaves
+    /// that guard green while the condition becomes permanently whatever its default is. The failure is
+    /// silent in the other direction too: every value-level test still passes, because they construct the
+    /// record directly.
+    /// <para>The population is derived from the record's own optional <c>bool</c> parameters rather than
+    /// listed, so a third condition fails here until it has a control. <c>IsChecked="{Binding …}"</c> is the
+    /// required shape and not merely the name: a CheckBox binds <c>IsChecked</c> two-way by default, which is
+    /// what makes the tick reach the schedule, and a condition mentioned in a tooltip or bound one-way to
+    /// something else is not a control.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryMaintenanceConditionTheScheduleCarries_HasACheckBoxInTheView()
+    {
+        var appDir = FindAppProjectDir();
+        var model = File.ReadAllText(Path.Combine(appDir, "Models", "MaintenanceSchedule.cs"));
+        var view = XmlComment().Replace(
+            File.ReadAllText(Path.Combine(appDir, "Views", "ScheduledMaintenanceView.xaml")), string.Empty);
+
+        // Sliced to the MaintenanceSchedule record's parameter list. MaintenanceStatus lives in the same
+        // file and has optional parameters of its own, and those are read back from Windows rather than
+        // chosen — a file-wide match would demand a checkbox for them.
+        const string declaration = "public sealed record MaintenanceSchedule(";
+        var start = model.IndexOf(declaration, StringComparison.Ordinal);
+        Assert.True(start >= 0,
+            "could not find the MaintenanceSchedule record declaration — if the model was renamed, update "
+            + "this guard rather than letting it pass on a slice it never found");
+
+        var body = model.IndexOf("\n{", start, StringComparison.Ordinal);
+        Assert.True(body > start, "the MaintenanceSchedule declaration has no parameter list to read");
+        var parameters = model[start..body];
+
+        var conditions = OptionalBoolParameter().Matches(parameters)
+            .Select(m => m.Groups["name"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        // Vacuity floor: two conditions today (RunOnBattery, OnlyWhenIdle). A slice that parsed none would
+        // pass an empty loop and report success.
+        Assert.True(conditions.Count >= 2,
+            $"parsed only {conditions.Count} optional bool conditions from the MaintenanceSchedule "
+            + "declaration, out of 2 measured — the pattern is no longer reading the parameter list");
+
+        var untickable = conditions
+            .Where(name => !view.Contains($"IsChecked=\"{{Binding {name}}}\"", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(untickable.Count == 0,
+            "a maintenance schedule carries these conditions and the tab offers no control for them, so "
+            + "each one is permanently stuck at its default and the user cannot see that it applies at "
+            + $"all:\n  {string.Join("\n  ", untickable)}");
+    }
+
+    /// <summary>An optional <c>bool</c> parameter in a record declaration, capturing its name.</summary>
+    [GeneratedRegex(@"\bbool\s+(?<name>\w+)\s*=\s*(?:true|false)\s*[,)]", RegexOptions.Compiled)]
+    private static partial Regex OptionalBoolParameter();
 
     /// <summary>
     /// Every field the startup scan fills in on a <c>StartupEntry</c> is either bound in

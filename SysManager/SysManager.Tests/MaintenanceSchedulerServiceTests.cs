@@ -136,6 +136,45 @@ public class MaintenanceSchedulerServiceTests
         Assert.Equal("Last run failed (file not found)", status.LastResultDescription);
     }
 
+    /// <summary>
+    /// <c>NumberOfMissedRuns</c> survives the trip through <see cref="PSObject"/>, whichever integral type
+    /// the host hands it back as.
+    /// </summary>
+    /// <remarks>
+    /// The count comes back <c>uint</c> from the CIM layer but <c>int</c> through some hosts — the same split
+    /// <c>LastTaskResult</c> already has to handle — so a single-type cast would read null on whichever host
+    /// disagreed, and the missed-runs warning (#1578) would just never appear. Absent is its own row because
+    /// a task that has never been evaluated has no count at all, and that must read as "nothing to report"
+    /// rather than zero.
+    /// </remarks>
+    [Fact]
+    public async Task GetStatusAsync_ReadsMissedRuns_FromEitherIntegralType()
+    {
+        foreach (object? raw in new object?[] { 4, 4u, 4L, "4" })
+        {
+            var row = StatusRow("Ready", 0);
+            row.Properties.Add(new PSNoteProperty("MissedRunsCount", raw));
+            var (svc, _) = NewService(row);
+
+            var status = await svc.GetStatusAsync();
+
+            Assert.Equal(4, status.MissedRuns);
+            Assert.StartsWith("4 scheduled runs did not happen", status.MissedRunsWarning, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_NoMissedRunsProperty_ReportsNothing()
+    {
+        var (svc, _) = NewService(StatusRow("Ready", 0)); // the row has no MissedRunsCount at all
+
+        var status = await svc.GetStatusAsync();
+
+        Assert.True(status.Exists);
+        Assert.Null(status.MissedRuns);
+        Assert.Null(status.MissedRunsWarning);
+    }
+
     [Fact]
     public async Task GetStatusAsync_PowerShellThrows_ReturnsExistsFalse()
     {

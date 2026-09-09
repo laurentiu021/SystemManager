@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.79.0] - 2026-09-09
+
+The Drivers tab now shows whether Windows reports each driver as digitally signed. Until now the only clue
+about where a driver came from was the Manufacturer column, and that name is a string the driver package
+supplies about itself, so anyone can write anything in it. The new Signature column comes from Windows
+instead. It stays blank when Windows reports nothing, because "Unsigned" is the kind of word someone acts
+on and it must not stand in for "we do not know".
+
+### Added
+
+- **Drivers — a Signature column, read from Windows rather than from the driver.** `Win32_PnPSignedDriver`,
+  the Windows source this tab already queried, is named for exactly this property, and the query selected
+  four others and dropped it. So the one tab that could answer "is this driver from who it claims?" was
+  answering it with `Manufacturer`, which the driver package fills in about itself. The column says "Signed"
+  or "Unsigned" and deliberately not "Safe": a signature identifies the publisher and nothing more, and
+  Windows will load a signed driver from anyone holding a valid certificate. There are three states rather
+  than two. A driver Windows says nothing about shows blank, and a test pins that absent never renders as
+  unsigned, because on this tab that reads as an accusation and sends someone hunting for a driver to remove.
+
+### Changed
+
+- **A query that fetches a property nothing reads now fails the build.** The dropped `IsSigned` broke
+  nothing and failed nothing: the query worked, the parse worked, and the column that should have existed
+  simply did not exist. `EveryPropertyACimQueryFetches_IsReadBackOut` compares both directions over the
+  queries that return JSON — every property selected has to be parsed, and every property parsed has to be
+  selected — so deleting a value from a query fails as loudly as never reading one. The reverse direction is
+  the one that matters most: parse tests supply their own JSON, so they keep passing while the real query
+  quietly stops asking for the value.
+
 ## [1.78.8] - 2026-09-08
 
 App Blocker's Unblock button asked you to confirm even when it could not do the job. Without

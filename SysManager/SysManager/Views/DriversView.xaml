@@ -104,6 +104,22 @@
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
+
+                        <!-- Win32_PnPSignedDriver is named for this, and the query dropped it (#1581), so the
+                             one column that could say "is this from who it claims?" was missing while
+                             Manufacturer — a string the driver package supplies about itself — sat beside it.
+                             Blank when Windows did not report a value: "Unsigned" is an accusation a user may
+                             act on, and it must not stand in for "we do not know". Deliberately says "Signed"
+                             rather than "Safe" — a signature identifies the publisher, nothing more. -->
+                        <DataGridTextColumn Header="Signature" Binding="{Binding SignatureDisplay}" Width="100" MinWidth="80"
+                                            SortMemberPath="SignatureDisplay">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
                     </DataGrid.Columns>
                 </DataGrid>
                 <!-- Nothing scanned yet -->

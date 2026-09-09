@@ -83,7 +83,7 @@ public sealed partial class DriversViewModel : ViewModelBase
                 await _runner.RunScriptViaPwshAsync(@"
                     Get-CimInstance Win32_PnPSignedDriver |
                       Where-Object { $_.DeviceName -and $_.DriverVersion } |
-                      Select-Object DeviceName, DriverVersion, Manufacturer, DriverDate |
+                      Select-Object DeviceName, DriverVersion, Manufacturer, DriverDate, IsSigned |
                       ConvertTo-Json -Compress
                 ", cancellationToken: _cts.Token);
             }
@@ -135,6 +135,7 @@ public sealed partial class DriversViewModel : ViewModelBase
                 Manufacturer = el.TryGetProperty("Manufacturer", out var mf) ? mf.GetString() ?? "" : "",
                 DriverVersion = el.TryGetProperty("DriverVersion", out var dv) ? dv.GetString() ?? "" : "",
                 DriverDate = ParseCimDate(el.TryGetProperty("DriverDate", out var dd) ? dd : default),
+                IsSigned = ParseCimBool(el.TryGetProperty("IsSigned", out var sg) ? sg : default),
             }))
             {
                 _allDrivers.Add(entry);
@@ -176,6 +177,24 @@ public sealed partial class DriversViewModel : ViewModelBase
     /// <summary>
     /// CIM dates come as "/Date(ticks)/" strings in JSON.
     /// </summary>
+    /// <summary>
+    /// Reads a CIM boolean, keeping "absent" distinct from "false".
+    /// </summary>
+    /// <remarks>
+    /// The distinction is the point (#1581). If a missing <c>IsSigned</c> collapsed to <c>false</c>, the
+    /// column would call a driver unsigned because Windows declined to say — and on this tab that reads as
+    /// an accusation the user may act on. <c>ConvertTo-Json</c> can also emit the value as the strings
+    /// "True"/"False" depending on how the property is surfaced, so both shapes are accepted; anything else
+    /// is unknown rather than guessed at.
+    /// </remarks>
+    internal static bool? ParseCimBool(JsonElement el) => el.ValueKind switch
+    {
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.String => bool.TryParse(el.GetString(), out var parsed) ? parsed : null,
+        _ => null,
+    };
+
     private static DateTime? ParseCimDate(JsonElement el)
     {
         if (el.ValueKind == JsonValueKind.Null || el.ValueKind == JsonValueKind.Undefined)

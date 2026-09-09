@@ -961,7 +961,12 @@ offers, "rate us" prompts:
 
 ### Drivers
 - Sortable DataGrid table of all installed system drivers
-- Columns: Device Name, Manufacturer, Version, Date — click headers to sort
+- Columns: Device Name, Manufacturer, Version, Date, Signature — click headers to sort
+- **Signature** — whether Windows reports the driver as digitally signed. Manufacturer
+  is a name the driver package supplies about itself, so it proves nothing; this column
+  comes from Windows. It says "Signed", not "Safe" — a signature identifies the
+  publisher, and Windows will load a signed driver from anyone with a valid
+  certificate. Blank means Windows reported nothing, which is not the same as unsigned
 - **Hide built-in Windows drivers** — tick the filter to leave only the drivers your
   hardware maker installed (graphics, audio, network, …), which is usually what you
   care about when checking whether something needs updating. The count shows both

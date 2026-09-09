@@ -3170,10 +3170,12 @@ public partial class ArchitectureTests
         var appDir = FindAppProjectDir();
         var modelsDir = Path.Combine(appDir, "Models");
 
-        var xaml = string.Join('\n', Directory
+        // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
+        // and this codebase comments heavily enough that the risk is real rather than theoretical.
+        var xaml = XmlComment().Replace(string.Join('\n', Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Select(File.ReadAllText));
+            .Select(File.ReadAllText)), string.Empty);
 
         var sources = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
@@ -3194,7 +3196,7 @@ public partial class ArchitectureTests
                 var property = char.ToUpperInvariant(field[0]) + field[1..];
                 checkedProperties++;
 
-                if (xaml.Contains(property, StringComparison.Ordinal)) continue;
+                if (Regex.IsMatch(xaml, $@"\b{Regex.Escape(property)}\b")) continue;
                 if (Regex.IsMatch(source, $@"\b{Regex.Escape(property)}\b")) continue;
 
                 // Require the declaring type's name in the same file, so a same-named property on another
@@ -3239,6 +3241,25 @@ public partial class ArchitectureTests
     /// <para>Scope is <c>[ObservableProperty]</c> fields. A plain property is the same defect —
     /// <c>ReleaseNote.Url</c> was one, and <c>DriveTarget.Display</c> another — but has no generated-name
     /// convention to key on, so those stay a review judgement.</para>
+    /// <para><b>Name-only matching was not enough, and the hole had a live instance (#2194).</b> Both
+    /// criteria used to be answered by a bare name: <c>xaml.Contains(property)</c> over every view
+    /// concatenated, and a read anywhere in any <c>.cs</c> file. Neither knew which TYPE the hit belonged
+    /// to, so a same-named member on an unrelated type made a property look reachable.
+    /// <c>ResourceHistoryViewModel.SampleCount</c> was assigned on every reload and read by nothing, and
+    /// this guard passed it because <c>HealthAnalyzer</c> declares a <c>SampleCount</c> of its own — a
+    /// record parameter on the ping-metrics type, read as <c>m.SampleCount</c> — which the global search
+    /// credited here. Two changes close it: the XAML side matches on a word boundary with comments
+    /// stripped, and the C# side requires the read to sit in a file that also names the declaring type,
+    /// copied from <see cref="EveryModelProperty_IsEitherWrittenOrShown"/> rather than reinvented.</para>
+    /// <para>The word boundary is load-bearing on its own: <c>Contains</c> credits any property whose name
+    /// is a substring of some other identifier, and <c>StartupView.xaml</c> carries
+    /// <c>OpenFileLocationCommand</c> — enough to make a hypothetical <c>FileLocation</c> look bound. That
+    /// exact shape is what hid <c>StartupEntry.Location</c> until a per-tab guard caught it (#1587).</para>
+    /// <para><b>What is still not checked:</b> which type a <c>{Binding}</c> belongs to. A
+    /// <c>{Binding Location}</c> in <c>ContextMenuView</c> counts for every type that owns a
+    /// <c>Location</c>, because resolving each view's item type across 65 views is a separate piece of work
+    /// with its own false-positive risk on templated and nested bindings. So this narrows the hole rather
+    /// than closing it, and a name owned by two types still needs a per-tab guard.</para>
     /// </remarks>
     [Fact]
     public void EveryViewModelProperty_IsShownOrRead()
@@ -3246,10 +3267,12 @@ public partial class ArchitectureTests
         var appDir = FindAppProjectDir();
         var viewModelsDir = Path.Combine(appDir, "ViewModels");
 
-        var xaml = string.Join('\n', Directory
+        // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
+        // and this codebase comments heavily enough that the risk is real rather than theoretical.
+        var xaml = XmlComment().Replace(string.Join('\n', Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Select(File.ReadAllText));
+            .Select(File.ReadAllText)), string.Empty);
 
         var sources = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
@@ -3261,14 +3284,25 @@ public partial class ArchitectureTests
 
         foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(viewModelsDir, StringComparison.Ordinal)))
         {
+            var typeName = TypeDeclaration().Match(source).Groups[1].Value;
+
             foreach (var m in ObservablePropertyField().Matches(source).Cast<Match>())
             {
                 var field = m.Groups[1].Value;
                 var property = char.ToUpperInvariant(field[0]) + field[1..];
                 inspected++;
 
-                if (xaml.Contains(property, StringComparison.Ordinal)) continue;
-                if (sources.Values.Any(text => IsReadSomewhere(text, property))) continue;
+                if (Regex.IsMatch(xaml, $@"\b{Regex.Escape(property)}\b")) continue;
+
+                // The read must sit in a file that also names the declaring type. Copied from
+                // EveryModelProperty_IsEitherWrittenOrShown below rather than reinvented: without it,
+                // HealthAnalyzer's own SampleCount — a record parameter on an unrelated ping-metrics type,
+                // read as m.SampleCount — credited ResourceHistoryViewModel.SampleCount, which nothing read.
+                if (typeName.Length > 0
+                    && sources.Any(kv => kv.Value.Contains(typeName, StringComparison.Ordinal)
+                                         && IsReadSomewhere(kv.Value, property))) continue;
+                if (typeName.Length == 0
+                    && sources.Values.Any(text => IsReadSomewhere(text, property))) continue;
 
                 unreachable.Add($"{Path.GetFileNameWithoutExtension(path)}.{property}");
             }

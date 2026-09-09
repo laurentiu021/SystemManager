@@ -3571,6 +3571,68 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A screenshot gallery group may only name tabs it actually shows a picture of.
+    /// </summary>
+    /// <remarks>
+    /// Each <c>&lt;details&gt;</c> block in the README's Screenshots section carries a summary line listing
+    /// the tabs inside it, and the reader decides whether to expand it from that line alone. Two groups
+    /// promised a shot they did not contain: <b>Storage</b> listed "Disk Analyzer · Duplicate Finder" over a
+    /// single image, and <b>Monitor</b> listed "… · Bandwidth" over four.
+    /// <para>The Monitor one is instructive: it became false when the Bandwidth Monitor screenshot was
+    /// deleted for showing the tab while it was still a placeholder. Deleting the image was right; the
+    /// summary above it was left promising it, so removing one stale thing created another. A count is the
+    /// cheapest possible check and it holds that line.</para>
+    /// <para>Counted, not name-matched. The summary abbreviates deliberately — "Bandwidth" for Bandwidth
+    /// Monitor, "Repair" for Network Repair, "Logs" for System Logs — and demanding the full label would
+    /// force a rewrite of eleven honest summaries to catch two dishonest ones. A group that shows N images
+    /// may name N tabs; disclosing an absent one in prose underneath is fine, and is what both fixed groups
+    /// now do.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryScreenshotGroupSummary_NamesOnlyWhatItShows()
+    {
+        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var groups = GalleryGroup().Matches(readme).ToList();
+
+        // Vacuity floor: 11 collapsible groups today, one per nav group that has any screenshot. A markup
+        // change that stopped the blocks parsing would otherwise pass an empty loop.
+        Assert.True(groups.Count >= 10,
+            $"only {groups.Count} screenshot groups parsed from README.md, out of 11 measured — the guard "
+            + "is no longer reading the gallery, so a pass proves nothing");
+
+        var overpromised = new List<string>();
+        foreach (var group in groups)
+        {
+            var title = group.Groups["title"].Value.Trim();
+            var promised = group.Groups["promised"].Value
+                .Split('·', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Length;
+            var shown = ScreenshotReference().Matches(group.Groups["body"].Value)
+                .Select(m => m.Groups[1].Value)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+
+            if (promised > shown)
+                overpromised.Add($"{title}: names {promised} tabs, shows {shown} image(s)");
+        }
+
+        Assert.True(overpromised.Count == 0,
+            "these gallery groups name a tab they show no picture of, so the summary line a reader decides "
+            + "from is a promise the block does not keep. Trim the summary and disclose the gap in prose "
+            + $"underneath, or add the shot:\n  {string.Join("\n  ", overpromised)}");
+    }
+
+    /// <summary>One collapsible screenshot group: its title, its promised tab list, and its body.</summary>
+    [GeneratedRegex(@"<summary><strong>(?<title>.+?)</strong>\s*—\s*(?<promised>.+?)</summary>"
+        + @"(?<body>.*?)</details>",
+        RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex GalleryGroup();
+
+    /// <summary>A screenshot path, capturing the file stem.</summary>
+    [GeneratedRegex(@"docs/screenshots/([0-9A-Za-z-]+)\.png", RegexOptions.Compiled)]
+    private static partial Regex ScreenshotReference();
+
+    /// <summary>
     /// The version field of an issue template must not pin an example release. Both templates showed
     /// <c>0.12.x</c> — roughly 130 releases stale — so a reporter copying the placeholder filed against
     /// a version that never shipped, in the field used for triage. Writing today's number in only resets

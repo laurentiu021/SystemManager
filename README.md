@@ -1226,7 +1226,7 @@ offers, "rate us" prompts:
 </details>
 
 <details>
-<summary><strong>📊 Monitor</strong> — Resource History · New App Alerts · File Lock · Settings Watchdog · Bandwidth</summary>
+<summary><strong>📊 Monitor</strong> — Resource History · New App Alerts · File Lock · Settings Watchdog</summary>
 <br>
 <p>
 <a href="docs/screenshots/19-resource-history.png"><img src="docs/screenshots/19-resource-history.png" width="280" alt="Resource History"></a>&nbsp;
@@ -1254,11 +1254,13 @@ previous one showed the tab while it was a placeholder, which no longer reflects
 </details>
 
 <details>
-<summary><strong>💾 Storage</strong> — Disk Analyzer · Duplicate Finder</summary>
+<summary><strong>💾 Storage</strong> — Disk Analyzer</summary>
 <br>
 <p>
 <a href="docs/screenshots/29-disk-analyzer.png"><img src="docs/screenshots/29-disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
 </p>
+<p><em>Duplicate Finder is implemented and has no screenshot yet — a shot of it would be a list
+of real file paths, which needs redacting before it can ship.</em></p>
 </details>
 
 <details>

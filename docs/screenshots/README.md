@@ -7,10 +7,18 @@ conventions below so they render cleanly in the README.
 ## File naming
 
 Use zero-padded numbers so the file list stays in the same order as the
-nav on the left rail. The current set is captured against the live app and
-covers most tabs; the number matches the tab's position in the sidebar, so
-a few numbers are intentionally skipped (work-in-progress tabs, or tabs whose
-live data couldn't be shared even after redaction — see Privacy check below).
+nav on the left rail. The number matches the tab's position in the sidebar, so
+the missing numbers name the uncovered tabs exactly.
+
+43 of the 58 tabs have a shot. The 15 without one are Bandwidth Monitor,
+Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
+Remover, Environment Variables, Legacy Panels, Notification Blocker, Process
+Manager, Services, Startup Manager, Task Scheduler, Uninstaller and Volume
+Control. One of those — Notification Blocker — is still marked as a preview tab.
+The other fourteen are list-heavy pages: a usable shot of them is a screenful of
+real service names, installed programs, file paths or environment values, and the
+redaction cost is the reason they are not here yet (see Privacy check below).
+None of the fifteen is missing because the tab is unfinished.
 
 A short animated tour also lives under [`docs/gifs/`](../gifs/)
 (`feature-tour.gif`, `cleanup-tools.gif`) and is embedded at the top of the
@@ -24,10 +32,14 @@ each image is a column of text with an empty margin beside it. 1.76.2 replaced e
 collapsed group's subtitle — a truncated list of page names — with a written two-line
 description. 1.76.3 then gave the administrator strip at the top of 31 pages a single
 geometry, so where a shot shows that strip its corners and height are also out of date.
-Nothing else in the shots is stale.
 
-The whole set wants retaking in one pass rather than piecemeal, so that the rail matches
-across all of them. Until then treat the sidebar in every image as out of date.
+The pages themselves are out of date too, and by more than the rail. The whole set was
+captured in one pass at 1.51.x, and every view it shows has changed since — the diffs are
+heaviest on Dashboard, System Logs, App Updates, Windows Update and Gaming Profile, which
+have gained whole cards, columns and controls rather than just moved. Recapture in
+descending order of that, so the shots a visitor sees first stop misrepresenting the app
+soonest, but retake the rail-only ones in the same pass so the sidebar matches across all
+of them. Until then treat every image as showing an older build, not just an older rail.
 
 ## Format and size
 

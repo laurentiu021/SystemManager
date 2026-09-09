@@ -159,7 +159,14 @@ A palette button in the top-right corner opens an appearance popup with:
 - **Light mode** — 6 curated presets (Clean Indigo, Sky Breeze, Warm Sand, Mint Fresh, Soft Blossom, Lavender)
 - **Custom mode** — free hex input for accent, background, surface, and text colors
 - Background shade slider for fine-tuning lightness/darkness
+- **Reset to default theme** — one click back to the shipped dark theme and shade, from any mode
 - Settings persist between sessions
+
+Custom colours cannot make the app unreadable. Text is adjusted to stay legible against every surface
+it lands on, and a panel colour that leaves no room for readable text at all — a near-white card on a
+near-black background, say — is nudged toward the background until it does. The twelve built-in themes
+are unaffected by that correction; their surfaces already sit near their backgrounds. If a result is
+still not what you wanted, Reset to default theme puts the shipped theme back and survives a restart.
 
 Graph lines follow the theme rather than fighting it. The Ping, Bandwidth Monitor and Resource
 History charts each draw with a fixed set of colours — blue is CPU, purple is memory — and those

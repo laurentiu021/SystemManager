@@ -21,12 +21,23 @@ public sealed class ThemeService
 
     public event Action? ThemeChanged;
 
-    public ThemePreset CurrentTheme { get; private set; } = ThemePreset.Defaults["midnight-indigo"];
-    public string CurrentPresetId { get; private set; } = "midnight-indigo";
-    public string CurrentMode { get; private set; } = "dark";
-    public double ShadePosition { get; private set; } = 0.5;
+    /// <summary>The theme the app ships with, and the shade position it ships at.</summary>
+    /// <remarks>
+    /// Named constants because three things have to agree on them: the field initialisers below,
+    /// <see cref="ResetToDefault"/>, and the slider's own default in <c>ThemePopup.xaml</c>. They were three
+    /// copies of the same two values.
+    /// </remarks>
+    public const string DefaultPresetId = "midnight-indigo";
 
-    private ThemePreset _baseTheme = ThemePreset.Defaults["midnight-indigo"];
+    /// <inheritdoc cref="DefaultPresetId"/>
+    public const double DefaultShade = 0.5;
+
+    public ThemePreset CurrentTheme { get; private set; } = ThemePreset.Defaults[DefaultPresetId];
+    public string CurrentPresetId { get; private set; } = DefaultPresetId;
+    public string CurrentMode { get; private set; } = "dark";
+    public double ShadePosition { get; private set; } = DefaultShade;
+
+    private ThemePreset _baseTheme = ThemePreset.Defaults[DefaultPresetId];
 
     // The shade slider raises SetShade on every tick of a drag; persisting on each one would
     // hammer the disk. Coalesce writes: SetShade applies the shade live but (re)starts this
@@ -90,6 +101,25 @@ public sealed class ThemeService
         Save();
     }
 
+    /// <summary>
+    /// Puts the shipped theme back — the way out of a custom theme that cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Custom mode was the only setting in the app with no undo. Four typed hex values are persisted and
+    /// <see cref="Load"/> faithfully restores them on every launch, so a theme the user could not read was a
+    /// theme they could not fix from inside the app: the only escape was deleting
+    /// <c>%AppData%\SysManager\theme.json</c>, which the person this app is for will never find. That
+    /// contradicted the product rule that a change the app makes stays reversible (#1561).
+    /// <para>Resets the shade too. A preset alone is not "the shipped theme" if the slider is still parked at
+    /// an extreme the user pushed it to while trying to rescue an unreadable one.</para>
+    /// </remarks>
+    public void ResetToDefault()
+    {
+        ShadePosition = DefaultShade;
+        // SetPreset applies and saves; it also sets CurrentMode from the preset, which clears "custom".
+        SetPreset(DefaultPresetId);
+    }
+
     public void SetAccent(Color accent)
     {
         _baseTheme = _baseTheme with { Accent = accent };
@@ -134,7 +164,22 @@ public sealed class ThemeService
     {
         CurrentMode = "custom";
         CurrentPresetId = "custom";
-        _baseTheme = new ThemePreset(
+        _baseTheme = CustomPreset(accent, background, surface, text);
+        ApplyShade();
+        Save();
+    }
+
+    /// <summary>
+    /// The preset the four popup colours expand into, before <see cref="Shade"/> corrects it.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from <see cref="SetCustom"/> so the custom path can be measured without going through the
+    /// service — <see cref="SetCustom"/> persists to the user's real theme file, so a test that called it to
+    /// find out what a pair of colours produces would overwrite the developer's theme to ask the question.
+    /// </remarks>
+    internal static ThemePreset CustomPreset(Color accent, Color background, Color surface, Color text)
+    {
+        return new ThemePreset(
             Id: "custom",
             Name: "Custom",
             IsDark: IsDarkBackground(background),
@@ -146,8 +191,44 @@ public sealed class ThemeService
             TextPrimary: text,
             TextSecondary: Lerp(text, background, 0.3),
             TextMuted: Lerp(text, background, 0.55));
-        ApplyShade();
-        Save();
+    }
+
+    /// <summary>
+    /// Pulls a panel colour toward the background until readable text on that panel is possible at all,
+    /// leaving it alone when it already is.
+    /// </summary>
+    /// <remarks>
+    /// Background and Surface are independent hex values in Custom mode, and some pairs admit no readable text
+    /// whatsoever. Primary text owes AAA to the Background and AA to the panels drawn on it; against
+    /// <c>#070A0F</c> and <c>#FFFFFF</c> those demand a relative luminance of at least 0.30 and at most 0.183,
+    /// so no colour satisfies both. The old code never noticed, because <see cref="Legible"/> corrected primary
+    /// against the Background alone: that pair rendered white text on a white card at 1.04:1, and cards, rows
+    /// and panels are what the window mostly shows.
+    /// <para><b>Correcting the text cannot fix that, which is why this sits at the input.</b> Two earlier
+    /// attempts did try the text — adding the surfaces to the correction, then searching in both directions —
+    /// and reached 2.05:1 and 4.49:1 respectively, because they were looking for a colour that does not
+    /// exist.</para>
+    /// <para>The condition is the requirement itself rather than a geometric proxy: the panel has to admit the
+    /// most extreme text this mode can produce, which is white on a dark theme and black on a light one, at AA.
+    /// Stopping merely on the same side of <see cref="IsDarkBackground"/>'s line left the panel sitting on the
+    /// threshold, and text then measured 4.01–4.49:1 — right, in shape, and still short.</para>
+    /// <para>Pulled only as far as it takes: a user who asked for a lighter panel keeps the lightest panel that
+    /// can carry text. Shipped presets never enter the loop, since their surfaces sit near their backgrounds
+    /// by design.</para>
+    /// </remarks>
+    internal static Color PanelThatAdmitsReadableText(Color panel, Color background)
+    {
+        var extremeText = IsDarkBackground(background) ? Colors.White : Colors.Black;
+        if (ContrastAgainst(extremeText, panel) >= 4.5) return panel;
+
+        for (var step = 1; step <= 50; step++)
+        {
+            var candidate = Lerp(panel, background, step * 0.02);
+            if (ContrastAgainst(extremeText, candidate) >= 4.5) return candidate;
+        }
+
+        // The background itself, which always admits its own mode's text: the whole ramp is built from it.
+        return background;
     }
 
     /// <summary>
@@ -195,18 +276,33 @@ public sealed class ThemeService
     {
         var offset = (position - 0.5) * 0.12;
 
+        var background = ShiftLightness(baseTheme.Background, offset);
+
+        // The panel correction runs HERE, on the shifted colours, not on the seeded ones. It was tried in
+        // CustomPreset first and the shade undid it: ShiftLightness moves Background and Surface by different
+        // amounts, so a panel corrected before the shift drifted back out of range and text measured 4.12:1 at
+        // the top of the slider while passing in the middle. This is also where Legible runs, so nothing
+        // downstream can revert either correction.
         var shaded = baseTheme with
         {
-            Background = ShiftLightness(baseTheme.Background, offset),
-            Surface = ShiftLightness(baseTheme.Surface, offset),
-            Surface2 = ShiftLightness(baseTheme.Surface2, offset),
+            Background = background,
+            Surface = PanelThatAdmitsReadableText(ShiftLightness(baseTheme.Surface, offset), background),
+            Surface2 = PanelThatAdmitsReadableText(ShiftLightness(baseTheme.Surface2, offset), background),
             Border = ShiftLightness(baseTheme.Border, offset)
         };
 
         // TextPrimary is corrected first because the two DERIVED surfaces are lerped toward it, so they
         // cannot be computed until it is final. Derived here with the same factors Apply uses, from the
         // shaded Surface2 and the corrected primary — which is exactly the pair Apply will be handed.
-        var primary = Legible(shaded.TextPrimary, baseTheme.IsDark, 7.0, shaded.Background);
+        // Surface and Surface2 at AA alongside the Background at AAA. Every shipped preset picks a Surface
+        // close to its Background, so holding primary to the Background alone held for free and neither this
+        // correction nor ThemeTextContrastTests ever measured the rest — while Custom mode takes Background
+        // and Surface as independent hex values. Background #070A0F with Surface #FFFFFF walked primary
+        // toward WHITE, because the direction comes from the background, and put white text on a white card
+        // at 1.04:1. Cards, rows and panels are what the window mostly shows; the Background is the gap
+        // between them.
+        var primary = Legible(shaded.TextPrimary, baseTheme.IsDark,
+                              (shaded.Background, 7.0), (shaded.Surface, 4.5), (shaded.Surface2, 4.5));
         var surface3 = Lerp(shaded.Surface2, primary, 0.05);
         var surface4 = Lerp(shaded.Surface2, primary, 0.10);
 
@@ -222,36 +318,48 @@ public sealed class ThemeService
         return shaded with
         {
             TextPrimary = primary,
-            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark, 4.5,
-                                    shaded.Surface2, surface4),
-            TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark, 4.5,
-                                shaded.Background, shaded.Surface, shaded.Surface2, surface3, surface4)
+            TextSecondary = Legible(shaded.TextSecondary, baseTheme.IsDark,
+                                    (shaded.Surface2, 4.5), (surface4, 4.5)),
+            TextMuted = Legible(shaded.TextMuted, baseTheme.IsDark,
+                                (shaded.Background, 4.5), (shaded.Surface, 4.5), (shaded.Surface2, 4.5),
+                                (surface3, 4.5), (surface4, 4.5))
         };
     }
 
     /// <summary>
-    /// Returns <paramref name="text"/> unchanged when it already clears <paramref name="minimum"/> against
-    /// every surface, otherwise walks it away from them until it does.
+    /// Returns <paramref name="text"/> unchanged when it already clears every target's floor, otherwise walks
+    /// it away from the surfaces until it does.
     /// </summary>
     /// <remarks>
-    /// "Away" is toward white on a dark theme and toward black on a light one, decided from the preset's own
-    /// mode rather than by comparing luminances, so a surface shifted close to the text cannot flip the
-    /// direction mid-walk. 2% steps to a 80% ceiling, matching <c>ChartTheme.ReadableAgainst</c>; every real
-    /// preset clears its floor far earlier, and the ceiling exists so a pathological custom theme terminates
-    /// rather than looping.
+    /// Per-surface floors, because primary text owes AAA to the Background and AA to the panels drawn on top
+    /// of it, and one number cannot say both.
+    /// <para>"Away" is toward white on a dark theme and toward black on a light one, decided from the preset's
+    /// own mode rather than by comparing luminances, so a surface shifted close to the text cannot flip the
+    /// direction mid-walk. 2% steps to an 80% ceiling, matching <c>ChartTheme.ReadableAgainst</c>; every
+    /// shipped preset clears its floors in the mode's own direction, usually at step 0.</para>
+    /// <para>One direction, deliberately. Walking the other way was tried and it cannot help: a target set
+    /// that straddles the text has no solution to find — AAA against <c>#070A0F</c> needs a relative luminance
+    /// of at least 0.30 and AA against <c>#FFFFFF</c> needs at most 0.183 — so a search in either direction
+    /// lands short. That pair is prevented at the input instead, by
+    /// <see cref="PanelThatAdmitsReadableText"/>, which is where the actual defect was.</para>
     /// </remarks>
-    private static Color Legible(Color text, bool isDark, double minimum, params Color[] surfaces)
+    private static Color Legible(Color text, bool isDark, params (Color Surface, double Minimum)[] targets)
     {
         var target = isDark ? Colors.White : Colors.Black;
 
-        for (var step = 0; step <= 40; step++)
+        // All the way to the extreme, not the old 80% ceiling. The ceiling was there so a pathological
+        // custom theme terminated, which the step count already guarantees, and it was the last thing keeping
+        // text short: with the panel corrected to admit this mode's extreme text, that extreme is a solution,
+        // and stopping at 80% of the way to it measured 4.45:1 where white measures 20:1. Shipped presets are
+        // unaffected — they clear their floors at step 0.
+        for (var step = 0; step <= 50; step++)
         {
             var candidate = Lerp(text, target, step * 0.02);
-            if (surfaces.All(surface => ContrastAgainst(candidate, surface) >= minimum))
+            if (targets.All(t => ContrastAgainst(candidate, t.Surface) >= t.Minimum))
                 return candidate;
         }
 
-        return Lerp(text, target, 0.8);
+        return target;
     }
 
     public void Apply(ThemePreset theme)

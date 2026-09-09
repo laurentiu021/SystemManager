@@ -601,7 +601,7 @@ Key services:
   before the first change of a session (best-effort; since 1.68.0 it no longer owns that logic). It reimplements no tweak; `PendingApplyCount` /
   `PendingUndoCount` / `TweakItem.ClassifyTier` are pure, unit-tested helpers.
 - `SafetyDatabase` — curated safety ratings for Windows services.
-- `ThemeService` — runtime theme switching with 12 presets and persistence.
+- `ThemeService` — runtime theme switching with 12 presets and persistence. Two corrections run inside `Shade`, on the already-shifted colours so nothing downstream can undo them: `PanelThatAdmitsReadableText` nudges a Surface toward the Background until this mode's most extreme text clears AA on it, and `Legible` then fits the text to per-surface floors (AAA on the Background, AA on the panels). Both are no-ops for the shipped presets. `ResetToDefault` restores the shipped preset and shade — the only undo Custom mode has, since the four typed colours are persisted and reloaded on every launch.
 - `ToastService` — global glass-style toast notifications.
 
 ## Helpers

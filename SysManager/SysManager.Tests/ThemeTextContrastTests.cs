@@ -326,6 +326,71 @@ public class ThemeTextContrastTests
     }
 
     /// <summary>
+    /// A custom theme's primary text must clear AA on the Surface it lands on, not only on the Background.
+    /// </summary>
+    /// <remarks>
+    /// Every shipped preset picks a Surface close to its Background, so this held for free and neither the
+    /// correction in <c>Shade</c> nor <see cref="TextPrimary_MeetsWcagAaa_OnBackground"/> ever measured it.
+    /// Custom mode takes the two as independent hex values, so a user can set Background near-black and
+    /// Surface near-white: the correction then walks TextPrimary toward WHITE, because the mode is decided
+    /// from the Background, and lands white text on a white card.
+    /// <para>Cards, DataGrid rows and every panel in the app draw on Surface or Surface2, so this is most of
+    /// what the window actually shows — the Background is largely the gap between the panels.</para>
+    /// <para>AA (4.5:1), not the AAA bar the Background is held to. The stricter bar belongs to the colour the
+    /// theme was designed around; the point here is that a typed pair cannot produce unreadable panels.</para>
+    /// </remarks>
+    [Theory]
+    // Background and Surface at opposite ends, in both directions, which is what Custom mode allows.
+    [InlineData("#070A0F", "#FFFFFF", "#F1F3F7")]
+    [InlineData("#FFFFFF", "#070A0F", "#101418")]
+    // The saturated-green background that mis-classified as dark before IsDarkBackground moved to
+    // luminance, kept as a case because it is the one where mode and appearance disagree most.
+    [InlineData("#00FF00", "#0A0A0A", "#101010")]
+    [InlineData("#7F7F7F", "#FAFAFA", "#202020")]
+    public void CustomTheme_KeepsPrimaryTextLegibleOnSurface(string background, string surface, string text)
+    {
+        var preset = ThemeService.CustomPreset(
+            Hex("#6366F1"), Hex(background), Hex(surface), Hex(text));
+
+        var offenders = new List<string>();
+        var positionsChecked = 0;
+
+        // Every slider position, like EveryShadePosition_KeepsTheTextRampLegible: the shade shifts Surface
+        // and Background by different amounts, so the worst case is not necessarily the default.
+        for (var step = 0; step <= 20; step++)
+        {
+            var position = step * 0.05;
+            var shaded = ThemeService.Shade(preset, position);
+            positionsChecked++;
+
+            foreach (var (label, against) in new[]
+                     {
+                         ("Surface", shaded.Surface),
+                         ("Surface2", shaded.Surface2),
+                     })
+            {
+                var ratio = ContrastRatio(shaded.TextPrimary, against);
+                if (ratio < 4.5)
+                    offenders.Add($"shade {position:F2}: TextPrimary on {label} = {ratio:F2}:1");
+            }
+        }
+
+        // Vacuity floor, same as the sweep above: a loop that stopped running reports a clean sweep of nothing.
+        Assert.Equal(21, positionsChecked);
+
+        Assert.True(offenders.Count == 0,
+            $"a custom theme with Background {background} and Surface {surface} leaves primary text "
+            + "unreadable on the surfaces the app actually draws panels on. The correction in "
+            + "ThemeService.Shade walks TextPrimary away from the BACKGROUND only, and the direction it "
+            + "walks is chosen from the background's luminance, so a light Surface under a dark Background "
+            + "gets white text on white:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>Parses a hex literal the way the appearance popup does.</summary>
+    private static Color Hex(string value) => (Color)ColorConverter.ConvertFromString(value);
+
+    /// <summary>
     /// Mirrors <c>ThemeService.Lerp</c> so the toggle track is derived with the same maths the app uses,
     /// rather than an approximation of it. <c>ThemeStatusBrushTests</c> keeps the same mirror for the
     /// same reason; <c>ThemeService.Lerp</c> is private and is not worth widening for a test.

@@ -237,6 +237,38 @@ public partial class ThemePopup : UserControl
         ApplyCustomFromInputs();
     }
 
+    /// <summary>
+    /// Puts the shipped theme back and re-syncs the popup to it.
+    /// </summary>
+    /// <remarks>
+    /// No confirmation dialog. The user reaching for this is most likely looking at a theme they cannot read,
+    /// so a dialog would be one more unreadable thing between them and the fix — and the action is not
+    /// destructive: it changes four colours and a slider, all of which they can set again.
+    /// <para>The re-sync has to be explicit. <see cref="SyncUiToService"/> only runs once, on Loaded, and the
+    /// mode radios and shade slider hold their own state — without this the popup would keep showing "Custom"
+    /// and the old slider position over a theme that is no longer either.</para>
+    /// </remarks>
+    private void ResetTheme_Click(object sender, RoutedEventArgs e)
+    {
+        // The radio FIRST, so Mode_Changed's own SetPreset happens before the reset rather than after it.
+        // Checking it from Custom raises Checked, which applies the companion preset — harmless in itself, but
+        // it must not be the last write.
+        DarkMode.IsChecked = true;
+        ThemeService.Instance.ResetToDefault();
+
+        // Suppressed, or putting the slider back would raise Shade_Changed and save a shade position on top
+        // of the one the reset just restored.
+        _suppressShadeEvent = true;
+        ShadeSlider.Value = ThemeService.DefaultShade;
+        _suppressShadeEvent = false;
+
+        UpdatePanels();
+        // Seed the custom boxes from the default too, so switching to Custom after a reset starts from a
+        // readable theme rather than from the colours that made the reset necessary.
+        PopulateCustomFields(ThemeService.Instance.CurrentTheme);
+        BuildPresetCards();
+    }
+
     private void CustomAccent_Click(object sender, MouseButtonEventArgs e) => FocusHex(CustomAccentHex);
     private void CustomBg_Click(object sender, MouseButtonEventArgs e) => FocusHex(CustomBgHex);
     private void CustomSurface_Click(object sender, MouseButtonEventArgs e) => FocusHex(CustomSurfaceHex);

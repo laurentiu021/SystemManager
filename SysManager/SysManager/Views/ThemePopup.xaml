@@ -171,6 +171,18 @@
                             </Grid>
                         </Border>
                     </StackPanel>
+
+                    <!-- The way back. Custom mode was the only setting in the app with no undo: four typed hex
+                         values are persisted and restored on every launch, so a theme the user could not read
+                         was one they could not fix from inside the app — the only escape was deleting
+                         theme.json (#1561). Outside both panels because a preset plus an extreme shade can
+                         also be worth abandoning, and because the button that rescues you from an unreadable
+                         theme should not itself be behind a mode switch. -->
+                    <Button x:Name="ResetThemeButton" Content="Reset to default theme"
+                            Style="{StaticResource GhostButton}"
+                            HorizontalAlignment="Left" Margin="0,16,0,0" Padding="10,6" FontSize="12"
+                            ToolTip="Puts the shipped dark theme and the default background shade back."
+                            Click="ResetTheme_Click"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

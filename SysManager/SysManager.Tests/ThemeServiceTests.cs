@@ -146,4 +146,119 @@ public class ThemeServiceTests : IDisposable
             $"{channel}: the saved file should hold the colour the user typed ({text}), not a value derived "
             + $"from it. It holds:\n{generation1}");
     }
+    // ---------- the way back from an unreadable theme (#1561) ----------
+
+    [Fact]
+    public void ResetToDefault_PutsBackTheShippedPresetTheModeAndTheShade()
+    {
+        var svc = new ThemeService(_dir);
+        svc.SetPreset("warm-sand");     // a LIGHT preset, so the mode has to move too
+        svc.SetShade(0.9);
+
+        svc.ResetToDefault();
+
+        Assert.Equal(ThemeService.DefaultPresetId, svc.CurrentPresetId);
+        Assert.Equal(ThemeService.DefaultShade, svc.ShadePosition, precision: 3);
+        Assert.Equal("dark", svc.CurrentMode);
+    }
+
+    [Fact]
+    public void ResetToDefault_SurvivesARestart()
+    {
+        // The point of the button. A custom theme is persisted and Load restores it faithfully on every
+        // launch, so a reset that only changed the live theme would be undone by the next start-up — which is
+        // the state the user is trying to escape.
+        var svc = new ThemeService(_dir);
+        svc.SetCustom(Hex("#6366F1"), Hex("#070A0F"), Hex("#FFFFFF"), Hex("#F1F3F7"));
+        Assert.Equal("custom", svc.CurrentMode);
+
+        svc.ResetToDefault();
+
+        var reloaded = new ThemeService(_dir);
+        reloaded.Initialize();
+        Assert.Equal(ThemeService.DefaultPresetId, reloaded.CurrentPresetId);
+        Assert.Equal("dark", reloaded.CurrentMode);
+        Assert.Equal(ThemeService.DefaultShade, reloaded.ShadePosition, precision: 3);
+    }
+
+    // ---------- the panel correction that makes readable text possible at all ----------
+
+    [Theory]
+    [MemberData(nameof(AllPresetIds))]
+    public void PanelCorrection_LeavesEveryShippedSurfaceExactlyAsDesigned(string presetId)
+    {
+        // The correction must be invisible to the twelve designed themes. If it moves one of their surfaces,
+        // it is not correcting a pathological pair — it is redesigning a preset.
+        var p = ThemePreset.Defaults[presetId];
+
+        Assert.Equal(p.Surface, ThemeService.PanelThatAdmitsReadableText(p.Surface, p.Background));
+        Assert.Equal(p.Surface2, ThemeService.PanelThatAdmitsReadableText(p.Surface2, p.Background));
+    }
+
+    [Theory]
+    // A near-white panel under a near-black background, and the reverse. Both are typeable in Custom mode and
+    // neither admits any readable primary text before correction.
+    [InlineData("#070A0F", "#FFFFFF")]
+    [InlineData("#FFFFFF", "#070A0F")]
+    [InlineData("#00FF00", "#0A0A0A")]
+    public void PanelCorrection_PullsAnInvertedPanelUntilTheModesTextFitsOnIt(string background, string surface)
+    {
+        var bg = Hex(background);
+        var corrected = ThemeService.PanelThatAdmitsReadableText(Hex(surface), bg);
+
+        Assert.NotEqual(Hex(surface), corrected);
+
+        // The condition it exists to guarantee: this mode's most extreme text clears AA on the panel, so
+        // Legible has a solution to walk to rather than a floor it cannot reach.
+        var extreme = ThemeService.IsDarkBackground(bg) ? Colors.White : Colors.Black;
+        var ratio = ContrastRatio(extreme, corrected);
+        Assert.True(ratio >= 4.5,
+            $"a corrected panel must admit this mode's extreme text; {extreme} on {corrected} = {ratio:F2}:1");
+    }
+
+    [Fact]
+    public void PanelCorrection_KeepsAsMuchOfThePanelAsItCan()
+    {
+        // Pulled only as far as it takes, not snapped to the background: a user who asked for a lighter panel
+        // keeps the lightest panel that can carry text. If this ever equals the background, the loop is
+        // overshooting and the custom surface has stopped meaning anything.
+        var bg = Hex("#070A0F");
+        var corrected = ThemeService.PanelThatAdmitsReadableText(Hex("#FFFFFF"), bg);
+
+        Assert.NotEqual(bg, corrected);
+        Assert.True(RelativeLuminance(corrected) > RelativeLuminance(bg),
+            "the corrected panel must still be lighter than the background it sits on");
+    }
+
+    public static TheoryData<string> AllPresetIds()
+    {
+        var data = new TheoryData<string>();
+        foreach (var id in ThemePreset.Defaults.Keys) data.Add(id);
+        return data;
+    }
+
+    private static Color Hex(string value) => (Color)ColorConverter.ConvertFromString(value);
+
+    /// <summary>
+    /// Mirrors the WCAG formula rather than calling the service's copy, for the reason
+    /// <c>ThemeService.OnColor</c> documents: a mistake in that formula has to show up as a failing assertion
+    /// instead of being cancelled out by sharing the same bug.
+    /// </summary>
+    private static double ContrastRatio(Color a, Color b)
+    {
+        var (la, lb) = (RelativeLuminance(a), RelativeLuminance(b));
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    private static double RelativeLuminance(Color c)
+    {
+        static double Channel(byte v)
+        {
+            var s = v / 255.0;
+            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(c.R)) + (0.7152 * Channel(c.G)) + (0.0722 * Channel(c.B));
+    }
+
 }

@@ -49,7 +49,6 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
 
     [ObservableProperty] private HistoryRange _selectedRange;
     [ObservableProperty] private int _retentionDays;
-    [ObservableProperty] private int _sampleCount;
     [ObservableProperty] private bool _hasData;
     [ObservableProperty] private bool _hasTemperatureData;
     [ObservableProperty] private string _summary = "";
@@ -171,7 +170,6 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
             _cpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.CpuTempC)));
             _gpuTempBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.GpuTempC)));
 
-            SampleCount = _loaded.Count;
             HasData = _loaded.Count > 0;
             // The temperature chart is meaningful only if at least one sample carries a temp
             // reading (sensors/admin dependent); otherwise show its empty state, not a blank.

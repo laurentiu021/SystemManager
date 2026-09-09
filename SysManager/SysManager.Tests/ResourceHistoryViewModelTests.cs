@@ -138,7 +138,9 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
     public async Task ARedundantRefreshOnTheSameRangeStillShowsThatRange()
     {
         // The gate drops nothing user-visible: a second reload for the already-selected range still
-        // ends on that range, with its samples counted, and releases the progress bar.
+        // ends on that range, reporting its sample count on screen, and releases the progress bar.
+        // Asserted through StatusMessage rather than a counter property, because the status line is
+        // what the tab actually shows — a field holding the same number proves only that the code ran.
         var now = DateTime.Now;
         using var service = SeededService(
             new ResourceSample(now.AddMinutes(-20), 10, 20, null, null, null),
@@ -150,7 +152,7 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         await vm.ReloadCommand.ExecuteAsync(null);
         await vm.ReloadCommand.ExecuteAsync(null);   // a redundant Refresh on the same range
 
-        Assert.Equal(2, vm.SampleCount);
+        Assert.Contains("Showing 2 sample(s)", vm.StatusMessage, StringComparison.Ordinal);
         Assert.True(vm.HasData);
         Assert.False(vm.IsBusy);   // the gate released, so the progress bar cleared
     }
@@ -163,7 +165,6 @@ public class ResourceHistoryViewModelReloadTests : IDisposable
         await vm.InitializationComplete;
 
         Assert.False(vm.HasData);
-        Assert.Equal(0, vm.SampleCount);
         Assert.Contains("No history yet", vm.StatusMessage);
     }
 

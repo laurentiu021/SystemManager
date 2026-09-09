@@ -6778,8 +6778,20 @@ public partial class ArchitectureTests
         var view = WithoutXamlComments(
             File.ReadAllText(Path.Combine(appDir, "Views", "StartupView.xaml")));
 
-        // What the user is entitled to see, because the scan pays to work it out.
-        string[] displayed = ["Name", "Command", "Location", "IsEnabled", "Publisher", "StatusText"];
+        // What the user is entitled to see, because the scan pays to work it out. Two lists, because the
+        // scan fills a StartupEntry in two ways and they carry different invariants.
+        //
+        // Set at construction, so required at EVERY site (see the per-site check below).
+        string[] displayedPerSite = ["Name", "Command", "Location", "IsEnabled", "Publisher", "StatusText"];
+        // Set by a post-pass over the finished list — EnrichWithDescriptions, ApplyApprovedState,
+        // VerifySignatures. One assignment covers every source, so "at every site" does not apply; they must
+        // still be bound.
+        //
+        // This half was the guard's blind spot: it parsed object initialisers only, so a field filled in by a
+        // post-pass was invisible to it. Description and Safety had been arriving that way since #1587, and
+        // Signature/SignatureDetail joined them — four fields the guard was written to cover and did not see.
+        string[] displayedPostPass = ["Description", "Safety", "Signature", "SignatureDetail"];
+        var displayed = displayedPerSite.Concat(displayedPostPass).ToArray();
         // Not display: these steer the toggle and the Open button. Demanding UI for them would push this
         // guard into asking for columns nobody wants, which is how the sibling guard's scope was drawn too.
         string[] logicOnly = ["Source", "RegistryKey", "ValueName", "TaskPath"];
@@ -6789,7 +6801,18 @@ public partial class ArchitectureTests
                 .Select(m => m.Groups[1].Value)
                 .ToHashSet(StringComparer.Ordinal))
             .ToList();
-        var assigned = new SortedSet<string>(perSite.SelectMany(s => s), StringComparer.Ordinal);
+        // The other half of "the scan fills this in": `entry.Field = …` in a pass over the finished list.
+        var postPass = new SortedSet<string>(
+            StartupPostPassAssignment().Matches(service).Select(m => m.Groups[1].Value),
+            StringComparer.Ordinal);
+        Assert.True(postPass.Count >= 5,
+            $"only {postPass.Count} post-pass StartupEntry assignments were parsed, out of 7 measured "
+            + "(Description, IsEnabled, Safety, Signature, SignatureDetail, Source, StatusText) — the "
+            + "detection is out of date, so the undecided check below reads a short list. Found: "
+            + string.Join(", ", postPass));
+
+        var assigned = new SortedSet<string>(
+            perSite.SelectMany(s => s).Concat(postPass), StringComparer.Ordinal);
 
         // Vacuity floor. If the construction sites are reshaped and this parses nothing, every check below
         // passes over an empty set. 3 sites, 10 distinct fields when measured.
@@ -6802,7 +6825,7 @@ public partial class ArchitectureTests
         // the tab would render blank for that one source only — which is the hardest kind of gap to notice,
         // because the other two sources look right.
         var partial = perSite
-            .Select((fields, i) => (Site: i + 1, Missing: displayed.Except(fields, StringComparer.Ordinal).ToList()))
+            .Select((fields, i) => (Site: i + 1, Missing: displayedPerSite.Except(fields, StringComparer.Ordinal).ToList()))
             .Where(x => x.Missing.Count > 0)
             .Select(x => $"construction site {x.Site} does not assign {string.Join(", ", x.Missing)}")
             .ToList();
@@ -6839,6 +6862,63 @@ public partial class ArchitectureTests
             "Location is bound somewhere in StartupView.xaml but not as a column value. It is also the "
             + "column's own tooltip, so the tooltip alone satisfies a bare check while the column is gone — "
             + "which is the state #1587 reported. Require the column.");
+
+        // The same trap, and the signature pill walks into it harder: Signature is bound five times in one
+        // template (background, border, dot, label) and SignatureDetail twice (tooltip and visibility), so
+        // the name-based check above stays green with any four of the five deleted. Measured by mutating
+        // exactly that — removing the label binding and removing the tooltip binding were both GREEN.
+        //
+        // What identifies the pill rather than a mention of it: the label converter, which nothing else in
+        // this view uses, and the detail as an actual tooltip. Delete the column and both go.
+        foreach (var (fragment, why) in new[]
+                 {
+                     ("Converter={StaticResource SigTrustText}",
+                      "the words the user reads — nothing else in this view uses that converter, so its "
+                      + "absence means the pill is gone"),
+                     ("ToolTip=\"{Binding SignatureDetail}\"",
+                      "the sentence explaining the pill; without it a coloured chip states a verdict and "
+                      + "never says what it means"),
+                 })
+        {
+            Assert.True(view.Contains(fragment, StringComparison.Ordinal),
+                $"StartupView.xaml no longer contains '{fragment}' — {why}. The scan still pays to verify "
+                + "every entry's certificate, so the work is being done and thrown away.");
+        }
+
+        // And that the pipeline actually runs the post-pass. Every VerifySignatures test calls it directly,
+        // so deleting the call from Scan() would leave all of them green while the column rendered nothing
+        // on a real machine — the same shape of gap as an unbound property, one level up.
+        var scan = SliceMethod(service, "private static IReadOnlyList<StartupEntry> Scan()");
+        foreach (var pass in new[] { "EnrichWithDescriptions(results)", "ApplyApprovedState(results)", "VerifySignatures(results)" })
+        {
+            Assert.Contains(pass, scan, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>An <c>entry.Property =</c> assignment, capturing the property name.</summary>
+    /// <remarks>
+    /// Scoped to the <c>entry</c> local the post-passes all use, rather than any member assignment, so an
+    /// unrelated object's property cannot enter the set.
+    /// </remarks>
+    [GeneratedRegex(@"\bentry\.([A-Z]\w+)\s*=(?!=)", RegexOptions.Compiled)]
+    private static partial Regex StartupPostPassAssignment();
+
+    /// <summary>
+    /// The body of a method, from its signature to the next member declaration at the same indent.
+    /// </summary>
+    private static string SliceMethod(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"'{signature}' not found — the slice would be empty and prove nothing");
+
+        // The next member at four-space indent ends the body; the file is one class, so this is unambiguous.
+        var end = source.IndexOf("\n    /// <summary>", start + signature.Length, StringComparison.Ordinal);
+        if (end < 0) end = source.IndexOf("\n    private", start + signature.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"could not find the end of '{signature}'");
+
+        var body = source[start..end];
+        Assert.True(body.Length > 200, $"the slice for '{signature}' is {body.Length} chars — not a method body");
+        return body;
     }
 
     /// <summary>

@@ -65,6 +65,33 @@ public sealed partial class StartupEntry : ObservableObject
     /// </summary>
     [ObservableProperty] private string _startupImpactDetail = "";
 
+    /// <summary>
+    /// Whether Windows can confirm who signed this entry's executable.
+    /// </summary>
+    /// <remarks>
+    /// The honest version of <see cref="Publisher"/>, which is <c>FileVersionInfo.CompanyName</c> — a string
+    /// the file itself declares and that any program can set to "Microsoft Corporation". So the tab was
+    /// handing over a trust signal carrying no trust. This is the same question answered by a certificate
+    /// instead, using the chain validation the update and Ookla gates already use.
+    /// <para><see cref="SignatureTrust.Unknown"/> renders nothing, deliberately: it means the command did
+    /// not resolve to a file this app could read, which is a statement about the scan and not about the
+    /// program.</para>
+    /// </remarks>
+    [ObservableProperty] private SignatureTrust _signature;
+
+    /// <summary>
+    /// The plain-language sentence behind <see cref="Signature"/>, for the pill's tooltip. Written for
+    /// someone deciding whether to turn an entry off, so "Unsigned" reads as ordinary rather than alarming.
+    /// </summary>
+    /// <remarks>
+    /// This carries the signer's name where there is one ("Windows can confirm this really comes from
+    /// Google LLC"), rather than a separate property for it. The comparison that matters — a file declaring
+    /// "Microsoft Corporation" in <see cref="Publisher"/> while its certificate says something else — is
+    /// already visible with the column beside this one, so a second field holding the same name would be
+    /// state nothing reads.
+    /// </remarks>
+    [ObservableProperty] private string _signatureDetail = "";
+
     /// <summary>Registry key path (for registry-based entries).</summary>
     public string RegistryKey { get; init; } = "";
 
@@ -73,6 +100,32 @@ public sealed partial class StartupEntry : ObservableObject
 
     /// <summary>Task Scheduler path (for scheduled task entries).</summary>
     public string TaskPath { get; init; } = "";
+}
+
+/// <summary>What a certificate check could establish about a startup entry's executable.</summary>
+public enum SignatureTrust
+{
+    /// <summary>
+    /// Nothing was checked — the command did not resolve to a readable file. Renders no pill at all: this
+    /// says something about the scan, not about the program, and a grey "unknown" chip would read as a
+    /// verdict.
+    /// </summary>
+    Unknown,
+
+    /// <summary>
+    /// No embedded signature. Ordinary, not suspicious — most small utilities are unsigned, and so are
+    /// SysManager's own builds.
+    /// </summary>
+    Unsigned,
+
+    /// <summary>Signed, and the certificate's chain validated to a trusted root.</summary>
+    Verified,
+
+    /// <summary>
+    /// Signed, but the signature could not be confirmed — the chain failed to validate, or the signature
+    /// data itself could not be read. The one state here that deserves attention.
+    /// </summary>
+    Invalid,
 }
 
 public enum StartupSource

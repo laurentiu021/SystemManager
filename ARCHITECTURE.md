@@ -282,7 +282,25 @@ Key services:
   `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the
   Task Scheduler tab owns). Enriches each entry from `ProcessDescriptionService`
   (plain-language description + `ProcessSafety`) keyed on the executable's base
-  name; unrecognised programs are left blank so the UI never guesses a safety.
+  name; unrecognised programs are left blank so the UI never guesses a safety. A second
+  post-pass, `VerifySignatures`, answers "who really made this" with a certificate rather
+  than `FileVersionInfo.CompanyName`, which is the string the `Publisher` column shows and
+  which any program can set to "Microsoft Corporation". It uses the shared
+  `Helpers/Authenticode` reader and chain validator with **`X509RevocationMode.Offline`** —
+  unlike the update and Ookla gates, which pass `Online`: this runs over every entry on the
+  machine, so an online build would mean a revocation request per file and, with no network,
+  a wait per file, in a tab the user just opened. Results are cached per resolved
+  executable path, since several entries pointing at one exe is normal. `ResolveExecutablePath`
+  is the single answer to "which file is this entry", shared with `ExtractPublisher`, so the
+  Publisher and the certificate can never describe different files.
+- `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
+  (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
+  policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).
+  Deliberately holds no policy about what an answer MEANS: an unsigned file is fatal for the
+  Ookla download and expected for our own build, so each caller keeps that decision. Two
+  calls rather than one because both fail-closed callers compare the subject BEFORE building
+  a chain, and a single "inspect" would add a revocation fetch on the path where the subject
+  already failed.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress

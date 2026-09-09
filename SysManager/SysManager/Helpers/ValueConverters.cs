@@ -411,3 +411,127 @@ public static class ProcessSafetyPalette
     private static bool Is(string? value, string name)
         => string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
 }
+
+/// <summary>Maps <see cref="Models.SignatureTrust"/> to the pill's text and dot colour.</summary>
+public sealed class SignatureTrustToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => SignatureTrustPalette.ResolveText(value);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>Maps <see cref="Models.SignatureTrust"/> to the pill's background tint.</summary>
+public sealed class SignatureTrustToBackgroundConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => SignatureTrustPalette.ResolveBackground(value);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Maps <see cref="Models.SignatureTrust"/> to the words on the pill. The enum names are
+/// developer-facing; "Verified" / "Unsigned" / "Check failed" say what the value means to someone
+/// deciding whether to turn a startup entry off.
+/// </summary>
+public sealed class SignatureTrustToTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => SignatureTrustPalette.Label(value);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// The colour and wording decisions for signature trust, in one place so the three converters cannot
+/// drift apart, and so the mapping is unit-testable without a WPF Application.
+/// </summary>
+/// <remarks>
+/// Shaped after <see cref="ProcessSafetyPalette"/> rather than invented: same key-plus-fallback pairs,
+/// same live-theme lookup, same reasoning about neutrality.
+/// </remarks>
+public static class SignatureTrustPalette
+{
+    // The same "no emphasis" pair the process chip uses for an unrecognised program, so an unsigned
+    // startup entry looks like ordinary de-emphasised text rather than a bespoke grey.
+    private static readonly SolidColorBrush NeutralText = Frozen(Color.FromRgb(0x7B, 0x83, 0x96));
+    private static readonly SolidColorBrush NeutralBg = Frozen(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
+    private static readonly SolidColorBrush VerifiedText = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
+    private static readonly SolidColorBrush VerifiedBg = Frozen(Color.FromArgb(0x1A, 0x22, 0xC5, 0x5E));
+    private static readonly SolidColorBrush InvalidText = Frozen(Color.FromRgb(0xFB, 0xBF, 0x24));
+    private static readonly SolidColorBrush InvalidBg = Frozen(Color.FromArgb(0x1F, 0xF5, 0x9E, 0x0B));
+
+    private static SolidColorBrush Frozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>
+    /// Theme resource key + hardcoded fallback for the pill's text/dot colour. A null key means the value
+    /// is intentionally theme-independent.
+    /// </summary>
+    /// <remarks>
+    /// <b>Unsigned is grey, not amber</b>, for the reason <see cref="ProcessSafetyPalette"/> gives about
+    /// unrecognised processes: most startup entries on an ordinary machine are unsigned, so an amber row
+    /// for each of them would make the whole column read as a list of problems and teach the user to stop
+    /// looking at it. Grey reads as "nothing to check", which is what it means. Amber is kept for
+    /// <see cref="Models.SignatureTrust.Invalid"/> — a file that IS signed and whose signature does not
+    /// hold up, which is the one state here worth a second look. Not red: red belongs to actions that
+    /// destroy something, and this column destroys nothing.
+    /// </remarks>
+    public static (string? Key, Brush Fallback) TextBrushKey(object? trust) => Trust(trust) switch
+    {
+        Models.SignatureTrust.Verified => ("SuccessText", VerifiedText),
+        Models.SignatureTrust.Invalid => ("WarningText", InvalidText),
+        _ => (null, NeutralText),
+    };
+
+    /// <summary>Theme resource key + hardcoded fallback for the pill's background tint.</summary>
+    public static (string? Key, Brush Fallback) BackgroundBrushKey(object? trust) => Trust(trust) switch
+    {
+        Models.SignatureTrust.Verified => ("SuccessBgSubtle", VerifiedBg),
+        Models.SignatureTrust.Invalid => ("WarningBgSubtle", InvalidBg),
+        _ => (null, NeutralBg),
+    };
+
+    /// <summary>The words on the pill. Empty for <see cref="Models.SignatureTrust.Unknown"/>.</summary>
+    /// <remarks>
+    /// "Check failed" rather than "Invalid": the file may be perfectly fine and the machine's certificate
+    /// store out of date, and the column must not accuse. What the user needs to know is that the answer
+    /// did not come back, which is what the tooltip then explains.
+    /// </remarks>
+    public static string Label(object? trust) => Trust(trust) switch
+    {
+        Models.SignatureTrust.Verified => "Verified",
+        Models.SignatureTrust.Unsigned => "Unsigned",
+        Models.SignatureTrust.Invalid => "Check failed",
+        _ => "",
+    };
+
+    public static Brush ResolveText(object? trust) => Live(TextBrushKey(trust));
+
+    public static Brush ResolveBackground(object? trust) => Live(BackgroundBrushKey(trust));
+
+    // Prefer the live theme brush (recomputed per preset by ThemeService.StatusPalette) so the pill stays
+    // legible on light themes; fall back to the frozen dark values when there is no Application, i.e.
+    // design-time and unit tests.
+    private static Brush Live((string? Key, Brush Fallback) spec)
+        => spec.Key is not null && Application.Current?.TryFindResource(spec.Key) is Brush b
+            ? b
+            : spec.Fallback;
+
+    // Accepts the enum, its name, or null, because a DataGrid cell can hand over any of the three while a
+    // row is being recycled.
+    private static Models.SignatureTrust Trust(object? value) => value switch
+    {
+        Models.SignatureTrust t => t,
+        string s when Enum.TryParse<Models.SignatureTrust>(s, ignoreCase: true, out var parsed) => parsed,
+        _ => Models.SignatureTrust.Unknown,
+    };
+}

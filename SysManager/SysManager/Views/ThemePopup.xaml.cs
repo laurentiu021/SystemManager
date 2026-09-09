@@ -38,18 +38,26 @@ public partial class ThemePopup : UserControl
 
         DarkMode.Checked += Mode_Changed;
         LightMode.Checked += Mode_Changed;
+        FollowWindowsMode.Checked += Mode_Changed;
         CustomMode.Checked += Mode_Changed;
         ShadeSlider.ValueChanged += Shade_Changed;
     }
 
 
+    /// <summary>Lists the presets of whichever arm the theme is actually on.</summary>
+    /// <remarks>
+    /// Keyed on the SERVICE's resolved theme rather than on <c>DarkMode.IsChecked</c>. In Auto mode neither the
+    /// Dark nor the Light radio is checked, so the old expression fell through to "light" and listed the light
+    /// presets on a machine Windows had on dark. Reading the service is also what makes the Loaded ordering
+    /// stop mattering: it is the truth in every mode, where the radios are a view of it.
+    /// </remarks>
     private void BuildPresetCards()
     {
         PresetPanel.Children.Clear();
-        var mode = DarkMode.IsChecked == true ? "dark" : "light";
+        var isDark = ThemeService.Instance.CurrentTheme.IsDark;
         foreach (var (id, preset) in ThemePreset.Defaults)
         {
-            if (preset.IsDark != (mode == "dark")) continue;
+            if (preset.IsDark != isDark) continue;
             var card = CreatePresetCard(id, preset);
             PresetPanel.Children.Add(card);
         }
@@ -138,6 +146,7 @@ public partial class ThemePopup : UserControl
         {
             case "light": LightMode.IsChecked = true; break;
             case "custom": CustomMode.IsChecked = true; break;
+            case ThemeService.AutoMode: FollowWindowsMode.IsChecked = true; break;
             default: DarkMode.IsChecked = true; break;
         }
 
@@ -222,14 +231,17 @@ public partial class ThemePopup : UserControl
     private void Mode_Changed(object sender, RoutedEventArgs e)
     {
         UpdatePanels();
-        if (CustomMode.IsChecked != true)
-        {
-            var targetMode = LightMode.IsChecked == true ? "light" : "dark";
-            var companion = ThemeService.Instance.GetCompanionPreset(targetMode);
-            ThemeService.Instance.SetPreset(companion);
+        if (CustomMode.IsChecked == true) return;
 
-            BuildPresetCards();
-        }
+        // Auto resolves the arm from Windows and STAYS on auto; the other two pin one. Both end up applying a
+        // companion preset, so the user's chosen family survives the switch either way.
+        if (FollowWindowsMode.IsChecked == true)
+            ThemeService.Instance.FollowWindows();
+        else
+            ThemeService.Instance.SetPreset(
+                ThemeService.Instance.GetCompanionPreset(LightMode.IsChecked == true ? "light" : "dark"));
+
+        BuildPresetCards();
     }
 
     private void CustomHex_LostFocus(object sender, RoutedEventArgs e)

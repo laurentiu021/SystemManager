@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 
@@ -18,6 +19,7 @@ public sealed class ThemeService
     public static ThemeService Instance => _instance ??= new ThemeService();
 
     private readonly string _settingsPath;
+    private readonly Func<bool> _windowsPrefersDark;
 
     public event Action? ThemeChanged;
 
@@ -68,18 +70,76 @@ public sealed class ThemeService
     /// loss that hit SpeedTestHistoryService (#1734, #1741). Internal because nothing outside the
     /// assembly should build a second theme service — the app has exactly one, via <see cref="Instance"/>.
     /// </summary>
-    internal ThemeService(string? configDir = null)
+    /// <param name="windowsPrefersDark">
+    /// How <see cref="AutoMode"/> asks Windows which way it is set. Injected so a test can drive both answers:
+    /// the real one reads HKCU, so a test without the seam would assert whatever the developer's own machine
+    /// happens to be on, and would report the opposite result on the other workstation.
+    /// </param>
+    internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null)
     {
         _settingsPath = Path.Combine(
             configDir ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
             "theme.json");
+        _windowsPrefersDark = windowsPrefersDark ?? WindowsIsOnDark;
     }
+
+    /// <summary>
+    /// Reads the OS setting through the service that owns it, rather than duplicating the registry path.
+    /// </summary>
+    /// <remarks>
+    /// Constructed here rather than injected because <see cref="Instance"/> is a static singleton with no
+    /// container behind it, and <see cref="WindowsThemeService.GetCurrentTheme"/> is a bare HKCU read whose
+    /// constructor does no I/O — it only composes a path it is not asked for here. Wiring the DI graph into
+    /// this singleton to reach one registry value would be the larger change, and the seam above is what makes
+    /// the behaviour testable anyway.
+    /// </remarks>
+    private static bool WindowsIsOnDark() => new WindowsThemeService().GetCurrentTheme() == WindowsTheme.Dark;
 
     public void Initialize()
     {
         Load();
+
+        // Resolve before applying: a persisted auto theme has to answer to what Windows is on NOW, not to the
+        // arm it happened to be on when the app last closed.
+        if (CurrentMode == AutoMode) ResolveFollowedTheme();
+
         Apply(CurrentTheme);
+
+        // Once, for the process. The handler no-ops outside auto mode, so there is nothing to subscribe and
+        // unsubscribe as the user switches modes — and a subscription that only exists in one mode is one that
+        // gets forgotten on the path that leaves it.
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+    }
+
+    /// <summary>
+    /// Releases the process-lifetime OS-theme subscription. Called from <c>App.OnExit</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>SystemEvents</c> holds its handlers in a static list, so without this the singleton is rooted for
+    /// the life of the process — harmless for a singleton, but it also means the handler can fire during
+    /// shutdown, after the dispatcher has stopped accepting work.
+    /// </remarks>
+    public void Shutdown() => SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General || CurrentMode != AutoMode) return;
+
+        // SystemEvents raises this on its own thread and the theme writes into Application.Current.Resources,
+        // so the work has to be marshalled. General also fires for a great deal that is not the app theme,
+        // which is why FollowWindowsNow re-resolves and returns early when the answer has not moved.
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher)
+            dispatcher.BeginInvoke(FollowWindowsNow);
+        else
+            FollowWindowsNow();
+    }
+
+    private void FollowWindowsNow()
+    {
+        var before = CurrentPresetId;
+        ResolveFollowedTheme();
+        if (CurrentPresetId != before) Save();
     }
 
     public string GetCompanionPreset(string targetMode)
@@ -118,6 +178,46 @@ public sealed class ThemeService
         ShadePosition = DefaultShade;
         // SetPreset applies and saves; it also sets CurrentMode from the preset, which clears "custom".
         SetPreset(DefaultPresetId);
+    }
+
+    /// <summary>
+    /// The mode that follows the Windows light/dark setting instead of pinning one.
+    /// </summary>
+    /// <remarks>
+    /// The app already read this setting and already wrote it — the Dark Mode tab can put Windows on a
+    /// schedule — while refusing to follow it itself, so a user who turned that schedule on watched SysManager
+    /// desync from their desktop every evening (#1631).
+    /// </remarks>
+    public const string AutoMode = "auto";
+
+    /// <summary>
+    /// Follows the Windows light/dark setting from now on, and applies it immediately.
+    /// </summary>
+    public void FollowWindows()
+    {
+        CurrentMode = AutoMode;
+        ResolveFollowedTheme();
+        Save();
+    }
+
+    /// <summary>
+    /// Points the theme at whichever arm Windows is currently on, keeping the mode on <see cref="AutoMode"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="SetPreset"/>, which sets <see cref="CurrentMode"/> from the preset's own
+    /// <c>IsDark</c> — calling it here would resolve Windows' setting and then immediately overwrite "auto"
+    /// with "dark" or "light", so the next OS change would be ignored and the mode pill would jump on its own.
+    /// <para>Resolved through <see cref="GetCompanionPreset"/>, so the user's chosen family is kept across the
+    /// switch: Warm Ember becomes Warm Sand rather than resetting to the default.</para>
+    /// </remarks>
+    private void ResolveFollowedTheme()
+    {
+        var id = GetCompanionPreset(_windowsPrefersDark() ? "dark" : "light");
+        if (!ThemePreset.Defaults.TryGetValue(id, out var preset)) return;
+
+        CurrentPresetId = id;
+        _baseTheme = preset;
+        ApplyShade();
     }
 
     public void SetAccent(Color accent)

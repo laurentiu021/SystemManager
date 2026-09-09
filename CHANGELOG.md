@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.82.0] - 2026-09-09
+
+SysManager can now follow your Windows light/dark setting instead of staying on whichever theme you last
+picked. There is a new **Auto** button in the Appearance menu, and once it is on, the app changes with
+Windows — including when Windows changes on its own. This was the odd gap: SysManager could already put
+Windows itself on a dark-mode schedule, and then refused to follow it, so anyone using that schedule watched
+the app fall out of step with their desktop every evening.
+
+### Added
+
+- **Appearance — an Auto mode that follows Windows.** Sits between Light and Custom in the mode switcher.
+  It keeps your chosen colour family across the switch rather than resetting: on Warm Ember, going light
+  gives you Warm Sand, not the default theme. Picking any preset turns Auto off, so a deliberate choice is
+  never quietly overwritten.
+- **It keeps up while the app is open.** The app listens for the Windows preference change and re-resolves,
+  so switching Windows to light — by hand, on a schedule, or by the Dark Mode tab in this very app — moves
+  SysManager with it. On start-up it reads the setting fresh rather than restoring the arm it happened to be
+  on when it last closed.
+
+### Fixed
+
+- **The preset list showed the wrong half in some cases.** It was chosen from which mode button looked
+  pressed rather than from the theme actually in use, so it could list the light presets while the app was
+  dark. It now reads the live theme, which is also what makes the new Auto mode list the right presets.
+
 ## [1.81.1] - 2026-09-09
 
 Custom colours could make the app unreadable, and there was no way back. If you set a dark background with a

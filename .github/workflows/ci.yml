@@ -519,9 +519,25 @@ jobs:
       # 'success', so a `conclusion == 'failure'` check never fires and the failure is
       # masked entirely. `outcome` reflects the real step result before continue-on-error
       # is applied.
+      # WHICH kind of failure, not just that there was one. See the integration job's copy of this step
+      # for the run that made it necessary; the same wording covered both cases there and sent a reader
+      # looking for a broken test that did not exist.
       - name: Annotate UI test failures
-        if: steps.ui-tests.outcome == 'failure'
-        run: echo "::warning::UI automation tests failed — review the ui-test-results artifact for details."
+        if: ${{ steps.ui-tests.outcome == 'failure' && !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/ui-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::warning::The UI run failed and wrote no TRX, so not even the test count is known. Review the ui-test-results artifact."
+            exit 0
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l | tr -d ' ')
+          passed=$({ grep -o '<UnitTestResult [^>]*outcome="Passed"' "$report" || true; } | wc -l | tr -d ' ')
+          if [ "$passed" -lt "$cases" ]; then
+            echo "::warning::$((cases - passed)) of $cases UI tests did not pass. This job is non-blocking, so the merge is not gated; the failure is still real. Review the ui-test-results artifact."
+          else
+            echo "::warning::All $cases UI tests PASSED and the run still exited non-zero, so this is an infrastructure or teardown failure rather than a test failure. Do not go looking for a broken test. Review the ui-test-results artifact."
+          fi
 
       # A test that FAILS is a warning here, on purpose. A test that is never RUN is an error, and the
       # two are not the same finding: a failure means the job worked and found something, while a
@@ -636,9 +652,33 @@ jobs:
 
       # `outcome`, NOT `conclusion`: continue-on-error forces the step's conclusion to 'success', so a
       # conclusion check never fires and the failure is masked completely. Same trap as ui-tests.
+      #
+      # And WHICH kind of failure, because this step used to say "Integration tests failed" for both of
+      # them. On 2026-09-09 it said exactly that on a run where all 625 tests PASSED and the hang-dump
+      # extension's own DisposeAsync threw during teardown (#2195), and again forty minutes later on a run
+      # where one test genuinely failed (#2206). Identical wording, opposite meanings: the first sends a
+      # reader hunting a broken test that does not exist, and once that has happened the annotation stops
+      # being believed for the second. The TRX knows the difference — read it rather than guessing.
+      #
+      # `grep -o … | wc -l`, never `grep -c`: the TRX puts every <UnitTestResult> on one line, so a line
+      # count returns 1 for a suite of 625. The outcome match is scoped inside the element because
+      # <ResultSummary> carries an `outcome` attribute of its own.
       - name: Annotate integration test failures
-        if: steps.integration-tests.outcome == 'failure'
-        run: echo "::warning::Integration tests failed — review the integration-test-results artifact. This job is non-blocking, so the merge is not gated; the failure is still real."
+        if: ${{ steps.integration-tests.outcome == 'failure' && !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/integration-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::warning::The integration run failed and wrote no TRX, so not even the test count is known. Review the integration-test-results artifact."
+            exit 0
+          fi
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l | tr -d ' ')
+          passed=$({ grep -o '<UnitTestResult [^>]*outcome="Passed"' "$report" || true; } | wc -l | tr -d ' ')
+          if [ "$passed" -lt "$cases" ]; then
+            echo "::warning::$((cases - passed)) of $cases integration tests did not pass. This job is non-blocking, so the merge is not gated; the failure is still real. Review the integration-test-results artifact."
+          else
+            echo "::warning::All $cases integration tests PASSED and the run still exited non-zero, so this is an infrastructure or teardown failure rather than a test failure (see issue #2195). Do not go looking for a broken test. Review the integration-test-results artifact."
+          fi
 
       # Same reasoning as "Verify the UI suite actually ran" above, including why the floor is counted
       # here rather than passed to the runner: a failure is a warning, an empty or collapsed run is an

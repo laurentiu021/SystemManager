@@ -421,6 +421,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // ONE session restore point for the graph, as in DI: a second instance would let two
         // tabs each attempt a snapshot, and Windows refuses the second within 24h anyway.
         var sessionRestorePoint = new SessionRestorePoint(restorePoints.CreateAsync);
+        // ONE boot analyzer, as in DI: Boot Analyzer reads its history and Startup Manager reads the same
+        // per-component delay events to fill in its Startup impact column. Two instances would open the same
+        // event log twice for one answer.
+        var bootAnalyzer = new BootAnalyzerService();
         var gamingCpu = new CpuAffinityService();
         // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
         // before it records a recovery baseline, so a second copy would answer "no" while the first
@@ -446,7 +450,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner)),
             [typeof(PerformanceViewModel)] = new PerformanceViewModel(new PerformanceService(runner, restorePoints), gamingProfiles),
-            [typeof(StartupViewModel)] = new StartupViewModel(new StartupService()),
+            [typeof(StartupViewModel)] = new StartupViewModel(new StartupService(), bootAnalyzer),
             [typeof(NetworkSharedState)] = networkShared,
             [typeof(PingViewModel)] = new PingViewModel(networkShared),
             [typeof(TracerouteViewModel)] = new TracerouteViewModel(networkShared),
@@ -475,7 +479,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService()),
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
-            [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(new BootAnalyzerService()),
+            [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer),
             [typeof(TimerResolutionViewModel)] = new TimerResolutionViewModel(new TimerResolutionService()),
             [typeof(FileLockViewModel)] = new FileLockViewModel(new FileLockService()),
             [typeof(DisplayProfileViewModel)] = new DisplayProfileViewModel(new DisplayProfileService()),

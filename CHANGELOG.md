@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.81.0] - 2026-09-09
+
+Startup Manager now shows how long Windows measured each program delaying your last start-up. This is
+Windows' own number, not a guess this app makes, and it is the one thing that tells you which of twenty
+startup entries is actually worth turning off. The app had been reading these measurements all along and
+showing them only on the Boot Analyzer tab, which is not where anyone goes to decide what to switch off. It
+needs administrator rights, because that is what reading them requires, and the banner at the top of the tab
+says so.
+
+### Added
+
+- **Startup Manager — a Startup impact column.** Sourced from the same Windows Diagnostics-Performance
+  events the Boot Analyzer tab reads (#1587), presented the way that tab presents them: the bare figure,
+  "3.2 s" or "800 ms". Sorting is on the underlying milliseconds, so the slowest entry really does come
+  first — sorting the text would put "800 ms" above "3.2 s". The tooltip gives the whole sentence, including
+  which start-up was measured and what Windows classified the program as.
+- **Attribution that fails closed.** A figure appears only when Windows' report matches the entry whole:
+  its name, or the executable file name in its command line, compared case-insensitively and in full. A
+  prefix, a substring or a near-match shows nothing. A wrong match would tell you a program you depend on
+  cost you three seconds, on the one tab whose action is to switch that program off, so no measurement is
+  the right answer when there is any doubt. An entry Windows never flagged stays blank rather than showing
+  "0 s", which would be a claim that it is fast.
+
+### Changed
+
+- **Reading the boot measurements is skipped entirely without administrator rights.** They cannot be read
+  without them, so an unelevated scan no longer pays to open an event log that will return nothing. The
+  elevation banner now says what the rights unlock, rather than only mentioning the on/off switches.
+
 ## [1.80.0] - 2026-09-09
 
 Startup Manager now shows where each entry actually lives: a registry Run key and which hive it is in, a

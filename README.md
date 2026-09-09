@@ -483,7 +483,7 @@ a confirmation before it runs:
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
   really stays down
-- Sort by name, publisher, location, safety, or status via clickable column headers
+- Sort by name, publisher, location, safety, status, or startup impact via clickable column headers
 - Plain-language description for recognised programs (from the built-in database) instead
   of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you
   can tell what an entry is before deciding whether to turn it off
@@ -492,6 +492,12 @@ a confirmation before it runs:
   Startup folder, or Task Scheduler. This is the difference between an entry you can switch off yourself,
   one that needs administrator rights, and one a system policy holds in place; long paths shorten from
   the end, with the full value on hover
+- **A Startup impact column** — how long Windows measured that program delaying your last start-up, from
+  Windows' own boot-performance events rather than an estimate. Sorts by the real delay, so the slowest
+  entry comes first. A figure appears only when Windows' report matches the entry exactly, by name or by
+  executable file name: a near-match would blame the wrong program, and this is the tab where you act on
+  that. Blank means Windows measured nothing, never "0 s". Requires administrator rights, because reading
+  those events does — the banner at the top of the tab says so
 - Open file location in Explorer
 
 ### Windows Features

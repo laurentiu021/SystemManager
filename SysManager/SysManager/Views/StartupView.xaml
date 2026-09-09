@@ -28,8 +28,8 @@
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="Changing startup entries requires administrator privileges."
-                       ElevatedMessage="Running as administrator — you can enable and disable any startup entry."/>
+                       NotElevatedMessage="Changing startup entries requires administrator privileges, and so does reading Windows' start-up delay measurements — the Startup impact column stays empty without them."
+                       ElevatedMessage="Running as administrator — you can enable and disable any startup entry, and Startup impact shows what Windows measured each one delaying the last start-up."/>
 
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
@@ -235,6 +235,25 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
+
+                    <!-- Windows' own measurement of what delayed the last start-up, from the same
+                         Diagnostics-Performance events the Boot Analyzer tab reads (#1587) — the app owned
+                         this number and kept it in a tab nobody has a reason to open, while this is the tab
+                         where it answers a question: which of twenty entries is worth turning off.
+                         Presentation follows BootAnalyzerView's own "Delay" column: the bare figure, no chip.
+                         Sorted on StartupImpactMs, because sorting the display string puts "800 ms" above
+                         "3.2 s". Blank when Windows reported nothing about the entry, which is the normal
+                         case and never rendered as a zero. -->
+                    <DataGridTextColumn Header="Startup impact" Binding="{Binding StartupImpact}" Width="110" MinWidth="90"
+                                        SortMemberPath="StartupImpactMs" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="ToolTip" Value="{Binding StartupImpactDetail}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
                     <DataGridTemplateColumn Header="" Width="80" MinWidth="80" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>

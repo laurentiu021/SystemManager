@@ -87,7 +87,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
 - `CleanupViewModel` — TEMP, Recycle Bin, SFC, DISM (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.
-- `StartupViewModel` — startup program management (enable/disable via registry).
+- `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
 - `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three

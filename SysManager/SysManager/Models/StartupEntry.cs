@@ -39,6 +39,32 @@ public sealed partial class StartupEntry : ObservableObject
     /// </summary>
     [ObservableProperty] private string _safety = "";
 
+    /// <summary>
+    /// How long Windows measured this entry delaying the most recent start-up it noticed, formatted the way
+    /// the Boot Analyzer tab formats it ("3.2 s", "800 ms"). Empty when Windows reported nothing about it.
+    /// </summary>
+    /// <remarks>
+    /// Windows' own measurement, from the Diagnostics-Performance events the Boot Analyzer tab already reads
+    /// — not an estimate this app invents. Empty is the normal case: Windows only records a component when it
+    /// crossed a delay threshold, and reading those events at all requires administrator rights.
+    /// <para>Blank rather than "0 s" or "None" when there is no measurement. The distinction matters on a
+    /// column whose whole purpose is "which of these twenty is worth turning off": a zero would be a claim
+    /// that this entry is fast, and nothing here supports that claim.</para>
+    /// </remarks>
+    [ObservableProperty] private string _startupImpact = "";
+
+    /// <summary>
+    /// The raw delay in milliseconds behind <see cref="StartupImpact"/>, or 0 when unmeasured. Exists so the
+    /// column sorts numerically — sorting the display string would put "800 ms" above "3.2 s".
+    /// </summary>
+    [ObservableProperty] private long _startupImpactMs;
+
+    /// <summary>
+    /// The whole sentence behind <see cref="StartupImpact"/>, including when the start-up was and what
+    /// Windows classified the component as. The column shows the bare figure; this goes on its tooltip.
+    /// </summary>
+    [ObservableProperty] private string _startupImpactDetail = "";
+
     /// <summary>Registry key path (for registry-based entries).</summary>
     public string RegistryKey { get; init; } = "";
 

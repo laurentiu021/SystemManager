@@ -19,6 +19,15 @@ namespace SysManager.ViewModels;
 public sealed partial class StartupViewModel : ViewModelBase
 {
     private readonly StartupService _service;
+    private readonly Func<bool> _isElevatedProbe;
+
+    /// <summary>
+    /// Where Windows' boot-delay measurements come from. A delegate rather than the service itself, so a test
+    /// can prove the elevation gate by whether this is called at all — the outcome cannot prove it, because
+    /// the real reader also returns nothing when the rights are missing.
+    /// </summary>
+    private readonly Func<Task<IReadOnlyList<BootDegradation>>> _readDegradations;
+
     private readonly List<StartupEntry> _allEntries = [];
 
     public BulkObservableCollection<StartupEntry> Entries { get; } = new();
@@ -30,10 +39,27 @@ public sealed partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private string _scanSummary = "Click Scan to discover startup items.";
     [ObservableProperty] private bool _hideWindowsEntries;
 
-    public StartupViewModel(StartupService service)
+    public StartupViewModel(StartupService service, BootAnalyzerService boot)
+        : this(service, AdminHelper.IsElevated,
+               () => (boot ?? throw new ArgumentNullException(nameof(boot))).ReadDegradationsAsync())
+    {
+    }
+
+    /// <summary>Test seam: the same view-model with the elevation probe and the boot reader supplied.</summary>
+    /// <param name="service">The startup scan.</param>
+    /// <param name="isElevated">
+    /// How this view-model asks whether the process is elevated. Injected rather than called inline, because
+    /// the boot-impact read below happens only when elevated and a test has to be able to drive both sides of
+    /// that branch. Same seam and same two-constructor shape as <c>WindowsUpdateViewModel</c>.
+    /// </param>
+    /// <param name="readDegradations">Windows' boot-delay measurements. See <see cref="_readDegradations"/>.</param>
+    internal StartupViewModel(StartupService service, Func<bool> isElevated,
+                              Func<Task<IReadOnlyList<BootDegradation>>> readDegradations)
     {
         _service = service;
-        IsElevated = AdminHelper.IsElevated();
+        _isElevatedProbe = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
+        _readDegradations = readDegradations ?? throw new ArgumentNullException(nameof(readDegradations));
+        IsElevated = _isElevatedProbe();
         // Scan, EnableAll and ToggleEntry all read or write the same startup registry/task
         // state; running them concurrently could interleave registry writes and produce
         // inconsistent counts. Re-evaluate their CanExecute when IsBusy flips so only one
@@ -93,6 +119,13 @@ public sealed partial class StartupViewModel : ViewModelBase
                 var exePath = ExtractExecutablePath(item.Command);
                 item.Icon = IconExtractorService.GetIcon(exePath ?? item.Command);
             }
+
+            // Only when elevated. Reading Diagnostics-Performance needs administrator rights, and without
+            // them the reader catches the access denial and returns nothing — so an unelevated run would pay
+            // for opening an event log on every scan to fill in no figures at all. The banner at the top of
+            // the tab is what tells the user why the column is empty.
+            if (_isElevatedProbe())
+                ApplyBootImpact(sorted, await _readDegradations().ConfigureAwait(false));
 
             void Publish()
             {
@@ -229,6 +262,93 @@ public sealed partial class StartupViewModel : ViewModelBase
         }
         catch (InvalidOperationException) { StatusMessage = "Could not open file location."; }
         catch (System.ComponentModel.Win32Exception) { StatusMessage = "Could not open file location."; }
+    }
+
+    /// <summary>
+    /// Attaches Windows' own boot-delay measurement to any entry it can be attributed to with certainty.
+    /// </summary>
+    /// <remarks>
+    /// Attribution fails closed. A wrong match is worse than no match here: it tells someone a program they
+    /// depend on cost them three seconds, and the action this tab offers is to switch that program off. So
+    /// only a whole-string, case-insensitive equality counts — against the entry's own name, or against the
+    /// executable file name in its command line. Windows reports a component either way depending on the
+    /// event ("slowdriver.sys" on one, "Some App" on another), and neither comparison is a substring or a
+    /// prefix. Anything less certain leaves the column blank.
+    /// <para>Newest measurement wins, because the column claims to describe the last start-up. Windows keeps
+    /// several boots of history and an entry that was slow once and is not any more should not keep saying so.</para>
+    /// </remarks>
+    internal static void ApplyBootImpact(IEnumerable<StartupEntry> entries,
+                                         IReadOnlyList<BootDegradation> degradations)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(degradations);
+        if (degradations.Count == 0) return;
+
+        foreach (var entry in entries)
+        {
+            var match = MatchDegradation(entry, degradations);
+            if (match is null) continue;
+
+            entry.StartupImpact = match.DurationDisplay;
+            entry.StartupImpactMs = match.DurationMs;
+            entry.StartupImpactDetail =
+                $"Windows measured this delaying start-up by {match.DurationDisplay} on {match.WhenDisplay}. "
+                + $"Windows classified it as: {match.Kind}.";
+        }
+    }
+
+    /// <summary>The newest degradation that is certainly this entry, or null.</summary>
+    internal static BootDegradation? MatchDegradation(StartupEntry entry,
+                                                      IReadOnlyList<BootDegradation> degradations)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(degradations);
+
+        var exe = ExecutableFileName(entry.Command);
+        return degradations
+            .Where(d => Identifies(d.Name, entry.Name) || Identifies(d.Name, exe)
+                     || Identifies(ExecutableFileName(d.Name), exe))
+            .OrderByDescending(d => d.When)
+            .FirstOrDefault();
+
+        // Empty never identifies anything — an entry with no name, or a command with no executable in it,
+        // would otherwise match every degradation that also came out empty.
+        static bool Identifies(string reported, string candidate)
+            => candidate.Length > 0 && string.Equals(reported, candidate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The executable file name in a command line — <c>chrome.exe</c> — or empty when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="ExtractExecutablePath"/>, which probes the filesystem with
+    /// <c>File.Exists</c> to decide where an unquoted path ends. That is right for opening a folder in
+    /// Explorer and wrong here: matching has to give the same answer on any machine, including a test one
+    /// where the path does not exist. Keyed on the extension instead, which is what makes it pure.
+    /// </remarks>
+    internal static string ExecutableFileName(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return "";
+
+        string[] extensions = [".exe", ".bat", ".cmd", ".com", ".sys", ".dll"];
+        var best = -1;
+        var length = 0;
+        foreach (var extension in extensions)
+        {
+            var at = command.IndexOf(extension, StringComparison.OrdinalIgnoreCase);
+            // Earliest extension in the string, so arguments that name another file are ignored:
+            // rundll32.exe C:\thing.dll,Entry is rundll32.exe, not thing.dll.
+            if (at >= 0 && (best < 0 || at < best))
+            {
+                best = at;
+                length = extension.Length;
+            }
+        }
+        if (best < 0) return "";
+
+        var end = best + length;
+        var start = command.LastIndexOfAny(['\\', '/', '"', ' '], best) + 1;
+        return command[start..end];
     }
 
     private static string? ExtractExecutablePath(string command)

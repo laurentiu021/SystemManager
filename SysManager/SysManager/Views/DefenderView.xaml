@@ -37,7 +37,7 @@
 
         <!-- Tamper Protection warning -->
         <Border Grid.Row="3" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="0,0,0,12"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
                 Visibility="{Binding IsTamperProtected, Converter={StaticResource FlexVis}}">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
                  its orientation, so TextWrapping was inert and this warning clipped (#1807). -->

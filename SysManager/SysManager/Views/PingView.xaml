@@ -119,7 +119,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="0,0,10,10" Padding="14,12" CornerRadius="12"
+                            <Border Margin="0,0,10,10" Padding="14,12" CornerRadius="{StaticResource RadiusLg}"
                                     Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                 <Grid>
                                     <Border Background="{Binding ColorHex, Converter={StaticResource HexBrush}}"

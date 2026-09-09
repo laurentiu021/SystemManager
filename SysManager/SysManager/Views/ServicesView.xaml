@@ -227,7 +227,7 @@
                 <DataGridTemplateColumn Header="Safety" Width="90" MinWidth="80" SortMemberPath="SafetyLevel">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <Border CornerRadius="8" Padding="6,3"
+                            <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
                                     Background="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
                                     BorderBrush="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
                                     BorderThickness="1" HorizontalAlignment="Left"

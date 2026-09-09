@@ -92,7 +92,7 @@
                                Visibility="{Binding SfcEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
                 <!-- SFC verdict (shown after completion) -->
-                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
                         Background="{DynamicResource Surface1}"
                         Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
                     <!-- DockPanel, not a horizontal StackPanel: the verdict is a full sentence, and inside a
@@ -121,7 +121,7 @@
                                Visibility="{Binding DismEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
                 <!-- DISM verdict (shown after completion) -->
-                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="8"
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
                         Background="{DynamicResource Surface1}"
                         Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
                     <!-- DockPanel for the same reason as the SFC verdict above. -->

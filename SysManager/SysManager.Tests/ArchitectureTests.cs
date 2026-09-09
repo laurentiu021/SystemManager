@@ -2476,11 +2476,20 @@ public partial class ArchitectureTests
     ///   exactly the same pixels, so the intent is stated and the arithmetic cannot go stale if the element is
     ///   resized.</item>
     /// </list>
-    /// <para>This guard deliberately does NOT require a token. Asking for one across 175 call sites is a
-    /// separate, purely mechanical migration; asking for an on-scale VALUE is the part that prevents a
-    /// regression, and it is checkable without touching a single view. <c>2</c> is on the list because it is
-    /// the accent stripe on the elevation and preview banners — a deliberate hairline, not a surface radius.
-    /// </para>
+    /// <para><b>It now requires the token as well, because the migration it deferred has happened.</b> This
+    /// used to say that asking for a token across 175 call sites was "a separate, purely mechanical
+    /// migration" and check only the VALUE. #1633 did that migration — 69 on-scale literals became token
+    /// references — so the weaker rule would leave the finished work free to unravel one literal at a time,
+    /// each new view looking locally reasonable.</para>
+    /// <para><b>The token values are read from App.xaml rather than hardcoded here.</b> Changing
+    /// <c>RadiusMd</c> from 8 to 10 must not leave this guard demanding a literal 8 — it would fail every
+    /// migrated view for using the very token it asks for. The allowed-value list stays literal, because
+    /// that is the scale's shape and a change to it should be deliberate.</para>
+    /// <para>Two values are allowed to stay raw, and they are not exceptions to the token rule — neither has
+    /// a token to use. <c>2</c> (20 uses) is the accent stripe on the elevation and preview banners, a
+    /// deliberate hairline rather than a surface radius; <c>16</c> (once) is ThemePopup's floating shell.
+    /// Both are documented at the token definitions in App.xaml. Any value the scale does not name is
+    /// silently accepted here, which is what makes adding one a deliberate act.</para>
     /// </remarks>
     [Fact]
     public void EveryCornerRadius_IsOnTheScale()
@@ -2489,39 +2498,106 @@ public partial class ArchitectureTests
         var allowed = new HashSet<string>(StringComparer.Ordinal) { "2", "4", "8", "12", "16", "999" };
 
         var appDir = FindAppProjectDir();
-        var offenders = new List<string>();
+        var appXaml = WithoutXamlComments(File.ReadAllText(Path.Combine(appDir, "App.xaml")));
+
+        // value -> token key, read from the definitions so the rule follows the scale rather than a copy.
+        var tokens = RadiusTokenDefinition().Matches(appXaml)
+            .ToDictionary(m => m.Groups[2].Value, m => m.Groups[1].Value, StringComparer.Ordinal);
+        Assert.True(tokens.Count >= 4,
+            $"only {tokens.Count} radius tokens were found in App.xaml — if the scale was renamed or moved, "
+            + "the token half of this guard is enforcing nothing.");
+
+        var offScale = new List<string>();
+        var untokenised = new List<string>();
+        var undefined = new List<string>();
         var literals = 0;
+        var references = 0;
 
         foreach (var file in Directory
                      .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
                      .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                                              StringComparison.Ordinal)))
         {
-            var text = File.ReadAllText(file);
+            // Comments stripped, because App.xaml's own documentation QUOTES two of these values to explain
+            // why they stay raw — and without this the guard counted its own prose. That inflated the
+            // population by 2 and, worse, meant deleting the real ThemePopup 16 would leave the comment
+            // standing in for it. A guard must not be able to satisfy itself.
+            var text = WithoutXamlComments(File.ReadAllText(file));
+            foreach (var use in RadiusTokenUse().Matches(text).Cast<Match>())
+            {
+                references++;
+                var key = use.Groups[1].Value;
+                if (!tokens.ContainsValue(key))
+                    undefined.Add($"{Path.GetFileName(file)}: {key} is referenced but not defined");
+            }
             foreach (var hit in NumericCornerRadius().Matches(text).Cast<Match>())
             {
                 literals++;
                 var value = hit.Groups["value"].Value;
-                if (allowed.Contains(value)) continue;
-                offenders.Add($"{Path.GetFileName(file)}: CornerRadius=\"{value}\"");
+                if (tokens.TryGetValue(value, out var token))
+                    untokenised.Add($"{Path.GetFileName(file)}: a raw {value} — use {token}");
+                else if (!allowed.Contains(value))
+                    offScale.Add($"{Path.GetFileName(file)}: CornerRadius=\"{value}\"");
             }
         }
 
-        // Vacuity floor. RE-MEASURED at 90 on the same day it was written: 177 was the count before the
-        // elevation banner was extracted into one control, and that removed 60 banner Borders plus 27 of the
-        // stripe hairlines. The floor fired on the rebase, which is the floor working — a population is a
-        // measurement, and another change moved it. Current spread: 8 x39, 2 x20, 12 x19, 4 x9, 999 x2, 16 x1.
-        Assert.True(literals >= 80,
-            $"only {literals} numeric CornerRadius values were read, out of 90 measured — the pattern is out "
-            + "of date, so a pass proves nothing.");
+        // Vacuity floor, RE-MEASURED twice now, and both moves were real work rather than a broken pattern.
+        // 177 -> 90 when the elevation banner became one control (60 banner Borders and 27 hairlines gone).
+        // 90 -> 21 when #1633 replaced the 69 on-scale literals with token references. A population is a
+        // measurement; if a change moves it, re-measure and say why. Current spread: 2 x20, 16 x1.
+        //
+        // The floor is on literals PLUS references, because the two trade off: migrating one moves a count
+        // from the first to the second. A floor on literals alone would have fired on #1633 for doing
+        // exactly what this guard now asks for.
+        Assert.True(literals + references >= 100,
+            $"only {literals} numeric radii and {references} token references were read ({literals + references} "
+            + "against 120 measured) — the patterns are out of date, so a pass proves nothing.");
 
-        Assert.True(offenders.Count == 0,
+        // A StaticResource inside a DataTemplate resolves at RUNTIME, so deleting or renaming a key still
+        // compiles and the first symptom is a crash when the template inflates. That has happened here once
+        // with a Style, which is why the token half of this guard checks both directions.
+        Assert.True(undefined.Count == 0,
+            "these views reference a radius token that App.xaml does not define. It compiles either way — a "
+            + "StaticResource in a DataTemplate is resolved when the template inflates, not when it is "
+            + "built — so the first sign would be a crash in front of a user:\n  "
+            + string.Join("\n  ", undefined.Distinct())
+            + $"\n(defined: {string.Join(", ", tokens.Values.OrderBy(v => v, StringComparer.Ordinal))})");
+
+        Assert.True(offScale.Count == 0,
             "these corner radii are not on the scale. The tokens exist because the radii drifted once already "
             + "(5/6/8/10/999 scattered), and a number that is half of its element's own size is a pill or a "
             + "circle — say so with {StaticResource RadiusPill}, which clamps to the same pixels and cannot go "
             + "stale if the element is resized. Otherwise pick the nearest scale step (4, 8, 12, 16):\n  "
-            + string.Join("\n  ", offenders));
+            + string.Join("\n  ", offScale));
+
+        Assert.True(untokenised.Count == 0,
+            "these corner radii repeat a number the scale already names. #1633 migrated all 69 of them, so a "
+            + "literal here is that work unravelling one view at a time — each looking locally reasonable. "
+            + "Use the token; it is the same pixels:\n  "
+            + string.Join("\n  ", untokenised)
+            + $"\n({references} references to the scale, {tokens.Count} tokens defined)");
     }
+
+    /// <summary>XAML with its <c>&lt;!-- --&gt;</c> comments removed.</summary>
+    /// <remarks>
+    /// Needed wherever a check counts markup, because this repo's XAML comments quote the very values and
+    /// keys the checks look for — App.xaml's radius-token block explains two raw values by writing them out.
+    /// A guard that reads its own documentation reports a population that includes its own prose.
+    /// </remarks>
+    private static string WithoutXamlComments(string xaml) => XamlComment().Replace(xaml, "");
+
+    /// <summary>A XAML comment, including a multi-line one.</summary>
+    [GeneratedRegex(@"<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex XamlComment();
+
+    /// <summary>A radius token definition in App.xaml, capturing its key and its value.</summary>
+    [GeneratedRegex(@"<CornerRadius\s+x:Key=""(Radius\w+)""\s*>\s*([0-9]+)\s*</CornerRadius>",
+                    RegexOptions.Compiled)]
+    private static partial Regex RadiusTokenDefinition();
+
+    /// <summary>A reference to one of the radius tokens, capturing the key.</summary>
+    [GeneratedRegex(@"(?:Static|Dynamic)Resource\s+(Radius\w+)", RegexOptions.Compiled)]
+    private static partial Regex RadiusTokenUse();
 
     /// <summary>A <c>CornerRadius</c> written as a plain number rather than a token.</summary>
     [GeneratedRegex(@"CornerRadius=""(?<value>\d+)""", RegexOptions.Compiled)]
@@ -9404,5 +9480,4 @@ public partial class ArchitectureTests
             + "as \"non-negative\":\n  "
             + string.Join("\n  ", offenders));
     }
-
 }

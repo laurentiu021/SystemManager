@@ -37,7 +37,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8">
+                                CornerRadius="{StaticResource RadiusMd}">
                             <ContentPresenter
                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
@@ -146,7 +146,7 @@
                                         AutomationProperties.AutomationId="{Binding Children[0].Id}"
                                         AutomationProperties.Name="{Binding Children[0].Label}"
                                         AutomationProperties.ItemStatus="{Binding Children[0].SelectionStatus}">
-                                    <Border CornerRadius="8" Padding="14,10"
+                                    <Border CornerRadius="{StaticResource RadiusMd}" Padding="14,10"
                                             DataContext="{Binding Children[0]}"
                                             Style="{StaticResource SidebarNavRow}">
                                         <Grid>
@@ -170,7 +170,7 @@
                                                            FontFamily="{StaticResource UiFont}"
                                                            FontSize="13"/>
                                                 <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                                <Border Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                <Border Background="{DynamicResource AccentSoft}" CornerRadius="{StaticResource RadiusSm}"
                                                         Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
@@ -188,7 +188,7 @@
                                           AutomationProperties.AutomationId="{Binding Id}"
                                           AutomationProperties.Name="{Binding Label}">
                                     <Expander.Header>
-                                        <Border CornerRadius="8" Padding="14,10" Cursor="Hand"
+                                        <Border CornerRadius="{StaticResource RadiusMd}" Padding="14,10" Cursor="Hand"
                                                 ToolTip="{Binding Tooltip}">
                                             <Border.Style>
                                                 <Style TargetType="Border">
@@ -303,7 +303,7 @@
                                                         AutomationProperties.AutomationId="{Binding Id}"
                                                         AutomationProperties.Name="{Binding Label}"
                                                         AutomationProperties.ItemStatus="{Binding SelectionStatus}">
-                                                    <Border CornerRadius="8" Padding="28,9,14,9"
+                                                    <Border CornerRadius="{StaticResource RadiusMd}" Padding="28,9,14,9"
                                                             Style="{StaticResource SidebarNavRow}">
                                                         <Grid>
                                                             <Rectangle x:Name="ActiveMark"
@@ -334,7 +334,7 @@
                                                                                    FontSize="13"
                                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                                         <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                                                        <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="4"
+                                                                        <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="{StaticResource RadiusSm}"
                                                                                 Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
                                                                                 Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
                                                                             <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
@@ -361,7 +361,7 @@
 
                 <!-- Footer -->
                 <StackPanel Grid.Row="2" Margin="20,10,20,16">
-                    <Border Background="{DynamicResource Surface3}" CornerRadius="999"
+                    <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusPill}"
                             Padding="10,3" HorizontalAlignment="Left"
                             AutomationProperties.AutomationId="ElevationBadge">
                         <StackPanel Orientation="Horizontal">
@@ -409,7 +409,7 @@
                              A Button would supply the peer and Space, but NOT Enter: ButtonBase
                              honours Enter only where KeyboardNavigation.AcceptsReturn is set, which
                              is why the nav rows set it explicitly. -->
-                        <Border Grid.Column="1" x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="8"
+                        <Border Grid.Column="1" x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
                                 Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
                                 KeyDown="ThemeBtn_KeyDown"

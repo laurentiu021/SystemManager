@@ -90,7 +90,7 @@
 
                         <!-- Per-game optimizations (only meaningful with a game selected) -->
                         <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                                BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,10,0,0"
+                                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="12,10" Margin="0,10,0,0"
                                 IsEnabled="{Binding HasSelectedGame}">
                             <StackPanel>
                                 <TextBlock Text="Applied to the selected game" Style="{StaticResource Caption}" Margin="0,0,0,6"/>

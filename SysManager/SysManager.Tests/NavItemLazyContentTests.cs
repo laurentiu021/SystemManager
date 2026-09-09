@@ -192,8 +192,11 @@ public class NavItemLazyContentTests
         // more specific claim, and a bar parked on a stale percentage would be worse than a marquee.
         var item = new NavItem
         {
-            Id = "t", Label = "T", ViewType = typeof(object),
-            Progress = 42, IsProgressIndeterminate = true,
+            Id = "t",
+            Label = "T",
+            ViewType = typeof(object),
+            Progress = 42,
+            IsProgressIndeterminate = true,
         };
 
         Assert.Equal(TaskbarItemProgressState.Indeterminate,

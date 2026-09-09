@@ -349,4 +349,89 @@ public partial class UiAutomationContractTests
         // The column must also be identifiable and sortable, which an empty header prevented.
         Assert.Equal("Severity", (string?)severityColumn.Attribute("SortMemberPath"));
     }
+    /// <summary>
+    /// Every input a user can focus but that carries no text of its own must be given an accessible name.
+    /// </summary>
+    /// <remarks>
+    /// The sibling guard above covers controls whose <c>Content</c> IS their label — a Button, a CheckBox.
+    /// A TextBox, ComboBox or Slider has no such text, so unless it is named it announces as its control
+    /// type alone: "edit", "combo box". The label a sighted user reads is a separate TextBlock beside it,
+    /// which a screen reader has no reason to associate with the control.
+    /// <para>#1544 asked for <c>AutomationProperties.LabeledBy</c>, which is still unused across the app, and
+    /// the measurement is why this guard does not require it: <b>132 of 133</b> real input instances already
+    /// carry an explicit <c>AutomationProperties.Name</c>, which is the stronger form — it does not depend on
+    /// an element relationship surviving a layout change. The remaining one is
+    /// <c>PART_EditableTextBox</c> inside a ComboBox template, which is named by the ComboBox that templates
+    /// it and would be wrong to name separately. So the app was already right and had nothing keeping it
+    /// that way; this is the keeping.</para>
+    /// <para>A bound name counts. Row controls inside a DataTemplate are named from their item
+    /// (<c>EveryRowControl_AnnouncesTheRowItIsOn</c> holds them to naming the row), and a
+    /// <c>{Binding}</c> there is a real name produced at runtime.</para>
+    /// <para>Two exclusions. Anything inside a <c>ControlTemplate</c> or a <c>Style</c> is a template part,
+    /// named by whatever it templates — that is the <c>PART_</c> case, and naming it would announce the part
+    /// instead of the control. And <c>ProgressBar</c> is included rather than waved through: all of them are
+    /// named today, so the bar stays where the code already is.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryInputWithoutItsOwnText_CarriesAnAccessibleName()
+    {
+        var appDir = Path.Combine(FindSolutionDirectory().FullName, "SysManager");
+        string[] inputs = ["TextBox", "PasswordBox", "ComboBox", "Slider", "DatePicker", "ProgressBar"];
+        var offenders = new List<string>();
+        var inspected = 0;
+
+        var files = Directory
+            .EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml", SearchOption.TopDirectoryOnly)
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            // App.xaml too, and not for completeness: it is the only file where the template-part exclusion
+            // below has anything to exclude. Scoped to the views alone, that rule skipped zero elements and
+            // was decoration; here it earns its place on PART_EditableTextBox, and a future unnamed input
+            // added to a SHARED template gets caught rather than hiding in the one file nobody scanned.
+            .Append(Path.Combine(appDir, "App.xaml"))
+            .OrderBy(f => f, StringComparer.Ordinal);
+
+        foreach (var file in files)
+        {
+            XDocument document;
+            try { document = XDocument.Load(file); }
+            catch (System.Xml.XmlException) { continue; }
+
+            foreach (var element in document.Descendants()
+                         .Where(e => inputs.Contains(e.Name.LocalName, StringComparer.Ordinal)))
+            {
+                // A template part is named by the control it templates, not by itself.
+                if (element.Ancestors().Any(a => a.Name.LocalName is "ControlTemplate" or "Style"))
+                    continue;
+
+                inspected++;
+
+                // The literal attribute name, the way the sibling guard reads it. XDocument parses
+                // AutomationProperties.Name as ONE local name in the default namespace, not as "Name" in an
+                // "AutomationProperties" namespace — a first version looked for the latter, matched nothing,
+                // and reported the whole app unnamed.
+                var named = new[] { "AutomationProperties.Name", "AutomationProperties.LabeledBy",
+                                    "AutomationProperties.AutomationId" }
+                    .Any(attribute => !string.IsNullOrWhiteSpace((string?)element.Attribute(attribute)));
+                if (named) continue;
+
+                var hint = (string?)element.Attribute(XNamespace.Get(
+                    "http://schemas.microsoft.com/winfx/2006/xaml") + "Name");
+                offenders.Add($"{Path.GetFileName(file)}: <{element.Name.LocalName}"
+                              + $"{(hint is null ? "" : " " + hint)}> announces only its control type");
+            }
+        }
+
+        // Vacuity floor. A collapse means the XAML parse or the template-part exclusion started skipping
+        // everything, and a clean pass would prove nothing. The count is printed so a legitimate change to
+        // the population reads as a number to re-measure rather than as a mystery.
+        Assert.True(inspected >= 110,
+            $"only {inspected} input controls were inspected — fix this guard rather than trusting its pass.");
+
+        Assert.True(offenders.Count == 0,
+            "these inputs carry no text of their own and no accessible name, so a screen reader announces "
+            + "the control type and nothing else — the label beside them on screen is not something it can "
+            + "associate with them. Add AutomationProperties.Name with the words the label shows:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
 }

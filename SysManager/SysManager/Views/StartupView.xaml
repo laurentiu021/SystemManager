@@ -127,6 +127,26 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <!-- Where the entry actually lives: a Run key and its hive, a Startup folder, or Task
+                         Scheduler. StartupService has filled this in for every source since the tab shipped
+                         and the unit tests assert it is never blank, but no column bound it (#1587) — so an
+                         entry whose toggle needs admin, or one in the policy Run key that cannot be toggled
+                         from here at all, looked identical to a plain per-user Run entry. Same ElementStyle
+                         as Publisher above; a registry path is longer than a company name, hence 150 rather
+                         than 140, and it ellipsizes from the end so the hive stays visible with the full
+                         value on hover. -->
+                    <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="150" MinWidth="100"
+                                        SortMemberPath="Location" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                <Setter Property="ToolTip" Value="{Binding Location}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
                     <!-- Safety/provenance from the built-in database. Chip structure matches the Process
                          Manager tab's Safety column (ProcessManagerView.xaml) and uses the same
                          ProcessSafety* converters, so "is this Windows, or something I installed?" is

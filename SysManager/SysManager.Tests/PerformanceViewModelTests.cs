@@ -323,7 +323,14 @@ public class PerformanceViewModelTests
     [Fact]
     public async Task TrimRam_WhenSystemModificationLocked_BailsAtGuard()
     {
-        var vm = NewVm();
+        // Initialisation is awaited before the command runs, and that is load-bearing rather than tidy. The
+        // constructor fires InitAsync and forgets it; InitAsync awaits the snapshot gate, so its continuation
+        // is still pending here. `await ExecuteAsync` yields, the continuation gets pumped, and RefreshAsync
+        // overwrites StatusMessage with "Reading performance settings…" — on top of the guard message this
+        // test is asserting. It passed 40/40 locally and failed on CI, which is what an unpumped continuation
+        // looks like: the race is decided by how loaded the machine is.
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -349,9 +356,15 @@ public class PerformanceViewModelTests
     [Fact]
     public async Task ApplyPowerPlan_WhenSystemModificationLocked_BailsAtGuard()
     {
-        var vm = NewVm();
+        // Awaited for the reason TrimRam's sibling above documents: the constructor's pending InitAsync
+        // continuation otherwise lands during `await ExecuteAsync` and overwrites the guard message. This is
+        // the test that actually went red on CI while passing 40/40 locally.
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+
         // Force SelectedPlan away from the current plan so the "already set" early-return
-        // (before the lock guard) doesn't short-circuit the command first.
+        // (before the lock guard) doesn't short-circuit the command first. AFTER the await, because
+        // initialisation ends in SyncTogglesFromProfile, which assigns SelectedPlan itself.
         vm.SelectedPlan = "ultimate";
 
         var prevDialog = DialogService.Instance;

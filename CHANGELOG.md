@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.83.0] - 2026-09-09
+
+The taskbar button now shows how far a long job has got. Start an SFC scan, a bulk install or a deep
+cleanup, minimise the window, and the SysManager button on the taskbar fills up as the work progresses —
+so "is it still going, or did it freeze?" no longer means restoring the window and finding the right tab.
+That mattered more here than in most apps, because closing SysManager hides it to the tray instead of
+quitting, so the taskbar was the only signal left and it showed nothing at all.
+
+### Added
+
+- **Progress on the Windows taskbar button.** Fed from whichever tab you have open: a percentage where the
+  tab knows one, a moving bar where it does not, and nothing when nothing is running. Both signals are used
+  deliberately — the three longest operations in the app (Deep Cleanup, File Shredder, Speed Test) report a
+  percentage while most tabs report only "working", so using one would have left the button blank exactly
+  where it is needed most.
+- Blank rather than an empty bar when a job finishes, because an empty bar reads as "starting".
+
+### Changed
+
+- **The taskbar follows the tab you are looking at**, and only that one. Two tabs can work at once and there
+  is no right way to pick a winner between them, so the button answers for the tab you are actually asking
+  about. It never builds a tab you have not opened just to ask what it is doing, which is what keeps
+  start-up as quick as it is.
+
 ## [1.82.0] - 2026-09-09
 
 SysManager can now follow your Windows light/dark setting instead of staying on whichever theme you last

@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Shell;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
@@ -295,6 +297,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnSelectedNavChanged(NavItem? oldValue, NavItem? newValue)
     {
         UpdateSelectionState(oldValue, newValue);
+        FollowTaskbarProgress(oldValue, newValue);
 
         if (newValue is null)
         {
@@ -321,6 +324,76 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Gate on visibility as well: the tray menu can navigate while the window is hidden (see
         // NavigateTo), and starting a loop nothing can see is the very cost this gate exists to avoid.
         SetActive(newValue.Content, IsWindowVisible); // accessing Content materialises the entered tab's VM
+    }
+
+    /// <summary>
+    /// What the Windows taskbar button shows: the selected tab's progress, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// The taskbar was the one progress signal the app never used, and it is the ONLY one left once the
+    /// window is minimised — which this app actively encourages, since closing it hides to the tray rather
+    /// than exiting (#1584). An SFC scan or a bulk winget install ran for minutes with a live in-app
+    /// percentage while the button showed nothing, so "is it still working or did it freeze?" needed the
+    /// window restored and the right tab found.
+    /// <para>The SELECTED tab only. Two tabs can work at once, and picking a winner between them is a
+    /// design question with no obviously right answer; the selected one is the tab the user is asking about.
+    /// <c>OperationLockService</c> already prevents concurrent same-category work.</para>
+    /// </remarks>
+    public TaskbarItemProgressState TaskbarProgressState =>
+        MapTaskbarProgress(SelectedNav).State;
+
+    /// <inheritdoc cref="TaskbarProgressState"/>
+    public double TaskbarProgressValue => MapTaskbarProgress(SelectedNav).Value;
+
+    /// <summary>
+    /// Maps a tab's mirrored progress onto the taskbar's two-part API.
+    /// </summary>
+    /// <remarks>
+    /// Reads the MIRRORED values on the <see cref="NavItem"/>, never <c>NavItem.Content</c>: touching Content
+    /// materialises the view-model, which would rebuild every lazy tab the moment the shell asked what to
+    /// show on the taskbar and undo the lazy-startup design.
+    /// <para>Indeterminate wins over a percentage. A view-model that sets both is mid-operation with no
+    /// meaningful total — <c>IsProgressIndeterminate</c> is the more specific claim, and a bar that jumps to
+    /// a stale percentage would be worse than a marquee.</para>
+    /// <para><c>Progress</c> of 0 maps to None rather than to an empty Normal bar: 0 is also the value a
+    /// finished operation leaves behind, and an empty green bar reads as "starting" rather than "done".</para>
+    /// </remarks>
+    internal static (TaskbarItemProgressState State, double Value) MapTaskbarProgress(NavItem? tab)
+    {
+        if (tab is null) return (TaskbarItemProgressState.None, 0);
+        if (tab.IsProgressIndeterminate) return (TaskbarItemProgressState.Indeterminate, 0);
+        if (tab.Progress is > 0 and <= 100)
+            return (TaskbarItemProgressState.Normal, tab.Progress / 100.0);
+        return (TaskbarItemProgressState.None, 0);
+    }
+
+    /// <summary>
+    /// Re-reads the taskbar state after the selected tab, or that tab's own progress, moves.
+    /// </summary>
+    private void RaiseTaskbarProgressChanged()
+    {
+        OnPropertyChanged(nameof(TaskbarProgressState));
+        OnPropertyChanged(nameof(TaskbarProgressValue));
+    }
+
+    /// <summary>
+    /// Follows the selected tab's progress, and only that tab's.
+    /// </summary>
+    /// <remarks>
+    /// Re-pointed on every navigation rather than subscribing to all 58 tabs: a stale subscription would let
+    /// a background tab drive the button, which is the opposite of what the selected-tab rule says.
+    /// </remarks>
+    private void FollowTaskbarProgress(NavItem? oldValue, NavItem? newValue)
+    {
+        if (oldValue is not null) oldValue.PropertyChanged -= OnSelectedTabProgressChanged;
+        if (newValue is not null) newValue.PropertyChanged += OnSelectedTabProgressChanged;
+        RaiseTaskbarProgressChanged();
+    }
+
+    private void OnSelectedTabProgressChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(NavItem.Progress) or nameof(NavItem.IsProgressIndeterminate))
+            RaiseTaskbarProgressChanged();
     }
 
     internal static void UpdateSelectionState(NavItem? oldValue, NavItem? newValue)

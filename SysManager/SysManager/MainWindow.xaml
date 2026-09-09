@@ -14,6 +14,16 @@
         <vm:MainWindowViewModel/>
     </Window.DataContext>
 
+    <!-- Progress on the taskbar button. This is the only progress signal left once the window is
+         minimised, and closing this app HIDES it to the tray rather than exiting (see OnClosing), so a
+         multi-minute SFC scan or bulk install used to run with a live in-app percentage and a completely
+         silent taskbar (#1584). Fed by the selected tab's mirrored progress; the view-model decides
+         Indeterminate vs Normal vs None so the rule is testable without a Window. -->
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo ProgressState="{Binding TaskbarProgressState}"
+                         ProgressValue="{Binding TaskbarProgressValue}"/>
+    </Window.TaskbarItemInfo>
+
     <Window.Resources>
         <!-- Each leaf is a real Button so it exposes one invokable UIA peer and remains
              keyboard-operable without inheriting the app's command-button chrome. -->

@@ -43,6 +43,13 @@ leaves carry none, so the icon column belongs to the twelve headings rather than
 Collapsed groups show a child count badge, a written two-line subtitle passed to `Group()` and asserted to
 fit that budget, and a tooltip still generated from the child labels.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
+`NavItem` also mirrors the tab's `IsBusy`, `Progress` and `IsProgressIndeterminate` out of its view-model,
+and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's pair into the Windows taskbar
+button's `ProgressState`/`ProgressValue` (bound in `MainWindow.xaml`). Both progress signals are read,
+not one: 37 view-models set the indeterminate flag and 10 set a percentage, and Deep Cleanup, File
+Shredder and Speed Test — the three longest operations — are in the second group only. The mapping reads
+the MIRRORED values and never `NavItem.Content`, because touching Content materialises the view-model and
+would rebuild every lazy tab the shell asked about.
 The flat Dashboard row and grouped leaf rows are invokable `SidebarNavButton`
 controls. Their inner visuals consume selection through the shared `SidebarNavRow`,
 `SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes

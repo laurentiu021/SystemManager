@@ -90,7 +90,22 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     [ObservableProperty] private bool _isBusy;
 
     /// <summary>
-    /// Wire IsBusy forwarding from the underlying ViewModel. Called automatically on first
+    /// The tab's progress, mirrored from its view-model so the shell can publish it to the Windows taskbar
+    /// button without reaching into the view-model — or forcing a never-opened tab to build one.
+    /// </summary>
+    /// <remarks>
+    /// Both signals, not one. 37 view-models set <see cref="ViewModelBase.IsProgressIndeterminate"/> and 10
+    /// set <see cref="ViewModelBase.Progress"/>, and the three longest operations in the app — Deep Cleanup,
+    /// File Shredder and Speed Test — are in the second group only. A taskbar driven off the indeterminate
+    /// flag alone would be silent exactly where a user is most likely to have minimised the window.
+    /// </remarks>
+    [ObservableProperty] private int _progress;
+
+    /// <inheritdoc cref="Progress"/>
+    [ObservableProperty] private bool _isProgressIndeterminate;
+
+    /// <summary>
+    /// Wire busy/progress forwarding from the underlying ViewModel. Called automatically on first
     /// materialisation of <see cref="Content"/>. For an eagerly-assigned instance that must
     /// forward IsBusy before it is ever displayed, call this after construction.
     /// </summary>
@@ -109,6 +124,8 @@ public sealed partial class NavItem : ObservableObject, IDisposable
             vm.PropertyChanged -= OnViewModelPropertyChanged;
             vm.PropertyChanged += OnViewModelPropertyChanged;
             IsBusy = vm.IsBusy;
+            Progress = vm.Progress;
+            IsProgressIndeterminate = vm.IsProgressIndeterminate;
         }
     }
 
@@ -127,8 +144,15 @@ public sealed partial class NavItem : ObservableObject, IDisposable
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ViewModelBase.IsBusy) && sender is ViewModelBase vm)
-            IsBusy = vm.IsBusy;
+        if (sender is not ViewModelBase vm) return;
+        switch (e.PropertyName)
+        {
+            case nameof(ViewModelBase.IsBusy): IsBusy = vm.IsBusy; break;
+            case nameof(ViewModelBase.Progress): Progress = vm.Progress; break;
+            case nameof(ViewModelBase.IsProgressIndeterminate):
+                IsProgressIndeterminate = vm.IsProgressIndeterminate;
+                break;
+        }
     }
 
     public UserControl View

@@ -25,7 +25,7 @@
                 <TextBlock Text="Winsock and TCP/IP resets require admin and a reboot."
                            Style="{StaticResource Subtle}" Margin="0,0,0,16"/>
 
-                <Border Padding="16" Margin="0,0,0,12" CornerRadius="12" BorderThickness="1">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="{StaticResource RadiusLg}" BorderThickness="1">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="{DynamicResource Surface1}"/>
@@ -52,7 +52,7 @@
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
                 </Border>
-                <Border Padding="16" Margin="0,0,0,12" CornerRadius="12" BorderThickness="1">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="{StaticResource RadiusLg}" BorderThickness="1">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="{DynamicResource Surface1}"/>
@@ -79,7 +79,7 @@
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
                 </Border>
-                <Border Padding="16" Margin="0,0,0,12" CornerRadius="12" BorderThickness="1">
+                <Border Padding="16" Margin="0,0,0,12" CornerRadius="{StaticResource RadiusLg}" BorderThickness="1">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="{DynamicResource Surface1}"/>

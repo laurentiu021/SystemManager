@@ -67,7 +67,7 @@
 
         <!-- Drift summary banner (warning) -->
         <Border Grid.Row="4" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="12" Padding="12,10" Margin="28,12,28,0"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="28,12,28,0"
                 Visibility="{Binding HasDrift, Converter={StaticResource FlexVis}}">
             <!-- DockPanel, not a horizontal StackPanel: a StackPanel gives children infinite width along
                  its orientation, so TextWrapping was inert and this drift notice clipped (#1807). -->

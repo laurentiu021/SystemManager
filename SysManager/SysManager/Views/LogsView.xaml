@@ -444,7 +444,7 @@
                             </StackPanel>
 
                             <Expander Header="Full system message" Margin="0,16,0,0" Foreground="{DynamicResource TextSecondary}">
-                                <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
+                                <Border Padding="10" CornerRadius="{StaticResource RadiusMd}" Background="{DynamicResource Surface0}"
                                         BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.FullMessage, Mode=OneWay}"
                                              AutomationProperties.Name="Full system message"
@@ -458,7 +458,7 @@
                             </Expander>
 
                             <Expander Header="Raw XML (for power users)" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}">
-                                <Border Padding="10" CornerRadius="8" Background="{DynamicResource Surface0}"
+                                <Border Padding="10" CornerRadius="{StaticResource RadiusMd}" Background="{DynamicResource Surface0}"
                                         BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                     <TextBox Text="{Binding SelectedEntry.Xml, Mode=OneWay}"
                                              AutomationProperties.Name="Raw event XML"

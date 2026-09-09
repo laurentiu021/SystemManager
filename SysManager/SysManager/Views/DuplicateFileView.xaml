@@ -141,7 +141,7 @@
                                                 </StackPanel>
                                                 <!-- Keep badge: marks the one suggested copy. Uses the Success palette
                                                      ("this is the one to keep"), not a warning colour. -->
-                                                <Border DockPanel.Dock="Left" CornerRadius="8" Padding="6,2" Margin="0,0,8,0"
+                                                <Border DockPanel.Dock="Left" CornerRadius="{StaticResource RadiusMd}" Padding="6,2" Margin="0,0,8,0"
                                                         VerticalAlignment="Center"
                                                         Background="{DynamicResource SuccessBgSubtle}"
                                                         BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"

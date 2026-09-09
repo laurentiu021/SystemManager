@@ -24,7 +24,7 @@
     <Grid>
         <!-- Not elevated: say what is locked, and offer the one button that unlocks it. -->
         <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,8"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
             <!-- DockPanel, not a horizontal StackPanel: the message is the last child, so it fills the
                  remaining width and TextWrapping actually wraps. Inside a horizontal StackPanel the child
@@ -56,7 +56,7 @@
              through the parent's 12,8 padding to the border edge; it is tied to that padding, which is
              one more reason both live here rather than in 30 copies. -->
         <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                BorderThickness="1" CornerRadius="12" Padding="12,8"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,8"
                 Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}}">
             <Grid>
                 <Border Background="{DynamicResource WarningStripe}" Width="4" HorizontalAlignment="Left"

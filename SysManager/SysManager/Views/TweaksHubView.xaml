@@ -13,7 +13,7 @@
     <UserControl.Resources>
         <!-- One reviewable tweak row: select checkbox + name/description + applied-state pill. -->
         <DataTemplate x:Key="TweakRow">
-            <Border Margin="0,2" Padding="12,10" CornerRadius="8" BorderThickness="1"
+            <Border Margin="0,2" Padding="12,10" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
                     Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -28,7 +28,7 @@
                         <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                     </StackPanel>
-                    <Border Grid.Column="2" CornerRadius="4" Padding="8,2" VerticalAlignment="Center"
+                    <Border Grid.Column="2" CornerRadius="{StaticResource RadiusSm}" Padding="8,2" VerticalAlignment="Center"
                             Background="{DynamicResource Surface3}">
                         <TextBlock FontSize="10" FontWeight="Bold">
                             <TextBlock.Style>
@@ -93,7 +93,7 @@
                     <StackPanel>
                         <TextBlock Text="ADVANCED" Style="{StaticResource SectionLabel}" Margin="0,0,0,4"/>
                         <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
-                                BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                                BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,10">
                             <TextBlock Text="Higher-impact, machine-wide changes — review each one. Still fully reversible."
                                        Foreground="{DynamicResource WarningText}" FontSize="12" TextWrapping="Wrap"/>
                         </Border>

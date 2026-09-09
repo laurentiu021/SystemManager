@@ -45,7 +45,7 @@
                                VerticalAlignment="Center" FontSize="12"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
-                <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="4,0"
+                <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="{StaticResource RadiusSm}" Padding="6,2" Margin="4,0"
                         Visibility="{Binding PendingReboot, Converter={StaticResource BoolToVis}}">
                     <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="{DynamicResource Warning}"/>
                 </Border>
@@ -88,7 +88,7 @@
                     <DataGridTemplateColumn Header="Safety" Width="80" MinWidth="80" SortMemberPath="SafetyLevel">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="8" Padding="6,3"
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
                                         Background="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
                                         HorizontalAlignment="Left"
                                         ToolTip="{Binding SafetyDescription}">
@@ -152,7 +152,7 @@
                     <DataGridTemplateColumn Header="Status" Width="130" MinWidth="80" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,4" VerticalAlignment="Center"
                                         BorderThickness="1" BorderBrush="{DynamicResource Border1}"
                                         Visibility="{Binding Status, Converter={StaticResource FlexVis}}"
                                         ToolTip="{Binding Status}">

@@ -90,12 +90,12 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
                                                        Foreground="{DynamicResource TextPrimary}"/>
-                                            <Border Background="{DynamicResource Surface3}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0"
+                                            <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsProtected, Converter={StaticResource FlexVis}}">
                                                 <TextBlock Text="Protected" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
                                             </Border>
-                                            <Border Background="{DynamicResource Surface3}" CornerRadius="4" Padding="6,1" Margin="8,0,0,0"
+                                            <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsCommonBloat, Converter={StaticResource FlexVis}}">
                                                 <TextBlock Text="Common bloat" FontSize="10" Foreground="{DynamicResource TextMuted}"/>

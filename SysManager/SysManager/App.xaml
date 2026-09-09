@@ -146,6 +146,14 @@
             <!-- the two layout strategies in the project docs. If a token scale  -->
             <!-- is wanted, land it WITH the view migration, not before it.       -->
             <!-- ============================================================ -->
+            <!-- MIGRATED: every on-scale raw value in the XAML now references one of these four   -->
+            <!-- (69 of them, #1633). Two values stay RAW on purpose, and are not misses:            -->
+            <!--   CornerRadius="2"  x20 — the hairline used for accent stripes and small chips. Off  -->
+            <!--                          the 4/8/12 scale deliberately; a 4 there reads as a bulge.  -->
+            <!--   CornerRadius="16" x1  — ThemePopup's outer shell, the only floating panel in the    -->
+            <!--                          app and deliberately rounder than a card.                    -->
+            <!-- Adding a token for either would extend a scale chosen as 4/8/12/999, so they are      -->
+            <!-- documented here instead. EveryOnScaleCornerRadius_UsesItsToken enforces the rest.     -->
             <CornerRadius x:Key="RadiusSm">4</CornerRadius>
             <CornerRadius x:Key="RadiusMd">8</CornerRadius>
             <CornerRadius x:Key="RadiusLg">12</CornerRadius>
@@ -235,7 +243,7 @@
                                             <Border x:Name="HeaderFocusBorder"
                                                     BorderBrush="Transparent"
                                                     BorderThickness="1"
-                                                    CornerRadius="8">
+                                                    CornerRadius="{StaticResource RadiusMd}">
                                                 <ContentPresenter HorizontalAlignment="Stretch"/>
                                             </Border>
                                             <ControlTemplate.Triggers>

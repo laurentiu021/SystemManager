@@ -176,7 +176,7 @@
                     <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="8" Padding="8,4" VerticalAlignment="Center"
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,4" VerticalAlignment="Center"
                                         Background="{DynamicResource Surface3}" BorderThickness="1" BorderBrush="{DynamicResource Border1}">
                                     <Grid>
                                         <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
@@ -202,7 +202,7 @@
                     <DataGridTemplateColumn Header="Safety" Width="110" MinWidth="100" SortMemberPath="SafetyLevel">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="8" Padding="6,3"
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
                                         Background="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
                                         BorderBrush="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
                                         BorderThickness="1" HorizontalAlignment="Left"

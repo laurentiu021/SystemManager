@@ -185,7 +185,7 @@
                         <ItemsControl ItemsSource="{Binding PathEntries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Margin="0,2" Padding="8,6" CornerRadius="8" BorderThickness="1"
+                                    <Border Margin="0,2" Padding="8,6" CornerRadius="{StaticResource RadiusMd}" BorderThickness="1"
                                             Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>

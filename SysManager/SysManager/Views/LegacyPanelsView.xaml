@@ -44,7 +44,7 @@
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="Bd" Background="{DynamicResource Surface2}"
                                                 BorderBrush="{DynamicResource Border1}" BorderThickness="1"
-                                                CornerRadius="8" Padding="14,12">
+                                                CornerRadius="{StaticResource RadiusMd}" Padding="14,12">
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"
                                                            Foreground="{DynamicResource TextPrimary}"/>

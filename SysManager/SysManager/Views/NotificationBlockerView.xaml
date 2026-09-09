@@ -85,7 +85,7 @@
                               AutomationProperties.Name="Notification senders">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Margin="0,2" Padding="12,10" CornerRadius="8"
+                            <Border Margin="0,2" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
                                     BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">

@@ -122,6 +122,32 @@ public class DriversViewModelTests
     }
 
     [Fact]
+    public void ParseDriverJson_CarriesTheSignatureStateThrough()
+    {
+        var vm = NewVm();
+        var method = typeof(DriversViewModel)
+            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        // The third entry omits IsSigned entirely, which is the case that must stay blank rather than
+        // become "Unsigned" — a query change or a Windows edition that stops reporting it lands here.
+        var json = """
+        [
+            {"DeviceName":"Signed one","Manufacturer":"Intel","DriverVersion":"1","IsSigned":true},
+            {"DeviceName":"Unsigned one","Manufacturer":"Somebody","DriverVersion":"2","IsSigned":false},
+            {"DeviceName":"Unknown one","Manufacturer":"Somebody","DriverVersion":"3"}
+        ]
+        """;
+
+        method.Invoke(vm, new object[] { json });
+
+        Assert.Equal(3, vm.Drivers.Count);
+        Assert.Equal("Signed", vm.Drivers[0].SignatureDisplay);
+        Assert.Equal("Unsigned", vm.Drivers[1].SignatureDisplay);
+        Assert.Equal("", vm.Drivers[2].SignatureDisplay);
+        Assert.Null(vm.Drivers[2].IsSigned);
+    }
+
+    [Fact]
     public void ParseDriverJson_SingleObject_PopulatesOneDriver()
     {
         var vm = NewVm();
@@ -352,5 +378,58 @@ public class DriverEntryTests
         Assert.Equal("", entry.Manufacturer);
         Assert.Equal("", entry.DriverVersion);
         Assert.Null(entry.DriverDate);
+        Assert.Null(entry.IsSigned);
+        Assert.Equal("", entry.SignatureDisplay);
+    }
+
+    // ── Signature state (#1581) ──────────────────────────────────────────────
+    //
+    // Win32_PnPSignedDriver is named for exactly this and the query dropped it, so the tab that could
+    // answer "is this from who it claims?" showed only Manufacturer — a string the driver package supplies
+    // about itself. The whole value of these tests is the THIRD state: an absent value must not render as
+    // "Unsigned", because on this tab that is an accusation a user may act on.
+
+    [Theory]
+    [InlineData(true, "Signed")]
+    [InlineData(false, "Unsigned")]
+    [InlineData(null, "")]
+    public void SignatureDisplay_SaysSignedOrUnsignedAndNothingWhenUnknown(bool? signed, string expected)
+        => Assert.Equal(expected, new DriverEntry { IsSigned = signed }.SignatureDisplay);
+
+    /// <summary>
+    /// It says "Signed", never "Safe" — a signature identifies the publisher and nothing more, and Windows
+    /// loads a signed driver from anyone holding a valid certificate.
+    /// </summary>
+    [Fact]
+    public void SignatureDisplay_NeverClaimsTheDriverIsSafe()
+    {
+        foreach (var signed in new bool?[] { true, false, null })
+        {
+            var text = new DriverEntry { IsSigned = signed }.SignatureDisplay;
+            Assert.DoesNotContain("safe", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("trusted", text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    [InlineData("\"True\"", true)]      // ConvertTo-Json can surface the value as a string
+    [InlineData("\"False\"", false)]
+    [InlineData("null", null)]
+    [InlineData("\"\"", null)]          // present but unparseable is unknown, not false
+    [InlineData("42", null)]
+    public void ParseCimBool_KeepsAbsentDistinctFromFalse(string json, bool? expected)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(expected, DriversViewModel.ParseCimBool(doc.RootElement));
+    }
+
+    [Fact]
+    public void ParseCimBool_WithAnAbsentProperty_IsUnknown()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""{"DeviceName":"x"}""");
+        var absent = doc.RootElement.TryGetProperty("IsSigned", out var el) ? el : default;
+        Assert.Null(DriversViewModel.ParseCimBool(absent));
     }
 }

@@ -9480,4 +9480,111 @@ public partial class ArchitectureTests
             + "as \"non-negative\":\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// Every property a PowerShell query fetches must be read back out of the JSON. A property selected
+    /// and never parsed is invisible to the compiler and to every test.
+    /// </summary>
+    /// <remarks>
+    /// This is #1581's defect exactly. <c>DriversViewModel</c> queried <c>Win32_PnPSignedDriver</c> — a CIM
+    /// class named for the one thing it reports — selected <c>DeviceName, DriverVersion, Manufacturer,
+    /// DriverDate</c>, and dropped <c>IsSigned</c>. So the tab that could answer "is this driver from who it
+    /// claims?" showed only <c>Manufacturer</c>, which is a string the driver package supplies about itself.
+    /// Nothing failed: the query worked, the parse worked, the column that should have existed simply did
+    /// not, which is this repo's dominant recurring shape — surface that is fetched or implemented and never
+    /// read.
+    /// <para><b>Scoped to queries piped through <c>ConvertTo-Json</c></b>, because that is the only shape
+    /// where "selected" and "parsed" are separately checkable. The other seven <c>Select-Object</c> call
+    /// sites format their own output — <c>WindowsFeaturesService</c> pipes through
+    /// <c>ForEach-Object { $_.FeatureName + '|' + $_.State }</c> and splits on the delimiter — so a
+    /// JSON-property check would report every one of them as dropped. It did, on the first run: 5 false
+    /// positives across 2 files, which is why the scope is the pipe and not the keyword.</para>
+    /// <para>Both name syntaxes count. A plain list gives <c>Select-Object DeviceName, IsSigned</c>;
+    /// Windows Update builds calculated properties instead, <c>@{N='Title';E={...}}</c>, and its names are
+    /// just as much a contract with the parser.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryPropertyACimQueryFetches_IsReadBackOut()
+    {
+        var appDir = FindAppProjectDir();
+        var offenders = new List<string>();
+        var filesChecked = 0;
+        var namesChecked = 0;
+
+        foreach (var path in Directory
+                     .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal))
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var source = File.ReadAllText(path);
+            if (!source.Contains("ConvertTo-Json", StringComparison.Ordinal)
+                || !source.Contains("Select-Object", StringComparison.Ordinal))
+                continue;
+
+            filesChecked++;
+            var name = Path.GetFileName(path);
+
+            var parsed = JsonPropertyRead().Matches(source)
+                .Select(m => m.Groups[1].Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            var selected = SelectedPropertyList().Matches(source)
+                .SelectMany(m => m.Groups[1].Value.Split(',', StringSplitOptions.TrimEntries))
+                .Concat(SelectedCalculatedProperty().Matches(source).Select(m => m.Groups[1].Value))
+                .Where(n => n.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            foreach (var property in selected)
+            {
+                namesChecked++;
+                if (!parsed.Contains(property))
+                    offenders.Add($"{name}: the query fetches {property} and nothing reads it");
+            }
+
+            // And the reverse, which is the direction that catches a property REMOVED from the query.
+            // Without it, deleting IsSigned from the Select-Object would fail nothing: the parse tests
+            // supply their own JSON, so they keep passing while the real query stops fetching the value.
+            var selectedSet = selected.ToHashSet(StringComparer.Ordinal);
+            foreach (var property in parsed.OrderBy(p => p, StringComparer.Ordinal))
+            {
+                namesChecked++;
+                if (!selectedSet.Contains(property))
+                    offenders.Add($"{name}: {property} is parsed but the query never fetches it");
+            }
+        }
+
+        // 24 checks across 2 files when measured. A collapse means the pipe-shape detection stopped
+        // matching, and a clean result over zero queries proves nothing. Counted in BOTH directions, so
+        // the number is names-selected plus names-parsed rather than distinct properties; the floor sits
+        // under the real total so a legitimate query change does not read as a broken pattern.
+        Assert.True(filesChecked >= 2 && namesChecked >= 20,
+            $"only {namesChecked} property checks across {filesChecked} JSON-returning queries ran — the "
+            + "pipe-shape detection is out of date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these queries fetch a property that nothing parses. Fetching it costs the same as using it, so "
+            + "the column or field it was meant to feed is simply missing — which no test can see, because "
+            + "the query and the parse both work:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({namesChecked} selected properties checked across {filesChecked} queries)");
+    }
+
+    /// <summary>A property read out of a parsed JSON element.</summary>
+    [GeneratedRegex(@"(?:TryGetProperty|GetProperty)\(\s*""([A-Za-z0-9_]+)""", RegexOptions.Compiled)]
+    private static partial Regex JsonPropertyRead();
+
+    /// <summary>A plain property name in a <c>Select-Object</c> list.</summary>
+    /// <remarks>
+    /// Anchored on the keyword and stopping at the pipe, so it reads the list rather than the rest of the
+    /// script. Only bare identifiers are captured; a wildcard or an expression is not a name a parser can
+    /// be held to.
+    /// </remarks>
+    [GeneratedRegex(@"Select-Object\s+((?:[A-Za-z0-9_]+\s*,\s*)*[A-Za-z0-9_]+)", RegexOptions.Compiled)]
+    private static partial Regex SelectedPropertyList();
+
+    /// <summary>A calculated property's name: <c>@{N='Title';E={...}}</c> or <c>@{Name='Title';...}</c>.</summary>
+    [GeneratedRegex(@"@\{\s*N(?:ame)?\s*=\s*'([A-Za-z0-9_]+)'", RegexOptions.Compiled)]
+    private static partial Regex SelectedCalculatedProperty();
 }

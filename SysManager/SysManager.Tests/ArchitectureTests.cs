@@ -3519,6 +3519,58 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every tab has a README section headed with its own name.
+    /// </summary>
+    /// <remarks>
+    /// "Every implemented feature MUST have its own README section" is a house rule that nothing enforced,
+    /// and it had drifted two ways at once.
+    /// <para><b>Four tabs shared one section.</b> Ping, Traceroute, Speed Test and Network Repair were
+    /// described together under a heading called "Network monitor" — a name no tab has, in a different part
+    /// of the reference from the other Network tab. Searching the README for "Speed Test" found the
+    /// screenshot gallery and a parenthetical list, and nothing that said what the tab does. Its Ookla
+    /// server picker, its per-engine history and its verdict copy were undocumented, and the shared section
+    /// had gone stale in a way a combined heading hides: it credited the Global preset with "your router",
+    /// which the preset does not contain — the gateway is detected and added separately.</para>
+    /// <para><b>Three headings named the tab something else.</b> "Cleanup (fast)" for Quick Cleanup, "Deep
+    /// cleanup (safe)" for Deep Cleanup, "Duplicate File Finder" for Duplicate Finder — and a reader
+    /// searching the sidebar name found nothing. The issue templates had the same defect and are pinned by
+    /// <see cref="EveryIssueTemplateTabList_OffersTheRealTabs"/>; this is the same question asked of the
+    /// README, which is where a prospective user looks first.</para>
+    /// <para>The heading must CONTAIN the label rather than equal it, so a descriptive qualifier stays
+    /// allowed ("Windows Update (Windows Update Agent COM API)", "Gaming Profile 🔬"). Matching is
+    /// case-sensitive on purpose: "System health" is not what the sidebar says, and a reader scanning for
+    /// the tab they are looking at should find its name written the same way.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTab_HasItsOwnReadmeSection()
+    {
+        var labels = SidebarTabLabels();
+        Assert.True(labels.Count >= 50,
+            $"only {labels.Count} tab labels were parsed from MainWindowViewModel — the guard is vacuous");
+
+        var headings = File.ReadAllLines(Path.Combine(FindRepoRoot(), "README.md"))
+            .Where(l => l.StartsWith("### ", StringComparison.Ordinal))
+            .Select(l => l[4..].Trim())
+            .ToList();
+
+        // Vacuity floor: 75 today. A README whose headings stopped parsing would pass an empty loop.
+        Assert.True(headings.Count >= 60,
+            $"only {headings.Count} '###' headings were read from README.md, out of 75 measured — the "
+            + "guard is no longer reading the feature reference, so a pass proves nothing");
+
+        var undocumented = labels
+            .Where(label => !headings.Any(h => h.Contains(label, StringComparison.Ordinal)))
+            .OrderBy(l => l, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(undocumented.Count == 0,
+            $"{undocumented.Count} of the {labels.Count} tabs have no README section headed with their own "
+            + "name. A tab a reader cannot find in the README is a tab they will not know exists, and a "
+            + "heading that renames it is the same problem with extra steps:\n  "
+            + string.Join("\n  ", undocumented));
+    }
+
+    /// <summary>
     /// The version field of an issue template must not pin an example release. Both templates showed
     /// <c>0.12.x</c> — roughly 130 releases stale — so a reporter copying the placeholder filed against
     /// a version that never shipped, in the field used for triage. Writing today's number in only resets

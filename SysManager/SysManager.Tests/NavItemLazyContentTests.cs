@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using System.Windows.Shell;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -134,4 +136,133 @@ public class NavItemLazyContentTests
         var item = new NavItem { Id = "bad", Label = "Bad", ViewType = typeof(object) };
         Assert.Throws<InvalidOperationException>(() => _ = item.Content);
     }
+    // ---------- taskbar progress (#1584) ----------
+
+    private sealed class ProgressVm : ViewModelBase
+    {
+    }
+
+    [Fact]
+    public void WireBusy_MirrorsTheViewModelsProgressImmediately()
+    {
+        // Not only on the next change. A tab opened while an operation is already running would otherwise
+        // publish nothing to the taskbar until the next percentage tick, and an indeterminate operation
+        // never ticks at all.
+        var vm = new ProgressVm { Progress = 42, IsProgressIndeterminate = true, IsBusy = true };
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Content = vm }.WireBusy();
+
+        Assert.Equal(42, item.Progress);
+        Assert.True(item.IsProgressIndeterminate);
+    }
+
+    [Fact]
+    public void ProgressChangesOnTheViewModel_ReachTheNavItem()
+    {
+        var vm = new ProgressVm();
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Content = vm }.WireBusy();
+
+        vm.Progress = 70;
+        vm.IsProgressIndeterminate = true;
+
+        Assert.Equal(70, item.Progress);
+        Assert.True(item.IsProgressIndeterminate);
+
+        vm.IsProgressIndeterminate = false;
+        Assert.False(item.IsProgressIndeterminate);
+    }
+
+    [Theory]
+    [InlineData(1, 0.01)]
+    [InlineData(42, 0.42)]
+    [InlineData(100, 1.0)]
+    public void MapTaskbarProgress_APercentageBecomesANormalBar(int progress, double expected)
+    {
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Progress = progress };
+
+        var (state, value) = MainWindowViewModel.MapTaskbarProgress(item);
+
+        Assert.Equal(TaskbarItemProgressState.Normal, state);
+        Assert.Equal(expected, value, precision: 6);
+    }
+
+    [Fact]
+    public void MapTaskbarProgress_IndeterminateWinsOverAPercentage()
+    {
+        // A view-model setting both is mid-operation with no meaningful total. The indeterminate flag is the
+        // more specific claim, and a bar parked on a stale percentage would be worse than a marquee.
+        var item = new NavItem
+        {
+            Id = "t",
+            Label = "T",
+            ViewType = typeof(object),
+            Progress = 42,
+            IsProgressIndeterminate = true,
+        };
+
+        Assert.Equal(TaskbarItemProgressState.Indeterminate,
+                     MainWindowViewModel.MapTaskbarProgress(item).State);
+    }
+
+    [Theory]
+    [InlineData(0)]     // also what a finished operation leaves behind — an empty green bar reads as "starting"
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void MapTaskbarProgress_NothingMeaningfulShowsNothing(int progress)
+    {
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Progress = progress };
+
+        var (state, value) = MainWindowViewModel.MapTaskbarProgress(item);
+
+        Assert.Equal(TaskbarItemProgressState.None, state);
+        Assert.Equal(0, value);
+    }
+
+    [Fact]
+    public void MapTaskbarProgress_WithNoSelectedTab_ShowsNothing()
+        => Assert.Equal(TaskbarItemProgressState.None,
+                        MainWindowViewModel.MapTaskbarProgress(null).State);
+
+    [Fact]
+    public void MapTaskbarProgress_DoesNotMaterialiseTheTabsViewModel()
+    {
+        // The whole lazy-startup design turns on this. Reading NavItem.Content builds the view-model, so a
+        // shell that asked Content what to show on the taskbar would rebuild every tab it looked at — and
+        // the mapping is called on every navigation and every progress tick.
+        var built = 0;
+        var item = LazyItem(() => { built++; return new ProgressVm(); });
+
+        _ = MainWindowViewModel.MapTaskbarProgress(item);
+
+        Assert.False(item.IsContentCreated);
+        Assert.Equal(0, built);
+    }
+
+    [Fact]
+    public void MainWindow_BindsTheTaskbarButtonToBothHalvesOfTheState()
+    {
+        // The repo's dominant defect shape: a view-model property that is computed, tested, and bound by
+        // nothing. Neither half is an [ObservableProperty], so the general unreachable-property guard cannot
+        // see them — only the shipped XAML can answer for this one.
+        var xaml = File.ReadAllText(Path.Combine(FindAppDir(), "MainWindow.xaml"));
+        var markup = System.Text.RegularExpressions.Regex.Replace(
+            xaml, "<!--.*?-->", string.Empty, System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        Assert.Contains("<TaskbarItemInfo", markup, StringComparison.Ordinal);
+        Assert.Contains("ProgressState=\"{Binding TaskbarProgressState}\"", markup, StringComparison.Ordinal);
+        Assert.Contains("ProgressValue=\"{Binding TaskbarProgressValue}\"", markup, StringComparison.Ordinal);
+    }
+
+    /// <summary>Walks up to the app project directory, the way the architecture guards do.</summary>
+    private static string FindAppDir()
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, "SysManager", "SysManager");
+            if (File.Exists(Path.Combine(candidate, "MainWindow.xaml"))) return candidate;
+            dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar));
+        }
+        throw new DirectoryNotFoundException("could not locate the app project from " + AppContext.BaseDirectory);
+    }
+
 }

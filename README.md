@@ -1025,6 +1025,11 @@ offers, "rate us" prompts:
   remembers the answer. If you pick the notification area, it tells you where the
   window went so it doesn't look like it vanished. Right-click the tray icon to
   reopen or exit at any time.
+- **Progress on the taskbar button** — a long job keeps reporting while the window is
+  minimised. The SysManager button on the taskbar fills up as an SFC scan, a bulk
+  install or a deep cleanup progresses, and shows a moving bar for the tabs that know
+  they are working but not how far along. It follows the tab you have open, and it
+  goes blank when the job finishes rather than sitting at an empty bar
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

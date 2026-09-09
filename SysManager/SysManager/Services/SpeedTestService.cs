@@ -521,13 +521,20 @@ public sealed class SpeedTestService
     /// </remarks>
     private static void VerifyOoklaSignature(string exe)
     {
-        try
+        // Reading the certificate and validating its chain live in Helpers/Authenticode, so the policy
+        // below is the only thing this method owns. Unsigned and unreadable are treated alike here and
+        // deliberately NOT in UpdateService: an unsigned third-party download is a rejection, while an
+        // unsigned SysManager build is the normal case.
+        var (state, cert, hresult) = Helpers.Authenticode.ReadSigner(exe);
+        if (state is not Helpers.SignerState.Signed || cert is null)
         {
-#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete — no direct replacement for Authenticode verification
-            var signer = System.Security.Cryptography.X509Certificates.X509Certificate.CreateFromSignedFile(exe);
-#pragma warning restore SYSLIB0057
-            using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(signer);
+            Log.Warning("Ookla speedtest.exe has no valid Authenticode signature (0x{HResult:X8})", hresult);
+            throw new InvalidOperationException(
+                "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.");
+        }
 
+        using (cert)
+        {
             if (!cert.Subject.Contains("Ookla", StringComparison.OrdinalIgnoreCase))
             {
                 Log.Warning("Ookla speedtest.exe Authenticode subject mismatch: {Subject}", cert.Subject);
@@ -535,27 +542,18 @@ public sealed class SpeedTestService
                     $"Ookla speedtest.exe failed Authenticode verification (subject: {cert.Subject}). Binary deleted for security.");
             }
 
-            // Subject alone is forgeable (anyone can issue a self-signed "Ookla" cert),
-            // so also build and validate the full certificate chain to a trusted root,
-            // with online revocation. Fail closed if the chain does not validate.
-            using var chain = new System.Security.Cryptography.X509Certificates.X509Chain();
-            chain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.Online;
-            chain.ChainPolicy.RevocationFlag = System.Security.Cryptography.X509Certificates.X509RevocationFlag.ExcludeRoot;
-            chain.ChainPolicy.VerificationFlags = System.Security.Cryptography.X509Certificates.X509VerificationFlags.NoFlag;
-            if (!chain.Build(cert))
+            // Subject alone is forgeable (anyone can issue a self-signed "Ookla" cert), so also validate
+            // the full certificate chain to a trusted root, with online revocation. Fail closed if it
+            // does not validate. Checked AFTER the subject, so a mismatch costs no revocation request.
+            if (!Helpers.Authenticode.ValidateChain(
+                    cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Online, out var statuses))
             {
-                var statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
                 Log.Warning("Ookla speedtest.exe certificate chain did not validate: {Status}", statuses);
                 throw new InvalidOperationException(
                     $"Ookla speedtest.exe certificate chain failed validation ({statuses}). Binary deleted for security.");
             }
+
             Log.Information("Ookla speedtest.exe Authenticode chain verified: {Subject}", cert.Subject);
-        }
-        catch (System.Security.Cryptography.CryptographicException ex)
-        {
-            Log.Warning(ex, "Ookla speedtest.exe has no valid Authenticode signature");
-            throw new InvalidOperationException(
-                "Ookla speedtest.exe has no valid Authenticode signature. Binary deleted for security.", ex);
         }
     }
 

@@ -129,13 +129,20 @@ public class UpdateServiceAuthenticodeTests
     }
 
     [Fact]
-    public void VerifyAuthenticode_PinsThePublisherAndBuildsAChain()
+    public void VerifyAuthenticode_PinsThePublisherAndValidatesTheChain()
     {
         // Asserted against the source rather than by execution, deliberately and with the limitation
         // stated: producing a genuinely signed binary with a controllable publisher needs a test
         // certificate and signtool, which this unit-test project does not have. What CAN be checked
         // mechanically is that the signed branch does both things the Ookla path does — compare
         // against the pin AND validate the chain. Either one alone is bypassable.
+        //
+        // The chain build now lives in Helpers/Authenticode, shared with the Ookla gate, so what is
+        // asserted here is the DELEGATION and the pin; the policy inside it is pinned by
+        // AuthenticodeTests.ValidateChain_UsesTheStrictPolicy_AndFailsClosed, and the fact that this
+        // caller asks for online revocation by AuthenticodeTests.EveryFailClosedGate_AsksForOnlineRevocation.
+        // This test going red when the build moved out is exactly what it is for — the assertions were
+        // moved with the code rather than dropped.
         var source = File.ReadAllText(ServiceSourcePath("UpdateService.cs"));
         var start = source.IndexOf("public static bool VerifyAuthenticode", StringComparison.Ordinal);
         Assert.True(start >= 0, "VerifyAuthenticode not found — this test would otherwise assert nothing");
@@ -143,11 +150,14 @@ public class UpdateServiceAuthenticodeTests
         Assert.True(end > start, "method boundary not found");
         var method = source[start..end];
 
-        Assert.Contains("ExpectedSignerSubject", method);          // the pin is consulted
-        Assert.Contains("X509Chain", method);                      // the chain is built
-        Assert.Contains("X509RevocationMode.Online", method);      // revocation is checked
-        Assert.Contains("chain.Build(cert)", method);
-        Assert.Contains("return false", method);                   // and it fails closed
+        // The COMPARISON, not the bare name. `ExpectedSignerSubject` also appears a few lines above, in
+        // the `.Length == 0` branch that handles "nothing to pin against yet" — so a check for the name
+        // alone stayed GREEN when the subject comparison itself was replaced with a constant. Found by
+        // mutating exactly that: the pin can be removed while the constant is still mentioned twice.
+        Assert.Contains("cert.Subject.Contains(ExpectedSignerSubject", method, StringComparison.Ordinal);
+        Assert.Contains("Helpers.Authenticode.ValidateChain", method, StringComparison.Ordinal);
+        Assert.Contains("X509RevocationMode.Online", method, StringComparison.Ordinal);
+        Assert.Contains("return false", method, StringComparison.Ordinal);   // and it fails closed
     }
 
     [Fact]

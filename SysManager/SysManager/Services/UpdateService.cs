@@ -407,13 +407,6 @@ public sealed class UpdateService
         }
     }
 
-    // CryptographicException HResult raised by CreateFromSignedFile when the file
-    // carries NO embedded Authenticode signature at all. On .NET this surfaces as
-    // CRYPT_E_NO_MATCH (0x80092009) — "Cannot find the requested object". SysManager's
-    // own builds are unsigned (no code-signing certificate yet), so this is the normal,
-    // expected case and must NOT be treated as tampering.
-    private const int CryptENoMatch = unchecked((int)0x80092009);
-
     /// <summary>
     /// The publisher this app's own signed builds must carry, once a code-signing certificate
     /// exists. EMPTY means "not signing yet", which keeps the signed branch permissive exactly as
@@ -450,17 +443,29 @@ public sealed class UpdateService
     /// </remarks>
     public static bool VerifyAuthenticode(string filePath)
     {
-        try
-        {
-#pragma warning disable SYSLIB0057 // CreateFromSignedFile is obsolete
-            var signer = System.Security.Cryptography.X509Certificates.X509Certificate
-                .CreateFromSignedFile(filePath);
-#pragma warning restore SYSLIB0057
-            // A non-null cert means an embedded Authenticode signature was found and its
-            // signer certificate could be read. (Unsigned files throw below rather than
-            // returning null, so this branch is the signed case.)
-            using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(signer);
+        // Reading the certificate and validating its chain live in Helpers/Authenticode. The three-way
+        // split it returns is the whole reason this method can be permissive about one case and closed
+        // about the other: an absent signature is expected here, while unreadable signature data is not.
+        var (state, cert, hresult) = Helpers.Authenticode.ReadSigner(filePath);
 
+        if (state is Helpers.SignerState.Unsigned)
+        {
+            // No embedded signature — expected for SysManager's unsigned builds. Allow it;
+            // integrity is already guaranteed by the SHA256 verification step.
+            Serilog.Log.Information("Update binary has no Authenticode signature (expected for unsigned builds)");
+            return true;
+        }
+
+        if (state is Helpers.SignerState.Unreadable || cert is null)
+        {
+            // Signature data present but could not be read/parsed — treat as suspect.
+            Serilog.Log.Warning("Update binary Authenticode signature could not be read (HResult 0x{HResult:X8}): {File}",
+                hresult, LogService.SanitizePath(filePath));
+            return false;
+        }
+
+        using (cert)
+        {
             if (ExpectedSignerSubject.Length == 0)
             {
                 // No certificate of our own yet, so there is nothing to compare against. Allowing a
@@ -481,35 +486,17 @@ public sealed class UpdateService
             }
 
             // Subject alone is forgeable — anyone can issue a self-signed certificate carrying any
-            // subject string — so validate the whole chain to a trusted root, with online
-            // revocation, and fail closed. Same policy as VerifyOoklaSignature.
-            using var chain = new System.Security.Cryptography.X509Certificates.X509Chain();
-            chain.ChainPolicy.RevocationMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.Online;
-            chain.ChainPolicy.RevocationFlag = System.Security.Cryptography.X509Certificates.X509RevocationFlag.ExcludeRoot;
-            chain.ChainPolicy.VerificationFlags = System.Security.Cryptography.X509Certificates.X509VerificationFlags.NoFlag;
-            if (!chain.Build(cert))
+            // subject string — so validate the whole chain to a trusted root, with online revocation, and
+            // fail closed. Same policy as VerifyOoklaSignature, which is now the same code.
+            if (!Helpers.Authenticode.ValidateChain(
+                    cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Online, out var statuses))
             {
-                var statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
                 Serilog.Log.Warning("Update binary certificate chain did not validate: {Status}", statuses);
                 return false;
             }
 
             Serilog.Log.Information("Update binary Authenticode chain verified: {Subject}", cert.Subject);
             return true;
-        }
-        catch (System.Security.Cryptography.CryptographicException ex) when (ex.HResult == CryptENoMatch)
-        {
-            // No embedded signature — expected for SysManager's unsigned builds. Allow it;
-            // integrity is already guaranteed by the SHA256 verification step.
-            Serilog.Log.Information("Update binary has no Authenticode signature (expected for unsigned builds)");
-            return true;
-        }
-        catch (System.Security.Cryptography.CryptographicException ex)
-        {
-            // Signature data present but could not be read/parsed — treat as suspect.
-            Serilog.Log.Warning(ex, "Update binary Authenticode signature could not be read (HResult 0x{HResult:X8}): {File}",
-                ex.HResult, LogService.SanitizePath(filePath));
-            return false;
         }
     }
 

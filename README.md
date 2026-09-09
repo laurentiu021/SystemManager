@@ -281,29 +281,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
   to this tab
 
-### Network monitor
-- Live ping across multiple targets overlaid on a single latency chart
-- Auto-verdict that tells you in plain English whether packet loss is local,
-  at your ISP, or at the far-end service
-- **Presets for gamers & streamers**:
-  - Global (Google, Cloudflare, your router)
-  - **CS2 Europe** — Valve matchmaking relays (Vienna, Luxembourg, Warsaw, EU West/Central/East)
-  - **FACEIT Europe** — competitive CS2 servers in DE, NL, UK
-  - **PUBG Europe** — EU matchmaking cloud regions (Frankfurt, Ireland, London)
-  - **Streaming** — YouTube, Twitch, Cloudflare
-- Auto-traceroute on a configurable interval (30 s – 10 min)
-- Speed tests: HTTP (Cloudflare) and the official Ookla CLI (auto-downloaded)
-  with persistent history (last 20 results per engine) for tracking service
-  degradation over time
-- Every speed result comes with a plain-English verdict — what that speed is
-  actually enough for (video calls, HD, 4K, several devices at once) rather than
-  just a number — plus one line comparing it with your previous test on the same
-  engine
-- Jitter, loss %, and average ping per target rolled up into health pills
-- **Network repair tools**: DNS flush, Winsock reset, TCP/IP reset with
-  confirmation dialogs and admin checks
-
-### System logs (Windows Event Log, friendly)
+### System Logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
 - Each event gets a plain-English explanation and recommended next steps
 - Filter by severity and time range, plus full-text search
@@ -313,7 +291,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 - The Security log requires administrator rights. Without them the page says so
   outright rather than showing an empty list that looks like "no events"
 
-### System report
+### System Report
 - One-click, read-only snapshot of the whole machine: OS, CPU, memory
   (with per-slot module detail), GPU, motherboard, storage health, and active
   network adapters
@@ -324,7 +302,7 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Fully local: nothing on the system is changed and the report is written only
   to the file you choose — nothing leaves the machine
 
-### System health
+### System Health
 - OS / CPU / RAM / storage overview
 - SMART data per disk: temperature, wear %, power-on hours, read/write errors
 - Colour-coded verdict per drive
@@ -450,13 +428,13 @@ a confirmation before it runs:
 - Sort by name, ID, version, or source via clickable column headers
 - Select all or individual packages, bulk upgrade with per-package status
 
-### Cleanup (fast)
+### Quick Cleanup
 - Clear TEMP folders
 - Empty the Recycle Bin
 - Run `SFC /scannow` and `DISM /RestoreHealth` in the background — keep
   using the app while they grind
 
-### Deep cleanup (safe)
+### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
   before a single byte is deleted. You pick what goes.
 - **System buckets**: NVIDIA / AMD / Intel installer leftovers, Windows
@@ -524,7 +502,7 @@ a confirmation before it runs:
 - Search/filter across all features
 - Requires administrator privileges for modifications
 
-### Duplicate File Finder
+### Duplicate Finder
 - Three-pass scan: group by size, partial-hash pre-filter, then full SHA-256
 - Duplicate groups sorted by wasted space (descending)
 - Preset folders or custom folder selection
@@ -719,6 +697,73 @@ a confirmation before it runs:
 - Progress tracking per-item with cancel support
 - Skips junction points and symbolic links (prevents symlink attacks)
 - Confirmation dialog before irreversible shred
+
+### Ping
+- **Says WHERE the problem is, not just that there is one.** Targets are tagged by role —
+  your gateway, public DNS, game servers, streaming services — and the verdict names the
+  layer: "Problem on your local network", "Problem at your ISP or upstream", "It's the game
+  server, not you", "Streaming service is slow", or "Multiple layers affected". This is the
+  point of the tab: "my internet is bad" is not actionable, "your router is fine, your ISP
+  is not" is.
+- **Watches several hosts at once**, each with its own live latency, average, jitter and
+  loss, and its own colour on the shared chart
+- **Five presets for gamers and streamers**, plus your own: type a hostname or IP to add a
+  target, and only the ones you added carry a remove button
+  - **Global** — Google DNS, Cloudflare, Quad9, google.com
+  - **CS2 Europe** — Valve matchmaking relays (Vienna, Luxembourg, Warsaw, EU West/Central/East)
+  - **FACEIT Europe** — competitive CS2 servers in DE, NL, UK
+  - **PUBG Europe** — the EU matchmaking cloud regions (Frankfurt, Ireland, London)
+  - **Streaming** — YouTube, Twitch, Cloudflare, to correlate buffering with the network
+- **Your gateway is detected and added automatically**, so the first thing the chart can
+  tell you apart is your own network from everything beyond it
+- **Live latency chart** with a pickable window (1, 5, 10 or 15 minutes) and a pingable
+  interval, default once per second
+- Headline numbers across all targets: average ping, worst loss, worst jitter
+- Start, Stop and Clear are separate, and the status line confirms what Clear did
+
+### Traceroute
+- **Traces every ping target on a loop**, so you can see which hop the latency appears at
+  rather than only that the destination is slow — interval 30 s to 10 min, default 60 s
+- **Latency per hop, charted**, alongside the hop table (number, address, ms)
+- **One-off trace to any host** you type, with its own status line and a Cancel button
+- Shares its targets and its start/stop state with the Ping tab, because it is the same
+  monitor answering a different question
+
+### Speed Test
+- **Two engines, and it explains why they disagree.** Ookla measures raw TCP throughput to
+  a nearby server (closest to what you pay your ISP for); the HTTP test measures through
+  Cloudflare's CDN (closer to real browsing, usually lower). The tab says this on screen
+  rather than leaving you to wonder which number is "wrong".
+- **A verdict, not just numbers** — each result says what that speed is actually enough for
+  ("Comfortable for HD streaming on one or two devices, and for video calls", "Handles 4K
+  streaming and several devices at once") plus one line comparing it with your previous test
+  on the same engine, so a slow day is visible as a slow day rather than a number you have
+  to interpret
+- **Pick the Ookla server** or leave it on Auto (nearest): Bucharest, London, Frankfurt,
+  Amsterdam, Paris, New York
+- **Separate persistent history per engine**, the last 20 results each — date, download,
+  upload, ping and server — clearable on its own, because comparing an HTTP run against an
+  Ookla run is not a comparison
+- Progress bar with a time-remaining estimate and a Cancel button; the Ookla CLI is
+  downloaded on first run
+- Only one engine runs at a time, so the two cards can never show conflicting progress
+
+### Network Repair
+- **Three fixes, each explained before you press it** — what it does, whether it is safe,
+  whether it needs a reboot, and what kind of breakage it is for:
+  - **Flush DNS Cache** — clears the local resolver cache for stale entries. Safe, instant,
+    no reboot.
+  - **Reset Winsock Catalog** — resets the socket API that every networked app uses, for
+    damage from broken VPN drivers, malware or corrupted LSP providers. Admin + reboot.
+  - **Reset TCP/IP Stack** — rebuilds the TCP/IP registry keys from Windows defaults. The
+    last resort, and labelled as one: it discards custom IP configuration, routes and
+    adapter settings. Admin + reboot.
+- **Admin elevation banner** stating exactly which of the three need elevation and what
+  unlocks once you restart elevated
+- **A reboot warning appears only after a fix that actually needs one**, rather than
+  standing on screen permanently
+- Each of the three is confirmed before it runs, and the buttons disable while a repair is
+  in flight so two resets cannot overlap
 
 ### DNS & Hosts
 - **DNS Preset Switching** — one-click DNS change: plain resolvers (Google,
@@ -1039,6 +1084,24 @@ offers, "rate us" prompts:
   install or a deep cleanup progresses, and shows a moving bar for the tabs that know
   they are working but not how far along. It follows the tab you have open, and it
   goes blank when the job finishes rather than sitting at an empty bar
+
+### About
+- **Version, build, license and source** in one place, with the update controls beside them
+  rather than buried in a settings page
+- **What's new, pulled live from GitHub** — every release with its version, date and full
+  changelog, and a badge marking the one you are running, so you can see what you skipped
+  without leaving the app
+- **Go back to the previous version** — the build you updated from is kept, and this button
+  restores it. It appears only when that build is actually on disk, and refuses with a
+  reason rather than half-doing it when the swap would not be safe.
+- **Export or copy a full system report**, and a separate "Copy environment info" for
+  pasting into a bug report
+- **Report a problem** and **Ask a question** open the right GitHub page directly; **View
+  license** and **What's new** open the licence and the changelog
+- **The startup version check is a checkbox here** — "Check GitHub for a new version when
+  SysManager starts" — and switching it off does not disable the **Check for updates**
+  button, which still works on demand. What that check does and does not send is described
+  under [Privacy](#privacy).
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, plus a manual

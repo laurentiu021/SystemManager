@@ -483,11 +483,15 @@ a confirmation before it runs:
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
   really stays down
-- Sort by name, publisher, safety, or status via clickable column headers
+- Sort by name, publisher, location, safety, or status via clickable column headers
 - Plain-language description for recognised programs (from the built-in database) instead
   of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you
   can tell what an entry is before deciding whether to turn it off
 - Shows name, publisher, and enabled/disabled status; the full command path is on hover
+- **A Location column** saying where the entry actually lives — which registry Run key and hive, which
+  Startup folder, or Task Scheduler. This is the difference between an entry you can switch off yourself,
+  one that needs administrator rights, and one a system policy holds in place; long paths shorten from
+  the end, with the full value on hover
 - Open file location in Explorer
 
 ### Windows Features

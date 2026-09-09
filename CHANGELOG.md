@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.80.0] - 2026-09-09
+
+Startup Manager now shows where each entry actually lives: a registry Run key and which hive it is in, a
+Startup folder, or Task Scheduler. The app had worked this out for every entry since the tab shipped and
+then kept it to itself. It matters because entries are not equal. Turning off an all-users entry needs
+administrator rights, and one placed by a system policy cannot be turned off from this tab at all, yet all
+three looked identical in the list.
+
+### Added
+
+- **Startup Manager — a Location column.** Every scan filled `Location` in for all three sources, the tests
+  asserted it was never blank, and no column bound it, so the work was thrown away on every refresh
+  (#1587). The column sits after Publisher with the same styling, ellipsizes from the end so the hive stays
+  readable, and puts the full path on hover.
+
+### Changed
+
+- **A field the startup scan fills in must now be shown or declared logic-only.** The build fails on a third
+  option, which is what `Location` had been for as long as the tab existed. `Source`, `RegistryKey`,
+  `ValueName` and `TaskPath` are named as steering the toggle and the Open button rather than being
+  displayed; anything else added later fails until someone decides which it is. The check also runs per
+  construction site rather than over their union, because a field dropped from one of the three would leave
+  that one source blank while the other two looked correct — the hardest kind of gap to notice.
+
 ## [1.79.0] - 2026-09-09
 
 The Drivers tab now shows whether Windows reports each driver as digitally signed. Until now the only clue

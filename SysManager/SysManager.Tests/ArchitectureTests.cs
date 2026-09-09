@@ -6507,6 +6507,133 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every field the startup scan fills in on a <c>StartupEntry</c> is either bound in
+    /// <c>StartupView.xaml</c> or named here as logic-only. A new one is neither, so it fails until someone
+    /// decides which it is.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same defect as <see cref="EveryScheduledTaskFieldTheQueryFetches_IsBoundInTheView"/>, one
+    /// tab over. <c>Location</c> was assigned at all three construction sites — the folder builder, the
+    /// scheduled-task reader and the Run-key reader — and <c>StartupServiceTests</c> asserted it was never
+    /// blank, while no column bound it (#1587). So a Run entry whose toggle needs admin, and a policy-key
+    /// entry that cannot be toggled from this tab at all, looked exactly like a plain per-user one.</para>
+    /// <para><b>Why this is per-tab and not a widening of
+    /// <see cref="EveryViewModelProperty_IsShownOrRead"/>.</b> Both global guards test a property NAME
+    /// against every view concatenated, and four types own a <c>Location</c>: <c>ContextMenuEntry</c>,
+    /// <c>BrokenShortcut</c>, a nested type in <c>SettingsWatchdogViewModel</c>, and this one. Three of them
+    /// are bound, so the name is present in the XAML blob and <c>StartupEntry.Location</c> read as bound by
+    /// bindings that belong to other tabs. Measured: with the criterion tightened to word-boundary matching
+    /// AND a declaring-type requirement on the C# side, it still did not appear, because
+    /// <c>ContextMenuView.xaml</c> alone satisfies the name. Only the tab's own view can answer for the
+    /// tab's own model.</para>
+    /// <para><c>Location</c> is required in its column form, <c>Binding="{Binding Location}"</c>, not merely
+    /// somewhere in the file: it is bound twice, as the column value and as that column's tooltip, so a bare
+    /// check would stay green with the column deleted. Same distinction the Task Scheduler guard documents
+    /// for <c>DescriptionDisplay</c>.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStartupFieldTheScanFillsIn_IsBoundInTheViewOrDeclaredLogicOnly()
+    {
+        var appDir = FindAppProjectDir();
+        var service = DocComment().Replace(
+            File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs")), string.Empty);
+        var view = WithoutXamlComments(
+            File.ReadAllText(Path.Combine(appDir, "Views", "StartupView.xaml")));
+
+        // What the user is entitled to see, because the scan pays to work it out.
+        string[] displayed = ["Name", "Command", "Location", "IsEnabled", "Publisher", "StatusText"];
+        // Not display: these steer the toggle and the Open button. Demanding UI for them would push this
+        // guard into asking for columns nobody wants, which is how the sibling guard's scope was drawn too.
+        string[] logicOnly = ["Source", "RegistryKey", "ValueName", "TaskPath"];
+
+        var perSite = ObjectInitializerBodies(service, "StartupEntry")
+            .Select(body => InitializerAssignment().Matches(body)
+                .Select(m => m.Groups[1].Value)
+                .ToHashSet(StringComparer.Ordinal))
+            .ToList();
+        var assigned = new SortedSet<string>(perSite.SelectMany(s => s), StringComparer.Ordinal);
+
+        // Vacuity floor. If the construction sites are reshaped and this parses nothing, every check below
+        // passes over an empty set. 3 sites, 10 distinct fields when measured.
+        Assert.True(perSite.Count >= 3 && assigned.Count >= 9,
+            $"only {assigned.Count} assigned StartupEntry fields were parsed across {perSite.Count} "
+            + "construction sites — the initializer detection is out of date, so a pass proves nothing. "
+            + "Found: " + string.Join(", ", assigned));
+
+        // EVERY site, not the union. A field dropped from one of the three would still be in the union, and
+        // the tab would render blank for that one source only — which is the hardest kind of gap to notice,
+        // because the other two sources look right.
+        var partial = perSite
+            .Select((fields, i) => (Site: i + 1, Missing: displayed.Except(fields, StringComparer.Ordinal).ToList()))
+            .Where(x => x.Missing.Count > 0)
+            .Select(x => $"construction site {x.Site} does not assign {string.Join(", ", x.Missing)}")
+            .ToList();
+        Assert.True(partial.Count == 0,
+            "a displayed field is filled in at some StartupEntry construction sites and not others, so the "
+            + "column is blank for entries from that one source while the rest look correct:\n  "
+            + string.Join("\n  ", partial));
+
+        // A field that is neither displayed nor declared logic-only is the defect itself: nobody has decided
+        // whether the user should see it. #1581's IsSigned and this Location both entered exactly here.
+        var undecided = assigned.Except(displayed).Except(logicOnly, StringComparer.Ordinal).ToList();
+        Assert.True(undecided.Count == 0,
+            "the startup scan fills these in and this guard does not know whether the user should see them. "
+            + "Bind them in StartupView.xaml and add them to `displayed`, or declare them logic-only and say "
+            + $"why:\n  {string.Join("\n  ", undecided)}");
+
+        // And the reverse: a name in `displayed` that the scan stopped assigning would make its binding
+        // check meaningless while still passing.
+        var notAssigned = displayed.Except(assigned, StringComparer.Ordinal).ToList();
+        Assert.True(notAssigned.Count == 0,
+            "these are listed as displayed but the scan no longer assigns them, so the binding checks below "
+            + $"are measuring nothing:\n  {string.Join("\n  ", notAssigned)}");
+
+        var unbound = displayed
+            .Where(f => !view.Contains($"{{Binding {f}}}", StringComparison.Ordinal)
+                     && !view.Contains($"{{Binding {f},", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(unbound.Count == 0,
+            "the startup scan works these out on every refresh and StartupView.xaml shows none of them, so "
+            + "the user cannot see data the app already holds — the defect neither the compiler nor a "
+            + $"view-model test can see:\n  {string.Join("\n  ", unbound)}");
+
+        Assert.True(view.Contains("Binding=\"{Binding Location}\"", StringComparison.Ordinal),
+            "Location is bound somewhere in StartupView.xaml but not as a column value. It is also the "
+            + "column's own tooltip, so the tooltip alone satisfies a bare check while the column is gone — "
+            + "which is the state #1587 reported. Require the column.");
+    }
+
+    /// <summary>
+    /// The brace-matched bodies of every <c>new T { … }</c> and <c>new() { … }</c> in <paramref name="source"/>.
+    /// </summary>
+    /// <remarks>
+    /// <c>new()</c> counts because the target-typed form is how <c>BuildStartupFolderEntry</c> constructs its
+    /// entry, and keying only on the spelled-out type name would have skipped a third of the sites.
+    /// </remarks>
+    private static IEnumerable<string> ObjectInitializerBodies(string source, string typeName)
+    {
+        foreach (var m in Regex.Matches(source, $@"new\s*(?:{Regex.Escape(typeName)}\s*|\(\)\s*)\{{")
+                     .Cast<Match>())
+        {
+            var open = m.Index + m.Length - 1;
+            var depth = 0;
+            for (var i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}' && --depth == 0)
+                {
+                    yield return source[(open + 1)..i];
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>A property assignment at the start of a line inside an object initializer.</summary>
+    [GeneratedRegex(@"^\s*(\w+)\s*=(?!=)", RegexOptions.Compiled | RegexOptions.Multiline)]
+    private static partial Regex InitializerAssignment();
+
+    /// <summary>
     /// The CHANGELOG's version headers must form an unbroken descending run — no version may be missing
     /// between the newest and oldest entry, and none may appear twice.
     /// </summary>

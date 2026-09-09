@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.85.0] - 2026-09-09
+
+The Startup Manager now tells you whether Windows can actually confirm who made each program that
+runs at boot. The Publisher column beside it has always come from the file's own version
+information — a label the program writes about itself, which anything can set to "Microsoft
+Corporation" — so it looked like a trust badge with nothing behind it. The new Signature column
+checks the file's certificate instead, and says "Verified", "Unsigned", or "Check failed" in as many
+words.
+
+### Added
+
+- **A Signature column in the Startup Manager**, checked against the file's certificate with the same
+  chain validation the in-app updater uses. Hovering it explains the result in a sentence — "Windows
+  can confirm this really comes from Google LLC" — rather than leaving you to interpret a badge.
+- **Unsigned is grey and says so kindly.** Most small utilities are unsigned, and so is SysManager
+  itself, so a warning colour on all of them would turn the column into noise you learn to ignore.
+  Amber is kept for a file that *is* signed and whose signature does not hold up, which is the one
+  case here worth a second look — and even then the label reads "Check failed" rather than accusing
+  the program, because an out-of-date certificate store on your PC produces the same result.
+- Entries whose command does not point at a readable file get no badge at all, instead of a grey
+  verdict on a program nothing was able to inspect.
+- The column sorts, so you can bring everything unverified to the top.
+
+### Changed
+
+- **The signature check runs offline**, against certificates already on your PC. Opening the tab
+  never waits on the network, and it behaves the same on a laptop with no connection. The trade is
+  deliberate: a certificate revoked in the last few days may still read as verified, which is the
+  right call for a column that informs and the wrong one for the update check, where the same code
+  still verifies online.
+
 ## [1.84.0] - 2026-09-09
 
 Scheduled maintenance now actually runs on a laptop that is not plugged in. Windows refuses to start a

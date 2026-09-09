@@ -31,6 +31,12 @@
             <h:ProcessSafetyToBackgroundConverter x:Key="ProcSafetyBg"/>
             <h:ProcessSafetyToTextConverter x:Key="ProcSafetyText"/>
             <h:ProcessSafetyToTooltipConverter x:Key="ProcSafetyTip"/>
+            <!-- Signature trust is its own scale: it answers "can Windows confirm who signed this",
+                 which is a different question from either provenance database above, and its neutral
+                 state (Unsigned) is the common case rather than the exception. -->
+            <h:SignatureTrustToBrushConverter x:Key="SigTrustBrush"/>
+            <h:SignatureTrustToBackgroundConverter x:Key="SigTrustBg"/>
+            <h:SignatureTrustToTextConverter x:Key="SigTrustText"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
             <h:MaintenanceActionToTextConverter x:Key="MaintenanceActionText"/>

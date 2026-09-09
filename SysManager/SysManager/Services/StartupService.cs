@@ -111,6 +111,10 @@ public sealed class StartupService
         // same way and there is one place to test.
         EnrichWithDescriptions(results);
 
+        // Answer "who really made this" with a certificate rather than a string the file declares about
+        // itself. Last, over the finished list, for the same reason as the enrichment above.
+        VerifySignatures(results);
+
         return results;
     }
 
@@ -693,13 +697,8 @@ public sealed class StartupService
     {
         try
         {
-            // Strip quotes and arguments
-            var path = command.Trim('"', ' ');
-            var spaceIdx = path.IndexOf(' ');
-            if (spaceIdx > 0 && !System.IO.File.Exists(path))
-                path = path[..spaceIdx].Trim('"');
-
-            if (System.IO.File.Exists(path))
+            var path = ResolveExecutablePath(command);
+            if (path.Length > 0)
             {
                 var vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(path);
                 return vi.CompanyName ?? "";
@@ -710,5 +709,134 @@ public sealed class StartupService
         catch (UnauthorizedAccessException) { /* access denied */ }
         catch (System.Security.SecurityException) { /* security error */ }
         return "";
+    }
+
+    /// <summary>
+    /// The executable a registry command line actually runs, or empty when it does not resolve to a file
+    /// that exists.
+    /// </summary>
+    /// <remarks>
+    /// A Run value is a command line, not a path: it may be quoted, carry arguments, or both. The
+    /// full-string <c>File.Exists</c> is tried FIRST and deliberately — a program installed under
+    /// "C:\Program Files\Some App\app.exe" with no arguments has a space in the path itself, and truncating
+    /// at the first space would lose it.
+    /// <para><c>internal</c> and pure so the resolution is testable on its own. It used to be inline in
+    /// <see cref="ExtractPublisher"/>, which meant the signature check would have needed its own copy of
+    /// the same parsing — two answers to "which file is this entry" is exactly the kind of drift that ends
+    /// with a Publisher and a certificate describing different files.</para>
+    /// </remarks>
+    internal static string ResolveExecutablePath(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return "";
+
+        var path = command.Trim('"', ' ');
+        if (System.IO.File.Exists(path)) return path;
+
+        var spaceIdx = path.IndexOf(' ');
+        if (spaceIdx > 0)
+        {
+            path = path[..spaceIdx].Trim('"');
+            if (System.IO.File.Exists(path)) return path;
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Fills <see cref="StartupEntry.Signature"/> and <see cref="StartupEntry.SignatureDetail"/> for every
+    /// entry whose command resolves to a file.
+    /// </summary>
+    /// <remarks>
+    /// A post-pass over the finished list, like <see cref="EnrichWithDescriptions"/> and for the same
+    /// reason: every source (registry, startup folder, scheduled task) is enriched identically and there is
+    /// one place to test.
+    /// <para><b>Offline revocation, not online.</b> The two fail-closed gates verify one file at a moment
+    /// when a network request is acceptable. This runs over every startup entry on the machine, so an
+    /// online chain build would mean a revocation fetch per file — and on a machine with no network, a wait
+    /// per file. A local-first app does not do that to a tab the user just opened. The cost is that a
+    /// certificate revoked since the last CRL refresh still reads as verified, which is the right trade for
+    /// an informational column and the wrong one for an installer gate.</para>
+    /// <para>Results are cached per resolved path: several entries pointing at one executable is normal
+    /// (an updater and its tray helper), and chain building is the expensive part.</para>
+    /// </remarks>
+    internal static void VerifySignatures(IReadOnlyList<StartupEntry> entries)
+    {
+        Dictionary<string, (SignatureTrust Trust, string Detail)> cache =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries)
+        {
+            var path = ResolveExecutablePath(entry.Command);
+            if (path.Length == 0) continue;   // Unknown: nothing to say, so the pill does not render
+
+            if (!cache.TryGetValue(path, out var verdict))
+            {
+                verdict = Inspect(path);
+                cache[path] = verdict;
+            }
+
+            entry.Signature = verdict.Trust;
+            entry.SignatureDetail = verdict.Detail;
+        }
+    }
+
+    private static (SignatureTrust Trust, string Detail) Inspect(string path)
+    {
+        var (state, cert, hresult) = Helpers.Authenticode.ReadSigner(path);
+
+        if (state is Helpers.SignerState.Unsigned)
+            return (SignatureTrust.Unsigned,
+                "Nobody signed this file, so Windows cannot confirm who made it. That is normal for many "
+                + "small programs and does not mean it is unsafe — it just means there is nothing to check.");
+
+        if (state is Helpers.SignerState.Unreadable || cert is null)
+            return (SignatureTrust.Invalid,
+                $"This file carries signature data that Windows could not read (0x{hresult:X8}). A signed "
+                + "file whose signature will not open is worth a closer look.");
+
+        using (cert)
+        {
+            var signer = CommonName(cert.Subject);
+
+            if (!Helpers.Authenticode.ValidateChain(
+                    cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Offline, out var statuses))
+            {
+                Log.Debug("Startup entry signature chain did not validate for {Path}: {Status}",
+                    LogService.SanitizePath(path), statuses);
+                return (SignatureTrust.Invalid,
+                    $"This file says it comes from {signer}, but Windows could not confirm that "
+                    + $"({statuses}). Worth a closer look before you trust it.");
+            }
+
+            return (SignatureTrust.Verified,
+                $"Windows can confirm this really comes from {signer}.");
+        }
+    }
+
+    /// <summary>
+    /// The common name out of a certificate subject, or the whole subject when it carries no CN.
+    /// </summary>
+    /// <remarks>
+    /// A subject reads <c>CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US</c>. The tooltip
+    /// says "comes from Google LLC", so only the CN belongs in it — the rest is correct and unreadable.
+    /// A quoted CN containing a comma keeps everything up to the closing quote.
+    /// </remarks>
+    internal static string CommonName(string subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject)) return "";
+
+        const string marker = "CN=";
+        var at = subject.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (at < 0) return subject.Trim();
+
+        var rest = subject[(at + marker.Length)..].TrimStart();
+        if (rest.StartsWith('"'))
+        {
+            var close = rest.IndexOf('"', 1);
+            return close > 1 ? rest[1..close] : rest[1..].Trim();
+        }
+
+        var comma = rest.IndexOf(',');
+        return (comma >= 0 ? rest[..comma] : rest).Trim();
     }
 }

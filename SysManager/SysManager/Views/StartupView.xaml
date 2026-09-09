@@ -127,6 +127,38 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <!-- Whether Windows can confirm the Publisher beside it. Publisher is
+                         FileVersionInfo.CompanyName — a string the file declares about itself, which any
+                         program can set to "Microsoft Corporation" — so on its own it is a trust signal
+                         carrying no trust. This column answers the same question with a certificate.
+                         Placed immediately after Publisher so the claim and its verification are read
+                         together rather than a column apart.
+                         Chip structure copied from the Safety column below: same RadiusMd/6,3 border, same
+                         6px dot, same FontSize 11 SemiBold. Visibility follows SignatureDetail rather than
+                         the enum, because that string is non-empty in exactly the three states worth
+                         showing — an entry whose command did not resolve to a readable file gets no pill
+                         instead of a grey verdict it has not earned, matching how Safety collapses. -->
+                    <DataGridTemplateColumn Header="Signature" Width="110" MinWidth="100" SortMemberPath="Signature">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
+                                        Background="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        BorderThickness="1" HorizontalAlignment="Left"
+                                        ToolTip="{Binding SignatureDetail}"
+                                        Visibility="{Binding SignatureDetail, Converter={StaticResource FlexVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                 Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                        <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
+                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
                     <!-- Where the entry actually lives: a Run key and its hive, a Startup folder, or Task
                          Scheduler. StartupService has filled this in for every source since the tab shipped
                          and the unit tests assert it is never blank, but no column bound it (#1587) — so an

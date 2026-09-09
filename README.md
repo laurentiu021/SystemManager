@@ -472,7 +472,20 @@ a confirmation before it runs:
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
   really stays down
-- Sort by name, publisher, location, safety, status, or startup impact via clickable column headers
+- **A Signature column that says whether Windows can confirm the publisher.** The Publisher column
+  next to it comes from the file's own version info — a string any program can set to "Microsoft
+  Corporation" — so on its own it is a trust badge with nothing behind it. This checks the file's
+  certificate instead, using the same chain validation the in-app updater uses, and shows one of
+  three things: **Verified** ("Windows can confirm this really comes from Google LLC"), **Unsigned**,
+  or **Check failed**. Programs whose command doesn't point at a readable file get no badge at all
+  rather than a guess.
+  - **Unsigned is grey, not a warning.** Most small utilities are unsigned and so is SysManager
+    itself; the tooltip says so in as many words. Amber is reserved for a file that *is* signed and
+    whose signature does not hold up — the one case here worth a second look.
+  - The check runs offline, against certificates already on your PC, so opening the tab never waits
+    on the network.
+- Sort by name, publisher, location, safety, status, signature, or startup impact via clickable column
+  headers
 - Plain-language description for recognised programs (from the built-in database) instead
   of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you
   can tell what an entry is before deciding whether to turn it off

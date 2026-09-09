@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.81.1] - 2026-09-09
+
+Custom colours could make the app unreadable, and there was no way back. If you set a dark background with a
+light panel colour, the text ended up white on a white card — and because your colours are saved and restored
+every time the app starts, an unreadable theme stayed unreadable. There is now a "Reset to default theme"
+button in the Appearance menu, and a panel colour that leaves no room for readable text is nudged until it
+does.
+
+### Fixed
+
+- **Custom themes no longer produce unreadable panels.** Background and Surface are separate values, so they
+  could sit on opposite sides of light and dark. The correction that keeps text legible only measured the text
+  against the Background, so a near-black Background with a near-white Surface walked the text toward *white*
+  and put it on a white card at 1.04:1 — and cards, rows and panels are most of what the window shows. The
+  panel is now nudged toward the background until the text this mode produces can be read on it, measured at
+  every position of the background-shade slider. The twelve built-in themes are untouched: their surfaces sit
+  near their backgrounds by design, and a test asserts the correction leaves all of them exactly as they were.
+
+### Added
+
+- **"Reset to default theme" in the Appearance menu.** Custom mode was the only setting in the app with no
+  undo. The only way out of a theme you could not read was deleting a file in `%AppData%` — which the person
+  this app is written for will never find. The button restores the shipped dark theme and the default
+  background shade, and it survives a restart. No confirmation dialog, deliberately: someone reaching for it is
+  probably looking at a screen they cannot read, and the action changes nothing they cannot set again.
+
 ## [1.81.0] - 2026-09-09
 
 Startup Manager now shows how long Windows measured each program delaying your last start-up. This is

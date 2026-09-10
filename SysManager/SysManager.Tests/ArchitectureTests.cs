@@ -7126,6 +7126,56 @@ public partial class ArchitectureTests
         }
     }
 
+    /// <summary>
+    /// The Process Manager's signature pill is rendered, and the snapshot pipeline actually fills it in.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of the Startup guard above, for the same column on the other tab, and it exists because
+    /// every weakness that one had to be mutated into existence applies here identically.
+    /// <list type="bullet">
+    /// <item><description><b>A name check would not work.</b> <c>Signature</c> is bound five times inside one
+    /// cell template — background, border brush, dot fill, label text, sort path — and
+    /// <c>SignatureDetail</c> twice, as tooltip and as the visibility source. So
+    /// <c>xaml.Contains("{Binding Signature")</c> stays green with any four of the five deleted. What the
+    /// pill cannot exist without is the label converter, which nothing else in this view uses, and the
+    /// detail serving as an actual tooltip.</description></item>
+    /// <item><description><b>Written-or-shown does not reach it.</b>
+    /// <see cref="EveryModelProperty_IsEitherWrittenOrShown"/> accepts a property that is merely assigned,
+    /// and <c>VerifySignatures</c> assigns this one — being assigned is what makes an unbound column a
+    /// defect rather than dead code.</description></item>
+    /// <item><description><b>Every unit test calls the post-pass directly.</b> Deleting
+    /// <c>VerifySignatures(results)</c> from <c>Snapshot</c> leaves all eight of them green while the column
+    /// renders nothing on a real machine, which is the unbound-surface defect one level up.</description></item>
+    /// </list>
+    /// </remarks>
+    [Fact]
+    public void TheProcessSignaturePill_IsRendered_AndTheSnapshotFillsItIn()
+    {
+        var appDir = FindAppProjectDir();
+        var view = XmlComment().Replace(
+            File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml")), string.Empty);
+        var service = File.ReadAllText(Path.Combine(appDir, "Services", "ProcessManagerService.cs"));
+
+        foreach (var (fragment, why) in new[]
+                 {
+                     ("Converter={StaticResource SigTrustText}",
+                      "the words the user reads — nothing else in this view uses that converter, so its "
+                      + "absence means the pill is gone"),
+                     ("ToolTip=\"{Binding SignatureDetail}\"",
+                      "the sentence explaining the pill; without it a coloured chip states a verdict and "
+                      + "never says what it means"),
+                 })
+        {
+            Assert.True(view.Contains(fragment, StringComparison.Ordinal),
+                $"ProcessManagerView.xaml no longer contains '{fragment}' — {why}. Every refresh still pays "
+                + "to verify each new process's certificate, so the work is being done and thrown away.");
+        }
+
+        var snapshot = SliceMethod(service,
+            "private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<int>? knownPids, CancellationToken ct)");
+        Assert.Contains("VerifySignatures(results)", snapshot, StringComparison.Ordinal);
+    }
+
     /// <summary>An <c>entry.Property =</c> assignment, capturing the property name.</summary>
     /// <remarks>
     /// Scoped to the <c>entry</c> local the post-passes all use, rather than any member assignment, so an

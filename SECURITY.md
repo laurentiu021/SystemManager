@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.87.x   | :white_check_mark: |
-| < 1.87   | :x:                |
+| 1.88.x   | :white_check_mark: |
+| < 1.88   | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a
@@ -111,13 +111,14 @@ What the app can and cannot do by design:
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
   the feature fails safely rather than substituting an alternative.
-- **Signature checks on lists, and what they cost**: the Startup Manager's Signature column reads each
-  program's Authenticode certificate and builds its chain, which is a different job from the two gates
-  above. Those verify one file at a moment you asked for something, so they use the network: they look up
-  revocation and they will fetch a missing intermediate certificate, because that is what lets a genuine
-  signature verify. A column over every startup entry on the machine cannot do either — it would mean a
-  request per file, and on a disconnected PC a timeout per file — so it is restricted to what is already
-  on your machine, both for revocation and for certificate downloads. The two settings are decided
+- **Signature checks on lists, and what they cost**: the Signature columns in the Startup Manager and
+  the Process Manager read each program's Authenticode certificate and build its chain, which is a
+  different job from the two gates above. Those verify one file at a moment you asked for something, so
+  they use the network: they look up revocation and they will fetch a missing intermediate certificate,
+  because that is what lets a genuine signature verify. A column over every startup entry, or every
+  program running right now, cannot do either — it would mean a request per file, and on a disconnected
+  PC a timeout per file — so it is restricted to what is already on your machine, both for revocation
+  and for certificate downloads. The two settings are decided
   together in one place, because turning off only the first still leaves the second fetching. The
   trade-off is stated plainly: a certificate revoked since your PC last refreshed its lists still reads
   as verified, and a signed file whose issuer your PC has never seen reads as "Check failed" rather than

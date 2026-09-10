@@ -234,6 +234,38 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <!-- Safety above answers "is this Windows, or something I installed?" from the bundled
+                         database, keyed on the process NAME — so a copy of svchost.exe in a user folder
+                         inherits the real one's chip. This asks the file itself who signed it, which is the
+                         question a name cannot be trusted to answer.
+                         Chip structure and converters are the Startup Manager's Signature column verbatim
+                         (StartupView.xaml): same RadiusMd/6,3 border, 6px dot, FontSize 11 SemiBold, and
+                         Visibility driven by SignatureDetail rather than the enum, because that string is
+                         non-empty in exactly the three states worth showing.
+                         Placed after Category rather than beside Safety, for the reason Category itself
+                         states above: two judgement chips side by side compete for the same attention. The
+                         Startup Manager separates its two the same way, with a text column between them. -->
+                    <DataGridTemplateColumn Header="Signature" Width="110" MinWidth="100" SortMemberPath="Signature">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
+                                        Background="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        BorderThickness="1" HorizontalAlignment="Left"
+                                        ToolTip="{Binding SignatureDetail}"
+                                        Visibility="{Binding SignatureDetail, Converter={StaticResource FlexVis}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
+                                                 Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                        <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
+                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
                     <DataGridTemplateColumn Header="Actions" Width="120" MinWidth="120" CanUserSort="False" CanUserResize="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

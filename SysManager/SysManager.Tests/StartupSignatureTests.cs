@@ -168,28 +168,22 @@ public class StartupSignatureTests
     }
 
     /// <summary>
-    /// The scan asks for OFFLINE revocation, and that is not a detail.
+    /// The scan still routes its verdict through the shared describer rather than growing its own copy.
     /// </summary>
     /// <remarks>
-    /// The two fail-closed gates pass <c>Online</c> because each verifies one file at a moment when a
-    /// network request is acceptable — pinned by
-    /// <see cref="AuthenticodeTests.EveryFailClosedGate_AsksForOnlineRevocation"/>. This runs over every
-    /// startup entry on the machine, so <c>Online</c> here would mean a revocation fetch per file, and on a
-    /// machine with no network a wait per file, in a tab the user just opened. A local-first app does not do
-    /// that. Changing this compiles, passes every other test, and is only visible as a tab that takes
-    /// seconds to populate on a train — so it is asserted.
+    /// The revocation mode itself moved with the chain build and is pinned by
+    /// <see cref="AuthenticodeTests.TheInformationalPath_AsksForOfflineRevocation_SoItDoesNotFetchPerFile"/>.
+    /// What is this tab's business is that it keeps ASKING the shared describer: the wording of a verdict is
+    /// user-facing copy, and a local reimplementation here would compile, pass, and leave two tabs
+    /// describing one certificate in two different sentences.
     /// </remarks>
     [Fact]
-    public void TheScan_AsksForOfflineRevocation_SoItDoesNotFetchPerFile()
+    public void TheScan_GetsItsVerdictFromTheSharedDescriber()
     {
         var source = File.ReadAllText(ServiceSourcePath("StartupService.cs"));
 
-        var at = source.IndexOf("Authenticode.ValidateChain", StringComparison.Ordinal);
-        Assert.True(at >= 0, "StartupService no longer validates a chain — move this guard with the code");
-
-        var call = source[at..Math.Min(source.Length, at + 200)];
-        Assert.Contains("X509RevocationMode.Offline", call, StringComparison.Ordinal);
-        Assert.DoesNotContain("X509RevocationMode.Online", call, StringComparison.Ordinal);
+        Assert.Contains("SignatureVerdict.Describe(path)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Authenticode.ReadSigner", source, StringComparison.Ordinal);
     }
 
     // Walks up to the app project — source is not copied to the test output.
@@ -214,7 +208,7 @@ public class StartupSignatureTests
     [InlineData("CN=Only Name", "Only Name")]
     [InlineData("cn=Lowercase Marker, C=US", "Lowercase Marker")]
     public void CommonName_TakesJustTheCommonName(string subject, string expected)
-        => Assert.Equal(expected, StartupService.CommonName(subject));
+        => Assert.Equal(expected, Helpers.SignatureVerdict.CommonName(subject));
 
     [Fact]
     public void CommonName_QuotedNameContainingAComma_IsKeptWhole()
@@ -222,7 +216,7 @@ public class StartupSignatureTests
         // "Acme, Inc." is a real shape for a company name, and splitting on the comma would render
         // "comes from Acme" — a different company.
         Assert.Equal("Acme, Inc.",
-            StartupService.CommonName("CN=\"Acme, Inc.\", O=Acme, C=US"));
+            Helpers.SignatureVerdict.CommonName("CN=\"Acme, Inc.\", O=Acme, C=US"));
     }
 
     [Theory]
@@ -230,7 +224,7 @@ public class StartupSignatureTests
     [InlineData("   ", "")]
     [InlineData("O=No Common Name Here", "O=No Common Name Here")]
     public void CommonName_WithoutAUsableCn_FallsBackWithoutInventing(string subject, string expected)
-        => Assert.Equal(expected, StartupService.CommonName(subject));
+        => Assert.Equal(expected, Helpers.SignatureVerdict.CommonName(subject));
 
     // ── The palette: what the user reads, and how loudly ──
 

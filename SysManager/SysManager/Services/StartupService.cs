@@ -750,12 +750,10 @@ public sealed class StartupService
     /// A post-pass over the finished list, like <see cref="EnrichWithDescriptions"/> and for the same
     /// reason: every source (registry, startup folder, scheduled task) is enriched identically and there is
     /// one place to test.
-    /// <para><b>Offline revocation, not online.</b> The two fail-closed gates verify one file at a moment
-    /// when a network request is acceptable. This runs over every startup entry on the machine, so an
-    /// online chain build would mean a revocation fetch per file — and on a machine with no network, a wait
-    /// per file. A local-first app does not do that to a tab the user just opened. The cost is that a
-    /// certificate revoked since the last CRL refresh still reads as verified, which is the right trade for
-    /// an informational column and the wrong one for an installer gate.</para>
+    /// <para>The verdict and its wording come from <see cref="Helpers.SignatureVerdict"/>, shared with the
+    /// Process Manager's column, which is also where the reasoning for offline-only checking lives. Kept
+    /// there rather than restated here so the two tabs cannot end up describing the same certificate
+    /// differently.</para>
     /// <para>Results are cached per resolved path: several entries pointing at one executable is normal
     /// (an updater and its tray helper), and chain building is the expensive part.</para>
     /// </remarks>
@@ -771,72 +769,12 @@ public sealed class StartupService
 
             if (!cache.TryGetValue(path, out var verdict))
             {
-                verdict = Inspect(path);
+                verdict = Helpers.SignatureVerdict.Describe(path);
                 cache[path] = verdict;
             }
 
             entry.Signature = verdict.Trust;
             entry.SignatureDetail = verdict.Detail;
         }
-    }
-
-    private static (SignatureTrust Trust, string Detail) Inspect(string path)
-    {
-        var (state, cert, hresult) = Helpers.Authenticode.ReadSigner(path);
-
-        if (state is Helpers.SignerState.Unsigned)
-            return (SignatureTrust.Unsigned,
-                "Nobody signed this file, so Windows cannot confirm who made it. That is normal for many "
-                + "small programs and does not mean it is unsafe — it just means there is nothing to check.");
-
-        if (state is Helpers.SignerState.Unreadable || cert is null)
-            return (SignatureTrust.Invalid,
-                $"This file carries signature data that Windows could not read (0x{hresult:X8}). A signed "
-                + "file whose signature will not open is worth a closer look.");
-
-        using (cert)
-        {
-            var signer = CommonName(cert.Subject);
-
-            if (!Helpers.Authenticode.ValidateChain(
-                    cert, System.Security.Cryptography.X509Certificates.X509RevocationMode.Offline, out var statuses))
-            {
-                Log.Debug("Startup entry signature chain did not validate for {Path}: {Status}",
-                    LogService.SanitizePath(path), statuses);
-                return (SignatureTrust.Invalid,
-                    $"This file says it comes from {signer}, but Windows could not confirm that "
-                    + $"({statuses}). Worth a closer look before you trust it.");
-            }
-
-            return (SignatureTrust.Verified,
-                $"Windows can confirm this really comes from {signer}.");
-        }
-    }
-
-    /// <summary>
-    /// The common name out of a certificate subject, or the whole subject when it carries no CN.
-    /// </summary>
-    /// <remarks>
-    /// A subject reads <c>CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US</c>. The tooltip
-    /// says "comes from Google LLC", so only the CN belongs in it — the rest is correct and unreadable.
-    /// A quoted CN containing a comma keeps everything up to the closing quote.
-    /// </remarks>
-    internal static string CommonName(string subject)
-    {
-        if (string.IsNullOrWhiteSpace(subject)) return "";
-
-        const string marker = "CN=";
-        var at = subject.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (at < 0) return subject.Trim();
-
-        var rest = subject[(at + marker.Length)..].TrimStart();
-        if (rest.StartsWith('"'))
-        {
-            var close = rest.IndexOf('"', 1);
-            return close > 1 ? rest[1..close] : rest[1..].Trim();
-        }
-
-        var comma = rest.IndexOf(',');
-        return (comma >= 0 ? rest[..comma] : rest).Trim();
     }
 }

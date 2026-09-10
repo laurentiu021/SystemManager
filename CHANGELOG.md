@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.88.0] - 2026-09-10
+
+**The Process Manager now tells you whether Windows can confirm who made each running program.**
+The Safety column beside it recognises a process by its name, which is the thing anything can copy:
+a file called `svchost.exe` sitting in your downloads folder gets the same reassuring label as the
+real one. The new Signature column asks the file itself, reading the certificate inside it, and says
+"Verified", "Unsigned", or "Check failed" in as many words. It is the same question the Startup
+Manager already answers, now on the tab where you go looking when something is eating your CPU.
+
+### Added
+
+- **A Signature column in the Process Manager**, read from the running program's own certificate
+  rather than from anything it says about itself. Hovering explains the result in a sentence —
+  "Windows can confirm this really comes from Google LLC" — instead of leaving you to interpret a
+  colour.
+- **Unsigned is grey and says so kindly**, exactly as on the Startup Manager: most ordinary programs
+  are unsigned, and so is SysManager, so a warning colour on all of them would turn the column into
+  noise. Amber is kept for a file that *is* signed and whose signature does not hold up.
+- **A process whose file Windows will not let us read gets no badge at all** — that is most system
+  processes unless you run as administrator. Nothing was checked, so nothing is claimed.
+- The check costs the tab nothing on an ordinary refresh. Only processes that have just appeared are
+  looked at, and several processes from one program are answered once, so a browser running as a
+  dozen processes is one check rather than twelve.
+
+### Changed
+
+- The wording and the three states behind the Signature column now live in one place shared with the
+  Startup Manager, so the two tabs cannot end up describing the same certificate differently.
+
 ## [1.87.1] - 2026-09-10
 
 **Opening the Startup Manager no longer reaches out to the internet.** The Signature column checks

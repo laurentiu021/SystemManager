@@ -573,6 +573,20 @@ a confirmation before it runs:
 - **Safety column** — every process is labelled **Windows**, **Known app** or
   **Not recognised**, with a hover explanation of what that means for ending it.
   Sortable, so everything unrecognised can be grouped together at a glance
+- **Signature column** — whether Windows can confirm who made the running program, read
+  from the file's own certificate. This is a different question from Safety, and the
+  difference is the point: Safety recognises a process by **name**, so a copy of
+  `svchost.exe` sitting in a downloads folder inherits the real one's label. The
+  certificate belongs to the file. Shows **Verified** ("Windows can confirm this really
+  comes from Google LLC" on hover), **Unsigned**, or **Check failed**
+  - **Unsigned is grey, not a warning** — most ordinary programs are unsigned, and so is
+    SysManager itself. Amber is kept for a file that *is* signed and whose signature does
+    not hold up, which is the one case worth a second look
+  - Processes whose file Windows will not let SysManager read — most system processes,
+    unless you run as administrator — get no badge at all rather than a guess
+  - Checked offline against certificates already on your PC, and only for processes that
+    have just appeared, so a tab that refreshes every second does not re-check the same
+    programs or reach for the network
 - Kill process with confirmation dialog, and the warning matches the real cost.
   Processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, …)
   are refused outright. Security and servicing processes (Defender's engine, Windows

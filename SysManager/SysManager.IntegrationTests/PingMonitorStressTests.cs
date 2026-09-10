@@ -53,13 +53,29 @@ public class PingMonitorStressTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         // The churn deliberately never touches "base" — only 192.0.2.2-253 hosts — so
         // it survives as a fixed point we can assert on after the storm settles.
+        //
+        // The churned targets are DISABLED, and that is load-bearing rather than tidiness.
+        // PumpAsync snapshots `Targets.Values.Where(t => t.IsEnabled …)` every tick, so a
+        // disabled target is still enumerated — the concurrent add/remove still races the
+        // snapshot, which is the entire point of this test — but it is never pinged. With
+        // them enabled, an unthrottled two-second loop filled the map with ~250 hosts and
+        // the pump then fired ~4000 fire-and-forget ICMP operations at unroutable
+        // addresses, every one of them abandoned mid-flight when Stop() cancelled the
+        // token. The suite runs maxParallelThreads=1, so those continuations all drained
+        // through a single worker AFTER this test returned, and the bill landed on
+        // whichever test ran next: ToggleIsEnabled_MidFlight_IsRespected measured 283s on
+        // a healthy run and 336s on a slow one, against 1.2s of intended Task.Delay. Above
+        // 300s it crossed --hangdump-timeout 5m, so the runner wrote a 704 MB dump and the
+        // hang-dump extension's DisposeAsync then timed out, reporting `Failed!` with
+        // `failed: 0` — 13% of runs (8 of 60 measured). "base" stays enabled so the pump
+        // is genuinely pinging while the map churns underneath it. See #2195.
         var churn = Task.Run(() =>
         {
             var rnd = new Random(42);
             while (!cts.IsCancellationRequested)
             {
                 var h = $"192.0.2.{rnd.Next(2, 254)}";
-                svc.AddOrUpdate(new PingTarget("x", h, "#111"));
+                svc.AddOrUpdate(new PingTarget("x", h, "#111") { IsEnabled = false });
                 if (rnd.Next(2) == 0) svc.Remove(h);
             }
         });

@@ -395,10 +395,57 @@ public class DeepCleanupViewModelTests
         Assert.Equal("marker", vm.LargeScanStatus);
     }
 
+    /// <summary>
+    /// The constructor's background load picks a default location — which is why the test below awaits it.
+    /// </summary>
+    /// <remarks>
+    /// This is the mechanism behind the CI failure, observed directly rather than inferred from a timing
+    /// race. Clearing <c>SelectedLocation</c> and then letting the load finish shows the value coming back:
+    /// the load ends with <c>SelectedLocation = ScanLocations.FirstOrDefault()</c> and does not check
+    /// whether anything set it in the meantime. Any test that clears the property without first awaiting
+    /// initialization is racing that assignment, and on a slower machine it loses.
+    /// <para>Picking a default is deliberate product behaviour — the tab opens ready to scan rather than
+    /// demanding a choice first — so this pins it rather than treating it as the bug. The bug is only ever
+    /// a test that does not account for it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheConstructorLoad_PicksADefaultLocation_EvenAfterOneWasCleared()
+    {
+        var vm = NewVm();
+        vm.SelectedLocation = null;
+
+        await vm.InitializationComplete;
+
+        // Conditional on the machine having any scannable folder at all, so this cannot fail on an
+        // environment with no Downloads, Documents or fixed drive rather than on the behaviour.
+        if (vm.ScanLocations.Count == 0) return;
+
+        Assert.NotNull(vm.SelectedLocation);
+        Assert.Same(vm.ScanLocations[0], vm.SelectedLocation);
+    }
+
+    /// <summary>
+    /// With no location picked, the scan says so instead of scanning something the user did not choose.
+    /// </summary>
+    /// <remarks>
+    /// <b>Awaiting <c>InitializationComplete</c> is what makes this deterministic, and it is not
+    /// decoration.</b> The constructor launches its location enumeration fire-and-forget, and that load
+    /// ends by assigning <c>SelectedLocation = ScanLocations.FirstOrDefault()</c>. Setting the property to
+    /// null before the load finishes therefore gets overwritten mid-test, and the scan runs against
+    /// Downloads — the assertion then fails with "Found 0 files ≥ 500 MB in Downloads", which reads like a
+    /// broken feature rather than a race.
+    /// <para>It went red in CI on the pull request that added an unrelated test class, because that shifted
+    /// the timing enough to lose a race this machine happened to win. <c>ViewModelBase</c> exposes
+    /// <c>InitializationComplete</c> for exactly this ("tests can await it to observe the loaded state
+    /// deterministically instead of racing the fire-and-forget load"), so the seam existed and this test
+    /// simply was not using it. The wider sweep of tests with the same exposure is #2201.</para>
+    /// </remarks>
     [Fact]
     public async Task ScanLargeFiles_NoLocation_SetsErrorStatus()
     {
         var vm = NewVm();
+        await vm.InitializationComplete;
+
         vm.SelectedLocation = null;
 
         await vm.ScanLargeFilesCommand.ExecuteAsync(null);

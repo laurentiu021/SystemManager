@@ -197,6 +197,10 @@ F5 runs exactly what its own toolbar button runs and nothing else: nothing that 
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
 does nothing rather than starting a second one.
 
+**`Ctrl+F` jumps to the search box** on the twelve tabs that have one, and selects whatever is already
+typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
+nothing to filter it does nothing at all, rather than moving your caret somewhere unexpected.
+
 The focus outline is deliberately two thin lines of opposite shade — one light, one dark — rather
 than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up
 on a purple primary button, a red delete button, a grey secondary button and a plain card, and any

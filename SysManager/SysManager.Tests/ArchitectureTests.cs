@@ -2885,6 +2885,99 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"""(?<id>nav-[a-z0-9-]+)""", RegexOptions.Compiled)]
     private static partial Regex NavIdLiteral();
 
+    /// <summary>The ping stress test's add/remove churn builds targets that the pump will not ping.</summary>
+    /// <remarks>
+    /// <c>ParallelAddRemoveWhileRunning_IsThreadSafe</c> hammers the target map for two seconds with no
+    /// throttle, which is the point: the concurrent add/remove has to race <c>PumpAsync</c>'s snapshot. What
+    /// was not the point is that the churned hosts were ENABLED, so the pump fired roughly 4000
+    /// fire-and-forget ICMP operations at unroutable addresses and <c>Stop()</c> then abandoned all of them
+    /// mid-flight. The integration suite runs <c>maxParallelThreads=1</c>, so those continuations drained
+    /// through one worker after the test had already returned and the bill landed on the next test:
+    /// <c>ToggleIsEnabled_MidFlight_IsRespected</c> measured 283s against 1.2s of intended delay, and when it
+    /// crossed <c>--hangdump-timeout 5m</c> the runner wrote a 704 MB dump whose extension then failed
+    /// teardown, reporting <c>Failed!</c> with <c>failed: 0</c> on 8 of 60 runs (#2195).
+    /// <para>Disabling them costs the test nothing — the pump still enumerates every entry each tick, so the
+    /// race is identical — which is exactly why the line is so easy to "simplify" back. It took a per-test
+    /// TRX comparison across two runs to find, so it gets a guard rather than a comment. This suite is
+    /// blocking and the suite it guards is not, on purpose: a job cannot be trusted to report a defect whose
+    /// symptom is that job timing out.</para>
+    /// <para>Disabling them alone did not fix it, it relocated it: the next CI run put
+    /// <c>ToggleIsEnabled_MidFlight_IsRespected</c> at 7.64s and this test at 217s, for a net saving of only
+    /// 59s. The unthrottled spin was the other half — ~27 million operations in two seconds — so the loop is
+    /// now bounded on operations and throttled, and this guard checks both.</para>
+    /// </remarks>
+    [Fact]
+    public void ThePingChurn_BuildsDisabledTargets_SoItDoesNotOrphanThousandsOfPings()
+    {
+        var path = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.IntegrationTests",
+            "PingMonitorStressTests.cs");
+        Assert.True(File.Exists(path), $"{path} not found — this guard would read nothing.");
+
+        // Comment-stripped: the churn carries a long explanation that names IsEnabled, and matching prose
+        // instead of code is how two earlier guards in this file reported the wrong colour.
+        var code = string.Join('\n', File.ReadAllLines(path).Where(IsCode));
+
+        var churn = ChurnLoopBody().Match(code);
+        Assert.True(churn.Success,
+            "the churn loop in ParallelAddRemoveWhileRunning_IsThreadSafe was not found, so this guard read "
+            + "nothing. It slices from the bounded `for` over ChurnOperations to the end of the enclosing "
+            + "Task.Run — if the test was restructured, re-point the slice rather than deleting it.");
+
+        var body = churn.Groups["body"].Value;
+        var built = NewPingTarget().Count(body);
+        Assert.True(built >= 1,
+            $"the churn slice builds {built} PingTargets, so the slice is empty and a pass proves nothing.");
+
+        // Completeness, not just non-emptiness. The first version of this slice terminated on the first
+        // `});` and an object initializer ends in exactly that, so it cut off mid-construction — one
+        // PingTarget still inside it, its `IsEnabled = false` outside it, and the guard reporting a
+        // violation that was not there. A truncated slice can only ever under-report, so require the far
+        // end of the loop body as well as the near end.
+        Assert.True(body.Contains("svc.Remove(", StringComparison.Ordinal),
+            "the churn slice does not reach the loop's Remove call, so it is truncated and can only "
+            + "under-report. Re-point ChurnLoopBody at the real end of the loop body:\n" + body);
+
+        // The bound is half the fix and it regresses just as easily. The operation count is enforced by the
+        // slice anchor itself (a `while` spin no longer matches, and the guard says so), but the throttle
+        // inside the loop is one deletable line — and without it 20k operations run as fast as the machine
+        // allows, which is the unstable shape all over again.
+        //
+        // Needle split for the same reason NoTestWaitsBySleeping splits its own: that guard scans this file
+        // too, and written whole this literal made it report ArchitectureTests.cs as a test that sleeps.
+        var throttle = "await Task." + "Delay(";
+        Assert.True(body.Contains(throttle, StringComparison.Ordinal),
+            "the churn loop no longer yields between batches. Unthrottled, it measured ~27 million "
+            + "add/remove operations in two seconds against a live pump, and the cost of that was not "
+            + "stable — the same runner measured this test at 4s and at 217s. Keep a delay in the loop so "
+            + "the operations spread across pump ticks at a cost independent of machine speed (#2195).");
+
+        var enabled = built - DisabledPingTarget().Count(body);
+        Assert.True(enabled == 0,
+            $"{enabled} of the {built} PingTargets built inside the churn loop are left enabled. The pump "
+            + "pings every enabled target every tick and Stop() abandons them in flight, so the churn orphans "
+            + "ICMP operations that drain into whichever test runs next — see #2195, where that cost one test "
+            + "283s and tripped the 5-minute hang dump on 13% of runs. Build them as "
+            + "`new PingTarget(name, host, colour) { IsEnabled = false }`: the pump still enumerates them, so "
+            + "the concurrency this test exists to prove is unchanged.");
+    }
+
+    /// <summary>The body of the stress test's churn loop, up to the end of the task that runs it.</summary>
+    /// <remarks>
+    /// The terminator is anchored to the start of a line. An object initializer also ends in <c>});</c>, so an
+    /// unanchored one stops inside the very construction this slice exists to read.
+    /// </remarks>
+    [GeneratedRegex(@"for \(int i = 0; i < ChurnOperations; i\+\+\)(?<body>.*?)\n\s*\}\);",
+        RegexOptions.Singleline | RegexOptions.Compiled)]
+    private static partial Regex ChurnLoopBody();
+
+    /// <summary>A ping target being constructed.</summary>
+    [GeneratedRegex(@"new PingTarget\(", RegexOptions.Compiled)]
+    private static partial Regex NewPingTarget();
+
+    /// <summary>A ping target constructed with its pump participation switched off.</summary>
+    [GeneratedRegex(@"new PingTarget\([^)]*\)\s*\{\s*IsEnabled\s*=\s*false\s*\}", RegexOptions.Compiled)]
+    private static partial Regex DisabledPingTarget();
+
     /// <summary>A <c>DataGrid</c> or <c>ItemsControl</c> bound to a collection.</summary>
     [GeneratedRegex(@"<(?:DataGrid|ItemsControl)\b[^>]*ItemsSource=""\{Binding", RegexOptions.Compiled)]
     private static partial Regex CollectionItemsSource();

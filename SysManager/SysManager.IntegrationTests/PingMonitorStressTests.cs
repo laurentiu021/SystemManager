@@ -50,17 +50,55 @@ public class PingMonitorStressTests
         svc.Start();
         Assert.True(svc.IsRunning);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         // The churn deliberately never touches "base" — only 192.0.2.2-253 hosts — so
-        // it survives as a fixed point we can assert on after the storm settles.
-        var churn = Task.Run(() =>
+        // it survives as a fixed point we can assert on after the storm settles. "base"
+        // stays enabled, so the pump is genuinely pinging while the map churns under it.
+        //
+        // Two things here are load-bearing rather than tidiness, and both were measured
+        // on #2195. This test used to spin unthrottled for two seconds against a
+        // CancellationTokenSource, with the churned targets left ENABLED.
+        //
+        // ENABLED was the expensive half. PumpAsync snapshots
+        // `Targets.Values.Where(t => t.IsEnabled …)` every tick, so a disabled target is
+        // still enumerated — the concurrent add/remove still races that snapshot, which
+        // is the entire point of this test — but it is never pinged. With them enabled the
+        // map filled with ~250 hosts and the pump fired thousands of fire-and-forget ICMP
+        // operations at unroutable addresses, all abandoned mid-flight when Stop()
+        // cancelled the token. The suite runs maxParallelThreads=1, so those continuations
+        // drained through one worker AFTER this test returned, and the bill landed on
+        // whichever test ran next: ToggleIsEnabled_MidFlight_IsRespected measured 283s
+        // against 1.2s of intended Task.Delay, and 336s on a slow run. Past 300s it
+        // crossed --hangdump-timeout 5m, the runner wrote a 704 MB dump, and the hang-dump
+        // extension's DisposeAsync then timed out and reported `Failed!` with `failed: 0`
+        // on 8 of 60 runs. Disabling them moved that test to 7.64s.
+        //
+        // UNTHROTTLED was the unstable half, and disabling the targets alone did not fix
+        // it — it relocated it. The two-second spin measured ~27 MILLION add/remove
+        // operations, i.e. ~14 million ConcurrentDictionary writes a second alongside a
+        // pump snapshotting the same dictionary every tick, and the cost of that was never
+        // stable: the same runner image measured this pair at 4s + 283s, then at 217s + 8s.
+        // Interleaving is what proves thread safety, not iteration count, so the churn is
+        // bounded on OPERATIONS and yields between batches — a fixed ~20k operations
+        // spread across several pump ticks, at a cost that does not depend on how fast the
+        // machine happens to be.
+        //
+        // Yes, that is an awaited delay in a test, which ArchitectureTests.NoTestWaitsBySleeping
+        // forbids — and that guard is scoped to the blocking unit suite, deliberately, not to
+        // this project. The rule exists because a unit test must not assert how fast the
+        // machine is. Here the subject under test IS a timer: PumpAsync ticks on Interval, so
+        // the churn has to span ticks to race the snapshot at all, and Task.Yield() would
+        // finish all 20k operations before the pump ticked once. The delay is what makes this
+        // test's cost machine-INdependent rather than dependent on it.
+        const int ChurnOperations = 20_000;
+        var churn = Task.Run(async () =>
         {
             var rnd = new Random(42);
-            while (!cts.IsCancellationRequested)
+            for (int i = 0; i < ChurnOperations; i++)
             {
                 var h = $"192.0.2.{rnd.Next(2, 254)}";
-                svc.AddOrUpdate(new PingTarget("x", h, "#111"));
+                svc.AddOrUpdate(new PingTarget("x", h, "#111") { IsEnabled = false });
                 if (rnd.Next(2) == 0) svc.Remove(h);
+                if (i % 1_000 == 0) await Task.Delay(25);
             }
         });
 

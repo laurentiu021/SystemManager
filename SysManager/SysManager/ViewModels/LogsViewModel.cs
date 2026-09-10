@@ -27,6 +27,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class LogsViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly EventLogService _eventLogs;
     private readonly SynchronizationContext? _sync;
     private CancellationTokenSource? _cts;

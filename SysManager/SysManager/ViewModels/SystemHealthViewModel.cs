@@ -18,6 +18,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class SystemHealthViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
     private readonly SystemInfoService _sys;
     private readonly DiskHealthService _diskHealth;
     private readonly MemoryTestService _memTest;

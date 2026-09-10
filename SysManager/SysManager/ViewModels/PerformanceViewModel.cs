@@ -26,6 +26,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class PerformanceViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly PerformanceService _service;
     // Consulted for ONE question: is a game profile live? While it is, the current power plan and
     // visual-effects state belong to the profile, not to the user, so they must not be recorded as

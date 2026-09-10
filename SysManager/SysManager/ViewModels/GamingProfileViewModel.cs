@@ -22,6 +22,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class GamingProfileViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshProcessesCommand;
+
     private readonly IGamingProfileService _service;
     private readonly ICpuAffinityService _cpu;
 

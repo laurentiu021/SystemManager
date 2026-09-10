@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class PrivacyMonitorViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly PrivacyMonitorService _service;
     private CancellationTokenSource? _cts;
 

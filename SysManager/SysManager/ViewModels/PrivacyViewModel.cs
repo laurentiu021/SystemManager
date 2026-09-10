@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class PrivacyViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly PrivacyService _service;
     private readonly ISessionRestorePoint _restorePoint;
     private readonly Dictionary<PrivacyToggle, bool> _baselineStates = [];

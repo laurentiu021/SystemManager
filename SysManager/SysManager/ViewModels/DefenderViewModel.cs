@@ -21,6 +21,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DefenderViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly DefenderService _service;
     private readonly ISessionRestorePoint _restorePoint;
 

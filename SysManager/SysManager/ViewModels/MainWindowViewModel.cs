@@ -4,6 +4,7 @@
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Windows.Input;
 using System.Windows.Shell;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -365,6 +366,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (tab.Progress is > 0 and <= 100)
             return (TaskbarItemProgressState.Normal, tab.Progress / 100.0);
         return (TaskbarItemProgressState.None, 0);
+    }
+
+    /// <summary>
+    /// Which command an accelerator should run on <paramref name="tab"/>, or <c>null</c> for "do nothing
+    /// and let the key through".
+    /// </summary>
+    /// <remarks>
+    /// Pure and <c>internal</c> so the routing is testable without a <c>Window</c>: the shell's
+    /// <c>KeyDown</c> handler then only executes what this returns and marks the event handled. Same reason
+    /// <see cref="MapTaskbarProgress"/> is shaped this way — the decision is the part worth pinning, and it
+    /// cannot be reached through WPF in a unit test.
+    /// <para><b>Never touches <c>Content</c> unless it is already built.</b> Reading it materialises the
+    /// view model, so without the <c>IsContentCreated</c> check a keypress would construct the tab it is
+    /// asking about — and on a lazy graph that is how every tab ends up built by accident.</para>
+    /// <para>F5 does NOT check <c>CanExecute</c> here; the caller does. Returning the command and letting
+    /// the shell decide keeps this a pure question about intent, and keeps the "don't start a second scan"
+    /// rule in the one place that executes.</para>
+    /// </remarks>
+    internal static IRelayCommand? AcceleratorCommand(NavItem? tab, Key key)
+    {
+        if (tab is not { IsContentCreated: true, Content: ViewModelBase active }) return null;
+
+        return key switch
+        {
+            Key.F5 => active.RefreshOnF5,
+            Key.Escape => active.EscapeCancel,
+            _ => null,
+        };
     }
 
     /// <summary>

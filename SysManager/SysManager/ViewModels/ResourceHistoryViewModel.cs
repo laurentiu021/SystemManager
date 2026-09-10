@@ -29,6 +29,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ResourceHistoryViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ReloadCommand;
+
     // A chart renders cleanly with a few hundred points; more just costs CPU with no
     // visible benefit, so any range is downsampled to this cap before plotting.
     private const int MaxChartPoints = 400;

@@ -19,6 +19,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ProcessManagerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly ProcessManagerService _service;
     private CancellationTokenSource? _autoRefreshCts;
 

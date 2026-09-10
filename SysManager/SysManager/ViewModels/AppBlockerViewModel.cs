@@ -18,6 +18,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class AppBlockerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshListCommand;
+
     public BulkObservableCollection<BlockedApp> BlockedApps { get; } = new();
 
     [ObservableProperty] private string _newExeName = "";

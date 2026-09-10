@@ -19,6 +19,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ServicesViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly IPowerShellRunner _ps;
     private readonly ServiceStartupLedgerService _ledger;
     private List<ServiceEntry> _allServices = [];

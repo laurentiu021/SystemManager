@@ -21,6 +21,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TweaksHubViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly ITweaksHubService _service;
 
     public BulkObservableCollection<TweakItem> Essential { get; } = new();

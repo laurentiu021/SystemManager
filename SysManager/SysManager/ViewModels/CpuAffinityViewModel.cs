@@ -29,6 +29,9 @@ public sealed partial class CoreToggle : ObservableObject
 /// </summary>
 public sealed partial class CpuAffinityViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshProcessesCommand;
+
     private readonly ICpuAffinityService _service;
 
     /// <summary>

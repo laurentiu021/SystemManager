@@ -729,6 +729,31 @@ upgrades) check elevation via `AdminHelper.IsElevated()` and surface a banner
 when running unelevated. The banner calls `AdminHelper.RelaunchAsAdmin()`,
 which restarts the process with `runas` and the current command-line args.
 
+## Keyboard accelerators
+
+Two keys are handled at the shell, and both route through a seam on `ViewModelBase` rather
+than a name the shell guesses at:
+
+- `EscapeCancel` — the command Escape runs, returned only while the tab has something to
+  stop. One property rather than a flag beside a command, because the app answers "is
+  something running?" five different ways (`IsBusy` on most tabs, plus `IsShredding`,
+  `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
+  four tabs. 15 tabs override it.
+- `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
+  agree on a name: 12 distinct spellings bind to a refresh-shaped button, and two views bind
+  two candidates each, so a convention-matching shell would have to guess. 40 tabs override
+  it, and the named command must begin with Refresh/Rescan/Reload/Scan/Load — which
+  mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
+
+`MainWindowViewModel.AcceleratorCommand(NavItem?, Key)` is the pure routing decision, extracted
+so it is testable without a `Window`; `MainWindow.xaml.cs`'s bubbling `KeyDown` handler executes
+what it returns. Two rules live in that handler: it never reads `NavItem.Content` unless
+`IsContentCreated` (a keypress must not build a lazy tab), and `CanExecute` is consulted for F5
+only — `EscapeCancel` already gates itself, and a second gate there would be a way for Escape to
+go quiet. `ArchitectureTests.EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand` and
+`EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand` derive both contracts from the views, so a
+tab cannot ship a refresh or cancel button the keyboard cannot reach.
+
 ## Threading
 
 - Long-running work (ping loops, PowerShell runs, winget scans, deep-clean

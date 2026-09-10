@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class SettingsWatchdogViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly ISettingsWatchdogService _service;
 
     public BulkObservableCollection<DriftRow> Drifts { get; } = new();

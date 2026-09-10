@@ -22,6 +22,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ProfileViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly ProfileService _service;
 
     /// <summary>Sections discovered for export (those whose config file exists).</summary>

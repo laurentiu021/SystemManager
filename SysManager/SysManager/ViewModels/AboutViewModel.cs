@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class AboutViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => LoadHistoryCommand;
+
     private readonly UpdateService _updates;
     private readonly SystemReportService _reportService;
     private readonly UpdateCheckPreferenceService _preferences;

@@ -18,6 +18,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class StartupViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
     private readonly StartupService _service;
     private readonly Func<bool> _isElevatedProbe;
 

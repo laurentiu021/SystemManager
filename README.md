@@ -590,6 +590,10 @@ a confirmation before it runs:
     for no revocation lookup and answers from your PC only, and it runs just for processes that have
     just appeared, so a tab refreshing every second neither re-checks the same programs nor reaches
     for the network
+  - **The list appears first and this column fills in behind it.** Checking a signature takes Windows
+    about a fortieth of a second per program, which adds up over everything running, so the process list
+    is on screen straight away and the badges arrive over the next couple of seconds rather than the tab
+    making you wait for them
   - **Windows components count as signed too** — Windows signs most of its own programs through a
     separate catalogue file rather than inside the program, and both are read, so `svchost.exe`,
     `conhost.exe` and the rest are confirmed rather than listed as unsigned. What is still marked

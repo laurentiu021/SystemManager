@@ -40,7 +40,7 @@ public class ProcessSignatureTests
         {
             var entry = Entry(1000, exe);
 
-            ProcessManagerService.VerifySignatures([entry]);
+            ProcessManagerService.VerifySignatures([entry], ProcessManagerService.NewSignatureCache());
 
             Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
             // The wording matters as much as the state: most user programs are unsigned, and a sentence
@@ -68,7 +68,7 @@ public class ProcessSignatureTests
         {
             var entry = Entry(1001, exe);
 
-            ProcessManagerService.VerifySignatures([entry]);
+            ProcessManagerService.VerifySignatures([entry], ProcessManagerService.NewSignatureCache());
 
             Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
             Assert.Contains("nothing to check", entry.SignatureDetail, StringComparison.Ordinal);
@@ -84,7 +84,7 @@ public class ProcessSignatureTests
         // verdict on a program it never looked at.
         var entry = Entry(4, "");
 
-        ProcessManagerService.VerifySignatures([entry]);
+        ProcessManagerService.VerifySignatures([entry], ProcessManagerService.NewSignatureCache());
 
         Assert.Equal(SignatureTrust.Unknown, entry.Signature);
         Assert.Equal("", entry.SignatureDetail);
@@ -101,7 +101,7 @@ public class ProcessSignatureTests
         {
             var tabs = Enumerable.Range(0, 12).Select(i => Entry(2000 + i, exe)).ToList();
 
-            ProcessManagerService.VerifySignatures(tabs);
+            ProcessManagerService.VerifySignatures(tabs, ProcessManagerService.NewSignatureCache());
 
             Assert.All(tabs, e => Assert.Equal(SignatureTrust.Unsigned, e.Signature));
             Assert.All(tabs, e => Assert.Equal(tabs[0].SignatureDetail, e.SignatureDetail));
@@ -132,7 +132,7 @@ public class ProcessSignatureTests
             var noPath = Entry(3001, "");
             var checkedLast = Entry(3002, exe);
 
-            ProcessManagerService.VerifySignatures([checkedFirst, noPath, checkedLast]);
+            ProcessManagerService.VerifySignatures([checkedFirst, noPath, checkedLast], ProcessManagerService.NewSignatureCache());
 
             Assert.Equal(SignatureTrust.Unsigned, checkedFirst.Signature);
             Assert.Equal(SignatureTrust.Unknown, noPath.Signature);
@@ -158,11 +158,70 @@ public class ProcessSignatureTests
             entry.SafetyLevel = "System";
             entry.Category = "System";
 
-            ProcessManagerService.VerifySignatures([entry]);
+            ProcessManagerService.VerifySignatures([entry], ProcessManagerService.NewSignatureCache());
 
             Assert.Equal("System", entry.SafetyLevel);
             Assert.Equal("System", entry.Category);
             Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
+        }
+        finally { File.Delete(exe); }
+    }
+
+    /// <summary>
+    /// A cache carried across calls is what makes batching cheap rather than quadratic.
+    /// </summary>
+    /// <remarks>
+    /// The column is filled in batches of ten so the list can render first, and every batch is a separate
+    /// call. If the cache were local to the call, a browser running as a dozen processes spread over two
+    /// batches would be verified twice — and on a tab that keeps adding rows, the same executable would be
+    /// re-verified for the lifetime of the pass. That is the whole reason the cache is a parameter.
+    /// </remarks>
+    [Fact]
+    public void VerifySignatures_ACacheSharedAcrossBatches_IsNotReUsedFromScratch()
+    {
+        var exe = WriteTempExe([0x4D, 0x5A, 0x90, 0x00]);
+        try
+        {
+            var cache = ProcessManagerService.NewSignatureCache();
+
+            var firstBatch = new[] { Entry(5000, exe), Entry(5001, exe) };
+            ProcessManagerService.VerifySignatures(firstBatch, cache);
+
+            Assert.Single(cache);                       // one executable, one verification
+            Assert.True(cache.ContainsKey(exe));
+
+            // A later batch naming the same executable must answer from the cache, identically.
+            var secondBatch = new[] { Entry(5002, exe) };
+            ProcessManagerService.VerifySignatures(secondBatch, cache);
+
+            Assert.Single(cache);
+            Assert.Equal(firstBatch[0].Signature, secondBatch[0].Signature);
+            Assert.Equal(firstBatch[0].SignatureDetail, secondBatch[0].SignatureDetail);
+        }
+        finally { File.Delete(exe); }
+    }
+
+    /// <summary>
+    /// The cache ignores path case, because Windows does.
+    /// </summary>
+    /// <remarks>
+    /// Getting this wrong produces no wrong answer, which is exactly why it needs a test: an ordinal
+    /// comparer would treat <c>C:\Windows\explorer.exe</c> and <c>C:\WINDOWS\EXPLORER.EXE</c> as two
+    /// executables and verify the same file twice, at ~25 ms a time, on a tab that is already the slowest to
+    /// load. A silent cost, invisible to every other assertion here.
+    /// </remarks>
+    [Fact]
+    public void TheSignatureCache_TreatsPathCaseTheWayWindowsDoes()
+    {
+        var exe = WriteTempExe([0x4D, 0x5A, 0x90, 0x00]);
+        try
+        {
+            var cache = ProcessManagerService.NewSignatureCache();
+
+            ProcessManagerService.VerifySignatures([Entry(5100, exe)], cache);
+            ProcessManagerService.VerifySignatures([Entry(5101, exe.ToUpperInvariant())], cache);
+
+            Assert.Single(cache);
         }
         finally { File.Delete(exe); }
     }

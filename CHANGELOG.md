@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.88.4] - 2026-09-10
+
+**The Process Manager opens straight away again.** Checking who signed a program takes Windows about a
+fortieth of a second, which is nothing once and about four seconds across everything running — and the
+tab was doing all of it before showing you anything, on the one page you open *because* something is
+already wrong. The list now appears first and the Signature column fills in behind it over the next
+couple of seconds. Same answers, and you can read, sort and search the list while they arrive.
+
+### Fixed
+
+- **Opening the tab no longer waits for the signature checks.** The list is on screen in well under a
+  second instead of after three and a half to four; the badges then appear in small groups rather than
+  all at once at the end.
+- Refreshing while the badges are still arriving no longer starts the work over. A program that starts
+  while the checking is still going is picked up by the pass already running.
+- Leaving the tab abandons any checking still outstanding, rather than carrying on for a list nobody is
+  looking at.
+- The per-second refresh is unaffected, as it was before: only programs that have just started need
+  checking, so a routine refresh does no signature work at all.
+
 ## [1.88.3] - 2026-09-10
 
 **Windows' own programs no longer show as "Unsigned".** Windows signs most of its own components in a

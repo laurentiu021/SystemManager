@@ -339,14 +339,26 @@ Key services:
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
-  open file location. A `VerifySignatures` post-pass over the finished snapshot fills the
-  Signature column from the running image's certificate, through the shared
-  `Helpers/SignatureVerdict`. **A per-refresh cache is sufficient on a tab that polls**, and
-  the reason is the `knownPids` argument: `FilePath` is only read for a PID the caller has
-  not seen, and `ProcessManagerViewModel.ReconcileInto` keeps a surviving row's identity
-  fields — so the first refresh pays for every distinct image and each later one pays only
-  for processes that actually started. Keyed on the path, because one browser runs as a
-  dozen processes from one executable. The signature pair MUST stay in `ReconcileInto`'s
+  open file location. `VerifySignatures(entries, cache)` fills the Signature column from the
+  running image's certificate, through the shared `Helpers/SignatureVerdict`.
+  **Deliberately NOT called from `Snapshot`.** It was, and the cost was measured: ~25 ms per
+  file over ~82 distinct images, so `SnapshotAsync` took ~3.7–4.2 s — spent before the list
+  appeared, on the tab someone opens *because* something is wrong. Moving it out took the same
+  call to ~1.5 s cold and ~0.65 s warm, with nothing verified yet.
+  `ProcessManagerViewModel.FillSignaturesAsync` now runs it in batches of ten after the list
+  renders: each batch is verified on a background thread and applied when the `await` resumes
+  on the UI thread, so **no bound row is ever written from a background thread** — the one
+  threading rule this shape has to respect, and the reason verdicts go into a cache first and
+  onto rows second. `StartSignatureFill` allows one pass at a time, because the tab
+  auto-refreshes every second while a full pass takes seconds; a running pass re-reads the
+  unverified rows before each batch, so processes that start mid-pass are picked up.
+  The cache is the caller's **for one pass, not the tab's lifetime**: only newly-started
+  processes are ever unverified, so it lives exactly as long as the work, and a longer-lived
+  one would owe an answer for a file replaced on disk. `NewSignatureCache()` exists so a
+  caller does not have to know the comparer — an ordinal one would verify
+  `explorer.exe` and `EXPLORER.EXE` separately, a silent cost no other assertion would catch.
+  Keyed on the path, because one browser runs as a dozen processes from one executable.
+  The signature pair MUST stay in `ReconcileInto`'s
   identity group: a fresh entry for a tracked PID carries no path, so its verdict is
   `Unknown`, and copying it across would blank the column one tick after it appeared.
 - `Helpers/SignatureVerdict` — the file-path-to-three-state answer both the Startup Manager

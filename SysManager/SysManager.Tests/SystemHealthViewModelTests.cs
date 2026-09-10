@@ -152,6 +152,7 @@ public class SystemHealthViewModelTests
     public async Task RunChkdsk_NullDrive_SetsStatusMessage()
     {
         var vm = NewVm();
+        await vm.InitializationComplete;
         await vm.RunChkdskCommand.ExecuteAsync(null);
         Assert.Contains("No drive", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
@@ -160,6 +161,7 @@ public class SystemHealthViewModelTests
     public async Task RunChkdsk_EmptyDrive_SetsStatusMessage()
     {
         var vm = NewVm();
+        await vm.InitializationComplete;
         await vm.RunChkdskCommand.ExecuteAsync("");
         Assert.Contains("No drive", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
@@ -168,6 +170,7 @@ public class SystemHealthViewModelTests
     public async Task RunChkdskOnSelected_NoneSelected_SetsStatusMessage()
     {
         var vm = NewVm();
+        await vm.InitializationComplete;
         vm.ChkdskDrives.Clear();
         await vm.RunChkdskOnSelectedCommand.ExecuteAsync(null);
         Assert.Contains("Select at least", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
@@ -290,6 +293,7 @@ public class SystemHealthViewModelTests
     {
         using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm();
+        await vm.InitializationComplete;
         var drive = new DriveTarget { Letter = "C:", Label = "Windows", IsSelected = true };
         vm.ChkdskDrives.Add(drive);
 
@@ -307,6 +311,7 @@ public class SystemHealthViewModelTests
     {
         using var notElevated = AdminHelper.ForceElevation(false);
         var vm = NewVm();
+        await vm.InitializationComplete;
 
         await vm.RunChkdskCommand.ExecuteAsync("D:");
 

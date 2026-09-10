@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.88.2] - 2026-09-10
+
+**The Signature column was telling you almost every program on your PC had failed its check.** It was
+supposed to be the rare warning; instead it was the normal answer. On this machine it confirmed one
+signed program out of forty-eight and put an amber "Check failed" on the other forty-seven — File
+Explorer, Outlook, Windows Terminal, Windows Settings among them. All of those are properly signed by
+Microsoft. The column now asks Windows for its verdict instead of working it out itself, and gets the
+same answer you would see in a file's own Properties window: forty-six confirmed, and the one remaining
+warning is a genuine expired certificate.
+
+### Fixed
+
+- **The Signature column now agrees with Windows.** It uses the same check that sits behind the
+  **Digital Signatures** tab in a file's Properties, so the two can no longer disagree — and if you
+  want to double-check anything the column says, that dialog is the second opinion.
+- **Nothing is accused for being unreadable.** A file the app cannot make sense of now reads as
+  unsigned, because that is what Windows says about it. Previously our own reader failing to parse a
+  file produced a warning about the file, which was blaming the wrong party.
+- The warning colour is back to meaning what it says. On a normal PC it should now appear rarely, and
+  when it does it is worth the look.
+- No network request is made, on either tab. That was already the intent and the previous approach
+  could not actually deliver it — a certificate check that cannot reach the internet also cannot
+  finish, which is a large part of why every answer came back as a failure.
+
+### Known limitation, stated rather than left to be discovered
+
+- Windows signs many of its own components through a separate catalogue file rather than inside the
+  program, and that kind of signature is not read yet. Those show as **Unsigned**. It understates them
+  instead of accusing them, and it is the next thing to fix on this column.
+
 ## [1.88.1] - 2026-09-10
 
 **The Event Log tab no longer collects an account identifier it never showed you.** For every event it

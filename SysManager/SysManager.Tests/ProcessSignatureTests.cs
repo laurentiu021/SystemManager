@@ -50,10 +50,19 @@ public class ProcessSignatureTests
         finally { File.Delete(exe); }
     }
 
+    /// <summary>
+    /// A file Windows cannot parse reads as unsigned, and specifically not as a problem.
+    /// </summary>
+    /// <remarks>
+    /// The inverse of what this asserted before the mechanism changed, deliberately. Reading the
+    /// certificate ourselves turned an unparseable file into an amber chip, which was the reader failing
+    /// rather than anything about the file. <c>WinVerifyTrust</c> returns <c>TRUST_E_NOSIGNATURE</c> for
+    /// every such case — measured on an empty file, a two-byte stub, a text file named <c>.exe</c>, a
+    /// missing path and a directory — so an image the app cannot make sense of is never accused.
+    /// </remarks>
     [Fact]
-    public void VerifySignatures_AnImageThatIsNotReadableAtAll_IsSuspectRatherThanUnsigned()
+    public void VerifySignatures_AnImageWindowsCannotParse_ReadsAsUnsignedRatherThanAccused()
     {
-        // An empty file is not "unsigned", it is unreadable — the distinction the three states exist for.
         var exe = WriteTempExe([]);
         try
         {
@@ -61,8 +70,8 @@ public class ProcessSignatureTests
 
             ProcessManagerService.VerifySignatures([entry]);
 
-            Assert.Equal(SignatureTrust.Invalid, entry.Signature);
-            Assert.Contains("could not read", entry.SignatureDetail, StringComparison.Ordinal);
+            Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
+            Assert.Contains("nothing to check", entry.SignatureDetail, StringComparison.Ordinal);
         }
         finally { File.Delete(exe); }
     }
@@ -100,30 +109,40 @@ public class ProcessSignatureTests
         finally { File.Delete(exe); }
     }
 
+    /// <summary>
+    /// A verdict reached for one entry does not leak onto an entry that was never checked.
+    /// </summary>
+    /// <remarks>
+    /// The negative side of the caching test above, and it had to be rebuilt when the mechanism changed.
+    /// It used to pit two synthetic files against each other expecting two different verdicts; under
+    /// <c>WinVerifyTrust</c> every synthetic file is <c>TRUST_E_NOSIGNATURE</c>, so no pair of files a test
+    /// can create will disagree — which is a better outcome for users and a worse one for that assertion.
+    /// <para>What is still fully deterministic, and is the failure that would actually matter: an entry with
+    /// no image path must come out of the loop untouched even when an earlier entry in the same call got a
+    /// verdict. A cache keyed on nothing, or a verdict variable hoisted out of the loop, shows up here as a
+    /// system process wearing another program's signature.</para>
+    /// </remarks>
     [Fact]
-    public void VerifySignatures_TwoDifferentImages_AreNotConflatedByTheCache()
+    public void VerifySignatures_AnEntryWithNoPath_DoesNotInheritTheVerdictBeforeIt()
     {
-        // The negative side of the test above. A cache keyed on something shared between the two — the
-        // process name, say, which is "test" for both here — would hand the second entry the first one's
-        // answer, and the column would be confidently wrong rather than blank.
-        var unsigned = WriteTempExe([0x4D, 0x5A, 0x90, 0x00]);
-        var unreadable = WriteTempExe([]);
+        var exe = WriteTempExe([0x4D, 0x5A, 0x90, 0x00]);
         try
         {
-            var a = Entry(3000, unsigned);
-            var b = Entry(3001, unreadable);
+            var checkedFirst = Entry(3000, exe);
+            var noPath = Entry(3001, "");
+            var checkedLast = Entry(3002, exe);
 
-            ProcessManagerService.VerifySignatures([a, b]);
+            ProcessManagerService.VerifySignatures([checkedFirst, noPath, checkedLast]);
 
-            Assert.Equal(SignatureTrust.Unsigned, a.Signature);
-            Assert.Equal(SignatureTrust.Invalid, b.Signature);
-            Assert.NotEqual(a.SignatureDetail, b.SignatureDetail);
+            Assert.Equal(SignatureTrust.Unsigned, checkedFirst.Signature);
+            Assert.Equal(SignatureTrust.Unknown, noPath.Signature);
+            Assert.Equal("", noPath.SignatureDetail);
+
+            // And the entry after the gap still gets its own answer, from the cache rather than a re-read.
+            Assert.Equal(SignatureTrust.Unsigned, checkedLast.Signature);
+            Assert.Equal(checkedFirst.SignatureDetail, checkedLast.SignatureDetail);
         }
-        finally
-        {
-            File.Delete(unsigned);
-            File.Delete(unreadable);
-        }
+        finally { File.Delete(exe); }
     }
 
     [Fact]

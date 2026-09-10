@@ -111,19 +111,22 @@ What the app can and cannot do by design:
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
   the feature fails safely rather than substituting an alternative.
-- **Signature checks on lists, and what they cost**: the Signature columns in the Startup Manager and
-  the Process Manager read each program's Authenticode certificate and build its chain, which is a
-  different job from the two gates above. Those verify one file at a moment you asked for something, so
-  they use the network: they look up revocation and they will fetch a missing intermediate certificate,
-  because that is what lets a genuine signature verify. A column over every startup entry, or every
-  program running right now, cannot do either — it would mean a request per file, and on a disconnected
-  PC a timeout per file — so it is restricted to what is already on your machine, both for revocation
-  and for certificate downloads. The two settings are decided
-  together in one place, because turning off only the first still leaves the second fetching. The
-  trade-off is stated plainly: a certificate revoked since your PC last refreshed its lists still reads
-  as verified, and a signed file whose issuer your PC has never seen reads as "Check failed" rather than
-  being confirmed by a download. That is the right bias for a column that informs, and the wrong one for
-  a gate that admits code, which is why they differ.
+- **Signature checks on lists, and what they cost**: the Signature columns in the Startup Manager and the
+  Process Manager ask Windows for its verdict, through the same `WinVerifyTrust` API that Explorer's
+  *Digital Signatures* tab uses. That is a different job from the two gates above, which compare a specific
+  publisher and therefore build a certificate chain themselves, using the network to look up revocation and
+  to fetch a missing intermediate certificate. A column covering every startup entry, or every program
+  running right now, cannot do that — it would mean a request per file, and on a disconnected PC a wait per
+  file — so it asks for **no revocation check** and tells Windows to answer from this machine's caches
+  only. No network request is made for a column.
+  - The trade-off, stated plainly: a certificate revoked since your PC last refreshed its lists still reads
+    as verified. That is the right bias for a column that informs you and the wrong one for a gate that
+    admits code, which is why the two differ.
+  - What the columns do **not** see: a signature stored in a Windows catalogue rather than inside the file.
+    Many Windows components are signed that way and currently read as "Unsigned" — the column understates
+    them rather than accusing them.
+  - Reading the publisher's *name* is a separate step from deciding whether the signature holds, and it
+    only ever affects the wording of a tooltip. A verdict is never derived from it.
 - **Local diagnostic log**: SysManager keeps 14 days of rolling log files in
   `%LocalAppData%\SysManager\logs`. They never leave the machine on their own —
   there is no upload path. Your Windows user name is replaced with `[user]` on

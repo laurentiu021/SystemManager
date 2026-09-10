@@ -106,12 +106,22 @@ public class StartupSignatureTests
         finally { File.Delete(exe); }
     }
 
+    /// <summary>
+    /// A file Windows cannot parse at all reads as unsigned, not as a problem.
+    /// </summary>
+    /// <remarks>
+    /// This asserts the opposite of what it used to, and the change is the point. The old mechanism read
+    /// the certificate itself, so an empty file surfaced as "signature data present but unreadable" and got
+    /// an amber chip — an accusation produced by the reader failing, not by anything about the file.
+    /// <para>Measured against <c>WinVerifyTrust</c> instead: an empty file, a two-byte stub, a text file
+    /// named <c>.exe</c>, a path that does not exist and even a directory all return
+    /// <c>TRUST_E_NOSIGNATURE</c>. Windows declines to accuse anything it cannot parse, and the column now
+    /// says the same. That is why nothing synthetic can produce the amber state — see
+    /// <see cref="WindowsTrustTests"/> for the mapping, which is where the amber arm is actually pinned.</para>
+    /// </remarks>
     [Fact]
-    public void VerifySignatures_FileWhoseSignatureCannotBeRead_IsFlagged()
+    public void VerifySignatures_FileWindowsCannotParse_ReadsAsUnsignedRatherThanAccused()
     {
-        // An empty file cannot be read as an image at all, which Authenticode.ReadSigner reports as
-        // Unreadable rather than Unsigned. The two must not collapse: one is the common case and the other
-        // is the only state in this column worth a second look.
         var exe = WriteTempExe([]);
         try
         {
@@ -119,8 +129,8 @@ public class StartupSignatureTests
 
             StartupService.VerifySignatures([entry]);
 
-            Assert.Equal(SignatureTrust.Invalid, entry.Signature);
-            Assert.Contains("could not read", entry.SignatureDetail, StringComparison.Ordinal);
+            Assert.Equal(SignatureTrust.Unsigned, entry.Signature);
+            Assert.Contains("nothing to check", entry.SignatureDetail, StringComparison.Ordinal);
         }
         finally { File.Delete(exe); }
     }

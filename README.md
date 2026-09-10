@@ -492,11 +492,12 @@ a confirmation before it runs:
   - **Unsigned is grey, not a warning.** Most small utilities are unsigned and so is SysManager
     itself; the tooltip says so in as many words. Amber is reserved for a file that *is* signed and
     whose signature does not hold up — the one case here worth a second look.
-  - The check runs offline, against certificates already on your PC, so opening the tab never waits
-    on the network — it downloads nothing, not even a missing piece of a certificate. The cost of
-    that is honest rather than hidden: if your PC has never seen a particular publisher's
-    certificate, the column says **Check failed** instead of fetching the rest and confirming it.
-    The tooltip says Windows could not confirm the publisher, which is exactly what happened.
+  - The verdict is Windows' own, from the same check behind Explorer's **Digital Signatures** tab, so
+    it agrees with what Windows tells you elsewhere. It asks for no revocation lookup and answers from
+    your PC only, so opening the tab never waits on the network and downloads nothing.
+  - What it does not yet see: a signature kept in a Windows catalogue instead of inside the file. A
+    number of Windows components are signed that way and currently show as **Unsigned** — the column
+    understates them rather than accusing them.
 - Sort by name, publisher, location, safety, status, signature, or startup impact via clickable column
   headers
 - Plain-language description for recognised programs (from the built-in database) instead
@@ -584,9 +585,12 @@ a confirmation before it runs:
     not hold up, which is the one case worth a second look
   - Processes whose file Windows will not let SysManager read — most system processes,
     unless you run as administrator — get no badge at all rather than a guess
-  - Checked offline against certificates already on your PC, and only for processes that
-    have just appeared, so a tab that refreshes every second does not re-check the same
-    programs or reach for the network
+  - The verdict is Windows' own — the same check behind Explorer's **Digital Signatures** tab. It asks
+    for no revocation lookup and answers from your PC only, and it runs just for processes that have
+    just appeared, so a tab refreshing every second neither re-checks the same programs nor reaches
+    for the network
+  - Windows components signed through a Windows catalogue rather than inside the file show as
+    **Unsigned** for now — understated rather than accused
 - Kill process with confirmation dialog, and the warning matches the real cost.
   Processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, …)
   are refused outright. Security and servicing processes (Defender's engine, Windows

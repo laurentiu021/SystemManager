@@ -192,32 +192,36 @@ public class AuthenticodeTests
     }
 
     /// <summary>
-    /// The informational path asks for OFFLINE revocation, and that is not a detail.
+    /// The informational path does not build a managed chain at all, and must not go back to one.
     /// </summary>
     /// <remarks>
-    /// The other half of <see cref="EveryFailClosedGate_AsksForOnlineRevocation"/>. Both the Startup Manager
-    /// and the Process Manager column run over every relevant file on the machine, so <c>Online</c> here
-    /// would mean a revocation fetch per file, and on a machine with no network a wait per file, in a tab
-    /// the user just opened. Changing it compiles, passes every other test, and is visible only as a tab
-    /// that takes seconds to populate on a train — so it is asserted.
-    /// <para>Lives here, next to the gate guard, rather than in one tab's test file: since the verdict was
-    /// shared this is one decision covering two tabs, and the copy that used to sit in
-    /// <c>StartupSignatureTests</c> failed with "move this guard with the code" the moment the chain build
-    /// moved. That is what it was for.</para>
+    /// This replaces a guard that pinned <c>X509RevocationMode.Offline</c> on <c>SignatureVerdict</c>. That
+    /// guard was correct about the intent and the intent turned out to be unreachable: an offline chain
+    /// build verified 1 of 48 signed process images and reported "Check failed" for 47, because it still
+    /// demands a revocation answer with no cached CRL and an intermediate it may not fetch. The
+    /// informational columns now ask Windows through <c>WinVerifyTrust</c>.
+    /// <para>So what is worth asserting has inverted: not "which revocation mode", but that the verdict is
+    /// no longer derived from a chain we build. The two fail-closed gates still do, which is what
+    /// <see cref="EveryFailClosedGate_AsksForOnlineRevocation"/> covers — this is the other half, and
+    /// keeping both here is what stops a future change from quietly giving the columns the gates' mechanism
+    /// back.</para>
     /// </remarks>
     [Fact]
-    public void TheInformationalPath_AsksForOfflineRevocation_SoItDoesNotFetchPerFile()
+    public void TheInformationalPath_DoesNotBuildAManagedChain()
     {
         var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "SignatureVerdict.cs"));
+        Assert.True(source.Length > 1000, "SignatureVerdict.cs is too small to be the real file");
 
-        var at = source.IndexOf("Authenticode.ValidateChain", StringComparison.Ordinal);
-        Assert.True(at >= 0,
-            "SignatureVerdict no longer validates a chain — move this guard with the code rather than "
-            + "deleting it");
+        Assert.Contains("WindowsTrust.Verify(path)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ValidateChain", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("X509RevocationMode", source, StringComparison.Ordinal);
 
-        var call = source[at..Math.Min(source.Length, at + 220)];
-        Assert.Contains("X509RevocationMode.Offline", call, StringComparison.Ordinal);
-        Assert.DoesNotContain("X509RevocationMode.Online", call, StringComparison.Ordinal);
+        // The certificate is still read, for the publisher's NAME only. That distinction is the reason the
+        // column stopped accusing everything, so it is stated in the assertion rather than left to a
+        // comment: a verdict derived from ReadSigner is the defect coming back.
+        Assert.Contains("Authenticode.ReadSigner(path)", source, StringComparison.Ordinal);
+        var signer = source[source.IndexOf("private static string Signer", StringComparison.Ordinal)..];
+        Assert.Contains("Authenticode.ReadSigner(path)", signer, StringComparison.Ordinal);
     }
 
     private static string HelperMethodSource(string signature)

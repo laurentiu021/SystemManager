@@ -286,13 +286,11 @@ Key services:
   post-pass, `VerifySignatures`, answers "who really made this" with a certificate rather
   than `FileVersionInfo.CompanyName`, which is the string the `Publisher` column shows and
   which any program can set to "Microsoft Corporation". It uses the shared
-  `Helpers/Authenticode` reader and chain validator with **`X509RevocationMode.Offline`** —
-  unlike the update and Ookla gates, which pass `Online`: this runs over every entry on the
-  machine, so an online build would mean a revocation request per file and, with no network,
-  a wait per file, in a tab the user just opened. Results are cached per resolved
-  executable path, since several entries pointing at one exe is normal. `ResolveExecutablePath`
-  is the single answer to "which file is this entry", shared with `ExtractPublisher`, so the
-  Publisher and the certificate can never describe different files.
+  `Helpers/SignatureVerdict`, which asks Windows via `WinVerifyTrust` — **not** the managed
+  chain the two fail-closed gates build. Results are cached per resolved executable path,
+  since several entries pointing at one exe is normal. `ResolveExecutablePath` is the single
+  answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
+  the certificate can never describe different files.
 - `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).
@@ -301,14 +299,29 @@ Key services:
   switch that defaults to on, so a caller that chose `Offline` to avoid a request per file made
   one anyway and, with no network, waited out `UrlRetrievalTimeout` for each. The two settings
   are therefore derived from the one argument rather than offered separately —
-  `DisableCertificateDownloads` is on exactly when revocation is `Offline` — so the scanning
-  callers stay local and the two fail-closed gates keep the fetch that lets a genuine signature
-  validate.
+  `DisableCertificateDownloads` is on exactly when revocation is `Offline`.
   Deliberately holds no policy about what an answer MEANS: an unsigned file is fatal for the
   Ookla download and expected for our own build, so each caller keeps that decision. Two
   calls rather than one because both fail-closed callers compare the subject BEFORE building
   a chain, and a single "inspect" would add a revocation fetch on the path where the subject
   already failed.
+  **Its only remaining callers are those two gates.** The informational columns used it and
+  moved off it, because an offline managed chain cannot answer for an arbitrary file: measured
+  over 82 running process images it verified 1 and reported failure for 47, on
+  `RevocationStatusUnknown` (46 of 48, no cached CRL) and `PartialChain` (29, intermediate not
+  local). Loosening the flags enough to pass means `AllowUnknownCertificateAuthority`, which
+  accepts any certificate authority and verifies nothing.
+- `Helpers/WindowsTrust` — `WinVerifyTrust` behind a four-state answer
+  (`Trusted`/`NoSignature`/`Expired`/`NotTrusted`), the mechanism Explorer's Digital Signatures
+  tab and Process Explorer use. Over the same 82 images: 46 trusted, 1 genuine failure. Called
+  with `WTD_REVOKE_NONE` plus `WTD_CACHE_ONLY_URL_RETRIEVAL`, which is a supported way to say
+  "answer from this machine only" — the guarantee `Offline` was reached for and does not give.
+  `Classify` is a pure HRESULT map, kept `internal` and tested directly, because it is what
+  decides the colour a user sees and the previous mechanism's wrong verdicts came from
+  classification rather than from reading. Costs ~25 ms per file and does not get cheaper warm,
+  so callers cache and stay off the UI thread. Does not see catalog signatures
+  (`WTD_CHOICE_FILE` reads the embedded one), which is why Windows components still read as
+  unsigned.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
@@ -329,10 +342,14 @@ Key services:
   `Helpers/Authenticode` on purpose: that type answers only the mechanical questions and
   holds no policy, because the two fail-closed gates disagree with each other on what an
   unsigned file means. This one carries exactly one policy — the informational one, for
-  columns that describe many files and admit no code: unsigned is ordinary, revocation is
-  offline, every answer comes with a readable sentence. A gate adopting those would stop
+  columns that describe many files and admit no code: unsigned is ordinary, nothing reaches
+  the network, every answer comes with a readable sentence. A gate adopting those would stop
   being a gate. Shared rather than copied so two tabs cannot describe one certificate in
   two different sentences.
+  The verdict comes from `Helpers/WindowsTrust`; the certificate is still read, but **only for
+  the publisher's name**, never for the verdict. That ordering is the fix: a name is cosmetic,
+  so failing to read one costs a phrase in a tooltip, while the verdict decides a colour. Every
+  phrasing here has a form that works with no name, which is what lets the name be optional.
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
   via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell.
 - `UninstallerService` — winget-based uninstall + registry UninstallString

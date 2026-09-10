@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.89.0] - 2026-09-10
+
+**The Process Manager now shows when each program started.** When something is eating your CPU, the
+useful question is usually *when did this appear* — a program that started three minutes ago is a very
+different suspect from one that has been running since you turned the PC on. The tab already knew the
+answer and read it every second without ever showing you, so you could sort by memory and by CPU but
+not by age. There is now a **Started** column, and clicking its header groups everything that arrived
+recently.
+
+### Added
+
+- **Started column in the Process Manager**, sortable chronologically. Programs whose start time
+  Windows will not reveal — most system processes, unless you run SysManager as administrator — show a
+  dash rather than a made-up date.
+
 ## [1.88.4] - 2026-09-10
 
 **The Process Manager opens straight away again.** Checking who signed a program takes Windows about a

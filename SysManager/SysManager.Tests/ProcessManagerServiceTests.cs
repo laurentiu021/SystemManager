@@ -220,6 +220,43 @@ public class ProcessManagerServiceTests
     }
 
     [Fact]
+    public void ProcessEntry_StartTimeDisplay_FormatsTheTimestamp()
+    {
+        var entry = new ProcessEntry { StartTime = new DateTime(2026, 3, 9, 14, 5, 7, DateTimeKind.Local) };
+        Assert.Equal("2026-03-09 14:05:07", entry.StartTimeDisplay);
+    }
+
+    /// <summary>
+    /// The case the em dash exists for. <c>Process.StartTime</c> throws for most system processes without
+    /// elevation and the snapshot swallows that, leaving the field at <c>default</c> — so binding the raw
+    /// value would print <c>0001-01-01 00:00:00</c>, which reads as a bug rather than "not available".
+    /// </summary>
+    [Fact]
+    public void ProcessEntry_StartTimeDisplay_WhenWindowsWouldNotSay_ShowsADashNotYearOne()
+    {
+        var entry = new ProcessEntry();
+
+        Assert.Equal("—", entry.StartTimeDisplay);
+        Assert.DoesNotContain("0001", entry.StartTimeDisplay, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The display string has to re-raise when the timestamp arrives, because the snapshot fills
+    /// <c>StartTime</c> in after construction — a computed property with no
+    /// <c>NotifyPropertyChangedFor</c> would leave the column showing the em dash for the row's whole life.
+    /// </summary>
+    [Fact]
+    public void ProcessEntry_StartTimeDisplay_NotifiesWhenTheTimestampArrives()
+    {
+        var entry = new ProcessEntry();
+        var changed = entry.RecordPropertyChanges();
+
+        entry.StartTime = new DateTime(2026, 3, 9, 14, 5, 7, DateTimeKind.Local);
+
+        Assert.Contains(nameof(ProcessEntry.StartTimeDisplay), changed);
+    }
+
+    [Fact]
     public void ProcessEntry_PropertyChange_Notifies()
     {
         var entry = new ProcessEntry();

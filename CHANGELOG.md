@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.87.0] - 2026-09-10
+
+**Ctrl+F now jumps to the search box.** On the twelve tabs that have one — processes, services,
+installed apps, the event log, Windows features, scheduled tasks and the rest — Ctrl+F puts the caret
+in it and selects whatever is already typed, so you can replace the search straight away. The same
+thing the key does in a browser.
+
+### Added
+
+- **Ctrl+F focuses the open tab's search box**, and selects the existing text so a second press
+  replaces the search rather than appending to it.
+- On a tab with nothing to filter it does nothing at all, rather than moving the caret somewhere
+  unexpected — and the keypress is left for anything else that wants it.
+- A search box inside a section the tab is currently hiding is skipped, so the caret cannot end up
+  somewhere off screen.
+
 ## [1.86.0] - 2026-09-10
 
 **F5 now refreshes the tab you are looking at**, on all forty tabs that have something to look at

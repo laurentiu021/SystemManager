@@ -745,6 +745,17 @@ than a name the shell guesses at:
   it, and the named command must begin with Refresh/Rescan/Reload/Scan/Load — which
   mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
 
+`Ctrl+F` is the third, and takes no seam at all: `Helpers/FilterBoxes` walks the visual tree under
+`ContentHost` — the element the shell binds the live tab into — for the first `TextBox` whose `Text`
+binds one of four property names (`FilterText`, `SearchText`, `SearchQuery`, `Filter`), then focuses
+and selects it. Focusing a control is a View concern, so routing it through a view model would have
+put UI manipulation where the MVVM rules forbid it, and 12 tabs already state which box is the filter
+by what it binds. The list was measured rather than assumed: three names looked complete until a scan
+of every `TextBox` announced as a filter or search box found Task Scheduler binding plain `Filter`.
+`ArchitectureTests.EveryFilterBox_BindsANameCtrlFRecognises` holds it against the views in both
+directions, using the ACCESSIBLE NAME as the independent test of "is this a filter box" so the check
+is not circular.
+
 `MainWindowViewModel.AcceleratorCommand(NavItem?, Key)` is the pure routing decision, extracted
 so it is testable without a `Window`; `MainWindow.xaml.cs`'s bubbling `KeyDown` handler executes
 what it returns. Two rules live in that handler: it never reads `NavItem.Content` unless

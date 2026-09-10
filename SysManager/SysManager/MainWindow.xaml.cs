@@ -329,6 +329,12 @@ public partial class MainWindow : Window
     /// </remarks>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key is Key.F && Keyboard.Modifiers is ModifierKeys.Control)
+        {
+            FocusTheFilterBox(e);
+            return;
+        }
+
         if (e.Key is not (Key.Escape or Key.F5)) return;
         if (DataContext is not MainWindowViewModel vm) return;
         if (MainWindowViewModel.AcceleratorCommand(vm.SelectedNav, e.Key) is not { } command) return;
@@ -341,6 +347,27 @@ public partial class MainWindow : Window
         if (e.Key is Key.F5 && !command.CanExecute(null)) return;
 
         command.Execute(null);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Ctrl+F puts the caret in the open tab's filter box, and selects what is already there.
+    /// </summary>
+    /// <remarks>
+    /// <c>SelectAll</c> so a second Ctrl+F replaces the previous search rather than appending to it, which
+    /// is what the same key does in a browser and an editor.
+    /// <para>Only marked handled when a box was actually found. On the many tabs that filter nothing the
+    /// keypress is left alone, so a control that wants Ctrl+F for itself still gets it — and nothing has to
+    /// maintain a list of which tabs those are.</para>
+    /// <para><c>ContentHost</c> is the element the shell binds the live tab into, so the search starts at
+    /// the open tab and cannot reach a filter box on a tab that is not on screen.</para>
+    /// </remarks>
+    private void FocusTheFilterBox(KeyEventArgs e)
+    {
+        if (Helpers.FilterBoxes.FindIn(ContentHost) is not { } box) return;
+
+        box.Focus();
+        box.SelectAll();
         e.Handled = true;
     }
 

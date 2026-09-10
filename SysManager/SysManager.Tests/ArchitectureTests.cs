@@ -1566,6 +1566,109 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every filter or search box binds a property name Ctrl+F recognises.
+    /// </summary>
+    /// <remarks>
+    /// Ctrl+F finds the open tab's filter box by what the box binds, because 12 tabs already state it that
+    /// way and inventing a marker attribute would have meant touching 12 views to say something they
+    /// already said. The cost of keying on an existing convention is that the convention has to be held.
+    /// <para><b>The list was measured and the first attempt was short.</b> <c>FilterText</c>,
+    /// <c>SearchText</c> and <c>SearchQuery</c> looked like the whole set; scanning every <c>TextBox</c>
+    /// whose accessible name mentions filtering or search found a twelfth tab, Task Scheduler, binding plain
+    /// <c>Filter</c>. Ctrl+F would have silently done nothing there — and a shortcut that works on eleven
+    /// tabs out of twelve is worse than none, because the user learns it is unreliable and stops reaching
+    /// for it.</para>
+    /// <para>Non-circular by construction: what makes a <c>TextBox</c> a filter box here is its
+    /// ACCESSIBLE NAME saying so, which is independent of the binding path being checked. Both directions
+    /// are asserted — an unrecognised path on a filter-named box, and a recognised path on a box whose
+    /// accessible name does not mention filtering, since that second case means either the name or the
+    /// recogniser is wrong.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryFilterBox_BindsANameCtrlFRecognises()
+    {
+        var app = FindAppProjectDir();
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var binding = new Regex(@"^\{Binding\s+(?<path>[\w.]+)", RegexOptions.CultureInvariant);
+        var filterish = new Regex("filter|search", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        // The recogniser, read from the helper so the two cannot drift: a name added there without a view
+        // using it, or used by a view without being there, both show up below.
+        var recognised = FilterBoxNames(app);
+        Assert.True(recognised.Count >= 4,
+            $"only {recognised.Count} names were parsed out of FilterBoxes.BindingPaths, out of 4 measured — "
+            + "the parse is broken, so every check below compares against a short list");
+
+        var offenders = new List<string>();
+        var boxes = 0;
+
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            foreach (var element in XDocument.Load(view).Descendants(presentation + "TextBox"))
+            {
+                var path = binding.Match((string?)element.Attribute("Text") ?? string.Empty);
+                if (!path.Success) continue;
+
+                var bound = path.Groups["path"].Value;
+                var accessible = (string?)element.Attribute(
+                    XName.Get("AutomationProperties.Name")) ?? string.Empty;
+                var named = filterish.IsMatch(accessible);
+                var known = recognised.Contains(bound);
+                if (!named && !known) continue;
+
+                boxes++;
+                var viewName = Path.GetFileNameWithoutExtension(view);
+
+                if (named && !known)
+                    offenders.Add($"{viewName} has a box announced as \"{accessible}\" bound to {bound}, "
+                                  + "which Ctrl+F does not recognise — so the shortcut silently does nothing "
+                                  + "on that tab. Add the name to FilterBoxes.BindingPaths.");
+
+                if (known && !named)
+                    offenders.Add($"{viewName} binds {bound}, which Ctrl+F treats as a filter box, but its "
+                                  + $"accessible name is \"{accessible}\" — either the name does not describe "
+                                  + "what the box is for, or the box is not a filter and Ctrl+F will land in "
+                                  + "the wrong place.");
+            }
+        }
+
+        // Vacuity floor: 13 filter boxes across 12 views today (Bulk Installer has two). A parse that
+        // stopped finding them would report success having checked nothing.
+        Assert.True(boxes >= 13,
+            $"only {boxes} filter boxes were found across Views/, out of 13 measured — the XAML parse is "
+            + "broken, not the views.");
+
+        Assert.True(offenders.Count == 0,
+            $"Ctrl+F must reach the filter box on every tab that has one:\n  {string.Join("\n  ", offenders)}"
+            + $"\n({boxes} boxes checked)");
+
+        // And the shell must actually do the lookup.
+        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml.cs"));
+        Assert.Contains("Key.F && Keyboard.Modifiers is ModifierKeys.Control", shell, StringComparison.Ordinal);
+        Assert.Contains("FilterBoxes.FindIn(ContentHost)", shell, StringComparison.Ordinal);
+    }
+
+    /// <summary>The names in <c>FilterBoxes.BindingPaths</c>, read from its source.</summary>
+    /// <remarks>
+    /// Read rather than referenced because the helper is <c>internal</c> to a WPF assembly and touching it
+    /// from a test would load presentation types for the sake of a string array.
+    /// </remarks>
+    private static HashSet<string> FilterBoxNames(string appDir)
+    {
+        var source = File.ReadAllText(Path.Combine(appDir, "Helpers", "FilterBoxes.cs"));
+        var at = source.IndexOf("BindingPaths = [", StringComparison.Ordinal);
+        Assert.True(at >= 0, "FilterBoxes.BindingPaths not found — this guard would compare against nothing");
+
+        var end = source.IndexOf(']', at);
+        Assert.True(end > at, "the BindingPaths initialiser is not closed");
+
+        return Regex.Matches(source[at..end], "\"(?<name>\\w+)\"")
+            .Select(m => m.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
     /// Every issue template must apply at least one label, and every label it names must be one this
     /// repository actually defines.
     /// </summary>

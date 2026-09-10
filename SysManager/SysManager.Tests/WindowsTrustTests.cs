@@ -120,6 +120,72 @@ public class WindowsTrustTests
     }
 
     /// <summary>
+    /// A file with no signature of its own gets a second question: the Windows catalogs.
+    /// </summary>
+    /// <remarks>
+    /// Windows signs most of its own components through a <c>.cat</c> file rather than inside the binary, so
+    /// <c>WTD_CHOICE_FILE</c> alone reports <c>powershell.exe</c>, <c>cmd.exe</c> and <c>conhost.exe</c> as
+    /// unsigned — 12 of the 35 running images with no embedded signature verify through a catalog.
+    /// <para>Asserted against the source because no file a unit test can create is catalog-signed: a catalog
+    /// lookup that silently answered "no signature" for everything would pass this entire suite. The real
+    /// verification is <c>CatalogSignatureTests</c> in the integration project, against actual Windows
+    /// binaries; what belongs here is that the second question is asked at all, and asked ONLY for
+    /// <see cref="TrustResult.NoSignature"/>.</para>
+    /// <para>That last part is a decision, not a detail: falling back for an expired or untrusted embedded
+    /// signature would be choosing the more flattering of two verdicts.</para>
+    /// </remarks>
+    [Fact]
+    public void AFileWithNoEmbeddedSignature_IsAlsoCheckedAgainstTheCatalogs()
+    {
+        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "WindowsTrust.cs"));
+        Assert.True(source.Length > 3000, "WindowsTrust.cs is too small to be the real file");
+
+        // The fallback happens, and only on the no-signature answer.
+        Assert.Contains("embedded is TrustResult.NoSignature ? VerifyByCatalog(filePath) : embedded",
+            source, StringComparison.Ordinal);
+
+        // SHA-256 by name. The older CryptCATAdminAcquireContext implies SHA-1 and must not come back.
+        Assert.Contains("CryptCATAdminAcquireContext2", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CryptCATAdminAcquireContext(", source, StringComparison.Ordinal);
+        Assert.Contains("Sha256 = \"SHA256\"", source, StringComparison.Ordinal);
+
+        // Both handles released. Three of the five native steps can fail, so these belong in a finally and
+        // a leak here is once per unsigned file per refresh on a tab that polls.
+        Assert.Contains("CryptCATAdminReleaseCatalogContext(admin, catalog, 0)", source, StringComparison.Ordinal);
+        Assert.Contains("CryptCATAdminReleaseContext(admin, 0)", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The member tag is upper-case hex — the documented shape, and deliberately not claimed to be more.
+    /// </summary>
+    /// <remarks>
+    /// This started out asserting that upper case was load-bearing, on the reasoning that the tag is matched
+    /// against what the catalog stores. A mutation refuted it: forcing the tag to lower case left every real
+    /// catalog verification in <c>CatalogSignatureTests</c> passing, so the trust provider is not matching on
+    /// this string in the way its name suggests.
+    /// <para>Kept, because pinning the documented format is worth a line and a future change to it should be
+    /// deliberate — but the docstring says what the evidence supports rather than what sounded right. A test
+    /// whose stated reason is false is worse than no test, because it survives review on the strength of the
+    /// reason.</para>
+    /// </remarks>
+    [Fact]
+    public void TheMemberTag_IsUpperCaseHex()
+    {
+        var bytes = new byte[] { 0x0A, 0xBC, 0xDE, 0xF0, 0x00, 0xFF };
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(bytes.Length);
+        try
+        {
+            System.Runtime.InteropServices.Marshal.Copy(bytes, 0, buffer, bytes.Length);
+
+            var tag = WindowsTrust.HexTag(buffer, (uint)bytes.Length);
+
+            Assert.Equal("0ABCDEF000FF", tag);
+            Assert.Equal(tag.ToUpperInvariant(), tag);   // stated directly rather than left to the literal
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+    }
+
+    /// <summary>
     /// The call asks for no revocation lookup and answers from this machine only.
     /// </summary>
     /// <remarks>

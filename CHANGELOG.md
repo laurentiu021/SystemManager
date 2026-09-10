@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.88.3] - 2026-09-10
+
+**Windows' own programs no longer show as "Unsigned".** Windows signs most of its own components in a
+separate catalogue file rather than inside the program itself, and the Signature column was only looking
+inside the program — so PowerShell, Command Prompt, the console host and the search box all appeared to
+have no signature at all. They are signed, and Windows says so; we just were not asking the right
+question. On this machine that moves twelve more programs into **Verified**, and what is left marked
+unsigned is genuinely unsigned.
+
+### Fixed
+
+- **A signature stored in a Windows catalogue is now read too.** The column asks about the signature
+  inside the file first and, only when there is none, looks the file up in your PC's catalogues — so a
+  program carrying its own signature costs nothing extra.
+- Together with the previous fix, the column now confirms 59 of the 82 programs running on a test
+  machine, against 1 before either change. The 22 still marked unsigned are ordinary third-party
+  programs that really are unsigned, and the single warning left is a genuinely expired certificate.
+- Still no network request, for either kind of signature.
+- A file the app cannot open — locked, or permission denied — reads as unsigned rather than as a
+  problem, the same way anything unparseable already did. "We could not look" must not read as "we
+  looked and it failed".
+
+### Known limitation
+
+- Opening the Process Manager now takes around three and a half seconds the first time while it checks
+  each program, though later refreshes are unaffected because only newly started programs are checked.
+  Making the list appear immediately and fill the column in behind it is the next change on this tab.
+
 ## [1.88.2] - 2026-09-10
 
 **The Signature column was telling you almost every program on your PC had failed its check.** It was

@@ -122,9 +122,10 @@ What the app can and cannot do by design:
   - The trade-off, stated plainly: a certificate revoked since your PC last refreshed its lists still reads
     as verified. That is the right bias for a column that informs you and the wrong one for a gate that
     admits code, which is why the two differ.
-  - What the columns do **not** see: a signature stored in a Windows catalogue rather than inside the file.
-    Many Windows components are signed that way and currently read as "Unsigned" — the column understates
-    them rather than accusing them.
+  - **Both kinds of signature are read.** Windows signs most of its own components through a catalogue file
+    (`.cat`) rather than inside the program, so the check asks about the embedded signature first and, when
+    there is none, looks the file up in the machine's catalogues. Neither step contacts anything. A file
+    reported as unsigned after both is genuinely unsigned.
   - Reading the publisher's *name* is a separate step from deciding whether the signature holds, and it
     only ever affects the wording of a tooltip. A verdict is never derived from it.
 - **Local diagnostic log**: SysManager keeps 14 days of rolling log files in

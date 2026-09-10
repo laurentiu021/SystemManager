@@ -319,9 +319,21 @@ Key services:
   `Classify` is a pure HRESULT map, kept `internal` and tested directly, because it is what
   decides the colour a user sees and the previous mechanism's wrong verdicts came from
   classification rather than from reading. Costs ~25 ms per file and does not get cheaper warm,
-  so callers cache and stay off the UI thread. Does not see catalog signatures
-  (`WTD_CHOICE_FILE` reads the embedded one), which is why Windows components still read as
-  unsigned.
+  so callers cache and stay off the UI thread.
+  **Two questions, in order.** `WTD_CHOICE_FILE` sees only the signature embedded in a file, and
+  Windows signs most of its own components through a `.cat` catalogue — 35 of those 82 images carry
+  no embedded signature and 12 of the 35 verify through a catalogue (`powershell.exe`, `cmd.exe`,
+  `conhost.exe`, the search host). So a `NoSignature` answer gets a second question:
+  `CryptCATAdminAcquireContext2` with **SHA-256 by name** (the older `CryptCATAdminAcquireContext`
+  implies SHA-1), hash the file, `CryptCATAdminEnumCatalogFromHash`, then `WinVerifyTrust` again with
+  `WTD_CHOICE_CATALOG`. The hash is both the lookup key and the member tag; the tag is upper-case hex
+  because that is the documented shape, and measurement showed it is **not** load-bearing (forcing lower
+  case left every real verification passing). Only `NoSignature` falls through — an expired
+  or untrusted embedded signature is an answer, and looking for a catalogue that might disagree would
+  be picking the more flattering verdict. Two native handles and an allocation are released on every
+  path including the failures, because a leak here is once per unsigned file per refresh on a tab
+  that polls. `CatalogSignatureTests` (integration) is the only place this can be verified for real:
+  no file a unit test can create is catalog-signed.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress

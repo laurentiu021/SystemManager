@@ -173,6 +173,26 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
+                    <!-- The snapshot has always read each process's start time, on every tick, and showed it
+                         nowhere. "Something is eating my CPU" is usually answered by WHEN it appeared — a
+                         process three minutes old is a different suspect from one up since boot — and the
+                         tab let you sort by CPU and by memory but not by age.
+                         SortMemberPath is StartTime, not StartTimeDisplay, so sorting is chronological
+                         rather than alphabetical on the formatted string. Placed here because Threads is the
+                         last plain fact about the process: Status, Safety and Signature after it are the
+                         judgement chips, and Category's own comment above reasons about that same split. -->
+                    <DataGridTextColumn Header="Started" Binding="{Binding StartTimeDisplay}"
+                                        Width="140" MinWidth="120" SortMemberPath="StartTime">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontFamily" Value="Consolas"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+
                     <DataGridTemplateColumn Header="Status" Width="100" MinWidth="90" SortMemberPath="Status">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>

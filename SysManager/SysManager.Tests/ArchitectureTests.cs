@@ -7391,6 +7391,89 @@ public partial class ArchitectureTests
         Assert.DoesNotContain("VerifySignatures", snapshot, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Every observable field on <c>ProcessEntry</c> is bound in <c>ProcessManagerView.xaml</c>, shown through
+    /// a computed property that is bound, or named here as logic-only. A new one is none of those, so it fails
+    /// until someone decides which it is.
+    /// </summary>
+    /// <remarks>
+    /// The <c>ProcessEntry</c> counterpart of
+    /// <see cref="EveryStartupFieldTheScanFillsIn_IsBoundInTheViewOrDeclaredLogicOnly"/>, and it exists
+    /// because this tab kept producing the same defect and no guard reached it. <c>Signature</c> was #1581 and
+    /// <c>StartTime</c> was #2224: the snapshot read each process's start time on every single tick and
+    /// displayed it nowhere, so a tab whose purpose is "what is my PC doing right now" could sort by CPU and
+    /// by memory but not by age.
+    /// <para><b>Why the global guards do not cover it.</b> <c>EveryModelProperty_IsBoundOrRead</c> accepts a
+    /// property that is merely written, and <c>StartTime</c> was written — by the snapshot, and read by
+    /// <c>ReconcileInto</c> to tell a genuinely-same process from a PID Windows reused. That is a real use, so
+    /// nothing was wrong by those guards' criteria; the datum was simply never shown. Only the tab's own view
+    /// can answer for the tab's own model.</para>
+    /// <para>Two fields are shown through a computed property rather than directly, which a name-based check
+    /// would call unbound: <c>MemoryBytes</c> through <c>MemoryDisplay</c> and <c>StartTime</c> through
+    /// <c>StartTimeDisplay</c>. Both are required as an actual binding, so deleting the column fails this even
+    /// though the underlying field is still assigned.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryProcessEntryField_IsBoundInTheViewOrDeclaredLogicOnly()
+    {
+        var appDir = FindAppProjectDir();
+        var model = DocComment().Replace(
+            File.ReadAllText(Path.Combine(appDir, "Models", "ProcessEntry.cs")), string.Empty);
+        var view = WithoutXamlComments(
+            File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml")));
+
+        var fields = ObservablePropertyField().Matches(model)
+            .Select(m => char.ToUpperInvariant(m.Groups[1].Value[0]) + m.Groups[1].Value[1..])
+            .ToList();
+
+        // Vacuity floor: 17 observable fields when measured. If the model is reshaped and this parses a
+        // handful, every check below passes over almost nothing.
+        Assert.True(fields.Count >= 15,
+            $"only {fields.Count} observable fields were parsed from ProcessEntry, out of 17 measured — the "
+            + "field detection is out of date, so a pass proves nothing. Found: " + string.Join(", ", fields));
+
+        // Shown, but through a computed property. The computed one is what the column binds, so that is what
+        // gets required — the field being assigned is not evidence anybody can see it.
+        var shownVia = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MemoryBytes"] = "MemoryDisplay",
+            ["StartTime"] = "StartTimeDisplay",
+        };
+
+        // Not display, with the reason. Demanding a column for these would push this guard into asking for
+        // UI nobody wants, which is how the Startup guard's scope was drawn too.
+        var logicOnly = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["FilePath"] = "feeds the Open button and icon extraction; the path itself is not a column, and "
+                + "CanOpenFileLocation is what the button binds",
+            ["HasMainWindow"] = "drives the \"apps only\" filter, which is a control rather than a cell",
+        };
+
+        var undecided = new List<string>();
+        foreach (var field in fields)
+        {
+            if (logicOnly.ContainsKey(field)) continue;
+
+            var required = shownVia.TryGetValue(field, out var via) ? via : field;
+            if (view.Contains($"{{Binding {required}", StringComparison.Ordinal)) continue;
+
+            undecided.Add(field == required
+                ? field
+                : $"{field} (shown through {required}, which is not bound)");
+        }
+
+        Assert.True(undecided.Count == 0,
+            "these ProcessEntry fields are neither bound in ProcessManagerView.xaml nor declared logic-only "
+            + "here, so the snapshot pays to fill them in on every tick and the user cannot see them — the "
+            + "shape of #1581 and #2224. Add a column, or add the field to logicOnly with the reason it is "
+            + "not display:\n  " + string.Join("\n  ", undecided));
+
+        // And that sorting the Started column orders by the timestamp, not by the formatted string. Bound as
+        // StartTimeDisplay, a DataGrid sorts alphabetically on that text — which for "yyyy-MM-dd HH:mm:ss"
+        // happens to agree with chronological order, so the defect is invisible until the format changes.
+        Assert.Contains("SortMemberPath=\"StartTime\"", view, StringComparison.Ordinal);
+    }
+
     /// <summary>An <c>entry.Property =</c> assignment, capturing the property name.</summary>
     /// <remarks>
     /// Scoped to the <c>entry</c> local the post-passes all use, rather than any member assignment, so an

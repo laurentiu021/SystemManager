@@ -563,9 +563,15 @@ a confirmation before it runs:
   scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there)
 
 ### Process Manager
-- Lists running Windows processes with PID, memory, threads, and status
+- Lists running Windows processes with PID, memory, threads, status, and when each one started
 - Real-time filter by name, description, category, or PID
-- Sort by memory, CPU usage, name, category, or PID via clickable column headers
+- Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
+- **Started column** — when each process began. "Something is eating my CPU" is usually
+  answered by *when it appeared*: a process that started three minutes ago is a very
+  different suspect from one that has been running since you turned the PC on, and sorting
+  by it groups everything that arrived recently. Processes whose start time Windows will
+  not reveal — most system processes, unless you run as administrator — show a dash rather
+  than a made-up date
 - **Built-in description database** — 108 common Windows processes and popular
   applications with plain-language descriptions and categories (System, Browser,
   Development, Communication, Media, Gaming, etc.). The description sits under each

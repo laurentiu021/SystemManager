@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SysManager.Helpers;
@@ -26,7 +27,9 @@ public sealed partial class ProcessEntry : ObservableObject
     // for other users' and most system processes unless elevated — so the choices were to implement it
     // properly or not to imply it exists. Dropped; the Safety column already answers the question this
     // tab is for ("is this Windows, or something I installed?").
-    [ObservableProperty] private DateTime _startTime;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StartTimeDisplay))]
+    private DateTime _startTime;
     [ObservableProperty] private int _threadCount;
     [ObservableProperty] private string _filePath = "";
     [ObservableProperty] private ImageSource? _icon;
@@ -57,4 +60,22 @@ public sealed partial class ProcessEntry : ObservableObject
 
     /// <summary>Formatted memory for display.</summary>
     public string MemoryDisplay => FormatHelper.FormatSize(MemoryBytes);
+
+    /// <summary>When the process started, or <c>—</c> when Windows would not say.</summary>
+    /// <remarks>
+    /// Same format and same em-dash fallback as <see cref="FileLocker.StartTimeDisplay"/>, which was the only
+    /// place in the app showing a process start time before this one.
+    /// <para>The fallback is not cosmetic. <c>Process.StartTime</c> throws for most system processes without
+    /// elevation, and <see cref="ProcessManagerService"/> swallows that and leaves the field at
+    /// <c>default</c> — so binding the raw value would print <c>0001-01-01 00:00:00</c> in a column, which
+    /// reads as a bug rather than as "not available".</para>
+    /// <para>Absolute rather than a relative age ("4 min ago"), deliberately. The list refreshes through
+    /// <c>ProcessManagerViewModel.ReconcileInto</c>, which only writes properties whose value CHANGED — a
+    /// relative string derives from the clock rather than from the model, so it would be computed once when
+    /// the row appeared and then never raise a change again. It would silently freeze at the age the process
+    /// had when it was first seen, which is worse than an absolute timestamp that is simply always true.</para>
+    /// </remarks>
+    public string StartTimeDisplay => StartTime == default
+        ? "—"
+        : StartTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }

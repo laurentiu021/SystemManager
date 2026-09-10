@@ -196,7 +196,6 @@ public sealed partial class EventLogService
             // 5000 strings for the lifetime of the tab. LogsViewModel fills it on selection via
             // GetXmlAsync. Unlike FullMessage, nothing filters on it.
             MachineName = rec.MachineName,
-            UserName = rec.UserId?.Value,
             RecordId = rec.RecordId ?? 0
         };
     }

@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.88.1] - 2026-09-10
+
+**The Event Log tab no longer collects an account identifier it never showed you.** For every event it
+read — up to five thousand at a time — it also picked up the Windows security identifier of the account
+behind that event, and then did nothing with it: no column displayed it, no export included it, nothing
+read it at all. Since the app is not going to show it, it should not be picking it up. Removed, along
+with the tests that were quietly keeping it alive.
+
+### Fixed
+
+- **A per-event account SID is no longer read or held in memory.** It was never displayed and never
+  written to any file — the Event Log's CSV export lists its columns explicitly and this was not among
+  them — so nothing left your PC before or after this change. It is simply data the app had no reason
+  to be holding.
+- The field also did not contain what its name said. It was labelled as a user name while holding a raw
+  identifier like `S-1-5-21-…`, which would have needed translating before it meant anything to anyone
+  reading it.
+
+### Changed
+
+- A new build check fails if any model value is filled in and then displayed nowhere and read by
+  nothing. That is this project's most persistent class of mistake — work done on every refresh and
+  thrown away — and it had been caught by review rather than by the build. All 193 such values are now
+  checked on every pull request.
+
 ## [1.88.0] - 2026-09-10
 
 **The Process Manager now tells you whether Windows can confirm who made each running program.**

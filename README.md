@@ -493,7 +493,10 @@ a confirmation before it runs:
     itself; the tooltip says so in as many words. Amber is reserved for a file that *is* signed and
     whose signature does not hold up — the one case here worth a second look.
   - The check runs offline, against certificates already on your PC, so opening the tab never waits
-    on the network.
+    on the network — it downloads nothing, not even a missing piece of a certificate. The cost of
+    that is honest rather than hidden: if your PC has never seen a particular publisher's
+    certificate, the column says **Check failed** instead of fetching the rest and confirming it.
+    The tooltip says Windows could not confirm the publisher, which is exactly what happened.
 - Sort by name, publisher, location, safety, status, signature, or startup impact via clickable column
   headers
 - Plain-language description for recognised programs (from the built-in database) instead

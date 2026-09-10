@@ -296,6 +296,14 @@ Key services:
 - `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).
+  `PolicyFor` builds that policy, and it exists because **`Offline` revocation alone does not
+  make a chain build local**: a missing intermediate is still fetched over AIA under a separate
+  switch that defaults to on, so a caller that chose `Offline` to avoid a request per file made
+  one anyway and, with no network, waited out `UrlRetrievalTimeout` for each. The two settings
+  are therefore derived from the one argument rather than offered separately —
+  `DisableCertificateDownloads` is on exactly when revocation is `Offline` — so the scanning
+  callers stay local and the two fail-closed gates keep the fetch that lets a genuine signature
+  validate.
   Deliberately holds no policy about what an answer MEANS: an unsigned file is fatal for the
   Ookla download and expected for our own build, so each caller keeps that decision. Two
   calls rather than one because both fail-closed callers compare the subject BEFORE building

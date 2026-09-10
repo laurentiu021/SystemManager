@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.86.0] - 2026-09-10
+
+**F5 now refreshes the tab you are looking at**, on all forty tabs that have something to look at
+again — the running processes, the startup entries, the event log, the installed apps, the drive
+health. It is the most familiar shortcut in Windows and it did nothing anywhere in this app, on a
+tool whose tabs are almost all "go and check again".
+
+### Added
+
+- **F5 re-reads the open tab.** Each tab names its own refresh, so F5 runs exactly what that tab's
+  own toolbar button runs — not a guess. Nothing that cleans, deletes, applies or uninstalls is
+  reachable from a bare keypress, which is what makes a shortcut with no confirmation behind it
+  reasonable at all.
+- Pressing F5 during a refresh that is already running does nothing, rather than queueing a second
+  one.
+- F5 is ignored on a tab you have not opened yet, so the key cannot be what starts a scan on a tab
+  that was never on screen.
+
+### Fixed
+
+- The keyboard section of the README said Escape stops work on "sixteen" tabs. It is fifteen — the
+  number was counted once and then drifted.
+
 ## [1.85.0] - 2026-09-09
 
 The Startup Manager now tells you whether Windows can actually confirm who made each program that

@@ -19,6 +19,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DnsHostsViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshHostsCommand;
+
     private readonly DnsService _dnsService;
     private readonly HostsFileService _hostsService;
     private readonly CancellationTokenSource _cts = new();

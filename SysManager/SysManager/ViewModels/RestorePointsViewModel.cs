@@ -21,6 +21,9 @@ namespace SysManager.ViewModels;
 public sealed partial class RestorePointsViewModel : ViewModelBase
 {
     /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
+    /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
         IsBusy ? CancelCommand : null;
 

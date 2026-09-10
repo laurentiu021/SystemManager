@@ -16,6 +16,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BatteryHealthViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly BatteryService _service;
 
     [ObservableProperty] private BatteryInfo _battery = new();

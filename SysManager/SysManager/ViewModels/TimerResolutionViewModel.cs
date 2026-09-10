@@ -17,6 +17,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TimerResolutionViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly ITimerResolutionService _service;
 
     [ObservableProperty] private string _currentDisplay = "—";

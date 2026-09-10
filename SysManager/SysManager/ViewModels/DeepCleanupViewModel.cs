@@ -17,6 +17,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class DeepCleanupViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
     private readonly DeepCleanupService _cleanup;
     private readonly LargeFileScanner _largeFiles;
     private readonly FixedDriveService _drives;

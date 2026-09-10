@@ -19,6 +19,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class AppAlertsViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshInstalledAppsCommand;
+
     private readonly AppAlertService _service;
     private readonly Dispatcher _dispatcher;
 

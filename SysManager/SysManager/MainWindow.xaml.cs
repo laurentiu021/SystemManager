@@ -304,7 +304,7 @@ public partial class MainWindow : Window
     private void ThemePopupHost_Closed(object sender, EventArgs e) => ThemeBtn.Focus();
 
     /// <summary>
-    /// Escape stops whatever the open tab is doing.
+    /// Escape stops whatever the open tab is doing; F5 makes it look again.
     /// </summary>
     /// <remarks>
     /// Bubbling <c>KeyDown</c>, deliberately not <c>PreviewKeyDown</c>. A ComboBox closing its dropdown
@@ -318,15 +318,29 @@ public partial class MainWindow : Window
     /// <para><c>IsContentCreated</c> is checked so this cannot construct a view model as a side effect of
     /// a keypress. In practice the selected tab is always materialised; relying on that rather than
     /// asserting it is how a lazy graph gets built by accident.</para>
+    /// <para><b>F5</b> runs the tab's <see cref="ViewModelBase.RefreshOnF5"/>, which every tab with
+    /// something to re-read names for itself. <c>CanExecute</c> is consulted first, so pressing it during
+    /// a refresh that gates itself does nothing rather than starting a second one. Bubbling like Escape,
+    /// so a control that wants F5 gets it first — and unlike Escape, F5 is not something a TextBox or
+    /// ComboBox consumes, which is why it needs no busy gate to stay out of the way.</para>
+    /// <para>Both keys are read-only in effect: F5 re-reads, Escape cancels. Nothing that cleans, deletes,
+    /// applies or kills is reachable from a bare keypress, which is what makes an accelerator with no
+    /// confirmation dialog behind it acceptable at all.</para>
     /// </remarks>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key is not Key.Escape) return;
+        if (e.Key is not (Key.Escape or Key.F5)) return;
         if (DataContext is not MainWindowViewModel vm) return;
-        if (vm.SelectedNav is not { IsContentCreated: true, Content: ViewModelBase active }) return;
-        if (active.EscapeCancel is not { } cancel) return;
+        if (MainWindowViewModel.AcceleratorCommand(vm.SelectedNav, e.Key) is not { } command) return;
 
-        cancel.Execute(null);
+        // CanExecute is consulted for F5 and deliberately NOT for Escape. RefreshOnF5 returns its command
+        // unconditionally, so this is the only thing standing between a held-down F5 and a second
+        // concurrent scan. EscapeCancel already returns null unless the tab has something running, and
+        // adding a CanExecute check there would change a path this work is not about: a Cancel command
+        // that reported false while busy would silently stop answering Escape.
+        if (e.Key is Key.F5 && !command.CanExecute(null)) return;
+
+        command.Execute(null);
         e.Handled = true;
     }
 

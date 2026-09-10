@@ -21,6 +21,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly EnvironmentVariableService _service;
 
     // Baseline of the on-disk state, keyed "scope\0NAME" → value. Used to compute the

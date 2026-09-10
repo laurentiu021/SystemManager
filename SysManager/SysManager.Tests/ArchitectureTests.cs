@@ -1438,6 +1438,134 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every tab with something to re-read answers F5, with the command its own refresh button runs.
+    /// </summary>
+    /// <remarks>
+    /// F5 is the most widely known shortcut in Windows and did nothing anywhere in this app (#1549). A
+    /// shortcut that works on some tabs and silently not others is worse than none, because the user learns
+    /// it is unreliable and stops reaching for it — so this asserts the whole set rather than a sample.
+    /// <para>Derived from the VIEW, like <see cref="EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand"/>
+    /// above: the toolbar button already states which command is this tab's refresh, and the view model's
+    /// <c>RefreshOnF5</c> must name the same one. The tabs do not agree on a name — 12 distinct spellings
+    /// bind to a refresh-shaped button — which is exactly why the shell cannot match a convention and each
+    /// view model has to say.</para>
+    /// <para><b>Two views bind two candidates each and are resolved here, not skipped.</b> Deep Cleanup
+    /// binds <c>ScanCommand</c> and <c>ScanLargeFilesCommand</c>; System Health binds <c>ScanCommand</c> and
+    /// <c>RefreshDrivesCommand</c>. In both, F5 is the tab's primary read: Deep Cleanup's large-files finder
+    /// is a sub-feature of the tab, and System Health's <c>RefreshDrivesAsync</c> only repopulates the
+    /// chkdsk drive picker while <c>ScanAsync</c> is the "Collecting system info…" pass the tab exists for.
+    /// Recording the choice here keeps it a decision rather than a gap.</para>
+    /// <para><b>Read-only only.</b> The named command must begin with Refresh, Rescan, Reload, Scan or Load,
+    /// which mechanically keeps Clean, Delete, Apply, Uninstall and Kill off a bare keypress. An accelerator
+    /// with no confirmation behind it is only acceptable while that holds.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand()
+    {
+        var app = FindAppProjectDir();
+        var binding = new Regex(@"Command=""\{Binding ((?:Refresh|Rescan|Reload|Scan|Load)[A-Za-z]*Command)",
+            RegexOptions.CultureInvariant);
+
+        // Where a view offers more than one refresh-shaped command, which one F5 means. See the remarks.
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["DeepCleanupView"] = "ScanCommand",
+            ["SystemHealthView"] = "ScanCommand",
+        };
+
+        var offenders = new List<string>();
+        var wired = 0;
+
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            // Comments stripped: several views discuss a command in prose, and a match there would invent
+            // a contract for a button that does not exist.
+            var markup = WithoutXamlComments(File.ReadAllText(view));
+            var candidates = binding.Matches(markup)
+                .Select(m => m.Groups[1].Value)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+            if (candidates.Count == 0) continue;
+
+            var viewName = Path.GetFileNameWithoutExtension(view);
+
+            string command;
+            if (candidates.Count == 1)
+            {
+                command = candidates[0];
+            }
+            else if (resolved.TryGetValue(viewName, out var chosen))
+            {
+                command = chosen;
+                if (!candidates.Contains(chosen, StringComparer.Ordinal))
+                {
+                    offenders.Add($"{viewName}.xaml no longer binds {chosen}, which this guard names as its "
+                                  + $"F5 target — it binds {string.Join(", ", candidates)}");
+                    continue;
+                }
+            }
+            else
+            {
+                offenders.Add($"{viewName}.xaml binds {candidates.Count} refresh-shaped commands "
+                              + $"({string.Join(", ", candidates)}) and none is named as the F5 target. "
+                              + "Add it to the `resolved` table with the reason.");
+                continue;
+            }
+
+            var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
+            if (!File.Exists(vmPath))
+            {
+                offenders.Add($"{viewName}.xaml binds {command} but {viewName}Model.cs does not exist");
+                continue;
+            }
+
+            var vm = string.Join('\n', File.ReadAllLines(vmPath)
+                .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+
+            var overrideAt = vm.IndexOf("override IRelayCommand? RefreshOnF5", StringComparison.Ordinal);
+            if (overrideAt < 0)
+            {
+                offenders.Add($"{viewName}Model has no RefreshOnF5 override, so F5 does nothing on a tab "
+                              + $"whose own toolbar offers {command}");
+                continue;
+            }
+
+            // The override's own expression: another member could mention the command and make this pass
+            // while F5 ran something else entirely.
+            var end = vm.IndexOf(';', overrideAt);
+            var expression = end > overrideAt ? vm[overrideAt..end] : vm[overrideAt..];
+            wired++;
+
+            if (!expression.Contains(command, StringComparison.Ordinal))
+                offenders.Add($"{viewName}Model points F5 at something other than {command}, which is the "
+                              + "command its own refresh button runs");
+        }
+
+        // Vacuity floor: 40 tabs bind a refresh-shaped command today. A parse that stopped finding them
+        // would report success having checked nothing.
+        Assert.True(wired >= 38,
+            $"only {wired} tabs were found wiring F5, out of 40 measured — the parse is broken, not the "
+            + "views, and every check above ran over a short list.");
+
+        Assert.True(offenders.Count == 0,
+            "F5 must re-read the tab the user is looking at, using the command its own refresh button "
+            + $"runs:\n  {string.Join("\n  ", offenders)}\n({wired} tabs checked)");
+
+        // And the shell must consult it. 40 overrides feeding nothing is the same defect as an unbound
+        // property, multiplied — and every view-model test would still pass.
+        //
+        // The KEY FILTER, not a mention of the key. `Key.F5` appears twice in the handler: once in the
+        // guard clause that admits the keypress at all, and once in the CanExecute check below it. Removing
+        // F5 from the first left the second in place, so a check for the bare name stayed GREEN with the
+        // whole feature switched off — measured by mutating exactly that.
+        var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml.cs"));
+        Assert.Contains("Key.Escape or Key.F5", shell, StringComparison.Ordinal);
+        Assert.Contains("AcceleratorCommand(vm.SelectedNav, e.Key)", shell, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Every issue template must apply at least one label, and every label it names must be one this
     /// repository actually defines.
     /// </summary>

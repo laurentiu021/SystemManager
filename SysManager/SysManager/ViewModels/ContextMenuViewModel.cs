@@ -21,6 +21,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ContextMenuViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly IContextMenuService _service;
     private List<ContextMenuEntry> _allEntries = [];
 

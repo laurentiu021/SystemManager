@@ -14,6 +14,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class AppUpdatesViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
     private readonly IWingetService _winget;
     private readonly EtaCalculator _upgradeEta = new();
     private CancellationTokenSource? _cts;

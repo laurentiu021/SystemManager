@@ -34,6 +34,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ReloadHistoryCommand;
+
     private const int PollIntervalMs = 1000;
     // Cap the top-consumers list so a machine with hundreds of connections stays readable and cheap.
     private const int MaxRows = 40;

@@ -16,6 +16,9 @@ namespace SysManager.ViewModels;
 
 public sealed partial class DashboardViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly SystemInfoService _sys;
     private readonly TuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;

@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly MaintenanceSchedulerService _service;
 
     public IReadOnlyList<MaintenanceAction> Actions { get; } = [MaintenanceAction.Cleanup, MaintenanceAction.PurgeStandby];

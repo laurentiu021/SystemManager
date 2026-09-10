@@ -18,6 +18,9 @@ namespace SysManager.ViewModels;
 public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 {
     /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
+    /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
         IsBusy ? CancelCommand : null;
 

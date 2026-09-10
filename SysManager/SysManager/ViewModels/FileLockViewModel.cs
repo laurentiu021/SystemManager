@@ -19,6 +19,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class FileLockViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+
     private readonly IFileLockService _service;
 
     public BulkObservableCollection<FileLocker> Lockers { get; } = new();

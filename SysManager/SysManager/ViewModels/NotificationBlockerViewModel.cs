@@ -20,6 +20,9 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class NotificationBlockerViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
+
     private readonly INotificationBlockerService _service;
     private readonly Dictionary<NotificationApp, bool> _baselineStates = [];
     private bool _masterBaseline = true;

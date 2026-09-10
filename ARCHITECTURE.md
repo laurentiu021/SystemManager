@@ -314,7 +314,25 @@ Key services:
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
-  open file location.
+  open file location. A `VerifySignatures` post-pass over the finished snapshot fills the
+  Signature column from the running image's certificate, through the shared
+  `Helpers/SignatureVerdict`. **A per-refresh cache is sufficient on a tab that polls**, and
+  the reason is the `knownPids` argument: `FilePath` is only read for a PID the caller has
+  not seen, and `ProcessManagerViewModel.ReconcileInto` keeps a surviving row's identity
+  fields — so the first refresh pays for every distinct image and each later one pays only
+  for processes that actually started. Keyed on the path, because one browser runs as a
+  dozen processes from one executable. The signature pair MUST stay in `ReconcileInto`'s
+  identity group: a fresh entry for a tracked PID carries no path, so its verdict is
+  `Unknown`, and copying it across would blank the column one tick after it appeared.
+- `Helpers/SignatureVerdict` — the file-path-to-three-state answer both the Startup Manager
+  and the Process Manager render, plus the sentence shown on hover. Separate from
+  `Helpers/Authenticode` on purpose: that type answers only the mechanical questions and
+  holds no policy, because the two fail-closed gates disagree with each other on what an
+  unsigned file means. This one carries exactly one policy — the informational one, for
+  columns that describe many files and admit no code: unsigned is ordinary, revocation is
+  offline, every answer comes with a readable sentence. A gate adopting those would stop
+  being a gate. Shared rather than copied so two tabs cannot describe one certificate in
+  two different sentences.
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
   via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell.
 - `UninstallerService` — winget-based uninstall + registry UninstallString

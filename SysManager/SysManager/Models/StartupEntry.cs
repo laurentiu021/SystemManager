@@ -102,32 +102,6 @@ public sealed partial class StartupEntry : ObservableObject
     public string TaskPath { get; init; } = "";
 }
 
-/// <summary>What a certificate check could establish about a startup entry's executable.</summary>
-public enum SignatureTrust
-{
-    /// <summary>
-    /// Nothing was checked — the command did not resolve to a readable file. Renders no pill at all: this
-    /// says something about the scan, not about the program, and a grey "unknown" chip would read as a
-    /// verdict.
-    /// </summary>
-    Unknown,
-
-    /// <summary>
-    /// No embedded signature. Ordinary, not suspicious — most small utilities are unsigned, and so are
-    /// SysManager's own builds.
-    /// </summary>
-    Unsigned,
-
-    /// <summary>Signed, and the certificate's chain validated to a trusted root.</summary>
-    Verified,
-
-    /// <summary>
-    /// Signed, but the signature could not be confirmed — the chain failed to validate, or the signature
-    /// data itself could not be read. The one state here that deserves attention.
-    /// </summary>
-    Invalid,
-}
-
 public enum StartupSource
 {
     RegistryCurrentUser,

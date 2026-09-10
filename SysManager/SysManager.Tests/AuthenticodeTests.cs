@@ -191,6 +191,35 @@ public class AuthenticodeTests
         Assert.Contains("X509RevocationMode.Online", call, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The informational path asks for OFFLINE revocation, and that is not a detail.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <see cref="EveryFailClosedGate_AsksForOnlineRevocation"/>. Both the Startup Manager
+    /// and the Process Manager column run over every relevant file on the machine, so <c>Online</c> here
+    /// would mean a revocation fetch per file, and on a machine with no network a wait per file, in a tab
+    /// the user just opened. Changing it compiles, passes every other test, and is visible only as a tab
+    /// that takes seconds to populate on a train — so it is asserted.
+    /// <para>Lives here, next to the gate guard, rather than in one tab's test file: since the verdict was
+    /// shared this is one decision covering two tabs, and the copy that used to sit in
+    /// <c>StartupSignatureTests</c> failed with "move this guard with the code" the moment the chain build
+    /// moved. That is what it was for.</para>
+    /// </remarks>
+    [Fact]
+    public void TheInformationalPath_AsksForOfflineRevocation_SoItDoesNotFetchPerFile()
+    {
+        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "SignatureVerdict.cs"));
+
+        var at = source.IndexOf("Authenticode.ValidateChain", StringComparison.Ordinal);
+        Assert.True(at >= 0,
+            "SignatureVerdict no longer validates a chain — move this guard with the code rather than "
+            + "deleting it");
+
+        var call = source[at..Math.Min(source.Length, at + 220)];
+        Assert.Contains("X509RevocationMode.Offline", call, StringComparison.Ordinal);
+        Assert.DoesNotContain("X509RevocationMode.Online", call, StringComparison.Ordinal);
+    }
+
     private static string HelperMethodSource(string signature)
     {
         var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "Authenticode.cs"));

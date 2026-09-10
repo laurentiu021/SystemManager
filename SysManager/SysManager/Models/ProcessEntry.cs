@@ -35,6 +35,23 @@ public sealed partial class ProcessEntry : ObservableObject
     [ObservableProperty] private string _category = "Unknown";
     [ObservableProperty] private string _safetyLevel = "Unknown";
 
+    /// <summary>
+    /// Whether Windows can confirm who made the running image, from its certificate.
+    /// </summary>
+    /// <remarks>
+    /// A different question from <see cref="SafetyLevel"/>, which comes from the bundled process database
+    /// and answers "is this Windows, or something I installed?" by name. This one answers "is this really
+    /// from who it says?" from the file itself, so a copy of <c>svchost.exe</c> sitting in a user folder
+    /// cannot inherit the real one's reputation.
+    /// <para>Defaults to <see cref="SignatureTrust.Unknown"/>, which renders no pill: a process whose image
+    /// path could not be read — most system processes, without elevation — has not been checked, and a grey
+    /// chip there would be a verdict it has not earned.</para>
+    /// </remarks>
+    [ObservableProperty] private SignatureTrust _signature = SignatureTrust.Unknown;
+
+    /// <summary>The sentence behind <see cref="Signature"/>, shown on hover. Empty when nothing was checked.</summary>
+    [ObservableProperty] private string _signatureDetail = "";
+
     /// <summary>True when the process has a valid, accessible file path (cached on creation).</summary>
     [ObservableProperty] private bool _canOpenFileLocation;
 

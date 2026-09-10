@@ -139,7 +139,50 @@ public sealed partial class ProcessManagerService
             foreach (var p in procs) p.Dispose();
         }
 
+        VerifySignatures(results);
+
         return results;
+    }
+
+    /// <summary>
+    /// Fills <see cref="ProcessEntry.Signature"/> and <see cref="ProcessEntry.SignatureDetail"/> for every
+    /// entry whose image path was read.
+    /// </summary>
+    /// <remarks>
+    /// A post-pass over the finished list, matching <c>StartupService.VerifySignatures</c>, and using the
+    /// same <see cref="Helpers.SignatureVerdict"/> so the two tabs cannot describe one certificate in two
+    /// ways.
+    /// <para><b>Why a per-refresh cache is enough on a tab that polls.</b> Reading a certificate and
+    /// building its chain is the expensive part here, and this list refreshes on a timer, so the obvious
+    /// worry is paying that cost every tick. It does not: <see cref="ProcessEntry.FilePath"/> is only
+    /// populated for a PID the caller has not seen before — that is the whole point of the
+    /// <c>knownPids</c> argument — and a surviving row keeps its own identity fields through
+    /// <c>ProcessManagerViewModel.ReconcileInto</c>. So the first refresh pays for every distinct image on
+    /// the machine, and each one after it pays only for processes that actually started. A cache that
+    /// outlived the call would buy nothing and would have to answer for a file replaced on disk.</para>
+    /// <para>Keyed on the path rather than the PID because a machine runs one browser as a dozen processes
+    /// from one executable, and that is the common case rather than the exception.</para>
+    /// </remarks>
+    internal static void VerifySignatures(IReadOnlyList<ProcessEntry> entries)
+    {
+        Dictionary<string, (SignatureTrust Trust, string Detail)> cache =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var entry in entries)
+        {
+            // No path: a system process whose module list Windows refused, which is most of them without
+            // elevation. Nothing was checked, so the pill does not render — see ProcessEntry.Signature.
+            if (entry.FilePath.Length == 0) continue;
+
+            if (!cache.TryGetValue(entry.FilePath, out var verdict))
+            {
+                verdict = Helpers.SignatureVerdict.Describe(entry.FilePath);
+                cache[entry.FilePath] = verdict;
+            }
+
+            entry.Signature = verdict.Trust;
+            entry.SignatureDetail = verdict.Detail;
+        }
     }
 
     /// <summary>

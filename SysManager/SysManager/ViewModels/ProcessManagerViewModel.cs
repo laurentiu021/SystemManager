@@ -168,8 +168,11 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             if (existing.TryGetValue(fresh.Pid, out var current) && current.StartTime == fresh.StartTime)
             {
                 // Same process instance — update only the volatile metrics; identity fields
-                // (Name, FilePath, Icon, PlainDescription, Category, SafetyLevel, StartTime)
-                // are stable for a given process and stay as they were.
+                // (Name, FilePath, Icon, PlainDescription, Category, SafetyLevel, Signature,
+                // SignatureDetail, StartTime) are stable for a given process and stay as they were.
+                // The signature pair MUST stay in that group: the fresh entry carries no path for a PID
+                // already tracked, so its verdict is Unknown, and copying it over would blank the column
+                // one tick after it appeared.
                 current.CpuPercent = fresh.CpuPercent;
                 current.MemoryBytes = fresh.MemoryBytes;
                 current.ThreadCount = fresh.ThreadCount;

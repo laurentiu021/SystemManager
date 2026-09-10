@@ -9336,6 +9336,11 @@ public partial class ArchitectureTests
             "RmGetList",
             "RmEndSession",
             "SHGetKnownFolderPath",   // shell32: returns a PWSTR, no A/W pair
+            // wintrust: the "2" suffix IS the wide-only revision. It takes the hash algorithm as a PCWSTR
+            // and ships no A/W pair, so appending W binds nothing. Confirmed by running it rather than by
+            // reading a header: the catalog lookup it opens verifies 12 real Windows binaries, which a
+            // failed bind could not do (LibraryImport throws EntryPointNotFoundException at first use).
+            "CryptCATAdminAcquireContext2",
         ];
 
         var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");

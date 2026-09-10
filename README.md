@@ -495,9 +495,10 @@ a confirmation before it runs:
   - The verdict is Windows' own, from the same check behind Explorer's **Digital Signatures** tab, so
     it agrees with what Windows tells you elsewhere. It asks for no revocation lookup and answers from
     your PC only, so opening the tab never waits on the network and downloads nothing.
-  - What it does not yet see: a signature kept in a Windows catalogue instead of inside the file. A
-    number of Windows components are signed that way and currently show as **Unsigned** — the column
-    understates them rather than accusing them.
+  - **Windows components count as signed too.** Windows signs most of its own programs through a separate
+    catalogue file rather than inside the program, and both are read — so `powershell.exe`, `cmd.exe` and
+    the rest are confirmed rather than listed as unsigned. Anything still marked **Unsigned** after that is
+    genuinely unsigned.
 - Sort by name, publisher, location, safety, status, signature, or startup impact via clickable column
   headers
 - Plain-language description for recognised programs (from the built-in database) instead
@@ -589,8 +590,10 @@ a confirmation before it runs:
     for no revocation lookup and answers from your PC only, and it runs just for processes that have
     just appeared, so a tab refreshing every second neither re-checks the same programs nor reaches
     for the network
-  - Windows components signed through a Windows catalogue rather than inside the file show as
-    **Unsigned** for now — understated rather than accused
+  - **Windows components count as signed too** — Windows signs most of its own programs through a
+    separate catalogue file rather than inside the program, and both are read, so `svchost.exe`,
+    `conhost.exe` and the rest are confirmed rather than listed as unsigned. What is still marked
+    **Unsigned** is genuinely unsigned
 - Kill process with confirmation dialog, and the warning matches the real cost.
   Processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, …)
   are refused outright. Security and servicing processes (Defender's engine, Windows

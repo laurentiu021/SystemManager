@@ -3455,6 +3455,103 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every model property is shown by a view or genuinely READ by code — being assigned is not enough.
+    /// </summary>
+    /// <remarks>
+    /// The strictly stronger sibling of <see cref="EveryModelProperty_IsEitherWrittenOrShown"/>, and the
+    /// gap between them is not academic: that guard's criterion is "written OR shown", and it therefore
+    /// accepts a property that is diligently filled in and consumed by nobody. Being filled in is what
+    /// makes that a defect rather than dead code — the app pays for the value on every refresh and throws
+    /// it away.
+    /// <para><c>FriendlyEventEntry.UserName</c> (#2225) was the live instance: assigned from
+    /// <c>rec.UserId?.Value</c> for every event record, bound by no view, read by no service. Three unit
+    /// tests named it — asserting that it raised <c>PropertyChanged</c> and defaulted to null — which
+    /// exercised the toolkit rather than a feature and is what let it look alive.</para>
+    /// <para><b>What actually does the work here, measured rather than assumed.</b> The criterion that
+    /// catches the defect is the plain one: no XAML binding, and no dotted reference from any C# file. Two
+    /// refinements sit alongside it, and both were predicted to be load-bearing and are not — so they are
+    /// documented as what they are, because a guard whose comment claims more than its code delivers is how
+    /// a weak check survives review.</para>
+    /// <list type="number">
+    /// <item><description><b>Dotted binding paths count</b> (<c>{Binding SelectedEntry.MachineName}</c> is
+    /// a real binding, and <c>MachineName</c> was a false positive of the first sweep until this was
+    /// added). But <b>0 of the 193 properties are reachable ONLY that way</b> — every dotted-bound one also
+    /// has a bare binding or a C# read. Correct, not currently load-bearing. A negative control asserting
+    /// it would be an assertion that cannot fail, so there is not one.</description></item>
+    /// <item><description><b>An assignment is not a read</b> — the match rejects a following <c>=</c>
+    /// while still accepting <c>==</c>, <c>=&gt;</c> and <c>!=</c>. Also <b>0 live instances</b>: no
+    /// property is assigned as <c>x.Prop =</c> without a dotted read somewhere. It notably does NOT catch
+    /// this defect either, and a mutation proved it: relaxing the exclusion while restoring the field left
+    /// the guard RED, because <c>UserName = rec.UserId?.Value</c> is an object-initializer member with no
+    /// leading dot, which the read check never matched in either form. Kept because the distinction is
+    /// right for a post-pass-assigned property (<c>entry.Signature = …</c>), which is the shape the next
+    /// instance is likely to take.</description></item>
+    /// </list>
+    /// <para>C# comments are stripped first, for the reason the guard above gives: this codebase comments
+    /// heavily enough that a comment merely naming a property would credit it as read — including the
+    /// comment left in place of the deleted field.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryModelProperty_IsBoundOrRead()
+    {
+        var appDir = FindAppProjectDir();
+        var modelsDir = Path.Combine(appDir, "Models") + Path.DirectorySeparatorChar;
+
+        var xaml = XmlComment().Replace(string.Join('\n', Directory
+            .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Select(File.ReadAllText)), string.Empty);
+
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .ToDictionary(f => f, f => CSharpComment().Replace(File.ReadAllText(f), string.Empty));
+
+        var dead = new List<string>();
+        var inspected = 0;
+
+        foreach (var (path, source) in sources.Where(kv => kv.Key.StartsWith(modelsDir, StringComparison.Ordinal)))
+        {
+            var typeName = TypeDeclaration().Match(source).Groups[1].Value;
+            if (typeName.Length == 0) continue;
+
+            foreach (var m in ObservablePropertyField().Matches(source).Cast<Match>())
+            {
+                var field = m.Groups[1].Value;
+                var property = char.ToUpperInvariant(field[0]) + field[1..];
+                inspected++;
+
+                var name = Regex.Escape(property);
+                if (Regex.IsMatch(xaml, $@"\{{Binding\s+(?:[A-Za-z_]\w*\.)*{name}\b")) continue;
+                if (Regex.IsMatch(xaml, $@"Path=(?:[A-Za-z_]\w*\.)*{name}\b")) continue;
+                if (Regex.IsMatch(xaml, $@"SortMemberPath=""(?:[A-Za-z_]\w*\.)*{name}""")) continue;
+
+                // A read anywhere but its own declaring file. Its own file counts too, for a computed
+                // property built from it (MemoryDisplay from MemoryBytes).
+                if (sources.Any(kv => Regex.IsMatch(kv.Value, $@"\.{name}\b\s*(?!=[^=])"))) continue;
+                if (Regex.IsMatch(source, $@"=>[^;]*\b{name}\b")) continue;
+
+                dead.Add($"{typeName}.{property} ({Path.GetFileName(path)})");
+            }
+        }
+
+        // Measured floor, not a token one: every check above is a "no match" assertion, and a no-match
+        // assertion is what silently passes when its pattern rots. 193 inspected today.
+        Assert.True(inspected >= 185,
+            $"only {inspected} model properties were inspected, out of 193 measured — the extraction has "
+            + "stopped matching every [ObservableProperty] declaration, so a pass here means nothing.");
+
+        Assert.True(dead.Count == 0,
+            "these model properties are filled in and then read by nothing and shown nowhere, so the app "
+            + "pays for the value on every refresh and throws it away. Bind them, consume them, or remove "
+            + $"them:\n  {string.Join("\n  ", dead)}");
+    }
+
+    /// <summary>A C# line, doc or block comment — stripped before a property is credited as read.</summary>
+    [GeneratedRegex(@"//.*?$|/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.Singleline)]
+    private static partial Regex CSharpComment();
+
+    /// <summary>
     /// Every view-model property is shown by a view or read by code — not merely maintained.
     /// </summary>
     /// <remarks>

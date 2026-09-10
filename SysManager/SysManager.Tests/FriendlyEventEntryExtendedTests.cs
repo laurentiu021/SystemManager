@@ -27,7 +27,6 @@ public class FriendlyEventEntryExtendedTests
         e.FullMessage = "full";
         e.Xml = "<x/>";
         e.MachineName = "pc";
-        e.UserName = "u";
         e.RecordId = 99;
         e.Explanation = "exp";
         e.Recommendation = "rec";
@@ -42,7 +41,6 @@ public class FriendlyEventEntryExtendedTests
         Assert.Contains(nameof(e.FullMessage), raised);
         Assert.Contains(nameof(e.Xml), raised);
         Assert.Contains(nameof(e.MachineName), raised);
-        Assert.Contains(nameof(e.UserName), raised);
         Assert.Contains(nameof(e.RecordId), raised);
         Assert.Contains(nameof(e.Explanation), raised);
         Assert.Contains(nameof(e.Recommendation), raised);
@@ -98,10 +96,12 @@ public class FriendlyEventEntryExtendedTests
     }
 
     [Fact]
-    public void MachineAndUser_AreOptional()
+    public void MachineName_IsOptional()
     {
+        // Optional because a record from a forwarded or exported log may carry no machine at all. The
+        // companion UserName assertion went with the field in #2225: it held a SID that nothing read, and
+        // asserting its default was the only thing keeping the property looking alive.
         var e = new FriendlyEventEntry();
         Assert.Null(e.MachineName);
-        Assert.Null(e.UserName);
     }
 }

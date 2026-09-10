@@ -31,7 +31,13 @@ public sealed partial class FriendlyEventEntry : ObservableObject
     [ObservableProperty] private string _fullMessage = "";       // full rendered text
     [ObservableProperty] private string _xml = "";               // raw xml for power users
     [ObservableProperty] private string? _machineName;
-    [ObservableProperty] private string? _userName;
+    // No UserName: one was declared here and assigned from rec.UserId?.Value for every record, and
+    // nothing ever read it — no view bound it, no service consumed it. It also did not hold what its name
+    // promised: UserId is a SecurityIdentifier, so the value was a SID (S-1-5-21-…), which means anything
+    // to a reader only after SecurityIdentifier.Translate, a call that fails for an account the machine
+    // cannot resolve. Same decision as ProcessEntry.UserName: implement it properly or do not imply it
+    // exists. If the Event Log tab wants it, #2225 records where the SID comes from and what showing it
+    // would take — it belongs beside MachineName in the detail pane, translated and cached per SID.
     [ObservableProperty] private long _recordId;
     [ObservableProperty] private string _explanation = "";       // friendly explanation
     [ObservableProperty] private string _recommendation = "";    // what to try

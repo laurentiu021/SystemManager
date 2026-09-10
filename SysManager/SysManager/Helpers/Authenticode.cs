@@ -91,7 +91,8 @@ internal static class Authenticode
     /// <c>Online</c> for the two fail-closed gates, which verify one file at a moment when a network
     /// request is acceptable. Anything scanning many files, or running on the assumption that the machine
     /// may be offline, passes <c>Offline</c> — a local-first app must not make a revocation request per
-    /// file and must not hang when there is no network.
+    /// file and must not hang when there is no network. This one argument settles certificate downloads
+    /// too; see <see cref="PolicyFor"/> for why the two cannot be chosen separately.
     /// </param>
     /// <param name="statuses">
     /// The comma-separated chain statuses when validation fails, for the caller's log. Empty on success.
@@ -103,10 +104,7 @@ internal static class Authenticode
     /// </remarks>
     internal static bool ValidateChain(X509Certificate2 certificate, X509RevocationMode revocation, out string statuses)
     {
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = revocation;
-        chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
-        chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
+        using var chain = new X509Chain { ChainPolicy = PolicyFor(revocation) };
 
         if (chain.Build(certificate))
         {
@@ -117,4 +115,36 @@ internal static class Authenticode
         statuses = string.Join(", ", chain.ChainStatus.Select(s => s.Status.ToString()));
         return false;
     }
+
+    /// <summary>
+    /// The chain policy for a given revocation mode: strict verification, and network access allowed only
+    /// where the caller has already accepted it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Certificate downloads travel with the revocation mode, and this is the reason the method
+    /// exists.</b> <see cref="X509RevocationMode.Offline"/> suppresses the CRL and OCSP fetch, and it is
+    /// easy to read that as "this chain build does not touch the network". It is not: when an intermediate
+    /// certificate is missing from the local store, the chain engine follows the Authority Information
+    /// Access extension and downloads it, under a separate switch that defaults to allowing it. So a caller
+    /// that chose <c>Offline</c> because it is scanning a whole tab's worth of files still made a request
+    /// per unrecognised issuer — and on a machine with no network, waited out
+    /// <see cref="X509ChainPolicy.UrlRetrievalTimeout"/> for each one, which is the stall <c>Offline</c>
+    /// was picked to avoid.
+    /// <para>The two settings are therefore derived from one another rather than exposed as a second
+    /// parameter: a caller passing <c>Offline</c> has already said it cannot afford a network request, and
+    /// a caller passing <c>Online</c> is one of the two fail-closed gates verifying a single file at a
+    /// moment when a request is expected — there, downloading a missing intermediate is what lets a
+    /// legitimate signature validate.</para>
+    /// <para>The cost on the offline path is that a signed file whose issuer is not cached locally now
+    /// fails to validate where it previously might have succeeded after a download. That is the honest
+    /// answer for an informational column: the tooltip says Windows could not confirm the publisher, which
+    /// is exactly what happened, and it says it immediately instead of after a timeout.</para>
+    /// </remarks>
+    internal static X509ChainPolicy PolicyFor(X509RevocationMode revocation) => new()
+    {
+        RevocationMode = revocation,
+        RevocationFlag = X509RevocationFlag.ExcludeRoot,
+        VerificationFlags = X509VerificationFlags.NoFlag,
+        DisableCertificateDownloads = revocation is X509RevocationMode.Offline,
+    };
 }

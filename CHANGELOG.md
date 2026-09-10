@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.87.1] - 2026-09-10
+
+**Opening the Startup Manager no longer reaches out to the internet.** The Signature column checks
+each program's certificate against your own machine, and it was written to do that without asking any
+server anything — but Windows has a second, separate switch for that, and it was left at its default.
+So on a PC that had not seen a particular publisher's certificate before, checking the column could
+quietly fetch part of it, and on a PC with no connection at all it could sit and wait for that fetch to
+time out. It now asks nothing and answers immediately.
+
+### Fixed
+
+- **The signature check on the Startup Manager makes no network request.** Turning off the revocation
+  lookup, which the tab already did, does not turn off certificate downloads — that is a separate
+  setting, and it defaults to on. Both are now decided together, so a check that was chosen to stay
+  local actually stays local.
+- On a machine with no network, that column no longer waits out a download timeout per unfamiliar
+  publisher before it can draw.
+- The two places that verify a single file and *should* use the network — the in-app updater checking
+  a downloaded build, and the check on the third-party speed-test tool before it runs — keep it. There,
+  fetching a missing intermediate certificate is what lets a genuine signature verify, and the wait is
+  part of an action you asked for.
+
 ## [1.87.0] - 2026-09-10
 
 **Ctrl+F now jumps to the search box.** On the twelve tabs that have one — processes, services,

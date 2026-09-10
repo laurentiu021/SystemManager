@@ -100,27 +100,66 @@ public class AuthenticodeTests
     // ── ValidateChain: the policy, pinned against the source ──
 
     /// <summary>
-    /// The one chain policy this app uses is the strict one, and it fails closed.
+    /// The one chain policy this app uses is the strict one: revocation honoured, root excluded from it,
+    /// no verification flag relaxed.
     /// </summary>
     /// <remarks>
-    /// Asserted against the source rather than by execution, deliberately and with the reason stated:
-    /// producing a signed binary whose chain can be made to fail on demand needs a test certificate and
-    /// signtool. What CAN be checked mechanically is that the policy is the strict one — revocation
-    /// honoured, root excluded from it, no verification flags relaxed — and that a failed build returns
-    /// false rather than falling through.
+    /// Asserted on the policy object itself rather than on the text of the method that used to build it.
+    /// The previous version of this guard matched source lines, and it would have passed unchanged through
+    /// the defect it now covers: a setting that is simply absent leaves no line to fail on.
+    /// </remarks>
+    [Theory]
+    [InlineData(X509RevocationMode.Online)]
+    [InlineData(X509RevocationMode.Offline)]
+    public void EveryPolicy_IsTheStrictOne(X509RevocationMode revocation)
+    {
+        var policy = Authenticode.PolicyFor(revocation);
+
+        Assert.Equal(revocation, policy.RevocationMode);
+        Assert.Equal(X509RevocationFlag.ExcludeRoot, policy.RevocationFlag);
+        Assert.Equal(X509VerificationFlags.NoFlag, policy.VerificationFlags);
+    }
+
+    /// <summary>
+    /// The offline policy really is offline: it does not download a missing intermediate certificate
+    /// either.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="X509RevocationMode.Offline"/> suppresses the CRL and OCSP fetch and nothing else, so a
+    /// chain build under it still followed the Authority Information Access extension and downloaded any
+    /// intermediate the local store did not have. That is a network request from a tab the user merely
+    /// opened, and on a machine with no network it is a wait per unrecognised issuer — the exact stall the
+    /// offline mode was chosen to avoid. The pairing is the whole point of
+    /// <see cref="Authenticode.PolicyFor"/>, so it is pinned in both directions: the fail-closed gates
+    /// must keep the download, because there a missing intermediate is what a legitimate signature needs
+    /// fetched before it can validate.
+    /// </remarks>
+    [Fact]
+    public void OnlyTheOnlinePolicy_MayDownloadACertificate()
+    {
+        Assert.True(Authenticode.PolicyFor(X509RevocationMode.Offline).DisableCertificateDownloads);
+        Assert.False(Authenticode.PolicyFor(X509RevocationMode.Online).DisableCertificateDownloads);
+    }
+
+    /// <summary>
+    /// The chain build uses that policy, and a build that fails returns false rather than falling through.
+    /// </summary>
+    /// <remarks>
+    /// Still asserted against the source, deliberately and with the reason stated: producing a signed
+    /// binary whose chain can be made to fail on demand needs a test certificate and signtool. What CAN be
+    /// checked mechanically is that the policy above is the one handed to the chain, and that the failure
+    /// path returns.
     /// <para>This guard replaces the equivalent assertions that used to live inside
     /// <c>UpdateServiceAuthenticodeTests.VerifyAuthenticode_PinsThePublisherAndBuildsAChain</c>, which went
     /// RED the moment the chain build moved out of that method — correctly, and it is the reason this one
     /// exists rather than the assertions simply being dropped.</para>
     /// </remarks>
     [Fact]
-    public void ValidateChain_UsesTheStrictPolicy_AndFailsClosed()
+    public void ValidateChain_BuildsWithThatPolicy_AndFailsClosed()
     {
         var method = HelperMethodSource("internal static bool ValidateChain");
 
-        Assert.Contains("chain.ChainPolicy.RevocationMode = revocation", method, StringComparison.Ordinal);
-        Assert.Contains("X509RevocationFlag.ExcludeRoot", method, StringComparison.Ordinal);
-        Assert.Contains("X509VerificationFlags.NoFlag", method, StringComparison.Ordinal);
+        Assert.Contains("ChainPolicy = PolicyFor(revocation)", method, StringComparison.Ordinal);
         Assert.Contains("chain.Build(certificate)", method, StringComparison.Ordinal);
         Assert.Contains("return false", method, StringComparison.Ordinal);
     }
@@ -159,10 +198,20 @@ public class AuthenticodeTests
         Assert.True(start >= 0, $"'{signature}' not found in Helpers/Authenticode.cs — this test would "
             + "otherwise assert nothing at all");
 
-        // To the end of the file: ValidateChain is the last member, and a slice that ran to a marker the
-        // file no longer contains would silently be empty.
-        var method = source[start..];
-        Assert.True(method.Length > 200, $"the slice from '{signature}' is {method.Length} chars — not a method body");
+        // To the next member declared at the same indentation, or the end of the file when the requested
+        // one is last. Slicing to the end unconditionally was fine while ValidateChain WAS last, and
+        // stopped being fine the moment a member was added after it: the slice then also covered that
+        // member's body, and an assertion could pass on text belonging to a method it was not about.
+        var body = source[start..];
+        var next = body.IndexOf("\n    internal static ", 1, StringComparison.Ordinal);
+        var method = next > 0 ? body[..next] : body;
+
+        // Doc comments out, for the same reason: every assertion below names a construct, and this file's
+        // prose explains those constructs at length. A guard that can be satisfied by the sentence
+        // describing the code instead of the code is not a guard.
+        method = string.Join('\n', method.Split('\n').Where(l => !l.TrimStart().StartsWith("///", StringComparison.Ordinal)));
+
+        Assert.True(method.Length > 200, $"the slice from '{signature}' is {method.Length} chars of code — not a method body");
         return method;
     }
 

@@ -7268,9 +7268,34 @@ public partial class ArchitectureTests
                 + "to verify each new process's certificate, so the work is being done and thrown away.");
         }
 
+        // And that something actually runs the pass. Every unit test calls VerifySignatures directly, so
+        // nothing calling it in production would leave all of them green while the column stayed empty —
+        // the unbound-surface defect one level up.
+        var vm = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
+        Assert.Contains("StartSignatureFill();", vm, StringComparison.Ordinal);
+        Assert.Contains("ProcessManagerService.VerifySignatures(pending, cache)", vm, StringComparison.Ordinal);
+
+        // ONE cache for the whole pass, declared before the batch loop. Moving the declaration inside it
+        // compiles, produces identical verdicts, and re-verifies the same executable in every batch — so a
+        // browser running as a dozen processes across two batches is checked twice, at ~25 ms a time, and
+        // nothing else here would notice. The service-level test proves a shared cache is HONOURED; this is
+        // what proves one is actually shared.
+        var fill = SliceMethod(vm, "private async Task FillSignaturesAsync()");
+        var cacheAt = fill.IndexOf("NewSignatureCache()", StringComparison.Ordinal);
+        var loopAt = fill.IndexOf("while (!ct.IsCancellationRequested)", StringComparison.Ordinal);
+        Assert.True(cacheAt >= 0, "FillSignaturesAsync no longer creates a verdict cache");
+        Assert.True(loopAt >= 0, "FillSignaturesAsync no longer batches — move this guard with the code");
+        Assert.True(cacheAt < loopAt,
+            "the verdict cache is created inside the batch loop, so every batch starts from scratch and "
+            + "re-verifies executables an earlier batch already answered for");
+
+        // The other half, and it is the newer guarantee: the pass must NOT be back inside the snapshot.
+        // It was there until the cost was measured — ~25 ms per file over ~82 distinct images, about three
+        // and a half seconds spent before the list appeared. Putting it back is a one-line change that
+        // reintroduces that wait silently, since every verdict would still be correct.
         var snapshot = SliceMethod(service,
             "private IReadOnlyList<ProcessEntry> Snapshot(IReadOnlySet<int>? knownPids, CancellationToken ct)");
-        Assert.Contains("VerifySignatures(results)", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("VerifySignatures", snapshot, StringComparison.Ordinal);
     }
 
     /// <summary>An <c>entry.Property =</c> assignment, capturing the property name.</summary>

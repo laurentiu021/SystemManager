@@ -394,12 +394,33 @@ public class MainWindowViewModelTests
             Assert.Same(fromGroups[i], vm.NavItems[i]);
     }
 
+    /// <summary>
+    /// Exactly ONE collapsible group starts expanded, and it is the one <c>InitiallyExpandedGroupId</c>
+    /// names. Every other one starts collapsed.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert that ALL of them start collapsed, which was the state #1519 was about: the app
+    /// opened showing twelve category names and not one feature. One group now opens — and it has to be
+    /// one, because at 820px the twelve collapsed groups already fill 600 of a 670px viewport, so a second
+    /// pushes category headings below the fold.
+    /// <para>Asserted against the constant rather than the string, so the two cannot drift; and the count is
+    /// asserted as well as the identity, because "one is expanded" and "only one is expanded" are different
+    /// claims and the second is the one the viewport arithmetic depends on.</para>
+    /// <para>A constant naming a group that no longer exists fails here too, by expanding nothing — which is
+    /// worth stating because that failure is silent in the app: the sidebar simply opens as it used to.</para>
+    /// </remarks>
     [Fact]
-    public void NavGroups_CollapsibleGroupsStartCollapsed()
+    public void NavGroups_ExactlyTheCleanupGroupStartsExpanded()
     {
         var vm = new MainWindowViewModel();
+        var collapsible = vm.NavGroups.Where(group => !group.IsSingleItem).ToList();
+
+        var expanded = collapsible.Where(group => group.IsExpanded).ToList();
+
+        var only = Assert.Single(expanded);
+        Assert.Equal(MainWindowViewModel.InitiallyExpandedGroupId, only.Id);
         Assert.All(
-            vm.NavGroups.Where(group => !group.IsSingleItem),
+            collapsible.Where(group => group.Id != MainWindowViewModel.InitiallyExpandedGroupId),
             group => Assert.False(group.IsExpanded));
     }
 

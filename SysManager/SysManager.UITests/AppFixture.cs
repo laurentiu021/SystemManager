@@ -55,9 +55,9 @@ public sealed class AppFixture : IDisposable
         // that look up nav items directly (not via GoToTab) find them too.
         //
         // Note for anyone wanting to assert the INITIAL expansion state: this call destroys it, and the
-        // fixture is shared across the collection, so no test in this suite can see it. That contract is
-        // asserted at the source level instead, by
-        // ArchitectureTests.ExactlyOneSidebarGroup_OpensWithTheApp.
+        // fixture is shared across the collection, so no test in this suite can see it. It is asserted
+        // where it belongs instead — against a real view-model, in
+        // MainWindowViewModelTests.NavGroups_ExactlyTheCleanupGroupStartsExpanded.
         ExpandAllNavGroups();
     }
 

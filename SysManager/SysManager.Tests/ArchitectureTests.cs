@@ -4323,56 +4323,37 @@ public partial class ArchitectureTests
     /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
     /// </summary>
     /// <summary>
-    /// Exactly ONE sidebar group opens with the app, it is the one the constant names, and that constant
-    /// names a group that actually exists.
+    /// The startup expansion is driven by <c>InitiallyExpandedGroupId</c>, not by a repeated literal.
     /// </summary>
     /// <remarks>
-    /// The sidebar used to open with all twelve groups collapsed, so it showed twelve category headers and
-    /// not a single feature name (#1519). One group now starts open — and it has to be one, because the
-    /// viewport cannot hold more: at 820px the twelve collapsed groups already fill 600 of a 670px
-    /// viewport, so expanding a second pushes category headers below the fold. Expanding System as well
-    /// would cost nine of the twelve.
-    /// <para>Three separate failure modes, hence three assertions. A second expanded group is a UX
-    /// regression nothing else would catch. A constant naming a group id that was later renamed would
-    /// expand NOTHING, silently restoring the original complaint — the unreachable-surface defect this
-    /// codebase keeps producing. And a hardcoded literal in place of the constant would leave the two
-    /// halves free to drift.</para>
-    /// <para>Not a UI test, and not for lack of trying: <c>AppFixture</c> calls
-    /// <c>ExpandAllNavGroups()</c> during launch so that tests can find nav items directly, which destroys
-    /// the initial state before any test observes it. The shared fixture makes that unavoidable without a
-    /// second app launch, which is a lot of machinery for a one-line default.</para>
+    /// The BEHAVIOUR — exactly one collapsible group open, and it is that constant's group — is asserted in
+    /// <c>SysManager.IntegrationTests.MainWindowViewModelTests.NavGroups_ExactlyTheCleanupGroupStartsExpanded</c>,
+    /// which constructs a real <c>MainWindowViewModel</c> and is the stronger test. It also catches a
+    /// constant renamed to a group that no longer exists, by finding nothing expanded.
+    /// <para>What it cannot see is a hardcoded <c>"grp-cleanup"</c> in place of the constant: the app would
+    /// behave identically and the test would pass, while the constant the test itself reads and the value the
+    /// app uses were free to drift apart. That is the one thing left for a source check, so that is all this
+    /// asserts (#1519).</para>
+    /// <para>Worth recording that the first version of this guard asserted all three properties, because I
+    /// had concluded the behaviour was not testable — searching <c>SysManager.Tests</c> for
+    /// <c>new MainWindowViewModel</c> and finding nothing, without also searching the integration project,
+    /// where it is constructed eleven times. CI found the pre-existing
+    /// <c>NavGroups_CollapsibleGroupsStartCollapsed</c> by failing it.</para>
     /// </remarks>
     [Fact]
-    public void ExactlyOneSidebarGroup_OpensWithTheApp()
+    public void TheStartupExpansion_GoesThroughTheNamedConstant()
     {
         var path = Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs");
         var source = WithoutComments(File.ReadAllText(path));
 
+        Assert.True(source.Contains("InitiallyExpandedGroupId", StringComparison.Ordinal),
+            "InitiallyExpandedGroupId is gone. If the mechanism changed, re-derive this guard and the "
+            + "integration test that reads the constant — as written this is checking nothing.");
+
         Assert.True(source.Contains("g.IsExpanded = g.Id == InitiallyExpandedGroupId", StringComparison.Ordinal),
-            "the startup expansion no longer goes through InitiallyExpandedGroupId. If the mechanism "
-            + "changed, re-derive this guard against the new one — it is checking nothing as written.");
-
-        // The constant must name a group the nav table actually builds. A rename would otherwise expand
-        // nothing at all, which looks exactly like the collapsed sidebar #1519 was about.
-        var declared = Regex.Match(source,
-            @"InitiallyExpandedGroupId\s*=\s*""(?<id>[^""]+)""");
-        Assert.True(declared.Success, "InitiallyExpandedGroupId is no longer a string literal constant.");
-        var groupId = declared.Groups["id"].Value;
-        Assert.True(source.Contains($"Group(\"{groupId}\"", StringComparison.Ordinal),
-            $"InitiallyExpandedGroupId is \"{groupId}\", but no Group(\"{groupId}\", …) is built. The sidebar "
-            + "would open with every group collapsed and nothing would say so.");
-
-        // No second group may be expanded at startup. Counted over the whole file rather than a slice: the
-        // auto-expand on navigation (parentGroup.IsExpanded = true) is a USER action and reads differently,
-        // so it is matched and excluded by name rather than by where it sits.
-        var expansions = Regex.Matches(source, @"(?<target>\w+)\.IsExpanded\s*=\s*true")
-            .Select(m => m.Groups["target"].Value)
-            .ToList();
-        Assert.True(expansions.All(t => t == "parentGroup"),
-            "a sidebar group is expanded unconditionally at startup: "
-            + string.Join(", ", expansions.Where(t => t != "parentGroup").Select(t => $"{t}.IsExpanded = true"))
-            + ". Only one group fits — expanding a second pushes category headers below the fold, which "
-            + "trades \"no tab names visible\" for \"no categories visible\".");
+            "the startup expansion no longer reads InitiallyExpandedGroupId. A literal in its place behaves "
+            + "identically and passes the integration test, while leaving the constant that test asserts "
+            + "against free to drift from the value the app actually uses.");
     }
 
     [Fact]

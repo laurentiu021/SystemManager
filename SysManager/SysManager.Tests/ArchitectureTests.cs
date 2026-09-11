@@ -459,11 +459,13 @@ public partial class ArchitectureTests
                 offenders.Add($"{type.Name}.ExportCsvCommand is not bound in {Path.GetFileName(view)}");
         }
 
-        // Vacuity floor: four tabs export CSV when measured — Resource History, Camera/Mic/Location,
-        // Settings Watchdog, Disk Analyzer. A collapse means the reflection stopped finding them and every
-        // absence below is an absence of looking.
-        Assert.True(checked_ >= 4,
-            $"only {checked_} view-models with an ExportCsvCommand were found, out of 4 measured — the "
+        // Vacuity floor: NINE tabs export CSV when measured — Resource History, Camera/Mic/Location,
+        // Settings Watchdog, Disk Analyzer, Process Manager, App Alerts, File Lock Detector, Bandwidth
+        // Monitor, Shortcut Cleaner. A collapse means the reflection stopped finding them and every absence
+        // below is an absence of looking. The floor tracks the population deliberately: left at the original
+        // four it would have let five exports disappear while still reporting that it had checked something.
+        Assert.True(checked_ >= 9,
+            $"only {checked_} view-models with an ExportCsvCommand were found, out of 9 measured — the "
             + "reflection is out of date, so a pass proves nothing.");
 
         Assert.True(offenders.Count == 0,

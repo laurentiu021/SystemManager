@@ -79,6 +79,10 @@
                         <Button Content="Refresh" Command="{Binding ReloadHistoryCommand}"
                                 Style="{StaticResource GhostButton}" Margin="8,0,0,0"
                                 AutomationProperties.Name="Refresh throughput chart"/>
+                        <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                                Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                AutomationProperties.Name="Export CSV — per-app network usage"
+                                ToolTip="Save the per-app usage list to a CSV file you choose the location for."/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Right">
                         <TextBlock Text="Alert over" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>

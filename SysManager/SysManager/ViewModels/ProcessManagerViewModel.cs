@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
+using System.Text;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -491,6 +494,40 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
     private static bool MatchesPid(ProcessEntry p, string filter) =>
         p.Pid.ToString().Contains(filter);
+
+    /// <summary>Whether a snapshot has produced anything worth exporting.</summary>
+    public bool HasProcesses => ProcessCount > 0;
+
+    /// <summary>
+    /// Writes the process list, as filtered on screen to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// Exports FilteredProcesses rather than Processes, so the file matches what the user is looking at: someone who has typed a filter to isolate a suspect wants that list, not all ~470 rows.
+    /// <para>The file goes only where the dialog is pointed — nothing is written to a default location and
+    /// nothing leaves the machine.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasProcesses))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-Processes-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = ProcessManagerService.ToCsv(FilteredProcesses);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {FilteredProcesses.Count} process(es) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Process list exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnProcessCountChanged(int value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

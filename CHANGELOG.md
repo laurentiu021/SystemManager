@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.91.0] - 2026-09-11
+
+**Every tab whose output is a list can now save it to a file.** Five more got an **Export CSV** button —
+Process Manager, New App Alerts, File Lock Detector, Bandwidth Monitor and Shortcut Cleaner — which
+finishes what the last release started. Nine tabs in total now export. On the two tabs where a button
+destroys the list you would want to keep (Clear History, and deleting shortcuts), Export sits to the left
+of it, so reading order matches the order to use them in.
+
+### Added
+
+- **Export CSV on the Process Manager**, saving the list *as currently filtered* rather than all of it —
+  if you have typed a filter to isolate a suspect, that is the list you want.
+- **Export CSV on New App Alerts**, File Lock Detector, Bandwidth Monitor and Shortcut Cleaner.
+- Each export carries the raw values beside the readable ones — byte counts next to "50.0 MB", real
+  timestamps next to "2 days ago" — because a spreadsheet sorts text, and "9.8 GB" sorts below "10 MB".
+- The File Lock export keeps the flag that marks a process Windows will not let you safely end, so the
+  one row nobody should act on stays marked in a file someone else may read.
+
 ## [1.90.0] - 2026-09-11
 
 **Three more tabs can now save what they found to a file.** Camera/Mic/Location, Settings Watchdog and

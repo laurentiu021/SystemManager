@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
+using System.Text;
+using System.IO;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -649,6 +652,37 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         // here — but clear a stale alert when leaving so it doesn't linger on the hidden tab.
         if (!value) AlertMessage = "";
     }
+
+    /// <summary>
+    /// Writes per-app network usage to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// Rates are a snapshot of the moment the button was pressed and totals are cumulative for the session, so the export carries both with raw numbers beside the formatted ones — a file whose only figures are "1.2 MB/s" cannot be sorted or added up.
+    /// <para>The file goes only where the dialog is pointed — nothing is written to a default location and
+    /// nothing leaves the machine.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasProcesses))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-Bandwidth-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = BandwidthHistoryService.ToCsv(Processes);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Processes.Count} app(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Bandwidth usage exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnHasProcessesChanged(bool value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

@@ -40,6 +40,12 @@
                     <Button Content="Acknowledge All" Command="{Binding AcknowledgeAllCommand}"
                             AutomationProperties.Name="Acknowledge all alerts"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
+                    <!-- Before Clear History for the same reason Export sits left of Restore on the Settings
+                         Watchdog: clearing erases the list, so saving it has to come first in reading order. -->
+                    <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                            AutomationProperties.Name="Export CSV — the new-app alerts"
+                            Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"
+                            ToolTip="Save this list before clearing it — Clear History erases it."/>
                     <Button Content="Clear History" Command="{Binding ClearHistoryCommand}"
                             AutomationProperties.Name="Clear History — app alerts"
                             Style="{StaticResource DangerButton}" Padding="12,8"/>

@@ -85,6 +85,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <DockPanel Grid.Column="0" VerticalAlignment="Center">
                 <ProgressBar AutomationProperties.Name="File lock scan progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
@@ -92,7 +93,14 @@
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" TextWrapping="Wrap"/>
             </DockPanel>
-            <Button Grid.Column="1" Content="End process" Command="{Binding KillSelectedCommand}"
+            <!-- Export before End process, so the destructive button stays rightmost where the eye expects
+                 it, and the safe one is not the thing a hurried click lands on. The path toolbar above is a
+                 fixed three-column Grid, which is why this sits with the results rather than beside Scan. -->
+            <Button Grid.Column="1" Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                    Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"
+                    AutomationProperties.Name="Export CSV — the locking processes"
+                    ToolTip="Save this list to a CSV file you choose the location for."/>
+            <Button Grid.Column="2" Content="End process" Command="{Binding KillSelectedCommand}"
                     Style="{StaticResource DangerButton}" Padding="14,8"
                     AutomationProperties.Name="End process — the selected process"/>
         </Grid>

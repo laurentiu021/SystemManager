@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Helpers;
+using System.Text;
+using System.Globalization;
 using System.Collections.Concurrent;
 using System.IO;
 using Microsoft.Win32;
@@ -244,5 +247,32 @@ public sealed class AppAlertService : IDisposable
         if (_disposed) return;
         _disposed = true;
         Stop();
+    }
+
+    /// <summary>Renders the newly-installed-app alerts as CSV with a header row.</summary>
+    /// <remarks>
+    /// The install path is included because it is the column that answers "is this the real thing", and the
+    /// acknowledged flag because an exported list is usually being sent to someone who needs to know which
+    /// entries the user has already looked at.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<AppInstallEntry> alerts)
+    {
+        ArgumentNullException.ThrowIfNull(alerts);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "App", "Publisher", "Detected", "Source", "Install path", "Acknowledged");
+        foreach (var a in alerts)
+        {
+            Csv.AppendRow(sb,
+                a.Name,
+                a.Publisher,
+                a.DetectedAt == default
+                    ? null
+                    : a.DetectedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                a.Source,
+                a.InstallPath,
+                a.IsAcknowledged ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }

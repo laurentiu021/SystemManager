@@ -21,7 +21,12 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Shortcut Cleaner" Style="{StaticResource Display}"/>
-            <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <!-- The explanation is STATIC and comes first; the live status sits under it. This slot used to
+                 hold ScanStatus alone, so the tab opened saying "Click Scan to find broken shortcuts." — an
+                 instruction, not an explanation of what a broken shortcut is or where they go (#1506). -->
+            <TextBlock Text="Find shortcuts that point at programs you have already removed, and clear out the dead ones. They go to the Recycle Bin by default, so you can put any of them back."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
             <TextBlock Text="{Binding CurrentLocation}" Style="{StaticResource Subtle}" Margin="0,2,0,0"
                        Opacity="0.6"
                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>

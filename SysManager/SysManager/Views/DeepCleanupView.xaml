@@ -20,12 +20,13 @@
                 <!-- Elevation. Directly under the header, which is where the golden admin-control contract
                      puts it on every other privileged tab, and Margin="0,12,0,0" because this is a
                      scrolling page whose StackPanel already carries the 28 gutter.
-                     Five of the nineteen buckets live under %WinDir% — the Windows Update download cache,
-                     Delivery Optimization, the Installer patch cache, Windows\Temp and Prefetch — and
-                     without admin they were silently counted as "skipped" with no stated reason. -->
+                     Six of the buckets live under %WinDir% — the Windows Update download cache, Delivery
+                     Optimization, the Installer patch cache, Windows\Temp, Prefetch and the blue-screen
+                     memory dumps — and without admin they were silently counted as "skipped" with no
+                     stated reason. -->
                 <v:AdminBanner Margin="0,12,0,0"
-                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp and Prefetch — can only be deleted as administrator. They are still scanned and counted, and shown as skipped."
-                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp and Prefetch items can be deleted too."/>
+                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp, Prefetch and the blue-screen memory dumps — can only be deleted as administrator. They are still scanned and counted, and shown as skipped."
+                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp, Prefetch and blue-screen memory dump items can be deleted too."/>
 
                 <!-- Safety note -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.IO.Enumeration;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -54,10 +55,21 @@ public sealed class DeepCleanupService
 
     // ---------- scan definitions (built once, then iterated with progress) ----------
 
+    /// <summary>One scannable bucket: what to call it, what to tell the user about it, and where it lives.</summary>
+    /// <param name="Paths">
+    /// Directories to walk. An entry may also name a single FILE — <c>MEMORY.DMP</c> is one file sitting
+    /// directly in the Windows folder, and naming its parent instead would walk all of <c>%WinDir%</c>.
+    /// </param>
+    /// <param name="FilePatterns">
+    /// When set, only files matching one of these wildcards are counted and deleted, and the bucket's
+    /// emptied folders are left in place. Every bucket but two owns its whole folder, so the default is
+    /// null and means "everything under the path" — see <see cref="Scan"/> for why both halves matter.
+    /// </param>
     private sealed record Def(
         string Name,
         string Description,
         string[] Paths,
+        string[]? FilePatterns = null,
         TimeSpan? OlderThan = null,
         bool IsDestructiveHint = false,
         bool IsRecycleBin = false);
@@ -124,6 +136,26 @@ public sealed class DeepCleanupService
                     Path.Combine(programData, "Microsoft", "Windows", "WER", "ReportQueue"),
                     Path.Combine(programData, "Microsoft", "Windows", "WER", "ReportArchive"),
                 ]),
+
+            new("Blue-screen memory dumps",
+                "What Windows writes out when it blue-screens. MEMORY.DMP is sized to how much RAM you have, "
+                + "so on a machine that has crashed it is often the single biggest file on the drive. These are "
+                + "also the only record of why it crashed — delete them and any investigation into that ends, "
+                + "which is why this one is never ticked for you. Deleting them needs administrator.",
+                [
+                    Path.Combine(windowsDir, "MEMORY.DMP"),
+                    Path.Combine(windowsDir, "Minidump"),
+                    Path.Combine(windowsDir, "LiveKernelReports"),
+                ],
+                FilePatterns: ["*.dmp"],
+                IsDestructiveHint: true),
+
+            new("Explorer thumbnail & icon cache",
+                "The picture previews and icons Windows keeps so folders open quickly. It rebuilds them as you "
+                + "browse, and clearing them is the standard fix for thumbnails that show the wrong picture or "
+                + "come up blank.",
+                [Path.Combine(localAppData, "Microsoft", "Windows", "Explorer")],
+                FilePatterns: ["thumbcache_*.db", "iconcache_*.db"]),
 
             new("Old Windows servicing logs (> 30 days)",
                 "CBS logs older than 30 days. Windows keeps rolling ones itself.",
@@ -215,7 +247,7 @@ public sealed class DeepCleanupService
             var d = defs[i];
             progress?.Report(new ScanProgress(i + 1, total, d.Name));
 
-            var existing = d.Paths.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p))
+            var existing = d.Paths.Where(p => !string.IsNullOrEmpty(p) && (Directory.Exists(p) || File.Exists(p)))
                                   .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
             long size = 0; var files = 0; var skipped = 0;
@@ -224,7 +256,7 @@ public sealed class DeepCleanupService
             foreach (var p in existing)
             {
                 if (ct.IsCancellationRequested) break;
-                foreach (var file in EnumerateFiles(p, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+                foreach (var file in EnumerateTargets(p, d.FilePatterns, ct))
                 {
                     if (ct.IsCancellationRequested) break;
                     try
@@ -256,6 +288,10 @@ public sealed class DeepCleanupService
                 FileCount = files,
                 SkippedCount = skipped,
                 OlderThan = d.OlderThan,
+                // Carried on the category, not looked up from the definitions at clean time: Clean is
+                // handed categories by the caller and walks their Paths, so a filter it could not see
+                // would give the user an honest size on screen and a delete that took the whole folder.
+                FilePatterns = d.FilePatterns,
                 IsDestructiveHint = d.IsDestructiveHint,
                 IsRecycleBin = d.IsRecycleBin,
                 IsSelected = size > 0 && !d.IsDestructiveHint
@@ -374,14 +410,15 @@ public sealed class DeepCleanupService
             }
 
             var cutoff = cat.OlderThan.HasValue ? DateTime.UtcNow - cat.OlderThan.Value : (DateTime?)null;
+            var patterns = cat.FilePatterns?.ToArray();
             foreach (var path in cat.Paths)
             {
                 if (ct.IsCancellationRequested) break;
-                if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) continue;
+                if (string.IsNullOrWhiteSpace(path) || (!Directory.Exists(path) && !File.Exists(path))) continue;
 
                 try
                 {
-                    foreach (var file in EnumerateFiles(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+                    foreach (var file in EnumerateTargets(path, patterns, ct))
                     {
                         if (ct.IsCancellationRequested) break;
                         try
@@ -403,6 +440,10 @@ public sealed class DeepCleanupService
                             Log.Debug(ex, "Deep cleanup: failed to delete file {File}", file);
                         }
                     }
+                    // A filtered bucket owns files, not folders: the Explorer cache lives inside Explorer's
+                    // own working folder, and removing a directory there — which the bucket's scan never
+                    // counted — is outside what the user agreed to.
+                    if (patterns is not null) continue;
                     foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
                     {
                         try { Directory.Delete(dir, recursive: false); }
@@ -432,6 +473,58 @@ public sealed class DeepCleanupService
 
     private static long SafeLength(string path)
     { try { return new FileInfo(path).Length; } catch (IOException) { return 0; } catch (UnauthorizedAccessException) { return 0; } }
+
+    /// <summary>
+    /// Yields the files one <see cref="Def.Paths"/> entry stands for: the file itself when the entry names
+    /// a file, otherwise everything under it — in both cases narrowed to <paramref name="patterns"/> when
+    /// the definition set any.
+    /// </summary>
+    /// <remarks>
+    /// Two behaviours the bucket definitions need and the raw walk does not give. A path may be a FILE,
+    /// because <c>MEMORY.DMP</c> sits directly in <c>%WinDir%</c> and pointing the bucket at that folder
+    /// would walk all of Windows. And a walk may need narrowing, because
+    /// <c>%LOCALAPPDATA%\Microsoft\Windows\Explorer</c> holds the rebuildable thumbnail caches next to the
+    /// jump lists that are the user's recent-files history.
+    /// <para>Called by BOTH <see cref="Scan"/> and <see cref="Clean"/>, so the set of files a bucket
+    /// reports is by construction the set it deletes. That is the whole point of the helper: those were
+    /// two separate walks, and a filter added to one of them is a bucket that lies.</para>
+    /// </remarks>
+    private static IEnumerable<string> EnumerateTargets(string path, string[]? patterns, CancellationToken ct)
+    {
+        if (File.Exists(path) && !Directory.Exists(path))
+        {
+            // Guarded like a traversal root: a symlink here would make the caller delete its target,
+            // outside the bucket's tree. IsReparsePoint fails safe on an access error.
+            if (!IsReparsePoint(path) && Matches(path, patterns)) yield return path;
+            yield break;
+        }
+
+        foreach (var file in EnumerateFiles(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+        {
+            if (Matches(file, patterns)) yield return file;
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/>'s file name matches one of <paramref name="patterns"/>, or when
+    /// the bucket set none — an unfiltered bucket owns everything under its paths.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FileSystemName.MatchesSimpleExpression(ReadOnlySpan{char}, ReadOnlySpan{char}, bool)"/>
+    /// rather than a hand-rolled comparison, so <c>thumbcache_*.db</c> means here exactly what it means to
+    /// <c>Directory.EnumerateFiles</c>. Case-insensitive: NTFS is, and Windows writes <c>MEMORY.DMP</c>
+    /// upper-case while the pattern reads lower.
+    /// </remarks>
+    private static bool Matches(string path, string[]? patterns)
+    {
+        if (patterns is null || patterns.Length == 0) return true;
+        var name = Path.GetFileName(path.AsSpan());
+        foreach (var pattern in patterns)
+        {
+            if (FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: true)) return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Walks <paramref name="root"/> depth-first and yields every file under it, skipping reparse points
@@ -466,15 +559,22 @@ public sealed class DeepCleanupService
             try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
             try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
 
-            // Wrap iteration to handle exceptions thrown during MoveNext()
-            // (e.g., file becomes inaccessible mid-enumeration).
+            // Wrap iteration because the enumerator can throw from MoveNext() rather than from the call
+            // above — a directory that stops being one mid-walk, or an entry that becomes unreadable.
+            //
+            // The throw ENDS this directory; it does not skip one entry. A throwing MoveNext leaves the
+            // enumerator terminal, so `continue` here re-threw the same exception forever and pinned a core
+            // in a loop cancellation cannot even reach (the ct check is on the outer loop). Measured, not
+            // reasoned: EnumerateFiles over a path that is a FILE returns fine, GetEnumerator returns fine,
+            // and MoveNext then threw IOException on all ten attempts without advancing once. `break` moves
+            // on to the next directory on the stack, which is the most this walk can honestly do.
             using var enumerator = files.GetEnumerator();
             while (true)
             {
                 string? item;
                 try { if (!enumerator.MoveNext()) break; item = enumerator.Current; }
-                catch (IOException) { continue; }
-                catch (UnauthorizedAccessException) { continue; }
+                catch (IOException) { break; }
+                catch (UnauthorizedAccessException) { break; }
                 yield return item;
             }
 

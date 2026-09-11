@@ -447,15 +447,23 @@ a confirmation before it runs:
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
   before a single byte is deleted. You pick what goes.
-- **Says when administrator rights are what's stopping it.** Five of the buckets live in
+- **Says when administrator rights are what's stopping it.** Six of the buckets live in
   the Windows folder — the Windows Update download cache, Delivery Optimization, the
-  Installer patch cache, `Windows\Temp` and Prefetch — and without administrator they are
-  still scanned and counted but cannot be deleted. They used to show as "skipped" with no
-  reason given; the tab now says so at the top, and offers to restart elevated
+  Installer patch cache, `Windows\Temp`, Prefetch and the blue-screen memory dumps — and
+  without administrator they are still scanned and counted but cannot be deleted. They used
+  to show as "skipped" with no reason given; the tab now says so at the top, and offers to
+  restart elevated
 - **System buckets**: NVIDIA / AMD / Intel installer leftovers, Windows
   Update cache, Delivery Optimization cache, Windows Installer patch
   cache, TEMP, Prefetch, crash dumps, old CBS logs, DirectX shader cache,
   Recycle Bin on every drive.
+- **The two biggest wins on a machine that has crashed**, both new and both scoped to
+  exactly the files they name: the **blue-screen memory dumps** (`MEMORY.DMP` is sized to
+  your RAM, so it is routinely gigabytes — never ticked for you, because deleting it ends
+  any investigation into the crash) and the **Explorer thumbnail & icon cache**, which
+  Windows rebuilds and whose clearing is the standard fix for blank or wrong thumbnails.
+  Its folder also holds your recent-files jump lists, so only `thumbcache_*.db` and
+  `iconcache_*.db` are counted, and only those are deleted.
 - **Gamer buckets** — launcher *caches only*, never game files or logins:
   Steam (appcache, htmlcache, depotcache, shader cache), Epic Games
   Launcher, Battle.net, Riot / League of Legends, GOG Galaxy, EA Desktop.

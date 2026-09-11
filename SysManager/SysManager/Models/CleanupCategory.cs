@@ -23,6 +23,20 @@ public sealed partial class CleanupCategory : ObservableObject
     public int FileCount { get; init; }
     public int SkippedCount { get; init; }
     public TimeSpan? OlderThan { get; init; }
+
+    /// <summary>
+    /// When set, only files matching one of these wildcards belong to this category — and so only they
+    /// are deleted, and its folders are left in place.
+    /// </summary>
+    /// <remarks>
+    /// Carried here rather than looked up at clean time, for the same reason as <see cref="OlderThan"/>:
+    /// the cleaner is handed categories and walks their <see cref="Paths"/>, so a filter it cannot see is
+    /// a category that reports one set of files and deletes another. Two of the buckets need it — the
+    /// blue-screen dumps (<c>*.dmp</c>, among <c>.etl</c> traces) and the Explorer thumbnail cache, whose
+    /// folder also holds the jump lists that are the user's recent-files history (#1577).
+    /// </remarks>
+    public IReadOnlyList<string>? FilePatterns { get; init; }
+
     public bool IsDestructiveHint { get; init; }
 
     /// <summary>

@@ -8984,10 +8984,15 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor, re-measured: seven call sites across three files (five in the two sweepers, two in
+        // Vacuity floor, re-measured: six call sites across three files (four in the two sweepers, two in
         // CleanupPreScanService). A collapse means the pattern or the declaration filter stopped matching,
         // and this guard would then pass without reading a single call.
-        Assert.True(callsChecked >= 7,
+        //
+        // It was seven until #1577. DeepCleanupService's scan and clean each walked files directly; both now
+        // go through EnumerateTargets, which owns the single walk and applies the per-bucket file filter, so
+        // two call sites became one. The floor moved because the population did, not because the pattern
+        // stopped matching — the distinction the message below asks the next reader to make.
+        Assert.True(callsChecked >= 6,
             $"only {callsChecked} walker calls were matched across {callers.Count} file(s) — the pattern no "
             + "longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
             + "pass.");
@@ -10693,6 +10698,101 @@ public partial class ArchitectureTests
             + "built — without it the scan's file counts, byte totals and age cutoff can only be asserted "
             + "as \"non-negative\":\n  "
             + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A bucket that counts only some of the files under its path must delete only those files. Scan and
+    /// Clean are separate walks, so the filter has to reach both or the bucket lies about what it removes.
+    /// </summary>
+    /// <remarks>
+    /// Two buckets are filtered (#1577). The blue-screen dumps take <c>*.dmp</c> from
+    /// folders that also hold <c>.etl</c> traces, and the Explorer thumbnail cache takes
+    /// <c>thumbcache_*.db</c> / <c>iconcache_*.db</c> from Explorer's own working folder — which also holds
+    /// the jump lists that are the user's recent-files history. A filter applied in Scan alone gives the
+    /// worst possible outcome: an honest size on screen, and a delete that takes the whole folder.
+    /// <para>Flat greps over the comment-stripped file, matching
+    /// <see cref="DeepCleanupsScan_TakesItsRootsFromTheSeam"/> — a guard that slices a method body between
+    /// markers passes vacuously the moment a marker moves. The count of direct <c>EnumerateFiles</c> uses
+    /// is what pins it: the raw walk is unfiltered, so the only legitimate uses are its own declaration and
+    /// the one call inside the filtering helper. A third means someone reached past the filter.</para>
+    /// <para>The floor comes first. If no definition sets <c>FilePatterns</c> any more, nothing below is
+    /// about live code and the guard would pass while checking nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryFilteredCleanupBucket_IsFilteredInBothScanAndClean()
+    {
+        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
+        Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
+        var source = WithoutComments(File.ReadAllText(path));
+
+        var declared = source.Split("FilePatterns:").Length - 1;
+        Assert.True(declared >= 2,
+            $"only {declared} cleanup definitions set FilePatterns, and there were 2 — the blue-screen "
+            + "dumps and the Explorer thumbnail cache. If a filtered bucket was removed, remove the part "
+            + "of this guard that is about it rather than leaving it asserting over nothing.");
+
+        Assert.True(source.Contains("FilePatterns = d.FilePatterns", StringComparison.Ordinal),
+            "the scan no longer copies FilePatterns onto the CleanupCategory it builds. Clean is handed "
+            + "categories and walks their Paths — it cannot see the definitions — so a filter that stops "
+            + "at the definition is a bucket that reports one set of files and deletes another.");
+
+        Assert.True(source.Contains("cat.FilePatterns", StringComparison.Ordinal),
+            "Clean no longer reads FilePatterns off the category. Every unmatched file under a filtered "
+            + "bucket's path is then deleted, including Explorer's recent-files jump lists, which that "
+            + "bucket's own scan never counted.");
+
+        // Directory.EnumerateFiles is the framework call inside the walker itself; the walk this is about
+        // is DeepCleanupService's own, which is unfiltered by design.
+        var directWalks = Regex.Matches(source, @"(?<!Directory\.)\bEnumerateFiles\(").Count;
+        Assert.True(directWalks == 2,
+            $"DeepCleanupService uses its raw EnumerateFiles walk {directWalks} times, and there are only "
+            + "two legitimate uses: the declaration, and the single call inside EnumerateTargets that "
+            + "applies the pattern filter. Anything else walks a bucket's files without filtering them — "
+            + "which for the Explorer bucket means deleting the user's jump lists.");
+    }
+
+    /// <summary>
+    /// The cleanup walk must ABANDON a directory whose enumerator throws, not retry it. A throwing
+    /// <c>MoveNext</c> does not advance, so retrying it is an infinite loop.
+    /// </summary>
+    /// <remarks>
+    /// This was live code, and only a proof mutation reached it: 900 seconds of nothing on a run that takes
+    /// 0.24. Measured with a standalone probe afterwards — <c>Directory.EnumerateFiles</c> over a path that
+    /// is a FILE returns without throwing, <c>GetEnumerator</c> returns without throwing, and
+    /// <c>MoveNext</c> then threw <c>IOException</c> on all ten attempts without advancing once. The
+    /// <c>catch { continue; }</c> that used to sit here therefore re-threw forever, pinning a core in a loop
+    /// cancellation cannot reach — the token is only checked on the outer loop.
+    /// <para>It stayed unreachable for as long as both callers filtered their paths through
+    /// <c>Directory.Exists</c>. #1577 is what made a path that names a FILE legitimate (<c>MEMORY.DMP</c>),
+    /// so the distance between this walker and a hang is now one edit, and nothing else would catch it: a
+    /// spin fails no assertion, it just never finishes.</para>
+    /// <para>The two <c>catch (…) { continue; }</c> arms guarding the <c>EnumerateFiles</c> CALL are
+    /// deliberately untouched and must stay <c>continue</c> — they sit on the outer loop, where continuing
+    /// means "take the next directory off the stack", which is real progress. So this matches the shape
+    /// around <c>MoveNext</c> rather than banning the string.</para>
+    /// </remarks>
+    [Fact]
+    public void TheCleanupWalk_AbandonsADirectoryWhoseEnumeratorThrows()
+    {
+        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
+        Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
+        var source = WithoutComments(File.ReadAllText(path));
+
+        var match = Regex.Match(
+            source,
+            @"try \{ if \(!enumerator\.MoveNext\(\)\) break; item = enumerator\.Current; \}\s*"
+            + @"catch \([^)]*\) \{ (?<first>\w+); \}\s*catch \([^)]*\) \{ (?<second>\w+); \}");
+
+        Assert.True(match.Success,
+            "the MoveNext try/catch this guard is about was not found in DeepCleanupService. If the walk was "
+            + "rewritten, re-derive the check against the new shape — a pass here currently means nothing.");
+
+        var arms = new[] { match.Groups["first"].Value, match.Groups["second"].Value };
+        Assert.True(arms.All(a => a == "break"),
+            $"the walk retries a directory whose enumerator threw (arms: {string.Join(", ", arms)}). MoveNext "
+            + "does not advance when it throws — measured, it threw the same IOException ten times out of ten "
+            + "over a path that is a file — so `continue` here spins forever inside while(true), and the "
+            + "cancellation token is only checked on the outer loop. Use break: the directory is finished.");
     }
 
     /// <summary>

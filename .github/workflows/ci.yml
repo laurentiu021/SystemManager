@@ -632,13 +632,15 @@ jobs:
       # cancelled job reports `cancelled`, which `gh pr checks` renders as `fail` — indistinguishable from a
       # broken pipeline, and permanently red, which is how a non-blocking job teaches everyone to ignore it.
       #
-      # With a hang timeout, the run stops at five minutes of silence, NAMES the test that stopped responding,
-      # and writes a dump next to the results. A hang becomes a finding instead of a timeout.
-      # --hangdump replaces VSTest's --blame-hang, and --xunit-diagnostics is what makes the NAMING
-      # half work: the dump alone says a hang happened, while xunit.runner.json's
-      # longRunningTestSeconds reports WHICH test stopped responding, and those are diagnostic
-      # messages that are hidden unless diagnostics are on. The threshold sits below the dump timeout
-      # on purpose, so the name is already in the log by the time the dump lands.
+      # --hangdump replaces VSTest's --blame-hang. What it actually does, corrected against three observed
+      # hangs on 2026-09-11 rather than from the documentation: at five minutes of silence it writes a dump
+      # AND a 92-byte `*hang.log` per hung process naming the test that was running — and then lets the run
+      # continue. It does NOT stop the session, so the job still died at its 30-minute ceiling every time.
+      #
+      # So "a hang becomes a finding instead of a timeout" needed the step below to be true: the name was
+      # being written to a FILE the whole time, inside the artifact, while the job log said nothing. Neither
+      # --xunit-diagnostics nor xunit.runner.json's longRunningTestSeconds put a long-running-test message
+      # in the log on any of the three, so do not rely on those for the name (#2263).
       - name: Run integration tests
         id: integration-tests
         run: >
@@ -649,6 +651,32 @@ jobs:
           --xunit-diagnostics on
           --report-xunit-trx --report-xunit-trx-filename integration-results.trx
         continue-on-error: true
+
+      # A HANG is the third kind of failure, and it used to be the one that said nothing at all. The step
+      # above is killed by the job's timeout-minutes, which satisfies neither `outcome == 'failure'` nor
+      # `!cancelled()`, so BOTH steps below are skipped and the whole record is a red row on a non-blocking
+      # check. On 2026-09-11 that happened three times in one afternoon: the log showed "Running tests
+      # from …" and then twenty-eight minutes of nothing (#2263).
+      #
+      # --hangdump already writes the answer. It drops a 92-byte log per hung process naming the test that
+      # was running when the timeout fired — inside the 189 MB artifact, next to the dump, where nobody
+      # looks. `cat` costs nothing and turns half an hour of guessing into one line.
+      - name: Name the hung test if the run was killed
+        if: ${{ cancelled() }}
+        shell: bash
+        run: |
+          echo "The integration run did not finish and the job was cancelled — almost certainly this job's"
+          echo "timeout-minutes. The hang dump names the test that was still running:"
+          found=0
+          for log in TestResults/*hang.log; do
+            [ -s "$log" ] || continue
+            found=1
+            echo "::warning::hang in $(basename "$log"): $(tr -d '\r' < "$log" | tr '\n' ' ')"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No *hang.log was written, so --hangdump did not fire and the cancellation came from something other than a stuck test. Written instead:"
+            ls -la TestResults || true
+          fi
 
       # `outcome`, NOT `conclusion`: continue-on-error forces the step's conclusion to 'success', so a
       # conclusion check never fires and the failure is masked completely. Same trap as ui-tests.

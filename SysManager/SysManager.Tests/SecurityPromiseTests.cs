@@ -324,9 +324,77 @@ public class SecurityPromiseTests
         return StripComments(File.ReadAllText(path));
     }
 
+    // ── 8. The winget credential cannot reach the release asset ──
+
+    /// <summary>
+    /// Promise: the winget publishing token "acts only after the release already exists", so it cannot alter
+    /// the asset or hash that the verification instructions and the app's own update check rely on.
+    /// </summary>
+    /// <remarks>
+    /// <c>WINGET_TOKEN</c> is the only credential in the pipeline that is neither the ephemeral, repo-scoped
+    /// <c>GITHUB_TOKEN</c> nor the coverage token, and it necessarily carries write access to a fork of
+    /// <c>microsoft/winget-pkgs</c>. What bounds it is ORDERING, not scope: every step that uses it runs
+    /// after <c>Create GitHub Release</c> has published the exe, its SHA256, the SBOM and the attestation.
+    /// <para>That is a property of step order in one YAML file, which makes it exactly the kind of claim that
+    /// stops being true without anyone noticing — moving one step, or adding a new winget step earlier for a
+    /// pre-flight check, would falsify a published security statement while every test stayed green. Six
+    /// steps reference the token today (a fork sync, three publish attempts and two re-syncs between them),
+    /// so the count is also the floor: if the detection stops finding them, this fails rather than reporting
+    /// clean.</para>
+    /// <para>Deliberately NOT asserted here: that the token is fine-grained, scoped to the single fork, or
+    /// carries an expiry. None of that is visible from the repository — it lives in the maintainer's account
+    /// settings — and SECURITY.md does not claim it, because a security document should not state a posture
+    /// nobody can check from the outside.</para>
+    /// </remarks>
+    [Fact]
+    public void TheWingetToken_IsOnlyUsedAfterTheReleaseIsPublished()
+    {
+        var workflow = Path.Combine(RepoRoot(), ".github", "workflows", "release.yml");
+        Assert.True(File.Exists(workflow), $"release.yml not found at {workflow}");
+
+        var lines = File.ReadAllLines(workflow);
+        var publish = Array.FindIndex(lines, l => l.Contains("- name: Create GitHub Release", StringComparison.Ordinal));
+        Assert.True(publish >= 0,
+            "the 'Create GitHub Release' step was not found in release.yml, so this guard cannot tell what "
+            + "runs before the asset exists. If the step was renamed, re-point this rather than deleting it.");
+
+        var uses = lines
+            .Select((line, i) => (Line: line, Number: i + 1, Index: i))
+            .Where(l => l.Line.Contains("WINGET_TOKEN", StringComparison.Ordinal))
+            .ToList();
+
+        // Floor: six references when measured — one fork sync, three publish attempts, two re-syncs.
+        Assert.True(uses.Count >= 6,
+            $"only {uses.Count} WINGET_TOKEN references were found, out of 6 measured — the detection is out "
+            + "of date, so the ordering check below reads a short list.");
+
+        var early = uses
+            .Where(u => u.Index < publish)
+            .Select(u => $"line {u.Number}: {u.Line.Trim()}")
+            .ToList();
+
+        Assert.True(early.Count == 0,
+            $"the winget token is referenced before 'Create GitHub Release' (line {publish + 1}). "
+            + "SECURITY.md, \"Dependencies and supply chain\", states that it acts only after the release, "
+            + "its SHA256, the SBOM and the attestation are already published — which is what stops it from "
+            + "being able to alter the asset the verification instructions describe. Move the step after the "
+            + "release, or correct SECURITY.md:\n  " + string.Join("\n  ", early));
+    }
+
     private static string StripComments(string source)
         => Regex.Replace(Regex.Replace(source, @"/\*.*?\*/", "", RegexOptions.Singleline),
                          @"//.*?$", "", RegexOptions.Multiline);
+
+    // Walks up to the repository root — one level above the app project's solution folder.
+    private static string RepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".github", "workflows")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);   // else the assertions above would silently test nothing
+        return dir!.FullName;
+    }
 
     // Walks up to the app project — source is not copied to the test output.
     private static string AppProjectDir()

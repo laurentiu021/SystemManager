@@ -92,26 +92,36 @@ Most Windows utilities do one thing, or bundle telemetry and upsells. SysManager
 is a single, local-first app that covers the whole maintenance surface — and it's
 fully open source.
 
-| | **SysManager** | CCleaner | Wintoys | O&O ShutUp10 | HWiNFO |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Open source (MIT) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| No telemetry / no account | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Fully local (no cloud) | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Portable single `.exe` | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Code-signed binary | ❌ | ✅ | ✅ | ✅ | ✅ |
-| Disk / cache cleanup | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Privacy & telemetry toggles | ✅ | ⚠️ | ✅ | ✅ | ❌ |
-| Network diagnostics (ping / traceroute / speed) | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Disk / RAM SMART health | ✅ | ⚠️ | ❌ | ❌ | ✅ |
-| App updates + bulk install (winget) | ✅ | ❌ | ⚠️ | ❌ | ❌ |
-| Free | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+| | **SysManager** | BleachBit | CCleaner | Wintoys | O&O ShutUp10 | HWiNFO |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Open source | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| No telemetry / no account | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Fully local (no cloud) | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Portable single `.exe` | ✅ | ⚠️ | ❌ | ✅ | ✅ | ✅ |
+| Code-signed binary | ❌ | ⚠️ | ✅ | ✅ | ✅ | ✅ |
+| Disk / cache cleanup | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Privacy & telemetry toggles | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ❌ |
+| Network diagnostics (ping / traceroute / speed) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Disk / RAM SMART health | ✅ | ❌ | ⚠️ | ❌ | ❌ | ✅ |
+| App updates + bulk install (winget) | ✅ | ❌ | ❌ | ⚠️ | ❌ | ❌ |
+| Game-server latency tools (ping presets, timer resolution) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Free | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
 
 <sub>⚠️ = partial, paywalled, or limited. Comparison reflects the free editions as of 2026; features evolve — corrections welcome via an issue.</sub>
+
+<sub>**BleachBit is here because it is the rival that ties on the rows above.** A table whose top three rows
+exclude the best-known open-source Windows cleaner is cherry-picked, and a reader who knows BleachBit spots
+that immediately. Its ⚠️ cells are specifics, not hedges: it ships a portable **zip** of many files rather
+than one `.exe`; it cleans tracking data thoroughly but does not toggle Windows' own telemetry settings; and
+its current Windows release publishes a detached GPG signature for the zip rather than stating an Authenticode
+signature, which is a different thing from what stops the SmartScreen warning. Licences differ — SysManager is
+MIT, BleachBit is GPL-3.0 — which is why that row no longer names one.</sub>
 
 <sub>The signing row is the one where SysManager loses, and it is here on purpose — a table a project wins
 every row of tells you nothing. Builds are unsigned, so Windows shows a warning on first launch. Why, what
 that warning looks like, and how to check the download yourself:
-[First launch](#first-launch-windows-will-warn-you) · [Verifying the download](#verifying-the-download).</sub>
+[First launch](#first-launch-windows-will-warn-you) · [Verifying the download](#verifying-the-download).
+Sponsorship goes toward that certificate — see [Support](#support).</sub>
 
 ## Features
 

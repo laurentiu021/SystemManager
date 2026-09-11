@@ -4322,6 +4322,40 @@ public partial class ArchitectureTests
     /// <para>A comment cannot hold that line, so this asserts it. Adding a new eager tab fails here,
     /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
     /// </summary>
+    /// <summary>
+    /// The startup expansion is driven by <c>InitiallyExpandedGroupId</c>, not by a repeated literal.
+    /// </summary>
+    /// <remarks>
+    /// The BEHAVIOUR — exactly one collapsible group open, and it is that constant's group — is asserted in
+    /// <c>SysManager.IntegrationTests.MainWindowViewModelTests.NavGroups_ExactlyTheCleanupGroupStartsExpanded</c>,
+    /// which constructs a real <c>MainWindowViewModel</c> and is the stronger test. It also catches a
+    /// constant renamed to a group that no longer exists, by finding nothing expanded.
+    /// <para>What it cannot see is a hardcoded <c>"grp-cleanup"</c> in place of the constant: the app would
+    /// behave identically and the test would pass, while the constant the test itself reads and the value the
+    /// app uses were free to drift apart. That is the one thing left for a source check, so that is all this
+    /// asserts (#1519).</para>
+    /// <para>Worth recording that the first version of this guard asserted all three properties, because I
+    /// had concluded the behaviour was not testable — searching <c>SysManager.Tests</c> for
+    /// <c>new MainWindowViewModel</c> and finding nothing, without also searching the integration project,
+    /// where it is constructed eleven times. CI found the pre-existing
+    /// <c>NavGroups_CollapsibleGroupsStartCollapsed</c> by failing it.</para>
+    /// </remarks>
+    [Fact]
+    public void TheStartupExpansion_GoesThroughTheNamedConstant()
+    {
+        var path = Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs");
+        var source = WithoutComments(File.ReadAllText(path));
+
+        Assert.True(source.Contains("InitiallyExpandedGroupId", StringComparison.Ordinal),
+            "InitiallyExpandedGroupId is gone. If the mechanism changed, re-derive this guard and the "
+            + "integration test that reads the constant — as written this is checking nothing.");
+
+        Assert.True(source.Contains("g.IsExpanded = g.Id == InitiallyExpandedGroupId", StringComparison.Ordinal),
+            "the startup expansion no longer reads InitiallyExpandedGroupId. A literal in its place behaves "
+            + "identically and passes the integration test, while leaving the constant that test asserts "
+            + "against free to drift from the value the app actually uses.");
+    }
+
     [Fact]
     public void OnlyTheJustifiedTabs_AreBuiltAtStartup()
     {

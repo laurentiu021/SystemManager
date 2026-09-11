@@ -147,7 +147,11 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
 
-Groups expand and collapse with a click. Collapsed groups show a child count
+Groups expand and collapse with a click. **Cleanup opens with the app** — every group
+used to start collapsed, so the first screen showed twelve category names and not one
+feature. Only one group opens, because the viewport has room for exactly one: at a
+820px window the twelve collapsed groups already fill almost all of it, so expanding a
+second pushes category headings out of sight. Collapsed groups show a child count
 badge, a written one-line summary of what the group covers, and a tooltip with the
 full list. Dashboard renders as a flat top-level entry without an expander arrow.
 Each tab shows a slim progress bar under its name when performing a

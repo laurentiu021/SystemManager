@@ -130,6 +130,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var g in BuildNavGroups())
         {
             NavGroups.Add(g);
+            // ONE group opens with the app, and it is Cleanup (#1519). Every group used to start
+            // collapsed, so the sidebar opened showing twelve category headers and not a single
+            // feature name — for someone who came to the app because "my PC is slow", nothing on
+            // screen was what they were looking for.
+            //
+            // Exactly one, because the sidebar cannot show both. At 820px the twelve collapsed
+            // groups already fill 600 of a 670px viewport, so expanding ANYTHING pushes headers
+            // below the fold; expanding Cleanup costs the last two, Info and Advanced, which are
+            // the two least urgent. Expanding System as well would cost nine of the twelve, which
+            // trades "she sees no tab names" for "she sees no categories" — not obviously better.
+            //
+            // Cleanup rather than System because "clean it up" is the phrase the user actually
+            // arrives with, and its four children are the four things they came to do.
+            //
+            // Costs nothing at startup: the child rows bind only Id, Label, IsBusy,
+            // IsInDevelopment and SelectionStatus, all of them NavItem's own properties. None
+            // touches NavItem.Content, so no view-model is materialised by expanding a group —
+            // which is the property OnlyTheJustifiedTabs_AreBuiltAtStartup exists to protect.
+            g.IsExpanded = g.Id == InitiallyExpandedGroupId;
             foreach (var item in g.Children)
             {
                 item.WireBusy(); // no-op for lazy items until their VM is first materialised
@@ -178,6 +197,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // Resolve an eager VM: from DI when available, else from the designer graph.
     private T Eager<T>() where T : class =>
         _sp is not null ? _sp.GetRequiredService<T>() : (T)_designerVms![typeof(T)];
+
+    /// <summary>
+    /// The one sidebar group that is open when the app starts.
+    /// </summary>
+    /// <remarks>
+    /// A named constant so the choice is stated once and the test asserts THIS rather than a repeated
+    /// string. Change it and the test follows; add a second expanded group and the test fails, which is the
+    /// point — the viewport only has room for one (#1519).
+    /// </remarks>
+    internal const string InitiallyExpandedGroupId = "grp-cleanup";
 
     private NavGroup[] BuildNavGroups() =>
     [

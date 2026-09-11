@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.96.0] - 2026-09-11
+
+**The app now opens showing something you can actually use.** Every sidebar group used to start collapsed,
+so the first screen was twelve category names — System, Cleanup, Network, and so on — and not one feature.
+If you opened SysManager because your PC felt slow or your drive was full, nothing in front of you said so.
+Cleanup now opens with the app, putting Quick Cleanup, Deep Cleanup, Shortcut Cleaner and Scheduled
+Maintenance on screen from the first second.
+
+### Changed
+
+- **The Cleanup group starts open.** One group, not two: at a normal window size the twelve collapsed
+  groups already fill nearly the whole sidebar, so opening a second would push category names out of sight —
+  trading "no feature names visible" for "no categories visible". Opening Cleanup costs only the last two
+  headings, Info and Advanced.
+- Costs nothing at startup. Showing a group's rows does not build the tabs behind them; they are still
+  created the first time you actually open one.
+
 ## [1.95.0] - 2026-09-11
 
 **You can now see what the mouse is on.** The sidebar rows have no button chrome, so the faint tint that

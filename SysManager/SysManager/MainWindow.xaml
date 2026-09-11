@@ -163,7 +163,7 @@
 
                 <!-- Header -->
                 <StackPanel Grid.Row="0" Margin="20,20,20,16">
-                    <TextBlock Text="SysManager" FontSize="20" FontWeight="SemiBold"
+                    <TextBlock Text="SysManager" Style="{StaticResource Heading}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimary}"
                                FontFamily="{StaticResource UiFont}"/>
                     <TextBlock Text="System toolkit" Style="{StaticResource Caption}" Margin="0,2,0,0"/>

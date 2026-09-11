@@ -265,7 +265,7 @@
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource Success}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource Success}">
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource Success}">
                             <Run Text="{Binding CpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock Text="{Binding CpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
@@ -284,7 +284,7 @@
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricBlue}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource MetricBlue}">
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricBlue}">
                             <Run Text="{Binding RamPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
@@ -312,7 +312,7 @@
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricPurple}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock FontSize="26" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
+                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
                             <Run Text="{Binding GpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
                         <TextBlock Text="{Binding GpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"

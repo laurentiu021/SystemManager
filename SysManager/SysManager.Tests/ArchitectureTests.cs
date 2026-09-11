@@ -4323,6 +4323,86 @@ public partial class ArchitectureTests
     /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
     /// </summary>
     /// <summary>
+    /// A number rendered at one of the metric rungs' sizes must use the rung, and every rung a view
+    /// references must actually be defined.
+    /// </summary>
+    /// <remarks>
+    /// #1630(b): the type scale had names for 22 and 28 while views rendered numbers at 20, 26 and 30 with
+    /// raw <c>FontSize</c> attributes — so the scale was not being ignored, it simply had no name for what
+    /// the app draws. The rungs now exist at those sizes and the twelve call sites use them; this keeps the
+    /// next one from going back to a literal, which is how the drift started.
+    /// <para><b>Both halves matter, and the second is the subtle one.</b> A <c>{StaticResource}</c> inside a
+    /// <c>DataTemplate</c> resolves at RUNTIME, not at compile time, so a misspelled or deleted rung
+    /// compiles cleanly and throws when the tab is opened. Several of these call sites are inside templates.
+    /// Checking that every referenced rung is defined is the only thing standing between a rename and a
+    /// crash in a tab nobody opened during review.</para>
+    /// <para>Scoped to the metric rungs (20, 22, 26, 30) on purpose. 14 is <c>SectionTitle</c>'s size and
+    /// appears raw 39 times as ordinary label sizing — a different and much larger question. 28 is
+    /// <c>Display</c>'s size and is still raw in two places (Battery Health's charge, Dashboard's health
+    /// score); pulling those onto a rung makes numbers visibly smaller, which is the open half of #1630(b)
+    /// and needs a decision rather than a guard.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryMetricRungSize_IsReachedThroughItsRung()
+    {
+        var appDir = FindAppProjectDir();
+        var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
+
+        // The rungs, read from App.xaml rather than restated: a size changed there must change what this
+        // guard looks for, or it would enforce a scale the app no longer has.
+        var rungs = Regex.Matches(
+                appXaml,
+                @"<Style x:Key=""(?<key>Metric\w*|Heading)"" TargetType=""TextBlock""[^>]*>\s*<Setter Property=""FontSize"" Value=""(?<size>[\d.]+)""")
+            .ToDictionary(m => m.Groups["key"].Value, m => m.Groups["size"].Value, StringComparer.Ordinal);
+
+        Assert.True(rungs.Count >= 4,
+            $"only {rungs.Count} metric/heading rungs were matched in App.xaml, and there are 4 "
+            + "(Metric, MetricSmall, MetricLarge, MetricHero) plus Heading. The pattern no longer matches "
+            + "the style shape, so this guard is checking nothing.");
+
+        var rungSizes = rungs
+            .Where(r => r.Key.StartsWith("Metric", StringComparison.Ordinal))
+            .Select(r => r.Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var offenders = new List<string>();
+        var referenced = 0;
+
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var markup = WithoutXamlComments(File.ReadAllText(file));
+            var name = Path.GetFileName(file);
+
+            foreach (var m in Regex.Matches(markup, @"FontSize=""(?<size>[\d.]+)""").Cast<Match>())
+            {
+                var size = m.Groups["size"].Value;
+                if (!rungSizes.Contains(size)) continue;
+                var rung = rungs.First(r => r.Value == size && r.Key.StartsWith("Metric", StringComparison.Ordinal)).Key;
+                offenders.Add($"{name}: raw FontSize=\"{size}\" — use Style=\"{{StaticResource {rung}}}\"");
+            }
+
+            // Every rung a view names must exist. This is what a compile cannot tell you.
+            foreach (var m in Regex.Matches(markup, @"\{StaticResource (?<key>Metric\w*|Heading)\}").Cast<Match>())
+            {
+                referenced++;
+                var key = m.Groups["key"].Value;
+                if (!rungs.ContainsKey(key))
+                    offenders.Add($"{name}: references {{StaticResource {key}}}, which App.xaml does not define — "
+                                  + "inside a DataTemplate that throws when the tab is opened, not at build time");
+            }
+        }
+
+        Assert.True(referenced >= 12,
+            $"only {referenced} rung references were found across the views, and twelve call sites use them. "
+            + "The reference pattern stopped matching, so the 'every rung is defined' half proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "the type scale is being bypassed or a rung is missing:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The startup expansion is driven by <c>InitiallyExpandedGroupId</c>, not by a repeated literal.
     /// </summary>
     /// <remarks>

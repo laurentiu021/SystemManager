@@ -1114,10 +1114,11 @@
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             </Style>
 
-            <!-- The type scale runs Display (28) → SectionTitle (14) → Subtle → Caption. A Heading
-                 (20) rung existed between the first two and no view ever used it, which made it a
-                 trap: a reviewer enforcing "use an existing style" would point at a style that had
-                 never actually rendered. Add it back only alongside a view that needs it. -->
+            <!-- The text scale runs Display (28) → Heading (20) → SectionTitle (14) → Subtle → Caption.
+                 Heading was deleted once, because no view used it and that made it a trap: a reviewer
+                 enforcing "use an existing style" would point at a style that had never rendered. The
+                 condition set for its return — "only alongside a view that needs it" — is met now, by the
+                 sidebar wordmark; it is defined next to the Metric rungs below. -->
             <Style x:Key="SectionTitle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1172,6 +1173,52 @@
                 <Setter Property="FontSize" Value="22"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+            </Style>
+
+            <!-- The rungs above Metric, added because views were already using these exact sizes with raw
+                 FontSize attributes: 26 in six places (Dashboard's CPU/RAM/GPU meters, Bandwidth Monitor's
+                 up and down figures, Boot Analyzer's seconds), 30 in one (Timer Resolution's current
+                 value), and 20 in four (System Logs' four severity counts). So the scale was not being
+                 ignored — it simply had no name for what the app actually renders (#1630).
+                 The sizes are unchanged from what those views already had; only the source of the number
+                 moves. Every one of those call sites states its own FontWeight and Foreground, and a local
+                 attribute beats a style setter, so nothing about them renders differently.
+
+                 BasedOn the implicit TextBlock style, unlike Metric and Display above. That is
+                 load-bearing rather than tidiness: an explicit style REPLACES the keyless
+                 `<Style TargetType="TextBlock">`, so without BasedOn a repointed TextBlock would quietly
+                 lose its TextFormattingMode="Ideal" and TextRenderingMode="ClearType". Metric and Display
+                 have that gap today; widening it was not part of this change, and closing it for them is a
+                 separate one because it would alter how existing views render. -->
+            <Style x:Key="MetricSmall" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="20"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <Style x:Key="MetricLarge" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="26"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <Style x:Key="MetricHero" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="30"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <!-- Heading (20) is back, and this time it has a user: the "SysManager" wordmark at the top of
+                 the sidebar, which was a raw FontSize="20".
+
+                 It was deleted precisely because nothing used it, which made it a trap — a reviewer
+                 enforcing "use an existing style" would point at a style that had never rendered. The
+                 comment left in its place set the condition for its return: "add it back only alongside a
+                 view that needs it." MainWindow is that view.
+
+                 Distinct from MetricSmall despite sharing the size, because they are different things: the
+                 Metric rungs are numbers, and Heading is text. System Logs' four severity counts take
+                 MetricSmall rather than this for that reason. -->
+            <Style x:Key="Heading" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="20"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
             </Style>
 
             <!-- ============================================================ -->

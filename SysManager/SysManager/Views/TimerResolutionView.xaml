@@ -34,7 +34,7 @@
             <StackPanel>
                 <TextBlock Text="Current resolution" Style="{StaticResource SectionTitle}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding CurrentDisplay}" FontSize="30" FontWeight="Bold"
+                    <TextBlock Text="{Binding CurrentDisplay}" Style="{StaticResource MetricHero}" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}"/>
                     <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"
                             Background="{DynamicResource Surface3}"

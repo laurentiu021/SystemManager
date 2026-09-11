@@ -37,7 +37,7 @@
             <StackPanel>
                 <TextBlock Text="Latest boot" Style="{StaticResource SectionTitle}"/>
                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0" DataContext="{Binding LatestBoot}">
-                    <TextBlock Text="{Binding BootSecondsDisplay}" FontSize="26" FontWeight="Bold"
+                    <TextBlock Text="{Binding BootSecondsDisplay}" Style="{StaticResource MetricLarge}" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
                         <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12">

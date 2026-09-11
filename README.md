@@ -1,25 +1,18 @@
 # SysManager for Windows
 
-A modern Windows system monitoring and management toolkit: live network
-diagnostics with gamer-friendly presets, Windows updates, disk and memory
-health, gaming launcher cache cleanup, app updates and bulk install via
-winget, performance tuning, privacy and telemetry controls, context menu
-management, secure file shredding, DNS & hosts editor, duplicate finder,
-battery health, process management with built-in descriptions, startup
-control, shortcut cleanup, app blocking, install alerts, Windows features
-toggle, and a friendly Event Log viewer — all in one WPF desktop app.
+One portable app for keeping a Windows PC healthy — 58 tabs of network diagnostics, cleanup, privacy
+controls, app updates and hardware health, with no telemetry and no account.
 
-[![CI](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml)
-[![codecov](https://codecov.io/gh/laurentiu021/SystemManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SystemManager)
+<p align="center">
+<img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
+<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
+</p>
+
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
 [![Asset downloads](https://img.shields.io/github/downloads/laurentiu021/SystemManager/total?label=asset%20downloads)](https://github.com/laurentiu021/SystemManager/releases)
-[![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)
-[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/laurentiu021/SysManager)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/laurentiu021/SystemManager?style=social)](https://github.com/laurentiu021/SystemManager/stargazers)
 
 ---
 
@@ -88,10 +81,10 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-<p align="center">
-<img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
-<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
-</p>
+Beyond those, the rest of the 58 tabs cover performance tuning, DNS and hosts editing, duplicate files,
+battery health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
+new-install alerts and Windows optional features. [The full list is below](#features), grouped as the sidebar
+groups them.
 
 ## Why SysManager?
 
@@ -1784,6 +1777,16 @@ Windows Update / winget endpoints).
 PRs welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the build
 setup, coding conventions, and pull-request workflow. New contributors are
 expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+**Project health** — the badges a contributor looks for, kept here rather than at the top, where they told a
+visitor nothing about the app:
+
+[![CI](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml/badge.svg)](https://github.com/laurentiu021/SystemManager/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/laurentiu021/SystemManager/branch/main/graph/badge.svg)](https://codecov.io/gh/laurentiu021/SystemManager)
+[![Issues](https://img.shields.io/github/issues/laurentiu021/SystemManager)](https://github.com/laurentiu021/SystemManager/issues)
+[![winget](https://img.shields.io/badge/winget-laurentiu021.SysManager-0078D4?logo=windows)](https://github.com/microsoft/winget-pkgs/tree/master/manifests/l/laurentiu021/SysManager)
+[![Stars](https://img.shields.io/github/stars/laurentiu021/SystemManager?style=social)](https://github.com/laurentiu021/SystemManager/stargazers)
 
 ## Support
 

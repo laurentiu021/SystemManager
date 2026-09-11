@@ -22,6 +22,17 @@ namespace SysManager.Services;
 public sealed class DuplicateFileService
 {
     /// <summary>Progress payload.</summary>
+    /// <param name="FilesDiscovered">Files seen so far that clear the minimum size.</param>
+    /// <param name="FilesHashed">Files whose content has been hashed so far.</param>
+    /// <param name="BytesProcessed">Total bytes read by the hashing pass.</param>
+    /// <param name="CurrentFile">
+    /// The FULL path of the file being read — not its name. A consumer showing a single row wants the leaf
+    /// and can take it with <see cref="Path.GetFileName(string)"/>; one that reported only the name could
+    /// not go the other way, which left a tooltip promising the path showing the row's own text (#2262).
+    /// The one exception is the final report, whose value is the placeholder described on
+    /// <see cref="CompletePhase"/>.
+    /// </param>
+    /// <param name="Phase">Plain-language stage, or <see cref="CompletePhase"/> for the final report.</param>
     public sealed record ScanProgress(
         long FilesDiscovered,
         long FilesHashed,
@@ -74,7 +85,13 @@ public sealed class DuplicateFileService
         long discovered = 0;
         var stack = new Stack<string>();
         stack.Push(rootPath);
-        var lastReport = Environment.TickCount64;
+
+        // Zero, not the current tick: the throttle below is "not more often than every 200 ms", and seeding
+        // it with now made that "not before 200 ms have passed" as well. A folder that scans in less than
+        // that reported no file at all, so the readout stayed blank for the whole scan — and it also made
+        // the report shape untestable, because no test folder is slow enough to produce one. TickCount64 is
+        // time since boot, so the first file always clears the gap and every file after it is throttled.
+        var lastReport = 0L;
 
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
@@ -110,7 +127,11 @@ public sealed class DuplicateFileService
                     var now = Environment.TickCount64;
                     if (now - lastReport >= 200)
                     {
-                        progress?.Report(new ScanProgress(discovered, 0, 0, fi.Name, "Discovering files…"));
+                        // The FULL path, not fi.Name: the consumer shows the leaf on its status row and the
+                        // whole path on hover, and reporting the name made the hover a copy of the row
+                        // (#2262). The same name occurs in many folders, and which folder the scan is in is
+                        // the one thing the row cannot show.
+                        progress?.Report(new ScanProgress(discovered, 0, 0, fi.FullName, "Discovering files…"));
                         lastReport = now;
                     }
                 }
@@ -139,6 +160,13 @@ public sealed class DuplicateFileService
         long hashed = 0;
         long bytesProcessed = 0;
         var hashGroups = new Dictionary<string, DuplicateFileGroup>();
+
+        // Reset the throttle at the phase boundary, for the same reason it starts at zero: the phase the
+        // consumer announces changes here, and without this the first hashed file is only reported if 200 ms
+        // happen to have passed since the last discovered one. On a small folder they have not, so the line
+        // said "Hashing files…" while the file beside it was still the last one DISCOVERED — or, if discovery
+        // itself was short, showed nothing at all.
+        lastReport = 0L;
 
         foreach (var group in candidates)
         {
@@ -191,7 +219,8 @@ public sealed class DuplicateFileService
                         var now = Environment.TickCount64;
                         if (now - lastReport >= 200)
                         {
-                            progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, fi.Name, "Hashing files…"));
+                            // Full path, for the reason given at the discovery report above (#2262).
+                            progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, fi.FullName, "Hashing files…"));
                             lastReport = now;
                         }
                     }

@@ -130,8 +130,15 @@ public sealed partial class DebloaterService
     /// Parses <c>Get-AppxPackage</c> output into <see cref="StoreApp"/> records, applying the
     /// denylist and curated catalog. Pure and runner-agnostic for unit testing.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="objects"/> is null.</exception>
     public static IReadOnlyList<StoreApp> ParsePackages(IEnumerable<PSObject> objects)
     {
+        // The individual nulls below are handled and the collection itself was not (#2259). Found the hard
+        // way: an unconfigured test substitute returned a null collection, this threw NullReferenceException
+        // inside a view-model's constructor init, and the init swallowed it — so a real fault was invisible
+        // until something awaited the task. Failing here says which argument was wrong.
+        ArgumentNullException.ThrowIfNull(objects);
+
         List<StoreApp> apps = [];
         foreach (var obj in objects)
         {

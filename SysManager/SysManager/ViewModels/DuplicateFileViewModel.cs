@@ -249,9 +249,9 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     /// <para>The file name was reported by the service and assigned to <see cref="CurrentFile"/> on every
     /// progress tick, but nothing displayed it — so a scan of a large folder showed only rising numbers,
     /// with no sign of which file it was on or whether it had stalled on one.</para>
-    /// <para><see cref="Path.GetFileName(string)"/> is applied defensively rather than to shorten anything:
-    /// the service reports <c>FileInfo.Name</c>, so what arrives is already a bare name. It stays because
-    /// this method has no way to know that and a full path would otherwise dominate the row.</para>
+    /// <para>Only the leaf is shown: the service reports the full path, and a deep one would dominate the
+    /// row. The whole path is on the row's tooltip, so nothing is lost — that pairing is the point, and it
+    /// did not hold until the service stopped reporting a bare name (#2262).</para>
     /// <para>The phase is NOT repeated here: it is what the announced status line beside this one carries,
     /// so printing it twice would put the same word on the row twice (#2143).</para>
     /// <para>Pure and static so the formatting is testable without running a scan.</para>

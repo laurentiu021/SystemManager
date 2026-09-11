@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.97.1] - 2026-09-11
+
+**Hovering the scan line in Duplicate Finder now tells you which folder it is in.** It showed a tooltip, and
+the tooltip showed the same file name the line already showed — so pointing at it told you nothing. The tab
+was only ever told the file's name, never where it lived, and the same name occurs in dozens of folders, which
+on this tab is the whole point. Hover now shows the full path. Two smaller things came with it: a scan of a
+small folder used to show no file at all, because the first report waited a fifth of a second that the scan
+never lasted, and the line kept showing the last file of the previous stage after the stage had changed.
+
+### Fixed
+
+- The scan reports the file's full path, so the row shows the name and the hover shows the folder. Both are
+  worth having and neither was available before: the line was trimmed to fit and the tooltip repeated it.
+- **A folder that scans in under 200 milliseconds now shows what it is doing.** The rate limit on progress
+  reports was "no sooner than 200 ms from now" rather than "no more often than every 200 ms", so a fast scan
+  produced no report at all and the line stayed blank from start to finish.
+- The stage and the file beside it now change together. The rate limit carried over from finding files into
+  hashing them, so the line could read "Hashing files" while still naming the last file it had *found*.
+
 ## [1.97.0] - 2026-09-11
 
 **Duplicate Finder no longer talks over a screen reader while it scans.** Its one status line carried the

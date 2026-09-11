@@ -72,6 +72,67 @@ public class SidebarSelectionContractTests
                 mark => (string?)mark.Attribute("Style") == "{StaticResource SidebarActiveMark}"));
     }
 
+    /// <summary>
+    /// Every live sidebar row carries a HOVER mark as well as a selection mark, the hover one is neutral,
+    /// and it is suppressed while the row is selected.
+    /// </summary>
+    /// <remarks>
+    /// The tint alone was 1.11:1 composited — below what most people see on a laptop panel in a bright room —
+    /// and a background tint on a dark theme cannot reach WCAG 1.4.11's 3:1 at all. The 3px bar can, at
+    /// 6.05:1 or better, so it is the part that carries the contrast (#1540).
+    /// <para>The two assertions that matter are about CONFUSION, not presence. The selected row already draws
+    /// an Accent bar in this exact position, so a hover mark reading <c>{DynamicResource Accent}</c> would
+    /// make pointing at a row look like having opened it — and the suppression condition is what stops both
+    /// bars occupying the same 3px at once. <c>ThemeTextContrastTests.TheHoverMark_IsNeverTheAccent</c> covers
+    /// the same rule at the palette level; this covers the markup, because the brush KEY could be repointed
+    /// without any palette changing.</para>
+    /// <para>Asserted per row rather than only on the style, for the reason the marks above are: a row that
+    /// simply forgot the Rectangle would satisfy every style-level check while showing no hover bar.</para>
+    /// </remarks>
+    [Fact]
+    public void LiveRows_CarryANeutralHoverMark_SuppressedWhileSelected()
+    {
+        var document = LoadProjectXaml("MainWindow.xaml");
+        var markStyle = FindStyle(document, "SidebarHoverMark");
+
+        AssertSetter(markStyle, "Visibility", "Collapsed");
+        AssertSetter(markStyle, "Fill", "{DynamicResource RowHoverMark}");
+
+        var conditions = markStyle
+            .Descendants(Presentation + "MultiDataTrigger")
+            .Single()
+            .Descendants(Presentation + "Condition")
+            .Select(c => ((string?)c.Attribute("Binding"), (string?)c.Attribute("Value")))
+            .ToList();
+
+        Assert.Contains(conditions, c => c.Item1?.Contains("IsMouseOver", StringComparison.Ordinal) is true
+                                         && c.Item2 == "True");
+        Assert.Contains(conditions, c => c.Item1 == "{Binding IsSelected}" && c.Item2 == "False");
+
+        var liveRows = document
+            .Descendants(Presentation + "Border")
+            .Where(element => (string?)element.Attribute("Style") == "{StaticResource SidebarNavRow}")
+            .ToList();
+
+        Assert.Equal(2, liveRows.Count);
+        Assert.All(
+            liveRows,
+            row => Assert.Single(
+                row.Descendants(Presentation + "Rectangle"),
+                mark => (string?)mark.Attribute("Style") == "{StaticResource SidebarHoverMark}"));
+
+        // The hover mark must sit exactly where the selection mark does, or the bar would jump sideways
+        // between "pointing at" and "on" — the negative margin is what pulls it into the row's padding.
+        foreach (var row in liveRows)
+        {
+            var active = row.Descendants(Presentation + "Rectangle")
+                .Single(m => (string?)m.Attribute("Style") == "{StaticResource SidebarActiveMark}");
+            var hover = row.Descendants(Presentation + "Rectangle")
+                .Single(m => (string?)m.Attribute("Style") == "{StaticResource SidebarHoverMark}");
+            Assert.Equal((string?)active.Attribute("Margin"), (string?)hover.Attribute("Margin"));
+        }
+    }
+
     [Fact]
     public void LiveRows_ExposeSelectionToInvokableAutomationPeers()
     {

@@ -526,16 +526,58 @@ public sealed class ThemeService
         var rim = Lerp(theme.Border, theme.TextPrimary, 0.22);
         SetBrush(res, "CardRim", VGradient((rim, 0.0), (theme.Border, 0.5)));
 
-        // Row hover — a SUBTLE neutral tint, deliberately distinct from the accent-tinted selection
+        // Row hover — a neutral tint, deliberately distinct from the accent-tinted selection
         // (AccentSoft). Before, DataGrid rows used AccentSoft for BOTH hover and selection, so hovering
-        // any row made it look selected. This is a faint lift off the surface (toward TextPrimary),
+        // any row made it look selected. This is a lift off the surface (toward TextPrimary),
         // theme-derived so it works on light presets too.
-        SetBrush(res, "RowHover", Lerp(theme.Surface, theme.TextPrimary, 0.05));
+        //
+        // The factor is well above the 0.05 it shipped with: composited, 0.05 measured 1.11:1 against the
+        // surface it sits on, which is below the perceptual threshold on a typical laptop panel in a bright
+        // room. Hover is the ONLY affordance signal on the sidebar rows — they have no button chrome — so an
+        // imperceptible one means the app never shows what is clickable (#1540).
+        SetBrush(res, "RowHover", Lerp(theme.Surface, theme.TextPrimary, RowHoverLerp(theme.IsDark)));
+
+        // The hover MARK: a 3px bar on the left edge of a hovered sidebar row, which is what actually
+        // carries the contrast. A background tint cannot reach WCAG 1.4.11's 3:1 on a dark theme without
+        // becoming a different colour — at alpha 64 the accent wash tops out at 1.32:1 — whereas a solid
+        // bar is 6.05:1 or better on every preset measured.
+        //
+        // TextMuted rather than Accent, and that is the whole point: the SELECTED row already draws a 3px
+        // Accent bar in the same position (SidebarActiveMark in MainWindow.xaml), so an accent hover bar
+        // would make pointing at a row look exactly like having opened it — the same confusion this
+        // codebase already fixed once when hover and selection both used AccentSoft. Neutral bar for
+        // hover, accent bar for selection: they differ in colour as well as in wash strength.
+        SetBrush(res, "RowHoverMark", RowHoverMarkColor(theme));
 
         ApplyStatusBrushes(res, theme.IsDark);
 
         ThemeChanged?.Invoke();
     }
+
+    /// <summary>
+    /// How far <c>RowHover</c> lifts the surface toward the text colour, by mode.
+    /// </summary>
+    /// <remarks>
+    /// Two factors rather than one, because contrast ratio is not symmetric: lightening a dark surface by
+    /// 15% yields 1.43–1.52:1 across the dark presets, while darkening a light surface by the same 15% only
+    /// yields 1.27–1.35:1 — the light presets came out a third weaker for the identical arithmetic. A single
+    /// factor large enough for them (0.22) would push the dark presets to 1.9:1, a heavier wash than the
+    /// design called for. 0.25 on light lands them at 1.52–1.68, the same band.
+    /// <para>Internal so <c>ThemeTextContrastTests</c> asserts the floors against THIS method rather than a
+    /// copy of the numbers. A test that restates the factor stops testing the moment the service changes it.
+    /// The precedent is <c>ApplyStatusBrushes(res, theme.IsDark)</c>, which is mode-dependent for the same
+    /// kind of reason.</para>
+    /// </remarks>
+    internal static double RowHoverLerp(bool isDark) => isDark ? 0.15 : 0.25;
+
+    /// <summary>The colour of the 3px bar on a hovered row.</summary>
+    /// <remarks>
+    /// A named method for one property access, and it earns that: it is what the contrast tests assert
+    /// against. Asserting <c>TextMuted != Accent</c> on the palette instead would pass unchanged if this were
+    /// repointed AT the accent, which is precisely the regression worth catching — the selected row draws an
+    /// Accent bar in the same 3px, so hover would become indistinguishable from selected.
+    /// </remarks>
+    internal static Color RowHoverMarkColor(ThemePreset theme) => theme.TextMuted;
 
     /// <summary>
     /// Builds a frozen top-to-bottom <see cref="LinearGradientBrush"/> from the given color/offset

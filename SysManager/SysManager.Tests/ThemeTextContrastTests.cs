@@ -130,6 +130,126 @@ public class ThemeTextContrastTests
         Assert.True(light > 0, "No light presets — the title-bar bug could not manifest.");
     }
 
+    // ── Hover feedback (#1540) ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The 3px bar on a hovered sidebar row must clear WCAG 1.4.11's 3:1 on every preset — it is what
+    /// carries the contrast, because the background tint cannot.
+    /// </summary>
+    /// <remarks>
+    /// Hover is the only affordance signal on a sidebar row: the rows are bare <c>Border</c>s with no
+    /// button chrome, so nothing else says "this is clickable". Composited, the tint that shipped measured
+    /// 1.11:1 against the surface it sits on — below the perceptual threshold on a typical laptop panel in
+    /// a bright room.
+    /// <para>Raising the tint cannot fix that. Measured across the range #1540 proposed, an accent wash at
+    /// alpha 64 reaches 1.32:1 and a neutral lift at 0.15 reaches 1.50:1; to pass 3:1 by tint alone the
+    /// hover would have to become a different colour, which is what selection already is. So the bar is
+    /// the load-bearing part and this is the assertion that keeps it honest.</para>
+    /// <para>Asserted against Surface AND the two derived surfaces below it, because a sidebar row sits on
+    /// Surface while a DataGrid row can sit on either — and the derived ones are lighter, so they are the
+    /// worse case for a light-neutral bar.</para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void TheHoverMark_MeetsTheUiComponentFloor_OnEveryPreset(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+
+        // RowHoverMark = theme.TextMuted, and the derived surfaces use the same Lerp factors
+        // ThemeService.Apply does, so this test and the service cannot drift apart.
+        foreach (var (name, surface) in new (string, Color)[]
+        {
+            ("Surface", p.Surface),
+            ("Surface3 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.05)),
+            ("Surface4 (derived)", Lerp(p.Surface2, p.TextPrimary, 0.10)),
+        })
+        {
+            var ratio = ContrastRatio(ThemeService.RowHoverMarkColor(p), surface);
+            Assert.True(ratio >= 3.0,
+                $"{presetId}: the hover mark is {ratio:F2}:1 against {name}, under WCAG 1.4.11's 3:1 for a "
+                + "UI component boundary. It is the only part of the hover state that can clear that floor — "
+                + "the background tint physically cannot on a dark theme — so a mark below it leaves the "
+                + "sidebar with no perceptible indication of what the mouse is on.");
+        }
+    }
+
+    /// <summary>
+    /// The hover mark must not be the accent colour, on any preset. The SELECTED row draws a 3px Accent bar
+    /// in exactly the same position, so an accent hover mark would make pointing at a row look like having
+    /// opened it.
+    /// </summary>
+    /// <remarks>
+    /// This sidebar already had that confusion once, when hover and selection both painted themselves
+    /// <c>AccentSoft</c>; the fix separated them and the comment in <c>ThemeService</c> records it. Adding a
+    /// second accent bar would reintroduce the same defect in a different property, which no existing test
+    /// would have caught — <c>SidebarSelectionContractTests</c> checks the BRUSH NAMES in the markup, and
+    /// both marks reading <c>{DynamicResource …}</c> from different keys satisfies it.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void TheHoverMark_IsNeverTheAccent(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+
+        var mark = ThemeService.RowHoverMarkColor(p);
+        Assert.True(mark != p.Accent,
+            $"{presetId}: the hover mark colour equals the accent, which is what the selected row's mark "
+            + "uses. Hover would then be indistinguishable from selected.");
+
+        // Not merely unequal — distinguishable. Two colours 1.05:1 apart are the same colour to a user.
+        var separation = ContrastRatio(mark, p.Accent);
+        Assert.True(separation >= 1.2,
+            $"{presetId}: the hover mark and the selection mark are only {separation:F2}:1 apart, so the two "
+            + "bars read as the same bar. Hover must not look like the row you are on.");
+    }
+
+    /// <summary>
+    /// The hover tint must stay clearly WEAKER than the selection tint. Hover says "you are pointing at
+    /// this"; selection says "this is where you are", and the stronger signal has to be the second one.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllPresets))]
+    public void TheHoverTint_StaysWeakerThanTheSelectionTint(string presetId)
+    {
+        var p = ThemePreset.Defaults[presetId];
+
+        // The factor comes from the service, not from a number restated here: a test that copies it stops
+        // testing the moment the service changes it.
+        var hover = Lerp(p.Surface, p.TextPrimary, ThemeService.RowHoverLerp(p.IsDark));
+        var selection = Composite(p.Accent, 24, p.Surface);                      // AccentSoft over Surface
+
+        var hoverLift = ContrastRatio(hover, p.Surface);
+        var selectionLift = ContrastRatio(selection, p.Surface);
+
+        Assert.True(hoverLift >= 1.40,
+            $"{presetId}: the hover tint is only {hoverLift:F3}:1 off the surface. Below roughly 1.3 it is "
+            + "not perceptible on a laptop panel in a bright room, which is the whole of #1540 — and the "
+            + "light presets are where a single lerp factor fails, because darkening a light surface by the "
+            + "same fraction buys a third less ratio than lightening a dark one.");
+
+        // Deliberately NOT "selection must be stronger than hover": on a dark theme a neutral lift can
+        // out-measure a 9% accent wash while still reading as the weaker signal, because the accent is a
+        // HUE change and the lift is not. What must hold is that hover does not overwhelm it.
+        Assert.True(hoverLift <= selectionLift * 2.0,
+            $"{presetId}: the hover tint ({hoverLift:F3}:1) is more than twice the selection tint "
+            + $"({selectionLift:F3}:1) off the surface. Pointing at a row would shout louder than being on "
+            + "it.");
+    }
+
+    /// <summary>Composites <paramref name="fg"/> at <paramref name="alpha"/> over <paramref name="bg"/>.</summary>
+    /// <remarks>
+    /// <c>AccentSoft</c> is the accent at alpha 24, and an alpha brush's contrast is meaningless until it is
+    /// flattened against what it sits on — comparing the accent itself would measure a colour no user sees.
+    /// </remarks>
+    private static Color Composite(Color fg, byte alpha, Color bg)
+    {
+        var a = alpha / 255.0;
+        return Color.FromRgb(
+            (byte)Math.Round(fg.R * a + bg.R * (1 - a)),
+            (byte)Math.Round(fg.G * a + bg.G * (1 - a)),
+            (byte)Math.Round(fg.B * a + bg.B * (1 - a)));
+    }
+
     private static double ContrastRatio(Color a, Color b)
     {
         double la = RelLum(a), lb = RelLum(b);

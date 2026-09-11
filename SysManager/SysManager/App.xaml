@@ -75,8 +75,15 @@
                 <GradientStop Color="#33405A" Offset="0"/>
                 <GradientStop Color="#1F2633" Offset="0.5"/>
             </LinearGradientBrush>
-            <!-- Subtle neutral row-hover, distinct from accent selection. Dark fallback; ThemeService derives per preset. -->
-            <SolidColorBrush x:Key="RowHover" Color="#1A1F2A"/>
+            <!-- Neutral row-hover, distinct from accent selection. Dark fallback; ThemeService derives per preset.
+                 #303439 is Lerp(Surface, TextPrimary, 0.15) for this default palette — 1.50:1 against the
+                 surface, where the 0.05 it shipped with measured 1.11:1 and was below the perceptual
+                 threshold (#1540). -->
+            <SolidColorBrush x:Key="RowHover" Color="#303439"/>
+            <!-- The 3px bar on a hovered sidebar row, which is what carries the contrast: 6.41:1 here, where
+                 no background tint on a dark theme can reach 3:1. NEUTRAL on purpose — the selected row's
+                 bar in the same position is Accent, and reusing it would make hover look like selection. -->
+            <SolidColorBrush x:Key="RowHoverMark" Color="#9097A7"/>
 
             <!-- Text -->
             <SolidColorBrush x:Key="TextPrimary" Color="#F1F3F7"/>

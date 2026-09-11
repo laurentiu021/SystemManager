@@ -107,6 +107,40 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- The hover twin of SidebarActiveMark: same geometry and position, NEUTRAL fill.
+             A sidebar row has no button chrome, so the tint is the only thing saying "this is
+             clickable" — and composited that tint was 1.11:1, below what most people can see on a
+             laptop panel in a bright room. No background tint on a dark theme can reach WCAG
+             1.4.11's 3:1; a solid 3px bar is 6.05:1 or better on every preset (#1540).
+
+             Why it is not the accent: the row above it, when selected, draws an Accent bar in
+             exactly this spot. Reusing Accent here would make pointing at a row look identical to
+             having opened it, which is the confusion this sidebar already had once when hover and
+             selection were both AccentSoft.
+
+             Suppressed while the row is selected, so the two bars never occupy the same 3px at
+             once — the accent one wins, because "this is where you are" outranks "this is what you
+             are pointing at". IsMouseOver comes off the Button ancestor rather than this Rectangle,
+             which is only 3px wide and would otherwise light up nowhere. -->
+        <Style x:Key="SidebarHoverMark" TargetType="Rectangle">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Width" Value="3"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Fill" Value="{DynamicResource RowHoverMark}"/>
+            <Setter Property="RadiusX" Value="2"/>
+            <Setter Property="RadiusY" Value="2"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True"/>
+                        <Condition Binding="{Binding IsSelected}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -162,6 +196,9 @@
                                         <Grid>
                                             <Rectangle x:Name="SingleActiveMark"
                                                        Style="{StaticResource SidebarActiveMark}"
+                                                       Margin="-14,0,0,0"/>
+                                            <Rectangle x:Name="SingleHoverMark"
+                                                       Style="{StaticResource SidebarHoverMark}"
                                                        Margin="-14,0,0,0"/>
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- The GROUP's glyph, reached past this Border's
@@ -318,6 +355,9 @@
                                                         <Grid>
                                                             <Rectangle x:Name="ActiveMark"
                                                                        Style="{StaticResource SidebarActiveMark}"
+                                                                       Margin="-28,0,0,0"/>
+                                                            <Rectangle x:Name="HoverMark"
+                                                                       Style="{StaticResource SidebarHoverMark}"
                                                                        Margin="-28,0,0,0"/>
                                                             <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
                                                                  children infinite width, so the label's grid never constrained and the

@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.95.0] - 2026-09-11
+
+**You can now see what the mouse is on.** The sidebar rows have no button chrome, so the faint tint that
+appeared under the pointer was the only thing telling you a row was clickable — and measured against the
+surface behind it, that tint was a 1.11:1 difference, which is below what most people can see on a laptop
+screen in a bright room. Hovering a row now also draws a small bar down its left edge, and the tint itself
+is nearly four times stronger. The bar is deliberately grey rather than purple: the row you are actually on
+already draws a purple bar in that exact spot, and a purple hover bar would have made pointing at a row
+look the same as having opened it.
+
+### Changed
+
+- **Row hover is perceptible.** The tint lifts the surface by 15% instead of 5% — and by 25% on the six
+  light presets, where darkening a pale surface by the same fraction buys about a third less contrast.
+- **A 3px bar marks the hovered sidebar row**, in the muted text colour. At 6.4:1 against the surface it is
+  the part of the hover state that clears the accessibility floor for a UI boundary; no background tint on a
+  dark theme can reach it. It is hidden while the row is selected, so the two bars never share the same
+  3 pixels.
+- Group headers and table rows get the stronger tint but no bar: a group header has no selected state for
+  hover to be confused with, and a left border on a table row would inset the cells while leaving the
+  column headers where they are, misaligning every grid in the app.
+
 ## [1.94.0] - 2026-09-11
 
 **Quick Cleanup can now reclaim the several gigabytes Windows keeps in its component store — and it tells

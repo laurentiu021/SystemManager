@@ -62,7 +62,7 @@
                                 <DropShadowEffect Color="#FF3B30" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
-                        <TextBlock Text="{Binding CriticalCount}" FontSize="20" FontWeight="Bold"
+                        <TextBlock Text="{Binding CriticalCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
                              (both are reds — a colorblind-safe, non-color cue). -->
@@ -85,7 +85,7 @@
                                 <DropShadowEffect Color="#F87171" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
-                        <TextBlock Text="{Binding ErrorCount}" FontSize="20" FontWeight="Bold"
+                        <TextBlock Text="{Binding ErrorCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Plain "Errors" — the coloured SevDot already marks the row; the leading
                              glyph is reserved for Critical (▲) as its colourblind-safe "most severe red"
@@ -111,7 +111,7 @@
                                 <DropShadowEffect Color="#FBBF24" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
-                        <TextBlock Text="{Binding WarningCount}" FontSize="20" FontWeight="Bold"
+                        <TextBlock Text="{Binding WarningCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Warnings" FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
@@ -130,7 +130,7 @@
                                 <DropShadowEffect Color="#38BDF8" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
                             </Ellipse.Effect>
                         </Ellipse>
-                        <TextBlock Text="{Binding InfoCount}" FontSize="20" FontWeight="Bold"
+                        <TextBlock Text="{Binding InfoCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Info}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <TextBlock Text="Info" FontSize="12" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>

@@ -71,6 +71,20 @@ colour, accent included, falls to 1.00:1 against at least one of those.
 `ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
+The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
+`SectionTitle` (14) → `Subtle` → `Caption`. **Numbers**: `MetricHero` (30), `MetricLarge` (26),
+`Metric` (22), `MetricSmall` (20). The metric rungs above and below `Metric` were added for sizes views
+were already rendering with raw `FontSize` attributes, and `Heading` was restored alongside its first
+real user — the sidebar wordmark — having been deleted once for having none (#1630). `Heading` and
+`MetricSmall` share a size and are deliberately separate: one is text, the other a number, and System
+Logs' severity counts take the metric one for that reason. The new rungs are `BasedOn` the implicit
+`TextBlock` style because an explicit style REPLACES it, which would otherwise drop
+`TextFormattingMode`/`TextRenderingMode`; `Display` and `Metric` predate that and still have the gap.
+`ArchitectureTests.EveryMetricRungSize_IsReachedThroughItsRung` enforces both directions — no raw
+`FontSize` at a metric rung's size, and no reference to a rung `App.xaml` does not define, the latter
+because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and would otherwise crash a tab
+rather than fail a build.
+
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was
 removed rather than left as unreachable code. A tab that is implemented but not yet

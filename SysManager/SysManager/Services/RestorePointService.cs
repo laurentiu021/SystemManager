@@ -58,8 +58,15 @@ public sealed class RestorePointService
     /// Parses <c>Get-ComputerRestorePoint</c> output into <see cref="RestorePoint"/> records,
     /// sorted newest-first. Pure and runner-agnostic so it can be unit-tested directly.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="objects"/> is null.</exception>
     public static IReadOnlyList<RestorePoint> ParseRestorePoints(IEnumerable<PSObject> objects)
     {
+        // The individual nulls below are handled and the collection itself was not, which is the asymmetry
+        // worth closing on a method that is public and documented for direct use (#2259). Not reachable from
+        // production — PowerShellRunner.RunAsync always returns a collection — so this is about the contract
+        // a caller can rely on, and about failing at the boundary instead of somewhere inside the loop.
+        ArgumentNullException.ThrowIfNull(objects);
+
         List<RestorePoint> points = [];
         foreach (var obj in objects)
         {

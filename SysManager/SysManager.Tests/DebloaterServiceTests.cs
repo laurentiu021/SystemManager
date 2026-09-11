@@ -155,6 +155,25 @@ public class DebloaterServiceTests
     public void Parse_EmptyInput_ReturnsEmpty()
         => Assert.Empty(DebloaterService.ParsePackages([]));
 
+    /// <summary>
+    /// A null collection is rejected at the boundary, naming the argument — not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// Empty and null are different answers and only one of them was handled. The per-element <c>is null</c>
+    /// check inside showed nulls were thought about; the collection itself was missed, on a method that is
+    /// public and documented for direct use (#2259).
+    /// <para>How it was found is the argument for asserting it: an unconfigured test substitute returned a
+    /// null collection, the <c>NullReferenceException</c> travelled up through a view-model's constructor
+    /// init, and the init swallowed it — so a genuine fault was invisible until something awaited the task.
+    /// An <c>ArgumentNullException</c> naming <c>objects</c> would have said what was wrong immediately.</para>
+    /// </remarks>
+    [Fact]
+    public void Parse_NullInput_ThrowsNamingTheArgument()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => DebloaterService.ParsePackages(null!));
+        Assert.Equal("objects", ex.ParamName);
+    }
+
     // ---------- RemoveAsync safety gates ----------
 
     private static StoreApp App(string name, string full, bool isProtected = false) => new()

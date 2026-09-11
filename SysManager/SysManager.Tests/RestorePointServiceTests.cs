@@ -94,6 +94,22 @@ public class RestorePointServiceTests
     public void Parse_EmptyInput_ReturnsEmpty()
         => Assert.Empty(RestorePointService.ParseRestorePoints([]));
 
+    /// <summary>
+    /// A null collection is rejected at the boundary, naming the argument — not dereferenced.
+    /// </summary>
+    /// <remarks>
+    /// The sibling of <c>DebloaterService.ParsePackages</c>, same shape and same omission: per-element nulls
+    /// handled, the collection itself not, on a method that is public and documented for direct use (#2259).
+    /// Fixed together because fixing only the one that happened to be found is how the second one gets found
+    /// the same way later.
+    /// </remarks>
+    [Fact]
+    public void Parse_NullInput_ThrowsNamingTheArgument()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => RestorePointService.ParseRestorePoints(null!));
+        Assert.Equal("objects", ex.ParamName);
+    }
+
     [Fact]
     public async Task CreateAsync_PowerShellHostUnavailable_ReturnsFalse()
     {

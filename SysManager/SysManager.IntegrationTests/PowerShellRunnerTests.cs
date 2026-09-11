@@ -520,8 +520,14 @@ public class PowerShellRunnerTests
         using var observer = cts.Token.Register(() => firedAtMs = sw.Elapsed.TotalMilliseconds);
         cts.CancelAfter(TimeSpan.FromMilliseconds(300));
 
-        var ex = await Record.ExceptionAsync(async () =>
-            await runner.RunAsync("Start-Sleep -Seconds 30", cancellationToken: cts.Token));
+        // An INTERRUPTIBLE script, and that replaced `Start-Sleep -Seconds 30`. The old one asserted
+        // something PowerShell does not promise: ps.Stop() interrupts between pipeline statements, not
+        // inside a single blocking cmdlet call, so a 30-second sleep ran to completion every time and the
+        // test cost 30 seconds to report it. The controlled comparison is in the CI log for #2206 — on the
+        // SAME elevated out-of-process runspace, the loop below cancelled in 2.2 s while the sleep took
+        // 31.4 s. The real limit is pinned by its own test below rather than by making this one fail.
+        var ex = await Record.ExceptionAsync(async () => await runner.RunAsync(
+            "while ($true) { [System.Threading.Thread]::Sleep(50) }", cancellationToken: cts.Token));
         sw.Stop();
 
         var errors = lines.Where(l => l.Kind == Models.OutputKind.Error).Select(l => l.Text).ToList();
@@ -541,6 +547,73 @@ public class PowerShellRunnerTests
         // Stopping without reporting it is its own defect: every caller's cancel branch is written around
         // OperationCanceledException, so a silent return would show a cancelled operation as a completed one.
         Assert.True(ex is OperationCanceledException, "Cancellation did not surface as OperationCanceledException. " + diagnosis);
+    }
+
+    /// <summary>
+    /// A single long BLOCKING call cannot be interrupted — but the cancellation must still be reported when
+    /// it finally returns.
+    /// </summary>
+    /// <remarks>
+    /// The real limit behind #2206, pinned rather than wished away. <c>ps.Stop()</c> interrupts a pipeline
+    /// between statements; it cannot interrupt one statement that is inside a blocking native call. The
+    /// evidence is a controlled comparison from one CI run, on one elevated out-of-process runspace:
+    /// <c>while ($true) { Thread::Sleep(50) }</c> cancelled in 2.2 s, while <c>Start-Sleep -Seconds 30</c>
+    /// took 31.4 s — the whole sleep. Same transport, same cancel, opposite outcome.
+    ///
+    /// <para>So the canary above asserted something PowerShell does not promise, and cost thirty seconds
+    /// per CI run to say so. What the runner CAN promise is that the cancellation is not lost, and that is
+    /// what this asserts: the call takes the script's full duration, and it still raises
+    /// <c>OperationCanceledException</c> rather than returning as though nothing had been asked.</para>
+    ///
+    /// <para>Three seconds of real waiting, deliberately. A shorter block would not reliably outlast the
+    /// cancel on a loaded runner, and the value being pinned is precisely that the call does NOT come back
+    /// early. <c>Thread::Sleep</c> rather than <c>Start-Sleep</c> because the latter needs
+    /// <c>Microsoft.PowerShell.Utility</c>, which the in-process runspace does not load — it would fail
+    /// instantly on a dev box and pin nothing at all.</para>
+    ///
+    /// <para><b>Either cancellation message is correct here, and finding out why corrected the model above.</b>
+    /// Running this locally reported "stopped by cancellation" after the full three seconds: the stop stays
+    /// PENDING through the blocking call and takes effect at the next statement boundary, so
+    /// <c>EndInvoke</c> throws after all. CI's 30-second <c>Start-Sleep</c> reported "completed on its own"
+    /// because the sleep WAS the whole script — there was no next statement to stop at, so the pipeline
+    /// simply finished. Three outcomes, then, not two: interrupted promptly, stopped late at a boundary, or
+    /// never noticed. Asserting one message would pin the transport rather than the contract, and the
+    /// contract is that the cancellation reaches the caller either way.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_CancellingASingleBlockingCall_CannotInterruptItButStillReportsIt()
+    {
+        var runner = new PowerShellRunner();
+        var warm = await runner.RunAsync("1 + 1");
+        Assert.Equal(2, Convert.ToInt32(Assert.Single(warm).BaseObject, System.Globalization.CultureInfo.InvariantCulture));
+
+        using var cts = new CancellationTokenSource();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        cts.CancelAfter(TimeSpan.FromMilliseconds(300));
+
+        var ex = await Record.ExceptionAsync(async () => await runner.RunAsync(
+            "[System.Threading.Thread]::Sleep(3000)", cancellationToken: cts.Token));
+        sw.Stop();
+
+        var diagnosis = $"elapsed {sw.Elapsed}; exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"})";
+
+        // The premise: the call really did outlast the cancel. If this ever stops holding, ps.Stop() has
+        // become able to interrupt a blocking call and the rest of this test is about nothing.
+        Assert.True(sw.Elapsed > TimeSpan.FromMilliseconds(2500),
+            "the blocking call returned early, so ps.Stop() now interrupts inside one — which would be good "
+            + "news and makes this test obsolete rather than failing. " + diagnosis);
+
+        Assert.True(ex is OperationCanceledException,
+            "a cancelled run whose script could not be interrupted returned without reporting the "
+            + "cancellation, so the caller sees a completed operation. " + diagnosis);
+
+        // Either arm is right — see the remarks. What must not happen is neither.
+        Assert.True(
+            ex!.Message.Contains("stopped by cancellation", StringComparison.Ordinal)
+            || ex.Message.Contains("completed on its own", StringComparison.Ordinal),
+            "the cancellation was reported by neither of the runner's two arms, so the message no longer "
+            + "says which path ran and the next failure of this kind is back to being a stopwatch reading. "
+            + diagnosis);
     }
 
     /// <summary>

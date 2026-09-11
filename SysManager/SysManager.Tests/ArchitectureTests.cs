@@ -944,6 +944,71 @@ public partial class ArchitectureTests
     private static partial Regex ElevationSelfSkip();
 
     /// <summary>
+    /// No test hands the PowerShell runner a script that can run forever.
+    /// </summary>
+    /// <remarks>
+    /// A cancellation test's shape is "start something slow, cancel it, assert it stopped", and the slow thing
+    /// has to block long enough for the cancel to land. An endless loop does that — and if the cancel fails to
+    /// land, nothing ends it. On 2026-09-11 that cost three CI runs their whole 30-minute ceiling, each
+    /// reporting nothing about the other 635 tests, and it was the same probe every time (#2263). The suite is
+    /// serial, so one test that never returns takes the run with it.
+    /// <para>The fix is a script with a deadline of its own, which does not weaken the measurement: every
+    /// caller asserts cancellation lands within a few SECONDS, so the deadline only decides whether a failure
+    /// is reported or the job is killed. This holds that shape.</para>
+    /// <para>The needle is built by concatenation because this file is one of the files scanned — a guard
+    /// spelling its own forbidden pattern flags itself. Comment lines are dropped for the same reason: the
+    /// paragraph above would otherwise be a violation.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTestScript_CanRunForever()
+    {
+        // Assembled, never spelled: see the remark above.
+        var forbidden = "while (" + "$true)";
+
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                if (Path.GetFileName(file) == "ArchitectureTests.cs") continue;   // this file, prose and all
+
+                scanned++;
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    if (!IsCode(lines[i])) continue;
+                    if (lines[i].Contains(forbidden, StringComparison.Ordinal))
+                        offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 100,
+            $"only {scanned} test source files were scanned across the three test projects, which is far "
+            + "below the ~140 that exist — the enumeration is wrong, so a pass here proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these scripts have no end of their own, so a cancellation that fails to land hangs the whole "
+            + "serial suite until CI kills the job — 30 minutes reporting nothing about any other test. Give "
+            + "the loop a deadline, as PowerShellRunnerTests.BlockingScript does:\n  "
+            + string.Join("\n  ", offenders));
+
+        // The replacement has to still BE bounded, or the rule above is satisfied by a loop that spells its
+        // condition differently and runs just as long. Asserted on the comparison that does the work, not on
+        // the presence of the word "deadline".
+        var probe = File.ReadAllText(Path.Combine(
+            root, "SysManager", "SysManager.IntegrationTests", "PowerShellRunnerTests.cs"));
+        Assert.Contains("[DateTime]::UtcNow.AddSeconds(", probe, StringComparison.Ordinal);
+        Assert.Contains("while ([DateTime]::UtcNow -lt $deadline)", probe, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// An audio route SysManager cannot read must be shown as unknown, not as the system default.
     /// </summary>
     /// <remarks>

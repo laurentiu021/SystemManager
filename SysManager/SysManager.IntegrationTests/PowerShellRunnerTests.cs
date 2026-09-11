@@ -12,6 +12,57 @@ namespace SysManager.IntegrationTests;
 public class PowerShellRunnerTests
 {
     /// <summary>
+    /// A script that blocks, can be interrupted, and always ends by itself.
+    /// </summary>
+    /// <remarks>
+    /// Three properties, each load-bearing and each learned the hard way.
+    /// <para><b>It yields every 50 ms</b>, so <c>ps.Stop()</c> has a statement boundary to interrupt at.
+    /// <c>Start-Sleep -Seconds 30</c> gives it none — Stop interrupts BETWEEN pipeline statements, never
+    /// inside one blocking cmdlet call — so the sleep ran to completion every time. The controlled comparison
+    /// is in the CI log for #2206: on the same elevated out-of-process runspace, this loop cancelled in 2.2 s
+    /// while the sleep took 31.4 s.</para>
+    /// <para><b>It has a DEADLINE of its own.</b> This was <c>while ($true)</c>, which has none, and that is
+    /// the whole defect: a cancel that failed to land left the script running until CI killed the entire job
+    /// at its 30-minute ceiling — three times on 2026-09-11, each time reporting nothing at all about the
+    /// other 635 tests (#2263). The bound does not weaken what is measured: every caller asserts cancellation
+    /// lands in a few SECONDS, so 20 turns an all-or-nothing hang into an ordinary failure carrying its
+    /// diagnosis.</para>
+    /// <para><b><c>[DateTime]::UtcNow</c> rather than <c>Get-Date</c></b>, and <c>Thread::Sleep</c> rather
+    /// than <c>Start-Sleep</c>: the unelevated transport builds its runspace from
+    /// <c>InitialSessionState.CreateDefault2()</c>, which loads <c>Microsoft.PowerShell.Core</c> ONLY. Both
+    /// cmdlets live in <c>Microsoft.PowerShell.Utility</c> and would error instantly, returning normally — so
+    /// a cancellation that never happened would read as a fast success. A .NET static call needs no module.
+    /// </para>
+    /// </remarks>
+    private const string BlockingScript =
+        "$deadline = [DateTime]::UtcNow.AddSeconds(20); "
+        + "while ([DateTime]::UtcNow -lt $deadline) { [System.Threading.Thread]::Sleep(50) }";
+
+    /// <summary>
+    /// Awaits <paramref name="work"/>, failing the test if it does not finish rather than waiting forever.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BlockingScript"/> bounds the SCRIPT; this bounds everything else. A cancellation test's
+    /// natural shape is "await the thing that should have been interrupted", and if the runner itself never
+    /// returns then the await never returns either — which is a 30-minute job timeout that says nothing,
+    /// instead of one named failure (#2263). The ceiling is generous on purpose: it is a backstop for a hang,
+    /// not the measurement, and each caller asserts its own much tighter elapsed bound.
+    /// </remarks>
+    private static async Task<Exception?> BoundedAsync(ValueTask<Exception?> work, string testName)
+    {
+        // AsTask because a ValueTask may be awaited only once and Task.WhenAny needs to hold on to it.
+        var task = work.AsTask();
+        var ceiling = TimeSpan.FromSeconds(60);
+
+        if (await Task.WhenAny(task, Task.Delay(ceiling)).ConfigureAwait(false) != task)
+            Assert.Fail($"{testName} did not finish within {ceiling.TotalSeconds:F0}s. The script it runs "
+                        + "ends itself after 20s, so the run never returning points at the runner rather "
+                        + "than at the script — and hanging here would cost the whole suite.");
+
+        return await task.ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Disposing the runner STOPS the child process its runspace was built with, rather than only dropping
     /// the handle.
     /// </summary>
@@ -520,14 +571,10 @@ public class PowerShellRunnerTests
         using var observer = cts.Token.Register(() => firedAtMs = sw.Elapsed.TotalMilliseconds);
         cts.CancelAfter(TimeSpan.FromMilliseconds(300));
 
-        // An INTERRUPTIBLE script, and that replaced `Start-Sleep -Seconds 30`. The old one asserted
-        // something PowerShell does not promise: ps.Stop() interrupts between pipeline statements, not
-        // inside a single blocking cmdlet call, so a 30-second sleep ran to completion every time and the
-        // test cost 30 seconds to report it. The controlled comparison is in the CI log for #2206 — on the
-        // SAME elevated out-of-process runspace, the loop below cancelled in 2.2 s while the sleep took
-        // 31.4 s. The real limit is pinned by its own test below rather than by making this one fail.
-        var ex = await Record.ExceptionAsync(async () => await runner.RunAsync(
-            "while ($true) { [System.Threading.Thread]::Sleep(50) }", cancellationToken: cts.Token));
+        var ex = await BoundedAsync(
+            Record.ExceptionAsync(async () => await runner.RunAsync(
+                BlockingScript, cancellationToken: cts.Token)),
+            nameof(RunAsync_SupportsCancellation));
         sw.Stop();
 
         var errors = lines.Where(l => l.Kind == Models.OutputKind.Error).Select(l => l.Text).ToList();
@@ -708,8 +755,10 @@ public class PowerShellRunnerTests
         using var observer = cts.Token.Register(() => firedAtMs = sw.Elapsed.TotalMilliseconds);
         cts.CancelAfter(TimeSpan.FromMilliseconds(500));
 
-        var ex = await Record.ExceptionAsync(async () => await runner.RunAsync(
-            "while ($true) { [System.Threading.Thread]::Sleep(50) }", cancellationToken: cts.Token));
+        var ex = await BoundedAsync(
+            Record.ExceptionAsync(async () => await runner.RunAsync(
+                BlockingScript, cancellationToken: cts.Token)),
+            nameof(RunAsync_CancellingARunningPipeline_ReportsCancellation));
         sw.Stop();
 
         var diagnosis = $"elapsed {sw.Elapsed}; token fired at {(firedAtMs < 0 ? "NEVER" : $"{firedAtMs:F0} ms")}; "

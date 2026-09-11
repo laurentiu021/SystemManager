@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.92.0] - 2026-09-11
+
+**Deep Cleanup now tells you when administrator rights are the thing standing in the way.** Five of its
+categories live in the Windows folder — the Windows Update download cache, Delivery Optimization, the
+Installer patch cache, `Windows\Temp` and Prefetch — and without administrator they were counted, listed,
+and then quietly reported as "skipped" with no reason given. Those are among the largest items on the
+list, so the tab could look like it had done its job while leaving the biggest wins untouched. It now
+says so at the top of the page, in the same place every other tab does, with a button to restart elevated.
+
+### Added
+
+- **Elevation notice on Deep Cleanup**, naming the five categories that need administrator and what
+  becomes deletable once you restart elevated.
+
+### Fixed
+
+- Items skipped for lack of permission no longer look like items that were simply not there.
+
 ## [1.91.0] - 2026-09-11
 
 **Every tab whose output is a list can now save it to a file.** Five more got an **Export CSV** button —

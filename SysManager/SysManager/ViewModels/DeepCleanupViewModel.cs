@@ -33,6 +33,16 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     public BulkObservableCollection<LargeFileEntry> LargeFiles { get; } = new();
     public ObservableCollection<ScanLocation> ScanLocations { get; } = new();
 
+    /// <summary>Whether this session is elevated. Read by the shared <c>AdminBanner</c> from the DataContext.</summary>
+    /// <remarks>
+    /// Five of the nineteen buckets live under <c>%WinDir%</c> — the Windows Update download cache, the
+    /// Delivery Optimization cache, the Installer patch cache, <c>Windows\Temp</c> and Prefetch — so an
+    /// unelevated run cannot delete them. It did not fail visibly either: the files landed in
+    /// <see cref="Models.CleanupCategory.SkippedCount"/> and the row read "N files · M skipped" without ever
+    /// saying that administrator rights were the reason, which is the one thing the user could have acted on.
+    /// </remarks>
+    [ObservableProperty] private bool _isElevated;
+
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _isCleaning;
     [ObservableProperty] private bool _isLargeScanning;
@@ -75,7 +85,18 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         _cleanup = cleanup;
         _largeFiles = largeFiles;
         _drives = drives;
+        // Read synchronously, before InitAsync: the banner is above the fold and its two states must not
+        // flicker from "needs administrator" to "running as administrator" after the page has painted.
+        IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
+    }
+
+    /// <summary>Restarts SysManager elevated, so the five <c>%WinDir%</c> buckets stop being skipped.</summary>
+    [RelayCommand]
+    private void RelaunchAsAdmin()
+    {
+        if (AdminHelper.RelaunchAsAdmin())
+            App.RequestShutdown();
     }
 
     private async Task InitAsync()

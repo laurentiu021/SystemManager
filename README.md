@@ -570,6 +570,9 @@ a confirmation before it runs:
 - Lists running Windows processes with PID, memory, threads, status, and when each one started
 - Real-time filter by name, description, category, or PID
 - Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
+- **Export CSV** saves the list **as currently filtered** to a file you choose the location for —
+  someone who has typed a filter to isolate a suspect gets that list, not all ~470 rows. Both the
+  readable and the raw values are included, so a spreadsheet can sort by size and by start time
 - **Started column** — when each process began. "Something is eating my CPU" is usually
   answered by *when it appeared*: a process that started three minutes ago is a very
   different suspect from one that has been running since you turned the PC on, and sorting
@@ -644,6 +647,9 @@ a confirmation before it runs:
   mode; it uses a Windows kernel trace and so **needs administrator**. The tab
   offers it only when you're already running as administrator and falls back to the
   no-admin view automatically if the trace can't start — it never breaks the tab
+- **Export CSV** saves the per-app list to a file you choose the location for, with the raw
+  bytes-per-second and byte totals beside the readable figures — a file whose only numbers are
+  "1.2 MB/s" cannot be sorted or added up
 - **Threshold alert** — set a Mbps limit and the tab warns you when total download
   or upload goes over it (handy for catching a runaway background upload); set it to
   0 to turn the alert off
@@ -660,6 +666,8 @@ a confirmation before it runs:
   browse to a file/folder path and see which process(es) are using it, via the
   Windows Restart Manager (the same mechanism Explorer's own dialog uses)
 - Shows process name, PID, type, and start time for each locker
+- **Export CSV** saves the list to a file you choose the location for, including the flag that
+  marks a process Windows will not let you safely end — the one row nobody should act on
 - **End process** — terminate a selected locker (with confirmation) to release
   the file; critical system processes are protected from termination
 - Detection works as a standard user; ending a process owned by SYSTEM or
@@ -717,6 +725,8 @@ a confirmation before it runs:
 - Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
   shortcuts whose targets no longer exist
 - Lists results with name, location, and missing target path
+- **Export CSV** saves the list before you delete anything, naming both the shortcut and its
+  missing target, so the change is reviewable rather than a batch of deletions nobody can audit
 - Select all / deselect individual items
 - Move to Recycle Bin or permanent delete, with confirmation dialog
 - COM-based IShellLink resolution for accurate target validation
@@ -868,6 +878,8 @@ a confirmation before it runs:
 - FileSystemWatcher on install directories + 30-second registry poll cycle
 - Shows timestamped install history with app name, publisher, path, and
   detection source
+- **Export CSV** saves the history to a file you choose the location for. Worth doing before
+  **Clear History**, which erases it — the button sits to the left of it for that reason
 - Start/stop monitoring, acknowledge alerts, show all currently installed
   apps, clear history
 - Notifies you when a new install is detected, so you find out even when you are

@@ -3,8 +3,10 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -301,5 +303,42 @@ public sealed partial class ProcessManagerService
         }
         catch (InvalidOperationException ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }
         catch (System.ComponentModel.Win32Exception ex) { Log.Warning(ex, "Failed to open file location: {Path}", filePath); }
+    }
+
+    /// <summary>Renders a process list as CSV with a header row.</summary>
+    /// <remarks>
+    /// Both the raw byte count and the formatted size are exported, and the raw start time alongside its
+    /// display string, because a spreadsheet sorts text: "9.8 GB" lands below "10 MB" and an em dash sorts
+    /// against real dates. The display columns are what the user recognises from the tab; the raw ones are
+    /// what makes the file answer questions the screen already answered.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<ProcessEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "PID", "Name", "Description", "Memory", "Memory (bytes)", "CPU %", "Threads",
+            "Status", "Started", "Started (raw)", "Category", "Safety", "Signature", "Path");
+        foreach (var e in entries)
+        {
+            Csv.AppendRow(sb,
+                e.Pid.ToString(CultureInfo.InvariantCulture),
+                e.Name,
+                e.PlainDescription.Length > 0 ? e.PlainDescription : e.Description,
+                e.MemoryDisplay,
+                e.MemoryBytes.ToString(CultureInfo.InvariantCulture),
+                e.CpuPercent.ToString("F1", CultureInfo.InvariantCulture),
+                e.ThreadCount.ToString(CultureInfo.InvariantCulture),
+                e.Status,
+                e.StartTimeDisplay,
+                e.StartTime == default
+                    ? null
+                    : e.StartTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                e.Category,
+                e.SafetyLevel,
+                e.SignatureDetail.Length > 0 ? e.Signature.ToString() : "",
+                e.FilePath);
+        }
+        return sb.ToString();
     }
 }

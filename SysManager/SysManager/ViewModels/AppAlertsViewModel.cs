@@ -2,10 +2,14 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -162,6 +166,40 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
             ToastService.Instance.Show("New app installed", entry.Name);
         });
     }
+
+    /// <summary>Whether there are alerts worth exporting.</summary>
+    public bool HasAlerts => AlertCount > 0;
+
+    /// <summary>
+    /// Writes the new-app alerts to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// The list exists to answer "what appeared on this PC without me installing it", which is exactly the question someone asks a more technical friend — so it needs to leave the screen.
+    /// <para>The file goes only where the dialog is pointed — nothing is written to a default location and
+    /// nothing leaves the machine.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasAlerts))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-AppAlerts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = AppAlertService.ToCsv(Alerts);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Alerts.Count} alert(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("App alerts exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnAlertCountChanged(int value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

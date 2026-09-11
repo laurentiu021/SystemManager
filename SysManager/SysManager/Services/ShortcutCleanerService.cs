@@ -2,10 +2,13 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using System.Text;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -269,5 +272,25 @@ public sealed partial class ShortcutCleanerService
         void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
         void Resolve(IntPtr hwnd, uint fFlags);
         void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+    }
+
+    /// <summary>Renders the broken-shortcut list as CSV with a header row.</summary>
+    /// <remarks>
+    /// Both paths matter and neither is optional: the shortcut path is what would be deleted, and the target
+    /// path is the evidence for why — a file that no longer exists. An export naming only one of them cannot
+    /// be checked by whoever reads it.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<BrokenShortcut> shortcuts)
+    {
+        ArgumentNullException.ThrowIfNull(shortcuts);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "Name", "Location", "Shortcut path", "Missing target", "Selected");
+        foreach (var s in shortcuts)
+        {
+            Csv.AppendRow(sb, s.Name, s.Location, s.ShortcutPath, s.TargetPath,
+                s.IsSelected ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }

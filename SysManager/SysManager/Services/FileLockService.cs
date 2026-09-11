@@ -4,9 +4,11 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 using FILETIME = System.Runtime.InteropServices.ComTypes.FILETIME;
 
@@ -203,5 +205,30 @@ public sealed class FileLockService : IFileLockService
 
         [DllImport("rstrtmgr.dll")]
         public static extern int RmEndSession(uint pSessionHandle);
+    }
+
+    /// <summary>Renders the locking-process list as CSV with a header row.</summary>
+    /// <remarks>
+    /// <c>IsCritical</c> is exported as its own column rather than left inside <c>AppType</c>: a process the
+    /// Restart Manager flags as critical is the one the user must NOT be told to end, and that warning has to
+    /// survive into a file someone else may act on.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<FileLocker> lockers)
+    {
+        ArgumentNullException.ThrowIfNull(lockers);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "PID", "Process", "Type", "Started", "Started (raw)", "Critical");
+        foreach (var l in lockers)
+        {
+            Csv.AppendRow(sb,
+                l.ProcessId.ToString(CultureInfo.InvariantCulture),
+                l.ProcessName,
+                l.AppType,
+                l.StartTimeDisplay,
+                l.StartTime?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                l.IsCritical ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }

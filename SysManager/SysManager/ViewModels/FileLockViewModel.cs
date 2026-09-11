@@ -2,8 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+using System.IO;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -29,6 +33,19 @@ public sealed partial class FileLockViewModel : ViewModelBase
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty] private string _path = "";
     [ObservableProperty] private bool _hasScanned;
+
+    /// <summary>How many lockers the last scan found. Drives the export button's enabled state.</summary>
+    /// <remarks>
+    /// A count rather than a bool, and assigned where <c>Lockers</c> is replaced, because
+    /// <c>CanExecute</c> cannot observe a collection: <c>BulkObservableCollection</c> raises
+    /// <c>CollectionChanged</c>, which no generated command listens to. Deriving the button's state from a
+    /// property the scan already has to set keeps the two from disagreeing.
+    /// </remarks>
+    [ObservableProperty] private int _lockerCount;
+
+    /// <summary>Whether the last scan found anything worth exporting.</summary>
+    public bool HasLockers => LockerCount > 0;
+
     [ObservableProperty] private FileLocker? _selectedLocker;
 
     public FileLockViewModel(IFileLockService service)
@@ -85,6 +102,7 @@ public sealed partial class FileLockViewModel : ViewModelBase
             var lockers = await Task.Run(() => _service.FindLockers(target)).ConfigureAwait(true);
             Lockers.ReplaceWith(lockers);
             HasScanned = true;
+            LockerCount = lockers.Count;
             StatusMessage = lockers.Count == 0
                 ? "No process is currently using that path."
                 : $"{lockers.Count} process(es) are using that path.";
@@ -135,6 +153,40 @@ public sealed partial class FileLockViewModel : ViewModelBase
             StatusMessage = $"Couldn't end {locker.Display} — it may need administrator rights, or it already exited.";
         }
     }
+
+    /// <summary>
+    /// Writes the list of processes holding the scanned path to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// "What is using this file" is usually asked because something cannot be deleted or ejected, and the answer often has to be passed on — including the critical flag, which is the one row nobody should be told to end.
+    /// <para>The file goes only where the dialog is pointed — nothing is written to a default location and
+    /// nothing leaves the machine.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasLockers))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-FileLocks-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = FileLockService.ToCsv(Lockers);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            // System.IO.Path in full: this view-model has its own `Path` property — the file being
+            // scanned — which shadows the static class, so the unqualified call binds to a string.
+            var saved = System.IO.Path.GetFileName(dlg.FileName);
+            StatusMessage = $"Exported {Lockers.Count} process(es) to {saved}.";
+            ToastService.Instance.Show("Lock list exported", saved);
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnLockerCountChanged(int value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

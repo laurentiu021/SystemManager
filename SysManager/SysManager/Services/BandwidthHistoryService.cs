@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using Serilog;
 using SysManager.Helpers;
@@ -176,5 +178,35 @@ public sealed class BandwidthHistoryService
             result.Add(new BandwidthSample(mid, down / n, up / n));
         }
         return result;
+    }
+
+    /// <summary>Renders per-app network usage as CSV with a header row.</summary>
+    /// <remarks>
+    /// Rates are a snapshot and totals are cumulative, so both are exported with the raw numbers beside the
+    /// formatted ones. The remote summary is included because "which app is using the network" is usually
+    /// followed by "talking to what", and that column is the only place the tab answers it.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<ProcessNetworkUsage> usage)
+    {
+        ArgumentNullException.ThrowIfNull(usage);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "PID", "Process", "Connections", "Down", "Down (bytes/s)", "Up", "Up (bytes/s)",
+            "Total", "Total (bytes)", "Remote");
+        foreach (var u in usage)
+        {
+            Csv.AppendRow(sb,
+                u.ProcessId.ToString(CultureInfo.InvariantCulture),
+                u.ProcessName,
+                u.ConnectionCount.ToString(CultureInfo.InvariantCulture),
+                u.DownDisplay,
+                u.DownBytesPerSec.ToString("F0", CultureInfo.InvariantCulture),
+                u.UpDisplay,
+                u.UpBytesPerSec.ToString("F0", CultureInfo.InvariantCulture),
+                u.TotalDisplay,
+                (u.TotalDownBytes + u.TotalUpBytes).ToString(CultureInfo.InvariantCulture),
+                u.RemoteSummary);
+        }
+        return sb.ToString();
     }
 }

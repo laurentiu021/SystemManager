@@ -211,6 +211,137 @@ public class CsvExportTests
         Assert.Equal("Name,Full path,Size,Size (bytes),Share %,Files,Folders,Access denied\r\n", csv);
     }
 
+    // ── The five that followed: Process Manager, App Alerts, File Lock, Shortcut Cleaner, Bandwidth ──
+
+    /// <summary>
+    /// Raw start time beside the display string, and an em dash rather than year one when Windows would not
+    /// say — the same reason the column itself needs it (#2224).
+    /// </summary>
+    [Fact]
+    public void ProcessToCsv_CarriesRawValuesBesideTheDisplayedOnes()
+    {
+        var csv = ProcessManagerService.ToCsv([
+            new ProcessEntry
+            {
+                Pid = 4242, Name = "target.exe", PlainDescription = "A test process",
+                // 3.7, not a .x5 value: "F1" rounds midpoints to even, so 3.25 formats as 3.2 and a test
+                // asserting 3.3 fails on the formatter being right.
+                MemoryBytes = 52_428_800, CpuPercent = 3.7, ThreadCount = 7, Status = "Running",
+                StartTime = new DateTime(2026, 3, 9, 14, 5, 7), Category = "System",
+                SafetyLevel = "Known app", FilePath = @"C:\Program Files\Test\target.exe",
+            }]);
+
+        var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.StartsWith("PID,Name,Description,Memory,Memory (bytes),CPU %,Threads,Status,Started,", lines[0],
+            StringComparison.Ordinal);
+        Assert.Contains("50.0 MB,52428800,3.7,7,Running,2026-03-09 14:05:07,2026-03-09 14:05:07,", lines[1],
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProcessToCsv_WhenWindowsWithheldTheStartTime_LeavesTheRawColumnEmpty()
+    {
+        var csv = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }]);
+
+        // Display column is the em dash; the raw column is empty rather than 0001-01-01.
+        Assert.Contains(",—,,", csv, StringComparison.Ordinal);
+        Assert.DoesNotContain("0001", csv, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An unchecked signature must export as blank, not as the enum's name. <c>Unknown</c> means "not
+    /// checked", and writing that word into a file reads as a verdict the app never reached.
+    /// </summary>
+    [Fact]
+    public void ProcessToCsv_LeavesTheSignatureBlankWhenNothingWasChecked()
+    {
+        // Asserted on the signature COLUMN, not on the whole row: Category and SafetyLevel both default to
+        // the literal "Unknown" and are legitimately exported that way, so a row-wide DoesNotContain would
+        // fail on two columns that are correct.
+        const int signature = 12;   // PID,Name,Description,Memory,Memory(bytes),CPU,Threads,Status,Started,
+                                    // Started(raw),Category,Safety,Signature,Path
+        var row = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }])
+            .Split("\r\n")[1].Split(',');
+        Assert.Equal("", row[signature]);
+
+        var verified = ProcessManagerService.ToCsv([
+            new ProcessEntry { Pid = 9, Name = "signed.exe", Signature = SignatureTrust.Verified,
+                               SignatureDetail = "Windows can confirm this comes from Contoso Ltd" }])
+            .Split("\r\n")[1].Split(',');
+        Assert.Equal("Verified", verified[signature]);
+    }
+
+    [Fact]
+    public void AlertsToCsv_WritesTheHeaderAndTheAcknowledgedFlag()
+    {
+        var csv = AppAlertService.ToCsv([
+            new AppInstallEntry { Name = "Contoso Toolbar", Publisher = "Contoso, Inc.",
+                                  DetectedAt = new DateTime(2026, 3, 9, 14, 5, 7), Source = "Registry",
+                                  InstallPath = @"C:\Program Files\Contoso", IsAcknowledged = true }]);
+
+        var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("App,Publisher,Detected,Source,Install path,Acknowledged", lines[0]);
+        // The publisher's comma must not split the row.
+        Assert.Equal(@"Contoso Toolbar,""Contoso, Inc."",2026-03-09 14:05:07,Registry,C:\Program Files\Contoso,yes",
+            lines[1]);
+    }
+
+    /// <summary>
+    /// The critical flag gets its own column because it is the one row nobody should be told to end, and that
+    /// warning has to survive into a file someone else may act on.
+    /// </summary>
+    [Fact]
+    public void LockersToCsv_MarksACriticalProcessInItsOwnColumn()
+    {
+        var csv = FileLockService.ToCsv([
+            new FileLocker(4, "System", "RmCritical", null),
+            new FileLocker(4242, "notepad.exe", "RmMainWindow", new DateTime(2026, 3, 9, 14, 5, 7)),
+        ]);
+
+        var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("PID,Process,Type,Started,Started (raw),Critical", lines[0]);
+        Assert.EndsWith(",yes", lines[1], StringComparison.Ordinal);
+        Assert.EndsWith(",no", lines[2], StringComparison.Ordinal);
+        // No start time available: em dash in the display column, empty in the raw one.
+        Assert.Equal("4,System,RmCritical,—,,yes", lines[1]);
+    }
+
+    /// <summary>Both paths, because one names what would be deleted and the other is the evidence why.</summary>
+    [Fact]
+    public void ShortcutsToCsv_CarriesBothTheShortcutAndItsMissingTarget()
+    {
+        var csv = ShortcutCleanerService.ToCsv([
+            new BrokenShortcut { Name = "Old Game", Location = "Desktop",
+                                 ShortcutPath = @"C:\Users\me\Desktop\Old Game.lnk",
+                                 TargetPath = @"D:\Games\Old, Game\game.exe", IsSelected = true }]);
+
+        var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("Name,Location,Shortcut path,Missing target,Selected", lines[0]);
+        Assert.Contains(@"C:\Users\me\Desktop\Old Game.lnk", lines[1], StringComparison.Ordinal);
+        Assert.Contains(@"""D:\Games\Old, Game\game.exe""", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BandwidthToCsv_CarriesRatesAndTotalsWithRawNumbers()
+    {
+        var csv = BandwidthHistoryService.ToCsv([
+            new ProcessNetworkUsage
+            {
+                ProcessId = 4242, ProcessName = "browser.exe", ConnectionCount = 12,
+                DownBytesPerSec = 1_048_576, UpBytesPerSec = 131_072,
+                TotalDownBytes = 52_428_800, TotalUpBytes = 1_048_576,
+                RemoteSummary = "contoso.example, 3 more",
+            }]);
+
+        var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal("PID,Process,Connections,Down,Down (bytes/s),Up,Up (bytes/s),Total,Total (bytes),Remote",
+            lines[0]);
+        Assert.Contains(",1048576,", lines[1], StringComparison.Ordinal);
+        // Total bytes is the sum of both directions, and the remote summary's comma stays quoted.
+        Assert.Contains(",53477376,", lines[1], StringComparison.Ordinal);
+        Assert.EndsWith("\"contoso.example, 3 more\"", lines[1], StringComparison.Ordinal);
+    }
+
     // ── Every formatter refuses null rather than throwing something unhelpful deep inside ──
 
     [Fact]
@@ -219,6 +350,43 @@ public class CsvExportTests
         Assert.Throws<ArgumentNullException>(() => PrivacyMonitorService.ToCsv(null!));
         Assert.Throws<ArgumentNullException>(() => SettingsWatchdogService.ToCsv(null!));
         Assert.Throws<ArgumentNullException>(() => DiskAnalyzerService.ToCsv(null!));
+        Assert.Throws<ArgumentNullException>(() => ProcessManagerService.ToCsv(null!));
+        Assert.Throws<ArgumentNullException>(() => AppAlertService.ToCsv(null!));
+        Assert.Throws<ArgumentNullException>(() => FileLockService.ToCsv(null!));
+        Assert.Throws<ArgumentNullException>(() => ShortcutCleanerService.ToCsv(null!));
+        Assert.Throws<ArgumentNullException>(() => BandwidthHistoryService.ToCsv(null!));
         Assert.Throws<ArgumentNullException>(() => Csv.AppendRow(null!, "a"));
+    }
+
+    /// <summary>
+    /// Every export starts with a header row, so a file opened months later says what its columns are.
+    /// </summary>
+    /// <remarks>
+    /// Written as one test over all eight rather than eight assertions, because the thing being pinned is the
+    /// convention, and a ninth export added without a header should fail this rather than pass unnoticed.
+    /// </remarks>
+    [Fact]
+    public void EveryExport_StartsWithAHeaderRow()
+    {
+        var empty = new (string Name, string Csv)[]
+        {
+            ("Privacy", PrivacyMonitorService.ToCsv([])),
+            ("SettingsDrift", SettingsWatchdogService.ToCsv([])),
+            ("DiskUsage", DiskAnalyzerService.ToCsv([])),
+            ("Processes", ProcessManagerService.ToCsv([])),
+            ("AppAlerts", AppAlertService.ToCsv([])),
+            ("FileLocks", FileLockService.ToCsv([])),
+            ("BrokenShortcuts", ShortcutCleanerService.ToCsv([])),
+            ("Bandwidth", BandwidthHistoryService.ToCsv([])),
+        };
+
+        foreach (var (name, csv) in empty)
+        {
+            Assert.EndsWith("\r\n", csv, StringComparison.Ordinal);
+            var header = csv.Split("\r\n")[0];
+            Assert.False(string.IsNullOrWhiteSpace(header), $"{name} exported an empty header row");
+            Assert.Contains(',', header);   // a single-column export would be a formatting mistake
+            Assert.Single(csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries));
+        }
     }
 }

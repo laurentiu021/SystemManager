@@ -54,7 +54,13 @@
                         Style="{StaticResource GhostButton}" Margin="0,0,4,0"/>
                 <Button Content="Deselect All" Command="{Binding DeselectAllCommand}"
                         AutomationProperties.Name="Deselect all shortcuts"
-                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"/>
+                        Style="{StaticResource GhostButton}" Margin="0,0,8,0"/>
+                <!-- This is a delete list, so saving it before acting is the difference between a reviewable
+                     change and a batch of deletions nobody can audit afterwards. -->
+                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                        AutomationProperties.Name="Export CSV — the broken shortcuts"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,16,0"
+                        ToolTip="Save this list before deleting — it names both the shortcut and its missing target."/>
                 <CheckBox Content="Move to Recycle Bin" IsChecked="{Binding MoveToRecycleBin}"
                           AutomationProperties.Name="Move to Recycle Bin — deleted shortcuts go there"
                           VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>

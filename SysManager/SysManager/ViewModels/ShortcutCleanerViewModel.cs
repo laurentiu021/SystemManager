@@ -3,9 +3,12 @@
 // License: MIT
 
 using System.Globalization;
+using System.IO;
+using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -175,6 +178,40 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         if (e.PropertyName == nameof(BrokenShortcut.IsSelected))
             SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
     }
+
+    /// <summary>Whether a scan found anything worth exporting.</summary>
+    public bool HasBrokenShortcuts => BrokenCount > 0;
+
+    /// <summary>
+    /// Writes the broken-shortcut list to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// This is a delete list, so being able to save it before acting is the difference between a reviewable change and a batch of deletions nobody can audit afterwards.
+    /// <para>The file goes only where the dialog is pointed — nothing is written to a default location and
+    /// nothing leaves the machine.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasBrokenShortcuts))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-BrokenShortcuts-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = ShortcutCleanerService.ToCsv(BrokenShortcuts);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Broken shortcuts exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnBrokenCountChanged(int value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

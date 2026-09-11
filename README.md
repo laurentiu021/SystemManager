@@ -447,6 +447,11 @@ a confirmation before it runs:
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
   before a single byte is deleted. You pick what goes.
+- **Says when administrator rights are what's stopping it.** Five of the buckets live in
+  the Windows folder — the Windows Update download cache, Delivery Optimization, the
+  Installer patch cache, `Windows\Temp` and Prefetch — and without administrator they are
+  still scanned and counted but cannot be deleted. They used to show as "skipped" with no
+  reason given; the tab now says so at the top, and offers to restart elevated
 - **System buckets**: NVIDIA / AMD / Intel installer leftovers, Windows
   Update cache, Delivery Optimization cache, Windows Installer patch
   cache, TEMP, Prefetch, crash dumps, old CBS logs, DirectX shader cache,

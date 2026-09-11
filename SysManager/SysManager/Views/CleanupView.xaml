@@ -15,8 +15,8 @@
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Quick Cleanup" Style="{StaticResource Display}"/>
-            <TextBlock Text="Clear temp files, empty Recycle Bin, or run SFC and DISM to repair Windows."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Free up space and repair damaged Windows files: clear out temporary files and the Recycle Bin, or run Windows' own repair tools (SFC and DISM) when something feels broken. The repairs take a while and change nothing you can see — they only replace files that are already damaged."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

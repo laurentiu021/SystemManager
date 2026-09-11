@@ -16,8 +16,8 @@
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="App Updates" Style="{StaticResource Display}"/>
-            <TextBlock Text="Scan for winget upgrades and install them in bulk."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Find the programs on this PC that have a newer version available and update them in one go, through winget — Microsoft's own App Installer, already part of Windows. Nothing is updated until you tick it."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

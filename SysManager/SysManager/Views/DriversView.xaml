@@ -23,8 +23,8 @@
             <!-- Header -->
             <StackPanel Grid.Row="0" Margin="0,0,0,16">
                 <TextBlock Text="Drivers" Style="{StaticResource Display}"/>
-                <TextBlock Text="Installed system drivers — click column headers to sort."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                <TextBlock Text="Every driver Windows has loaded and the device each one belongs to — which is what you need when something has stopped working and you are asked for its name or version. This tab only reads: it never installs, updates or removes a driver."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
 
             <!-- Toolbar -->

@@ -11,8 +11,8 @@
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Network Repair" Style="{StaticResource Display}"/>
-            <TextBlock Text="Common fixes for DNS, socket, and TCP/IP issues."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="The standard things to try when the internet stops working but the connection still looks fine: renew your address, clear the stored name lookups, and reset the two Windows networking layers (Winsock and TCP/IP). Those last two only take effect after a restart."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

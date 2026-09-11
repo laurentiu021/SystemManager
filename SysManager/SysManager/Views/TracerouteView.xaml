@@ -20,8 +20,8 @@
         <DockPanel Grid.Row="0" Margin="28,24,28,0">
             <StackPanel>
                 <TextBlock Text="Traceroute" Style="{StaticResource Display}"/>
-                <TextBlock Text="Auto-traceroute for all targets + manual trace to any host."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                <TextBlock Text="Show every relay (“hop”) a connection passes through on its way to a site, so you can see which one is slowing it down. Runs on its own for your saved targets, or on demand for any address you type."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">

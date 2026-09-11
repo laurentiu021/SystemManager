@@ -6386,6 +6386,14 @@ public partial class ArchitectureTests
         // rewrite of the terse-but-adequate ones, which is a separate judgement (#1654).
         const int shortestUsefulExplanation = 35;
 
+        // Also measured, and the reason this is a rule rather than a habit: 51 explanations are 80 characters
+        // or longer, and five of them set no TextWrapping — Performance (111), Services (106), Duplicate
+        // Finder (102), Privacy (85), Process Manager (84). A Subtle TextBlock does not wrap by default, so
+        // each of those rendered as one line and lost its tail at anything short of a maximised window. 80 is
+        // where the population is unanimous once those five are fixed; it is not a guess about pixels, and it
+        // sits above the longest single-line explanation the app has.
+        const int mustWrapAbove = 80;
+
         var appDir = FindAppProjectDir();
         var viewsDir = Path.Combine(appDir, "Views");
         var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
@@ -6428,6 +6436,12 @@ public partial class ArchitectureTests
                 offenders.Add($"{file} — the explanation under the title is {words.Length} characters "
                               + $"(\"{words}\"), which is shorter than anything in the app that reads as an "
                               + "explanation. Say what the tab is for in a sentence.");
+            }
+            else if (words.Length >= mustWrapAbove && Attr(subtitle, "TextWrapping") != "Wrap")
+            {
+                offenders.Add($"{file} — the explanation is {words.Length} characters and sets no "
+                              + "TextWrapping, so it renders as ONE line and is cut off at anything short "
+                              + "of a maximised window. Add TextWrapping=\"Wrap\".");
             }
         }
 

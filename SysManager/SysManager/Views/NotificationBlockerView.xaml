@@ -135,11 +135,6 @@
                       Visibility="{Binding FilteredApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="5" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Notification setting progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
-                         IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
-        </DockPanel>
+        <v:StatusFooter Grid.Row="5" Margin="0,8,0,0" ProgressName="Notification setting progress"/>
     </Grid>
 </UserControl>

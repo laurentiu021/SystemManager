@@ -1,0 +1,34 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.StatusFooter"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Name="Root">
+
+    <!-- The scan-progress + status-line footer that 21 views had copied verbatim. Single source of
+         truth for the idiom, so the progress colour, the a11y wiring and the "Done" affordance the
+         colour contract asks for become one edit instead of twenty-one.
+
+         Bindings are unqualified on purpose: the three members all live on ViewModelBase
+         (IsProgressIndeterminate, IsBusy, StatusMessage), so the control inherits the view's
+         DataContext and needs no plumbing. Only the accessible NAME differs per view, which is why
+         it is the one dependency property — every view names its own bar ("Cleanup progress",
+         "Uninstall progress"), and collapsing 21 distinct names into one shared "Progress" would be
+         an accessibility regression dressed up as deduplication.
+
+         Grid.Row and Margin stay on the call site: the two layout strategies disagree about the
+         footer's gutter (28,12,28,24 for per-section views, 0,8,0,0 under a root gutter) and the row
+         index differs per view. Usage:
+           <v:StatusFooter Grid.Row="4" Margin="0,8,0,0" ProgressName="Cleanup progress"/>
+
+         NOT converted, deliberately: the 16 footers that carry extra content — a docked Cancel or
+         Refresh button, an ETA line, a trimmed path with a tooltip, or a literal
+         IsIndeterminate="True". Giving this control enough slots to absorb those would make it more
+         complicated than the duplication it removes. See #1630. -->
+    <DockPanel>
+        <ProgressBar AutomationProperties.Name="{Binding ProgressName, ElementName=Root}"
+                     DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
+                     IsIndeterminate="{Binding IsProgressIndeterminate}"
+                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+        <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
+    </DockPanel>
+</UserControl>

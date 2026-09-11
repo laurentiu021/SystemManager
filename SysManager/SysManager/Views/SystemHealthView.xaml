@@ -377,12 +377,7 @@
                 </Border>
 
                 <!-- Status bar -->
-                <DockPanel Margin="0,16,0,0">
-                    <ProgressBar AutomationProperties.Name="System health check progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
-                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
-                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                    <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
-                </DockPanel>
+                <v:StatusFooter Margin="0,16,0,0" ProgressName="System health check progress"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>

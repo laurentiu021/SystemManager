@@ -322,6 +322,24 @@ reviews, and who approves a release for signing.
 - All GitHub Actions used in the release pipeline are pinned to full commit
   SHAs, and release builds are deterministic
   (`ContinuousIntegrationBuild` + `Deterministic`).
+- **The winget publishing credential, and what it cannot reach.** Publishing to winget
+  means opening a pull request against `microsoft/winget-pkgs`, which no token belonging
+  to this repository can do — so the release workflow uses a separate maintainer-held
+  token (`WINGET_TOKEN`) whose only job is to sync a fork of that repository and open the
+  manifest pull request. It is the only credential in the whole pipeline that is not
+  either the ephemeral, repo-scoped `GITHUB_TOKEN` or the coverage upload token.
+  - **It acts only after the release already exists.** Every step that uses it runs after
+    `Create GitHub Release` has published the `.exe`, its SHA256 sum, the SBOM and the
+    build-provenance attestation. So it cannot alter, replace or re-hash the asset that
+    [Verifying a release](#verifying-a-release) describes, and it cannot influence what
+    the app's own update check validates — that check only ever reads the GitHub Releases
+    asset and its hash.
+  - **What it could affect** is the winget manifest: the URL and hash that a
+    `winget install laurentiu021.SysManager` reads. Microsoft's own review sits between
+    that pull request and users, but the manifest is the one place where the download
+    users receive is asserted outside this repository, which is why it is called out here
+    rather than left implicit. Verifying a download against the published SHA256 and the
+    attestation is what makes that channel checkable independently of the token.
 
 ## Scope
 

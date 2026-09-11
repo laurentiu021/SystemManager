@@ -693,6 +693,191 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A test asserting on <c>StatusMessage</c> must settle the view-model's constructor init first, when
+    /// that init can write <c>StatusMessage</c> itself.
+    /// </summary>
+    /// <remarks>
+    /// Most view-models call <c>InitializeAsync(InitAsync)</c> from their constructor and forget the task.
+    /// When that init reaches an <c>await</c> before writing <c>StatusMessage</c>, its continuation is still
+    /// pending while the test runs — and the test's own <c>await SomeCommand.ExecuteAsync(...)</c> is a yield
+    /// point that lets it land. The init's message then overwrites what the command reported and the
+    /// assertion fails on a string neither the test nor the command produced. That reddened #2199, a pull
+    /// request that touched only the theme stack (#2201).
+    ///
+    /// <para><b>Why the init path is traced rather than the file grepped.</b> The obvious rule — "the
+    /// view-model has a ctor init and writes StatusMessage somewhere" — puts 35 view-models in scope and
+    /// reports 22 violations that are all safe. <c>CleanupViewModel</c> is the clearest: its init writes
+    /// <c>TempSizeLabel</c> and <c>RecycleBinLabel</c> and never touches <c>StatusMessage</c>, so its eight
+    /// tests cannot race, and a guard shipping with those eight findings would get suppressed rather than
+    /// fixed. Following the init entry through two levels of calls narrows 35 to 22 and 22 findings to
+    /// zero.</para>
+    ///
+    /// <para><b>Helpers count.</b> Seven of the eight files an earlier body-scoped count flagged settle init
+    /// inside their own <c>NewVm()</c>, which is the idiom five files already use. A guard that only reads
+    /// test bodies calls those violations, which is the false positive #2201 predicted by name.</para>
+    ///
+    /// <para><b>The allowlist is three names, and they assert the OPPOSITE.</b> They check the message is
+    /// still empty before init lands, so settling it is exactly what they must not do. Kept deliberately
+    /// literal: a pattern like "any test whose name starts with Constructor_" would also exempt four tests
+    /// that assert the message is NON-empty right after construction, which is the same race in the other
+    /// direction.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTestAssertingAStatusMessage_SettlesTheConstructorInitFirst()
+    {
+        // These assert that StatusMessage is still EMPTY, i.e. the pre-init state. Awaiting init would
+        // break them by design, so they are named rather than pattern-matched.
+        string[] assertsThePreInitState =
+        [
+            "Constructor_StatusMessageEmpty",
+            "Constructor_InitialStatusMessageIsEmpty",
+            "StatusMessage_DefaultEmpty",
+        ];
+
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var racingViewModels = new List<string>();
+
+        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
+        {
+            var source = WithoutComments(File.ReadAllText(file));
+            var entry = Regex.Match(source, @"InitializeAsync\(\s*(\w+)\s*\)");
+            if (!entry.Success) continue;
+
+            if (InitPathWritesStatusMessage(source, entry.Groups[1].Value))
+                racingViewModels.Add(Path.GetFileNameWithoutExtension(file));
+        }
+
+        Assert.True(racingViewModels.Count >= 20,
+            $"only {racingViewModels.Count} view-models were found whose constructor init can write "
+            + "StatusMessage, and 22 were measured. The init-path trace stopped matching, so this guard is "
+            + "checking almost nothing — re-derive it before trusting a pass.");
+
+        var testDir = FindTestSourceDirectory();
+        var offenders = new List<string>();
+        var checkedTests = 0;
+
+        foreach (var vm in racingViewModels)
+        {
+            var path = Path.Combine(testDir, vm + "Tests.cs");
+            if (!File.Exists(path)) continue;
+            var source = WithoutComments(File.ReadAllText(path));
+            var bodies = MethodBodiesByName(source);
+
+            // A helper in the same file that settles init makes every caller of it safe.
+            // EVERY overload must settle, not any. Two same-named NewVm helpers made a settle in one vouch
+            // for the other, so removing it from the one the racy tests called left this guard green.
+            var settling = bodies
+                .Where(b => b.Value.All(body => body.Contains("InitializationComplete", StringComparison.Ordinal)))
+                .Select(b => b.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var (name, overloads) in bodies)
+            {
+                var body = string.Join("\n", overloads);
+                if (!body.Contains("StatusMessage", StringComparison.Ordinal)) continue;
+                if (!body.Contains("Assert.", StringComparison.Ordinal)) continue;
+                checkedTests++;
+
+                if (assertsThePreInitState.Contains(name, StringComparer.Ordinal)) continue;
+                if (body.Contains("InitializationComplete", StringComparison.Ordinal)) continue;
+
+                var calls = Regex.Matches(body, @"\b(\w+)\s*\(").Select(m => m.Groups[1].Value);
+                if (calls.Any(c => c != name && settling.Contains(c))) continue;
+
+                offenders.Add($"{vm}Tests.{name}");
+            }
+        }
+
+        Assert.True(checkedTests >= 40,
+            $"only {checkedTests} StatusMessage assertions were found across those view-models' test files, "
+            + "and 44 were measured. The method-body split stopped matching, so a pass here means nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These tests assert on a StatusMessage that the view-model's own constructor init also writes, "
+            + "without settling that init first. The init's continuation lands on the test's next await and "
+            + "overwrites the message, so the assertion fails on a string neither the test nor the command "
+            + "produced — for a reason that has nothing to do with the change being tested. Await "
+            + "vm.InitializationComplete, or settle it in the file's NewVm() as five other files do:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// True when <paramref name="entry"/>, or anything it calls within two further levels, assigns
+    /// <c>StatusMessage</c>.
+    /// </summary>
+    /// <remarks>
+    /// Two levels because the real chains are that long and no longer: <c>InitAsync</c> →
+    /// <c>RefreshAsync</c> → the write. Following <c>*Async</c> plus the <c>Refresh</c>/<c>Load</c>/<c>Scan</c>
+    /// families covers every init entry point in the app; anything it cannot follow simply is not reported,
+    /// which keeps the guard's scope smaller than the truth rather than larger.
+    /// </remarks>
+    private static bool InitPathWritesStatusMessage(string viewModelSource, string entry)
+    {
+        var bodies = MethodBodiesByName(viewModelSource);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var frontier = new List<string> { entry };
+
+        for (var depth = 0; depth < 3 && frontier.Count > 0; depth++)
+        {
+            var next = new List<string>();
+            foreach (var name in frontier)
+            {
+                if (!seen.Add(name)) continue;
+                if (!bodies.TryGetValue(name, out var overloads)) continue;
+                var body = string.Join("\n", overloads);
+                if (Regex.IsMatch(body, @"\bStatusMessage\s*=[^=]")) return true;
+
+                next.AddRange(Regex.Matches(body, @"\b(\w+Async)\s*\(").Select(m => m.Groups[1].Value));
+                next.AddRange(Regex.Matches(body, @"\b((?:Refresh|Load|Scan)\w*)\s*\(").Select(m => m.Groups[1].Value));
+            }
+            frontier = next;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Every method name in one comment-stripped C# file to the bodies declared under it — a LIST, because
+    /// overloads share a name.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <c>MethodBodies</c> further down, which yields bodies WITHOUT their names. Both exist
+    /// because the checks need different things: that one only has to separate one operation's try/finally
+    /// from another's, while resolving "does this test call a helper that settles init" needs the names.
+    /// <para><b>A list rather than one body per name, and that was a real defect.</b> Keeping only the first
+    /// declaration let a settle in ONE overload vouch for the other: <c>DebloaterViewModelTests</c> has two
+    /// <c>NewVm</c>s, and removing the settle from the one its racy tests call left the guard above green. A
+    /// helper counts as settling only when EVERY overload of it does. Found by mutation, not by review.</para>
+    /// </remarks>
+    private static Dictionary<string, List<string>> MethodBodiesByName(string source)
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+
+        foreach (var m in Regex.Matches(
+                     source,
+                     @"\n    (?:\[[^\]]*\]\s*\n\s*)*(?:public|private|internal|protected)[^\n=;]*?\b(\w+)\s*\([^)]*\)\s*\n?\s*\{")
+                     .Cast<Match>())
+        {
+            var open = source.IndexOf('{', m.Index + m.Length - 1);
+            if (open < 0) continue;
+
+            var depth = 0;
+            var end = open;
+            for (; end < source.Length; end++)
+            {
+                if (source[end] == '{') depth++;
+                else if (source[end] == '}' && --depth == 0) break;
+            }
+
+            if (!result.TryGetValue(m.Groups[1].Value, out var bodies))
+                result[m.Groups[1].Value] = bodies = [];
+            bodies.Add(source[open..Math.Min(end, source.Length)]);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// No test may skip itself because the session happens to be elevated.
     /// </summary>
     /// <remarks>

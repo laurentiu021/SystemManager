@@ -216,12 +216,56 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         {
             await task.ConfigureAwait(false);
         }
-        catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsPipelineStopped(ex))
         {
-            // Cancellation calls ps.Stop(), which makes EndInvoke throw PipelineStoppedException.
-            // Surface the standard cancellation signal so callers that catch OperationCanceledException
-            // treat a cancelled PowerShell run as cancelled rather than as an error.
-            throw new OperationCanceledException(cancellationToken);
+            // Cancellation calls ps.Stop(), which makes EndInvoke throw. Surface the standard cancellation
+            // signal so callers that catch OperationCanceledException treat a cancelled PowerShell run as
+            // cancelled rather than as an error.
+            //
+            // Filtered by IsPipelineStopped rather than by catching PipelineStoppedException directly,
+            // because WHICH type arrives depends on the transport — see that method. This arm used to name
+            // the in-process type only, so on an elevated (out-of-process) runspace it never matched.
+            //
+            // The message distinguishes this from the post-await throw below, and that is diagnostic rather
+            // than decorative: both raise OperationCanceledException, so without it a slow cancellation
+            // cannot be told apart from a stop that never interrupted anything. #2206 was hard precisely
+            // because the only evidence was an elapsed time.
+            throw new OperationCanceledException(
+                "The PowerShell pipeline was stopped by cancellation.", cancellationToken);
+        }
+
+        // A stopped pipeline does NOT always throw, and relying on the catch above alone reported a
+        // cancelled run as a successful one (#2206).
+        //
+        // Two ways to get here with the token cancelled, both measured rather than reasoned about:
+        // opening the runspace above takes a few hundred milliseconds, so a cancel that lands during the
+        // lease runs this callback synchronously (Register does that when the token is already cancelled)
+        // and ps.Stop() hits a NotStarted instance — BeginInvoke/EndInvoke then complete without throwing
+        // and without running the script. Locally that is every time: the token fired at 318 ms, the call
+        // returned at 334 ms, no exception, no output. And on CI the opposite end of the same hole — Stop
+        // failing to interrupt a running pipeline, which then finishes normally 30 seconds later.
+        //
+        // Either way the caller was handed an empty result set and no indication that anything was
+        // cancelled. Every consumer is written around OperationCanceledException — 31 view-models have a
+        // cancel branch and the services deliberately let it propagate — so a silent empty return does not
+        // merely lose the signal, it looks like a successful run that found nothing. Which for a query is
+        // indistinguishable from a real answer.
+        //
+        // Deliberately the OPPOSITE choice from RunProcessAsync, which on the same race lets completion win
+        // ("callers receive the real exit code instead of a false cancellation"). That is right there and
+        // wrong here, and the difference is what the method returns: an exit code from a process that
+        // finished is a true and complete answer worth preserving, whereas an empty collection from a script
+        // that never ran is not an answer at all. There is nothing here to preserve by staying silent.
+        //
+        // Thrown explicitly rather than via ThrowIfCancellationRequested() so the message says WHICH of the
+        // two cancellation paths ran. Reaching here means the pipeline was never interrupted — it either
+        // never started or ran to its natural end — which is a different fact from the catch arm above and
+        // the one #2206 needed five CI failures to establish.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(
+                "The PowerShell pipeline was not interrupted by cancellation; it completed on its own.",
+                cancellationToken);
         }
 
         return new Collection<PSObject>(output.ToList());
@@ -652,6 +696,37 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
     /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
     /// </remarks>
+    /// <summary>
+    /// True when <paramref name="ex"/> means "the pipeline was stopped", whichever transport reported it.
+    /// </summary>
+    /// <remarks>
+    /// The type depends on WHERE the pipeline ran, which is why naming one of them was not enough (#2206):
+    /// <list type="bullet">
+    /// <item>unelevated, in-process runspace → <see cref="PipelineStoppedException"/> directly;</item>
+    /// <item>elevated, out-of-process Windows PowerShell 5.1 over remoting →
+    /// <see cref="RemoteException"/> whose <c>SerializedRemoteException</c> is the stopped-pipeline error,
+    /// because the failure happened in the child and was serialized across the transport.</item>
+    /// </list>
+    /// <para>The arm above named the in-process type only, so on an ELEVATED runspace it never matched and
+    /// cancellation escaped as a raw PowerShell error. That is invisible on a developer machine, which runs
+    /// unelevated and takes the first branch, and it is what CI kept hitting: the failure reported
+    /// <c>RemoteException (The pipeline has been stopped.)</c> — the right event, the wrong type, no
+    /// translation. Nine words of a CI log that a local run could not have produced.</para>
+    /// <para><b>The remote arm checks the TYPE NAME, not the type.</b> Remoting does not hand back the
+    /// original exception object — it rehydrates a <c>PSObject</c> whose <c>TypeNames</c> read
+    /// <c>Deserialized.System.Management.Automation.PipelineStoppedException</c>, so an <c>is</c> test
+    /// against the real type is always false. Suffix-matching the type name is what actually holds, and it
+    /// is still locale-independent, unlike matching the message: a non-English Windows would fall out of a
+    /// string comparison on "The pipeline has been stopped." without anything saying so.</para>
+    /// <para><c>internal</c> so the shapes can be asserted directly, rather than needing an elevated host
+    /// to produce a real remote failure.</para>
+    /// </remarks>
+    internal static bool IsPipelineStopped(Exception ex) =>
+        ex is PipelineStoppedException
+        || ex.InnerException is PipelineStoppedException
+        || (ex as RemoteException)?.SerializedRemoteException?.TypeNames
+               .Any(name => name.EndsWith("PipelineStoppedException", StringComparison.Ordinal)) == true;
+
     private async Task<RunspaceLease> LeaseRunspaceAsync()
     {
         if (!_isElevated)

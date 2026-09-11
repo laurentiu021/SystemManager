@@ -29,6 +29,14 @@ public sealed class DuplicateFileService
         string CurrentFile,
         string Phase);
 
+    /// <summary>
+    /// The <see cref="ScanProgress.Phase"/> of the one final report, sent after the walk finishes so a
+    /// consumer sees settled counts. Named because a caller has to be able to recognise it: its
+    /// <see cref="ScanProgress.CurrentFile"/> is the placeholder "Done" rather than a file, so a UI that
+    /// renders every report verbatim would show a file that does not exist.
+    /// </summary>
+    internal const string CompletePhase = "Complete";
+
     // Skip system subtrees that are slow, protected, or pointless.
     private static readonly string[] SkipSegments =
     {
@@ -198,7 +206,7 @@ public sealed class DuplicateFileService
         // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize.
         ct.ThrowIfCancellationRequested();
 
-        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", "Complete"));
+        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", CompletePhase));
 
         // Only return groups with 2+ files (actual duplicates).
         return hashGroups.Values

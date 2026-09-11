@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.97.0] - 2026-09-11
+
+**Duplicate Finder no longer talks over a screen reader while it scans.** Its one status line carried the
+running counts and the name of the file being read, and it changed about five times a second for the whole
+scan — so a screen reader started a new sentence roughly every 200 milliseconds and finished none of them.
+The line is now two: the phase it is in, spoken; and the counts and current file, shown but silent. On screen
+the row looks the same as before. Spoken, a scan of any folder is now three sentences — "Discovering files",
+"Hashing files", "Scan complete" — instead of hundreds of half-finished ones.
+
+### Changed
+
+- **The scan's spoken status is the phase, not the file.** The counts and the file name moved to their own
+  line beside it, which is announced to nobody. Both lines use the same size and colour, so nothing looks
+  different; the difference is entirely in what gets read aloud.
+- Two sentences per scan whatever the folder holds. Rounding the counts instead — announcing every thousand
+  files, say — would have been worse the bigger the folder: any fixed step announces more often the more
+  there is to count.
+- The last report of a scan is no longer rendered. It exists so the counts settle on their final numbers, and
+  it names no real file, so it used to flash a file called "Done" and say the scan had finished twice.
+- The counts clear when a scan ends, however it ends. The totals it produced stay in the summary above.
+
 ## [1.96.1] - 2026-09-11
 
 **Pressing Cancel could leave a tab looking like it had finished successfully with nothing to show.** When a

@@ -55,6 +55,18 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [ObservableProperty] private string _scanSummary = "Select a folder and click Scan.";
     [ObservableProperty] private string _currentFile = "";
 
+    /// <summary>
+    /// The fast half of the scan report — running counts and the file being read — kept OUT of
+    /// <see cref="ViewModelBase.StatusMessage"/> so it is shown without being announced.
+    /// <para>The status line is a live region, and it used to carry this. The service throttles its reports
+    /// to one every 200 ms, so the announced line changed about five times a second for the length of the
+    /// scan: a screen reader started a new sentence before finishing the last one and conveyed less than a
+    /// line every few seconds would (#2143). Splitting the two is the shape Deep Cleanup already uses —
+    /// announce the coarsest line the tab has, leave the fine readouts silent — and this tab was the only
+    /// exception left.</para>
+    /// </summary>
+    [ObservableProperty] private string _scanReadout = "";
+
     // Distinguishes the un-run state from a completed zero-result scan so the big empty-state overlay
     // doesn't claim "No duplicates found" before the user has ever scanned. Set true only after a scan
     // actually completes (see ScanAsync); a cancelled/failed scan leaves it as-is.
@@ -132,7 +144,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
 
         IsBusy = true;
         IsProgressIndeterminate = true;
-        StatusMessage = "Scanning…";
+        StatusMessage = ScanningLabel;
         Groups.Clear();
         TotalWasted = 0;
         GroupCount = 0;
@@ -141,11 +153,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         try
         {
             var minBytes = MinBytesFor(MinSizeKb);
-            var progress = new Progress<DuplicateFileService.ScanProgress>(p =>
-            {
-                CurrentFile = p.CurrentFile;
-                StatusMessage = BuildScanStatus(p);
-            });
+            var progress = new Progress<DuplicateFileService.ScanProgress>(ApplyScanProgress);
 
             var results = await _service.ScanAsync(SelectedFolder, minBytes, progress, ct);
 
@@ -186,7 +194,37 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             IsBusy = false;
             IsProgressIndeterminate = false;
             CurrentFile = "";
+            // The counts belong to a scan that is over; the summary bar carries the totals from here.
+            // Leaving them would also leave the last file name sitting beside "Scan complete."
+            ScanReadout = "";
         }
+    }
+
+    /// <summary>The status line while a scan is starting, and the fallback if a report carries no phase.</summary>
+    private const string ScanningLabel = "Scanning…";
+
+    /// <summary>
+    /// Applies one progress report: the phase to the announced status line, the counts and current file to
+    /// the silent <see cref="ScanReadout"/>.
+    /// <para>The phase is assigned on every report, five times a second, and that is deliberate rather than
+    /// wasteful: the generated setter drops a value equal to the current one, so PropertyChanged — and with
+    /// it the announcement — fires only when the phase actually changes. That is twice per scan whatever the
+    /// folder contains, which is the pace a spoken line can keep up with. A rounded count would not have
+    /// that property: any fixed rounding step announces more often the bigger the folder is.</para>
+    /// <para>Internal so a test can drive the real callback body with a synthetic stream of reports; the
+    /// split only holds if the announced property is assigned the coarse half, and nothing else can see
+    /// that.</para>
+    /// </summary>
+    internal void ApplyScanProgress(DuplicateFileService.ScanProgress p)
+    {
+        // The final report exists so a consumer sees settled counts, and its CurrentFile is the placeholder
+        // "Done" rather than a file. The lines after the await say the same thing in a full sentence, so
+        // rendering it here would both show a file that does not exist and announce completion twice.
+        if (string.Equals(p.Phase, DuplicateFileService.CompletePhase, StringComparison.Ordinal)) return;
+
+        CurrentFile = p.CurrentFile;
+        StatusMessage = string.IsNullOrWhiteSpace(p.Phase) ? ScanningLabel : p.Phase;
+        ScanReadout = BuildScanReadout(p);
     }
 
     /// <summary>The largest <see cref="MinSizeKb"/> that still scales into a <c>long</c> byte count.</summary>
@@ -207,16 +245,20 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     internal static long MinBytesFor(long minSizeKb) => Math.Clamp(minSizeKb, 0, MaxMinSizeKb) * 1024;
 
     /// <summary>
-    /// The scan's status line: phase, running counts, and the file currently being read.
+    /// The silent half of the scan report: running counts and the file currently being read.
     /// <para>The file name was reported by the service and assigned to <see cref="CurrentFile"/> on every
     /// progress tick, but nothing displayed it — so a scan of a large folder showed only rising numbers,
-    /// with no sign of which file it was on or whether it had stalled on one. Only the name is shown; the
-    /// full path goes in the row's tooltip, because a deep path would otherwise dominate the line.</para>
+    /// with no sign of which file it was on or whether it had stalled on one.</para>
+    /// <para><see cref="Path.GetFileName(string)"/> is applied defensively rather than to shorten anything:
+    /// the service reports <c>FileInfo.Name</c>, so what arrives is already a bare name. It stays because
+    /// this method has no way to know that and a full path would otherwise dominate the row.</para>
+    /// <para>The phase is NOT repeated here: it is what the announced status line beside this one carries,
+    /// so printing it twice would put the same word on the row twice (#2143).</para>
     /// <para>Pure and static so the formatting is testable without running a scan.</para>
     /// </summary>
-    internal static string BuildScanStatus(DuplicateFileService.ScanProgress p)
+    internal static string BuildScanReadout(DuplicateFileService.ScanProgress p)
     {
-        var counts = string.Create(CultureInfo.InvariantCulture, $"{p.Phase} — {p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed");
+        var counts = string.Create(CultureInfo.InvariantCulture, $"{p.FilesDiscovered:N0} found, {p.FilesHashed:N0} hashed");
 
         // Path.GetFileName returns "" for a directory path ending in a separator, and the discovery phase
         // reports folders as well as files; fall back to the raw value rather than showing nothing.

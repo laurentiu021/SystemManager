@@ -45,6 +45,33 @@ public class OtherTabsUiTests
     }
 
     [Fact]
+    public void Cleanup_AnalyzeComponentStoreButton_Exists()
+    {
+        _fx.GoToTab("nav-cleanup");
+        Assert.NotNull(_fx.FindButtonById("btn-cleanup-analyze-store"));
+    }
+
+    /// <summary>
+    /// Present, and DISABLED until an analysis has reported that a cleanup is worth doing.
+    /// </summary>
+    /// <remarks>
+    /// The safety property of the whole feature, and the only place it is observable end to end. Component
+    /// cleanup permanently removes the ability to uninstall installed updates, so it must not be reachable
+    /// before the read-only analysis has said what there is to gain — and on a freshly launched app no
+    /// analysis has run. Asserted without clicking anything: no DISM is started by this test.
+    /// </remarks>
+    [Fact]
+    public void Cleanup_CleanComponentStoreButton_StartsDisabledUntilAnalysed()
+    {
+        _fx.GoToTab("nav-cleanup");
+        var button = _fx.FindButtonById("btn-cleanup-clean-store");
+        Assert.NotNull(button);
+        Assert.False(button!.IsEnabled,
+            "the component-store cleanup is clickable with no analysis behind it, so the user can start an "
+            + "irreversible operation without being told what it reclaims or what it costs.");
+    }
+
+    [Fact]
     public void Cleanup_CancelButton_Exists()
     {
         _fx.GoToTab("nav-cleanup");

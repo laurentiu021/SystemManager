@@ -852,6 +852,14 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   runner, so a `SystemModification` `OperationLockService` lock prevents running
   them (or other system-repair operations) concurrently — starting one while the
   other runs is refused with a status message.
+- The two component-store operations join that set under one `IsStoreRunning` flag and
+  the same lock. They are **two commands over one flag on purpose**: `AnalyzeComponentStore`
+  is read-only and always available, while `CleanComponentStore` additionally requires
+  `CanCleanStore`, which only a completed analysis that Windows itself recommended can set —
+  and which a completed cleanup clears again, because the analysis it was based on is then
+  stale. `/ResetBase` is never passed (it discards the ability to uninstall installed
+  updates), and `NoComponentStoreCall_PassesResetBase_AndBothCommandsAreBound` enforces both
+  that and the presence of the bindings.
 
 ## Safety guardrails (Deep Cleanup)
 

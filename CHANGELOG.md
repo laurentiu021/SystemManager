@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.94.0] - 2026-09-11
+
+**Quick Cleanup can now reclaim the several gigabytes Windows keeps in its component store — and it tells
+you the number before it touches anything.** WinSxS is where Windows stores the older versions of its own
+components, and on a machine that has been updated for a few years it routinely holds five to ten
+gigabytes. It is also where the free editions of the mainstream cleaners find their biggest headline
+figure, and they generally remove it on a single click without saying what it costs. "Check component
+store" runs a read-only analysis and reports what Windows itself considers reclaimable; only then does
+"Clean up component store" become clickable, and only behind a confirmation that states plainly what you
+give up: after a cleanup, updates already installed can no longer be uninstalled.
+
+### Added
+
+- **Check component store** — read-only `DISM /AnalyzeComponentStore`, reporting the size Windows reports
+  and whether Windows recommends a cleanup. "No cleanup needed" is a real answer and is shown as one,
+  rather than leaving a button that would spend half an hour reclaiming nothing.
+- **Clean up component store** — `DISM /StartComponentCleanup`, disabled until an analysis has recommended
+  it, confirmed before it starts, and recorded in the activity log. `/ResetBase` is never used: it
+  reclaims a little more and permanently discards update uninstallation, which is not a trade a cleanup
+  button may make for you. A test makes it impossible to add by accident.
+
+### Changed
+
+- The Repair Windows description now covers all four operations, including what cleaning up the component
+  store costs.
+
 ## [1.93.0] - 2026-09-11
 
 **Deep Cleanup can now find the biggest file on a PC that has blue-screened.** When Windows crashes it

@@ -443,6 +443,14 @@ a confirmation before it runs:
 - Empty the Recycle Bin
 - Run `SFC /scannow` and `DISM /RestoreHealth` in the background — keep
   using the app while they grind
+- **Component store (WinSxS), reported before it is touched.** WinSxS routinely holds
+  several gigabytes of superseded Windows components, and it is where the free editions of
+  the mainstream cleaners find their biggest number. "Check component store" runs the
+  read-only `DISM /AnalyzeComponentStore` and tells you what Windows itself says is
+  reclaimable; only then does "Clean up component store" become clickable, and only behind
+  a confirmation that states the cost — after a cleanup, updates already installed can no
+  longer be uninstalled. `/ResetBase` is never used, and a test makes it impossible to add
+  by accident
 
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count

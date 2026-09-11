@@ -65,7 +65,7 @@
 
                 <!-- Repair section — Windows system-file repairs, distinct from cleanup -->
                 <TextBlock Text="Repair Windows" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
-                <TextBlock Text="SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source. Both run in the background — you can keep using the app."
+                <TextBlock Text="SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source. Checking the component store reports how much of it Windows considers reclaimable, and cleaning it up removes the older component versions Windows keeps — after that, installed updates can no longer be uninstalled. All of these run in the background — you can keep using the app."
                            Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="SFC /scannow" Command="{Binding RunSfcCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
@@ -76,6 +76,16 @@
                             AutomationProperties.AutomationId="btn-cleanup-dism"
                             AutomationProperties.Name="Run DISM RestoreHealth"
                             IsEnabled="{Binding IsDismRunning, Converter={StaticResource BoolInvert}}"/>
+                    <!-- Two buttons, not one, and the second starts disabled: the analysis is read-only and
+                         its result is what enables the cleanup, so nothing is removed before the user has
+                         been told what it costs. Same SecondaryButton style and 0,0,8,8 spacing as SFC/DISM
+                         beside them. -->
+                    <Button Content="Check component store" Command="{Binding AnalyzeComponentStoreCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.AutomationId="btn-cleanup-analyze-store"
+                            AutomationProperties.Name="Check component store — report what Windows considers reclaimable"/>
+                    <Button Content="Clean up component store" Command="{Binding CleanComponentStoreCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                            AutomationProperties.AutomationId="btn-cleanup-clean-store"
+                            AutomationProperties.Name="Clean up component store — remove the superseded components Windows keeps"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-cancel"
                             AutomationProperties.Name="Cancel the running operation"/>
@@ -132,6 +142,29 @@
                         <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite"
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                    </DockPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                            Visibility="{Binding IsStoreRunning, Converter={StaticResource FlexVis}}">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
+                    <TextBlock Text="Component store — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StoreStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StoreEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding StoreEtaText, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+                <!-- Component store verdict (shown after completion) -->
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
+                        Background="{DynamicResource Surface1}"
+                        Visibility="{Binding StoreVerdict, Converter={StaticResource FlexVis}}">
+                    <!-- DockPanel for the same reason as the SFC verdict above, and it matters more here:
+                         this verdict names a size and what cleaning it up costs, so it is a long sentence. -->
+                    <DockPanel>
+                        <TextBlock Text="Component store:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding StoreVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{Binding StoreVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
                 </Border>
             </StackPanel>

@@ -310,58 +310,143 @@ public class DuplicateFileViewModelTests
     // whether it had stalled on one.
 
     [Fact]
-    public void ScanStatus_NamesTheFileBeingRead()
+    public void ScanReadout_NamesTheFileBeingRead()
     {
-        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
             FilesDiscovered: 1_234, FilesHashed: 567, BytesProcessed: 0,
             CurrentFile: @"C:\Users\someone\Pictures\holiday-2019\DSC_0042.jpg",
-            Phase: "Hashing"));
+            Phase: "Hashing files…"));
 
-        Assert.Contains("Hashing", status);
-        Assert.Contains("1,234 found", status);
-        Assert.Contains("567 hashed", status);
-        Assert.Contains("DSC_0042.jpg", status);
+        Assert.Contains("1,234 found", readout);
+        Assert.Contains("567 hashed", readout);
+        Assert.Contains("DSC_0042.jpg", readout);
 
         // Only the name: a deep path would dominate a single-line status row. The full path is the tooltip.
-        Assert.DoesNotContain("Pictures", status);
+        Assert.DoesNotContain("Pictures", readout);
+
+        // The phase belongs to the announced line beside this one, so repeating it here would print the
+        // same word on the row twice (#2143).
+        Assert.DoesNotContain("Hashing", readout);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
-    public void ScanStatus_OmitsTheFileWhenThereIsNone(string current)
+    public void ScanReadout_OmitsTheFileWhenThereIsNone(string current)
     {
         // The discovery phase reports ticks before it has a file in hand; the line must not end in a
         // dangling separator.
-        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
             FilesDiscovered: 10, FilesHashed: 0, BytesProcessed: 0, CurrentFile: current, Phase: "Scanning"));
 
-        Assert.Equal("Scanning — 10 found, 0 hashed", status);
+        Assert.Equal("10 found, 0 hashed", readout);
     }
 
     [Fact]
-    public void ScanStatus_HandlesAFolderPathWithATrailingSeparator()
+    public void ScanReadout_HandlesAFolderPathWithATrailingSeparator()
     {
         // Path.GetFileName returns "" for a path ending in a separator, which would have shown nothing at
         // all after the separator. Discovery reports folders too.
-        var status = DuplicateFileViewModel.BuildScanStatus(new Services.DuplicateFileService.ScanProgress(
+        var readout = DuplicateFileViewModel.BuildScanReadout(new Services.DuplicateFileService.ScanProgress(
             FilesDiscovered: 5, FilesHashed: 0, BytesProcessed: 0,
             CurrentFile: @"C:\Users\someone\Downloads\", Phase: "Scanning"));
 
-        Assert.Contains("Downloads", status);
-        Assert.DoesNotContain("· ·", status);
+        Assert.Contains("Downloads", readout);
+        Assert.DoesNotContain("· ·", readout);
+    }
+
+    // ── The announced half vs the shown half (#2143) ──
+    // The status line is a live region and it used to carry the counts and the file name, so it changed
+    // about five times a second for the whole scan: a screen reader began a new sentence before finishing
+    // the last. The phase now goes to the announced line and the fast half to a silent one beside it.
+
+    private static Services.DuplicateFileService.ScanProgress Tick(
+        long discovered, long hashed, string file, string phase) =>
+        new(discovered, hashed, BytesProcessed: hashed * 1024, CurrentFile: file, Phase: phase);
+
+    [Fact]
+    public void TheAnnouncedLine_ChangesOncePerPhase_WhileTheReadoutChangesEveryTick()
+    {
+        var vm = NewVm();
+        var announced = vm.RecordChangesOf(nameof(vm.StatusMessage), () => vm.StatusMessage);
+        var raised = vm.RecordPropertyChanges();
+
+        // The shape the service produces: it throttles reports to one every 200 ms, so 40 of them is eight
+        // seconds of scanning — a different file and higher counts on each.
+        for (var i = 1; i <= 20; i++)
+            vm.ApplyScanProgress(Tick(i, 0, $"file{i}.jpg", "Discovering files…"));
+        for (var i = 1; i <= 20; i++)
+            vm.ApplyScanProgress(Tick(20, i, $"file{i}.jpg", "Hashing files…"));
+
+        // Two announcements for forty reports. The assertion is on the SEQUENCE, not a count: a count would
+        // also pass if the line said the wrong two things.
+        Assert.Equal(["Discovering files…", "Hashing files…"], announced);
+
+        // …while the eye still gets every tick. Without this half the test would pass on a status line that
+        // simply stopped reporting.
+        Assert.Equal(40, raised.Count(n => n == nameof(vm.ScanReadout)));
     }
 
     [Fact]
-    public void DuplicateFileView_ShowsTheScanStatusWithTheFullPathOnHover()
+    public void TheFinalReport_IsNotRendered_BecauseItsFileNameIsAPlaceholder()
     {
-        // The pure formatter above would pass on the unfixed code, because the view model always built a
-        // status string — what was missing was the file name in it, and the path anywhere at all. Only the
-        // shipped markup can show the tooltip is wired.
-        var xaml = File.ReadAllText(ViewPath("DuplicateFileView.xaml"));
+        // The service sends one last report with settled counts and "Done" where a file path goes. The lines
+        // after the await say the same thing in a full sentence, so rendering it would show a file that does
+        // not exist and announce completion twice.
+        var vm = NewVm();
+        vm.ApplyScanProgress(Tick(900, 900, "photo.jpg", "Hashing files…"));
+        var status = vm.StatusMessage;
+        var readout = vm.ScanReadout;
 
-        Assert.Contains("ToolTip=\"{Binding CurrentFile}\"", xaml);
-        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml);
+        vm.ApplyScanProgress(Tick(900, 900, "Done", "Complete"));
+
+        Assert.Equal(status, vm.StatusMessage);
+        Assert.Equal(readout, vm.ScanReadout);
+        Assert.Equal("photo.jpg", vm.CurrentFile);
+        Assert.DoesNotContain("Done", vm.ScanReadout);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void AReportWithNoPhase_LeavesTheAnnouncedLineSayingSomething(string phase)
+    {
+        // A live region set to an empty string announces nothing, so the tab would go silent mid-scan.
+        var vm = NewVm();
+        vm.ApplyScanProgress(Tick(5, 0, "file.jpg", phase));
+
+        Assert.Equal("Scanning…", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void DuplicateFileView_AnnouncesThePhase_AndShowsTheReadoutSilently()
+    {
+        // The view model assertions above would pass on markup that still bound the old single line, and the
+        // live-region rule itself is enforced in ArchitectureTests. What only the shipped markup can show is
+        // which line each half landed on: the tooltip and the trimming belong to the readout now, because the
+        // readout is what carries a file name.
+        var root = System.Xml.Linq.XDocument.Load(ViewPath("DuplicateFileView.xaml")).Root;
+        Assert.NotNull(root);
+
+        System.Xml.Linq.XElement BoundTo(string property) =>
+            Assert.Single(root!.Descendants(),
+                e => e.Name.LocalName == "TextBlock"
+                     && e.Attribute("Text")?.Value == $"{{Binding {property}}}");
+
+        var coarse = BoundTo("StatusMessage");
+        Assert.Equal("{StaticResource StatusLine}", coarse.Attribute("Style")?.Value);
+        Assert.Null(coarse.Attribute("ToolTip"));
+
+        var readout = BoundTo("ScanReadout");
+        Assert.Equal("{Binding CurrentFile}", readout.Attribute("ToolTip")?.Value);
+        Assert.Equal("CharacterEllipsis", readout.Attribute("TextTrimming")?.Value);
+
+        // Caption, not StatusLine: StatusLine IS Caption plus AutomationProperties.LiveSetting, so basing the
+        // readout on it would look identical and quietly put the fast half back into the announcements.
+        var inline = Assert.Single(readout.Elements()
+            .Where(e => e.Name.LocalName == "TextBlock.Style")
+            .SelectMany(e => e.Elements().Where(s => s.Name.LocalName == "Style")));
+        Assert.Equal("{StaticResource Caption}", inline.Attribute("BasedOn")?.Value);
     }
 
     // Walks up from the test binaries to the app project — .xaml is not copied to the output.

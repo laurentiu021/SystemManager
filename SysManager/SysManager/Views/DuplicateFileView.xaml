@@ -183,17 +183,22 @@
             <ProgressBar AutomationProperties.Name="Duplicate file scan progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <!-- The status text now carries the file being read, so it can be long; trim it rather than
-                 letting a deep path stretch the row. The full path is on hover — the scan reported it on
-                 every tick and nothing ever showed it. -->
-            <TextBlock Text="{Binding StatusMessage}"
+            <!-- Two lines, not one, and they look identical on purpose: StatusLine IS Caption plus
+                 AutomationProperties.LiveSetting. So the row reads the same as before while only its coarse
+                 half is spoken. The status line carried the counts and the file name and changed five times
+                 a second, which announced a new sentence before the last one finished (#2143). -->
+            <TextBlock DockPanel.Dock="Left" Text="{Binding StatusMessage}"
+                       Style="{StaticResource StatusLine}" Margin="0,0,8,0"/>
+            <!-- Trimmed rather than allowed to stretch the row: the counts plus a long file name can exceed
+                 the width at a small window size. The tooltip carries CurrentFile, which the scan reports on
+                 every tick and nothing else shows. -->
+            <TextBlock Text="{Binding ScanReadout}"
                        TextTrimming="CharacterEllipsis"
                        ToolTip="{Binding CurrentFile}">
                 <TextBlock.Style>
-                    <!-- BasedOn StatusLine, not Caption: this is the one status line in the app declared as
-                         an inline style rather than a style reference, because it adds a tooltip trigger.
-                         It still has to be announced like the other 51. -->
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLine}">
+                    <!-- BasedOn Caption, NOT StatusLine: same appearance, no live region. Declared inline
+                         rather than as a style reference because it adds a tooltip trigger. -->
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                         <!-- No tooltip outside a scan: an empty one renders as a stray blank box. -->
                         <Setter Property="ToolTipService.IsEnabled" Value="False"/>
                         <Style.Triggers>

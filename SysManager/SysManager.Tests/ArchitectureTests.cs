@@ -6190,14 +6190,15 @@ public partial class ArchitectureTests
         // The rule is "announce the coarsest line each tab has", which is why this list is not simply
         // "anything that updates often". Deep Cleanup's percentage and folder path can be silent because
         // ScanStatusLine says the same thing more slowly; the SFC and DISM ETAs can be silent because the
-        // verdict and the tab's status line cover start and finish. Duplicate Finder's status line updates
-        // five times a second and carries a file name, and is announced anyway — it is the only line that tab
-        // has, so silencing it would leave a screen-reader user with nothing at all, including no "Scan
-        // complete." Splitting a coarse line out of it, the way Deep Cleanup already does, is #2143 — and
-        // when that lands, the per-file property belongs in this list.
+        // verdict and the tab's status line cover start and finish. Duplicate Finder's ScanReadout is the
+        // newest row and the reason this list has no exceptions left: that tab's status line used to carry
+        // the counts and the file name itself, so the one announced line changed five times a second, and
+        // this guard recorded it as a deliberate exception because silencing it would have left a
+        // screen-reader user with nothing at all. #2143 split the phase out into the status line and moved
+        // the fast half here.
         string[] mustStaySilent =
         [
-            "ScanProgress", "LargeCurrentFolder", "SfcEtaText", "DismEtaText",
+            "ScanProgress", "LargeCurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout",
         ];
 
         var appDir = FindAppProjectDir();
@@ -6708,7 +6709,7 @@ public partial class ArchitectureTests
     /// <summary>
     /// No remaining-time text is a hardcoded duration.
     /// <para>This is a different invariant from
-    /// <see cref="EveryEtaTextProperty_IsClearedWhenItsOperationEnds"/>: that one asks whether the text
+    /// <see cref="EveryTransientReadout_IsClearedWhenItsOperationEnds"/>: that one asks whether the text
     /// is taken DOWN when the work ends, this one asks whether it was ever TRUE. Both can fail
     /// independently, and the Dashboard failed only the second — it dutifully cleared a number it had
     /// invented.</para>
@@ -8446,19 +8447,20 @@ public partial class ArchitectureTests
     // collapse rule serves both, so it is not redeclared here.
 
     /// <summary>
-    /// Every ETA text property must either be cleared when its operation ends, or live inside a section
-    /// the view hides when the operation is not running. Otherwise the last value stays on screen: Speed
-    /// Test left the literal word "done" under BOTH its cards — they share one property — until the next
-    /// run, and after a cancel it stranded whatever the last tick produced, typically "a few seconds".
+    /// Every readout that belongs to one run — an ETA, a per-file line — must either be cleared when its
+    /// operation ends, or live inside a section the view hides when the operation is not running. Otherwise
+    /// the last value stays on screen: Speed Test left the literal word "done" under BOTH its cards — they
+    /// share one property — until the next run, and after a cancel it stranded whatever the last tick
+    /// produced, typically "a few seconds".
     /// <para>Two accepted shapes, because both are already in use and both are correct: clear it in
-    /// <c>finally</c> (AppUpdates, BulkInstaller, Uninstaller, Cleanup, and now SpeedTest), or gate the
-    /// containing panel on an <c>Is…ing</c> flag (DeepCleanup). What is NOT accepted is neither.</para>
+    /// <c>finally</c> (AppUpdates, BulkInstaller, Uninstaller, Cleanup, SpeedTest, DuplicateFile), or gate
+    /// the containing panel on an <c>Is…ing</c> flag (DeepCleanup). What is NOT accepted is neither.</para>
     /// <para>Matched on the CLEARING STATEMENT, not on the words of this comment: a guard that keys on
     /// prose passes because of its own explanation. The population is enumerated from the view models that
     /// actually own an ETA property, so adding a seventh consumer without clearing it fails here.</para>
     /// </summary>
     [Fact]
-    public void EveryEtaTextProperty_IsClearedWhenItsOperationEnds()
+    public void EveryTransientReadout_IsClearedWhenItsOperationEnds()
     {
         var appDir = FindAppProjectDir();
         var vmDir = Path.Combine(appDir, "ViewModels");
@@ -8472,7 +8474,7 @@ public partial class ArchitectureTests
             var source = File.ReadAllText(file);
             var vmName = Path.GetFileNameWithoutExtension(file);
 
-            foreach (var property in EtaTextProperties(source))
+            foreach (var property in TransientReadoutProperties(source))
             {
                 checkedProperties++;
 
@@ -8494,7 +8496,7 @@ public partial class ArchitectureTests
                 // Visibility bindings on its ProgressBar and Cancel button, which have nothing to do with
                 // the ETA TextBlock — leaving this guard green against the exact defect it was written for.
                 var viewPath = Path.Combine(viewsDir, vmName.Replace("ViewModel", "View") + ".xaml");
-                if (File.Exists(viewPath) && EtaElementSitsInAFlagGatedContainer(viewPath, property))
+                if (File.Exists(viewPath) && ReadoutElementSitsInAFlagGatedContainer(viewPath, property))
                     continue;
 
                 offenders.Add($"{vmName}.{property}");
@@ -8502,14 +8504,15 @@ public partial class ArchitectureTests
         }
 
         // Vacuity floor from an enumerated population: AppUpdates, BulkInstaller, Cleanup (×2),
-        // DeepCleanup (×2), SpeedTest, Uninstaller — eight ETA properties across six view models. A
-        // regex that silently stopped matching would otherwise make this pass by checking nothing.
-        Assert.True(checkedProperties >= 8,
-            $"only {checkedProperties} ETA properties were found — EtaBackingField() has stopped "
-          + "matching, so this guard is measuring nothing.");
+        // DeepCleanup (×2), SpeedTest, Uninstaller — eight ETA properties across six view models — plus
+        // DuplicateFile's scan readout, nine. A regex that silently stopped matching would otherwise make
+        // this pass by checking nothing.
+        Assert.True(checkedProperties >= 9,
+            $"only {checkedProperties} transient readouts were found — TransientReadoutBackingField() has "
+          + "stopped matching, so this guard is measuring nothing.");
 
         Assert.True(offenders.Count == 0,
-            "these ETA texts are neither cleared in a finally nor hidden with their section, so the last "
+            "these readouts are neither cleared in a finally nor hidden with their section, so the last "
           + "value stays on screen after the operation ends: " + string.Join(", ", offenders));
     }
 
@@ -8517,9 +8520,9 @@ public partial class ArchitectureTests
     /// Names of the ETA text properties a view model owns. Matches the <c>[ObservableProperty]</c> backing
     /// field, whose generated property is what the view binds.
     /// </summary>
-    private static IEnumerable<string> EtaTextProperties(string source)
+    private static IEnumerable<string> TransientReadoutProperties(string source)
     {
-        foreach (Match m in EtaBackingField().Matches(source))
+        foreach (Match m in TransientReadoutBackingField().Matches(source))
         {
             var field = m.Groups["name"].Value;   // _upgradeEtaText
             yield return char.ToUpperInvariant(field[1]) + field[2..];
@@ -8534,7 +8537,7 @@ public partial class ArchitectureTests
     /// <c>Visibility</c> on the ETA element itself: binding an element's visibility to the very string it
     /// displays is not a gate, it is what kept the stale text on screen.</para>
     /// </summary>
-    private static bool EtaElementSitsInAFlagGatedContainer(string viewPath, string property)
+    private static bool ReadoutElementSitsInAFlagGatedContainer(string viewPath, string property)
     {
         var root = System.Xml.Linq.XDocument.Load(viewPath).Root;
         if (root is null) return false;
@@ -8561,16 +8564,36 @@ public partial class ArchitectureTests
     /// </summary>
     private static List<string> TryFinallyBlocksFeeding(string source, string property)
     {
+        var byName = MethodBodiesByName(source);
         var bodies = new List<string>();
-        foreach (var method in MethodBodies(source))
-        {
-            // An assignment FROM the ETA calculator is what makes this method a feeder; the clear itself
-            // (`= string.Empty`) must not count, or a method that only resets it would look like one.
-            if (!Regex.IsMatch(method, Regex.Escape(property) + @"\s*=\s*(?!string\.Empty|"""")"))
-                continue;
 
-            var finallyBodies = FinallyBodies(method).ToList();
-            bodies.Add(finallyBodies.Count > 0 ? string.Join('\n', finallyBodies) : string.Empty);
+        foreach (var (name, overloads) in byName)
+        {
+            foreach (var method in overloads)
+            {
+                // An assignment FROM the ETA calculator is what makes this method a feeder; the clear itself
+                // (`= string.Empty`) must not count, or a method that only resets it would look like one.
+                if (!Regex.IsMatch(method, Regex.Escape(property) + @"\s*=\s*(?!string\.Empty|"""")"))
+                    continue;
+
+                var finallyBodies = FinallyBodies(method).ToList();
+
+                // A feeder with no try/finally of its own is a progress callback: the operation that invokes
+                // it owns the run, so the clear lives in THAT method's finally. Fall back to the callers'
+                // finally blocks rather than reporting the split as a gap — Duplicate Finder assigns its
+                // readout in ApplyScanProgress and clears it in ScanAsync's finally, which is correct and is
+                // the shape this guard used to fail. The rule is unchanged: whatever block is found still has
+                // to contain the clear, and every feeder still has to be covered.
+                if (finallyBodies.Count == 0)
+                    finallyBodies = byName
+                        .Where(other => !string.Equals(other.Key, name, StringComparison.Ordinal))
+                        .SelectMany(other => other.Value)
+                        .Where(body => Regex.IsMatch(body, @"\b" + Regex.Escape(name) + @"\b"))
+                        .SelectMany(FinallyBodies)
+                        .ToList();
+
+                bodies.Add(finallyBodies.Count > 0 ? string.Join('\n', finallyBodies) : string.Empty);
+            }
         }
         return bodies;
     }
@@ -8640,13 +8663,19 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// An <c>[ObservableProperty]</c> field holding ETA text — the thing that must not go stale. Both
-    /// spellings in use are matched: seven fields are named <c>…EtaText</c>, and Speed Test's is
-    /// <c>_estimatedTime</c>. Keying on "eta" alone missed exactly the one that carried the defect.
+    /// An <c>[ObservableProperty]</c> field holding text that belongs to one run and must not outlive it.
+    /// All three spellings in use are matched: seven fields are named <c>…EtaText</c>, Speed Test's is
+    /// <c>_estimatedTime</c>, and Duplicate Finder's per-file line is <c>_scanReadout</c>. Keying on "eta"
+    /// alone missed exactly the one that carried the original defect.
+    /// <para>"readout" is a deliberate third alternative, not a convenience: the rule is about text that
+    /// goes stale when an operation ends, which is not a property of ETAs specifically. It also removes an
+    /// accident — the field was first called <c>_scanDetail</c>, which this regex matched anyway because
+    /// "Detail" contains "eta", so the coverage was luck rather than intent.</para>
     /// </summary>
-    [GeneratedRegex(@"\[ObservableProperty\]\s*private\s+string\s+(?<name>_\w*(?:[Ee]ta|[Ee]stimated)\w*)\s*=",
+    [GeneratedRegex(@"\[ObservableProperty\]\s*private\s+string\s+"
+                    + @"(?<name>_\w*(?:[Ee]ta|[Ee]stimated|[Rr]eadout)\w*)\s*=",
                     RegexOptions.Compiled)]
-    private static partial Regex EtaBackingField();
+    private static partial Regex TransientReadoutBackingField();
 
     /// <summary>
     /// Every write on <c>IAudioMixerService</c> that reports whether it was applied must have that answer

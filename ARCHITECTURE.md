@@ -42,7 +42,12 @@ for the few entries whose view-model must exist at startup. Dashboard renders as
 Each group carries an icon, passed to `Group()` as a Segoe Fluent Icons code point and asserted distinct;
 leaves carry none, so the icon column belongs to the twelve headings rather than the fifty-eight pages.
 Collapsed groups show a child count badge, a written two-line subtitle passed to `Group()` and asserted to
-fit that budget, and a tooltip still generated from the child labels.
+fit that budget, and a tooltip still generated from the child labels. Exactly one group starts expanded —
+`InitiallyExpandedGroupId` (`grp-cleanup`) — set in the same loop that adds the groups; `#1519`'s arithmetic
+is why it is one and not two, and `ExactlyOneSidebarGroup_OpensWithTheApp` asserts all three of "the
+mechanism goes through the constant", "the constant names a group that exists", and "nothing else expands a
+group at startup". It costs no view-model: the child rows bind only `NavItem`'s own properties, none of
+which touches `Content`.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
 `NavItem` also mirrors the tab's `IsBusy`, `Progress` and `IsProgressIndeterminate` out of its view-model,
 and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's pair into the Windows taskbar

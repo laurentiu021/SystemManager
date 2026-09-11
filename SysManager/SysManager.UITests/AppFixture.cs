@@ -50,9 +50,14 @@ public sealed class AppFixture : IDisposable
             TimeSpan.FromSeconds(5)).Result
             ?? throw new InvalidOperationException("The current-view automation host was not exposed.");
 
-        // Sidebar groups render as collapsed Expanders, so their child nav items aren't
-        // realized in the UI Automation tree until expanded. Expand everything once up
-        // front so tests that look up nav items directly (not via GoToTab) find them too.
+        // Sidebar groups render as Expanders, and all but Cleanup start collapsed, so most child nav
+        // items aren't realized in the UI Automation tree yet. Expand everything once up front so tests
+        // that look up nav items directly (not via GoToTab) find them too.
+        //
+        // Note for anyone wanting to assert the INITIAL expansion state: this call destroys it, and the
+        // fixture is shared across the collection, so no test in this suite can see it. That contract is
+        // asserted at the source level instead, by
+        // ArchitectureTests.ExactlyOneSidebarGroup_OpensWithTheApp.
         ExpandAllNavGroups();
     }
 
@@ -62,9 +67,9 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public void GoToTab(string navId)
     {
-        // Sidebar groups start collapsed, so child nav items aren't in the automation
-        // tree until their group Expander is open. Drive the UI like a user: try to find
-        // the item; if it isn't realized yet, expand every group and retry.
+        // All sidebar groups but one start collapsed (Cleanup opens with the app — #1519), so most
+        // child nav items aren't in the automation tree until their group Expander is open. Drive the
+        // UI like a user: try to find the item; if it isn't realized yet, expand every group and retry.
         var item = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId));
         if (item is null)
         {

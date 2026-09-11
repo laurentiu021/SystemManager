@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Security;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 using Serilog;
@@ -267,6 +268,31 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
                 "UI Declutter", @"HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager",
                 "SoftLandingEnabled", onOff),
         ];
+    }
+    /// <summary>Renders a drift table as CSV with a header row.</summary>
+    /// <remarks>
+    /// This export exists for a specific moment: Restore is about to overwrite the "now" column, so the file
+    /// is the only record of what Windows changed. It therefore carries the labels the tab shows rather than
+    /// the raw registry integers, plus whether each row can be restored — a drift the app cannot undo is the
+    /// one the user most needs to keep a note of.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<SettingDrift> drifts)
+    {
+        ArgumentNullException.ThrowIfNull(drifts);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "Setting", "Category", "Description", "Was", "Now", "Can restore");
+        foreach (var d in drifts)
+        {
+            Csv.AppendRow(sb,
+                d.Setting.Name,
+                d.Setting.Category,
+                d.Setting.Description,
+                d.BaselineLabel,
+                d.CurrentLabel,
+                d.CanRestore ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }
 

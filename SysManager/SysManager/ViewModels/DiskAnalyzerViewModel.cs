@@ -5,8 +5,10 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -291,6 +293,48 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         if (!PresetPaths.Contains(entry.FullPath))
             PresetPaths.Add(entry.FullPath);
         await AnalyzeAsync();
+    }
+
+    /// <summary>Whether there is a breakdown worth exporting.</summary>
+    /// <remarks>
+    /// Derived from <see cref="EntryCount"/> rather than being a second flag, so it cannot disagree with the
+    /// number the tab displays. <c>OnEntryCountChanged</c> below is what makes the button follow it.
+    /// </remarks>
+    public bool HasEntries => EntryCount > 0;
+
+    /// <summary>
+    /// Writes the folder-size breakdown to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// A scan of a large drive takes minutes and produced a number the user could only read on screen, so
+    /// comparing "before" with "after a cleanup" meant running it twice and remembering. The export carries
+    /// both the formatted size and the raw byte count, because "9.8 GB" sorts below "10 MB" as text.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasEntries))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-DiskUsage-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = DiskAnalyzerService.ToCsv(Entries);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Entries.Count} folder(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Disk usage exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnEntryCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasEntries));
+        ExportCsvCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]

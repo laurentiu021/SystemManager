@@ -3,8 +3,12 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -90,6 +94,37 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
             StatusMessage = "Couldn't open Windows privacy settings.";
         }
     }
+
+    /// <summary>
+    /// Writes the access history to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// The tab's whole output is a list that could only be read on screen, so the realistic move — showing
+    /// someone which app used the camera — meant photographing the monitor. The file goes only where the
+    /// dialog is pointed; nothing is written to a default location and nothing leaves the machine.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasEntries))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-Privacy-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = PrivacyMonitorService.ToCsv(Entries);
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Entries.Count} entry(ies) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Access history exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnHasEntriesChanged(bool value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     protected override void Dispose(bool disposing)
     {

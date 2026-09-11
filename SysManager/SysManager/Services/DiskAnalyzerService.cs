@@ -2,8 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
+using System.Text;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -207,5 +210,35 @@ public sealed class DiskAnalyzerService
     {
         // PERF-006: Use OrdinalIgnoreCase instead of allocating a lowercase copy.
         return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Renders a folder-size breakdown as CSV with a header row.</summary>
+    /// <remarks>
+    /// Both the formatted size and the raw byte count are exported: the formatted one is what the user read
+    /// on screen, and the raw one is what a spreadsheet can sort — "9.8 GB" sorts below "10 MB" as text.
+    /// <para>This is the export most likely to contain a field needing quotes, since folder names are chosen
+    /// by whoever made them and a comma in one is unremarkable. Hence <see cref="Csv"/> rather than raw
+    /// concatenation.</para>
+    /// </remarks>
+    public static string ToCsv(IEnumerable<DiskUsageEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "Name", "Full path", "Size", "Size (bytes)", "Share %", "Files", "Folders",
+            "Access denied");
+        foreach (var e in entries)
+        {
+            Csv.AppendRow(sb,
+                e.Name,
+                e.FullPath,
+                e.SizeDisplay,
+                e.SizeBytes.ToString(CultureInfo.InvariantCulture),
+                e.Percentage.ToString("F1", CultureInfo.InvariantCulture),
+                e.FileCount.ToString(CultureInfo.InvariantCulture),
+                e.FolderCount.ToString(CultureInfo.InvariantCulture),
+                e.IsAccessDenied ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }

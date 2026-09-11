@@ -44,6 +44,10 @@
                 <Button Content="Cancel" AutomationProperties.Name="Cancel analysis" Command="{Binding CancelAnalysisCommand}"
                         Style="{StaticResource GhostButton}"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                <Button Content="Export CSV" AutomationProperties.Name="Export CSV — the folder breakdown"
+                        Command="{Binding ExportCsvCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                        ToolTip="Save this breakdown to a CSV file you choose the location for."/>
             </WrapPanel>
         </Border>
 

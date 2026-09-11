@@ -43,6 +43,12 @@
                 <Button Content="Check now" Command="{Binding RefreshCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
                         AutomationProperties.Name="Check now — for setting changes"/>
+                <!-- Before Restore, not after it. Restore overwrites the "Now" column, so this file is the
+                     only record of what Windows changed — the left-to-right order is the order to use it in. -->
+                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                        Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
+                        AutomationProperties.Name="Export CSV — the settings that changed"
+                        ToolTip="Save the list of changes before restoring — Restore overwrites it."/>
                 <Button Content="Restore changed" Command="{Binding RestoreSelectedCommand}"
                         Style="{StaticResource SecondaryButton}" Margin="6,0,0,0"
                         AutomationProperties.Name="Restore changed settings to baseline"/>

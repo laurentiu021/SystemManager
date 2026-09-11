@@ -3,8 +3,11 @@
 // License: MIT
 
 using System.Globalization;
+using System.IO;
+using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -138,6 +141,38 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
             ? $"Restored {restored} setting(s) to your baseline."
             : $"Restored {restored} setting(s) · {failed} could not be written (try running as administrator).";
     }
+
+    /// <summary>
+    /// Writes the drift table to a CSV the user picks a location for.
+    /// </summary>
+    /// <remarks>
+    /// The one export on this tab with a deadline attached: Restore overwrites the "now" column, so once it
+    /// has run there is no record left of what Windows changed. Saving first is the only way to keep the
+    /// before-picture, which is why this sits beside Restore rather than in a menu. The file goes only where
+    /// the dialog is pointed.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasDrift))]
+    private async Task ExportCsvAsync()
+    {
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-SettingsDrift-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.csv",
+            Filter = "CSV file (*.csv)|*.csv|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var csv = SettingsWatchdogService.ToCsv(Drifts.Select(r => r.Drift));
+            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            StatusMessage = $"Exported {Drifts.Count} change(s) to {Path.GetFileName(dlg.FileName)}.";
+            ToastService.Instance.Show("Settings drift exported", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
+        catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
+    }
+
+    partial void OnHasDriftChanged(bool value) => ExportCsvCommand.NotifyCanExecuteChanged();
 
     /// <summary>One drifted setting, wrapping the immutable <see cref="SettingDrift"/> for binding.</summary>
     public sealed partial class DriftRow(SettingDrift drift) : ObservableObject

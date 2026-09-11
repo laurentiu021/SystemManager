@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.90.0] - 2026-09-11
+
+**Three more tabs can now save what they found to a file.** Camera/Mic/Location, Settings Watchdog and
+Disk Analyzer each produce a list that could only be read on screen, so the realistic move — sending it
+to whoever helps you with the PC — meant photographing the monitor. Each now has an **Export CSV**
+button that writes the list wherever you point it. On Settings Watchdog it deliberately sits to the left
+of Restore, because Restore overwrites the "now" column and the file is the only record of what Windows
+changed.
+
+### Added
+
+- **Export CSV on Camera/Mic/Location** — the camera, microphone and location access history, with both
+  the readable time and a raw timestamp a spreadsheet can sort.
+- **Export CSV on Settings Watchdog** — what changed, in the same plain language the tab uses, plus
+  whether each change can be restored.
+- **Export CSV on Disk Analyzer** — the folder breakdown with both the readable size and the raw byte
+  count, since "9.8 GB" sorts below "10 MB" as text.
+- Folder names and app names containing a comma now survive as a single column. The first CSV export
+  wrote its fields raw, which was fine for numbers; these three carry names Windows or you chose, and
+  `C:\Users\me\Music\Grieg, Peer Gynt` is an ordinary folder name.
+
+Every export goes only where you point the file dialog — nothing is written to a default location and
+nothing leaves your machine.
+
 ## [1.89.0] - 2026-09-10
 
 **The Process Manager now shows when each program started.** When something is eating your CPU, the

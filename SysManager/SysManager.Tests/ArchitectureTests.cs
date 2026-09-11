@@ -408,6 +408,72 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every <c>ExportCsvCommand</c> is bound in ITS OWN view, not merely somewhere in the app's markup.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EveryViewModelCommand_IsReachableFromTheUi"/> cannot answer this, and the difference is the
+    /// whole reason this exists. That guard tests a command NAME against every <c>.xaml</c> concatenated, so
+    /// once one tab binds <c>ExportCsvCommand</c> the name is present in the corpus and every other
+    /// view-model's identically-named command reads as reachable. Measured by mutation: deleting the
+    /// <c>Command</c> binding from the Camera/Mic/Location, Settings Watchdog and Disk Analyzer toolbars left
+    /// it GREEN all three times, because <c>ResourceHistoryView.xaml</c> still mentioned the name.
+    /// <para>Same shape as the <c>Location</c> collision documented on
+    /// <see cref="EveryStartupFieldTheScanFillsIn_IsBoundInTheViewOrDeclaredLogicOnly"/> — a name shared by
+    /// several types is satisfied by whichever tab happens to bind it. Only the tab's own view can answer for
+    /// the tab's own view-model.</para>
+    /// <para>Derived by reflection rather than from a list, so a fifth tab gaining an export is covered the
+    /// moment it compiles instead of when someone remembers to extend a table. An export is exactly the
+    /// feature this repo has shipped unreachable before: the command is unit-tested through its pure
+    /// formatter, so every test passes while the button does not exist.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryExportCommand_IsBoundInItsOwnView()
+    {
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var offenders = new List<string>();
+        var checked_ = 0;
+
+        foreach (var type in AppAssembly.GetTypes()
+                     .Where(t => t.Namespace == "SysManager.ViewModels" && !t.IsNested)
+                     .OrderBy(t => t.Name, StringComparer.Ordinal))
+        {
+            var command = type
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .FirstOrDefault(p => p.Name == "ExportCsvCommand"
+                                  && typeof(System.Windows.Input.ICommand).IsAssignableFrom(p.PropertyType));
+            if (command is null) continue;
+
+            var view = Path.Combine(viewsDir,
+                type.Name.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
+            if (!File.Exists(view))
+            {
+                offenders.Add($"{type.Name} has an ExportCsvCommand but {Path.GetFileName(view)} does not "
+                            + "exist, so this guard cannot tell whether the button is there");
+                continue;
+            }
+
+            checked_++;
+            var markup = WithoutXamlComments(File.ReadAllText(view));
+            if (!markup.Contains("Command=\"{Binding ExportCsvCommand}\"", StringComparison.Ordinal))
+                offenders.Add($"{type.Name}.ExportCsvCommand is not bound in {Path.GetFileName(view)}");
+        }
+
+        // Vacuity floor: four tabs export CSV when measured — Resource History, Camera/Mic/Location,
+        // Settings Watchdog, Disk Analyzer. A collapse means the reflection stopped finding them and every
+        // absence below is an absence of looking.
+        Assert.True(checked_ >= 4,
+            $"only {checked_} view-models with an ExportCsvCommand were found, out of 4 measured — the "
+            + "reflection is out of date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "an Export CSV command exists on a view-model but its own view does not bind it, so the feature "
+            + "is unreachable on that tab. The general reachability guard cannot see this: another tab binds "
+            + "a command of the same name, which satisfies a corpus-wide search. Add the button, or remove "
+            + "the command:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every way of setting a theme goes through the one path that keeps its text legible.
     /// </summary>
     /// <remarks>

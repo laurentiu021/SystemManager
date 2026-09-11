@@ -291,6 +291,14 @@ Key services:
   since several entries pointing at one exe is normal. `ResolveExecutablePath` is the single
   answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
   the certificate can never describe different files.
+- `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
+  because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
+  safe for numbers and fixed-format timestamps but not for the app names, setting descriptions
+  and folder paths the later exports carry: `C:\Users\me\Music\Grieg, Peer Gynt` is an ordinary
+  folder name that silently becomes two columns without quoting. `Field` quotes only when the
+  value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
+  file format rather than console output. Nothing is trimmed or substituted — a lossy export of
+  a path is worse than a quoted one.
 - `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).

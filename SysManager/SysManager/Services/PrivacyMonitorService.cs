@@ -2,9 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
+using System.Text;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -134,5 +137,29 @@ public sealed class PrivacyMonitorService
         // Packaged: "Microsoft.WindowsCamera_8wekyb3d8bbwe" → "Microsoft.WindowsCamera"
         var underscore = keyName.IndexOf('_');
         return underscore > 0 ? keyName[..underscore] : keyName;
+    }
+
+    /// <summary>Renders an access history as CSV with a header row.</summary>
+    /// <remarks>
+    /// Both the raw timestamp and the on-screen label are exported. The label is what the user recognises
+    /// from the tab — including "In use now", which is not a time at all — and the raw column is what a
+    /// spreadsheet can sort and filter. Dropping either one makes the file worse than the screen it replaces.
+    /// </remarks>
+    public static string ToCsv(IEnumerable<PrivacyAccessEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, "Capability", "App", "Last used", "Last used (raw)", "In use now");
+        foreach (var e in entries)
+        {
+            Csv.AppendRow(sb,
+                e.Capability,
+                e.AppName,
+                e.LastUsedDisplay,
+                e.LastUsed?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                e.InUse ? "yes" : "no");
+        }
+        return sb.ToString();
     }
 }

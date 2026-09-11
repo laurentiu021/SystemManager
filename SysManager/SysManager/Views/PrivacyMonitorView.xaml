@@ -31,6 +31,10 @@
                 <Button Content="Refresh" Command="{Binding RefreshCommand}"
                         AutomationProperties.Name="Refresh access history"
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Export CSV" Command="{Binding ExportCsvCommand}"
+                        AutomationProperties.Name="Export CSV — the access history"
+                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"
+                        ToolTip="Save this list to a CSV file you choose the location for."/>
                 <Button Content="Open privacy settings" Command="{Binding OpenPrivacySettingsCommand}"
                         AutomationProperties.Name="Open privacy settings — in Windows"
                         Style="{StaticResource GhostButton}"

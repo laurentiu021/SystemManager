@@ -549,6 +549,10 @@ a confirmation before it runs:
 - Drive usage bar with total/used/free
 - Preset paths (fixed drives, user profile, Program Files) or custom browse
 - Show in Explorer for each folder
+- **Export CSV** saves the breakdown to a file you choose the location for, with both the
+  readable size and the raw byte count — so a spreadsheet can sort it, which it cannot do with
+  "9.8 GB" and "10 MB" as text. Useful for comparing before and after a cleanup without
+  running a minutes-long scan twice from memory
 - **Says what it doesn't count** — four Windows system areas (`$Recycle.Bin`,
   `System Volume Information`, `Windows\WinSxS`, `Windows\CSC`) are skipped because they are
   slow or unreadable, and junctions are never followed, since following one would
@@ -668,6 +672,9 @@ a confirmation before it runs:
 - Devices **in use right now** are flagged and sorted to the top
 - Read-only: an **Open privacy settings** button hands off to Windows to grant or
   revoke a permission — SysManager never changes capability permissions itself
+- **Export CSV** saves the history to a file you choose the location for, so evidence about
+  which app used the camera can be sent to whoever helps you with the PC instead of
+  photographed off the screen. The file stays on your machine unless you move it
 
 ### Settings Watchdog
 - **Catch the settings Windows Update silently resets** — feature and quality
@@ -681,6 +688,9 @@ a confirmation before it runs:
 - **Check now** re-reads the live values and lists any drift in plain language —
   e.g. *"Diagnostic data: was 'Off (Security)', now 'Full'"* — with the category
   and a before/after comparison
+- **Export CSV** saves the list of changes before you restore them. Restore overwrites the
+  "now" column, so this file is the only record of what Windows changed — which is why the
+  button sits to the left of Restore
 - **Restore changed** writes the drifted settings back to your baseline values in
   one step (HKLM-backed settings need administrator rights, surfaced not crashed)
 - Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and

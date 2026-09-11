@@ -476,6 +476,103 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every <c>StatusFooter</c> names its own progress bar, and no view re-inlines the block it replaced.
+    /// </summary>
+    /// <remarks>
+    /// The footer was copied verbatim into 21 views. Sharing it removes the duplication and creates two new
+    /// ways to get it wrong, both of which this pins.
+    /// <para><b>An unnamed progress bar.</b> Every view named its own — "Cleanup progress", "Uninstall
+    /// progress", "Startup item scan progress" — and the tempting version of this control had no dependency
+    /// property at all, which would have collapsed 21 distinct names into one shared "Progress". That is an
+    /// accessibility regression dressed up as deduplication, so <c>ProgressName</c> has no default and every
+    /// call site has to supply it. A default would have made the omission silent, which is precisely the
+    /// failure mode.</para>
+    /// <para><b>Re-inlining.</b> The copied block is five lines of unremarkable markup; the natural thing for
+    /// someone adding tab 60 is to copy it from the neighbour, which is how there came to be 21 of them. Once
+    /// the control exists, a fresh copy is a regression rather than a starting point — so the exact attribute
+    /// run is banned outside the control itself.</para>
+    /// <para>The 16 footers that carry extra content — a docked Cancel or Refresh button, an ETA line, a
+    /// trimmed path with a tooltip, a literal <c>IsIndeterminate="True"</c> — are deliberately NOT converted
+    /// and are deliberately NOT covered by the ban: they are not the shape this control replaces. The ban is
+    /// scoped to the plain form for that reason, and widening it would demand slots that make the control
+    /// more complicated than the duplication it removes (#1630).</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStatusFooter_NamesItsProgressBar_AndNobodyReInlinesIt()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var control = Path.Combine(viewsDir, "StatusFooter.xaml");
+        Assert.True(File.Exists(control),
+            $"{control} not found — the shared footer is gone, so this guard would police nothing.");
+
+        var unnamed = new List<string>();
+        var reInlined = new List<string>();
+        var callSites = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
+        {
+            var markup = WithoutXamlComments(File.ReadAllText(file));
+            var view = Path.GetFileName(file);
+
+            foreach (var element in StatusFooterElement().Matches(markup).Cast<Match>())
+            {
+                callSites++;
+                if (!element.Value.Contains("ProgressName=\"", StringComparison.Ordinal))
+                    unnamed.Add($"{view}: {Collapse(element.Value)}");
+                else if (element.Value.Contains("ProgressName=\"\"", StringComparison.Ordinal))
+                    unnamed.Add($"{view}: ProgressName is empty");
+            }
+
+            // The control itself is the one place the markup is allowed to live.
+            if (view.Equals("StatusFooter.xaml", StringComparison.OrdinalIgnoreCase)) continue;
+            // Collapsed before matching: an exact string would carry this file's indentation and line
+            // endings, so a re-inlined copy wrapped differently would slip past a guard that looked strict.
+            if (InlinedPlainFooter().IsMatch(Collapse(markup)))
+                reInlined.Add(view);
+        }
+
+        // Re-inlining is asserted FIRST, before the call-site floor. Replacing a call site with an inlined
+        // copy lowers the count by one, so a floor checked first fires on "the element match is out of date"
+        // and sends the reader hunting a broken regex instead of the block they just pasted back. Measured:
+        // that is exactly what the mutation run reported until this order was fixed.
+        Assert.True(reInlined.Count == 0,
+            "these views inline the status-footer markup the shared StatusFooter replaced. Copying it from a "
+            + "neighbour is how there came to be 21 copies; use <v:StatusFooter Grid.Row=\"…\" Margin=\"…\" "
+            + "ProgressName=\"… progress\"/> instead:\n  " + string.Join("\n  ", reInlined));
+
+        // Vacuity floor for the naming check below, and only for it: if the element match breaks, `unnamed`
+        // is empty for the wrong reason. 21 call sites when converted.
+        Assert.True(callSites >= 21,
+            $"only {callSites} StatusFooter call sites were found, out of 21 converted — the element match is "
+            + "out of date, so the naming check below proves nothing.");
+
+        Assert.True(unnamed.Count == 0,
+            "these StatusFooter call sites do not name their progress bar, so a screen reader announces an "
+            + "unnamed bar. Every view had its own name before the control existed and none of them should "
+            + "lose it — ProgressName has no default precisely so this cannot pass unnoticed:\n  "
+            + string.Join("\n  ", unnamed));
+    }
+
+    /// <summary>The plain status footer, inlined — the exact shape <c>StatusFooter</c> replaced.</summary>
+    /// <remarks>
+    /// Runs against whitespace-collapsed markup, so re-indenting a copy does not evade it. It matches the
+    /// WHOLE block through the closing <c>DockPanel</c>, not just the <c>ProgressBar</c> attributes: the 16
+    /// unconverted footers legitimately open with the same attributes and differ only in what follows, so a
+    /// shorter needle would report every one of them as a violation.
+    /// </remarks>
+    [GeneratedRegex(@"<DockPanel[^>]*>\s*<ProgressBar AutomationProperties\.Name=""[^""]*"" "
+        + @"DockPanel\.Dock=""Left"" Width=""120"" Height=""4"" Margin=""0,0,12,0"" "
+        + @"IsIndeterminate=""\{Binding IsProgressIndeterminate\}"" "
+        + @"Visibility=""\{Binding IsBusy, Converter=\{StaticResource BoolToVis\}\}""/>\s*"
+        + @"<TextBlock Text=""\{Binding StatusMessage\}"" Style=""\{StaticResource StatusLine\}""/>\s*"
+        + @"</DockPanel>", RegexOptions.Compiled)]
+    private static partial Regex InlinedPlainFooter();
+
+    /// <summary>A <c>&lt;v:StatusFooter …/&gt;</c> call site.</summary>
+    [GeneratedRegex(@"<v:StatusFooter\b[^>]*/>", RegexOptions.Compiled)]
+    private static partial Regex StatusFooterElement();
+
+    /// <summary>
     /// Every way of setting a theme goes through the one path that keeps its text legible.
     /// </summary>
     /// <remarks>
@@ -5705,6 +5802,19 @@ public partial class ArchitectureTests
                 }
             }
 
+            // A <v:StatusFooter ProgressName="…"/> puts a progress bar on this page whose markup lives in
+            // another file, so without this the guard stopped seeing 21 of them the moment the footer was
+            // shared — and worse, could no longer catch a view whose OWN bar is announced the same way as
+            // its footer's. Counted here as the bar it renders.
+            foreach (var footer in root.DescendantsAndSelf()
+                         .Where(e => e.Name.LocalName == "StatusFooter"))
+            {
+                barsSeen++;
+                var name = Attr(footer, "ProgressName");
+                if (string.IsNullOrWhiteSpace(name)) unnamed++;
+                else named.Add(name.Trim());
+            }
+
             foreach (var group in named.GroupBy(n => n, StringComparer.Ordinal).Where(g => g.Count() > 1))
                 ambiguous.Add($"{file} — {group.Count()} bars all announced \"{group.Key}\"");
 
@@ -5831,6 +5941,13 @@ public partial class ArchitectureTests
                                           + "coarse status line and the final verdict are announced.");
                 }
             }
+
+            // A <v:StatusFooter/> renders this tab's StatusMessage line from another file, so without this
+            // the guard stopped counting 21 of them when the footer was shared. It needs no announcement
+            // check of its own: the control uses Style="{StaticResource StatusLine}", and the loop below
+            // already asserts that style still carries AutomationProperties.LiveSetting — which is what
+            // keeps all 21 announced through one definition instead of twenty-one.
+            statusLinesSeen += root.DescendantsAndSelf().Count(e => e.Name.LocalName == "StatusFooter");
         }
 
         // Both shared styles must exist AND both must carry the setting. Checking only one would let the

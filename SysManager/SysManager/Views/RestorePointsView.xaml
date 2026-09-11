@@ -93,11 +93,6 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="4" Margin="0,8,0,0">
-            <ProgressBar AutomationProperties.Name="Restore point progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
-                         IsIndeterminate="{Binding IsProgressIndeterminate}"
-                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
-        </DockPanel>
+        <v:StatusFooter Grid.Row="4" Margin="0,8,0,0" ProgressName="Restore point progress"/>
     </Grid>
 </UserControl>

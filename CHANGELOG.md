@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.98.0] - 2026-09-11
+
+**Four tabs never said what they were for, and now all 58 do.** Under its title, every tab has a line of
+plain language explaining what it does — that is the app's oldest habit and the main reason it reads well if
+you are not a technician. Four tabs put a live status message in that spot instead, so they had a title, a
+number that kept changing, and no explanation anywhere on the page. New App Alerts opened with "Starting
+monitoring…", Shortcut Cleaner with "Click Scan to find broken shortcuts.", the Dashboard with your Windows
+version and how long the PC had been on, and App Blocker with a count of what was blocked. The status line is
+still there; the explanation now comes first.
+
+### Added
+
+- **App Blocker says what it does and that you can undo it.** It was the worst of the four and the one that
+  matters most: it is the tab that changes the Windows registry, and the only text describing it was the
+  yellow banner saying it needs administrator rights — which explains the permission, not the purpose.
+- **Shortcut Cleaner says where the shortcuts go.** They go to the Recycle Bin unless you tick otherwise, so
+  you can put any of them back; the old line was an instruction to press Scan.
+- **New App Alerts says it only watches.** It tells you when a program installs itself; removing one is a
+  different tab, and now it says so.
+- **The Dashboard says what the screen is for**, in one short line — it is the first thing anyone reads on
+  opening the app, and it described the PC rather than the page. Kept short on purpose: that header shares a
+  row with the buttons beside it.
+- A test now holds the rule for every tab, including any added later, so this cannot come back one tab at a
+  time. It needs no list of exceptions: a file with no page title is not a tab.
+
 ## [1.97.1] - 2026-09-11
 
 **Hovering the scan line in Duplicate Finder now tells you which folder it is in.** It showed a tooltip, and

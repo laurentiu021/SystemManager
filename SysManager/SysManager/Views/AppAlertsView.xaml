@@ -21,7 +21,12 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="New App Alerts" Style="{StaticResource Display}"/>
-            <TextBlock Text="{Binding MonitorStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <!-- The explanation is STATIC and comes first; the live status sits under it. This slot used to
+                 hold MonitorStatus alone, so the tab opened saying "Starting monitoring…" and never said what
+                 it was for (#1506). -->
+            <TextBlock Text="Get told when a new program installs itself on this PC, so nothing arrives unnoticed. This tab only watches and reports — removing a program is Apps → Uninstaller."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <TextBlock Text="{Binding MonitorStatus}" Style="{StaticResource Subtle}" Margin="0,2,0,0"/>
         </StackPanel>
 
         <!-- Toolbar -->

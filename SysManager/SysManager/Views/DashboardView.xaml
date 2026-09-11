@@ -48,7 +48,15 @@
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Left">
                     <TextBlock Text="Dashboard" Style="{StaticResource Display}"/>
-                    <TextBlock Style="{StaticResource Subtle}" Margin="0,4,0,0">
+                    <!-- The explanation is STATIC and comes first; the live OS and uptime line sits under it.
+                         This slot held only those two bindings, so the first subtitle anyone reads on opening
+                         the app said what this PC IS and never what the screen is for (#1506).
+                         Deliberately shorter than the other tabs' explanations: this header shares its row
+                         with the action buttons to its right, and the elevation banner is directly below, so
+                         a line that wraps here costs content on a small window. -->
+                    <TextBlock Text="What this PC is, how it is doing right now, and anything worth a closer look."
+                               Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,2,0,0">
                         <Run Text="{Binding OsLine, Mode=OneWay}"/>
                         <Run Text=" · "/>
                         <Run Text="{Binding UptimeLine, Mode=OneWay}"/>

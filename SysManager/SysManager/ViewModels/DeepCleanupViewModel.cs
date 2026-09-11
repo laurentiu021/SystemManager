@@ -35,10 +35,10 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
 
     /// <summary>Whether this session is elevated. Read by the shared <c>AdminBanner</c> from the DataContext.</summary>
     /// <remarks>
-    /// Five of the nineteen buckets live under <c>%WinDir%</c> — the Windows Update download cache, the
-    /// Delivery Optimization cache, the Installer patch cache, <c>Windows\Temp</c> and Prefetch — so an
-    /// unelevated run cannot delete them. It did not fail visibly either: the files landed in
-    /// <see cref="Models.CleanupCategory.SkippedCount"/> and the row read "N files · M skipped" without ever
+    /// Six of the buckets live under <c>%WinDir%</c> — the Windows Update download cache, the Delivery
+    /// Optimization cache, the Installer patch cache, <c>Windows\Temp</c>, Prefetch and the blue-screen
+    /// memory dumps — so an unelevated run cannot delete them. It did not fail visibly either: the files
+    /// landed in <see cref="Models.CleanupCategory.SkippedCount"/> and the row read "N files · M skipped" without ever
     /// saying that administrator rights were the reason, which is the one thing the user could have acted on.
     /// </remarks>
     [ObservableProperty] private bool _isElevated;

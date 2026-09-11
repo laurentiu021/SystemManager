@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.93.0] - 2026-09-11
+
+**Deep Cleanup can now find the biggest file on a PC that has blue-screened.** When Windows crashes it
+writes out `MEMORY.DMP`, sized to how much RAM the machine has — routinely several gigabytes, and often
+the single largest reclaimable file on the drive. Deep Cleanup had no bucket for it, nor for the
+`Minidump` and `LiveKernelReports` folders beside it. It now does, and it is deliberately never ticked
+for you: those dumps are the only record of why the machine crashed, so removing them ends any
+investigation into it. The second addition is the thumbnail cache — the previews Windows keeps so folders
+open quickly, whose clearing is the standard fix for thumbnails that come up blank or show the wrong
+picture.
+
+### Added
+
+- **Blue-screen memory dumps** as a bucket of its own: `MEMORY.DMP`, `Windows\Minidump` and
+  `Windows\LiveKernelReports`. Offered with its size and file count like every other bucket, never
+  pre-selected, and it needs administrator to delete — which the tab now says.
+- **Explorer thumbnail & icon cache**, scoped to exactly `thumbcache_*.db` and `iconcache_*.db`. That
+  folder is Explorer's own working directory and also holds the jump lists that are your recent-files
+  history, so nothing else in it is counted, and nothing else in it is deleted.
+
+### Changed
+
+- A cleanup bucket can now name a single file rather than a folder, and can restrict itself to files
+  matching a pattern. Both the scan and the delete read the same restriction, so the size shown is by
+  construction the size removed.
+- The Deep Cleanup elevation notice names six categories instead of five, the dumps being the sixth.
+
 ## [1.92.0] - 2026-09-11
 
 **Deep Cleanup now tells you when administrator rights are the thing standing in the way.** Five of its

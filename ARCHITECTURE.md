@@ -859,7 +859,15 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
 - Scan first, clean second. Every category is opt-in and shows its size.
 - Never touches browsers, passwords, registry, active drivers, Program
   Files, or actual game files in `steamapps\common`.
-- Windows.old is tagged **Irreversible** and never selected by default.
+- Windows.old is tagged **Irreversible** and never selected by default, as are the
+  blue-screen memory dumps: they are the only record of why a machine crashed.
+- A bucket may restrict itself to files matching a wildcard (`FilePatterns`), and the
+  restriction is carried on the `CleanupCategory` rather than looked up at clean time —
+  the cleaner is handed categories and walks their `Paths`, so a filter it could not see
+  would show an honest size and delete the whole folder. Two buckets need it: the dumps
+  (`*.dmp`, among `.etl` traces) and the Explorer thumbnail cache, whose folder also holds
+  the jump lists that are the user's recent-files history. A filtered bucket also leaves
+  its emptied folders in place, because it owns files and not the folder.
 - Large files finder has no delete action, even with admin rights.
 
 ## Logging

@@ -19,6 +19,8 @@ public partial class UiAutomationContractTests
             ["btn-cleanup-empty-recycle-bin"] = "Empty Recycle Bin",
             ["btn-cleanup-sfc"] = "SFC /scannow — run SFC system file check",
             ["btn-cleanup-dism"] = "Run DISM RestoreHealth",
+            ["btn-cleanup-analyze-store"] = "Check component store — report what Windows considers reclaimable",
+            ["btn-cleanup-clean-store"] = "Clean up component store — remove the superseded components Windows keeps",
             ["btn-cleanup-cancel"] = "Cancel the running operation",
             ["btn-system-health-scan"] = "Scan system health",
             ["btn-system-health-smart"] = "Run SMART check — disk health",

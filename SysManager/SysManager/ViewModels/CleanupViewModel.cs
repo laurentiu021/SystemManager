@@ -29,10 +29,13 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private readonly EtaCalculator _sfcEta = new();
     private readonly EtaCalculator _dismEta = new();
 
+    private readonly EtaCalculator _storeEta = new();
+
     private CancellationTokenSource? _tempCts;
     private CancellationTokenSource? _binCts;
     private CancellationTokenSource? _sfcCts;
     private CancellationTokenSource? _dismCts;
+    private CancellationTokenSource? _storeCts;
 
     // Temp Cleanup, SFC, and DISM all stream through the single shared _runner and its
     // LineReceived/ProgressChanged events into the one Console, so only one may run at a
@@ -53,6 +56,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private bool _isBinRunning;
     [ObservableProperty] private bool _isSfcRunning;
     [ObservableProperty] private bool _isDismRunning;
+    [ObservableProperty] private bool _isStoreRunning;
 
     [ObservableProperty] private string _sfcStatus = "Idle";
     [ObservableProperty] private string _sfcVerdict = "";
@@ -61,15 +65,34 @@ public sealed partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private string _dismVerdict = "";
     [ObservableProperty] private string _dismVerdictColorHex = StatusColors.Neutral;
 
+    [ObservableProperty] private string _storeStatus = "Idle";
+    [ObservableProperty] private string _storeVerdict = "";
+    [ObservableProperty] private string _storeVerdictColorHex = StatusColors.Neutral;
+
+    /// <summary>
+    /// True once an analysis has reported that Windows itself considers a cleanup worthwhile — which is
+    /// what enables the button that actually performs one.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of splitting this into two steps. Every rival runs component cleanup as one opaque
+    /// click; here the read-only <c>/AnalyzeComponentStore</c> reports first, and the destructive
+    /// <c>/StartComponentCleanup</c> is not even clickable until it has. So the user is told what they
+    /// stand to reclaim, and what they give up, before anything is removed.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CleanComponentStoreCommand))]
+    private bool _canCleanStore;
+
     [ObservableProperty] private string _sfcEtaText = string.Empty;
     [ObservableProperty] private string _dismEtaText = string.Empty;
+    [ObservableProperty] private string _storeEtaText = string.Empty;
 
     // Pre-scan info so the tab doesn't look empty on first load
     [ObservableProperty] private string _tempSizeLabel = "Scanning…";
     [ObservableProperty] private string _recycleBinLabel = "Scanning…";
 
     /// <summary>True whenever any background task is running — for a small badge.</summary>
-    public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning;
+    public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning || IsStoreRunning;
 
     public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan)
     {
@@ -122,6 +145,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
             _sfcCts?.Dispose();
             _dismCts?.Cancel();
             _dismCts?.Dispose();
+            _storeCts?.Cancel();
+            _storeCts?.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -171,6 +196,14 @@ public sealed partial class CleanupViewModel : ViewModelBase
     partial void OnIsBinRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsSfcRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsDismRunningChanged(bool value) => OnAnyRunningChanged();
+    partial void OnIsStoreRunningChanged(bool value)
+    {
+        OnAnyRunningChanged();
+        // Analyse and clean are separate commands over one running flag, so both re-evaluate:
+        // neither may be clickable a second time while the other is mid-flight.
+        AnalyzeComponentStoreCommand.NotifyCanExecuteChanged();
+        CleanComponentStoreCommand.NotifyCanExecuteChanged();
+    }
 
     private void OnAnyRunningChanged()
     {
@@ -183,8 +216,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
         IsBusy = IsAnyRunning;
         // Temp and Recycle-Bin cleanup report no percentage, but SFC/DISM do (via the runner's
         // ProgressChanged → Progress). Marquee only when nothing is reporting a real number,
-        // otherwise the determinate value would be ignored.
-        IsProgressIndeterminate = IsAnyRunning && !(IsSfcRunning || IsDismRunning);
+        // otherwise the determinate value would be ignored. The component-store operations are
+        // DISM too and report the same decimal percentage, so they count as determinate here.
+        IsProgressIndeterminate = IsAnyRunning && !(IsSfcRunning || IsDismRunning || IsStoreRunning);
     }
 
     [RelayCommand]
@@ -508,6 +542,192 @@ public sealed partial class CleanupViewModel : ViewModelBase
             : ($"DISM finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
     }
 
+    // ---------- component store (WinSxS) ----------
+
+    /// <summary>
+    /// Asks DISM what the component store holds and whether it thinks a cleanup is worth doing. Read-only.
+    /// </summary>
+    /// <remarks>
+    /// WinSxS routinely holds several gigabytes of superseded components, and it is the one place the free
+    /// editions of the mainstream cleaners beat this app on the headline number. They also run the cleanup
+    /// as a single opaque click. This reports first — Windows' own numbers, with the cost stated — and
+    /// leaves the removal to a second, separate press.
+    /// <para>Never given <c>/ResetBase</c>: that variant also discards the ability to uninstall installed
+    /// updates, which is not something a cleanup button may decide on the user's behalf. Enforced by
+    /// <c>NoComponentStoreCall_PassesResetBase</c> rather than left to review.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRunStoreOp))]
+    private Task AnalyzeComponentStoreAsync()
+        => RunComponentStoreAsync("/Online /Cleanup-Image /AnalyzeComponentStore", analyzing: true);
+
+    /// <summary>Performs the cleanup the analysis reported, after an explicit confirmation.</summary>
+    [RelayCommand(CanExecute = nameof(CanCleanComponentStore))]
+    private async Task CleanComponentStoreAsync()
+    {
+        if (IsStoreRunning) return;
+
+        // Confirmed because it is not reversible in the way the rest of the tab is: superseded component
+        // versions are what get removed, and those are exactly what an update uninstall would roll back to.
+        if (!DialogService.Instance.Confirm(
+                "Windows will remove the superseded components it is keeping in the component store.\n\n"
+                + "What you give up: updates already installed can no longer be uninstalled afterwards. "
+                + "Nothing you have installed stops working, and no personal files are touched.\n\n"
+                + "This can take 10 to 30 minutes. Cancelling stops the process mid-way, which leaves "
+                + "Windows to finish the servicing transaction on its own — better to let it run.",
+                "Clean up the component store?"))
+        {
+            StatusMessage = "Component store cleanup cancelled.";
+            return;
+        }
+
+        await RunComponentStoreAsync("/Online /Cleanup-Image /StartComponentCleanup", analyzing: false);
+    }
+
+    /// <summary>Analyse and clean differ only in the DISM argument and the wording, so they share this.</summary>
+    private async Task RunComponentStoreAsync(string arguments, bool analyzing)
+    {
+        if (IsStoreRunning) return;
+        if (!AdminHelper.IsElevated())
+        {
+            if (!DialogService.Instance.Confirm(
+                "Working with the component store requires admin privileges. Restart the application with elevated privileges?",
+                "Admin Required"))
+            {
+                StatusMessage = "Component store check cancelled — admin privileges required.";
+                return;
+            }
+            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
+            return;
+        }
+
+        // Same two guards as SFC/DISM, for the same two reasons: the SystemModification lock keeps the
+        // system-repair operations mutually exclusive, and _runnerBusy keeps anything else off the single
+        // shared runner whose LineReceived feeds the one Console.
+        using var opLock = OperationLockService.Instance.TryAcquire(
+            OperationCategory.SystemModification, analyzing ? "Component store analysis" : "Component store cleanup");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+        if (!TryBeginConsoleOp())
+        {
+            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
+            return;
+        }
+
+        IsStoreRunning = true;
+        IsProgressIndeterminate = true;
+        StoreStatus = analyzing ? "Analysing — usually under a minute" : "Cleaning up — can take 10–30 minutes";
+        StoreVerdict = "";
+        StoreVerdictColorHex = StatusColors.Neutral;
+        StoreEtaText = string.Empty;
+        _storeEta.Reset();
+        StatusMessage = analyzing
+            ? "Analysing the component store. You can keep using the app."
+            : "Cleaning up the component store in the background. You can keep using the app.";
+        _storeCts?.Dispose();
+        _storeCts = new CancellationTokenSource();
+        var captured = new System.Collections.Generic.List<string>();
+        void Collect(PowerShellLine l)
+        {
+            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
+            if (l.Text.Contains('%'))
+            {
+                var m = DismPercentRegex().Match(l.Text);
+                if (m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var pct) && pct is >= 0 and <= 100)
+                {
+                    Progress = (int)pct;
+                    StoreEtaText = _storeEta.Update((int)pct);
+                    IsProgressIndeterminate = false;
+                }
+            }
+        }
+        _runner.LineReceived += Collect;
+        try
+        {
+            var exit = await _runner.RunProcessAsync("DISM.exe", arguments, _storeCts.Token, PowerShellRunner.OemEncoding);
+            var result = ParseComponentStoreResult(captured, exit, analyzing);
+            StoreVerdict = result.Verdict;
+            StoreVerdictColorHex = result.ColorHex;
+            StoreStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
+            StatusMessage = result.Verdict;
+            // Only an analysis may enable the cleanup, and only when Windows said it is worth doing. A
+            // completed cleanup clears it: the analysis it was based on is now stale, and offering to
+            // clean again on the strength of it would report a size that no longer exists.
+            CanCleanStore = analyzing && result.CleanupRecommended;
+            if (!analyzing)
+            {
+                ActivityLogService.Instance.Log("Component store cleanup", result.Verdict);
+            }
+        }
+        catch (OperationCanceledException) { StoreStatus = "Cancelled."; StoreVerdict = analyzing ? "Analysis was cancelled." : "Cleanup was cancelled — Windows will finish the servicing transaction itself."; StoreVerdictColorHex = StatusColors.Neutral; StatusMessage = StoreStatus; }
+        catch (InvalidOperationException ex) { StoreStatus = $"Error: {ex.Message}"; StoreVerdict = ex.Message; StoreVerdictColorHex = StatusColors.Bad; StatusMessage = StoreStatus; }
+        catch (System.ComponentModel.Win32Exception ex) { StoreStatus = $"Error: {ex.Message}"; StoreVerdict = ex.Message; StoreVerdictColorHex = StatusColors.Bad; StatusMessage = StoreStatus; }
+        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsStoreRunning = false; IsProgressIndeterminate = false; StoreEtaText = string.Empty; }
+    }
+
+    /// <summary>Neither component-store operation may start while one is already running.</summary>
+    private bool CanRunStoreOp => !IsStoreRunning;
+
+    /// <summary>The cleanup additionally needs an analysis that recommended it.</summary>
+    private bool CanCleanComponentStore => !IsStoreRunning && CanCleanStore;
+
+    /// <summary>
+    /// Turns <c>/AnalyzeComponentStore</c> or <c>/StartComponentCleanup</c> output into a verdict, a colour,
+    /// and — for an analysis — whether the cleanup button should become available.
+    /// </summary>
+    /// <remarks>
+    /// Matches on the English phrases DISM prints, the same approach and the same limitation as
+    /// <see cref="ParseSfcResult"/> and <see cref="ParseDismResult"/>, with an exit-code fallback for
+    /// everything else. <c>Component Store Cleanup Recommended : No</c> is a real and common answer, and
+    /// saying so is more useful than an empty result — a store already cleaned should not present a button
+    /// that would spend half an hour reclaiming nothing.
+    /// <para>The reclaimable size is quoted from <c>Actual Size of Component Store</c> rather than computed.
+    /// Windows' own number is the honest one to show, and the alternative — subtracting "Shared with
+    /// Windows" — would state a saving this app cannot actually promise.</para>
+    /// </remarks>
+    internal static (string Verdict, string ColorHex, bool CleanupRecommended) ParseComponentStoreResult(
+        IReadOnlyList<string> lines, int exitCode, bool analyzing)
+    {
+        var all = string.Join(" ", lines);
+
+        if (!analyzing)
+        {
+            if (all.Contains("The operation completed successfully", StringComparison.OrdinalIgnoreCase))
+                return ("Component store cleaned up. The space Windows reported as reclaimable is now free.", StatusColors.Good, false);
+
+            return exitCode == 0
+                ? ("Component store cleanup finished.", StatusColors.Good, false)
+                : ($"Component store cleanup finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning, false);
+        }
+
+        var recommended = all.Contains("Component Store Cleanup Recommended : Yes", StringComparison.OrdinalIgnoreCase);
+        var notRecommended = all.Contains("Component Store Cleanup Recommended : No", StringComparison.OrdinalIgnoreCase);
+        var size = StoreSizeRegex().Match(all);
+        var sizeText = size.Success ? size.Groups[1].Value.Trim() : null;
+
+        if (recommended)
+        {
+            return (sizeText is null
+                    ? "Windows recommends cleaning up the component store."
+                    : $"Windows recommends cleaning up the component store, which currently holds {sizeText}.",
+                StatusColors.Warning, true);
+        }
+
+        if (notRecommended)
+        {
+            return (sizeText is null
+                    ? "No cleanup needed — Windows says the component store is already as small as it will get."
+                    : $"No cleanup needed — the component store holds {sizeText}, and Windows says none of it is worth reclaiming.",
+                StatusColors.Good, false);
+        }
+
+        return exitCode == 0
+            ? ("Analysis completed. Check the console output for what Windows reported.", StatusColors.Neutral, false)
+            : ($"Analysis finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning, false);
+    }
+
     [RelayCommand(CanExecute = nameof(IsAnyRunning))]
     private void Cancel()
     {
@@ -515,6 +735,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         _binCts?.Cancel();
         _sfcCts?.Cancel();
         _dismCts?.Cancel();
+        _storeCts?.Cancel();
     }
 
     // SFC reports progress as a whole-number percentage, e.g. "50 %".
@@ -524,4 +745,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     // DISM reports progress as a decimal percentage, e.g. "50.0%".
     [GeneratedRegex(@"([\d.]+)%")]
     private static partial Regex DismPercentRegex();
+
+    // "Actual Size of Component Store : 7.90 GB" — the size Windows itself reports, quoted rather than
+    // recomputed. Bounded to a number-and-unit so a localised or reworded line yields no match and the
+    // verdict simply omits the size, instead of quoting whatever followed the colon.
+    [GeneratedRegex(@"Actual Size of Component Store\s*:\s*([\d.,]+\s*[KMGT]?B)", RegexOptions.IgnoreCase)]
+    private static partial Regex StoreSizeRegex();
 }

@@ -10752,6 +10752,51 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No component-store call may pass <c>/ResetBase</c>, and both component-store commands must be bound
+    /// to a control.
+    /// </summary>
+    /// <remarks>
+    /// <c>/StartComponentCleanup /ResetBase</c> reclaims more, and also permanently discards the ability to
+    /// uninstall every update currently installed. That is not a trade a cleanup button may make on the
+    /// user's behalf, and it differs from the safe form by one appended word — so it is banned mechanically
+    /// rather than left to whoever next edits the argument string. #1577 names it as the irreversible
+    /// variant for exactly this reason.
+    /// <para>The binding half is this codebase's dominant recurring defect: a command implemented and
+    /// unit-tested while nothing in the XAML invokes it. Both halves are checked here because they fail the
+    /// same way — the feature looks present, and no compiler or view-model test can see that it is not.
+    /// <c>CleanComponentStore</c> is the one that matters: it is gated on <c>CanCleanStore</c>, so a missing
+    /// binding would leave the analysis reporting a size the user can never act on.</para>
+    /// </remarks>
+    [Fact]
+    public void NoComponentStoreCall_PassesResetBase_AndBothCommandsAreBound()
+    {
+        var vmPath = Path.Combine(FindAppProjectDir(), "ViewModels", "CleanupViewModel.cs");
+        Assert.True(File.Exists(vmPath), $"CleanupViewModel.cs was not found at {vmPath}");
+        var vm = WithoutComments(File.ReadAllText(vmPath));
+
+        // Floor first: if the operations were removed or moved, everything below is about nothing.
+        Assert.True(vm.Contains("/Online /Cleanup-Image /StartComponentCleanup", StringComparison.Ordinal)
+                    && vm.Contains("/Online /Cleanup-Image /AnalyzeComponentStore", StringComparison.Ordinal),
+            "CleanupViewModel no longer contains both component-store DISM arguments. If they moved, move "
+            + "this guard with them — it is checking nothing where it is.");
+
+        Assert.False(vm.Contains("ResetBase", StringComparison.OrdinalIgnoreCase),
+            "a component-store call passes /ResetBase. It reclaims more and permanently discards the "
+            + "ability to uninstall every installed update, which a cleanup button must not decide for the "
+            + "user. Use /StartComponentCleanup on its own.");
+
+        var markup = WithoutXamlComments(
+            File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", "CleanupView.xaml")));
+        foreach (var command in new[] { "AnalyzeComponentStoreCommand", "CleanComponentStoreCommand" })
+        {
+            Assert.True(markup.Contains($"{{Binding {command}}}", StringComparison.Ordinal),
+                $"{command} is implemented but no control in CleanupView invokes it, so the feature ships "
+                + "unreachable. Nothing else catches this: the compiler cannot see a XAML binding that is "
+                + "absent, and a view-model test executes the command directly.");
+        }
+    }
+
+    /// <summary>
     /// The cleanup walk must ABANDON a directory whose enumerator throws, not retry it. A throwing
     /// <c>MoveNext</c> does not advance, so retrying it is an infinite loop.
     /// </summary>

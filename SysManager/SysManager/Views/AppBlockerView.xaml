@@ -23,7 +23,13 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="App Blocker" Style="{StaticResource Display}" />
-            <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0" />
+            <!-- The explanation is STATIC and comes first; the live status sits under it. This slot used to
+                 hold BlockStatus alone, so the only thing describing the tab was the elevation banner below,
+                 which explains the PERMISSION and not the purpose — on the one tab here that writes registry
+                 keys (#1506). Reversibility is stated for the same reason every comparable tab states it. -->
+            <TextBlock Text="Stop a specific program from starting — for example a game launcher that opens itself with Windows. Unblock any time; the program stays installed and nothing is deleted."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
         </StackPanel>
 
         <!-- Elevation banner -->

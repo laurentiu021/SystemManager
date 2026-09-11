@@ -6359,6 +6359,114 @@ public partial class ArchitectureTests
             + "user instead of informing them:\n  " + string.Join("\n  ", overAnnounced));
     }
 
+    /// <summary>
+    /// Every tab explains itself in writing under its own title.
+    /// <para>The convention is a <c>Display</c> header followed by a <c>Subtle</c> line of plain language
+    /// saying what the tab is for — and it is the main reason the app reads well for someone who is not a
+    /// technician. Four views bound that slot to a live status string instead, so they had a title, a
+    /// changing status, and no explanation anywhere on the page: App Alerts opened with "Starting
+    /// monitoring…", Shortcut Cleaner with "Click Scan to find broken shortcuts.", the Dashboard with the OS
+    /// name and uptime, and App Blocker — the one tab that writes IFEO registry keys — with a count of what
+    /// was blocked. Its only descriptive text was the elevation banner, which explains the PERMISSION and
+    /// never the purpose or how to undo it (#1506).</para>
+    /// <para>The population needs no allowlist, which is what makes this rule survivable: a file with no
+    /// <c>Display</c> header is not a tab and is skipped mechanically. The six that skip are exactly the
+    /// non-tab controls (AdminBanner, ConsoleView, DevelopmentBanner, EmptyState, StatusFooter, ThemePopup),
+    /// so a new tab is covered the moment it exists rather than when someone remembers to list it.</para>
+    /// <para>BOTH spellings of a bound subtitle are rejected. The sweep that first counted these found three
+    /// because it read the <c>Text</c> ATTRIBUTE; a <c>TextBlock</c> with no <c>Text</c> attribute whose
+    /// <c>&lt;Run&gt;</c> children carry the bindings reads as empty rather than as bound, and that is the
+    /// form the Dashboard used — the fourth, and the first subtitle anyone sees on opening the app.</para>
+    /// </summary>
+    [Fact]
+    public void EveryTabView_ExplainsItselfUnderItsHeader()
+    {
+        // Measured: the shortest real explanation is AboutView's 40 characters ("Version info, updates and
+        // release notes."). The floor sits below it so this guard rejects a placeholder without forcing a
+        // rewrite of the terse-but-adequate ones, which is a separate judgement (#1654).
+        const int shortestUsefulExplanation = 35;
+
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
+
+        var offenders = new List<string>();
+        var tabsChecked = 0;
+
+        foreach (var path in files)
+        {
+            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            if (root is null) continue;
+            var file = Path.GetFileName(path);
+
+            var blocks = root.DescendantsAndSelf()
+                .Where(e => e.Name.LocalName == "TextBlock")
+                .ToList();
+
+            var headerAt = blocks.FindIndex(e => Attr(e, "Style") == "{StaticResource Display}");
+            if (headerAt < 0) continue;   // not a tab: no page title
+            tabsChecked++;
+
+            var subtitle = blocks.Skip(headerAt + 1)
+                .FirstOrDefault(e => Attr(e, "Style") == "{StaticResource Subtle}");
+            if (subtitle is null)
+            {
+                offenders.Add($"{file} — has a page title and no Subtle line under it at all, so the tab "
+                              + "never says what it is for");
+                continue;
+            }
+
+            var words = StaticSubtitleWords(subtitle);
+            if (words is null)
+            {
+                offenders.Add($"{file} — the first Subtle line under the title is bound to a view-model "
+                              + "property, so the slot the explanation belongs in carries live status "
+                              + "instead. Put the static sentence first and leave the status beneath it.");
+            }
+            else if (words.Length < shortestUsefulExplanation)
+            {
+                offenders.Add($"{file} — the explanation under the title is {words.Length} characters "
+                              + $"(\"{words}\"), which is shorter than anything in the app that reads as an "
+                              + "explanation. Say what the tab is for in a sentence.");
+            }
+        }
+
+        // Vacuity floor: 58 views carry a Display header, measured. A drop means the style read stopped
+        // matching and an absence-of-offenders pass would prove nothing.
+        Assert.True(tabsChecked >= 55,
+            $"only {tabsChecked} views with a page title were found across {files.Length} view files, out of "
+            + "58 measured — the Display header read is out of date, so a pass here means nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these tabs do not explain themselves under their own title, which is the one thing every other "
+            + "tab does and the reason the app reads well for someone who is not a technician:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The literal words a subtitle shows, or null when every part of it is bound to a property.
+    /// </summary>
+    /// <remarks>
+    /// Both spellings, because only one of them is obvious: a <c>Text</c> attribute holding a sentence, and a
+    /// <c>TextBlock</c> whose <c>&lt;Run&gt;</c> children hold it. The separators between Runs (" · ") are
+    /// literal too, so they are trimmed off — otherwise a subtitle made entirely of bindings would read as
+    /// having two characters of static copy and pass.
+    /// </remarks>
+    private static string? StaticSubtitleWords(System.Xml.Linq.XElement subtitle)
+    {
+        var attribute = Attr(subtitle, "Text");
+        if (attribute is not null)
+            return attribute.TrimStart().StartsWith("{Binding", StringComparison.Ordinal) ? null : attribute;
+
+        var literal = subtitle.DescendantsAndSelf()
+            .Where(e => e.Name.LocalName == "Run")
+            .Select(e => Attr(e, "Text") ?? "")
+            .Where(t => !t.TrimStart().StartsWith("{Binding", StringComparison.Ordinal));
+
+        var joined = string.Concat(literal).Trim(' ', '·', '·', '-', '—');
+        return joined.Length == 0 ? null : joined;
+    }
+
     /// <summary>An attribute's value by local name, ignoring the namespace prefix.</summary>
     private static string? Attr(System.Xml.Linq.XElement element, string localName) =>
         element.Attributes().FirstOrDefault(a => a.Name.LocalName == localName)?.Value;

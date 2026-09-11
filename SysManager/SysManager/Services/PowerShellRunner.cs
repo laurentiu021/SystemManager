@@ -221,7 +221,47 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             // Cancellation calls ps.Stop(), which makes EndInvoke throw PipelineStoppedException.
             // Surface the standard cancellation signal so callers that catch OperationCanceledException
             // treat a cancelled PowerShell run as cancelled rather than as an error.
-            throw new OperationCanceledException(cancellationToken);
+            //
+            // The message distinguishes this from the post-await throw below, and that is diagnostic rather
+            // than decorative: both raise OperationCanceledException, so without it a slow cancellation
+            // cannot be told apart from a stop that never interrupted anything. #2206 was hard precisely
+            // because the only evidence was an elapsed time.
+            throw new OperationCanceledException(
+                "The PowerShell pipeline was stopped by cancellation.", cancellationToken);
+        }
+
+        // A stopped pipeline does NOT always throw, and relying on the catch above alone reported a
+        // cancelled run as a successful one (#2206).
+        //
+        // Two ways to get here with the token cancelled, both measured rather than reasoned about:
+        // opening the runspace above takes a few hundred milliseconds, so a cancel that lands during the
+        // lease runs this callback synchronously (Register does that when the token is already cancelled)
+        // and ps.Stop() hits a NotStarted instance — BeginInvoke/EndInvoke then complete without throwing
+        // and without running the script. Locally that is every time: the token fired at 318 ms, the call
+        // returned at 334 ms, no exception, no output. And on CI the opposite end of the same hole — Stop
+        // failing to interrupt a running pipeline, which then finishes normally 30 seconds later.
+        //
+        // Either way the caller was handed an empty result set and no indication that anything was
+        // cancelled. Every consumer is written around OperationCanceledException — 31 view-models have a
+        // cancel branch and the services deliberately let it propagate — so a silent empty return does not
+        // merely lose the signal, it looks like a successful run that found nothing. Which for a query is
+        // indistinguishable from a real answer.
+        //
+        // Deliberately the OPPOSITE choice from RunProcessAsync, which on the same race lets completion win
+        // ("callers receive the real exit code instead of a false cancellation"). That is right there and
+        // wrong here, and the difference is what the method returns: an exit code from a process that
+        // finished is a true and complete answer worth preserving, whereas an empty collection from a script
+        // that never ran is not an answer at all. There is nothing here to preserve by staying silent.
+        //
+        // Thrown explicitly rather than via ThrowIfCancellationRequested() so the message says WHICH of the
+        // two cancellation paths ran. Reaching here means the pipeline was never interrupted — it either
+        // never started or ran to its natural end — which is a different fact from the catch arm above and
+        // the one #2206 needed five CI failures to establish.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(
+                "The PowerShell pipeline was not interrupted by cancellation; it completed on its own.",
+                cancellationToken);
         }
 
         return new Collection<PSObject>(output.ToList());

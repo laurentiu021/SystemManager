@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.96.1] - 2026-09-11
+
+**Pressing Cancel could leave a tab looking like it had finished successfully with nothing to show.** When a
+PowerShell query was cancelled in a narrow window — while its engine was still starting up — the query never
+ran, but nothing told the tab that. It received an empty list of results, which for a question like "which
+DNS servers am I using?" or "what did Defender find?" looks exactly like a real answer of "none". The tab
+would then show an empty state instead of saying it had been cancelled. Cancelling now always reports itself,
+whichever moment it lands in.
+
+### Fixed
+
+- A cancelled PowerShell query is no longer reported to the app as a successful run that returned nothing.
+  It only reported cancellation when the engine was interrupted mid-script; a cancel that arrived before the
+  script started, or one that failed to interrupt a script already running, was silently discarded.
+- The two cancellation paths now say which one happened, so a failure of this kind can be diagnosed from its
+  message instead of from a stopwatch. That is what this bug needed five CI failures to work out.
+
 ## [1.96.0] - 2026-09-11
 
 **The app now opens showing something you can actually use.** Every sidebar group used to start collapsed,

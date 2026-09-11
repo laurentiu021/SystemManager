@@ -468,17 +468,194 @@ public class PowerShellRunnerTests
         Assert.True(gotError);
     }
 
+    /// <summary>
+    /// Cancelling a running script must stop it, and must surface that as
+    /// <see cref="OperationCanceledException"/> so a caller's cancel branch fires.
+    /// </summary>
+    /// <remarks>
+    /// This test has failed on CI five times with the elapsed time sitting on the script's own duration —
+    /// 31.12, 30.565, 30.664, 33.82, 32.03 seconds against a 30-second sleep, and nothing in between. So the
+    /// failure is all-or-nothing: either <c>ps.Stop()</c> takes effect within a few hundred milliseconds or
+    /// the pipeline runs to its natural end (#2206). The obvious cause — the cancellation callback landing on
+    /// a not-yet-invoked <c>PowerShell</c> instance — was refuted with a harness that mutated the runner three
+    /// ways and cancelled in ~0.35 s every time, so no speculative fix was shipped.
+    ///
+    /// <para><b>What this instrumentation is for.</b> The failure message used to be one number, which cannot
+    /// tell the two live hypotheses apart. The runner's contract makes them distinguishable:
+    /// <c>ps.Stop()</c> makes <c>EndInvoke</c> throw <c>PipelineStoppedException</c>, which
+    /// <c>RunOnLeasedRunspaceAsync</c> translates to <c>OperationCanceledException</c>. So if Stop never
+    /// takes effect the script completes, <c>EndInvoke</c> returns normally and <b>no exception is thrown at
+    /// all</b>.</para>
+    ///
+    /// <list type="bullet">
+    /// <item>slow + <c>OperationCanceledException</c> → Stop worked and the 5-second bound is simply tight.</item>
+    /// <item>slow + <b>no exception</b> → Stop had no effect; the pipeline ran to completion. A user pressing
+    /// Cancel would wait out the whole operation.</item>
+    /// <item>token never fired → the <c>CancellationTokenSource</c> itself was starved, which on a loaded
+    /// runner is a test-environment fact rather than a product defect.</item>
+    /// </list>
+    ///
+    /// <para>The token's own firing time is captured through a SECOND registration on the same token rather
+    /// than by instrumenting the runner: it needs no production change, and it separates "the token fired
+    /// late" from "the token fired on time and was ignored", which is the whole question.</para>
+    ///
+    /// <para>Error lines are captured because of a trap this bug already produced twice: on a dev box
+    /// <c>Start-Sleep</c> does not exist in this runner's runspace — <c>CreateDefault2()</c> loads
+    /// <c>Microsoft.PowerShell.Core</c> only — so the script errors instantly, returns normally, and a
+    /// cancellation that never happened reads as a fast success. If that is what is happening, the captured
+    /// error says so instead of leaving the next person to rediscover it.</para>
+    /// </remarks>
     [Fact]
     public async Task RunAsync_SupportsCancellation()
     {
         var runner = new PowerShellRunner();
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        runner.LineReceived += lines.Enqueue;
+
+        using var cts = new CancellationTokenSource();
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        await Record.ExceptionAsync(async () =>
+
+        // Elapsed at the moment the token fired, from a registration of our own. -1 means it never fired.
+        var firedAtMs = -1.0;
+        using var observer = cts.Token.Register(() => firedAtMs = sw.Elapsed.TotalMilliseconds);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(300));
+
+        var ex = await Record.ExceptionAsync(async () =>
             await runner.RunAsync("Start-Sleep -Seconds 30", cancellationToken: cts.Token));
         sw.Stop();
+
+        var errors = lines.Where(l => l.Kind == Models.OutputKind.Error).Select(l => l.Text).ToList();
+        var diagnosis =
+            $"elapsed {sw.Elapsed}; token fired at {(firedAtMs < 0 ? "NEVER" : $"{firedAtMs:F0} ms")}; "
+            + $"exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"}); {lines.Count} line(s) captured"
+            + (errors.Count > 0 ? $", errors: {string.Join(" | ", errors.Take(2))}" : "");
+
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
-            $"Cancellation took too long: {sw.Elapsed}");
+            "Cancellation took too long. " + diagnosis
+            + " — the exception MESSAGE is the discriminator, because both cancellation paths raise "
+            + "OperationCanceledException: \"stopped by cancellation\" means ps.Stop() interrupted the "
+            + "pipeline and only the bound failed, while \"completed on its own\" means Stop never "
+            + "interrupted anything and the script ran to its natural end. NONE means the run predates the "
+            + "post-await check entirely.");
+
+        // Stopping without reporting it is its own defect: every caller's cancel branch is written around
+        // OperationCanceledException, so a silent return would show a cancelled operation as a completed one.
+        Assert.True(ex is OperationCanceledException, "Cancellation did not surface as OperationCanceledException. " + diagnosis);
+    }
+
+    /// <summary>
+    /// A cancel that lands while the RUNSPACE IS STILL OPENING must still report cancellation — the script
+    /// never runs, and returning an empty result set silently makes that look like a successful query.
+    /// </summary>
+    /// <remarks>
+    /// The regression test for #2206's root cause, and the only one of the three here that pins it
+    /// deterministically.
+    /// <para><b>Why the other two cannot.</b> Both depend on how long a runspace takes to open. Run alone in
+    /// a cold process that is ~300 ms, dominated by assembly loading, so a 300 ms cancel lands during the
+    /// lease and takes this path. Run after any other test in the class it is ~20 ms, the pipeline is already
+    /// executing, and the cancel takes the <c>PipelineStoppedException</c> path instead. Measured: removing
+    /// the post-await throw leaves the whole class GREEN, while running
+    /// <see cref="RunAsync_SupportsCancellation"/> on its own against the same code fails with
+    /// "exception NONE". A test whose coverage depends on execution order is not a regression test.</para>
+    /// <para><b>How this one is deterministic.</b> The <c>openRunspace</c> seam blocks until the test has
+    /// cancelled, so the token is guaranteed to be already cancelled when <c>Register</c> runs — which
+    /// invokes the callback synchronously, putting <c>ps.Stop()</c> on a <c>NotStarted</c> instance.
+    /// <c>BeginInvoke</c>/<c>EndInvoke</c> then complete without throwing and without running the script.
+    /// No timing, no sleeping, and the same sequence on every machine.</para>
+    /// <para>The MESSAGE is asserted, not just the exception type. Both cancellation paths raise
+    /// <c>OperationCanceledException</c>, so accepting either would let this pass on the wrong one — and the
+    /// wrong one is the path that already worked.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_CancelledWhileTheRunspaceIsOpening_ReportsCancellation()
+    {
+        using var cancelled = new SemaphoreSlim(0);   // released once the test has cancelled the token
+        using var reachedOpen = new SemaphoreSlim(0); // signals that the lease has begun opening
+
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => false,
+            openRunspace: async runspace =>
+            {
+                reachedOpen.Release();
+                await cancelled.WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.Run(runspace.Open);
+            });
+
+        using var cts = new CancellationTokenSource();
+        var run = runner.RunAsync("1 + 1", cancellationToken: cts.Token);
+
+        Assert.True(await reachedOpen.WaitAsync(TimeSpan.FromSeconds(10)),
+            "the runspace open was never reached, so nothing below is about the opening window.");
+        await cts.CancelAsync();
+        cancelled.Release();
+
+        var ex = await Record.ExceptionAsync(() => run);
+
+        Assert.True(ex is OperationCanceledException,
+            $"a run cancelled during the runspace open reported {ex?.GetType().Name ?? "NO EXCEPTION"}. "
+            + "With no exception the caller receives an empty result set and no indication that anything was "
+            + "cancelled — for a query that is indistinguishable from a real answer of \"nothing found\".");
+
+        Assert.Contains("completed on its own", ex!.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Cancelling a pipeline that is ALREADY RUNNING must also surface as
+    /// <see cref="OperationCanceledException"/> — the other half of #2206, and the half CI keeps hitting.
+    /// </summary>
+    /// <remarks>
+    /// The test above cancels at 300 ms, and opening a cold runspace takes about that long, so the cancel
+    /// lands during the lease and <c>ps.Stop()</c> hits a not-yet-invoked instance. That is one of two paths
+    /// through the same hole, and it is the only one reproducible on a dev box.
+    /// <para>This one takes the other: a warm-up call first, so the runspace is already open and the lease
+    /// returns immediately, then a longer delay so the cancel arrives while the pipeline is genuinely
+    /// executing. <c>EndInvoke</c> then throws <c>PipelineStoppedException</c> and the translation arm is
+    /// what has to convert it — a different line of the runner from the one the test above exercises.</para>
+    /// <para>The script is deliberately module-free. <c>Start-Sleep</c> lives in
+    /// <c>Microsoft.PowerShell.Utility</c>, which <c>CreateDefault2()</c> does not load, so on a dev box it
+    /// fails instantly with "the module could not be loaded" and the script returns in milliseconds —
+    /// a cancellation that never happened reading as a fast pass. That trap cost a whole round of
+    /// investigation on #2206; <c>[System.Threading.Thread]::Sleep</c> needs no module and blocks for real.
+    /// The assertion that the probe actually blocked is what keeps this test from repeating the mistake.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_CancellingARunningPipeline_ReportsCancellation()
+    {
+        var runner = new PowerShellRunner();
+
+        // Warm the runspace so the lease below is instant and the cancel lands mid-execution rather than
+        // mid-open. Module-free, and its result proves the runspace works before anything is measured.
+        var warm = await runner.RunAsync("1 + 1");
+        Assert.Equal(2, Convert.ToInt32(Assert.Single(warm).BaseObject, System.Globalization.CultureInfo.InvariantCulture));
+
+        using var cts = new CancellationTokenSource();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var firedAtMs = -1.0;
+        using var observer = cts.Token.Register(() => firedAtMs = sw.Elapsed.TotalMilliseconds);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+        var ex = await Record.ExceptionAsync(async () => await runner.RunAsync(
+            "while ($true) { [System.Threading.Thread]::Sleep(50) }", cancellationToken: cts.Token));
+        sw.Stop();
+
+        var diagnosis = $"elapsed {sw.Elapsed}; token fired at {(firedAtMs < 0 ? "NEVER" : $"{firedAtMs:F0} ms")}; "
+                        + $"exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"})";
+
+        // The probe must have BLOCKED. An infinite loop that returns in 50 ms means the script never ran,
+        // and everything below it would then be asserting over nothing.
+        Assert.True(sw.Elapsed > TimeSpan.FromMilliseconds(400),
+            "the blocking script returned before the cancel could land, so this test proves nothing about "
+            + "cancelling a RUNNING pipeline. " + diagnosis);
+
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10),
+            "a running pipeline did not stop when cancelled. " + diagnosis);
+
+        Assert.True(ex is OperationCanceledException,
+            "a cancelled running pipeline did not report cancellation. " + diagnosis
+            + " — PipelineStoppedException here means the translation arm stopped converting it, and a "
+            + "message of \"completed on its own\" means Stop did not interrupt a pipeline that was "
+            + "definitely running, which is the CI failure shape rather than this test's own.");
     }
 
     [Fact]

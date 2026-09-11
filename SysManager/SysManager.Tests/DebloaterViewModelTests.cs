@@ -25,8 +25,32 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class DebloaterViewModelTests
 {
-    private static DebloaterViewModel NewVm() =>
-        new(new DebloaterService(Substitute.For<IPowerShellRunner>()), NoRestorePoint());
+    /// <summary>
+    /// A view-model with an unconfigured runner, its constructor init settled.
+    /// </summary>
+    /// <remarks>
+    /// Settled for the same reason as the overload below (#2201). It matters here even though these tests
+    /// assert no <c>StatusMessage</c>: the init sets <c>HasScanned = true</c>, so
+    /// <see cref="EmptyState_BeforeScan_PromptsRefresh"/> was asserting <c>HasScanned</c> is FALSE as a
+    /// precondition it did not control — true only while the fire-and-forget init had not landed yet. Both
+    /// empty-state tests now set the flag they are about, which is what they were always testing: the copy
+    /// switches on <c>HasScanned</c>, not on how fast a background load happens to run.
+    /// </remarks>
+    private static DebloaterViewModel NewVm()
+    {
+        // Returns an EMPTY collection explicitly. An unconfigured substitute hands back a null
+        // Collection<PSObject>, which made DebloaterService.ParsePackages throw NullReferenceException
+        // out of the init — invisible until this factory started settling it, because RunInitAsync does not
+        // catch that type and nothing in production observes the task. Filed separately; a test fixture
+        // should state what the runner returns rather than lean on an auto-value either way.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new Collection<PSObject>()));
+
+        var vm = new DebloaterViewModel(new DebloaterService(runner), NoRestorePoint());
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
 
     /// <summary>
     /// A seam that answers "no point was created" — the common case on a consumer machine, where
@@ -55,7 +79,12 @@ public class DebloaterViewModelTests
     public void EmptyState_BeforeScan_PromptsRefresh()
     {
         var vm = NewVm();
-        Assert.False(vm.HasScanned);
+
+        // Set explicitly rather than relied on. The init sets this true, so asserting it was false meant
+        // asserting the background load had not landed yet — which is timing, not behaviour. The sibling
+        // test below has always set it the other way for exactly this reason.
+        vm.HasScanned = false;
+
         Assert.Equal("No apps loaded", vm.EmptyTitle);
         Assert.Contains("Refresh", vm.EmptyMessage);
     }
@@ -93,7 +122,7 @@ public class DebloaterViewModelTests
         // exception-safe.
         using var dialog = new DialogAnswer(confirm: true);
 
-        var vm = new DebloaterViewModel(new DebloaterService(runner), NoRestorePoint());
+        var vm = NewVm(NoRestorePoint(), runner);
         var a = Removable("Contoso.AppA");
         var b = Removable("Contoso.AppB");
         vm.Apps.Add(a);
@@ -128,13 +157,42 @@ public class DebloaterViewModelTests
         return runner;
     }
 
+    /// <summary>
+    /// Builds the view-model and SETTLES its constructor init before returning it.
+    /// </summary>
+    /// <remarks>
+    /// The constructor fires <c>RefreshAsync</c> and forgets it, and that init does two things no test
+    /// here survives landing late (#2201):
+    /// <list type="number">
+    /// <item>it writes <c>StatusMessage</c> — "Reading installed Store apps…" — which then overwrites
+    /// whatever the command under test reported, so the assertion fails on a string neither the test nor
+    /// the command produced. That is the exact failure that reddened an unrelated PR on #2199.</item>
+    /// <item>it calls <c>Apps.ReplaceWith(...)</c>, which DISCARDS the fixture. Every test in this file adds
+    /// its apps immediately after constructing, so a late init leaves the command acting on an empty list —
+    /// and a test that then asserts "nothing was removed" passes for the wrong reason entirely.</item>
+    /// </list>
+    /// <para>The second is why this is a factory rather than an await added to the three tests that assert
+    /// on <c>StatusMessage</c>: all six construction sites add to <c>Apps</c>, so all six are exposed,
+    /// whatever they go on to assert.</para>
+    /// <para>Settled synchronously, mirroring <c>AppBlockerViewModelTests.NewVm</c> and the four other
+    /// factories in this suite that do the same, so the sync tests here need no signature change.</para>
+    /// </remarks>
+    private static DebloaterViewModel NewVm(
+        ISessionRestorePoint restorePoint, IPowerShellRunner? runner = null)
+    {
+        var vm = new DebloaterViewModel(
+            new DebloaterService(runner ?? RunnerThatRemovesSuccessfully()), restorePoint);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
     [Fact]
     public async Task RemoveSelected_TakesTheRestorePointBeforeRemovingAnything()
     {
         var restorePoint = RestorePointTaken();
         using var dialog = new DialogAnswer(confirm: true);
 
-        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        var vm = NewVm(restorePoint);
         vm.Apps.Add(Removable("Contoso.AppA"));
 
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
@@ -149,7 +207,7 @@ public class DebloaterViewModelTests
         var restorePoint = RestorePointTaken();
         using var dialog = new DialogAnswer(confirm: false);
 
-        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        var vm = NewVm(restorePoint);
         vm.Apps.Add(Removable("Contoso.AppA"));
 
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
@@ -162,7 +220,7 @@ public class DebloaterViewModelTests
     public async Task RemoveSelected_WithNothingSelected_TakesNoRestorePoint()
     {
         var restorePoint = RestorePointTaken();
-        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), restorePoint);
+        var vm = NewVm(restorePoint);
         var app = Removable("Contoso.AppA");
         app.IsSelected = false;
         vm.Apps.Add(app);
@@ -177,7 +235,7 @@ public class DebloaterViewModelTests
     {
         using var dialog = new DialogAnswer(confirm: true);
 
-        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), RestorePointTaken());
+        var vm = NewVm(RestorePointTaken());
         vm.Apps.Add(Removable("Contoso.AppA"));
 
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
@@ -199,7 +257,7 @@ public class DebloaterViewModelTests
         // than none at all, because she would press the button on the strength of it.
         using var dialog = new DialogAnswer(confirm: true);
 
-        var vm = new DebloaterViewModel(new DebloaterService(RunnerThatRemovesSuccessfully()), NoRestorePoint());
+        var vm = NewVm(NoRestorePoint());
         vm.Apps.Add(Removable("Contoso.AppA"));
 
         await vm.RemoveSelectedCommand.ExecuteAsync(null);

@@ -24,7 +24,12 @@ whichever moment it lands in.
 - A cancelled PowerShell query is no longer reported to the app as a successful run that returned nothing.
   It only reported cancellation when the engine was interrupted mid-script; a cancel that arrived before the
   script started, or one that failed to interrupt a script already running, was silently discarded.
-- The two cancellation paths now say which one happened, so a failure of this kind can be diagnosed from its
+- **Cancelling now works the same way with administrator rights as without.** The two are not the same
+  underneath — running elevated hands the work to a separate Windows PowerShell process — and the cancelled
+  result came back in a different form from there that the app did not recognise. So on an elevated session
+  a cancelled query surfaced as a raw engine error rather than as a cancellation. This is the half that
+  could only ever be seen on a machine running as administrator.
+- The cancellation paths now say which one happened, so a failure of this kind can be diagnosed from its
   message instead of from a stopwatch. That is what this bug needed five CI failures to work out.
 
 ## [1.96.0] - 2026-09-11

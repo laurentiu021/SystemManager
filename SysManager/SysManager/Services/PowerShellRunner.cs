@@ -216,11 +216,15 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         {
             await task.ConfigureAwait(false);
         }
-        catch (PipelineStoppedException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsPipelineStopped(ex))
         {
-            // Cancellation calls ps.Stop(), which makes EndInvoke throw PipelineStoppedException.
-            // Surface the standard cancellation signal so callers that catch OperationCanceledException
-            // treat a cancelled PowerShell run as cancelled rather than as an error.
+            // Cancellation calls ps.Stop(), which makes EndInvoke throw. Surface the standard cancellation
+            // signal so callers that catch OperationCanceledException treat a cancelled PowerShell run as
+            // cancelled rather than as an error.
+            //
+            // Filtered by IsPipelineStopped rather than by catching PipelineStoppedException directly,
+            // because WHICH type arrives depends on the transport — see that method. This arm used to name
+            // the in-process type only, so on an elevated (out-of-process) runspace it never matched.
             //
             // The message distinguishes this from the post-await throw below, and that is diagnostic rather
             // than decorative: both raise OperationCanceledException, so without it a slow cancellation
@@ -692,6 +696,37 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
     /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
     /// </remarks>
+    /// <summary>
+    /// True when <paramref name="ex"/> means "the pipeline was stopped", whichever transport reported it.
+    /// </summary>
+    /// <remarks>
+    /// The type depends on WHERE the pipeline ran, which is why naming one of them was not enough (#2206):
+    /// <list type="bullet">
+    /// <item>unelevated, in-process runspace → <see cref="PipelineStoppedException"/> directly;</item>
+    /// <item>elevated, out-of-process Windows PowerShell 5.1 over remoting →
+    /// <see cref="RemoteException"/> whose <c>SerializedRemoteException</c> is the stopped-pipeline error,
+    /// because the failure happened in the child and was serialized across the transport.</item>
+    /// </list>
+    /// <para>The arm above named the in-process type only, so on an ELEVATED runspace it never matched and
+    /// cancellation escaped as a raw PowerShell error. That is invisible on a developer machine, which runs
+    /// unelevated and takes the first branch, and it is what CI kept hitting: the failure reported
+    /// <c>RemoteException (The pipeline has been stopped.)</c> — the right event, the wrong type, no
+    /// translation. Nine words of a CI log that a local run could not have produced.</para>
+    /// <para><b>The remote arm checks the TYPE NAME, not the type.</b> Remoting does not hand back the
+    /// original exception object — it rehydrates a <c>PSObject</c> whose <c>TypeNames</c> read
+    /// <c>Deserialized.System.Management.Automation.PipelineStoppedException</c>, so an <c>is</c> test
+    /// against the real type is always false. Suffix-matching the type name is what actually holds, and it
+    /// is still locale-independent, unlike matching the message: a non-English Windows would fall out of a
+    /// string comparison on "The pipeline has been stopped." without anything saying so.</para>
+    /// <para><c>internal</c> so the shapes can be asserted directly, rather than needing an elevated host
+    /// to produce a real remote failure.</para>
+    /// </remarks>
+    internal static bool IsPipelineStopped(Exception ex) =>
+        ex is PipelineStoppedException
+        || ex.InnerException is PipelineStoppedException
+        || (ex as RemoteException)?.SerializedRemoteException?.TypeNames
+               .Any(name => name.EndsWith("PipelineStoppedException", StringComparison.Ordinal)) == true;
+
     private async Task<RunspaceLease> LeaseRunspaceAsync()
     {
         if (!_isElevated)

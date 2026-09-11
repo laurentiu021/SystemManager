@@ -45,8 +45,8 @@
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Speed Test" Style="{StaticResource Display}"/>
-            <TextBlock Text="Ookla and HTTP speed tests with history tracking."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Measure how fast this connection actually is, and keep the results so a slowdown is something you can show your provider rather than describe. Uses the Ookla test where it can and a plain download test otherwise."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="28,16,28,28">

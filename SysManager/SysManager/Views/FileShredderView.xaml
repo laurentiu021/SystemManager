@@ -29,8 +29,8 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="File Shredder" Style="{StaticResource Display}"/>
-            <TextBlock Text="Securely delete files beyond recovery with multi-pass overwrite."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Delete a file so it cannot be recovered, by overwriting its contents before removing it — for something you would not want found on a PC you are selling or giving away. This is permanent: there is no Recycle Bin step and no undo, so it asks you to confirm and refuses to touch Windows' own folders."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="{StaticResource RadiusMd}"
                     Margin="0,10,0,0" Padding="10,8">
                 <!-- DockPanel, not a horizontal StackPanel: a StackPanel measures children with infinite

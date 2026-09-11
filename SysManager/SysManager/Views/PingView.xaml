@@ -20,8 +20,8 @@
         <DockPanel Grid.Row="0" Margin="28,24,28,0">
             <StackPanel>
                 <TextBlock Text="Ping" Style="{StaticResource Display}"/>
-                <TextBlock Text="Live ping monitoring with latency chart and health verdict."
-                           Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                <TextBlock Text="Watch how long this PC takes to reach a server, second by second, with a chart of the round-trip time and a plain verdict on whether the trouble is here, in your connection, or at the far end. The presets cover the game and streaming servers people ask about most."
+                           Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                         DockPanel.Dock="Right" VerticalAlignment="Center">

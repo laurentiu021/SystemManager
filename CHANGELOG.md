@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.0] - 2026-09-12
+
+**Eleven tabs stopped opening with a sentence written for someone who already knows Windows.** The line under
+each tab's title is the only explanation most people ever read, and it had drifted into two voices: the newer
+tabs say what the tab is for and what it costs you, while older ones opened with an acronym. "Common fixes for
+DNS, socket, and TCP/IP issues" tells you nothing unless you already knew. Those eleven now lead with what you
+get, put the jargon in brackets after it, and say plainly what the tab will and will not do to your PC.
+
+### Changed
+
+- **DNS & Hosts, Network Repair, Speed Test, Ping, Traceroute** — each says what the thing is for before
+  naming it. Network Repair also warns that two of its four fixes only take effect after a restart, which it
+  never said.
+- **App Updates and Bulk Installer** — "winget" is now explained once as Microsoft's own App Installer,
+  already part of Windows. It had appeared bare on both tabs and was expanded nowhere in the app.
+- **Drivers now says it only reads.** It lists drivers and cannot install, update or remove one — worth
+  saying, because a tab called Drivers sets a different expectation.
+- **File Shredder says the deletion is permanent** before you use it: no Recycle Bin step, no undo, and it
+  refuses Windows' own folders.
+- **Quick Cleanup leads with the outcome** rather than with SFC and DISM, and says the repairs change nothing
+  you can see.
+- **System Health says what it does not do** — everything on it reads rather than changes, except the memory
+  test, which Windows runs on the next restart once you schedule it.
+
+### Fixed
+
+- **Five long explanations were being cut off.** Performance, Services, Duplicate Finder, Privacy & Telemetry
+  and Process Manager had explanations of 84 to 111 characters set to never wrap, so the end of the sentence
+  was simply missing unless the window was maximised. A test now holds that rule for all 51 explanations that
+  are long enough to need it.
+
 ## [1.98.0] - 2026-09-11
 
 **Four tabs never said what they were for, and now all 58 do.** Under its title, every tab has a line of

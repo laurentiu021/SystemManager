@@ -14,8 +14,8 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="DNS &amp; Hosts" Style="{StaticResource Display}"/>
-            <TextBlock Text="Change DNS servers and manage the hosts file."
-                       Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+            <TextBlock Text="Point your PC at a faster or more private DNS server — the service that turns a website's name into an address — and block a site by adding it to the hosts file. Both are reversible: Restore puts back the DNS you had, and the hosts file is backed up before every save."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->

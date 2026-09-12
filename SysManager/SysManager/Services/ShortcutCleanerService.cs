@@ -71,6 +71,14 @@ public sealed partial class ShortcutCleanerService
             }
         }
 
+        // A cancelled scan exits the loops above with partial results — they break on cancellation
+        // rather than throwing — so returning normally would hand the caller a short list with no
+        // indication that it is short. The view model's success path then claimed a finished scan and,
+        // if nothing had been found yet, that the PC was clean (#2275). Throw so its existing cancel
+        // branch runs instead; it already says "Scan cancelled." and was dead code until now. Both
+        // sibling scanners end the same way, for the same reason.
+        ct.ThrowIfCancellationRequested();
+
         return results;
     }
 

@@ -17,6 +17,14 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class DiskAnalyzerService
 {
+    /// <summary>How far the walk has got, reported once per top-level subfolder as it is reached.</summary>
+    /// <param name="FoldersScanned">Top-level subfolders started so far. Not a fraction: the total is not
+    /// known until the walk ends, which is why the tab shows an indeterminate bar rather than a
+    /// percentage.</param>
+    /// <param name="CurrentFolder">The FULL PATH of the folder being measured, empty on the settling report
+    /// that follows the walk. The consumer trims it for display and shows the path on hover, so a name alone
+    /// would leave the hover with nothing to add. Empty rather than a word like "Done" because a caller
+    /// rendering this into a sentence would otherwise name a folder that does not exist (#2273, #2274).</param>
     public sealed record AnalysisProgress(int FoldersScanned, string CurrentFolder);
 
     // Skip system subtrees that are slow or inaccessible.
@@ -100,7 +108,7 @@ public sealed class DiskAnalyzerService
             catch (IOException) { continue; }
 
             scanned++;
-            progress?.Report(new AnalysisProgress(scanned, Path.GetFileName(dir)));
+            progress?.Report(new AnalysisProgress(scanned, dir));
 
             var (size, files, folders, denied) = MeasureFolder(dir, ct);
             var name = Path.GetFileName(dir);
@@ -145,7 +153,11 @@ public sealed class DiskAnalyzerService
                 r.Percentage = Math.Round(r.SizeBytes * 100.0 / total, 1);
         }
 
-        progress?.Report(new AnalysisProgress(scanned, "Done"));
+        // The settling report: the final count, with no folder. It carried the literal "Done", which the tab
+        // rendered as "Scanning folder 1234: Done" — a sentence saying the scan is still running and naming a
+        // folder that does not exist. Empty gives the consumer nothing fake to display and needs no sentinel
+        // to recognise, the same fix as LargeFileScanner (#2273).
+        progress?.Report(new AnalysisProgress(scanned, string.Empty));
         return results;
     }
 

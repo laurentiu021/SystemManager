@@ -312,4 +312,110 @@ public class DiskAnalyzerViewModelTests
         Assert.Contains("About the same",
             DiskAnalyzerViewModel.DescribeTrend(prior, 5_000_000_000), StringComparison.Ordinal);
     }
+
+    // ── The announced half vs the shown half (#2274) ──
+    // The status line is a live region, and the scan reported into it once per top-level subfolder with no
+    // rate limit at all. A folder with hundreds of small children announced hundreds of sentences in a few
+    // seconds, so the tab said LESS the more there was to say. The per-folder value now goes to a silent
+    // readout and the status line keeps the coarse phase, exactly as Duplicate Finder's was split in #2143.
+
+    private static DiskAnalyzerService.AnalysisProgress Tick(int scanned, string folder) =>
+        new(scanned, folder);
+
+    [Fact]
+    public void TheAnnouncedLine_IsNotTouched_WhileTheReadoutChangesEveryFolder()
+    {
+        var vm = NewVm();
+        var before = vm.StatusMessage;
+        var raised = vm.RecordPropertyChanges();
+
+        // What analysing a user profile looks like: one report per child directory, as fast as the walk
+        // reaches them.
+        for (var i = 1; i <= 40; i++)
+            vm.ApplyScanProgress(Tick(i, $@"C:\Sample\folder{i}"));
+
+        // Not "changed twice" — not at all. This callback has no coarse value to contribute: the phase
+        // boundaries are the command's own, so every announcement this tab makes is one of the three
+        // sentences it says when a scan starts or ends.
+        Assert.DoesNotContain(nameof(vm.StatusMessage), raised);
+        Assert.Equal(before, vm.StatusMessage);
+
+        // …while the eye still gets every report. Without this half the test would also pass on a callback
+        // that had simply stopped reporting anything.
+        Assert.Equal(40, raised.Count(n => n == nameof(vm.ScanReadout)));
+    }
+
+    [Fact]
+    public void TheReadout_ShowsTheCount_AndTheFolderNameRatherThanItsPath()
+    {
+        var vm = NewVm();
+        vm.ApplyScanProgress(Tick(1234, @"C:\Users\Sample\AppData\Local"));
+
+        Assert.Equal("1,234 folders measured · Local", vm.ScanReadout);
+        // The path goes to the hover instead: the count plus a deep path exceeds the row at a small window.
+        Assert.Equal(@"C:\Users\Sample\AppData\Local", vm.CurrentFolder);
+    }
+
+    [Fact]
+    public void TheSettlingReport_ClearsTheReadout_RatherThanNamingAFolderCalledDone()
+    {
+        // The service sends one last report with the settled count and no folder. It used to pass the literal
+        // "Done" there, which the tab rendered as "Scanning folder 1234: Done" — a sentence claiming the scan
+        // is still running, naming a folder that does not exist.
+        var vm = NewVm();
+        vm.ApplyScanProgress(Tick(1234, @"C:\Sample\Local"));
+        Assert.NotEmpty(vm.ScanReadout);
+
+        vm.ApplyScanProgress(Tick(1234, string.Empty));
+
+        Assert.Equal("", vm.ScanReadout);
+        Assert.Equal("", vm.CurrentFolder);
+    }
+
+    [Fact]
+    public void AFolderPathEndingInASeparator_StillShowsSomethingAfterTheCount()
+    {
+        // Path.GetFileName returns "" for a trailing separator, which would leave the readout ending in a
+        // bare separator. The service applies the same fallback when it names the entry itself.
+        var vm = NewVm();
+        vm.ApplyScanProgress(Tick(3, @"C:\Sample\"));
+
+        Assert.Equal(@"3 folders measured · C:\Sample\", vm.ScanReadout);
+    }
+
+    [Fact]
+    public void DiskAnalyzerView_AnnouncesTheStatusLine_AndShowsTheReadoutSilently()
+    {
+        // The assertions above would all pass on markup that still bound one combined line, and the
+        // live-region rule itself is enforced in ArchitectureTests. What only the shipped markup can show is
+        // which line each half landed on — so this reads the XAML, in the same shape as the equivalent test
+        // on Duplicate Finder.
+        var root = System.Xml.Linq.XDocument.Load(ViewPath("DiskAnalyzerView.xaml")).Root;
+        Assert.NotNull(root);
+
+        System.Xml.Linq.XElement BoundTo(string property) =>
+            Assert.Single(root!.Descendants(),
+                e => e.Name.LocalName == "TextBlock"
+                     && e.Attribute("Text")?.Value == $"{{Binding {property}}}");
+
+        var coarse = BoundTo("StatusMessage");
+        Assert.Equal("{StaticResource StatusLine}", coarse.Attribute("Style")?.Value);
+        Assert.Null(coarse.Attribute("ToolTip"));
+
+        var readout = BoundTo("ScanReadout");
+        Assert.Equal("{Binding CurrentFolder}", readout.Attribute("ToolTip")?.Value);
+        Assert.Equal("CharacterEllipsis", readout.Attribute("TextTrimming")?.Value);
+
+        // Caption, not StatusLine: StatusLine IS Caption plus AutomationProperties.LiveSetting, so basing the
+        // readout on it would look identical and quietly put the fast half back into the announcements.
+        var inline = Assert.Single(readout.Elements()
+            .Where(e => e.Name.LocalName == "TextBlock.Style")
+            .SelectMany(e => e.Elements().Where(s => s.Name.LocalName == "Style")));
+        Assert.Equal("{StaticResource Caption}", inline.Attribute("BasedOn")?.Value);
+
+        // This tab no longer uses the shared footer, because that control deliberately has no second slot.
+        // Asserting its absence pins the reason: a well-meaning "deduplicate this" would delete the readout.
+        Assert.DoesNotContain(root!.Descendants(), e => e.Name.LocalName == "StatusFooter");
+    }
+
 }

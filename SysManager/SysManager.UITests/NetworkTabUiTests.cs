@@ -31,7 +31,11 @@ public class NetworkTabUiTests
     public void Subtitle_Visible()
     {
         GoTo();
-        Assert.NotNull(_fx.WaitForText("Live ping"));
+        // "round-trip time" rather than a phrase from the opening clause: the subtitle was rewritten in
+        // #2272 to lead with what the tab does in plain language, which deleted the "Live ping" this waited
+        // for and left the assertion permanently red. A domain term survives that kind of edit, where an
+        // opening phrase is exactly what a rewording replaces.
+        Assert.NotNull(_fx.WaitForText("round-trip time"));
     }
 
     [Fact]

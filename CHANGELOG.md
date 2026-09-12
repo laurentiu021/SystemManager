@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.5] - 2026-09-12
+
+**When an update download fails, the tab now says why.** Pressing Download and having it fail showed you
+nothing at all: the progress bar disappeared, a "Manual download" button quietly appeared beside it, and
+the sentence explaining what went wrong — a firewall blocking the connection, a server that was
+temporarily unavailable, a timeout — was written to a line that had just been hidden. The explanation now
+appears in amber under the update, and it wraps, so a long message is readable rather than cut off.
+
+### Fixed
+
+- A failed update download shows the reason it failed instead of only a new button appearing.
+- The message wraps to as many lines as it needs. The four explanations are full sentences that tell you
+  what to try next, and the old row would have shown about a third of one.
+
 ## [1.99.4] - 2026-09-12
 
 **Disk Analyzer no longer talks over itself while it measures, and no longer ends by naming a folder

@@ -491,11 +491,16 @@ public partial class ArchitectureTests
     /// someone adding tab 60 is to copy it from the neighbour, which is how there came to be 21 of them. Once
     /// the control exists, a fresh copy is a regression rather than a starting point — so the exact attribute
     /// run is banned outside the control itself.</para>
-    /// <para>The 16 footers that carry extra content — a docked Cancel or Refresh button, an ETA line, a
+    /// <para>The 17 footers that carry extra content — a docked Cancel or Refresh button, an ETA line, a
     /// trimmed path with a tooltip, a literal <c>IsIndeterminate="True"</c> — are deliberately NOT converted
     /// and are deliberately NOT covered by the ban: they are not the shape this control replaces. The ban is
     /// scoped to the plain form for that reason, and widening it would demand slots that make the control
     /// more complicated than the duplication it removes (#1630).</para>
+    /// <para><b>The call-site count can legitimately go DOWN.</b> Disk Analyzer left this control in #2274:
+    /// it needs a second, silent line beside the status line, which is exactly the extra content the
+    /// paragraph above says not to give the control slots for. So 20 call sites, from 21 — and the floor
+    /// moved with it, deliberately. A drop is a broken element match OR a conversion away, and the two are
+    /// told apart by whether the view that lost it grew a footer of its own.</para>
     /// </remarks>
     [Fact]
     public void EveryStatusFooter_NamesItsProgressBar_AndNobodyReInlinesIt()
@@ -541,9 +546,10 @@ public partial class ArchitectureTests
             + "ProgressName=\"… progress\"/> instead:\n  " + string.Join("\n  ", reInlined));
 
         // Vacuity floor for the naming check below, and only for it: if the element match breaks, `unnamed`
-        // is empty for the wrong reason. 21 call sites when converted.
-        Assert.True(callSites >= 21,
-            $"only {callSites} StatusFooter call sites were found, out of 21 converted — the element match is "
+        // is empty for the wrong reason. 20 call sites — 21 were converted, then Disk Analyzer left again in
+        // #2274 for a second line the control has no slot for (see this test's summary).
+        Assert.True(callSites >= 20,
+            $"only {callSites} StatusFooter call sites were found, out of 20 in use — the element match is "
             + "out of date, so the naming check below proves nothing.");
 
         Assert.True(unnamed.Count == 0,
@@ -8999,6 +9005,196 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"IsCancellationRequested\s*\)\s*\{?\s*(break|yield\s+break|return)\b",
                     RegexOptions.Compiled)]
     private static partial Regex CancellationBreak();
+
+    /// <summary>
+    /// No progress callback writes a property that a view renders in a live region.
+    /// </summary>
+    /// <remarks>
+    /// A progress callback fires per item, so what it writes changes as fast as the work does. A live region
+    /// speaks every change. Put those together and a screen reader gets continuous speech instead of
+    /// information — it starts each sentence and is interrupted by the next.
+    /// <para>Disk Analyzer wrote <c>StatusMessage</c> — which <c>StatusFooter</c> renders through
+    /// <c>StatusLine</c>, i.e. announced — straight from its callback, with no rate limit at all: once per
+    /// top-level subfolder as the walk reached it. On a folder with hundreds of small children that is
+    /// hundreds of sentences in a few seconds, so the tab said LESS the more there was to say (#2274).</para>
+    /// <para><b>Why the existing live-region guard could not see it.</b>
+    /// <c>EveryStatusLine_IsALiveRegion_AndTheFastReadoutsAreNot</c> asserts that each status line IS
+    /// announced and that each NAMED fast readout is not. Disk Analyzer satisfied both: its status line was
+    /// announced as required, and it had no separate fast readout to list, because the fast value went
+    /// directly into the announced line. That rule watches for a fast value BESIDE the status line and never
+    /// for the status line itself being fast — the gap that let this survive #1545 and #2143. Checking the
+    /// writer rather than the neighbour is what closes it.</para>
+    /// <para><b>The population is every live region, not just the callback-written ones.</b> That is the
+    /// point: the check reads every announced binding in the app against every progress callback, so wiring
+    /// a fast value into any live region fails here when it is written rather than when someone finally runs
+    /// a screen reader.</para>
+    /// <para><b>Three exemptions, all reasoned.</b> Deep Cleanup's scan and clean lines are announced AND
+    /// callback-written, and they are correct: their report carries a <c>Total</c>, so the number of
+    /// announcements equals the number of categories — around a dozen for a whole pass, which is what a live
+    /// region is for. Duplicate Finder's writes only the coarse phase label, the shape #2143 established;
+    /// its fast half is <c>ScanReadout</c>, which the sibling guard holds silent. A name added here has to
+    /// argue that its line is SLOW, not merely that it is useful.</para>
+    /// </remarks>
+    [Fact]
+    public void NoProgressCallback_WritesAnAnnouncedLine()
+    {
+        // Announced and callback-written on purpose. The reason is the rate, not the usefulness.
+        (string Vm, string Property, string Why)[] exempt =
+        [
+            ("DeepCleanupViewModel", "ScanStatusLine",
+                "bounded by the report's Total: one announcement per category, ~12 per scan"),
+            ("DeepCleanupViewModel", "CleanStatusLine", "same, for the clean pass"),
+            ("DuplicateFileViewModel", "StatusMessage",
+                "writes only the coarse phase label; the fast half is ScanReadout (#2143)"),
+        ];
+
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+        var vmDir = Path.Combine(appDir, "ViewModels");
+
+        // Every property any view announces. StatusMessage is included whenever a view uses
+        // <v:StatusFooter/>, which renders it through StatusLine from ANOTHER file — most tabs reach it that
+        // way, so a sweep that only read TextBlocks in each view would miss all of them.
+        string[] announcedStyles = ["{StaticResource StatusLine}", "{StaticResource SubtleStatusLine}"];
+        var announced = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var path in Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly))
+        {
+            var root = System.Xml.Linq.XDocument.Load(path).Root;
+            if (root is null) continue;
+
+            if (root.DescendantsAndSelf().Any(e => e.Name.LocalName == "StatusFooter"))
+                announced.Add("StatusMessage");
+
+            foreach (var block in root.DescendantsAndSelf().Where(e => e.Name.LocalName == "TextBlock"))
+            {
+                if (BoundProperty(Attr(block, "Text")) is not { } bound) continue;
+                if (IsAnnounced(block, announcedStyles)) announced.Add(bound);
+            }
+        }
+
+        // Vacuity floor on the corpus this reads FROM, as an enumerated SET rather than a count: the whole
+        // app has six announced properties and naming them is strictly stronger than a number, in the same
+        // way the sibling guard's mustStaySilent list is. StatusMessage reaches this through 22
+        // <v:StatusFooter/> call sites plus Disk Analyzer's own inline StatusLine; the other five carry
+        // AutomationProperties.LiveSetting directly. A NEW live region needs no entry here — it is checked
+        // automatically — so this list only has to keep pace with renames.
+        string[] knownAnnounced =
+        [
+            "StatusMessage", "ScanStatusLine", "CleanStatusLine", "SfcVerdict", "DismVerdict", "StoreVerdict",
+        ];
+        var missing = knownAnnounced.Except(announced, StringComparer.Ordinal).ToList();
+        Assert.True(missing.Count == 0,
+            "these properties are announced in the views but this guard did not find them, so the live-region "
+            + "read is out of date and the check below covers less than it claims. They were renamed or their "
+            + $"binding changed shape — update the list with the current names:\n  "
+            + string.Join("\n  ", missing));
+
+        var offenders = new List<string>();
+        var callbacksSeen = 0;
+
+        foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
+        {
+            var vm = Path.GetFileNameWithoutExtension(file);
+            var code = WithoutComments(File.ReadAllText(file));
+
+            foreach (var body in ProgressCallbackBodies(code))
+            {
+                callbacksSeen++;
+                foreach (var written in AssignedProperties(body).Where(announced.Contains))
+                {
+                    if (exempt.Any(e => e.Vm == vm && e.Property == written)) continue;
+                    offenders.Add($"{vm}.{written}");
+                }
+            }
+        }
+
+        // Floor on the OTHER corpus: the callbacks themselves.
+        Assert.True(callbacksSeen >= 11,
+            $"only {callbacksSeen} progress callbacks were found — the callback shape is out of date, so no "
+            + "writer is being read.");
+
+        Assert.True(offenders.Count == 0,
+            "these write a live region from inside a progress callback, so a screen reader is told the fast "
+            + "value: it starts a sentence per item and is cut off by the next, which is less useful than "
+            + "silence. Announce the coarsest line the tab has and move the per-item value to a silent "
+            + "readout beside it, as Duplicate Finder and Disk Analyzer do:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The body of every <c>new Progress&lt;T&gt;(…)</c> in a view model — the lambda's statements, or the
+    /// named method's body when one is passed by reference.
+    /// </summary>
+    /// <remarks>
+    /// Both forms have to be read or the rule is evaded by extracting a method, which is exactly what the two
+    /// tabs that got this right do: <c>new Progress&lt;ScanProgress&gt;(ApplyScanProgress)</c>. A
+    /// call-site-only reader would report those two as clean without ever looking at what they write.
+    /// </remarks>
+    private static IEnumerable<string> ProgressCallbackBodies(string code)
+    {
+        foreach (var m in ProgressConstruction().Matches(code).Cast<Match>())
+        {
+            var argument = m.Groups["arg"].Value;
+
+            // A bare identifier is a method reference: read that method's body instead. Anything else is a
+            // lambda, whose body runs from the construction to the parenthesis that closes it.
+            if (argument.Length > 0)
+            {
+                if (MethodBodiesByName(code).TryGetValue(argument, out var overloads))
+                    foreach (var body in overloads)
+                        yield return body;
+                continue;
+            }
+
+            yield return BalancedFrom(code, m.Index);
+        }
+    }
+
+    /// <summary>
+    /// The text from <paramref name="start"/> to the close of the parenthesis group it opens — a lambda's
+    /// whole body, however many lines and nested braces it spans.
+    /// </summary>
+    private static string BalancedFrom(string code, int start)
+    {
+        var depth = 0;
+        for (var i = start; i < code.Length; i++)
+        {
+            if (code[i] == '(') depth++;
+            else if (code[i] == ')')
+            {
+                depth--;
+                if (depth == 0) return code[start..(i + 1)];
+            }
+        }
+        return code[start..];
+    }
+
+    /// <summary>The property names assigned in a block — the left side of a plain <c>X = …</c>.</summary>
+    /// <remarks>
+    /// <c>item.Status = …</c> is deliberately NOT matched: a row's own property is not a tab-level line, and
+    /// no view announces one.
+    /// </remarks>
+    private static IEnumerable<string> AssignedProperties(string body)
+    {
+        foreach (var m in PropertyAssignment().Matches(body).Cast<Match>())
+            yield return m.Groups["name"].Value;
+    }
+
+    /// <summary>
+    /// A <c>new Progress&lt;T&gt;(</c> construction. <c>arg</c> captures the argument only when it is a bare
+    /// identifier — a method group — and is empty for a lambda, which is how the reader tells them apart.
+    /// </summary>
+    /// <remarks>
+    /// The whole construction must match either way, or the lambda form would not be seen at all. Hence the
+    /// optional group rather than requiring the identifier.
+    /// </remarks>
+    [GeneratedRegex(@"new\s+Progress<[^>]*>\s*\((?:\s*(?<arg>[A-Za-z_]\w*)\s*\))?", RegexOptions.Compiled)]
+    private static partial Regex ProgressConstruction();
+
+    /// <summary>An assignment to a bare property name at the start of a statement.</summary>
+    [GeneratedRegex(@"(?:^|[;{}]|=>)\s*(?<name>[A-Z]\w*)\s*=(?!=)", RegexOptions.Compiled)]
+    private static partial Regex PropertyAssignment();
 
     private static string FindAppProjectDir()
     {

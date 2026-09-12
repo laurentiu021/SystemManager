@@ -206,7 +206,10 @@ public class DiskAnalyzerServiceTests : IDisposable
         await _service.AnalyzeAsync(_root, progress);
 
         Assert.True(progress.Reports.Count >= 1);
-        Assert.Contains(progress.Reports, r => r.CurrentFolder == "Done");
+        // This asserted `r.CurrentFolder == "Done"`, so the placeholder was not merely unnoticed — it was the
+        // EXPECTED value, which is why #2274 survived two sweeps of the live-region rules. What this test is
+        // for is that reporting happens at all; the specific contract is pinned in the two tests below.
+        Assert.Contains(progress.Reports, r => r.CurrentFolder.Length > 0);
     }
 
     // ── ShouldSkip ──
@@ -264,5 +267,43 @@ public class DiskAnalyzerServiceTests : IDisposable
         Assert.Contains("FileCount", changed);
         Assert.Contains("FolderCount", changed);
         Assert.Contains("IsAccessDenied", changed);
+    }
+
+    // ── What the progress reports carry (#2274) ──
+
+    [Fact]
+    public async Task EveryProgressReport_CarriesTheFullPath_SoTheTabCanShowItOnHover()
+    {
+        CreateFile(Path.Combine("Alpha", "a.bin"), 16);
+        CreateFile(Path.Combine("Beta", "b.bin"), 16);
+        var progress = new SyncProgress<DiskAnalyzerService.AnalysisProgress>();
+
+        await _service.AnalyzeAsync(_root, progress);
+
+        // Reported the whole path, not just the leaf: the tab trims it for the line and shows the path on
+        // hover, so a name alone would leave the hover with nothing to add.
+        var walked = progress.Reports.Where(r => r.CurrentFolder.Length > 0).ToList();
+        Assert.Equal(2, walked.Count);
+        Assert.All(walked, r => Assert.True(Path.IsPathFullyQualified(r.CurrentFolder),
+            $"expected a full path, got \"{r.CurrentFolder}\""));
+        Assert.Contains(walked, r => r.CurrentFolder.EndsWith("Alpha", StringComparison.Ordinal));
+        Assert.Contains(walked, r => r.CurrentFolder.EndsWith("Beta", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TheFinalReport_NamesNoFolder_RatherThanAFolderCalledDone()
+    {
+        // It used to pass the literal "Done" where a folder goes, and the tab rendered that into
+        // "Scanning folder 2: Done" — a sentence saying the scan is still running, naming a folder that does
+        // not exist. Empty leaves the consumer nothing fake to display and no sentinel to recognise.
+        CreateFile(Path.Combine("Alpha", "a.bin"), 16);
+        var progress = new SyncProgress<DiskAnalyzerService.AnalysisProgress>();
+
+        await _service.AnalyzeAsync(_root, progress);
+
+        var last = Assert.Single(progress.Reports.TakeLast(1));
+        Assert.Equal("", last.CurrentFolder);
+        Assert.Equal(1, last.FoldersScanned);   // the settled count is the point of the report
+        Assert.DoesNotContain(progress.Reports, r => r.CurrentFolder == "Done");
     }
 }

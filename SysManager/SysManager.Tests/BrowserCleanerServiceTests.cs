@@ -499,4 +499,28 @@ public sealed class BrowserCleanerServiceTests : IDisposable
 
         Assert.Equal(2, cookieRows.Count);   // one per profile, like the Chromium per-profile expansion
     }
+
+    [Fact]
+    public void ChangingTheSize_AnnouncesTheDisplayedSizeToo()
+    {
+        // SizeDisplay is computed from SizeBytes, so without [NotifyPropertyChangedFor] a row keeps showing
+        // the old size after the number behind it changes. Latent today — the scan sets the size in the
+        // object initialiser, before the item reaches the collection — which is exactly why it needs pinning
+        // rather than leaving to be noticed: the field is declared mutable and observable, so the first code
+        // to recompute a size in place would display a stale one with nothing failing.
+        var item = new Models.BrowserCleanupItem
+        {
+            Browser = "Chrome",
+            Category = "Cache",
+            Description = "Cached images and files",
+            Paths = [@"C:\Sample\Cache"],
+            SizeBytes = 1024,
+        };
+        var raised = item.RecordPropertyChanges();
+
+        item.SizeBytes = 5L * 1024 * 1024 * 1024;
+
+        Assert.Contains(nameof(item.SizeDisplay), raised);
+        Assert.Equal("5.0 GB", item.SizeDisplay);   // and the new value is what it now reads
+    }
 }

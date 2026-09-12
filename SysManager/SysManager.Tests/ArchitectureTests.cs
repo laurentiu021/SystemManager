@@ -4393,6 +4393,132 @@ public partial class ArchitectureTests
                     RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex TypeDeclaration();
 
+    /// <summary>
+    /// In <c>Models/</c>, every computed property derived from an <c>[ObservableProperty]</c> must be
+    /// announced when that property changes.
+    /// </summary>
+    /// <remarks>
+    /// <c>public string SizeDisplay => FormatHelper.FormatSize(SizeBytes);</c> re-reads nothing on its own.
+    /// Setting <c>SizeBytes</c> raises <c>PropertyChanged</c> for <c>SizeBytes</c>, and unless something also
+    /// raises it for <c>SizeDisplay</c>, a row keeps showing the old size. <c>BrowserCleanupItem</c> was
+    /// missing it while <c>DiskUsageEntry</c> and <c>InstalledApp</c> — the two other models with a mutable
+    /// size — both had it.
+    /// <para>An <c>init</c>-only dependency is out of scope by construction: it cannot change, so nothing can
+    /// go stale. That is why <c>CleanupCategory</c> and <c>ShredItem</c> are not flagged for the same
+    /// computed property. The distinction is the declaration, not a list.</para>
+    /// <para><b>Scoped to Models/ deliberately, and the numbers are why.</b> Over <c>ViewModels/</c> as well
+    /// the same rule flags 7 pairs and SIX are false positives: a view-model's generated hook typically
+    /// delegates — <c>OnIsSfcRunningChanged</c> to <c>OnAnyRunningChanged</c>, <c>OnSelectedNavChanged</c> to
+    /// <c>FollowTaskbarProgress</c> to <c>RaiseTaskbarProgressChanged</c> — so the notification is real but
+    /// one or two calls away, and a computed property used as a command's <c>CanExecute</c> is legitimately
+    /// refreshed by <c>NotifyCanExecuteChanged</c> instead. Following that call graph is what a correct
+    /// view-model version needs, and a guard that guesses at it would cry wolf six times out of seven.
+    /// Models are flat, so here the rule is exact: 26 pairs, 25 satisfied, one violation, no exemptions.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryComputedModelProperty_IsNotifiedByItsDependency()
+    {
+        var modelsDir = Path.Combine(FindAppProjectDir(), "Models");
+        var offenders = new List<string>();
+        var pairs = 0;
+
+        foreach (var path in Directory.EnumerateFiles(modelsDir, "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            var source = WithoutComments(File.ReadAllText(path));
+            var model = Path.GetFileName(path);
+
+            // Every observable property, and what each declares it also announces. NotifyPropertyChangedFor
+            // takes MANY names — [NotifyPropertyChangedFor(nameof(A), nameof(B))] — and reading only the
+            // single-argument form made Debloater's paired EmptyTitle/EmptyMessage look unannounced. That was
+            // this sweep's first false positive, so the whole argument list is read.
+            var announces = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            foreach (var m in ObservablePropertyField().Matches(source).Cast<Match>())
+            {
+                var field = m.Groups[1].Value;
+                var property = char.ToUpperInvariant(field[0]) + field[1..];
+                var head = source[Math.Max(0, m.Index - 400)..(m.Index + m.Length)];
+                announces[property] = NotifyPropertyChangedForAttribute().Matches(head).Cast<Match>()
+                    .SelectMany(a => NameOf().Matches(a.Groups[1].Value).Cast<Match>())
+                    .Select(n => n.Groups[1].Value)
+                    .ToHashSet(StringComparer.Ordinal);
+            }
+
+            // The OTHER way this codebase announces a derived property: the generated hook raises it by hand.
+            // ProcessNetworkUsage does exactly that for IsActive — `partial void OnConnectionCountChanged(int
+            // value) => OnPropertyChanged(nameof(IsActive));` — and reading only the attribute form reported
+            // it as a violation. Both spellings of the hook body are matched, expression and block, because
+            // that one is expression-bodied and the attribute form is what everything else here uses.
+            foreach (var hook in GeneratedChangeHook().Matches(source).Cast<Match>())
+            {
+                if (!announces.TryGetValue(hook.Groups["prop"].Value, out var set)) continue;
+                foreach (var raised in NotifyByHand().Matches(hook.Groups["body"].Value).Cast<Match>())
+                    set.Add(raised.Groups[1].Value);
+            }
+
+            if (announces.Count == 0) continue;
+
+            foreach (var c in ExpressionBodiedProperty().Matches(source).Cast<Match>())
+            {
+                var computed = c.Groups["name"].Value;
+                var body = c.Groups["body"].Value;
+
+                foreach (var dependency in announces.Keys
+                             .Where(d => Regex.IsMatch(body, $@"\b{Regex.Escape(d)}\b"))
+                             .OrderBy(d => d, StringComparer.Ordinal))
+                {
+                    pairs++;
+                    if (!announces[dependency].Contains(computed))
+                        offenders.Add($"{model}: {computed} is computed from {dependency}, which does not "
+                                      + $"announce it — add [NotifyPropertyChangedFor(nameof({computed}))]");
+                }
+            }
+        }
+
+        // Vacuity floor: 26 pairs measured across Models/. One under, because a model can legitimately be
+        // deleted; a broken read takes this to zero, not to 25.
+        Assert.True(pairs >= 25,
+            $"only {pairs} computed/observable pairs were found in Models/, out of 26 measured — one of the "
+            + "two reads is out of date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these computed properties are derived from an observable one that never announces them, so what "
+            + "the row displays stops matching the value behind it and nothing fails:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A <c>[NotifyPropertyChangedFor(...)]</c> attribute, capturing its whole argument list.</summary>
+    [GeneratedRegex(@"\[NotifyPropertyChangedFor\(([^\]]*)\)\]", RegexOptions.Compiled)]
+    private static partial Regex NotifyPropertyChangedForAttribute();
+
+    /// <summary>A <c>nameof(X)</c>, capturing X.</summary>
+    [GeneratedRegex(@"nameof\((\w+)\)", RegexOptions.Compiled)]
+    private static partial Regex NameOf();
+
+    /// <summary>
+    /// A generated <c>partial void On&lt;Property&gt;Changed(…)</c> hook and its body, expression or block.
+    /// </summary>
+    /// <remarks>
+    /// The expression form is matched first and non-greedily to the semicolon; the block form is delimited by
+    /// the closing brace at member indentation. A single pattern for both keeps the two spellings from
+    /// needing two readers that could drift apart.
+    /// </remarks>
+    [GeneratedRegex(@"partial void On(?<prop>\w+)Changed\([^)]*\)\s*(?<body>=>[^;]*;|\{[\s\S]*?\n    \})",
+                    RegexOptions.Compiled)]
+    private static partial Regex GeneratedChangeHook();
+
+    /// <summary>A hand-raised change notification: <c>OnPropertyChanged(nameof(X))</c>.</summary>
+    [GeneratedRegex(@"OnPropertyChanged\(nameof\((\w+)\)\)", RegexOptions.Compiled)]
+    private static partial Regex NotifyByHand();
+
+    /// <summary>
+    /// An expression-bodied public property: <c>public string SizeDisplay => …;</c>. Excludes types, whose
+    /// declarations would otherwise match the same shape.
+    /// </summary>
+    [GeneratedRegex(@"^\s*public\s+(?!class|record|interface|struct)[\w\?<>,\[\]\. ]+?\s+(?<name>\w+)\s*=>\s*"
+                    + @"(?<body>.*?);\s*$",
+                    RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.Singleline)]
+    private static partial Regex ExpressionBodiedProperty();
+
     /// <summary>An <c>[ObservableProperty]</c> backing field, capturing the field name without its underscore.</summary>
     /// <remarks>
     /// The prefix was <c>[^\n]*\n?</c>, which is wrong in both directions.

@@ -8381,13 +8381,18 @@ public partial class ArchitectureTests
     /// <para>This guard lives in the BLOCKING unit suite on purpose. The defect it pins is one the
     /// non-blocking UI job cannot report loudly enough to stop a merge, and it needs no desktop session
     /// to detect — it is pure text comparison over the two source trees.</para>
-    /// <para>Scope is chosen by what can actually rot. A one-word wait like <c>"CPU"</c> or a fragment
-    /// like <c>"drivers found"</c> survives rewording and is not checked; a multi-word PHRASE is what a
-    /// copy edit breaks, so the bar is two spaces (three words) rather than a character count — the
-    /// original defect's threshold experiment showed a 20-character floor excludes nearly every real
-    /// call site, because the durable waits are deliberately short. Literals carrying markup, path, or
-    /// format-hole characters are ids, xpaths and templates, not copy. Matching is whitespace-normalised
-    /// and case-insensitive because XAML wraps attribute values across lines.</para>
+    /// <para>Scope is TWO words or more, not three, and a character floor was tried and rejected — a
+    /// 20-character bar excludes nearly every real call site, because the durable waits are deliberately
+    /// short. Literals carrying markup, path, or format-hole characters are ids, xpaths and templates, not
+    /// copy. Matching is whitespace-normalised and case-insensitive because XAML wraps attribute values
+    /// across lines. See <see cref="IsUserFacingSentence"/> for why the three-word bar was wrong.</para>
+    /// <para><b>It escaped a second time, and the second cause was the corpus rather than the scope.</b>
+    /// #2272 rewrote eleven tab subtitles and <c>NetworkTabUiTests.Subtitle_Visible</c> kept waiting for
+    /// "Live ping", which the views stopped saying. Two independent holes had to be open for that: the
+    /// two-word literal was below the bar, AND the "what the app renders" corpus was whole files, so the
+    /// phrase still matched — inside a <c>///</c> summary on <c>PingViewModel</c>. Comments are stripped
+    /// now (see <see cref="RenderableText"/>), which is the half that mattered, because a corpus carrying
+    /// prose weakens every literal silently rather than one of them visibly.</para>
     /// <para><b>Negative assertions too, and the accessible-name helpers with them.</b> The rule reads the
     /// same in both directions, which is why one check covers both: a quoted string the app ships nowhere
     /// makes <c>Assert.True(HasText(x))</c> permanently RED and <c>Assert.False(HasButtonWithName(x))</c>
@@ -8405,7 +8410,12 @@ public partial class ArchitectureTests
         Assert.True(Directory.Exists(uiTestsDir),
             $"UI test project not found at {uiTestsDir} — the guard would pass vacuously");
 
-        // Everything the app can render: XAML markup plus C# status/message strings.
+        // Everything the app can render: XAML markup plus C# status/message strings — with COMMENTS
+        // REMOVED FIRST. Reading whole files was the original form and it is what let #2272's subtitle
+        // rewrite ship a permanently-red UI test: the wait quoted "Live ping", the views stopped saying
+        // it, and the phrase survived in a /// summary on PingViewModel. A doc comment is not copy, so a
+        // corpus that includes one answers "does the app say this?" with yes when the answer is no —
+        // silently, for every literal, which makes it the more serious of that defect's two causes.
         var appDir = FindAppProjectDir();
         var rendered = Directory
             .EnumerateFiles(appDir, "*.*", SearchOption.AllDirectories)
@@ -8415,7 +8425,7 @@ public partial class ArchitectureTests
                                        StringComparison.Ordinal)
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                                        StringComparison.Ordinal))
-            .Select(f => Collapse(File.ReadAllText(f)))
+            .Select(RenderableText)
             .ToArray();
 
         Assert.True(rendered.Length >= 100,
@@ -8427,7 +8437,7 @@ public partial class ArchitectureTests
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                                     StringComparison.Ordinal))
-            .Select(f => Collapse(File.ReadAllText(f)))
+            .Select(RenderableText)
             .ToArray();
 
         var exposedNames = views
@@ -8513,12 +8523,17 @@ public partial class ArchitectureTests
 
         // Vacuity floor: if the shape detection breaks, the loop above checks nothing and reports
         // success — the exact failure mode that let a permanently-red UI assertion survive weeks of
-        // green-looking runs. The floor is the ENUMERATED population, not a number picked to make the
-        // assertion pass: it was set after listing them, and it caught the first two attempts at this
-        // guard, whose narrower shape detection saw only 3 and then 8-minus-the-ternary.
-        Assert.True(assertionsChecked >= 7,
-            $"only {assertionsChecked} UI text assertions parsed — the guard is measuring nothing, fix it "
-            + "rather than trusting its pass");
+        // green-looking runs. The floor is the MEASURED population, not a number picked to make the
+        // assertion pass, and it caught the first two attempts at this guard, whose narrower shape
+        // detection saw only 3 and then 8-minus-the-ternary.
+        //
+        // 40 now, against a floor of 7 when the bar was three words. That jump IS the argument for the
+        // change: 33 assertions were out of scope for looking short rather than for being unverifiable,
+        // and every one of them passes. The margin of two absorbs deleting an obsolete test; a broken
+        // shape read drops this to nearly zero, not to 39.
+        Assert.True(assertionsChecked >= 38,
+            $"only {assertionsChecked} UI text assertions parsed, out of 40 measured — the guard is "
+            + "measuring nothing, fix it rather than trusting its pass");
 
         // The same floor, for the accessible-name half — measured separately because its shape detection can
         // break on its own. Three literal call sites exist (FunctionalUiTests, NetworkTabUiTests,
@@ -8539,6 +8554,27 @@ public partial class ArchitectureTests
 
     /// <summary>Whitespace-collapsed and trimmed, so XAML attribute wrapping cannot hide a match.</summary>
     private static string Collapse(string text) => WhitespaceRun().Replace(text, " ").Trim();
+
+    /// <summary>
+    /// A source file's renderable text, collapsed: everything the app can put on screen, with comments
+    /// removed so a phrase surviving only in prose does not read as shipped copy.
+    /// </summary>
+    /// <remarks>
+    /// Dispatches on extension because the two languages hide prose differently — XAML in
+    /// <c>&lt;!-- --&gt;</c> blocks that span lines, C# in <c>//</c>, <c>///</c> and <c>/* */</c> — and
+    /// composes the two strippers that already exist for those jobs rather than adding a third.
+    /// <para>String CONTENTS are deliberately kept: a status message is copy the app renders, and it is
+    /// most of the reason .cs files are in this corpus at all. <see cref="WithoutComments"/> is quote-aware
+    /// for exactly that reason, so a <c>//</c> inside a URL literal survives while a trailing comment on
+    /// the same line does not.</para>
+    /// </remarks>
+    private static string RenderableText(string path)
+    {
+        var text = File.ReadAllText(path);
+        return Collapse(path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
+            ? WithoutXamlComments(text)
+            : WithoutComments(text));
+    }
 
     /// <summary>Code, not a comment — a comment's prose is never an assertion.</summary>
     /// <remarks>
@@ -8582,12 +8618,24 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A literal worth checking is a multi-word PHRASE — three words or more. That is the shape a copy
-    /// edit breaks. Short waits ("CPU", "drivers found") are deliberately durable fragments and stay out
-    /// of scope, as do literals carrying markup, path, or format-hole characters (ids, xpaths, templates).
+    /// A literal worth checking is a multi-word PHRASE — TWO words or more. Literals carrying markup, path,
+    /// or format-hole characters are ids, xpaths and templates, not copy, and stay out of scope.
     /// </summary>
+    /// <remarks>
+    /// The bar was three words, on the reasoning that a short wait is a deliberately durable fragment
+    /// ("CPU", "drivers found") while a long one is prose a copy edit breaks. Two-word "Live ping" then
+    /// went stale in #2272 and this guard skipped it by design, so the Network tab's subtitle test was
+    /// permanently red inside a non-blocking job for as long as nobody read the log.
+    /// <para>The reasoning was wrong for a reason worth keeping written down: the exemption was protecting
+    /// against nothing. This check does not judge whether a literal LOOKS durable, it asks whether the app
+    /// still ships it — so a genuinely durable label passes on its own merits, and every word excluded from
+    /// the bar was coverage given away for free. What the character filter rejects is the real
+    /// out-of-scope shape, and it does that regardless of length.</para>
+    /// <para>One word remains out of scope, and only because a single word matches too easily to mean
+    /// anything: "Ping" appears in the corpus whatever the Ping tab says.</para>
+    /// </remarks>
     private static bool IsUserFacingSentence(string text) =>
-        text.Count(c => c == ' ') >= 2
+        text.Count(c => c == ' ') >= 1
         && text.IndexOfAny(['\\', '/', '{', '}', '<', '>']) < 0;
 
     [GeneratedRegex("\"(?<text>[^\"]*)\"", RegexOptions.Compiled)]
@@ -8928,7 +8976,6 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"^\s+bool\s+(?<name>\w+)\s*\(", RegexOptions.Compiled | RegexOptions.Multiline)]
     private static partial Regex BoolReturningMember();
 
-    /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     /// <summary>
     /// A service that stops a loop on cancellation must throw before returning, so a partial result is
     /// never handed back as a finished one.
@@ -9196,6 +9243,7 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?:^|[;{}]|=>)\s*(?<name>[A-Z]\w*)\s*=(?!=)", RegexOptions.Compiled)]
     private static partial Regex PropertyAssignment();
 
+    /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

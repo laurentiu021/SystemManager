@@ -36,6 +36,30 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [ObservableProperty] private string _selectedPath = "";
     [ObservableProperty] private string _scanSummary = "Select a drive or folder and click Analyze.";
 
+    /// <summary>
+    /// The per-folder line shown beside the status line while a scan runs — and NOT announced.
+    /// </summary>
+    /// <remarks>
+    /// The scan reports once per top-level subfolder with no rate limit, and that value used to go straight
+    /// into <c>StatusMessage</c>, which the footer renders as a live region. Analysing a folder with hundreds
+    /// of small children announced hundreds of sentences in a few seconds and a screen reader finished none
+    /// of them, so the tab said less the more there was to say (#2274).
+    /// <para>Split exactly as Duplicate Finder's was in #2143: the status line keeps the coarse "Analyzing…"
+    /// that the command sets at the phase boundaries, and the fast half lives here. Named
+    /// <c>ScanReadout</c> to match that tab deliberately — same role, same name, one entry covering both in
+    /// the guard that asserts these stay silent.</para>
+    /// </remarks>
+    [ObservableProperty] private string _scanReadout = "";
+
+    /// <summary>
+    /// The full path of the folder being measured, for the readout's hover. Also silent.
+    /// </summary>
+    /// <remarks>
+    /// The readout trims to a name because the counts plus a deep path exceed the row at a small window
+    /// size, so the path needs somewhere to go. Mirrors <c>CurrentFile</c> on Duplicate Finder.
+    /// </remarks>
+    [ObservableProperty] private string _currentFolder = "";
+
     // The delta line: "3.2 GB larger than your last scan on 12 Jul", or empty when this root has no
     // remembered scan yet. Explicitly "since last scan", never framed as continuous monitoring — the
     // sampling is user-triggered and irregular. Empty string keeps the row collapsed (see the view).
@@ -159,10 +183,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
         try
         {
-            var progress = new Progress<DiskAnalyzerService.AnalysisProgress>(p =>
-            {
-                StatusMessage = $"Scanning folder {p.FoldersScanned}: {p.CurrentFolder}";
-            });
+            // Writes the SILENT half only. StatusMessage is set at the phase boundaries — "Analyzing…" above,
+            // and the outcome below — so the announced line changes twice per scan instead of once per
+            // folder. See ScanReadout for what over-announcing did here.
+            var progress = new Progress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
 
             var results = await _service.AnalyzeAsync(SelectedPath, progress, ct);
 
@@ -198,7 +222,42 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         {
             IsBusy = false;
             IsProgressIndeterminate = false;
+            // Both belong to the run that just ended, however it ended. Leaving them would strand the last
+            // folder's name under a finished scan.
+            ScanReadout = "";
+            CurrentFolder = "";
         }
+    }
+
+    /// <summary>
+    /// Applies one progress report to the two silent readouts. Deliberately does not touch
+    /// <see cref="ViewModelBase.StatusMessage"/> — see <see cref="ScanReadout"/>.
+    /// </summary>
+    /// <remarks>
+    /// A named method rather than a lambda so the split is testable without driving a real scan, matching
+    /// <c>DuplicateFileViewModel.ApplyScanProgress</c>.
+    /// </remarks>
+    internal void ApplyScanProgress(DiskAnalyzerService.AnalysisProgress p)
+    {
+        // The settling report carries no folder: it exists to deliver the final count, and rendering it
+        // would put a bare separator under a scan that has finished.
+        if (string.IsNullOrEmpty(p.CurrentFolder))
+        {
+            ScanReadout = "";
+            CurrentFolder = "";
+            return;
+        }
+
+        CurrentFolder = p.CurrentFolder;
+
+        // Falls back to the whole path when the leaf is empty, which is what the service does when it builds
+        // the entry's own Name — a path ending in a separator would otherwise show the count and a separator
+        // with nothing after it.
+        var leaf = Path.GetFileName(p.CurrentFolder);
+        if (string.IsNullOrEmpty(leaf)) leaf = p.CurrentFolder;
+
+        ScanReadout = string.Create(CultureInfo.InvariantCulture,
+            $"{p.FoldersScanned:N0} folders measured · {leaf}");
     }
 
     /// <summary>

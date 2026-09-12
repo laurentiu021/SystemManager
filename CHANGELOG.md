@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.4] - 2026-09-12
+
+**Disk Analyzer no longer talks over itself while it measures, and no longer ends by naming a folder
+called "Done".** The line at the bottom of the tab changed once for every folder the scan reached, and
+that line is the one a screen reader speaks — so analysing a folder with hundreds of small children
+started hundreds of sentences in a few seconds and finished none of them. The tab now keeps a calm
+"Analyzing…" there and shows the running count and current folder on a second line beside it, with the
+full path on hover. Nothing is announced that changes faster than it can be heard.
+
+### Fixed
+
+- The Disk Analyzer status line is no longer rewritten once per folder, so a screen reader hears what the
+  tab is doing instead of a stream of interrupted sentences.
+- The last thing the scan reported was "Scanning folder 1234: Done" — a sentence claiming the scan is still
+  running, naming a folder that does not exist. The final report now names no folder at all.
+- The count and folder name moved to their own line, trimmed to fit, with the folder's full path on hover.
+  Nothing that was on screen before has been taken away.
+
 ## [1.99.3] - 2026-09-12
 
 **Cancelling a Browser Cleaner scan no longer reports that there is nothing to clean.** Stopping the scan

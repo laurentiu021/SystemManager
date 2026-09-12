@@ -212,11 +212,32 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             ps.BeginInvoke<PSObject, PSObject>(null, output),
             ar => ps.EndInvoke(ar));
 
+        // The registration above can fire while this instance is still NotStarted, and Stop() then throws
+        // InvalidOperationException, which is swallowed — so nothing has asked the pipeline to stop, and
+        // BeginInvoke goes on to run the script in full. The window is real rather than theoretical: leasing
+        // and opening a runspace takes a few hundred milliseconds, which is the same order as the delay any
+        // caller puts before cancelling.
+        //
+        // Measured on CI: a cancel at 390 ms against a script that loops on 50 ms sleeps, and the run
+        // finished its whole 20 seconds reporting "not interrupted … completed on its own". A loop of that
+        // shape IS interruptible — the blocking-call test below measured the same script cancelling in
+        // 2.2 s — so the stop was not refused, it was lost.
+        //
+        // Re-asserting here closes the window, because BeginInvoke has returned by this point and the
+        // instance will accept a Stop. Idempotent either way: a second Stop on an already-stopping pipeline
+        // raises the same InvalidOperationException this swallows, and on a pipeline that is running it does
+        // exactly what the registration intended to do the first time.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            try { ps.Stop(); } catch (InvalidOperationException) { }
+        }
+
         try
         {
             await task.ConfigureAwait(false);
         }
-        catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsPipelineStopped(ex))
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested
+                                   && (IsPipelineStopped(ex) || IsRemotingTornDownByOurStop(ex)))
         {
             // Cancellation calls ps.Stop(), which makes EndInvoke throw. Surface the standard cancellation
             // signal so callers that catch OperationCanceledException treat a cancelled PowerShell run as
@@ -726,6 +747,32 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         || ex.InnerException is PipelineStoppedException
         || (ex as RemoteException)?.SerializedRemoteException?.TypeNames
                .Any(name => name.EndsWith("PipelineStoppedException", StringComparison.Ordinal)) == true;
+
+    /// <summary>
+    /// The out-of-process transport reporting the stop WE asked for: a remoting data-structure fault raised
+    /// while cancellation is already requested.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from <see cref="IsPipelineStopped"/>, which answers "does this exception mean
+    /// the pipeline was stopped" and must keep answering it honestly —
+    /// <c>PSRemotingDataStructureException</c> is a general remoting protocol fault, so folding it in there
+    /// would make a genuine transport breakdown read as a stop, and that method's negative tests exist to
+    /// prevent exactly that.
+    /// <para><b>What makes the weaker inference safe is the caller, not the type.</b> The one call site is
+    /// guarded by <c>cancellationToken.IsCancellationRequested</c>, so this is only ever consulted after we
+    /// have called <c>Stop()</c> ourselves. With no cancellation requested the exception propagates as
+    /// itself, which is what a real remoting failure must do.</para>
+    /// <para>Found by CI, and only by CI: the in-process runspace this workstation uses raises
+    /// <c>PipelineStoppedException</c>, which the method above already matches. Closing the lost-stop window
+    /// in #2286 meant the stop started landing on the elevated out-of-process transport too, where
+    /// <c>EndInvoke</c> instead threw <c>PSRemotingDataStructureException("The remote pipeline has been
+    /// stopped.")</c> — so a cancellation that now WORKED surfaced as a raw remoting error rather than as
+    /// <c>OperationCanceledException</c>. Matched by TYPE and not by that message, which is a sentence from
+    /// PowerShell and not a contract.</para>
+    /// </remarks>
+    internal static bool IsRemotingTornDownByOurStop(Exception ex) =>
+        ex is System.Management.Automation.Remoting.PSRemotingDataStructureException
+        || ex.InnerException is System.Management.Automation.Remoting.PSRemotingDataStructureException;
 
     private async Task<RunspaceLease> LeaseRunspaceAsync()
     {

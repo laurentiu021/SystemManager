@@ -335,6 +335,7 @@ jobs:
       # longer pass as a green run of nothing. 5000 against a real count of ~5160 leaves room to delete
       # a class without editing CI, while still catching any collapse.
       - name: Run unit tests
+        id: unit-tests
         run: >
           dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release --no-build
@@ -344,6 +345,38 @@ jobs:
           --report-xunit-junit --report-xunit-junit-filename unit-results.junit.xml
           --coverage --coverage-output-format cobertura
           --coverage-output unit-coverage.cobertura.xml
+
+      # WHICH kind of failure, not just that there was one — the same step the UI and integration jobs
+      # already carry, finally applied to the job that actually gates a merge.
+      #
+      # A run went red with `total: 5566, failed: 0, error: 1`: every test passed, then the host waited
+      # ten seconds for foreground threads to exit, gave up, and force-exited with code 7. The step
+      # reported `exit code 1` and named no test, so roughly half an hour went into bisecting a diff that
+      # could not have caused it — the same commit passed on re-run. Exit 7 means the test host exited
+      # non-gracefully; that is not a broken test and should not read like one (#2283).
+      #
+      # This covers a non-zero EXIT. The kill case is a different shape and is covered by "Name the hung
+      # test if the run was killed" below, which keys on `cancelled()`: a timeout kill matches neither
+      # `outcome == 'failure'` nor `!cancelled()`, so one step cannot do both.
+      - name: Name the kind of unit-test failure
+        if: ${{ steps.unit-tests.outcome == 'failure' && !cancelled() }}
+        shell: bash
+        run: |
+          report=TestResults/unit-results.trx
+          if [ ! -s "$report" ]; then
+            echo "::warning::The unit run failed and wrote no TRX, so not even the test count is known. Review the unit-test-results artifact."
+            exit 0
+          fi
+          # `grep -o … | wc -l`, never `grep -c`: the TRX puts every <UnitTestResult> on one line, so a
+          # line count returns 1 for the whole suite. Scoped inside `<UnitTestResult` because
+          # <ResultSummary> carries an `outcome` of its own and would be counted as a case.
+          cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l | tr -d ' ')
+          passed=$({ grep -o '<UnitTestResult [^>]*outcome="Passed"' "$report" || true; } | wc -l | tr -d ' ')
+          if [ "$passed" -lt "$cases" ]; then
+            echo "::warning::$((cases - passed)) of $cases unit tests did not pass. This job is blocking, so the failure names itself in the log above — look there for the test names."
+          else
+            echo "::warning::All $cases unit tests PASSED and the run still exited non-zero, so this is an infrastructure or teardown failure rather than a test failure. Do not go looking for a broken test. Exit code 7 means the test host exited non-gracefully (see https://aka.ms/testingplatform/exitcodes); a re-run of the same commit usually passes."
+          fi
 
       # Skip Codecov on fork PRs: forked pull requests have no access to repository
       # secrets, so CODECOV_TOKEN is empty there and the upload would fail noisily for

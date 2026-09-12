@@ -3701,6 +3701,61 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every job that runs tests must say WHICH kind of failure a red result was.
+    /// </summary>
+    /// <remarks>
+    /// A test host can exit non-zero having failed no test. It happened on the blocking unit job:
+    /// <c>total: 5566, failed: 0, error: 1</c> — every test passed, then the host waited ten seconds for
+    /// foreground threads to exit, gave up and force-exited with code 7. The step reported "exit code 1"
+    /// and named nothing, so about half an hour went into bisecting a diff that could not have caused it.
+    /// The same commit passed on re-run.
+    /// <para>The UI and integration jobs had carried exactly this diagnosis for months. The blocking job —
+    /// the only one that actually gates a merge — did not, and nothing noticed, because a step's ABSENCE
+    /// is invisible to every other check. That asymmetry is what this pins (#2283).</para>
+    /// <para>Keyed on the distinguishing SENTENCE rather than on a step name, because the value is the
+    /// message a reader gets: one branch has to name the count that failed, and the other has to say the
+    /// tests passed and the failure is not a test. A step that prints one generic line for both is the
+    /// thing that sent the reader hunting a phantom test, so a guard keyed on "there is a step here"
+    /// would pass on the version that caused the problem.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTestJob_SaysWhichKindOfFailureItHad()
+    {
+        var ci = File.ReadAllText(Path.Combine(FindRepoRoot(), ".github", "workflows", "ci.yml"));
+
+        // The three suites, by the report each writes — a rename of a job or step cannot hide one.
+        string[] suites = ["unit-results.trx", "ui-results.trx", "integration-results.trx"];
+        var missing = new List<string>();
+
+        foreach (var suite in suites)
+        {
+            // The step reads that suite's report, so its script is where the two branches must be.
+            var at = ci.IndexOf($"report=TestResults/{suite}", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                missing.Add($"{suite} — no step reads this suite's report, so a red run of it names no cause");
+                continue;
+            }
+
+            // Bounded to the step: the next `- name:` at step indentation. Without that the search would
+            // run into the following steps and find another suite's wording.
+            var end = ci.IndexOf("      - name:", at, StringComparison.Ordinal);
+            var script = end < 0 ? ci[at..] : ci[at..end];
+
+            if (!script.Contains("did not pass", StringComparison.Ordinal))
+                missing.Add($"{suite} — its diagnosis never names how many tests failed");
+            if (!script.Contains("PASSED and the run still exited non-zero", StringComparison.Ordinal))
+                missing.Add($"{suite} — its diagnosis cannot say the tests passed and the failure is not a "
+                            + "test, which is the case that costs the most time to read");
+        }
+
+        Assert.True(missing.Count == 0,
+            "a red check on these suites does not distinguish a broken test from a host that exited "
+            + "non-zero having failed nothing. The second reads exactly like the first and sends whoever "
+            + "sees it looking for a test that does not exist:\n  " + string.Join("\n  ", missing));
+    }
+
+    /// <summary>
     /// Every private-reporting route must point at a channel that exists. SECURITY.md and
     /// CODE_OF_CONDUCT.md both told reporters to email "the address on the GitHub profile" — that profile
     /// publishes no email, so the one page a security reporter reads named a dead end. A vulnerability

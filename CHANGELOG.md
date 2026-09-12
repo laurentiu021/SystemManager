@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.2] - 2026-09-12
+
+**Cancelling a Shortcut Cleaner scan no longer tells you your PC is clean.** Pressing Cancel — or Escape,
+which does the same thing and is easy to hit by accident — stopped the scan and then reported it as finished.
+If it had not found anything yet, the tab said "No broken shortcuts found — your system is clean", raised a
+"scan complete" notification, and left a list that was short with no sign that it was short. It now says
+"Scan cancelled.", which is what it was always meant to say.
+
+### Fixed
+
+- A cancelled shortcut scan reports itself as cancelled. The tab already had the wording for it; the scan
+  never told it, so that message could not appear.
+
 ## [1.99.1] - 2026-09-12
 
 **The Large Files scan in Deep Cleanup showed nothing while it worked, then a folder called "Done".** It was

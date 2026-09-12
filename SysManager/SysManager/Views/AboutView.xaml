@@ -198,6 +198,32 @@
                                 <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
                             </TextBlock>
                         </StackPanel>
+
+                        <!-- Download FAILED. The mirror of the row above, and the reason it has to exist:
+                             DownloadStatus was rendered in exactly two places, one gated on IsDownloading
+                             and one on DownloadedPath, and a failure leaves both false — IsDownloading is
+                             cleared in the command's finally, and DownloadedPath is never set. So all four
+                             failure messages were written to elements that had just gone invisible. The user
+                             pressed Download, watched the bar, and everything vanished; the only signal left
+                             was the Manual download button silently appearing (#2281).
+
+                             Warning rather than Danger, and the same brush for the dot and the text as the
+                             success row uses: an automatic download that failed with a working manual
+                             fallback is a setback, not a loss, and Danger is this app's destructive-action
+                             colour. Both clear 4.5:1 on the card (8.1:1 measured for the worse case).
+
+                             DockPanel, not the success row's horizontal StackPanel: these messages are long
+                             — "…a network issue or firewall blocking the connection. Try 'Manual download'
+                             as fallback." — and a child of a horizontal StackPanel is given infinite width,
+                             so TextWrapping would never take effect. -->
+                        <DockPanel Margin="0,14,0,0"
+                                   Visibility="{Binding AutoDownloadFailed, Converter={StaticResource FlexVis}}">
+                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{DynamicResource Warning}"
+                                     VerticalAlignment="Top" Margin="0,5,8,0"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Warning}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                       AutomationProperties.Name="Why the download failed"/>
+                        </DockPanel>
                     </StackPanel>
                 </Border>
 

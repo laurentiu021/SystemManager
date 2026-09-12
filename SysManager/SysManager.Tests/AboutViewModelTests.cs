@@ -671,6 +671,70 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         Assert.Contains("RollBackStatus", xaml);   // feedback is rendered, not dead
     }
 
+    [Fact]
+    public void AFailedDownload_HasSomewhereVisibleToSayWhy()
+    {
+        // DownloadStatus was rendered in exactly two places, one gated on IsDownloading and one on
+        // DownloadedPath, and a failure leaves BOTH false: IsDownloading is cleared in the command's
+        // finally, and DownloadedPath is never set. So all four failure messages — the ones naming a
+        // firewall, an unavailable server, a timeout — were assigned to elements that had just gone
+        // invisible, and the only signal the user got was the Manual download button appearing (#2281).
+        //
+        // Both halves are asserted, because either alone passes on the broken code: the markup needs a
+        // renderer whose gate a failure SETS, and the command has to actually set it. A substring check
+        // for "DownloadStatus" would have passed before the fix, since the binding was already there.
+        var root = System.Xml.Linq.XDocument.Load(ViewPath("AboutView.xaml")).Root;
+        Assert.NotNull(root);
+
+        var parents = root!.Descendants()
+            .SelectMany(p => p.Elements().Select(c => (Child: c, Parent: p)))
+            .ToDictionary(x => x.Child, x => x.Parent);
+
+        // Every gate above each element that renders DownloadStatus.
+        var gateChains = root.Descendants()
+            .Where(e => (string?)e.Attribute("Text") == "{Binding DownloadStatus}")
+            .Select(e =>
+            {
+                var gates = new List<string>();
+                for (var n = e; n is not null; n = parents.GetValueOrDefault(n))
+                    if ((string?)n.Attribute("Visibility") is { } v)
+                        gates.Add(v);
+                return gates;
+            })
+            .ToList();
+
+        Assert.True(gateChains.Count >= 3,
+            $"only {gateChains.Count} elements render DownloadStatus — expected the in-progress line, the "
+            + "success row and the failure row, so this test is no longer looking at what it thinks.");
+
+        Assert.Contains(gateChains, chain =>
+            chain.Any(g => g.Contains("AutoDownloadFailed", StringComparison.Ordinal)));
+
+        // …and the flag that gate depends on is set by every failure path, or the row above can never
+        // appear. Read from the source because the command needs a release and a network to run.
+        var command = MethodBody(File.ReadAllText(ViewModelPath("AboutViewModel.cs")),
+                                 "private async Task DownloadAsync()");
+        var failureWrites = System.Text.RegularExpressions.Regex
+            .Matches(command, @"AutoDownloadFailed\s*=\s*true").Count;
+        Assert.Equal(4, failureWrites);   // returned-nothing, HttpRequestException, IOException, timeout
+    }
+
+    /// <summary>The body of a method, delimited by counting braces from its signature.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"{signature} not found — the test would assert over the whole file");
+
+        var open = source.IndexOf('{', at);
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
+        }
+        return source[open..];
+    }
+
     // Walks up from the test binaries to the app project — .xaml is not copied to the output.
     private static string ViewPath(string fileName)
     {
@@ -680,6 +744,19 @@ public sealed class AboutViewModelRollbackTests : IDisposable
 
         Assert.NotNull(dir);   // else the assertions above would silently test nothing
         var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
+        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
+        return path;
+    }
+
+    /// <summary>The same walk, for a view-model source file — .cs is not copied to the output either.</summary>
+    private static string ViewModelPath(string fileName)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
+            dir = dir.Parent;
+
+        Assert.NotNull(dir);
+        var path = Path.Combine(dir!.FullName, "SysManager", "ViewModels", fileName);
         Assert.True(File.Exists(path), $"{fileName} not found at {path}");
         return path;
     }

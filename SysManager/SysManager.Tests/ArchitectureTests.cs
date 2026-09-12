@@ -4472,6 +4472,99 @@ public partial class ArchitectureTests
     /// case-sensitive on purpose: "System health" is not what the sidebar says, and a reader scanning for
     /// the tab they are looking at should find its name written the same way.</para>
     /// </remarks>
+    /// <summary>
+    /// Every "N tabs" the README claims is re-derived from the source, not trusted.
+    /// </summary>
+    /// <remarks>
+    /// Gate-DOCS asks for exactly this and nothing enforced it, so a claim went stale in the one place a
+    /// reader is least able to check it: "announced on all 52 tabs that have one" while the real number was
+    /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
+    /// the same sentence is what tells a screen-reader user whether this app is worth trying.
+    /// <para>Two different denominators are claimed and they are NOT interchangeable: the total tab count
+    /// (58, from the sidebar) and the number of tabs carrying an announced status line (53, which is fewer
+    /// because a tab with nothing long-running has nothing to report). A guard that accepted either would
+    /// pass on the two being swapped, so each claim is classified by the phrase that follows it.</para>
+    /// <para>Screenshot filenames carry numbers too — <c>52-system-logs.png</c>, <c>55-about.png</c> — and
+    /// are not matched, because the pattern requires the word "tabs" after the number rather than a digit
+    /// anywhere. That is the difference between this and the sweep that first found the drift.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryReadmeTabCount_MatchesTheSource()
+    {
+        var appDir = FindAppProjectDir();
+        var viewsDir = Path.Combine(appDir, "Views");
+
+        var tabs = SidebarTabLabels().Count;
+        Assert.True(tabs >= 50, $"only {tabs} tab labels were parsed — the count to compare against is wrong");
+
+        // Tabs with an announced status line: an inline TextBlock bound to StatusMessage, or a
+        // <v:StatusFooter/>, which renders that same line from its own file. Comments stripped, because
+        // DiskAnalyzerView explains in prose why it is NOT using the shared footer (#2274) and a text scan
+        // counts that mention as a call site.
+        var statusLines = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+            .Select(f => WithoutXamlComments(File.ReadAllText(f)))
+            .Sum(markup =>
+                CountOccurrences(markup, "Text=\"{Binding StatusMessage}\"")
+                + StatusFooterElement().Matches(markup).Count);
+
+        Assert.True(statusLines >= 52,
+            $"only {statusLines} announced status lines were counted, out of 53 measured — the count to "
+            + "compare against is wrong, so the assertions below would enforce a stale number.");
+
+        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var wrong = new List<string>();
+        var claims = 0;
+        var statusClaims = 0;
+
+        foreach (var m in ReadmeTabCount().Matches(readme).Cast<Match>())
+        {
+            claims++;
+            var claimed = int.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture);
+
+            // "…all 53 tabs that have one…" is about the status-line subset; anything else is the total.
+            var after = readme[m.Index..Math.Min(readme.Length, m.Index + m.Length + 20)];
+            var isStatusSubset = after.Contains("that have one", StringComparison.Ordinal);
+            if (isStatusSubset) statusClaims++;
+
+            var expected = isStatusSubset ? statusLines : tabs;
+            if (claimed != expected)
+                wrong.Add($"\"{Collapse(m.Value)}\" — the source says {expected}"
+                          + (isStatusSubset ? " tabs carry an announced status line" : " tabs"));
+        }
+
+        // Both floors are enumerated: five total-count claims and one subset claim today. A pattern that
+        // stopped matching would otherwise let this pass having compared nothing.
+        Assert.True(claims >= 6,
+            $"only {claims} 'N tabs' claims were found in README.md, out of 6 measured — the pattern is out "
+            + "of date, so a pass proves nothing.");
+        Assert.True(statusClaims >= 1,
+            "the 'tabs that have one' claim was not found, so the status-line count is being compared "
+            + "against nothing and a drift in it would pass.");
+
+        Assert.True(wrong.Count == 0,
+            "these README counts no longer match the source. A number a reader cannot verify is worse than "
+            + "no number, and the accessibility claim is the one most likely to be taken on trust:\n  "
+            + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>Occurrences of a literal, which <c>string.Split</c> would over-count by one.</summary>
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var at = haystack.IndexOf(needle, StringComparison.Ordinal);
+             at >= 0;
+             at = haystack.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    /// <summary>
+    /// A "N tabs" claim, allowing one qualifier ("58 feature tabs"). The word is REQUIRED, so a screenshot
+    /// filename like <c>52-system-logs.png</c> cannot match.
+    /// </summary>
+    [GeneratedRegex(@"(?<n>\d+) (?:\w+ )?tabs\b", RegexOptions.Compiled)]
+    private static partial Regex ReadmeTabCount();
+
     [Fact]
     public void EveryTab_HasItsOwnReadmeSection()
     {
@@ -6284,7 +6377,7 @@ public partial class ArchitectureTests
     /// Every tab's status line is a live region, and the fast-moving readouts beside them are not.
     /// </summary>
     /// <remarks>
-    /// 52 tabs report what a long operation is doing through one <c>TextBlock</c> bound to
+    /// 53 tabs report what a long operation is doing through one <c>TextBlock</c> bound to
     /// <c>StatusMessage</c>, and none of them was announced: WCAG 4.1.3 asks that a status change which
     /// never receives focus still reach assistive software, and <c>AutomationProperties.LiveSetting</c> is
     /// the channel. Before this guard the whole project had two occurrences of it, both the same element —
@@ -6396,10 +6489,15 @@ public partial class ArchitectureTests
                            + "view using it went quiet at once while still resolving");
         }
 
-        // Vacuity floor: 52 status lines, one per tab that has one, measured. Raise it when a tab gains one;
-        // a drop means the Text attribute read stopped matching and the whole sweep found nothing.
-        Assert.True(statusLinesSeen >= 50,
-            $"only {statusLinesSeen} StatusMessage lines were found across {files.Length} views, out of 52 "
+        // Vacuity floor: 53 status lines, one per tab that has one, measured. A drop means the Text attribute
+        // read stopped matching and the whole sweep found nothing.
+        //
+        // The floor was 50 against 52 measured, and by the time anyone looked the real number was 53 — so a
+        // tab had gained a status line, the README's "all 52 tabs" claim had gone stale, and three units of
+        // slack absorbed the drift without a word. A floor exists to catch a read that BREAKS, which takes
+        // the count to nearly zero, not to one below. Slack past that only hides movement, so this keeps one.
+        Assert.True(statusLinesSeen >= 52,
+            $"only {statusLinesSeen} StatusMessage lines were found across {files.Length} views, out of 53 "
             + "measured — the element read is out of date, so a pass proves nothing.");
 
         // The negative half needs its own floor, and it is the half most likely to go quiet: an absence

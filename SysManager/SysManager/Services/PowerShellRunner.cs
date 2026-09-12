@@ -236,7 +236,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         {
             await task.ConfigureAwait(false);
         }
-        catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsPipelineStopped(ex))
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested
+                                   && (IsPipelineStopped(ex) || IsRemotingTornDownByOurStop(ex)))
         {
             // Cancellation calls ps.Stop(), which makes EndInvoke throw. Surface the standard cancellation
             // signal so callers that catch OperationCanceledException treat a cancelled PowerShell run as
@@ -746,6 +747,32 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         || ex.InnerException is PipelineStoppedException
         || (ex as RemoteException)?.SerializedRemoteException?.TypeNames
                .Any(name => name.EndsWith("PipelineStoppedException", StringComparison.Ordinal)) == true;
+
+    /// <summary>
+    /// The out-of-process transport reporting the stop WE asked for: a remoting data-structure fault raised
+    /// while cancellation is already requested.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from <see cref="IsPipelineStopped"/>, which answers "does this exception mean
+    /// the pipeline was stopped" and must keep answering it honestly —
+    /// <c>PSRemotingDataStructureException</c> is a general remoting protocol fault, so folding it in there
+    /// would make a genuine transport breakdown read as a stop, and that method's negative tests exist to
+    /// prevent exactly that.
+    /// <para><b>What makes the weaker inference safe is the caller, not the type.</b> The one call site is
+    /// guarded by <c>cancellationToken.IsCancellationRequested</c>, so this is only ever consulted after we
+    /// have called <c>Stop()</c> ourselves. With no cancellation requested the exception propagates as
+    /// itself, which is what a real remoting failure must do.</para>
+    /// <para>Found by CI, and only by CI: the in-process runspace this workstation uses raises
+    /// <c>PipelineStoppedException</c>, which the method above already matches. Closing the lost-stop window
+    /// in #2286 meant the stop started landing on the elevated out-of-process transport too, where
+    /// <c>EndInvoke</c> instead threw <c>PSRemotingDataStructureException("The remote pipeline has been
+    /// stopped.")</c> — so a cancellation that now WORKED surfaced as a raw remoting error rather than as
+    /// <c>OperationCanceledException</c>. Matched by TYPE and not by that message, which is a sentence from
+    /// PowerShell and not a contract.</para>
+    /// </remarks>
+    internal static bool IsRemotingTornDownByOurStop(Exception ex) =>
+        ex is System.Management.Automation.Remoting.PSRemotingDataStructureException
+        || ex.InnerException is System.Management.Automation.Remoting.PSRemotingDataStructureException;
 
     private async Task<RunspaceLease> LeaseRunspaceAsync()
     {

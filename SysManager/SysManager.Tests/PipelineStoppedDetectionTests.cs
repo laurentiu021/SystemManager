@@ -91,6 +91,50 @@ public class PipelineStoppedDetectionTests
             new InvalidOperationException("outer", new TimeoutException())));
     }
 
+    // ── The out-of-process transport's own way of saying "stopped" (#2286) ──
+    //
+    // Closing the lost-stop window meant the stop started landing on the elevated out-of-process transport,
+    // where EndInvoke throws PSRemotingDataStructureException("The remote pipeline has been stopped.")
+    // rather than the PipelineStoppedException an in-process runspace raises. So a cancellation that now
+    // WORKED surfaced as a raw remoting error. CI found it; this workstation's in-process runspace cannot.
+
+    [Fact]
+    public void ARemotingDataStructureFault_IsRecognisedAsOurStop()
+    {
+        Assert.True(PowerShellRunner.IsRemotingTornDownByOurStop(
+            new System.Management.Automation.Remoting.PSRemotingDataStructureException(
+                "The remote pipeline has been stopped.")));
+    }
+
+    [Fact]
+    public void ARemotingDataStructureFault_IsRecognisedWhenWrapped()
+    {
+        // FromAsync surfaces EndInvoke's exception directly, but a transport can nest it — the sibling
+        // predicate unwraps one level for the same reason and this must not be the weaker of the two.
+        Assert.True(PowerShellRunner.IsRemotingTornDownByOurStop(
+            new InvalidOperationException("outer",
+                new System.Management.Automation.Remoting.PSRemotingDataStructureException("stopped"))));
+    }
+
+    [Fact]
+    public void ARemotingFault_IsNotTreatedAsAStopByTheStrictPredicate()
+    {
+        // The two predicates stay separate on purpose. IsPipelineStopped answers "does this exception mean
+        // the pipeline was stopped", and a general remoting fault does not — folding it in would make a real
+        // transport breakdown read as a user cancellation. What makes the weaker inference safe is the call
+        // site's `cancellationToken.IsCancellationRequested`, not the type.
+        Assert.False(PowerShellRunner.IsPipelineStopped(
+            new System.Management.Automation.Remoting.PSRemotingDataStructureException(
+                "The remote pipeline has been stopped.")));
+    }
+
+    [Fact]
+    public void AnUnrelatedException_IsNotTakenForOurStop()
+    {
+        Assert.False(PowerShellRunner.IsRemotingTornDownByOurStop(new TimeoutException("timed out")));
+        Assert.False(PowerShellRunner.IsRemotingTornDownByOurStop(new PipelineStoppedException()));
+    }
+
     /// <summary>
     /// Builds a <see cref="RemoteException"/> carrying <paramref name="serialized"/>.
     /// </summary>

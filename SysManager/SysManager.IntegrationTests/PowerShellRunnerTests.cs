@@ -583,17 +583,33 @@ public class PowerShellRunnerTests
             + $"exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"}); {lines.Count} line(s) captured"
             + (errors.Count > 0 ? $", errors: {string.Join(" | ", errors.Take(2))}" : "");
 
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
-            "Cancellation took too long. " + diagnosis
-            + " — the exception MESSAGE is the discriminator, because both cancellation paths raise "
-            + "OperationCanceledException: \"stopped by cancellation\" means ps.Stop() interrupted the "
-            + "pipeline and only the bound failed, while \"completed on its own\" means Stop never "
-            + "interrupted anything and the script ran to its natural end. NONE means the run predates the "
-            + "post-await check entirely.");
-
         // Stopping without reporting it is its own defect: every caller's cancel branch is written around
         // OperationCanceledException, so a silent return would show a cancelled operation as a completed one.
+        // Asserted FIRST, because the two below describe what KIND of cancellation it was and neither means
+        // anything if there was none.
         Assert.True(ex is OperationCanceledException, "Cancellation did not surface as OperationCanceledException. " + diagnosis);
+
+        // The message, not the clock, and this is the assertion that actually names the defect.
+        //
+        // BlockingScript is a LOOP of 50 ms sleeps, and ps.Stop() interrupts a pipeline between statements —
+        // the blocking-call test below measured this exact shape cancelling in 2.2 s. So "completed on its
+        // own" here does NOT mean "PowerShell cannot interrupt a blocking call", which is the legitimate
+        // outcome that test pins. It means the stop was LOST: the registration fired while the instance was
+        // still NotStarted, Stop() threw InvalidOperationException, it was swallowed, and BeginInvoke then
+        // ran the script in full (#2286). The runner now re-asserts Stop after BeginInvoke to close that.
+        //
+        // This replaces a bare `elapsed < 5s`, which was the same defect measured through a proxy: it could
+        // only see a lost stop when the loss also happened to be slow, and when it fired it reported "took
+        // too long", which reads as a loaded runner. Two of the three explanations its own message offered
+        // were about timing, and the true one was not.
+        Assert.Contains("stopped by cancellation", ex!.Message, StringComparison.Ordinal);
+
+        // The bound is KEPT, below the script's own 20 seconds so a lost stop cannot pass it, and well above
+        // the ~350 ms a working stop takes. It is now a backstop rather than the discriminator: if it ever
+        // fires while the message above passes, the stop worked and the runner got slow, which is a
+        // different finding and the message says which.
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
+            "Cancellation was reported as a real stop but took too long. " + diagnosis);
     }
 
     /// <summary>
@@ -679,9 +695,14 @@ public class PowerShellRunnerTests
     /// "exception NONE". A test whose coverage depends on execution order is not a regression test.</para>
     /// <para><b>How this one is deterministic.</b> The <c>openRunspace</c> seam blocks until the test has
     /// cancelled, so the token is guaranteed to be already cancelled when <c>Register</c> runs — which
-    /// invokes the callback synchronously, putting <c>ps.Stop()</c> on a <c>NotStarted</c> instance.
-    /// <c>BeginInvoke</c>/<c>EndInvoke</c> then complete without throwing and without running the script.
-    /// No timing, no sleeping, and the same sequence on every machine.</para>
+    /// invokes the callback synchronously, putting <c>ps.Stop()</c> on a <c>NotStarted</c> instance, where it
+    /// throws <c>InvalidOperationException</c> and is swallowed. No timing, no sleeping, and the same
+    /// sequence on every machine.</para>
+    /// <para><b>Corrected:</b> this said <c>BeginInvoke</c>/<c>EndInvoke</c> then complete "without running
+    /// the script". They do not — the script RUNS, and against <c>1 + 1</c> that is simply invisible. The
+    /// test below runs the same seam with a script that blocks for 20 seconds and measured exactly that: the
+    /// full 20 seconds before the fix in #2286, about a second after it. The claim was untestable here and
+    /// wrong there.</para>
     /// <para>The MESSAGE is asserted, not just the exception type. Both cancellation paths raise
     /// <c>OperationCanceledException</c>, so accepting either would let this pass on the wrong one — and the
     /// wrong one is the path that already worked.</para>
@@ -717,7 +738,88 @@ public class PowerShellRunnerTests
             + "With no exception the caller receives an empty result set and no indication that anything was "
             + "cancelled — for a query that is indistinguishable from a real answer of \"nothing found\".");
 
-        Assert.Contains("completed on its own", ex!.Message, StringComparison.Ordinal);
+        // EITHER discriminator is correct here now, and that is a change from what this asserted.
+        //
+        // It pinned "completed on its own", which was the honest description of a hole: the registration
+        // fired while the instance was NotStarted, Stop() threw InvalidOperationException, it was swallowed,
+        // and BeginInvoke went on to run the script with nothing having asked it to stop. The runner now
+        // re-asserts Stop after BeginInvoke and closes that window (#2286), so this scenario reaches the
+        // pipeline properly.
+        //
+        // Which message comes back is then genuinely racy — and only because THIS script is `1 + 1`. Against
+        // a trivial script the stop and the script's own completion are in a real race, and both outcomes
+        // are correct: cancellation is reported either way, which is the contract asserted above and the
+        // reason this test exists. Pinning the winner of that race is precisely what made
+        // RunAsync_SupportsCancellation flaky, so it is not repeated here.
+        //
+        // The deterministic pin lives there instead, where the script BLOCKS for 20 seconds: a lost stop
+        // cannot hide behind a fast script, so "stopped by cancellation" is the only correct answer and is
+        // asserted exactly.
+        Assert.True(ex!.Message.Contains("stopped by cancellation", StringComparison.Ordinal)
+                    || ex.Message.Contains("completed on its own", StringComparison.Ordinal),
+            "the cancellation was reported without either discriminator in its message, so a future reader "
+            + $"cannot tell which path ran: \"{ex.Message}\"");
+    }
+
+    /// <summary>
+    /// A run cancelled while the runspace is opening must not go on to RUN the script.
+    /// </summary>
+    /// <remarks>
+    /// The test above proves the cancellation is reported. It cannot prove the script did not run, because
+    /// its script is <c>1 + 1</c> — indistinguishable from not running at all. This one uses the same
+    /// deterministic seam with a script that BLOCKS for 20 seconds, which separates the two outright: a lost
+    /// stop takes the full 20 seconds, a delivered one returns in about a second.
+    /// <para>That distinction is the whole of #2286. CI saw a cancel at 390 ms against a looping script and
+    /// the run finish its entire 20 seconds reporting "not interrupted … completed on its own". Since a loop
+    /// of 50 ms sleeps IS interruptible — the blocking-call test below measures that same shape cancelling in
+    /// 2.2 s — the stop was not refused, it was lost in the NotStarted window: <c>Register</c> fires
+    /// synchronously, <c>Stop()</c> throws <c>InvalidOperationException</c> on a not-yet-invoked instance, it
+    /// is swallowed, and <c>BeginInvoke</c> starts a pipeline nothing has asked to stop.</para>
+    /// <para>Deterministic for the same reason as the test above — the seam holds the open until the test has
+    /// cancelled — so this needs no sleeping to arrange the race and cannot depend on execution order. It is
+    /// the regression test the fix would otherwise not have: removing the runner's post-BeginInvoke
+    /// re-assertion takes this from about a second to the script's full 20.</para>
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_CancelledWhileTheRunspaceIsOpening_DoesNotRunTheScriptAnyway()
+    {
+        using var cancelled = new SemaphoreSlim(0);
+        using var reachedOpen = new SemaphoreSlim(0);
+
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => false,
+            openRunspace: async runspace =>
+            {
+                reachedOpen.Release();
+                await cancelled.WaitAsync(TimeSpan.FromSeconds(10));
+                await Task.Run(runspace.Open);
+            });
+
+        using var cts = new CancellationTokenSource();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var run = runner.RunAsync(BlockingScript, cancellationToken: cts.Token);
+
+        Assert.True(await reachedOpen.WaitAsync(TimeSpan.FromSeconds(10)),
+            "the runspace open was never reached, so nothing below is about the opening window.");
+        await cts.CancelAsync();
+        cancelled.Release();
+
+        var ex = await BoundedAsync(Record.ExceptionAsync(() => run),
+                                    nameof(RunAsync_CancelledWhileTheRunspaceIsOpening_DoesNotRunTheScriptAnyway));
+        sw.Stop();
+
+        var diagnosis = $"elapsed {sw.Elapsed}; exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"})";
+
+        Assert.True(ex is OperationCanceledException, "the run did not report cancellation at all. " + diagnosis);
+
+        // The assertion that matters: well under the script's own 20 seconds, so a stop that was swallowed
+        // and never re-asserted cannot pass. 5 seconds rather than 2 leaves room for a cold runspace open on
+        // a loaded runner without leaving room for the defect.
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
+            "a run cancelled during the runspace open went on to execute the script in full — the stop was "
+            + "swallowed on a NotStarted instance and never re-asserted, so the user's Cancel did nothing "
+            + "but the call still reported cancellation. " + diagnosis);
     }
 
     /// <summary>

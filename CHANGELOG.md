@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.6] - 2026-09-12
+
+**Pressing Cancel just as a background check starts now actually stops it.** There was a narrow window —
+the moment while the app was opening the PowerShell session it needs — where Cancel was accepted, reported
+back as cancelled, and yet the work carried on to the end anyway. Anything cancelled in that instant ran to
+completion in the background while the tab already said it had stopped. Cancel is now delivered even when
+it arrives in that window.
+
+### Fixed
+
+- Cancelling during the moment a PowerShell session is being opened now stops the script, instead of
+  reporting a cancellation while the script kept running to its natural end.
+
 ## [1.99.5] - 2026-09-12
 
 **When an update download fails, the tab now says why.** Pressing Download and having it fail showed you

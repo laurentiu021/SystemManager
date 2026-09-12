@@ -212,6 +212,26 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             ps.BeginInvoke<PSObject, PSObject>(null, output),
             ar => ps.EndInvoke(ar));
 
+        // The registration above can fire while this instance is still NotStarted, and Stop() then throws
+        // InvalidOperationException, which is swallowed — so nothing has asked the pipeline to stop, and
+        // BeginInvoke goes on to run the script in full. The window is real rather than theoretical: leasing
+        // and opening a runspace takes a few hundred milliseconds, which is the same order as the delay any
+        // caller puts before cancelling.
+        //
+        // Measured on CI: a cancel at 390 ms against a script that loops on 50 ms sleeps, and the run
+        // finished its whole 20 seconds reporting "not interrupted … completed on its own". A loop of that
+        // shape IS interruptible — the blocking-call test below measured the same script cancelling in
+        // 2.2 s — so the stop was not refused, it was lost.
+        //
+        // Re-asserting here closes the window, because BeginInvoke has returned by this point and the
+        // instance will accept a Stop. Idempotent either way: a second Stop on an already-stopping pipeline
+        // raises the same InvalidOperationException this swallows, and on a pipeline that is running it does
+        // exactly what the registration intended to do the first time.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            try { ps.Stop(); } catch (InvalidOperationException) { }
+        }
+
         try
         {
             await task.ConfigureAwait(false);

@@ -15,7 +15,15 @@ namespace SysManager.Models;
 public sealed partial class BrowserCleanupItem : ObservableObject
 {
     [ObservableProperty] private bool _isSelected;
-    [ObservableProperty] private long _sizeBytes;
+
+    // SizeDisplay is computed from this, so a change here has to announce that one too or a row keeps
+    // showing the old size. Latent today — the scan sets the size in the object initialiser, before the item
+    // reaches the collection — but the field is declared mutable and observable, so the first code to
+    // recompute a size in place would silently display a stale one. DiskUsageEntry and InstalledApp, the two
+    // other models with a mutable size, both do this; this one did not.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SizeDisplay))]
+    private long _sizeBytes;
     [ObservableProperty] private int _fileCount;
 
     public required string Browser { get; init; }

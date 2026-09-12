@@ -8923,6 +8923,83 @@ public partial class ArchitectureTests
     private static partial Regex BoolReturningMember();
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
+    /// <summary>
+    /// A service that stops a loop on cancellation must throw before returning, so a partial result is
+    /// never handed back as a finished one.
+    /// </summary>
+    /// <remarks>
+    /// Breaking out of a loop and returning normally gives the caller a short list with no way to know it is
+    /// short — and every caller here is written around <c>catch (OperationCanceledException)</c>, so the
+    /// cancel branch simply never runs and the SUCCESS path reports the partial result. Three instances, all
+    /// user-visible, all the same one-line fix:
+    /// <list type="bullet">
+    /// <item>#2206 — a cancelled PowerShell query returned as a successful empty result.</item>
+    /// <item>#2275 — a cancelled shortcut scan said "No broken shortcuts found — your system is clean."</item>
+    /// <item>#2278 — a cancelled browser scan said "No cleanable browser data found."</item>
+    /// </list>
+    /// <para>The first two were each fixed alone, which is why this exists: the third was found by counting
+    /// <c>ThrowIfCancellationRequested</c> per service rather than by using the tab.</para>
+    /// <para><b>The exemptions are reasoned, not convenient</b>, and there are three of nine. A continuous
+    /// monitor's loop ENDING is its shutdown, not a truncated answer, so Ping and Traceroute are correct as
+    /// written. Process Manager returns a list that carries no claim and is refreshed on a timer, so a short
+    /// one is a display artefact rather than a false statement; it is listed rather than fixed because
+    /// changing it would alter behaviour nothing complains about.</para>
+    /// <para>Keyed on the break SHAPE — <c>if (…IsCancellationRequested) break;</c> and its
+    /// <c>yield break</c>/<c>return</c> variants — because that is the construct that produces the defect. A
+    /// service that only checks the flag to skip one item never returns a truncated result.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryScanThatBreaksOnCancellation_ThrowsBeforeReturning()
+    {
+        // Correct as written, with the reason. Not an allowlist to grow: adding a name here means arguing
+        // that a truncated result is honest for that service.
+        string[] exempt =
+        [
+            "PingMonitorService.cs",        // continuous monitor: the loop ending IS the shutdown
+            "TracerouteMonitorService.cs",  // ditto
+            "ProcessManagerService.cs",     // a list with no claim attached, refreshed on a timer
+        ];
+
+        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var offenders = new List<string>();
+        var population = 0;
+
+        foreach (var path in Directory.EnumerateFiles(servicesDir, "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            var file = Path.GetFileName(path);
+            var code = string.Join("\n", File.ReadAllLines(path).Where(IsCode));
+
+            if (!CancellationBreak().IsMatch(code)) continue;
+            population++;
+
+            if (exempt.Contains(file, StringComparer.Ordinal)) continue;
+            if (code.Contains("ThrowIfCancellationRequested", StringComparison.Ordinal)) continue;
+
+            offenders.Add(file);
+        }
+
+        // Vacuity floor: nine services stop a loop on cancellation, measured. A drop means the break shape
+        // stopped matching and an absence-of-offenders pass would prove nothing.
+        Assert.True(population >= 8,
+            $"only {population} services were found that stop a loop on cancellation, out of 9 measured — "
+            + "the break shape is out of date, so a pass here means nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these services break out of a loop on cancellation and then return normally, so the caller "
+            + "receives a partial result and its catch (OperationCanceledException) branch never runs — it "
+            + "reports a finished operation, and for a scan that means telling the user nothing was found:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A loop stopped by cancellation: the construct that returns a truncated result. Matched on the
+    /// statement rather than on the flag alone, because checking the flag to skip ONE item is a different
+    /// thing and is not a defect.
+    /// </summary>
+    [GeneratedRegex(@"IsCancellationRequested\s*\)\s*\{?\s*(break|yield\s+break|return)\b",
+                    RegexOptions.Compiled)]
+    private static partial Regex CancellationBreak();
+
     private static string FindAppProjectDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

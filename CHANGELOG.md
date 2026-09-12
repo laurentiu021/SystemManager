@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.3] - 2026-09-12
+
+**Cancelling a Browser Cleaner scan no longer reports that there is nothing to clean.** Stopping the scan
+early made the tab say "No cleanable browser data found." — stated as a finding, about browsers it had not
+finished looking at. It now says "Cancelled.", the wording the tab already had and could never reach. This is
+the same fault fixed for Shortcut Cleaner in 1.99.2, and a test now holds the rule for every scan in the app
+so it cannot appear in a third place.
+
+### Fixed
+
+- A cancelled browser-data scan reports itself as cancelled instead of as a completed scan that found nothing.
+- Cleaning is deliberately left as it is: when you stop a clean, the count of files already removed is true,
+  and reporting a cancellation instead would throw that number away. The gap there was a missing word, not a
+  wrong one.
+
 ## [1.99.2] - 2026-09-12
 
 **Cancelling a Shortcut Cleaner scan no longer tells you your PC is clean.** Pressing Cancel — or Escape,

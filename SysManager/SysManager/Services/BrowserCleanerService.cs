@@ -263,6 +263,14 @@ public sealed class BrowserCleanerService
                     IsSelected = !d.Sensitive   // cache/history pre-selected; cookies/sessions opt-in
                 });
             }
+
+            // A cancelled scan exits the loops above with partial results — they break on cancellation
+            // rather than throwing — so returning normally handed the caller a short list with no way to
+            // know it was short. The view model's success path then claimed a finished scan and, with
+            // nothing found yet, said "No cleanable browser data found." (#2278). Throw so its existing
+            // cancel branch runs; it already says "Cancelled." and was dead code until now.
+            ct.ThrowIfCancellationRequested();
+
             return items;
         }, ct);
 
@@ -284,6 +292,14 @@ public sealed class BrowserCleanerService
                 }
             }
             Log.Information("BrowserCleaner: deleted {Count} files across {Items} items", deleted, items.Count);
+
+            // NOT ct.ThrowIfCancellationRequested() here, unlike the scan above, and the difference is
+            // deliberate. This count is TRUE whether or not the run was cancelled — those files really were
+            // deleted — so the caller reporting "Removed N file(s)" is not a false statement, only a silent
+            // one about having stopped. Throwing would send the view model down its cancel branch, which
+            // discards the count and skips the re-scan, so it would trade a missing word for missing
+            // information. Saying "cancelled after removing N" needs the count to survive, which an
+            // exception cannot carry (#2278).
             return deleted;
         }, ct);
 

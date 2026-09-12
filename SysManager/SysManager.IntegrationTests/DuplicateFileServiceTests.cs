@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.Concurrent;
 using System.IO;
 using SysManager.Services;
 
@@ -17,22 +16,6 @@ public class DuplicateFileServiceTests : IDisposable
 {
     private readonly string _root =
         Path.Combine(Path.GetTempPath(), "SysManagerTests", "dupe-progress-" + Guid.NewGuid().ToString("N"));
-
-    /// <summary>
-    /// Collects reports on the thread that raises them.
-    /// </summary>
-    /// <remarks>
-    /// NOT <see cref="Progress{T}"/>, which is what production uses: it POSTS each callback to a captured
-    /// synchronization context, so a report raised just before the scan returns can still be in flight when
-    /// the assertions run. That is a test that passes on timing rather than on behaviour. Implementing
-    /// <see cref="IProgress{T}"/> directly makes <c>Report</c> synchronous, so every report has arrived by
-    /// the time the awaited scan completes.
-    /// </remarks>
-    private sealed class SynchronousProgress<T> : IProgress<T>
-    {
-        public ConcurrentQueue<T> Reports { get; } = new();
-        public void Report(T value) => Reports.Enqueue(value);
-    }
 
     /// <summary>Two identical files in a subfolder, so the walk descends and finds a duplicate pair.</summary>
     private string SeedTree()

@@ -63,7 +63,14 @@ public sealed class LargeFileScanner
         stack.Push(rootPath);
         long scanned = 0;
         long bytesScanned = 0;
-        var lastReport = Environment.TickCount64;
+        // Zero, not the current tick. The throttle below is "not more often than every 200 ms", and
+        // seeding it with now made it "not before 200 ms have passed" as well — so a scan that finished
+        // inside that window reported nothing at all and the panel showed 0 files, 0 bytes and a blank
+        // folder for its whole duration (#2273). It bites harder here than in the sibling scanner because
+        // the report sits at the end of each DIRECTORY's loop, so a shallow tree gets only a handful of
+        // opportunities and all of them can fall in the first window. TickCount64 is time since boot, so
+        // the first directory always clears the gap and every one after it is throttled.
+        var lastReport = 0L;
 
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
@@ -140,11 +147,16 @@ public sealed class LargeFileScanner
             }
         }
 
-        // A cancelled scan exits the loop with partial results; surfacing them as
-        // "Done" would mislead the user. Throw so the caller's cancel branch handles it.
+        // A cancelled scan exits the loop with partial results; surfacing them as finished
+        // would mislead the user. Throw so the caller's cancel branch handles it.
         ct.ThrowIfCancellationRequested();
 
-        progress?.Report(new LargeFileProgress(scanned, bytesScanned, "Done"));
+        // One last report so the counts settle on their final numbers, with an EMPTY folder — it used to
+        // say "Done", and the consumer renders CurrentFolder verbatim into a line that names the folder
+        // being scanned, so the panel showed a folder called "Done" (#2273). Empty is the honest value:
+        // these are the final counts and no folder is being scanned any more. Nothing has to recognise a
+        // sentinel to avoid displaying it.
+        progress?.Report(new LargeFileProgress(scanned, bytesScanned, string.Empty));
         return heap.Reverse().Select(h => meta[h.Path]).ToArray();
     }
 

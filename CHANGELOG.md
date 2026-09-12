@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.99.1] - 2026-09-12
+
+**The Large Files scan in Deep Cleanup showed nothing while it worked, then a folder called "Done".** It was
+supposed to name the folder it was searching and count what it had found so far, but on any scan that finished
+quickly it reported neither — the panel sat at 0 files and a blank folder line from start to finish, and the
+one thing it did eventually show was the word "Done" where a folder name goes. Both are fixed, and the scan now
+names a real folder from the first one it opens.
+
+### Fixed
+
+- **A fast scan reports its progress.** The limit on how often progress could be sent was being measured from
+  the moment the scan started, so it also blocked the *first* report — and since progress is sent once per
+  folder, a small folder tree used up all its chances before the limit expired.
+- **"Done" is no longer displayed as a folder name.** The scan sends one last message so the totals land on
+  their final numbers, and that message used to carry the word "Done" where the folder goes. It now carries
+  nothing, which is the truth: no folder is being searched by then.
+
 ## [1.99.0] - 2026-09-12
 
 **Eleven tabs stopped opening with a sentence written for someone who already knows Windows.** The line under

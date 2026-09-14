@@ -165,6 +165,8 @@ public sealed class CliRunner
         {
             var (bytes, files, errors) = await TuneUpService.CleanTempFilesAsync(ct).ConfigureAwait(false);
             double mb = bytes / 1024.0 / 1024.0;
+            RecordHeadlessRun("Quick Cleanup", string.Create(CultureInfo.InvariantCulture,
+                $"Freed {mb:F0} MB across {files} file(s)"));
             return request.Json
                 ? new CliResult(CliResult.Ok, Json(new { freedBytes = bytes, freedMB = Math.Round(mb, 1), filesDeleted = files, errors }))
                 : new CliResult(CliResult.Ok, request.Silent
@@ -187,10 +189,34 @@ public sealed class CliRunner
             return new CliResult(CliResult.Error, request.Json ? Json(new { error }) : $"Standby purge failed: {error}");
 
         var after = svc.GetMemoryStatus();
+        RecordHeadlessRun("Standby cleaner", "Purged the standby memory list");
         return request.Json
             ? new CliResult(CliResult.Ok, Json(new { freedMB = Math.Round((after.AvailableBytes - before.AvailableBytes) / 1024.0 / 1024.0, 0), loadPercentAfter = after.LoadPercent }))
             : new CliResult(CliResult.Ok, request.Silent ? "Standby list purged" : $"Standby list purged. Memory load now {after.LoadPercent}%.");
     }
+
+    /// <summary>
+    /// Records a completed headless run in the app's own activity history, the same history the GUI
+    /// writes to.
+    /// </summary>
+    /// <remarks>
+    /// The two mutating verbs delete temporary files and drop the standby memory list, and both are
+    /// reachable from Scheduled Maintenance — which exists to run them while nobody is watching. Neither
+    /// left any trace: the GUI paths for the same two operations log ("Quick Cleanup" in
+    /// <c>CleanupViewModel</c>, "Standby cleaner" in <c>StandbyMemoryViewModel</c>), so a user who
+    /// scheduled a weekly cleanup opened the app afterwards and found nothing in the history to say it
+    /// had ever run. That history file is described in <see cref="ActivityLogService"/> as the only record
+    /// of what the app changed (#1509).
+    /// <para>The action name matches the GUI's so the history still reads by operation rather than by
+    /// which door the operation came through; the origin goes in the detail, because for an unattended
+    /// run "this was not you" is the part worth knowing.</para>
+    /// <para>Only successful runs are recorded, and only the two MUTATING verbs. <c>--health</c> is
+    /// deliberately excluded: it changes nothing, and a script polling it would evict the whole
+    /// 60-entry history — including the record of the destructive operations this is here to preserve.
+    /// </para>
+    /// </remarks>
+    internal static void RecordHeadlessRun(string action, string detail) =>
+        ActivityLogService.Instance.Log(action, detail + " — run from the command line");
 
     // ── Help / formatting ───────────────────────────────────────────────────
 

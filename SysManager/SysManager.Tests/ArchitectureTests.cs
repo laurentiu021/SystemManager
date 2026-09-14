@@ -7641,6 +7641,45 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every CLI verb that changes the machine records it in the app's own history, and the read-only one
+    /// does not.
+    /// </summary>
+    /// <remarks>
+    /// The two mutating verbs are what Scheduled Maintenance runs unattended, and neither wrote to the
+    /// activity log — while the GUI paths for the same two operations both do. So a user who scheduled a
+    /// weekly cleanup opened SysManager afterwards and found nothing to say it had ever run (#1509).
+    /// <para>Source-shape rather than behavioural because executing these verbs really deletes temporary
+    /// files and really drops the standby memory list; a test may not do either. The recording helper's
+    /// own behaviour IS covered, in <c>CliRunnerTests</c>.</para>
+    /// <para>The NEGATIVE half is the load-bearing one: <c>--health</c> must NOT record. It changes
+    /// nothing, and a script polling it would evict all 60 entries — including the record of the
+    /// destructive operations this exists to preserve. Bodies are read one method at a time, because a
+    /// whole-file search would see the call in a sibling and vouch for a method that has none.</para>
+    /// </remarks>
+    [Fact]
+    public void OnlyTheMutatingCliVerbs_RecordAHeadlessRun()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "CliRunner.cs")));
+
+        const string call = "RecordHeadlessRun(";
+
+        foreach (var mutating in (string[])["RunCleanupAsync", "RunPurgeStandby"])
+        {
+            var body = MethodBody(source, mutating);
+            Assert.False(body.Length == 0,
+                $"CliRunner.{mutating} could not be located, so this guard is reading nothing. Re-point it "
+                + "at whatever now performs that verb.");
+            Assert.Contains(call, body, StringComparison.Ordinal);
+        }
+
+        var health = MethodBody(source, "RunHealthAsync");
+        Assert.False(health.Length == 0,
+            "CliRunner.RunHealthAsync could not be located, so the negative half of this guard is vacuous.");
+        Assert.DoesNotContain(call, health, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A Context Menu preset may only act on rows it can actually change, and the number it promises in
     /// the confirmation must come from the same predicate the loop uses.
     /// </summary>

@@ -281,4 +281,44 @@ public class CliRunnerTests
         Assert.Equal(1, CliResult.Error);
         Assert.Equal(2, CliResult.UsageError);
     }
+
+    // ── Headless runs reach the app's own history (#1509) ──────────────────
+    //
+    // The two mutating verbs are the ones Scheduled Maintenance runs while nobody is watching, and
+    // neither left a trace: the GUI paths for the same two operations log, so a weekly scheduled cleanup
+    // deleted files and the app's history had nothing to say it ever ran.
+    //
+    // The verbs themselves are not executed here — --cleanup really deletes temporary files and
+    // --purge-standby really drops the standby list, which is why this file only ever executes the
+    // read-only commands. What is asserted here is the recording; that the two mutating verbs call it,
+    // and that the read-only one does not, is held by
+    // ArchitectureTests.OnlyTheMutatingCliVerbs_RecordAHeadlessRun.
+
+    [Fact]
+    public void RecordHeadlessRun_WritesThroughTheSharedActivityLog()
+    {
+        using var scope = new ActivityLogScope();
+
+        CliRunner.RecordHeadlessRun("Quick Cleanup", "Freed 12 MB across 34 file(s)");
+
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal("Quick Cleanup", entry.Action);
+        Assert.Equal("Freed 12 MB across 34 file(s) — run from the command line", entry.Detail);
+    }
+
+    [Fact]
+    public void RecordHeadlessRun_ActionMatchesTheGuiName_SoTheHistoryReadsByOperation()
+    {
+        // The origin belongs in the detail, not the action. Naming the action "Command line" would split
+        // one operation into two kinds of history entry depending on which door it came through, and the
+        // Dashboard shows the action.
+        using var scope = new ActivityLogScope();
+
+        CliRunner.RecordHeadlessRun("Standby cleaner", "Purged the standby memory list");
+
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal("Standby cleaner", entry.Action);
+        Assert.DoesNotContain("command line", entry.Action, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("run from the command line", entry.Detail, StringComparison.Ordinal);
+    }
 }

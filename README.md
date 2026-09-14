@@ -1286,6 +1286,11 @@ offers, "rate us" prompts:
   branch on the result
 - Only read-only or non-destructive actions are exposed on the CLI — anything that
   changes the system irreversibly stays in the GUI behind a confirmation dialog
+- **The two actions that change something record themselves in the app's history**, marked
+  as having come from the command line. So a scheduled cleanup that ran while you were
+  away is visible next time you open SysManager, instead of leaving no trace. `--health`
+  deliberately records nothing: it changes nothing, and a script polling it would push
+  the real entries out of a history that only keeps the last 60
 - The in-app **CLI Interface** tab is a reference: it lists every command with a
   one-click copy button. Example: `SysManager.exe --cleanup --silent`
 

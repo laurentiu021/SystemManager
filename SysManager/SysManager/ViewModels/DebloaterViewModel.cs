@@ -106,6 +106,15 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         try
         {
             var apps = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
+            // Keep the user's ticks across the rescan. These arrive UNSELECTED, so a rescan cleared the
+            // selection rather than reversing it — the Remove button simply stopped doing anything until
+            // every app was ticked again. Less dangerous than the tabs whose rows arrive pre-selected, but
+            // the same defect, and RefreshOnF5 is RefreshCommand (#2304).
+            //
+            // Keyed on the package FAMILY name, not the full name: the full name carries the version, so
+            // an app updating between two scans would look like a different app and silently lose the tick.
+            // The family name is what stays the same across versions.
+            Helpers.SelectionCarry.Apply(Apps, apps, a => a.PackageFamilyName, StringComparer.OrdinalIgnoreCase);
             Apps.ReplaceWith(apps);
             HasApps = apps.Count > 0;
             HasScanned = true;

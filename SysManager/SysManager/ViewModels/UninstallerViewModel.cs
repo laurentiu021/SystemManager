@@ -108,6 +108,14 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             var list = await _service.ListInstalledAsync(_cts.Token);
             foreach (var app in list)
                 app.Icon ??= IconExtractorService.FallbackIcon;
+            // Keep the user's ticks across the rescan. These rows arrive UNSELECTED, so a rescan cleared the
+            // selection rather than reversing it — the Uninstall button simply stopped doing anything until
+            // every app was ticked again. Less dangerous than the tabs whose rows arrive pre-selected, but
+            // the same defect, and RefreshOnF5 is ScanCommand (#2304).
+            //
+            // Keyed on id AND name: this list is not winget-only, and an entry discovered through the
+            // registry can have an empty id — keying on that alone would collapse every such app into one.
+            Helpers.SelectionCarry.Apply(AllApps, list, a => (a.Id, a.Name));
             AllApps.ReplaceWith(list);
 
             ApplyFilter();

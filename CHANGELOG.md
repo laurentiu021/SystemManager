@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.6] - 2026-09-14
+
+**The last three lists keep what you ticked.** Debloater, Uninstaller and App Blocker each threw your
+selection away when the list refreshed, so the Remove, Uninstall and Unblock buttons quietly stopped doing
+anything until you ticked everything again. These are the gentler half of the problem fixed over the last
+four releases — they lost your choice rather than reversing it, so nothing could act on something you had
+excluded — and with them every list in the app that acts on a tick now keeps yours.
+
+### Fixed
+
+- Ticks in Debloater survive a rescan, including when an app updated itself in between. Apps are matched by
+  the identity that stays the same across versions, so a new version does not read as a different app.
+- Ticks in Uninstaller survive a rescan. Applications that Windows reports without a package id — which is
+  most of the older ones — are matched by name as well, so they are not all treated as the same entry.
+- Ticks in App Blocker survive a refresh, matched the way Windows compares program names, so a difference in
+  capitalisation is not read as a different program.
+
 ## [1.101.5] - 2026-09-14
 
 **App Updates and Profile Export stop putting back the ticks you removed.** Both listed everything already

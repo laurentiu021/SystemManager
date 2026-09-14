@@ -68,6 +68,12 @@ public class SystemHealthMultiDriveTests
     public async Task RunChkdskOnSelected_NoneSelected_SetsMessage()
     {
         var vm = Build();
+        // Await the CONSTRUCTOR's own drive refresh, not just the explicit command. Without this the
+        // constructor's refresh could land after the deselect below and re-tick C:, and then this test —
+        // named NoneSelected — ran a real chkdsk. It did, once: 5m36s, which took the whole non-blocking
+        // integration job from ~5 minutes to 25m43s (#2300). The re-ticking is fixed in the view model;
+        // this await removes the race that made it reachable at all.
+        await vm.InitializationComplete;
         var t = vm.RefreshDrivesCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         foreach (var d in vm.ChkdskDrives) d.IsSelected = false;
@@ -75,6 +81,54 @@ public class SystemHealthMultiDriveTests
         var t2 = vm.RunChkdskOnSelectedCommand.ExecuteAsync(null);
         if (t2 is Task tt2) await tt2;
         Assert.Contains("Select", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RefreshDrives_KeepsEverythingDeselected_RatherThanReTickingC()
+    {
+        // THE regression test for #2300. RefreshDrivesAsync rebuilt the collection and hard-coded
+        // IsSelected to C: every time, and it runs on far more than first load — ScanAsync calls it and
+        // RefreshOnF5 is ScanCommand. So a user who unticked C: and pressed F5 got it silently re-ticked,
+        // and the next "Run chkdsk on selected" ran on a drive they had deselected.
+        //
+        // Deselecting everything is the case that works on any machine, including a CI runner with one
+        // drive, and it is the one that distinguishes the fix: preserving a NON-EMPTY selection looks
+        // identical to the old behaviour whenever the selection happens to be C:.
+        var vm = Build();
+        await vm.InitializationComplete;
+        Assert.NotEmpty(vm.ChkdskDrives);
+
+        foreach (var d in vm.ChkdskDrives) d.IsSelected = false;
+
+        var t = vm.RefreshDrivesCommand.ExecuteAsync(null);
+        if (t is Task tt) await tt;
+
+        Assert.NotEmpty(vm.ChkdskDrives);   // the refresh really repopulated, so this is not vacuous
+        Assert.DoesNotContain(vm.ChkdskDrives, d => d.IsSelected);
+    }
+
+    [Fact]
+    public async Task RefreshDrives_KeepsANonDefaultSelection()
+    {
+        // The other half: a tick the user placed must survive. On a single-drive runner this degenerates
+        // to "C: stays ticked", which the old code also did — so the assertion below is written to be
+        // meaningful either way by comparing against what was selected BEFORE the refresh rather than
+        // against the letter C:.
+        var vm = Build();
+        await vm.InitializationComplete;
+        Assert.NotEmpty(vm.ChkdskDrives);
+
+        // Tick the last drive and untick the rest. With one drive that is C:; with two or more it is
+        // deliberately not the default.
+        foreach (var d in vm.ChkdskDrives) d.IsSelected = false;
+        vm.ChkdskDrives[^1].IsSelected = true;
+        var chosen = vm.ChkdskDrives[^1].Letter;
+
+        var t = vm.RefreshDrivesCommand.ExecuteAsync(null);
+        if (t is Task tt) await tt;
+
+        var selected = vm.ChkdskDrives.Where(d => d.IsSelected).Select(d => d.Letter).ToList();
+        Assert.Equal([chosen], selected);
     }
 
     [Fact]

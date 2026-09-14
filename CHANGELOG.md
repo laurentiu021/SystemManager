@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.2] - 2026-09-14
+
+**System Health no longer forgets which drives you ticked.** Refreshing the page — pressing F5, or the
+Scan button — rebuilt the drive list and silently put the tick back on C:, throwing away whatever you had
+chosen. So if you unticked C: and ticked D: because D: was the one you wanted checked, then refreshed,
+"Run chkdsk on selected" ran a long disk check on C: instead. Nothing on screen said your choice had been
+discarded. Your selection now survives a refresh, including having deliberately unticked everything.
+
+### Fixed
+
+- The drive selection on System Health is preserved across a refresh. C: is still ticked by default, but
+  only the first time the list is built, when there is nothing to preserve.
+- Unticking every drive is honoured rather than treated as "nothing chosen yet" and reset to C:.
+- A drive that appears between refreshes — a USB disk plugged in — stays unticked, since it was never
+  chosen.
+
 ## [1.101.1] - 2026-09-14
 
 **A scheduled cleanup now shows up in the app's history.** Scheduled Maintenance exists to run while you

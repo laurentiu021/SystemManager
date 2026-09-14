@@ -334,7 +334,9 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Colour-coded verdict per drive
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors
 - Schedule the Windows Memory Diagnostic at next boot
-- Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select
+- Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select. C: is ticked
+  to start with, and whatever you tick after that survives a refresh — so a rescan cannot
+  quietly point a long disk check at a drive you deselected
 - **BIOS & firmware** — BIOS version/date/vendor, motherboard model, boot mode
   (UEFI/Legacy), and Secure Boot status, all read-only. A **Find BIOS update**
   button opens the right manufacturer support page (ASUS, MSI, Gigabyte, ASRock,

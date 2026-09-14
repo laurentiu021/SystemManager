@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.3] - 2026-09-14
+
+**Deep Cleanup stops undoing the unticking it asks you to do.** The scan summary says "untick anything you
+want to keep" — and then scanning again, including by pressing F5, re-ticked all of it. Your choices now
+survive a rescan. This is the same fault as the drive selection in the previous release, in the tab where
+it mattered more, since here the ticks decide what gets deleted.
+
+### Fixed
+
+- Unticking a cleanup category survives a rescan. Unticking every category survives too, rather than being
+  read as "nothing chosen yet" and reset.
+- Ticking a category that is *not* selected for you — a Windows.old folder, the blue-screen memory dumps —
+  also survives, so choosing one of those is not undone by the next refresh.
+- A category that was empty last time and has since filled up takes the default again. It was unticked by
+  the scan rather than by you, so there was no choice of yours to keep.
+
 ## [1.101.2] - 2026-09-14
 
 **System Health no longer forgets which drives you ticked.** Refreshing the page — pressing F5, or the

@@ -706,6 +706,124 @@ public class ServicesViewModelTests
             $"but found {confirms} calls to DialogService.Instance.Confirm.");
     }
 
+    // ── What else breaks (#1512) ─────────────────────────────────────────────────────────────────
+    //
+    // Nothing in the project read ServiceController.DependentServices, so the Stop prompt could only
+    // offer "This may affect system functionality" — true of every service on the machine, and
+    // therefore not a fact anyone can decide against. These tests pin the prompts that now name it.
+    //
+    // Elevation is FORCED rather than inherited: both commands return at the elevation gate before any
+    // prompt, so on a non-elevated runner every assertion below would pass having shown nothing. The
+    // safety level is set to Caution for the same reason — Critical is refused earlier still, and the
+    // ServiceEntry default IS Critical, so an entry that merely omitted the property would prove
+    // nothing. Confirm always answers false, so no service is ever really stopped or disabled.
+
+    private static List<ServiceEntry> OneServiceWith(params string[] dependents) =>
+    [
+        new()
+        {
+            Name = "Spooler", DisplayName = "Print Spooler", Status = "Running", StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.Caution, SafetyDescription = "Required for printing.",
+            DependentServices = dependents
+        }
+    ];
+
+    [Fact]
+    public async Task StopService_WithDependents_NamesWhatElseWindowsWillStop()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceWith("Windows Fax");
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.StopServiceCommand.ExecuteAsync(scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("also stop: Windows Fax", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task StopService_WithNoDependents_KeepsTheGenericSentence_AndClaimsNothingAboutOtherServices()
+    {
+        // The negative half. Inventing "also stops" for a service nothing depends on would be worse than
+        // the vague sentence it replaced, because it would be false.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceWith();
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.StopServiceCommand.ExecuteAsync(scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("may affect system functionality", StringComparison.Ordinal)
+                             && !m.Contains("also stop", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task DisableService_WithDependents_SaysTheyCannotStart_NotThatTheyStopNow()
+    {
+        // The wording distinction is the point. Disabling does not stop the service now — it stops
+        // Windows starting it — so a dependent's consequence is that it will not be able to start
+        // either. Borrowing the Stop prompt's "also stops" would describe an effect the user would not
+        // see until the next boot and then could not explain.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceWith("Windows Fax");
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("not be able to start either: Windows Fax", StringComparison.Ordinal)
+                             && !m.Contains("also stop", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task DisableService_WithNoDependents_KeepsItsOriginalSentence()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceWith();
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("prevents the service from starting automatically", StringComparison.Ordinal)
+                             && !m.Contains("not be able to start either", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Theory]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    public async Task ACriticalServiceWithDependents_IsStillRefusedBeforeAnyPrompt(string verb)
+    {
+        // Naming the dependents must not have moved the refusal. A critical service is rejected outright,
+        // before elevation and before any dialog — listing what else would break is no reason to start
+        // offering the choice.
+        using var elevated = AdminHelper.ForceElevation(true);
+        List<ServiceEntry> scanned =
+        [
+            new()
+            {
+                Name = "RpcSs", DisplayName = "Remote Procedure Call", Status = "Running",
+                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Critical,
+                SafetyDescription = "Core Windows IPC.", DependentServices = ["Windows Fax", "Print Spooler"]
+            }
+        ];
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: true);   // would proceed if it were ever asked
+
+        await ExecuteAsync(vm, verb, scanned[0]);
+
+        Assert.Equal(0, dialog.Calls);
+        Assert.Contains("cannot be", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     // ── Row marking ──────────────────────────────────────────────────────────────────────────────
     //
     // ToggleHighlightCommand and ServiceEntry.IsHighlighted shipped with the "row highlight" feature

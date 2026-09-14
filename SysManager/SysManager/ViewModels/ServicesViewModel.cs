@@ -199,8 +199,15 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Stopping services requires admin."; return; }
 
+        // Naming what else stops is the whole point of the prompt. "This may affect system
+        // functionality" is true of every service and therefore tells the user nothing they can act on;
+        // "also stops: Fax" is a fact they can decide against. Only the generic sentence is replaced —
+        // when nothing depends on this service there is nothing more honest to say (#1512).
         if (!DialogService.Instance.Confirm(
-            $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
+            entry.HasDependents
+                ? $"Stop service \"{entry.DisplayName}\"?\n\n"
+                  + $"Windows will also stop: {entry.DependentNames}."
+                : $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
             "Stop Service — Confirm")) return;
 
         try
@@ -234,8 +241,17 @@ public sealed partial class ServicesViewModel : ViewModelBase
 
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
+        // The dependents get their own sentence, worded for what disabling actually does. Disabling does
+        // not stop the service now — it stops Windows starting it — so the consequence for a dependent is
+        // that it will not be able to start either, on the next boot or the next time something asks for
+        // it. Saying "also stops" here, as the Stop prompt correctly does, would describe an effect the
+        // user would not see until they rebooted and then could not explain (#1512).
         if (!DialogService.Instance.Confirm(
-            $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
+            entry.HasDependents
+                ? $"Disable service \"{entry.DisplayName}\"?\n\n"
+                  + "This prevents the service from starting automatically. These services need it, so "
+                  + $"they will not be able to start either: {entry.DependentNames}."
+                : $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
             "Disable Service — Confirm")) return;
 
         // Snapshot the current startup type BEFORE disabling so Enable can restore the

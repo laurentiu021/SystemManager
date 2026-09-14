@@ -1147,6 +1147,10 @@ offers, "rate us" prompts:
   search — each chip shows how many services it matches, so you know before pressing it
 - Mark any row with the flag button to keep it findable while you keep filtering or
   searching. "Clear marks" removes them all, including any a filter is hiding
+- **Says what else breaks before you break it** — when other services need the one you
+  are turning off, they are named in the confirmation by their real names, so the choice
+  is "my printer will stop working" rather than "this may affect system functionality".
+  The names are on the safety pill's tooltip too, which needs no admin rights to read
 - Start, stop, disable, or enable services with confirmation dialogs
 - Requires admin for all mutations
 

@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.0] - 2026-09-14
+
+**Turning off a service now tells you what else will stop.** The prompt used to say "this may affect
+system functionality", which is true of every service on the machine and so tells you nothing you can
+decide against. When other services need the one you are switching off, they are now named in the
+confirmation by the names you would recognise — so the question becomes "my printer will stop working,
+do I want that?". The names also appear on the safety badge's tooltip, which you can read without
+administrator rights.
+
+### Added
+
+- Stop and Disable confirmations name the services that depend on the one being turned off. Each one is
+  worded for what that action actually does: stopping a service stops its dependents now, while disabling
+  it means they will not be able to start — the same sentence for both would have been wrong about one.
+- The safety badge's tooltip lists them too. The confirmation sits behind an administrator check, so
+  without this the information would have been invisible to anyone not running elevated.
+- A long list is capped at five names plus a count of the rest. A service with 25 dependents exists on an
+  ordinary install, and an unbounded list pushes a confirmation dialog's own buttons off screen.
+
+### Changed
+
+- Loading the Services tab reads each service's dependents, measured at 17 ms on top of a 167 ms scan
+  (10%). Read for every row rather than on selection because that cost does not justify the complexity.
+  The opposite direction — what a service itself needs in order to run — is deliberately not read: six
+  times the cost, for a question that would not change the decision.
+
 ## [1.100.0] - 2026-09-14
 
 **Context Menu now shows the add-ons that actually make your right-click slow.** The tab was listing

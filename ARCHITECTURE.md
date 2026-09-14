@@ -416,7 +416,11 @@ Key services:
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
-  recommendations, start/stop/disable with admin checks.
+  recommendations, start/stop/disable with admin checks. Also reads each
+  service's dependents (`ServiceController.DependentServices`, disposing the
+  handles it returns) so the stop and disable prompts can name what else
+  breaks. The opposite direction, `ServicesDependedOn`, is deliberately not
+  read: six times the cost for the question the user is not asking.
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File

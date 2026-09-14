@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// <summary>
 /// An installed Windows application as reported by winget list.
 /// </summary>
-public sealed partial class InstalledApp : ObservableObject
+public sealed partial class InstalledApp : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _name = "";

@@ -11,7 +11,7 @@ namespace SysManager.Models;
 /// <see cref="IsSelected"/> drives bulk removal; <see cref="IsProtected"/> marks
 /// system-critical packages the denylist refuses to remove (shown disabled in the UI).
 /// </summary>
-public sealed partial class StoreApp : ObservableObject
+public sealed partial class StoreApp : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "";

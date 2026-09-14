@@ -57,6 +57,13 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
 
     private void ApplyBlockedApps(IReadOnlyList<BlockedApp> apps)
     {
+        // Keep the user's ticks across the refresh. These rows arrive unselected, so a refresh cleared the
+        // selection rather than reversing it — "Unblock selected" simply stopped doing anything. Same defect
+        // as the tabs whose rows arrive pre-selected, and RefreshOnF5 is RefreshCommand (#2304).
+        //
+        // Keyed on the executable name, which IS the identity here: an IFEO block is per executable name,
+        // and the registry records nothing else. Compared case-insensitively, as Windows compares them.
+        Helpers.SelectionCarry.Apply(BlockedApps, apps, a => a.ExecutableName, StringComparer.OrdinalIgnoreCase);
         BlockedApps.ReplaceWith(apps);
         BlockedCount = BlockedApps.Count;
         BlockStatus = BlockedCount == 0

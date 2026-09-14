@@ -939,7 +939,8 @@ a confirmation before it runs:
 - Enter an exe name or browse for a file, confirm, and the app is prevented
   from launching
 - Fully reversible — unblock restores normal execution
-- Shows list of currently blocked apps with select/deselect and batch unblock
+- Shows list of currently blocked apps with select/deselect and batch unblock. Your ticks
+  survive a refresh, so the Unblock button cannot quietly stop doing anything
 - Requires admin privileges for registry modifications, in **both** directions —
   blocking and unblocking write the same protected setting, and each says so
   before asking you to confirm anything
@@ -952,6 +953,8 @@ Remove preinstalled Windows Store apps you don't use:
 - **System-critical apps are protected** — the Store, frameworks, and security/shell
   components are denylisted and can never be selected or removed
 - **Impact summary + confirmation** before anything is uninstalled
+- **Your ticks survive a rescan**, including when an app updates itself in between — apps are
+  matched by the identity that stays the same across versions
 - **Reversible** — removal is per-user, so any app can be reinstalled from the Store
 - **A Windows restore point is attempted before the first removal**, shared with the other tabs
   that change system settings. Described honestly rather than reassuringly: System Restore does
@@ -1047,7 +1050,9 @@ offers, "rate us" prompts:
 - Lists all installed applications via winget with size from registry
 - Filter by name or package ID
 - Sort by name, size, or publisher via clickable column headers
-- Select/deselect all, batch uninstall with confirmation dialog
+- Select/deselect all, batch uninstall with confirmation dialog. Ticks survive a rescan, and
+  applications Windows reports without a package id — most of the older ones — are matched by
+  name too, so they are not treated as one entry
 - Local app support — uninstalls apps not in winget via registry UninstallString
 - Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
 - Live console output from winget

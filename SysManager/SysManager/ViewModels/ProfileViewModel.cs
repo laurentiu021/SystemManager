@@ -77,17 +77,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
     internal static void CarryForwardSelection(
         IReadOnlyCollection<SelectableSection> previous, IReadOnlyCollection<SelectableSection> fresh)
     {
-        if (previous.Count == 0) return;
-
-        var decided = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var s in previous)
-            decided[s.Section.Key] = s.IsSelected;
-
-        foreach (var s in fresh)
-        {
-            if (decided.TryGetValue(s.Section.Key, out var wasSelected))
-                s.IsSelected = wasSelected;
-        }
+        Helpers.SelectionCarry.Apply(previous, fresh, s => s.Section.Key, StringComparer.Ordinal);
     }
 
     [RelayCommand]
@@ -181,7 +171,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
 }
 
 /// <summary>A config section paired with a checkbox state for selective export.</summary>
-public sealed partial class SelectableSection : ObservableObject
+public sealed partial class SelectableSection : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected = true;
 

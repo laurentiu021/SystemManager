@@ -72,17 +72,7 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
     internal static void CarryForwardSelection(
         IReadOnlyCollection<BrowserCleanupItem> previous, IReadOnlyCollection<BrowserCleanupItem> fresh)
     {
-        if (previous.Count == 0) return;
-
-        var decided = new Dictionary<(string Browser, string Category), bool>();
-        foreach (var item in previous)
-            decided[(item.Browser, item.Category)] = item.IsSelected;
-
-        foreach (var item in fresh)
-        {
-            if (decided.TryGetValue((item.Browser, item.Category), out var wasSelected))
-                item.IsSelected = wasSelected;
-        }
+        Helpers.SelectionCarry.Apply(previous, fresh, i => (i.Browser, i.Category));
     }
 
     private void OnItemSelectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

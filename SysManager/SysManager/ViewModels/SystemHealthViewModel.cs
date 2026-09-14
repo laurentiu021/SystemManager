@@ -157,24 +157,15 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         {
             var list = await _drives.EnumerateAsync();
 
-            // Carry the user's ticks across the rebuild. This used to hard-code IsSelected to C: every
-            // time, and this method runs on far more than first load: ScanAsync calls it, and
-            // RefreshOnF5 is ScanCommand. So ticking D:, pressing F5 and then "Run chkdsk on selected"
-            // ran chkdsk on C: — a long, disk-saturating operation on a drive the user had deselected,
-            // with nothing on screen saying their choice had been discarded (#2300).
+            // Built with the DEFAULT tick, then the user's own ticks are carried over it. This method used
+            // to hard-code the selection to C: every time, and it runs on far more than first load:
+            // ScanAsync calls it, and RefreshOnF5 is ScanCommand. So ticking D:, pressing F5 and then "Run
+            // chkdsk on selected" ran chkdsk on C: — a long, disk-saturating operation on a drive the user
+            // had deselected, with nothing on screen saying their choice had been discarded (#2300).
             //
-            // Null means "nothing to preserve yet", i.e. the first population, which is the only time C:
-            // is the answer. An EMPTY set is different and must be honoured: it means the user
-            // deliberately unticked everything, and re-ticking C: for them is the bug itself. Testing
-            // `Any(d => d.IsSelected)` instead of the collection being empty would collapse those two
-            // cases back together.
-            var keep = ChkdskDrives.Count == 0
-                ? null
-                : ChkdskDrives.Where(d => d.IsSelected)
-                              .Select(d => d.Letter)
-                              .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            ChkdskDrives.ReplaceWith(list.Select(d => new DriveTarget
+            // A drive that appeared since the last refresh (a USB disk plugged in) is not in the previous
+            // list, so it keeps the default — the user never chose it either way.
+            var fresh = list.Select(d => new DriveTarget
             {
                 Letter = d.Letter,
                 Label = d.Label,
@@ -183,13 +174,12 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
                 FreeGB = d.FreeGB,
                 MediaType = d.MediaType,
                 BusType = d.BusType,
-                // A drive that appeared since the last refresh (a USB disk plugged in) stays unticked:
-                // the user never chose it.
-                IsSelected = keep is null
-                    ? string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase)
-                    : keep.Contains(d.Letter),
+                IsSelected = string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase),
                 Status = "Idle"
-            }));
+            }).ToList();
+
+            Helpers.SelectionCarry.Apply(ChkdskDrives, fresh, d => d.Letter, StringComparer.OrdinalIgnoreCase);
+            ChkdskDrives.ReplaceWith(fresh);
         }
         catch (IOException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Drive enumeration failed: {ex.Message}"; }
@@ -429,7 +419,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
 /// A fixed drive shown in the chkdsk selector. Mutable so the UI can reflect
 /// live status ("Running...", "OK", "Error") as scans progress.
 /// </summary>
-public sealed partial class DriveTarget : ObservableObject
+public sealed partial class DriveTarget : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private string _status = "Idle";

@@ -12,7 +12,7 @@ namespace SysManager.Models;
 /// One bucket of safe-to-delete files, shown as a selectable row in the
 /// Deep Cleanup view. Mutable so checkbox state can two-way bind.
 /// </summary>
-public sealed partial class CleanupCategory : ObservableObject
+public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected;
 

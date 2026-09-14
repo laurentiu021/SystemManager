@@ -9,7 +9,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents a .lnk shortcut whose target no longer exists.
 /// </summary>
-public sealed partial class BrokenShortcut : ObservableObject
+public sealed partial class BrokenShortcut : ObservableObject, Helpers.ISelectableRow
 {
     /// <summary>Display name of the shortcut (without .lnk extension).</summary>
     [ObservableProperty] private string _name = "";

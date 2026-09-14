@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.4] - 2026-09-14
+
+**Shortcut Cleaner and Browser Cleaner stop putting back the ticks you removed.** Both list everything
+already ticked, so unticking is how you say "leave this alone" — and scanning again, including with F5, put
+every tick back. The next Delete then removed exactly what you had chosen to keep. Browser Cleaner was
+wrong the other way too: ticking cookies or sessions is a deliberate choice to be signed out, and a rescan
+quietly took it back. This is the same fault as the last two releases, found by checking every other list
+in the app rather than waiting for it to be reported.
+
+### Fixed
+
+- Unticking a broken shortcut survives a rescan, including unticking all of them. Matching ignores letter
+  case, so a shortcut listed with different capitalisation is not mistaken for a new one and re-ticked.
+- Unticking browser cache or history survives a rescan, and so does ticking cookies or sessions. The same
+  category in two browsers is tracked separately, so a choice made for Chrome does not move to Edge.
+- Browser Cleaner's summary only promises to keep you signed in when that is actually true. Now that
+  ticking cookies survives, repeating that reassurance would have told you the opposite of what was about
+  to happen — it now says you will be signed out of those browsers instead.
+
 ## [1.101.3] - 2026-09-14
 
 **Deep Cleanup stops undoing the unticking it asks you to do.** The scan summary says "untick anything you

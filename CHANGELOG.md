@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.1] - 2026-09-14
+
+**A scheduled cleanup now shows up in the app's history.** Scheduled Maintenance exists to run while you
+are not watching — and that was the problem: it ran, deleted temporary files, and SysManager's own recent
+activity had nothing to say it had ever happened. The same cleanup started from the button had always been
+recorded. Both actions a schedule can run now appear in the history, marked as having come from the
+command line, so "did my weekly cleanup actually run, and did it find anything?" is answerable by opening
+the app.
+
+### Fixed
+
+- Temp cleanup and standby-memory purge run from the command line — which is how Scheduled Maintenance
+  runs them — are recorded in the activity history, with how much was freed. They previously left no
+  trace, while the same two operations started from their buttons were both recorded.
+- The history entry uses the same name as the button version, so the list still reads by what was done
+  rather than splitting one operation into two kinds of entry; where it came from is in the detail line.
+- The read-only health score deliberately records nothing. It changes nothing, and a script polling it
+  would push all 60 entries out of a history whose whole purpose is to be the record of what the app
+  changed.
+
 ## [1.101.0] - 2026-09-14
 
 **Turning off a service now tells you what else will stop.** The prompt used to say "this may affect

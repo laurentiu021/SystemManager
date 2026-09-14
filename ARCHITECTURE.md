@@ -715,7 +715,12 @@ Key services:
   with `--json`/`--silent` modifiers and conventional exit codes (0/1/2). `Parse` and
   `ExecuteAsync` are pure/return-value-based, so the whole CLI is unit-tested without
   launching the process; `IsCliInvocation` is strict so the elevation/update-applier args
-  never trigger CLI mode.
+  never trigger CLI mode. The two MUTATING verbs write to `ActivityLogService` on success,
+  under the same action names the GUI uses, with the command-line origin in the detail — so
+  an unattended scheduled run is visible in the app's own history. `--health` deliberately
+  does not: it changes nothing, and polling it would evict the 60-entry history that is the
+  only record of what the app changed. `OnlyTheMutatingCliVerbs_RecordAHeadlessRun` pins both
+  halves.
 - `MaintenanceSchedulerService` — registers/reads/removes a single SysManager-owned Windows
   scheduled task (`\SysManager\Scheduled Maintenance`) that launches the app's own exe with a
   whitelisted CLI verb on a daily/weekly trigger, via the `ScheduledTasks` module through the

@@ -32,6 +32,41 @@ public sealed partial class ContextMenuService : IContextMenuService
     };
 
     /// <summary>
+    /// Where COM shell extensions register, which is nowhere near where verbs do.
+    /// </summary>
+    /// <remarks>
+    /// Six roots rather than the four above: <c>Folder</c> and <c>AllFilesystemObjects</c> carry handlers
+    /// but no verbs worth listing, and they are where a lot of the real noise lives — Folder is what most
+    /// archive and sync tools hook.
+    /// <para>This is the half of the tab that was invisible. The four verb roots are the small tidy half;
+    /// the complaint that the menu takes seconds to open is caused almost entirely by handlers, because
+    /// each one is a DLL Explorer has to load and ask before it can draw the menu (#1510).</para>
+    /// </remarks>
+    private static readonly (string SubKey, string Location)[] ShellExLocations =
+    {
+        (@"*\shellex\ContextMenuHandlers",                    "Files"),
+        (@"Directory\shellex\ContextMenuHandlers",            "Folders"),
+        (@"Directory\Background\shellex\ContextMenuHandlers", "Directory Background"),
+        (@"DesktopBackground\shellex\ContextMenuHandlers",    "Desktop"),
+        (@"Folder\shellex\ContextMenuHandlers",               "Folders"),
+        (@"AllFilesystemObjects\shellex\ContextMenuHandlers", "Files and folders"),
+    };
+
+    /// <summary>
+    /// Stands in for <c>HKEY_CLASSES_ROOT</c> so the scan can be pointed at a disposable test hive.
+    /// </summary>
+    /// <remarks>
+    /// The reads used <c>Registry.ClassesRoot</c> directly, which made every one of them untestable —
+    /// a test could only assert against whatever the developer's machine happened to have installed.
+    /// Same seam, and the same reason, as <c>AppBlockerService</c>'s injectable root.
+    /// </remarks>
+    private readonly RegistryKey _classesRoot;
+
+    /// <summary>Reads from <c>HKEY_CLASSES_ROOT</c> unless handed somewhere else to read from.</summary>
+    public ContextMenuService(RegistryKey? classesRoot = null) =>
+        _classesRoot = classesRoot ?? Registry.ClassesRoot;
+
+    /// <summary>
     /// Scans all known registry shell locations and returns discovered
     /// context menu entries with their enabled/disabled state.
     /// </summary>
@@ -43,7 +78,7 @@ public sealed partial class ContextMenuService : IContextMenuService
         {
             try
             {
-                using var shellKey = Registry.ClassesRoot.OpenSubKey(subKey, writable: false);
+                using var shellKey = _classesRoot.OpenSubKey(subKey, writable: false);
                 if (shellKey is null) continue;
 
                 foreach (var entryName in shellKey.GetSubKeyNames())
@@ -117,7 +152,158 @@ public sealed partial class ContextMenuService : IContextMenuService
             }
         }
 
+        entries.AddRange(ScanShellExtensions());
         return entries;
+    }
+
+    /// <summary>
+    /// Reads the COM shell extensions registered under <c>shellex\ContextMenuHandlers</c>.
+    /// </summary>
+    /// <remarks>
+    /// A handler registers as a CLSID, so the subkey name is usually meaningless to a reader — either a
+    /// GUID or a vendor's internal label. The name people would recognise lives in
+    /// <c>HKCR\CLSID\{guid}</c>, and the program it belongs to is derivable from that class's
+    /// <c>InprocServer32</c> DLL. Both are resolved here so a row reads "7-Zip Shell Extension" with a
+    /// source, rather than a GUID.
+    /// <para>De-duplicated by CLSID+location: the same handler is commonly registered under several roots
+    /// (Directory and Folder both, typically), and listing it three times would make the tab look worse
+    /// than the problem it is describing.</para>
+    /// </remarks>
+    private List<ContextMenuEntry> ScanShellExtensions()
+    {
+        List<ContextMenuEntry> handlers = [];
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (subKey, location) in ShellExLocations)
+        {
+            try
+            {
+                using var root = _classesRoot.OpenSubKey(subKey, writable: false);
+                if (root is null) continue;
+
+                foreach (var handlerName in root.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var handlerKey = root.OpenSubKey(handlerName, writable: false);
+                        if (handlerKey is null) continue;
+
+                        // The CLSID is the key's (Default) value; some registrations instead USE the CLSID
+                        // as the key name, so fall back to that.
+                        var clsid = handlerKey.GetValue("")?.ToString();
+                        if (string.IsNullOrWhiteSpace(clsid)) clsid = handlerName;
+                        clsid = clsid.Trim();
+
+                        if (!ClsidPattern().IsMatch(clsid))
+                        {
+                            Log.Debug("Skipping shell extension with no usable CLSID: {Root}\\{Name}", subKey, handlerName);
+                            continue;
+                        }
+
+                        if (!seen.Add(clsid + "|" + location)) continue;
+
+                        var (friendly, dll) = ResolveClsid(clsid);
+                        var displayName = !string.IsNullOrWhiteSpace(friendly) ? friendly
+                            : !string.IsNullOrWhiteSpace(handlerName) && !ClsidPattern().IsMatch(handlerName) ? handlerName
+                            : clsid;
+
+                        handlers.Add(new ContextMenuEntry
+                        {
+                            Kind = ContextMenuEntryKind.Handler,
+                            Clsid = clsid,
+                            Name = displayName,
+                            RawName = handlerName,
+                            Command = dll,
+                            RegistryPath = $@"HKCR\{subKey}\{handlerName}",
+                            Location = location,
+                            Source = ExtractSourceFromPath(dll),
+                            // Blocked-list state is machine-wide and is not read yet, so every handler
+                            // reports as active. That is honest for the common case — a handler on the
+                            // Blocked list is rare — and the row's switch is disabled either way.
+                            IsEnabled = true,
+                            IsSystemEntry = false,
+                            Explanation = HandlerExplanation(dll)
+                        });
+                    }
+                    catch (SecurityException ex) { Log.Debug("Shell extension inaccessible {Name}: {Error}", handlerName, ex.Message); }
+                    catch (UnauthorizedAccessException ex) { Log.Debug("Shell extension access denied {Name}: {Error}", handlerName, ex.Message); }
+                    catch (IOException ex) { Log.Debug("Shell extension I/O error {Name}: {Error}", handlerName, ex.Message); }
+                }
+            }
+            catch (SecurityException ex) { Log.Debug("shellex key inaccessible {Key}: {Error}", subKey, ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Debug("shellex key access denied {Key}: {Error}", subKey, ex.Message); }
+            catch (IOException ex) { Log.Debug("shellex key I/O error {Key}: {Error}", subKey, ex.Message); }
+        }
+
+        return handlers;
+    }
+
+    /// <summary>
+    /// Turns a CLSID into the name a person would recognise and the DLL that implements it.
+    /// </summary>
+    /// <remarks>
+    /// Returns empty strings rather than throwing when the class is not registered, which happens for
+    /// real: an uninstaller that removes its DLL and its CLSID registration but leaves the
+    /// <c>ContextMenuHandlers</c> entry behind is exactly the kind of leftover this tab should show.
+    /// </remarks>
+    internal (string Friendly, string Dll) ResolveClsid(string clsid)
+    {
+        try
+        {
+            using var clsidKey = _classesRoot.OpenSubKey($@"CLSID\{clsid}", writable: false);
+            if (clsidKey is null) return ("", "");
+
+            var friendly = clsidKey.GetValue("")?.ToString() ?? "";
+
+            var dll = "";
+            foreach (var server in (string[])["InprocServer32", "LocalServer32"])
+            {
+                using var serverKey = clsidKey.OpenSubKey(server, writable: false);
+                var path = serverKey?.GetValue("")?.ToString();
+                if (!string.IsNullOrWhiteSpace(path)) { dll = path.Trim('"'); break; }
+            }
+
+            return (friendly.Trim(), dll);
+        }
+        catch (SecurityException) { return ("", ""); }
+        catch (UnauthorizedAccessException) { return ("", ""); }
+        catch (IOException) { return ("", ""); }
+    }
+
+    /// <summary>Plain-language line for a handler row, since it has no command to describe.</summary>
+    private static string HandlerExplanation(string dll) =>
+        string.IsNullOrWhiteSpace(dll)
+            ? "An add-on registered by a program that is no longer installed, or whose file is missing. "
+              + "Explorer still looks for it every time you right-click."
+            : "An add-on from another program that adds its own items to the right-click menu. Explorer "
+              + "loads it and waits for it before the menu appears, so several of these make the menu slow.";
+
+    // A registry CLSID: {8-4-4-4-12} hex, braces required. Anchored, because a handler key name is
+    // attacker-influenced in the same way the verb names are (HKCR merges HKCU\Software\Classes).
+    [GeneratedRegex(@"\A\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}\z",
+                    RegexOptions.Compiled)]
+    private static partial Regex ClsidPattern();
+
+    /// <summary>
+    /// Whether <c>LegacyDisable</c> is the mechanism that hides this row, refusing and logging when it
+    /// is not.
+    /// </summary>
+    /// <remarks>
+    /// Explorer honours <c>LegacyDisable</c> on a verb key only. Written onto a
+    /// <c>shellex\ContextMenuHandlers</c> key it SUCCEEDS — that key is usually writable — and changes
+    /// nothing. Without this refusal the tab would report handlers as disabled, leave a junk value in
+    /// each one, and the menu would open exactly as slowly as before: a worse outcome than not offering
+    /// the toggle at all. Hiding a handler needs the machine-wide Blocked list, a separate admin-gated
+    /// change (#1510 stage 2).
+    /// <para>The row's switch is already disabled through <c>CanToggle</c>, so this is not the only
+    /// guard — but the preset path reaches these methods without going through a switch, so the refusal
+    /// belongs where the write is.</para>
+    /// </remarks>
+    private static bool CanBeHiddenByLegacyDisable(ContextMenuEntry entry)
+    {
+        if (entry.Kind != ContextMenuEntryKind.Handler) return true;
+        Log.Debug("Refused LegacyDisable on handler {Name} ({Clsid}) — Explorer ignores it there", entry.Name, entry.Clsid);
+        return false;
     }
 
     /// <summary>
@@ -128,6 +314,8 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </summary>
     public bool DisableEntry(ContextMenuEntry entry)
     {
+        if (!CanBeHiddenByLegacyDisable(entry)) return false;
+
         try
         {
             BackupRegistry(entry.RegistryPath);
@@ -168,6 +356,8 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </summary>
     public bool EnableEntry(ContextMenuEntry entry)
     {
+        if (!CanBeHiddenByLegacyDisable(entry)) return false;
+
         try
         {
             BackupRegistry(entry.RegistryPath);
@@ -750,17 +940,56 @@ public sealed partial class ContextMenuService : IContextMenuService
             if (spaceIdx > 0 && !File.Exists(path))
                 path = path[..spaceIdx].Trim('"');
 
-            if (File.Exists(path))
-            {
-                var vi = FileVersionInfo.GetVersionInfo(path);
-                if (!string.IsNullOrWhiteSpace(vi.ProductName))
-                    return vi.ProductName;
-                if (!string.IsNullOrWhiteSpace(vi.CompanyName))
-                    return vi.CompanyName;
-            }
+            return DescribeFile(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
+        {
+            return "";
+        }
+    }
 
-            // Fall back to filename without extension
-            return Path.GetFileNameWithoutExtension(path);
+    /// <summary>
+    /// Names the program a file belongs to, preferring its product then its company name, and falling
+    /// back to the bare file name when the file is not there to ask.
+    /// </summary>
+    private static string DescribeFile(string path)
+    {
+        if (File.Exists(path))
+        {
+            var vi = FileVersionInfo.GetVersionInfo(path);
+            if (!string.IsNullOrWhiteSpace(vi.ProductName))
+                return vi.ProductName;
+            if (!string.IsNullOrWhiteSpace(vi.CompanyName))
+                return vi.CompanyName;
+        }
+
+        return Path.GetFileNameWithoutExtension(path);
+    }
+
+    /// <summary>
+    /// Source for a handler, whose registration is a bare DLL path rather than a command line.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT <see cref="ExtractSource"/>. That one truncates at the first space because a
+    /// verb's registration is <c>"C:\…\app.exe" "%1"</c> and everything past the executable is arguments.
+    /// A shell extension's <c>InprocServer32</c> value is a path and nothing else, so the same rule turns
+    /// <c>C:\Program Files\Vendor\ext.dll</c> into "Program".
+    /// <para>It only truncates when the file is MISSING — the split is guarded by
+    /// <c>!File.Exists</c> — so an installed extension came out right either way. The rows it ruined are
+    /// precisely the ones this list exists to surface: an add-on left behind by an uninstalled program,
+    /// which is where a readable name matters most because there is no running program to recognise it
+    /// by.</para>
+    /// <para>Environment variables are expanded because system handlers register as
+    /// <c>%SystemRoot%\system32\…</c>. Unexpanded, the path never matches a file, so those rows fell back
+    /// to a bare file name instead of naming Windows as the source.</para>
+    /// </remarks>
+    private static string ExtractSourceFromPath(string dllPath)
+    {
+        if (string.IsNullOrWhiteSpace(dllPath)) return "";
+
+        try
+        {
+            return DescribeFile(Environment.ExpandEnvironmentVariables(dllPath.Trim('"', ' ')));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
         {

@@ -248,7 +248,16 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
 - **Win10/Win11 style toggle** — switch between classic and modern menu (restarts Explorer)
 - **Visual preview on hover** — real screenshots of each menu style
 - **Entry explanations** — human-readable descriptions for common entries
-- **"Applies to" column** — shows whether entry affects Files, Folders, Desktop, or Directory Background
+- **Add-ons listed too** — the COM shell extensions that programs like archivers, cloud sync
+  clients and antivirus install are shown alongside the plain menu entries. These are the ones
+  that make a right-click take a second to open, because Explorer loads each add-on's DLL and
+  waits for it before drawing the menu. A **"Type" column** says which kind each row is, and an
+  add-on's row names the program behind it instead of the raw class id
+- **Add-ons are read-only for now** — hiding one needs a machine-wide setting SysManager does not
+  write yet, so its switch is plainly disabled rather than moving without effect. Uninstalling the
+  program that added it removes it
+- **"Applies to" column** — shows whether the entry affects Files, Folders, Files and folders,
+  Desktop, or Directory Background
 - **HKCU fallback** — system-protected entries can be toggled via user-level registry override
 - Admin elevation banner with one-click restart as administrator
 

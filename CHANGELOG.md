@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.101.5] - 2026-09-14
+
+**App Updates and Profile Export stop putting back the ticks you removed.** Both listed everything already
+ticked, so unticking was how you said "not this one" — and refreshing put every tick back. In App Updates
+that meant the next Upgrade installed a package you had excluded; in Profile Export it meant a section you
+had left out went into the file anyway. This completes the sweep started two releases ago: every list in the
+app that can act on a tick now keeps yours.
+
+### Fixed
+
+- Unticking a package in App Updates survives a rescan, including when the rescan finds a newer version on
+  offer — "don't upgrade this one" does not stop being true because the version changed.
+- Unticking a section in Profile Export survives a refresh, so an excluded section cannot reappear in the
+  exported file or in what an import applies.
+- In both, unticking everything survives too, rather than being read as "nothing chosen yet" and reset.
+- A package or section that appears only after the refresh is ticked as normal, since there was no earlier
+  choice about it to keep.
+
 ## [1.101.4] - 2026-09-14
 
 **Shortcut Cleaner and Browser Cleaner stop putting back the ticks you removed.** Both list everything

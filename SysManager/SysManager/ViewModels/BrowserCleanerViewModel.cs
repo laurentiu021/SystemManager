@@ -54,6 +54,37 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Copies the user's ticks from the previous scan onto a fresh set, matched by browser and category.
+    /// </summary>
+    /// <remarks>
+    /// The scan pre-selects everything that is not sensitive, so a rescan was wrong in BOTH directions:
+    /// cache and history the user unticked came back ticked and would then be deleted, and a cookie or
+    /// session category they deliberately ticked — an explicit choice to be signed out — was silently
+    /// un-ticked again. <c>RefreshOnF5</c> is <c>ScanCommand</c>, so pressing F5 was enough (#2304).
+    /// <para>An empty <paramref name="previous"/> is the first scan. A previous list that is present with
+    /// nothing selected is a decision and is honoured, which is why this tests the collection being empty
+    /// rather than whether anything in it is selected.</para>
+    /// <para>Browser plus category is the identity: a browser has at most one row per category, and both
+    /// are required on the model, so the key is always present. A category that appeared since the last
+    /// scan — a browser installed in between — keeps the scan's default.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<BrowserCleanupItem> previous, IReadOnlyCollection<BrowserCleanupItem> fresh)
+    {
+        if (previous.Count == 0) return;
+
+        var decided = new Dictionary<(string Browser, string Category), bool>();
+        foreach (var item in previous)
+            decided[(item.Browser, item.Category)] = item.IsSelected;
+
+        foreach (var item in fresh)
+        {
+            if (decided.TryGetValue((item.Browser, item.Category), out var wasSelected))
+                item.IsSelected = wasSelected;
+        }
+    }
+
     private void OnItemSelectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(BrowserCleanupItem.IsSelected)) UpdateSelectedTotal();
@@ -71,20 +102,35 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed browsers…";
+        // Snapshot the user's ticks before the rebuild replaces every item.
+        var previous = Items.ToList();
+
         foreach (var old in Items) old.PropertyChanged -= OnItemSelectionChanged;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         try
         {
             var items = await _service.ScanAsync(_cts.Token).ConfigureAwait(true);
+
+            // Applied before subscribing, so restoring a tick does not fire a selection-changed
+            // notification for state the user has not just changed.
+            CarryForwardSelection(previous, items);
+
             Items.ReplaceWith(items);
             foreach (var i in Items) i.PropertyChanged += OnItemSelectionChanged;
             HasItems = Items.Count > 0;
             UpdateSelectedTotal();
             var total = FormatHelper.FormatSize(Items.Sum(i => i.SizeBytes));
+            // The reassurance about cookies is only stated when it is TRUE. Now that a deliberate tick on a
+            // sensitive category survives a rescan, printing it unconditionally would tell a user who had
+            // opted into being signed out the opposite of what is about to happen.
+            var signInSafe = !Items.Any(i => i.IsSensitive && i.IsSelected);
             StatusMessage = Items.Count == 0
                 ? "No cleanable browser data found."
-                : $"Found {Items.Count} categories across your browsers — {total} total. Cookies and sessions are left unticked to keep you signed in.";
+                : $"Found {Items.Count} categories across your browsers — {total} total."
+                  + (signInSafe
+                      ? " Cookies and sessions are left unticked to keep you signed in."
+                      : " You have ticked cookies or sessions, so cleaning will sign you out of those browsers.");
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         finally

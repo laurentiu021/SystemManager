@@ -771,7 +771,8 @@ a confirmation before it runs:
 - Lists results with name, location, and missing target path
 - **Export CSV** saves the list before you delete anything, naming both the shortcut and its
   missing target, so the change is reviewable rather than a batch of deletions nobody can audit
-- Select all / deselect individual items
+- Select all / deselect individual items — and **unticking one survives a rescan**, so
+  scanning again cannot quietly put back a shortcut you decided to keep
 - Move to Recycle Bin or permanent delete, with confirmation dialog
 - COM-based IShellLink resolution for accurate target validation
 
@@ -965,6 +966,9 @@ Reclaim space and clear browsing traces, per browser:
 - **Per-category** with size shown: Cache, History, Cookies, Sessions
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected
+- **Your ticks survive a rescan, in both directions** — unticking cache or history is not
+  put back, and ticking cookies or sessions is not taken away. If you have opted into
+  signing out, the summary says so instead of repeating the reassurance that you have not
 - **Firefox gets cache, cookies and sessions — but not history, on purpose.** Firefox
   keeps history and your bookmarks in the same file (`places.sqlite`), so clearing
   "history" would delete your bookmarks with it. Rather than do that quietly, the tab

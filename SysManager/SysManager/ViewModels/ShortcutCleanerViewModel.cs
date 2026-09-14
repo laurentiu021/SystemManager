@@ -69,6 +69,11 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         IsScanning = true;
         IsBusy = true;
         IsProgressIndeterminate = true;
+
+        // Snapshot what the user chose BEFORE the list is emptied below — after that there is nothing left
+        // to read it from.
+        var previous = BrokenShortcuts.ToList();
+
         // MEM-007: Unsubscribe from old items before clearing to prevent
         // PropertyChanged lambda leaks across rescans.
         foreach (var old in BrokenShortcuts)
@@ -84,6 +89,10 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         {
             var progress = new Progress<string>(msg => CurrentLocation = msg);
             var results = await _service.ScanAsync(progress, _cts.Token);
+
+            // Applied before subscribing, so re-applying a tick the user set earlier does not fire a
+            // change notification for state they have not just changed.
+            CarryForwardSelection(previous, results);
 
             foreach (var s in results)
                 s.PropertyChanged += OnShortcutPropertyChanged;
@@ -172,6 +181,39 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();
+
+    /// <summary>
+    /// Copies the user's ticks from the previous scan onto a fresh set of results, matched by shortcut path.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="BrokenShortcut"/> is selected by DEFAULT, so a rescan did not merely forget the user's
+    /// choice — it reversed it. Every shortcut they unticked in order to keep came back ticked, and "Delete
+    /// selected" then deleted it. <c>RefreshOnF5</c> is <c>ScanCommand</c>, so pressing F5 was enough
+    /// (#2304).
+    /// <para>An empty <paramref name="previous"/> is the first scan, the only time the default is the
+    /// answer. A previous list that is present but has nothing selected is a DECISION — the user unticked
+    /// everything — and honouring it is the whole point, which is why this tests the collection being empty
+    /// rather than whether anything in it is selected.</para>
+    /// <para>Unlike Deep Cleanup's equivalent there is no size clause, because the default here is a model
+    /// constant rather than something measured: every broken shortcut the scan finds is equally a candidate,
+    /// so any tick state it carried was the user's.</para>
+    /// <para>A shortcut that broke since the last scan is not in the map and keeps the default.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<BrokenShortcut> previous, IReadOnlyCollection<BrokenShortcut> fresh)
+    {
+        if (previous.Count == 0) return;
+
+        var decided = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in previous)
+            decided[s.ShortcutPath] = s.IsSelected;
+
+        foreach (var s in fresh)
+        {
+            if (decided.TryGetValue(s.ShortcutPath, out var wasSelected))
+                s.IsSelected = wasSelected;
+        }
+    }
 
     private void OnShortcutPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

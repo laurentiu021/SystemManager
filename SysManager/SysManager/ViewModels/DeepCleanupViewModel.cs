@@ -152,6 +152,48 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     }
     partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
 
+    /// <summary>
+    /// Copies the ticks the user set onto a freshly scanned set of categories, so a rescan does not throw
+    /// their choices away.
+    /// </summary>
+    /// <remarks>
+    /// Categories arrive from the service pre-selected (<c>size &gt; 0 &amp;&amp; !IsDestructiveHint</c>)
+    /// and the view model replaces the whole collection, so a rescan silently re-ticked everything the
+    /// user had unticked — immediately after the scan summary told them to "untick anything you want to
+    /// keep". <c>RefreshOnF5</c> is <c>ScanCommand</c>, so pressing F5 was enough to undo their choice
+    /// (#2301).
+    /// <para>An empty <paramref name="previous"/> is the FIRST scan, the only time the service's default
+    /// is the answer.</para>
+    /// <para>Only categories that HAD something in them carry forward, and that is the load-bearing
+    /// detail: an empty category was unticked by the SCAN, not by the user, so there is no decision to
+    /// preserve — and if it has content now, the default should apply again. Carrying every category
+    /// forward regardless would leave one that filled up since the last scan permanently unticked, for a
+    /// choice its owner never made.</para>
+    /// <para>Note what this deliberately does NOT key on: whether anything is currently selected. A user
+    /// who unticked every category has made a decision, and reading that as "nothing chosen yet" would
+    /// re-tick the lot — which is the bug itself. The same reasoning produced the drive-selection fix in
+    /// <c>SystemHealthViewModel</c> (#2300); that one needs no size clause only because a drive's default
+    /// is structural (C:) rather than measured.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<CleanupCategory> previous, IReadOnlyCollection<CleanupCategory> fresh)
+    {
+        if (previous.Count == 0) return;
+
+        var decided = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var c in previous)
+        {
+            if (c.TotalSizeBytes > 0)
+                decided[c.Name] = c.IsSelected;
+        }
+
+        foreach (var c in fresh)
+        {
+            if (decided.TryGetValue(c.Name, out var wasSelected))
+                c.IsSelected = wasSelected;
+        }
+    }
+
     private void OnCategoryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(CleanupCategory.IsSelected))
@@ -217,11 +259,23 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             });
             var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
 
+            // Carry the user's ticks across the rescan. Categories arrive pre-selected from the service
+            // (size > 0 && !IsDestructiveHint) and ReplaceWith throws the old ones away, so a rescan
+            // silently re-ticked everything the user had unticked — immediately after the summary below
+            // told them to "untick anything you want to keep". RefreshOnF5 is ScanCommand, so pressing F5
+            // was enough to undo their choice (#2301).
+            //
+            var catList = cats.ToList();
+
+            // Applied BEFORE the new categories are subscribed, so re-applying a tick the user set
+            // earlier does not fire a burst of change notifications for state they have not just changed —
+            // and before ReplaceWith, which is what makes the previous ticks readable at all.
+            CarryForwardSelection(Categories, catList);
+
             // MEM-006: Unsubscribe from old categories before clearing to prevent
             // PropertyChanged lambda leaks across rescans.
             foreach (var old in Categories)
                 old.PropertyChanged -= OnCategoryPropertyChanged;
-            var catList = cats.ToList();
             foreach (var c in catList)
                 c.PropertyChanged += OnCategoryPropertyChanged;
             Categories.ReplaceWith(catList);

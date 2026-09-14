@@ -473,6 +473,11 @@ a confirmation before it runs:
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
   before a single byte is deleted. You pick what goes.
+- **What you untick stays unticked.** Scanning again — including with F5 — keeps your
+  choices instead of re-ticking everything, so the tab cannot quietly undo the "untick
+  anything you want to keep" it just asked you for. A category that was empty last time
+  and has filled up since is the one exception: it was unticked by the scan rather than
+  by you, so it takes the default again
 - **Says when administrator rights are what's stopping it.** Six of the buckets live in
   the Windows folder — the Windows Update download cache, Delivery Optimization, the
   Installer patch cache, `Windows\Temp`, Prefetch and the blue-screen memory dumps — and

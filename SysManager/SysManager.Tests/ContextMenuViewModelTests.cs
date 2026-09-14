@@ -36,9 +36,11 @@ public class ContextMenuViewModelTests
         Assert.Contains("All", vm.LocationFilters);
         Assert.Contains("Files", vm.LocationFilters);
         Assert.Contains("Folders", vm.LocationFilters);
+        // AllFilesystemObjects shell extensions apply to both, and say so (#1510).
+        Assert.Contains("Files and folders", vm.LocationFilters);
         Assert.Contains("Directory Background", vm.LocationFilters);
         Assert.Contains("Desktop", vm.LocationFilters);
-        Assert.Equal(5, vm.LocationFilters.Count);
+        Assert.Equal(6, vm.LocationFilters.Count);
     }
 
     [Fact]

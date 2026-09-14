@@ -228,12 +228,27 @@
                     <DataGridTemplateColumn Header="" Width="62" MinWidth="62" CanUserResize="False" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <ToggleButton Style="{StaticResource ToggleSwitch}"
-                                              IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                <!-- IsEnabled bound to CanToggle, which is false for handler rows: hiding a
+                                     handler writes the machine-wide Blocked list, and that path is not wired
+                                     yet (#1510). A switch that moves and changes nothing is worse than one
+                                     that plainly cannot move, and the tooltip says which case this is. -->
+                                <ToggleButton IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanToggle}"
                                               Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               CommandParameter="{Binding}"
                                               AutomationProperties.Name="{Binding Name, StringFormat='Toggle {0}'}"
-                                              VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                              VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleSwitch}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CanToggle}" Value="False">
+                                                    <Setter Property="ToolTip"
+                                                            Value="Hiding an add-on is not available yet — it needs a machine-wide setting SysManager does not write. Uninstalling the program that added it removes it."/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                </ToggleButton>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -261,6 +276,21 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
+
+                    <!-- Which registration shape the row came from. One list rather than two tabs, because
+                         the user's problem is "my right-click menu is full of junk" and she has no reason to
+                         care that Windows stores the junk two different ways — but the rows behave
+                         differently, so the difference has to be legible. -->
+                    <DataGridTextColumn Header="Type" Binding="{Binding KindLabel}" Width="100" MinWidth="80"
+                                        SortMemberPath="Kind" IsReadOnly="True">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
 
                     <DataGridTextColumn Header="Applies to" Binding="{Binding Location}" Width="150" MinWidth="100"
                                         SortMemberPath="Location" IsReadOnly="True">

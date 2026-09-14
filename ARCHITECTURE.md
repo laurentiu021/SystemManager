@@ -458,8 +458,12 @@ Key services:
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
   restore it (`HasBackup` / `RestoreBackup`).
-- `ContextMenuService` — scans and toggles Explorer context menu shell
-  extensions via registry enumeration.
+- `ContextMenuService` — scans Explorer context menu registrations in both
+  shapes Windows stores them in: `shell` verbs (a name and a command line,
+  hidden with `LegacyDisable`) and `shellex\ContextMenuHandlers` COM
+  extensions (a class id, resolved to a friendly name and its server DLL).
+  Toggling applies to verbs only. Takes an injectable stand-in for
+  `HKEY_CLASSES_ROOT` so the scan is testable against a disposable hive.
 - `SystemReportService` — gathers a comprehensive system snapshot once
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained

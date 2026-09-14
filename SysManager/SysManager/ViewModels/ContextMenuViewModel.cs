@@ -41,9 +41,16 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     [ObservableProperty] private string _presetDescription = "";
 
     /// <summary>Available location filters for the ComboBox.</summary>
+    /// <remarks>
+    /// Must cover every <see cref="ContextMenuEntry.Location"/> the scan can produce, or a row shows
+    /// under "All" and then cannot be reached by any specific filter — which reads as the filter being
+    /// broken. "Files and folders" is here for the <c>AllFilesystemObjects</c> shell-extension root:
+    /// merging it into "Files" would be shorter and would misdescribe every folder the handler also
+    /// applies to. <c>EveryScannedLocation_HasAFilterThatMatchesIt</c> pins the coverage.
+    /// </remarks>
     public ObservableCollection<string> LocationFilters { get; } = new()
     {
-        "All", "Files", "Folders", "Directory Background", "Desktop"
+        "All", "Files", "Folders", "Files and folders", "Directory Background", "Desktop"
     };
 
     public ContextMenuViewModel(IContextMenuService service)
@@ -187,7 +194,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         if (!ContextMenuPreset.All.TryGetValue(presetId, out var preset)) return;
 
         var needsRestart = preset.ForcesClassicMenu != IsClassicMenuEnabled;
-        var thirdPartyEnabled = _allEntries.Count(e => !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e));
+        var thirdPartyEnabled = _allEntries.Count(IsPresetTarget);
 
         var message = $"Apply {preset.Name}?";
         if (needsRestart)
@@ -219,8 +226,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
                 // Disable all third-party entries to restore clean default
                 var dis = 0;
-                foreach (var entry in _allEntries.Where(e =>
-                             !e.IsSystemEntry && e.IsEnabled && !IsDefaultWindowsEntry(e)))
+                foreach (var entry in _allEntries.Where(IsPresetTarget))
                 {
                     if (_service.DisableEntry(entry))
                         dis++;
@@ -229,7 +235,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                 // Enable any default Windows entries that were previously disabled
                 var en = 0;
                 foreach (var entry in _allEntries.Where(e =>
-                             !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
+                             e.CanToggle && !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
                 {
                     if (_service.EnableEntry(entry))
                         en++;
@@ -308,6 +314,20 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     {
         "Windows", "Microsoft Windows", "Microsoft Corporation", "Windows Terminal"
     };
+
+    /// <summary>
+    /// A row a preset may switch off: third-party, currently on, and actually hideable.
+    /// </summary>
+    /// <remarks>
+    /// <c>CanToggle</c> is the load-bearing clause. Shell-extension handlers are third-party and report
+    /// as enabled, so without it a preset would call <c>DisableEntry</c> on every one of them; the write
+    /// targets a key <c>LegacyDisable</c> has no effect on, so the confirmation would promise to disable
+    /// N add-ons, the summary would claim it did, and the right-click menu would be unchanged.
+    /// <para>Counted and iterated through the same predicate on purpose: the confirmation dialog states
+    /// the number, so a predicate that drifted from the loop's would make the dialog lie (#1510).</para>
+    /// </remarks>
+    private static bool IsPresetTarget(ContextMenuEntry entry) =>
+        entry.CanToggle && !entry.IsSystemEntry && entry.IsEnabled && !IsDefaultWindowsEntry(entry);
 
     private static bool IsDefaultWindowsEntry(ContextMenuEntry entry)
     {

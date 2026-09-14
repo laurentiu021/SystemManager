@@ -7641,6 +7641,59 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A Context Menu preset may only act on rows it can actually change, and the number it promises in
+    /// the confirmation must come from the same predicate the loop uses.
+    /// </summary>
+    /// <remarks>
+    /// The tab now lists COM shell-extension handlers alongside verbs (#1510). A handler is third-party
+    /// and reports as enabled, so a preset predicate without <c>CanToggle</c> selects every one of them —
+    /// and hiding a handler needs the machine-wide Blocked list, not <c>LegacyDisable</c>. The service
+    /// refuses that write, which is proven behaviourally, so the damage stops at the dialog: it would
+    /// promise to disable N add-ons and the summary would then report none disabled.
+    /// <para>Source-shape rather than behavioural because the command's own path is unreachable from a
+    /// test — it confirms through <c>DialogService</c> and can restart Explorer. The predicate's clauses
+    /// and both of its call sites are checkable without running it.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryPresetDecisionOverTheEntryList_RequiresTheRowToBeToggleable()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "ViewModels", "ContextMenuViewModel.cs")));
+
+        const string decl = "private static bool IsPresetTarget(ContextMenuEntry entry) =>";
+        var at = source.IndexOf(decl, StringComparison.Ordinal);
+        Assert.True(at >= 0,
+            "ContextMenuViewModel no longer declares IsPresetTarget as an expression-bodied predicate, so "
+            + "this guard is reading nothing at all. Re-point it at whatever now decides which rows a "
+            + "preset switches off.");
+
+        var predicate = source[(at + decl.Length)..source.IndexOf(';', at)];
+        Assert.Contains("entry.CanToggle", predicate, StringComparison.Ordinal);
+
+        // Every Where/Count over the backing list, body included, so an inlined predicate is visible.
+        var queries = EntryListQuery().Matches(source)
+            .Select(m => BalancedFrom(source, m.Index + m.Value.Length - 1))
+            .ToList();
+        Assert.True(queries.Count >= 2,
+            $"Expected at least 2 queries over _allEntries, found {queries.Count} — the regex has stopped "
+            + "matching, which would let this pass while inspecting nothing.");
+
+        var loose = queries
+            .Where(q => !q.Contains("IsPresetTarget", StringComparison.Ordinal)
+                     && !q.Contains("CanToggle", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(loose.Count == 0,
+            "These queries over the entry list decide what a preset touches without requiring the row to "
+            + "be toggleable, so they select shell-extension handlers the write path then refuses — the "
+            + "confirmation dialog states a count it cannot deliver. Go through IsPresetTarget, or test "
+            + "CanToggle:\n  " + string.Join("\n  ", loose));
+    }
+
+    [GeneratedRegex(@"_allEntries\s*\.\s*(?:Where|Count)\(")]
+    private static partial Regex EntryListQuery();
+
+    /// <summary>
     /// C# source with comments removed, so a source-text assertion cannot be satisfied — or defeated —
     /// by prose that merely names the construct. Quote-aware on the line scan so a <c>//</c> inside a
     /// string literal (a URL, say) is left alone.

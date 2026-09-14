@@ -10,6 +10,42 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.100.0] - 2026-09-14
+
+**Context Menu now shows the add-ons that actually make your right-click slow.** The tab was listing
+only half of what is on that menu: the plain entries, with a name and a command. The other half — the
+add-ons that archivers, cloud sync clients and antivirus install — was invisible, and it is the half
+responsible for a right-click taking a second to open, because Windows has to load each add-on and wait
+for it before the menu can appear. They are now in the same list, each one named after the program it
+belongs to rather than a raw class id, with a new "Type" column saying which kind a row is. Hiding an
+add-on needs a machine-wide setting SysManager does not write yet, so its switch is plainly disabled
+instead of moving without effect — uninstalling the program that added it removes it.
+
+### Added
+
+- COM shell extensions registered under `shellex\ContextMenuHandlers` are scanned and listed, across all
+  six roots they register under, de-duplicated so an add-on registered under several does not appear
+  several times.
+- Each add-on's class id is resolved to its friendly name and its server DLL, so a row reads like a
+  program name. An add-on left behind by an uninstalled program is still listed, and says so — Explorer
+  keeps looking for it on every right-click.
+- A "Type" column distinguishing a menu entry from an add-on, and a "Files and folders" location filter
+  for add-ons that apply to both.
+
+### Fixed
+
+- The "Applies to" filter could not select every location a row can have, so rows with the missing one
+  were visible under "All" and nowhere else.
+- A preset no longer counts add-ons among the entries it promises to switch off. It could not have
+  switched them off — `LegacyDisable` has no effect on an add-on — so the confirmation would have named
+  a number, written a useless registry value into each one, and left the menu unchanged.
+- An add-on's source is read from its file path rather than through the parser meant for command lines,
+  which stopped at the first space. That only affected add-ons whose file is gone — exactly the leftovers
+  this list exists to surface, and the ones where a readable name matters most, since there is no running
+  program to recognise them by. One under "Program Files" was attributed to "Program".
+- An add-on registered through an environment variable, as the ones built into Windows are, now resolves
+  to the program it belongs to instead of falling back to a bare file name.
+
 ## [1.99.6] - 2026-09-12
 
 **Pressing Cancel just as a background check starts now actually stops it.** There was a narrow window —

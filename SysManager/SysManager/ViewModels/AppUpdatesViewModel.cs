@@ -72,6 +72,37 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     /// </summary>
     private bool NotBusy => !IsBusy;
 
+    /// <summary>
+    /// Copies the user's ticks from the previous scan onto a fresh package list, matched by package id.
+    /// </summary>
+    /// <remarks>
+    /// An <see cref="AppPackage"/> is selected by DEFAULT, so a rescan did not merely forget the user's
+    /// choice — it reversed it. Every package they unticked came back ticked, and "Upgrade selected" then
+    /// installed it. <c>RefreshOnF5</c> is <c>ScanCommand</c>, so pressing F5 was enough (#2304).
+    /// <para>An empty <paramref name="previous"/> is the first scan, the only time the default is the
+    /// answer. A previous list that is present with nothing selected is a DECISION — the user unticked
+    /// everything — which is why this tests the collection being empty rather than whether anything in it
+    /// is selected.</para>
+    /// <para>Keyed on the package id ALONE, deliberately not on the version. A rescan can find a newer
+    /// available version for the same package, and "do not upgrade this app" does not stop being true
+    /// because the version on offer changed.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<AppPackage> previous, IReadOnlyCollection<AppPackage> fresh)
+    {
+        if (previous.Count == 0) return;
+
+        var decided = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in previous)
+            decided[p.Id] = p.IsSelected;
+
+        foreach (var p in fresh)
+        {
+            if (decided.TryGetValue(p.Id, out var wasSelected))
+                p.IsSelected = wasSelected;
+        }
+    }
+
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IsBusy)) return;
@@ -98,6 +129,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying winget...";
+
+        // Snapshot the user's ticks BEFORE the list is cleared below — after that there is nothing left to
+        // read them from.
+        var previous = Packages.ToList();
+
         Packages.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -105,6 +141,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         try
         {
             var list = await _winget.ListUpgradableAsync(_cts.Token);
+            CarryForwardSelection(previous, list);
             Packages.ReplaceWith(list);
             HasScanned = true;
             StatusMessage = $"{Packages.Count} upgradable package(s) found";

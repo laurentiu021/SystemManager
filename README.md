@@ -455,6 +455,9 @@ a confirmation before it runs:
 - Scan for upgradable packages
 - Sort by name, ID, version, or source via clickable column headers
 - Select all or individual packages, bulk upgrade with per-package status
+- **Unticking a package survives a rescan** — including when the rescan finds a newer
+  version on offer, since "don't upgrade this one" doesn't stop being true because the
+  version changed
 
 ### Quick Cleanup
 - Clear TEMP folders
@@ -1273,7 +1276,8 @@ offers, "rate us" prompts:
   presets, close-button behaviour, standby-memory preference, update-check preference,
   app-icon fetching preference, and speed-test history**
 - **Selective export** (tick which sections to include) and **selective import**
-  (confirm what a profile contains before anything is overwritten)
+  (confirm what a profile contains before anything is overwritten). Your ticks survive a
+  refresh, so a section you excluded cannot quietly reappear in the export
 - **Version-aware** — refuses profiles created by a newer, incompatible build
 - **What it deliberately leaves out** — anything that describes *this* PC rather than
   your choices: the undo baselines behind Performance Mode and Environment Variables,

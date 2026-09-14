@@ -51,8 +51,43 @@ public sealed partial class ProfileViewModel : ViewModelBase
 
     private void ApplySections(IReadOnlyList<ConfigSection> available)
     {
-        Sections.ReplaceWith(available.Select(s => new SelectableSection(s) { IsSelected = true }));
+        var fresh = available.Select(s => new SelectableSection(s)).ToList();
+        CarryForwardSelection(Sections, fresh);
+        Sections.ReplaceWith(fresh);
         HasSections = Sections.Count > 0;
+    }
+
+    /// <summary>
+    /// Copies the user's ticks from the previous section list onto a freshly built one, matched by the
+    /// section's key.
+    /// </summary>
+    /// <remarks>
+    /// This method used to rebuild every row with <c>IsSelected = true</c> hard-coded, so a refresh did not
+    /// merely forget which sections the user had chosen — it re-ticked all of them. The ticks decide what
+    /// gets written into an export and what gets applied on an import, so an untick that came back meant
+    /// carrying over settings the user had deliberately left behind. <c>RefreshOnF5</c> is
+    /// <c>RefreshCommand</c>, which calls straight through to here, so pressing F5 was enough (#2304).
+    /// <para>An empty <paramref name="previous"/> is the first population, the only time every section
+    /// being ticked is the answer. A list that is present with nothing selected is a DECISION and is
+    /// honoured, which is why this tests the collection being empty rather than whether anything is
+    /// selected.</para>
+    /// <para>Keyed on <c>Section.Key</c> rather than the display name: the key is the stable identifier the
+    /// service builds the section from, and a display name is presentation text that can be reworded.</para>
+    /// </remarks>
+    internal static void CarryForwardSelection(
+        IReadOnlyCollection<SelectableSection> previous, IReadOnlyCollection<SelectableSection> fresh)
+    {
+        if (previous.Count == 0) return;
+
+        var decided = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var s in previous)
+            decided[s.Section.Key] = s.IsSelected;
+
+        foreach (var s in fresh)
+        {
+            if (decided.TryGetValue(s.Section.Key, out var wasSelected))
+                s.IsSelected = wasSelected;
+        }
     }
 
     [RelayCommand]

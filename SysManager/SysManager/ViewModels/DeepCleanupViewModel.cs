@@ -178,20 +178,8 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     internal static void CarryForwardSelection(
         IReadOnlyCollection<CleanupCategory> previous, IReadOnlyCollection<CleanupCategory> fresh)
     {
-        if (previous.Count == 0) return;
-
-        var decided = new Dictionary<string, bool>(StringComparer.Ordinal);
-        foreach (var c in previous)
-        {
-            if (c.TotalSizeBytes > 0)
-                decided[c.Name] = c.IsSelected;
-        }
-
-        foreach (var c in fresh)
-        {
-            if (decided.TryGetValue(c.Name, out var wasSelected))
-                c.IsSelected = wasSelected;
-        }
+        Helpers.SelectionCarry.Apply(previous, fresh, c => c.Name, StringComparer.Ordinal,
+                                     carriedADecision: c => c.TotalSizeBytes > 0);
     }
 
     private void OnCategoryPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

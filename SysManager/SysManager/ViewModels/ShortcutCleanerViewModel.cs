@@ -202,17 +202,7 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
     internal static void CarryForwardSelection(
         IReadOnlyCollection<BrokenShortcut> previous, IReadOnlyCollection<BrokenShortcut> fresh)
     {
-        if (previous.Count == 0) return;
-
-        var decided = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (var s in previous)
-            decided[s.ShortcutPath] = s.IsSelected;
-
-        foreach (var s in fresh)
-        {
-            if (decided.TryGetValue(s.ShortcutPath, out var wasSelected))
-                s.IsSelected = wasSelected;
-        }
+        Helpers.SelectionCarry.Apply(previous, fresh, s => s.ShortcutPath, StringComparer.OrdinalIgnoreCase);
     }
 
     private void OnShortcutPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

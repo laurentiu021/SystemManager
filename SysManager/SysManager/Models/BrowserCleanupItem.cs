@@ -12,7 +12,7 @@ namespace SysManager.Models;
 /// with the on-disk size discovered by a scan. <see cref="IsSelected"/> drives which items
 /// a clean removes; cookies default to unselected so logins aren't dropped by accident.
 /// </summary>
-public sealed partial class BrowserCleanupItem : ObservableObject
+public sealed partial class BrowserCleanupItem : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected;
 

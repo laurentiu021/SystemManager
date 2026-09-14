@@ -90,17 +90,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     internal static void CarryForwardSelection(
         IReadOnlyCollection<AppPackage> previous, IReadOnlyCollection<AppPackage> fresh)
     {
-        if (previous.Count == 0) return;
-
-        var decided = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        foreach (var p in previous)
-            decided[p.Id] = p.IsSelected;
-
-        foreach (var p in fresh)
-        {
-            if (decided.TryGetValue(p.Id, out var wasSelected))
-                p.IsSelected = wasSelected;
-        }
+        Helpers.SelectionCarry.Apply(previous, fresh, p => p.Id, StringComparer.OrdinalIgnoreCase);
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

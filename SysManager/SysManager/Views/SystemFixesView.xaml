@@ -34,6 +34,42 @@
         <!-- Fix cards -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
             <StackPanel>
+                <!-- The two general-purpose repairs first: they are what fixes an unexplained
+                     misbehaving Windows, and the targeted ones below only help if you already know
+                     what broke. Moved here from Quick Cleanup, whose name promised housekeeping
+                     while hosting a 15-minute system repair (#1493). -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Repair damaged Windows files (SFC)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Checks every protected Windows file against Windows' own known-good copy and replaces the damaged ones. Takes 5–15 minutes and runs in the background — you can keep using the app."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Run" Command="{Binding RunSfcCommand}"
+                            AutomationProperties.AutomationId="btn-fixes-sfc"
+                            AutomationProperties.Name="Run — repair damaged Windows files with SFC"
+                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Repair Windows' own repair source (DISM)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Rebuilds the store of known-good copies that the repair above draws from, downloading replacements through Windows Update. Run this first if SFC reports files it could not fix. Takes 10–30 minutes."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Run" Command="{Binding RunDismCommand}"
+                            AutomationProperties.AutomationId="btn-fixes-dism"
+                            AutomationProperties.Name="Run — repair the Windows component store with DISM"
+                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
+                </Grid>
+
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -79,8 +115,65 @@
                             Style="{StaticResource GhostButton}" VerticalAlignment="Center" MinWidth="80"/>
                 </Grid>
 
+                <!-- Live indicators for the two long repairs. A repair that grinds for half an hour has
+                     to say WHICH one is running, which is why these are bound to per-repair flags rather
+                     than to IsBusy. -->
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+                            Visibility="{Binding IsSfcRunning, Converter={StaticResource FlexVis}}">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Success}"/>
+                    <TextBlock Text="Repairing Windows files — " Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SfcStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SfcEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding SfcEtaText, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+                <!-- SFC verdict (shown after completion) -->
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
+                        Background="{DynamicResource Surface1}"
+                        Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
+                    <!-- DockPanel, not a horizontal StackPanel: inside one, a child's TextWrapping is
+                         inert — it is measured with infinite width, so long verdicts were clipped
+                         rather than wrapped. -->
+                    <DockPanel>
+                        <TextBlock Text="SFC result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <!-- Announced: an SFC repair runs for many minutes with the window in the
+                             background, and this is the sentence that says how it ended. The "Repairing
+                             Windows files" label above is static text, so a live region could not
+                             announce it even if it carried one — what changes there is visibility, not
+                             content. Start and progress are covered by the status line at the bottom. -->
+                        <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                    </DockPanel>
+                </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
+                            Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
+                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
+                    <TextBlock Text="Repairing the component store — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DismStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DismEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding DismEtaText, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+                <!-- DISM verdict (shown after completion) -->
+                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
+                        Background="{DynamicResource Surface1}"
+                        Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
+                    <!-- DockPanel for the same reason as the SFC verdict above. -->
+                    <DockPanel>
+                        <TextBlock Text="DISM result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                    </DockPanel>
+                </Border>
+
                 <TextBlock Margin="0,12,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
                            Text="Looking to reset the network stack (Winsock / TCP-IP / DNS flush)? Use the Network → Network Repair tab, which provides those as individual one-click tools."/>
+                <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                           Text="Just short of disk space? Cleaning up temporary files and old Windows update files is on the Cleanup → Quick Cleanup tab."/>
             </StackPanel>
         </Border>
 
@@ -91,8 +184,12 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <!-- Value as well as IsIndeterminate: SFC and DISM report a real percentage, and a marquee
+                 bar would throw that away. IsProgressIndeterminate is false for exactly those two once
+                 their first percentage lands. -->
             <ProgressBar AutomationProperties.Name="System repair progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
+                         Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
             <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelCommand}"
                     AutomationProperties.Name="Cancel current repair"

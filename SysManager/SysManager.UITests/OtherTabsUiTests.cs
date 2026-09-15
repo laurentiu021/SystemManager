@@ -5,7 +5,7 @@
 namespace SysManager.UITests;
 
 /// <summary>
-/// Coverage for the remaining tabs (Cleanup, Drivers, Windows Update,
+/// Coverage for the remaining tabs (Cleanup, System Fixes, Drivers, Windows Update,
 /// System health, App updates) — button and label presence.
 /// </summary>
 [Collection("App")]
@@ -28,20 +28,6 @@ public class OtherTabsUiTests
     {
         _fx.GoToTab("nav-cleanup");
         Assert.NotNull(_fx.FindButtonById("btn-cleanup-empty-recycle-bin"));
-    }
-
-    [Fact]
-    public void Cleanup_SfcButton_Exists()
-    {
-        _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButtonById("btn-cleanup-sfc"));
-    }
-
-    [Fact]
-    public void Cleanup_DismButton_Exists()
-    {
-        _fx.GoToTab("nav-cleanup");
-        Assert.NotNull(_fx.FindButtonById("btn-cleanup-dism"));
     }
 
     [Fact]
@@ -76,6 +62,25 @@ public class OtherTabsUiTests
     {
         _fx.GoToTab("nav-cleanup");
         Assert.NotNull(_fx.FindButtonById("btn-cleanup-cancel"));
+    }
+
+    // ---------------- System Fixes ----------------
+
+    // SFC and DISM moved here from Quick Cleanup (#1493). Asserted on THIS tab so the move is pinned
+    // end to end: a regression that put them back on Cleanup would leave these two red.
+
+    [Fact]
+    public void SystemFixes_SfcButton_Exists()
+    {
+        _fx.GoToTab("nav-system-fixes");
+        Assert.NotNull(_fx.FindButtonById("btn-fixes-sfc"));
+    }
+
+    [Fact]
+    public void SystemFixes_DismButton_Exists()
+    {
+        _fx.GoToTab("nav-system-fixes");
+        Assert.NotNull(_fx.FindButtonById("btn-fixes-dism"));
     }
 
     // ---------------- Drivers ----------------

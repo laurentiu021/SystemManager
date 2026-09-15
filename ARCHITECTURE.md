@@ -112,7 +112,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
-- `CleanupViewModel` — TEMP, Recycle Bin, SFC, DISM (background-aware).
+- `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.
 - `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
@@ -904,18 +904,20 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   scans) runs on background tasks.
 - View-model observable properties are updated on the UI thread via the
   dispatcher captured in `ViewModelBase`.
-- SFC and DISM each have their own `IsSfcRunning` / `IsDismRunning` flags for
-  UI state, but they are **mutually exclusive**: both share a single PowerShell
-  runner, so a `SystemModification` `OperationLockService` lock prevents running
-  them (or other system-repair operations) concurrently — starting one while the
-  other runs is refused with a status message.
-- The two component-store operations join that set under one `IsStoreRunning` flag and
-  the same lock. They are **two commands over one flag on purpose**: `AnalyzeComponentStore`
+- SFC and DISM live on `SystemFixesViewModel` and each have their own `IsSfcRunning` /
+  `IsDismRunning` flag for UI state, but they are **mutually exclusive**: every repair on
+  that tab streams into one console and drives one progress bar, so `CanRunFix` gates them
+  all on `!IsAnyRunning`, and a `SystemModification` `OperationLockService` lock additionally
+  excludes the system-repair operations on OTHER tabs. `CanExecute` is not treated as the
+  guard — `ExecuteAsync` runs a command body regardless of it, so each repair re-checks
+  elevation and its own running flag in the body.
+- Quick Cleanup's two component-store operations take the same lock, under one
+  `IsStoreRunning` flag. They are **two commands over one flag on purpose**: `AnalyzeComponentStore`
   is read-only and always available, while `CleanComponentStore` additionally requires
   `CanCleanStore`, which only a completed analysis that Windows itself recommended can set —
   and which a completed cleanup clears again, because the analysis it was based on is then
   stale. `/ResetBase` is never passed (it discards the ability to uninstall installed
-  updates), and `NoComponentStoreCall_PassesResetBase_AndBothCommandsAreBound` enforces both
+  updates), and `NoDismCall_PassesResetBase_AndEveryWindowsRepairCommandIsBound` enforces both
   that and the presence of the bindings.
 
 ## Safety guardrails (Deep Cleanup)

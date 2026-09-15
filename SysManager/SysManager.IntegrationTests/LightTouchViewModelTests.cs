@@ -30,8 +30,8 @@ public class LightTouchViewModelTests
         var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
         Assert.NotNull(vm.CleanTempCommand);
         Assert.NotNull(vm.EmptyRecycleBinCommand);
-        Assert.NotNull(vm.RunSfcCommand);
-        Assert.NotNull(vm.RunDismCommand);
+        Assert.NotNull(vm.AnalyzeComponentStoreCommand);
+        Assert.NotNull(vm.CleanComponentStoreCommand);
         Assert.NotNull(vm.CancelCommand);
     }
 

@@ -60,8 +60,7 @@ public class CleanupViewModelTests
         var vm = NewVm();
         Assert.False(vm.IsTempRunning);
         Assert.False(vm.IsBinRunning);
-        Assert.False(vm.IsSfcRunning);
-        Assert.False(vm.IsDismRunning);
+        Assert.False(vm.IsStoreRunning);
         Assert.False(vm.IsAnyRunning);
     }
 
@@ -69,8 +68,7 @@ public class CleanupViewModelTests
     public void Constructor_DefaultsStatusStringsToIdle()
     {
         var vm = NewVm();
-        Assert.Equal("Idle", vm.SfcStatus);
-        Assert.Equal("Idle", vm.DismStatus);
+        Assert.Equal("Idle", vm.StoreStatus);
     }
 
     [Fact]
@@ -94,8 +92,7 @@ public class CleanupViewModelTests
     [Theory]
     [InlineData(nameof(CleanupViewModel.IsTempRunning))]
     [InlineData(nameof(CleanupViewModel.IsBinRunning))]
-    [InlineData(nameof(CleanupViewModel.IsSfcRunning))]
-    [InlineData(nameof(CleanupViewModel.IsDismRunning))]
+    [InlineData(nameof(CleanupViewModel.IsStoreRunning))]
     public void IsAnyRunning_TurnsTrueWhenAnyFlagFlipsOn(string propName)
     {
         var vm = NewVm();
@@ -112,8 +109,7 @@ public class CleanupViewModelTests
 
         vm.IsTempRunning = true;
         vm.IsBinRunning = true;
-        vm.IsSfcRunning = true;
-        vm.IsDismRunning = true;
+        vm.IsStoreRunning = true;
 
         // OnIs*RunningChanged partial methods should have raised IsAnyRunning
         // each time — we only assert at least one fire here because the flag
@@ -139,8 +135,8 @@ public class CleanupViewModelTests
     [Theory]
     [InlineData("CleanTempCommand")]
     [InlineData("EmptyRecycleBinCommand")]
-    [InlineData("RunSfcCommand")]
-    [InlineData("RunDismCommand")]
+    [InlineData("AnalyzeComponentStoreCommand")]
+    [InlineData("CleanComponentStoreCommand")]
     [InlineData("CancelCommand")]
     [InlineData("RelaunchAsAdminCommand")]
     public void Command_IsExposedAndNotNull(string name)
@@ -186,91 +182,6 @@ public class CleanupViewModelTests
         vm.CancelCommand.Execute(null);
 
         Assert.True(cts.IsCancellationRequested);
-    }
-
-    // ---------- elevation gate on SFC / DISM ----------
-
-    // Both of these used to open with `if (vm.IsElevated) return;` — a skip so an elevated host would not
-    // report a false failure. The CI runner IS elevated, and this workstation cannot run the suite, so the
-    // skip meant the elevation gate on SFC and DISM was asserted nowhere at all. AdminHelper.ForceElevation
-    // states the condition instead, and the view-model is built INSIDE the scope because it caches
-    // IsElevated in its constructor.
-
-    [Fact]
-    public async Task RunSfc_WhenNotElevated_SetsRequiresAdminMessageAndClearsRunning()
-    {
-        using var notElevated = AdminHelper.ForceElevation(false);
-        var vm = NewVm();
-        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
-
-        await vm.RunSfcCommand.ExecuteAsync(null);
-
-        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.False(vm.IsSfcRunning);
-        Assert.False(vm.IsAnyRunning);
-    }
-
-    [Fact]
-    public async Task RunDism_WhenNotElevated_SetsRequiresAdminMessageAndClearsRunning()
-    {
-        using var notElevated = AdminHelper.ForceElevation(false);
-        var vm = NewVm();
-        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
-
-        await vm.RunDismCommand.ExecuteAsync(null);
-
-        Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.False(vm.IsDismRunning);
-        Assert.False(vm.IsAnyRunning);
-    }
-
-    /// <summary>
-    /// And the mirror image: elevated, the guard must let the command through to the runner.
-    /// </summary>
-    /// <remarks>
-    /// The negative test alone cannot tell a working gate from a command that refuses unconditionally. With
-    /// elevation forced on, SFC must get past the gate and launch <c>sfc.exe /scannow</c> through the runner
-    /// — asserted on the substitute, so nothing actually runs.
-    /// </remarks>
-    [Fact]
-    public async Task RunSfc_WhenElevated_ReachesTheRunner()
-    {
-        using var elevated = AdminHelper.ForceElevation(true);
-        var runner = Substitute.For<IPowerShellRunner>();
-        var vm = new CleanupViewModel(runner, Substitute.For<ICleanupPreScanService>());
-        Assert.True(vm.IsElevated);
-
-        await vm.RunSfcCommand.ExecuteAsync(null);
-
-        Assert.DoesNotContain("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-        await runner.Received(1).RunProcessAsync(
-            "sfc.exe", "/scannow", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
-    }
-
-    [Fact]
-    public async Task RunSfc_WhenAlreadyRunning_ReturnsImmediatelyWithoutChangingStatus()
-    {
-        var vm = NewVm();
-        vm.IsSfcRunning = true;
-        vm.StatusMessage = "marker";
-
-        await vm.RunSfcCommand.ExecuteAsync(null);
-
-        Assert.Equal("marker", vm.StatusMessage);
-        Assert.True(vm.IsSfcRunning); // left as the caller set it
-    }
-
-    [Fact]
-    public async Task RunDism_WhenAlreadyRunning_ReturnsImmediatelyWithoutChangingStatus()
-    {
-        var vm = NewVm();
-        vm.IsDismRunning = true;
-        vm.StatusMessage = "marker";
-
-        await vm.RunDismCommand.ExecuteAsync(null);
-
-        Assert.Equal("marker", vm.StatusMessage);
-        Assert.True(vm.IsDismRunning);
     }
 
     [Fact]
@@ -462,26 +373,21 @@ public class CleanupViewModelTests
     }
 
     [Fact]
-    public void IsBusy_IsIndeterminateForTempButDeterminateForSfcAndDism()
+    public void IsBusy_IsIndeterminateForTempButDeterminateForTheComponentStore()
     {
-        // Temp/Recycle-Bin report no percentage, so the bar must be marquee. SFC and DISM DO report
-        // one (through the runner's ProgressChanged → Progress), and a marquee bar there would throw
-        // that real number away.
+        // Temp/Recycle-Bin report no percentage, so the bar must be marquee. The component-store
+        // operations DO report one (DISM's decimal percentage, parsed off the runner's output), and a
+        // marquee bar there would throw that real number away.
         var vm = NewVm();
 
         vm.IsTempRunning = true;
         Assert.True(vm.IsProgressIndeterminate);
         vm.IsTempRunning = false;
 
-        vm.IsSfcRunning = true;
+        vm.IsStoreRunning = true;
         Assert.True(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
-        vm.IsSfcRunning = false;
-
-        vm.IsDismRunning = true;
-        Assert.True(vm.IsBusy);
-        Assert.False(vm.IsProgressIndeterminate);
-        vm.IsDismRunning = false;
+        vm.IsStoreRunning = false;
     }
 
     [Fact]
@@ -490,13 +396,11 @@ public class CleanupViewModelTests
         var vm = NewVm();
         vm.IsTempRunning = true;
         vm.IsBinRunning = true;
-        vm.IsSfcRunning = true;
-        vm.IsDismRunning = true;
+        vm.IsStoreRunning = true;
 
         vm.IsTempRunning = false;
         vm.IsBinRunning = false;
-        vm.IsSfcRunning = false;
-        vm.IsDismRunning = false;
+        vm.IsStoreRunning = false;
 
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
@@ -574,144 +478,5 @@ public class CleanupViewModelTests
         }
         throw new DirectoryNotFoundException(
             "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
-    }
-}
-
-// ---------- SFC result parsing ----------
-
-public class SfcResultParsingTests
-{
-    [Fact]
-    public void ParseSfcResult_NoViolations_ReturnsGreen()
-    {
-        var lines = new[] { "Windows Resource Protection did not find any integrity violations." };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("No integrity violations", verdict);
-        Assert.Equal(StatusColors.Good, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_SuccessfullyRepaired_ReturnsYellow()
-    {
-        var lines = new[] { "Windows Resource Protection found corrupt files and successfully repaired them." };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("successfully repaired", verdict);
-        Assert.Equal(StatusColors.Warning, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_UnableToFix_ReturnsRed()
-    {
-        var lines = new[] { "Windows Resource Protection found corrupt files but was unable to fix some of them." };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("could not repair", verdict);
-        Assert.Equal(StatusColors.Bad, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_CouldNotPerform_ReturnsRed()
-    {
-        var lines = new[] { "Windows Resource Protection could not perform the requested operation." };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("could not run", verdict);
-        Assert.Equal(StatusColors.Bad, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_ExitZeroNoMatch_ReturnsGreenFallback()
-    {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("successfully", verdict);
-        Assert.Equal(StatusColors.Good, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_NonZeroExit_ReturnsYellowFallback()
-    {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = CleanupViewModel.ParseSfcResult(lines, 1);
-        Assert.Contains("exit code 1", verdict);
-        Assert.Equal(StatusColors.Warning, color);
-    }
-
-    [Fact]
-    public void ParseSfcResult_EmptyLines_FallsBackToExitCode()
-    {
-        var (verdict, color) = CleanupViewModel.ParseSfcResult([], 0);
-        Assert.Contains("successfully", verdict);
-        Assert.Equal(StatusColors.Good, color);
-    }
-}
-
-// ---------- DISM result parsing ----------
-
-public class DismResultParsingTests
-{
-    [Fact]
-    public void ParseDismResult_RestoreSuccessful_ReturnsGreen()
-    {
-        var lines = new[] { "The restore operation completed successfully." };
-        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("healthy", verdict);
-        Assert.Equal(StatusColors.Good, color);
-    }
-
-    [Fact]
-    public void ParseDismResult_CorruptionRepaired_ReturnsYellow()
-    {
-        var lines = new[] { "The component store corruption was repaired." };
-        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("repaired", verdict);
-        Assert.Equal(StatusColors.Warning, color);
-    }
-
-    [Fact]
-    public void ParseDismResult_SourceNotFound_ReturnsRed()
-    {
-        var lines = new[] { "The source files could not be found." };
-        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("source files", verdict);
-        Assert.Equal(StatusColors.Bad, color);
-    }
-
-    [Fact]
-    public void ParseDismResult_ExitZeroNoMatch_ReturnsGreenFallback()
-    {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("successfully", verdict);
-        Assert.Equal(StatusColors.Good, color);
-    }
-
-    [Fact]
-    public void ParseDismResult_NonZeroExit_ReturnsYellowFallback()
-    {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = CleanupViewModel.ParseDismResult(lines, 87);
-        Assert.Contains("exit code 87", verdict);
-        Assert.Equal(StatusColors.Warning, color);
-    }
-
-    // RunSfcAsync/RunDismAsync now both acquire the SystemModification operation lock
-    // (after the elevation gate) so they are mutually exclusive — concurrent runs would
-    // cross-contaminate the shared _runner's captured output. The full VM path is gated
-    // behind elevation (skipped in non-admin CI, like the tests above), so this pins the
-    // mutual-exclusion contract the fix relies on at the service level.
-    [Fact]
-    public void SystemModificationLock_IsMutuallyExclusive()
-    {
-        using var first = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
-        Assert.NotNull(first);
-
-        // A second acquire for the same category (e.g. DISM while SFC holds it) must fail.
-        var second = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
-        Assert.Null(second);
-        Assert.Equal("SFC scan", OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification));
-
-        first!.Dispose();
-        // Once released, the category is free again.
-        using var third = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
-        Assert.NotNull(third);
     }
 }

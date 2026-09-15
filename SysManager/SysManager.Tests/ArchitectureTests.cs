@@ -1218,7 +1218,7 @@ public partial class ArchitectureTests
 
                 // A short LITERAL cannot meaningfully clip, so it stays out of scope. A BINDING does not:
                 // its length is unknown at build time, and treating unknown as short is how four real
-                // instances survived — SfcVerdict and DismVerdict on Cleanup, MemoryHealthVerdict on System
+                // instances survived — SfcVerdict and DismVerdict on System Fixes, MemoryHealthVerdict on System
                 // Health, ModuleStatus on Windows Update, every one of them a full sentence produced at
                 // runtime. The exclusion was written when banner messages were literals; centralising the
                 // elevation banner turned them into bindings and left the rule looking at nothing.
@@ -12336,8 +12336,8 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// No component-store call may pass <c>/ResetBase</c>, and both component-store commands must be bound
-    /// to a control.
+    /// No DISM call may pass <c>/ResetBase</c>, and every command that runs one of these Windows tools must
+    /// be bound to a control on its own tab.
     /// </summary>
     /// <remarks>
     /// <c>/StartComponentCleanup /ResetBase</c> reclaims more, and also permanently discards the ability to
@@ -12348,35 +12348,77 @@ public partial class ArchitectureTests
     /// <para>The binding half is this codebase's dominant recurring defect: a command implemented and
     /// unit-tested while nothing in the XAML invokes it. Both halves are checked here because they fail the
     /// same way — the feature looks present, and no compiler or view-model test can see that it is not.
-    /// <c>CleanComponentStore</c> is the one that matters: it is gated on <c>CanCleanStore</c>, so a missing
-    /// binding would leave the analysis reporting a size the user can never act on.</para>
+    /// <c>CleanComponentStore</c> is the one that matters most: it is gated on <c>CanCleanStore</c>, so a
+    /// missing binding would leave the analysis reporting a size the user can never act on.</para>
+    /// <para>Spans two tabs since #1493 split them by purpose: <c>/RestoreHealth</c> repairs a broken
+    /// Windows and lives on System Fixes, while <c>/AnalyzeComponentStore</c> and
+    /// <c>/StartComponentCleanup</c> reclaim disk space and stayed on Quick Cleanup. Both files are checked
+    /// for <c>/ResetBase</c>, because "the DISM call is over there now" is exactly how a ban on one file
+    /// stops covering the operation it was written for.</para>
     /// </remarks>
     [Fact]
-    public void NoComponentStoreCall_PassesResetBase_AndBothCommandsAreBound()
+    public void NoDismCall_PassesResetBase_AndEveryWindowsRepairCommandIsBound()
     {
-        var vmPath = Path.Combine(FindAppProjectDir(), "ViewModels", "CleanupViewModel.cs");
-        Assert.True(File.Exists(vmPath), $"CleanupViewModel.cs was not found at {vmPath}");
-        var vm = WithoutComments(File.ReadAllText(vmPath));
-
-        // Floor first: if the operations were removed or moved, everything below is about nothing.
-        Assert.True(vm.Contains("/Online /Cleanup-Image /StartComponentCleanup", StringComparison.Ordinal)
-                    && vm.Contains("/Online /Cleanup-Image /AnalyzeComponentStore", StringComparison.Ordinal),
-            "CleanupViewModel no longer contains both component-store DISM arguments. If they moved, move "
-            + "this guard with them — it is checking nothing where it is.");
-
-        Assert.False(vm.Contains("ResetBase", StringComparison.OrdinalIgnoreCase),
-            "a component-store call passes /ResetBase. It reclaims more and permanently discards the "
-            + "ability to uninstall every installed update, which a cleanup button must not decide for the "
-            + "user. Use /StartComponentCleanup on its own.");
-
-        var markup = WithoutXamlComments(
-            File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", "CleanupView.xaml")));
-        foreach (var command in new[] { "AnalyzeComponentStoreCommand", "CleanComponentStoreCommand" })
+        // vm-source file -> the DISM/SFC invocations that must still be in it. Each pair is a vacuity
+        // floor: if an operation moved again, this guard fails loudly instead of passing over nothing.
+        var expectedInvocations = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            Assert.True(markup.Contains($"{{Binding {command}}}", StringComparison.Ordinal),
-                $"{command} is implemented but no control in CleanupView invokes it, so the feature ships "
-                + "unreachable. Nothing else catches this: the compiler cannot see a XAML binding that is "
-                + "absent, and a view-model test executes the command directly.");
+            ["CleanupViewModel.cs"] =
+            [
+                "/Online /Cleanup-Image /StartComponentCleanup",
+                "/Online /Cleanup-Image /AnalyzeComponentStore",
+            ],
+            ["SystemFixesViewModel.cs"] =
+            [
+                "/Online /Cleanup-Image /RestoreHealth",
+                "\"sfc.exe\", \"/scannow\"",
+            ],
+        };
+
+        foreach (var (fileName, invocations) in expectedInvocations)
+        {
+            var vmPath = Path.Combine(FindAppProjectDir(), "ViewModels", fileName);
+            Assert.True(File.Exists(vmPath), $"{fileName} was not found at {vmPath}");
+            var vm = WithoutComments(File.ReadAllText(vmPath));
+
+            foreach (var invocation in invocations)
+            {
+                Assert.Contains(invocation, vm, StringComparison.Ordinal);
+            }
+
+            Assert.False(vm.Contains("ResetBase", StringComparison.OrdinalIgnoreCase),
+                $"a DISM call in {fileName} passes /ResetBase. It reclaims more and permanently discards "
+                + "the ability to uninstall every installed update, which no button may decide for the "
+                + "user. Use /StartComponentCleanup on its own.");
+        }
+
+        var expectedBindings = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["CleanupView.xaml"] = ["AnalyzeComponentStoreCommand", "CleanComponentStoreCommand"],
+            ["SystemFixesView.xaml"] = ["RunSfcCommand", "RunDismCommand"],
+        };
+
+        var markupByView = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (viewName, commands) in expectedBindings)
+        {
+            var markup = WithoutXamlComments(
+                File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", viewName)));
+            markupByView[viewName] = markup;
+            foreach (var command in commands)
+            {
+                Assert.True(markup.Contains($"{{Binding {command}}}", StringComparison.Ordinal),
+                    $"{command} is implemented but no control in {viewName} invokes it, so the feature "
+                    + "ships unreachable. Nothing else catches this: the compiler cannot see a XAML binding "
+                    + "that is absent, and a view-model test executes the command directly.");
+            }
+        }
+
+        // And the absence half of the split. Presence on the right tab does not stop a copy reappearing on
+        // the wrong one: CleanupViewModel no longer HAS these commands, so a re-added binding would be a
+        // silent dead button — WPF logs a binding failure and renders an enabled control that does nothing.
+        foreach (var command in expectedBindings["SystemFixesView.xaml"])
+        {
+            Assert.DoesNotContain($"{{Binding {command}}}", markupByView["CleanupView.xaml"], StringComparison.Ordinal);
         }
     }
 

@@ -17,8 +17,10 @@ public partial class UiAutomationContractTests
         {
             ["btn-cleanup-clean-temp"] = "Clean TEMP — clean temporary files",
             ["btn-cleanup-empty-recycle-bin"] = "Empty Recycle Bin",
-            ["btn-cleanup-sfc"] = "SFC /scannow — run SFC system file check",
-            ["btn-cleanup-dism"] = "Run DISM RestoreHealth",
+            // On System Fixes since #1493, where the repairs belong; Quick Cleanup keeps the two
+            // component-store buttons below, which reclaim space rather than repair anything.
+            ["btn-fixes-sfc"] = "Run — repair damaged Windows files with SFC",
+            ["btn-fixes-dism"] = "Run — repair the Windows component store with DISM",
             ["btn-cleanup-analyze-store"] = "Check component store — report what Windows considers reclaimable",
             ["btn-cleanup-clean-store"] = "Clean up component store — remove the superseded components Windows keeps",
             ["btn-cleanup-cancel"] = "Cancel the running operation",

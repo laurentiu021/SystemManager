@@ -2257,6 +2257,7 @@ public partial class ArchitectureTests
         var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
+        var checkedControls = 0;
 
         // Every style named above must exist. Found by mutating this guard: deleting DangerGhostButton
         // outright leaves the app BUILDING and this test GREEN, because a StaticResource inside a
@@ -2275,28 +2276,33 @@ public partial class ArchitectureTests
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
             var xaml = XamlCode(path);
-            var at = xaml.IndexOf(command, StringComparison.Ordinal);
-            if (at < 0)
+            var controls = ControlsBinding(xaml, command);
+            if (controls.Count == 0)
             {
                 offenders.Add($"{view} — nothing binds {command} any more; update this guard or the view");
                 continue;
             }
 
             checkedButtons++;
+            checkedControls += controls.Count;
 
-            if (ReadButtonElement(xaml, view, command, out var element) is { } problem)
-            {
-                offenders.Add(problem);
-                continue;
-            }
-
-            if (!styles.Any(style => element.Contains($"StaticResource {style}", StringComparison.Ordinal)))
-                offenders.Add($"{view} — {command} is on a button styled as neither "
-                              + string.Join(" nor ", styles));
+            // Every path, not just the first: a destructive action reachable from a button AND a context
+            // menu has to look destructive both ways, or the styled one vouches for the bare one.
+            foreach (var (tag, element) in controls)
+                if (!styles.Any(style => element.Contains($"StaticResource {style}", StringComparison.Ordinal)))
+                    offenders.Add($"{view} — {command} is on a <{tag}> styled as none of "
+                                  + string.Join(" / ", styles));
         }
 
         Assert.True(checkedButtons == destructive.Length,
             $"only {checkedButtons} of {destructive.Length} listed commands were found in their views");
+
+        // More CONTROLS than commands, because KillProcessCommand is reachable from its row button and from
+        // the row context menu (#1551). If this ever equals the command count, the multi-path case stopped
+        // being seen and the guard is back to checking one element per command.
+        Assert.True(checkedControls > destructive.Length,
+            $"{checkedControls} controls read for {destructive.Length} commands — no command was found on "
+            + "more than one control, so the every-path check is not exercised by anything.");
 
         Assert.True(offenders.Count == 0,
             "These buttons perform an immediate, unrecoverable change while looking like an ordinary "
@@ -2320,7 +2326,9 @@ public partial class ArchitectureTests
     private static (string Command, string View, string[] Styles)[] DestructiveControls =>
     [
         ("DeletePresetCommand", "AudioMixerView.xaml", ["DangerButton"]),
-        ("KillProcessCommand", "ProcessManagerView.xaml", ["DangerButton", "DangerGhostButton"]),
+        // DangerMenuItem because this command is reachable two ways since #1551 — the Actions-column button
+        // and the row context menu — and the button styles target Button, so a MenuItem cannot wear them.
+        ("KillProcessCommand", "ProcessManagerView.xaml", ["DangerButton", "DangerGhostButton", "DangerMenuItem"]),
         ("DeleteSelectedCommand", "ShortcutCleanerView.xaml", ["DangerButton"]),
         ("ShredAllCommand", "FileShredderView.xaml", ["DangerButton"]),
         ("UninstallSelectedCommand", "UninstallerView.xaml", ["DangerButton"]),
@@ -2354,15 +2362,49 @@ public partial class ArchitectureTests
     private static string? ReadButtonElement(string collapsedXaml, string view, string command, out string element)
     {
         element = "";
-        var at = collapsedXaml.IndexOf(command, StringComparison.Ordinal);
-        if (at < 0) return $"{view} — nothing binds {command} any more; update this guard or the view";
+        var controls = ControlsBinding(collapsedXaml, command);
+        if (controls.Count == 0) return $"{view} — nothing binds {command} any more; update this guard or the view";
 
-        var open = collapsedXaml.LastIndexOf("<Button", at, StringComparison.Ordinal);
-        var close = collapsedXaml.IndexOf('>', at);
-        if (open < 0 || close < 0) return $"{view} — could not read the element around {command}";
-
-        element = collapsedXaml[open..close];
+        element = controls[0].Element;
         return null;
+    }
+
+    /// <summary>
+    /// EVERY control that binds <paramref name="command"/>, as (tag name, element text).
+    /// </summary>
+    /// <remarks>
+    /// Was "the nearest <c>&lt;Button</c> before the FIRST occurrence", which broke the moment a command
+    /// got a second path. #1551 gave <c>KillProcessCommand</c> a context-menu item in the DataGrid's
+    /// RowStyle, which sits earlier in the file than the Actions column — so the first occurrence became
+    /// the menu item, and <c>LastIndexOf("&lt;Button")</c> walked back past it to an unrelated TOOLBAR
+    /// button and reported that button's attributes as the kill control's. Both guards over
+    /// <see cref="DestructiveControls"/> failed, on the wrong element, with a message about the right one.
+    /// <para>So: every occurrence, and the enclosing element found by walking back to its own <c>&lt;</c>
+    /// rather than to a hardcoded tag — attributes contain no <c>&lt;</c>, and the tag may now legitimately
+    /// be <c>MenuItem</c> as well as <c>Button</c>. A destructive action reachable two ways has to satisfy
+    /// the guard on both, or the safer path vouches for the one nobody checked.</para>
+    /// </remarks>
+    private static List<(string Tag, string Element)> ControlsBinding(string collapsedXaml, string command)
+    {
+        var found = new List<(string, string)>();
+        var from = 0;
+
+        while (true)
+        {
+            var at = collapsedXaml.IndexOf(command, from, StringComparison.Ordinal);
+            if (at < 0) break;
+            from = at + command.Length;
+
+            var open = collapsedXaml.LastIndexOf('<', at);
+            var close = collapsedXaml.IndexOf('>', at);
+            if (open < 0 || close < 0) continue;
+
+            var element = collapsedXaml[open..close];
+            var tag = new string(element.Skip(1).TakeWhile(c => char.IsLetter(c)).ToArray());
+            found.Add((tag, element));
+        }
+
+        return found;
     }
 
     /// <summary>
@@ -2395,6 +2437,7 @@ public partial class ArchitectureTests
         var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
+        var checkedControls = 0;
 
         foreach (var (command, view, _) in DestructiveControls)
         {
@@ -2402,16 +2445,21 @@ public partial class ArchitectureTests
             Assert.True(File.Exists(path), $"{path} not found — this guard would pass vacuously");
 
             var xaml = XamlCode(path);
-            if (ReadButtonElement(xaml, view, command, out var element) is { } unreadable)
+            var controls = ControlsBinding(xaml, command);
+            if (controls.Count == 0)
             {
-                offenders.Add(unreadable);
+                offenders.Add($"{view} — nothing binds {command} any more; update this guard or the view");
                 continue;
             }
 
             checkedButtons++;
+            checkedControls += controls.Count;
 
-            if (HelpTextProblem(element, $"{view} — {command}") is { } problem)
-                offenders.Add(problem);
+            // Every path. A screen-reader user reaching the kill through the context menu learns no less
+            // about it than one reaching the button, so the explanation belongs on both.
+            foreach (var (tag, element) in controls)
+                if (HelpTextProblem(element, $"{view} — {command} on <{tag}>") is { } problem)
+                    offenders.Add(problem);
         }
 
         // Vacuity floor, in two parts because one of them is not enough. Comparing against the list's own
@@ -2427,6 +2475,12 @@ public partial class ArchitectureTests
         Assert.True(checkedButtons == DestructiveControls.Length,
             $"only {checkedButtons} of {DestructiveControls.Length} listed commands were read out of their "
             + "views, so this guard checked less than it claims");
+
+        // Mirrors the sibling guard: more controls than commands, because the kill is reachable from a
+        // button and from a row context menu. Equal means the every-path loop is running over one element.
+        Assert.True(checkedControls > DestructiveControls.Length,
+            $"{checkedControls} controls read for {DestructiveControls.Length} commands — no command was "
+            + "found on more than one control, so the every-path check is not exercised by anything.");
 
         Assert.True(offenders.Count == 0,
             "These controls do something the user cannot undo, and a screen reader has no way to learn that "
@@ -7752,6 +7806,58 @@ public partial class ArchitectureTests
 
     [GeneratedRegex(@"IsPreset(?:Target|Restorable|Eligible)")]
     private static partial Regex PresetPredicate();
+
+    /// <summary>
+    /// A row context menu may only reach a command a row BUTTON on the same tab already reaches.
+    /// </summary>
+    /// <remarks>
+    /// The menus added in #1551 exist to give the row actions a keyboard path — Shift+F10 instead of
+    /// Tabbing through every cell of every preceding row. Their safety rests entirely on routing to the
+    /// SAME commands: <c>KillProcessCommand</c> confirms through <c>DialogService</c> before it ends a
+    /// process, and a menu item wired to a different command, or to a service call of its own, would be a
+    /// way around that confirmation reached by right-click.
+    /// <para>Comparing the two sets is what makes "mirrors the buttons" checkable rather than a claim in a
+    /// comment. Both sides carry a floor, because either pattern silently ceasing to match would leave this
+    /// comparing empty sets and passing.</para>
+    /// <para>The other half — that each of those bindings actually resolves to a member the view model has
+    /// — cannot be done from source text and is asserted against the parsed objects in
+    /// <c>RowContextMenuTests</c>, which instantiates the real view on an STA thread.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("ProcessManagerView.xaml")]
+    [InlineData("ServicesView.xaml")]
+    public void EveryRowMenuCommand_IsAlsoOnARowButton(string viewFile)
+    {
+        var xaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", viewFile));
+
+        var menuCommands = RowMenuCommand().Matches(xaml)
+            .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var buttonCommands = RowButtonCommand().Matches(xaml)
+            .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(menuCommands.Count >= 2,
+            $"only {menuCommands.Count} row-menu commands found in {viewFile} — the pattern stopped "
+            + "matching, so this comparison would pass against an empty set.");
+        Assert.True(buttonCommands.Count >= 2,
+            $"only {buttonCommands.Count} row-button commands found in {viewFile} — same problem, other side.");
+
+        var extra = menuCommands.Except(buttonCommands).OrderBy(c => c, StringComparer.Ordinal).ToList();
+        Assert.True(extra.Count == 0,
+            $"{viewFile}: these row-menu items reach a command no row button reaches, so the menu is not a "
+            + "mirror of the buttons and whatever confirmation the buttons rely on may not stand behind it: "
+            + string.Join(", ", extra));
+    }
+
+    // Both capture the WHOLE identifier. `(\w+Command)` matches a PREFIX — against
+    // `PlacementTarget.Tag.KillProcessCommandX` it returns "KillProcessCommand", which is a real command,
+    // so a renamed binding compared equal to the button's and this guard stayed green under mutation. The
+    // button side was already delimited by ", RelativeSource=", but it is written the same way so the two
+    // cannot drift into comparing differently-shaped names.
+    [GeneratedRegex(@"PlacementTarget\.Tag\.(\w+)")]
+    private static partial Regex RowMenuCommand();
+
+    [GeneratedRegex(@"DataContext\.(\w+), RelativeSource=\{RelativeSource AncestorType=UserControl\}")]
+    private static partial Regex RowButtonCommand();
 
     /// <summary>
     /// The Context Menu tab has to tell the user that hiding an add-on costs administrator rights and an

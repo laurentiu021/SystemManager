@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.104.0] - 2026-09-15
+
+**You can right-click a row in Process Manager and Services now.** Both tabs put their actions in
+buttons at the end of each row, which is fine with a mouse and close to unusable with a keyboard:
+reaching the buttons on the 200th process meant arrowing down to that row and then pressing Tab
+through every cell before them. Right-click — or the Menu key, or Shift+F10 — now opens the same
+actions on the row you are on, the way Task Manager and services.msc have always worked. They are
+the same actions, going through the same code, so every confirmation still stands in front of them.
+
+### Added
+
+- **Process Manager**: right-click a row for "Open file location" and "Kill". The kill item is
+  coloured like the kill button, explains what it costs to a screen reader, and asks the same
+  confirmation — it is a second way to reach the action, never a way around the warning.
+- **Services**: right-click a row for Start, Stop, Disable, Enable and Mark — the same five actions
+  as the row's buttons.
+- Menu items are labelled with the name of the row you opened them on ("Kill chrome.exe"), and that
+  one label is what a screen reader announces, so what is written and what is spoken cannot drift
+  apart.
+
 ## [1.103.0] - 2026-09-15
 
 **Three tabs moved to where you would actually look for them.** Nothing changed about what they do —

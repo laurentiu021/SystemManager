@@ -521,6 +521,27 @@
                 to guess. A style can be reused and can be found; a pair of attributes in a DataTemplate
                 cannot.
             -->
+            <!--
+                A row context-menu item that ends something for good (#1551). The row BUTTON for the same
+                action wears DangerGhostButton; a menu item cannot, because that style targets Button, so
+                without this the second path to a destructive action looked exactly like "Open file
+                location". EveryImmediatelyDestructiveButton_WearsADestructiveStyle enforces that every
+                path carries a destructive treatment, and it is what caught the gap.
+
+                Foreground only, no fill: this sits in a menu whose other items are ordinary, and a filled
+                red row would read as "this menu is dangerous" rather than "this item is" — the same
+                reasoning that made the row button DangerGhostButton instead of DangerButton. The disabled
+                trigger drops back to the muted colour so a greyed-out item does not still shout.
+            -->
+            <Style x:Key="DangerMenuItem" TargetType="MenuItem">
+                <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
             <Style x:Key="DangerGhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="1"/>

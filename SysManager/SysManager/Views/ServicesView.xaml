@@ -151,6 +151,43 @@
                  rather than replaced. See LogsView for the same pair. -->
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <!--
+                        Right-click / Menu key / Shift+F10 on a row, mirroring the Actions column (#1551).
+                        Four buttons per row, correctly labelled but reachable only by Tabbing through
+                        every preceding cell; services.msc has offered this menu for twenty years.
+
+                        Same construction as ProcessManagerView, whose comment carries the full reasoning:
+                        anchored to the ROW because WPF's DataGrid does not select on right-click; Tag
+                        carries the view model because a ContextMenu is in its own popup tree; headers are
+                        the buttons' own accessible-name strings so the visible and spoken label are one
+                        value; every item routes to the SAME command, so each service action keeps whatever
+                        confirmation it already had.
+                    -->
+                    <Setter Property="Tag"
+                            Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                    <Setter Property="ContextMenu">
+                        <Setter.Value>
+                            <ContextMenu>
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Start {0}'}"
+                                          Command="{Binding PlacementTarget.Tag.StartServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Stop {0}'}"
+                                          Command="{Binding PlacementTarget.Tag.StopServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <Separator/>
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Disable {0}'}"
+                                          Command="{Binding PlacementTarget.Tag.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Enable {0}'}"
+                                          Command="{Binding PlacementTarget.Tag.EnableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <Separator/>
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Mark or unmark this service: {0}'}"
+                                          Command="{Binding PlacementTarget.Tag.ToggleHighlightCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                            </ContextMenu>
+                        </Setter.Value>
+                    </Setter>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
                             <Setter Property="Background" Value="{DynamicResource WarningBgSubtle}"/>

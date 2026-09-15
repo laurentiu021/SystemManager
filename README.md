@@ -628,6 +628,11 @@ a confirmation before it runs:
 - Lists running Windows processes with PID, memory, threads, status, and when each one started
 - Real-time filter by name, description, category, or PID
 - Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
+- **Right-click a row** for the same actions the row's buttons offer, or press the Menu key or
+  Shift+F10 — the Windows shortcut Task Manager honours. Without it, reaching the buttons on the
+  200th process meant arrowing to that row and then pressing Tab through every cell before it. The
+  menu item that ends a program is coloured like the button that does, says what it costs, and goes
+  through the same confirmation
 - **Export CSV** saves the list **as currently filtered** to a file you choose the location for —
   someone who has typed a filter to isolate a suspect gets that list, not all ~470 rows. Both the
   readable and the raw values are included, so a spreadsheet can sort by size and by start time
@@ -1182,6 +1187,10 @@ offers, "rate us" prompts:
   is "my printer will stop working" rather than "this may affect system functionality".
   The names are on the safety pill's tooltip too, which needs no admin rights to read
 - Start, stop, disable, or enable services with confirmation dialogs
+- **Right-click a row** — or press the Menu key or Shift+F10 — for Start, Stop, Disable, Enable and
+  Mark, the same five actions as the row's buttons and through the same commands, so every
+  confirmation still applies. services.msc has worked this way for twenty years; four buttons per
+  row previously meant Tabbing through every cell of every preceding row to reach one
 - Requires admin for all mutations
 
 ### Drivers

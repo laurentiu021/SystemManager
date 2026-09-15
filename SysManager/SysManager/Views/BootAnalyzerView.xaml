@@ -105,6 +105,37 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
                             <DataGridTextColumn Header="Delay" Binding="{Binding DurationDisplay}" Width="80"/>
+
+                            <!--
+                                The route this tab never had (#1504). It named the exact component that cost
+                                seconds of boot time and then stopped — the word "Startup" did not appear in
+                                this file at all, so the user had to know that the cure for a slow-boot
+                                application lives nine rows down a collapsed group called System.
+
+                                Destination and label both come from the row, because the row is what knows
+                                its Kind: a Service opens Services, an Application or Background task opens
+                                Startup Manager, and a Driver or Device shows nothing — this app has no tab
+                                that disables a driver, and sending someone looking for one is worse than
+                                an honest dead end.
+
+                                Same GhostButton + MetricBlue treatment as the Dashboard's "Fix this", so a
+                                link to another tab looks the same wherever it appears.
+                            -->
+                            <DataGridTemplateColumn Header="" Width="170" MinWidth="150"
+                                                    CanUserSort="False" CanUserResize="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding NavLabel}"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='Open the tab that can switch off {0}'}"
+                                                Command="{Binding DataContext.OpenFixForCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource GhostButton}" Padding="8,2" FontSize="11"
+                                                Foreground="{DynamicResource MetricBlue}"
+                                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
 

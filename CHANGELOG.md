@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.105.0] - 2026-09-15
+
+**When SysManager tells you something is wrong, it can now take you to the fix.** The Dashboard used to
+report five real checks as plain text — two of them literally said "check System Health" without being
+able to take you there — and Boot Analyzer named the exact app that cost you seconds of startup and then
+stopped. Both now offer a link straight to the tab that can act on it. Nothing about what they find has
+changed; they just stopped leaving you to work out where the fix lives among 58 tabs.
+
+### Added
+
+- **Dashboard alerts** get a "Fix this" link: disk and memory findings go to System Health, a pending
+  restart to Windows Update, waiting app updates to App Updates, and critical events to System Logs. Green
+  results have no link, because there is nothing to fix.
+- **Health recommendations** get the same link where a tab can help — low disk space opens Deep Cleanup,
+  a degraded drive opens System Health, high memory opens Process Manager. "Restart recommended" and
+  "consider replacing the battery" deliberately have none: no tab in this app does either, and a link that
+  goes somewhere unhelpful is worse than no link.
+- **Boot Analyzer** rows link to the tab that can switch the component off — a slow service opens Services
+  **already filtered to that service**, a slow app or background task opens Startup Manager. Drivers and
+  devices get no link, because this app cannot disable one.
+
+### Changed
+
+- Three alert titles no longer end in "check System Health" / "see System Health". The link says where to
+  go, so the title saying it too read the same thing twice.
+
 ## [1.104.0] - 2026-09-15
 
 **You can right-click a row in Process Manager and Services now.** Both tabs put their actions in

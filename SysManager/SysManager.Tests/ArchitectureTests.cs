@@ -7853,6 +7853,102 @@ public partial class ArchitectureTests
     // so a renamed binding compared equal to the button's and this guard stayed green under mutation. The
     // button side was already delimited by ", RelativeSource=", but it is written the same way so the two
     // cannot drift into comparing differently-shaped names.
+    /// <summary>
+    /// Every <c>"nav-…"</c> id written anywhere in the app resolves to a tab that exists.
+    /// </summary>
+    /// <remarks>
+    /// #1496 and #1504 turned findings into links, so nav ids are now literals scattered across view
+    /// models, services and models — the Dashboard's alerts and health recommendations, Boot Analyzer's
+    /// per-row route, the tray shortcuts. A typo or a renamed tab makes a button that looks live and does
+    /// nothing, which is this codebase's most repeated defect wearing a new hat: <c>NavigateTo</c> ignores
+    /// an unknown id by design, precisely so a dead link cannot crash the app under a click.
+    /// <para>Scanned across the whole app rather than a list of known callers, so the next feature that
+    /// links to a tab is covered without anyone remembering to extend this.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryNavIdWrittenInTheApp_ResolvesToARealTab()
+    {
+        var appDir = FindAppProjectDir();
+
+        var declared = NavEntry()
+            .Matches(MemberSlice(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")),
+                                 "private NavGroup[] BuildNavGroups()"))
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(declared.Count >= 50,
+            $"only {declared.Count} nav ids parsed out of BuildNavGroups — the sidebar is not being read, "
+            + "so every id below would compare against an almost-empty set and pass.");
+
+        var offenders = new List<string>();
+        var used = 0;
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.*", SearchOption.AllDirectories)
+                     .Where(f => f.EndsWith(".cs", StringComparison.Ordinal)
+                              || f.EndsWith(".xaml", StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        {
+            var text = file.EndsWith(".xaml", StringComparison.Ordinal)
+                ? XamlCode(file)
+                : WithoutComments(File.ReadAllText(file));
+
+            foreach (var m in NavIdLiteral().Matches(text).Cast<Match>())
+            {
+                used++;
+                var id = m.Groups["id"].Value;
+                if (!declared.Contains(id))
+                    offenders.Add($"{Path.GetFileName(file)} — \"{id}\" is not a tab in BuildNavGroups");
+            }
+        }
+
+        Assert.True(used >= 60,
+            $"only {used} nav-id literals found across the app — the pattern stopped matching, so this "
+            + "guard is checking almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These nav ids do not name a tab, so whatever links to them is a button that looks live and "
+            + "goes nowhere — NavigateTo ignores an unknown id rather than throwing, so nothing else will "
+            + "tell you:\n  " + string.Join("\n  ", offenders.Distinct(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
+    /// No view model reaches the shell through <c>Application.Current.MainWindow</c>.
+    /// </summary>
+    /// <remarks>
+    /// That was how the Dashboard navigated: cast the live window's DataContext to the shell and walk its
+    /// NavItems. It cannot be tested, it is silently inert whenever no window is up, and #1504 pointed out
+    /// that copying it to the next caller would deepen a locator anti-pattern Gate-ARCH forbids. It was
+    /// replaced by an injected <c>INavigationService</c>, and this is what stops it coming back — the
+    /// replacement is invisible to the compiler, so nothing else would notice a second copy appearing.
+    /// </remarks>
+    [Fact]
+    public void NoViewModelReachesTheShellThroughTheLiveWindow()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        {
+            scanned++;
+            var code = WithoutComments(File.ReadAllText(file));
+            if (code.Contains("MainWindow?.DataContext", StringComparison.Ordinal)
+                || code.Contains("MainWindow.DataContext", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(scanned >= 40,
+            $"only {scanned} view models scanned — the directory is wrong and this guard reads nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These view models reach the shell through the live window instead of INavigationService, "
+            + "which cannot be tested and does nothing when no window is up:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
     [GeneratedRegex(@"PlacementTarget\.Tag\.(\w+)")]
     private static partial Regex RowMenuCommand();
 

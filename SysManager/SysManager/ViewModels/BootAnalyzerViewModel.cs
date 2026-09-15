@@ -37,13 +37,36 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
     [ObservableProperty] private BootRecord? _latestBoot;
     [ObservableProperty] private string _trend = "";
 
-    public BootAnalyzerViewModel(BootAnalyzerService service)
+    private readonly INavigationService _navigation;
+
+    public BootAnalyzerViewModel(BootAnalyzerService service, INavigationService navigation)
     {
         _service = service;
+        _navigation = navigation;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Reading boot performance history…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
+    }
+
+    /// <summary>
+    /// Opens the tab that can switch off the component this row blames, pre-filtered to its name.
+    /// </summary>
+    /// <remarks>
+    /// The diagnose-to-fix pair this tab existed half of: it named the exact application or service that
+    /// cost the user seconds of boot time, and then offered no route to it (#1504). The destination is the
+    /// row's own <c>NavTargetId</c>, so the mapping from component kind to tab lives with the model that
+    /// knows the kind.
+    /// <para>The name is passed as a filter, which is the difference between arriving at a list of every
+    /// service on the machine and arriving at the one just blamed. Startup Manager has no search box, so
+    /// it simply opens — the filter is ignored by anything that does not implement <c>IFilterable</c>,
+    /// which is why the caller can always pass it.</para>
+    /// </remarks>
+    [RelayCommand]
+    private void OpenFixFor(BootDegradation? degradation)
+    {
+        if (degradation is null || !degradation.CanNavigate) return;
+        _navigation.GoTo(degradation.NavTargetId, degradation.Name);
     }
 
     private bool NotBusy => !IsBusy;

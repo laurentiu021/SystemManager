@@ -77,4 +77,20 @@ public sealed record HealthRecommendation
 
     public string IconGlyph => Severity == "critical" ? "\uE783" : "\uE7BA";
     public string ColorHex => Severity == "critical" ? StatusColors.Bad : StatusColors.Warning;
+
+    /// <summary>
+    /// The nav id of the tab that can act on this recommendation, or empty when there is nothing to open.
+    /// </summary>
+    /// <remarks>
+    /// Every recommendation named a fix and gave no route to it \u2014 "Restart recommended", "health degraded
+    /// - consider backup", "High memory usage - close unused apps" (#1496). Same reasoning and same shape
+    /// as <c>DashboardAlert.NavTargetId</c>: an id, not a command, so the model stays a description.
+    /// <para>Empty is legitimate and expected: "consider replacement" for a worn battery, or a restart,
+    /// are things no tab in this app does, and inventing a destination for them would be worse than a
+    /// recommendation that simply reads as advice.</para>
+    /// </remarks>
+    public string NavTargetId { get; init; } = "";
+
+    /// <summary>True when this recommendation has somewhere to send the user.</summary>
+    public bool CanNavigate => !string.IsNullOrEmpty(NavTargetId);
 }

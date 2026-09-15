@@ -229,6 +229,19 @@
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
                                         <TextBlock Text="{Binding Message}" FontSize="12" VerticalAlignment="Center"
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                        <!-- Each recommendation named a fix and gave no route to it (#1496).
+                                             Not every one has a destination: "Restart recommended" and
+                                             "consider replacement" for a worn battery are things no tab
+                                             here does, and CanNavigate hides the button for those rather
+                                             than inventing somewhere to send you. -->
+                                        <Button Content="Fix this"
+                                                AutomationProperties.Name="{Binding Message, StringFormat='Fix this: {0}'}"
+                                                Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding NavTargetId}"
+                                                Style="{StaticResource GhostButton}" Padding="8,2" FontSize="11"
+                                                Foreground="{DynamicResource MetricBlue}" VerticalAlignment="Center"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -569,6 +582,29 @@
                                         <TextBlock Text="{Binding Eta}" FontSize="10" Foreground="{DynamicResource TextMuted}"
                                                    Margin="22,2,0,0"
                                                    Visibility="{Binding ShowEta, Converter={StaticResource BoolToVis}}"/>
+                                        <!--
+                                            The route out of the dead end (#1496). This card told the user
+                                            something was wrong and then left them to find the fix among 58
+                                            tabs behind 11 collapsed groups — two of these alerts literally
+                                            read "check System Health" without being able to take anyone
+                                            there. Those titles no longer say it, because this does.
+
+                                            Same GhostButton + MetricBlue + Padding 8,4 + FontSize 11 as the
+                                            quick-action "Go to {tab}" affordance two cards to the left, so
+                                            one meaning keeps one appearance.
+
+                                            Gated on CanNavigate, false for every green alert: "Fix this"
+                                            beside "All SMART indicators healthy" would teach the user that
+                                            the button means nothing.
+                                        -->
+                                        <Button Content="Fix this"
+                                                AutomationProperties.Name="{Binding Title, StringFormat='Fix this: {0}'}"
+                                                Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding NavTargetId}"
+                                                Style="{StaticResource GhostButton}" Padding="8,4" FontSize="11"
+                                                Foreground="{DynamicResource MetricBlue}" HorizontalAlignment="Left"
+                                                Margin="22,4,0,0"
+                                                Visibility="{Binding CanNavigate, Converter={StaticResource BoolToVis}}"/>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

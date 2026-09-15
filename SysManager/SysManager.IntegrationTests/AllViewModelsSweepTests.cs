@@ -37,7 +37,8 @@ public class AllViewModelsSweepTests
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()));
     [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService()));
     [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()));
-    [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()));
+    [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService()));
+    [Fact] public void LargeFiles_Constructs() => Assert.NotNull(new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService()));
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
     [Fact] public void Logs_Constructs() => Assert.NotNull(new LogsViewModel(new EventLogService()));
     [Fact] public void About_Constructs() => Assert.NotNull(new AboutViewModel(AboutConfigDir()));
@@ -81,9 +82,15 @@ public class AllViewModelsSweepTests
     [Fact]
     public void DeepCleanup_HasCollections()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService());
         Assert.NotNull(vm.Categories);
-        Assert.NotNull(vm.LargeFiles);
+    }
+
+    [Fact]
+    public void LargeFiles_HasCollections()
+    {
+        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        Assert.NotNull(vm.Files);
         Assert.NotNull(vm.ScanLocations);
     }
 

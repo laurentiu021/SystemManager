@@ -329,6 +329,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // destructive operation in the app, so it keeps the Privacy group's warning context.
         Group("grp-storage", "Storage & Files", "\uEDA2", "What fills the disk, what locks a file",  // HardDrive
             Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",      typeof(Views.DiskAnalyzerView), keywords: "what is using my disk, disk full, biggest folders, space"),
+            // Between the other two read-only space-analysis tools, which is what it is — it moved out of
+            // Deep Cleanup in #1523, where it sat below a scan-and-delete UI and read as part of it.
+            Tab<LargeFilesViewModel>("nav-large-files",     "Large Files",        typeof(Views.LargeFilesView), keywords: "biggest files, what is taking up space, huge files, free up space"),
             Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder",   typeof(Views.DuplicateFileView), keywords: "same files, copies, wasted space, identical"),
             Tab<FileLockViewModel>("nav-file-lock",         "File Lock Detector", typeof(Views.FileLockView), keywords: "file in use, cannot delete, locked, in another program")),
 
@@ -693,7 +696,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
             [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService()),
-            [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), fixedDrives),
+            [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService()),
+            [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
             [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService()),
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(new ProcessManagerService()),

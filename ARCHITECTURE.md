@@ -97,7 +97,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 | Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
 | Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `SettingsWatchdogViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
-| Storage & Files | `DiskAnalyzerViewModel` · `DuplicateFileViewModel` · `FileLockViewModel` |
+| Storage & Files | `DiskAnalyzerViewModel` · `LargeFilesViewModel` · `DuplicateFileViewModel` · `FileLockViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `BandwidthMonitorViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` |
@@ -113,7 +113,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
 - `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
-- `DeepCleanupViewModel` — scan-first deep cleanup + large-files finder.
+- `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list.
+- `LargeFilesViewModel` — read-only biggest-files listing for a chosen folder or drive. Split out of
+  `DeepCleanupViewModel` in #1523 and moved to the Storage group, beside the other two read-only
+  space-analysis tabs. The two halves shared nothing — the locations list, the drive enumeration and
+  the size threshold were read only by the large-file scan — so Deep Cleanup LOST two dependencies
+  (`LargeFileScanner`, `FixedDriveService`) rather than gaining a shared seam, and no longer needs an
+  async init at all.
 - `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
 - `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan.

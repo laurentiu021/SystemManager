@@ -122,6 +122,7 @@ public static class ServiceRegistration
         services.AddSingleton<SystemHealthViewModel>();
         services.AddSingleton<CleanupViewModel>();
         services.AddSingleton<DeepCleanupViewModel>();
+        services.AddSingleton<LargeFilesViewModel>();
         services.AddSingleton<DuplicateFileViewModel>();
         services.AddSingleton<DiskAnalyzerViewModel>();
         services.AddSingleton<ProcessManagerViewModel>();

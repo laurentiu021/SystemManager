@@ -11,7 +11,7 @@ namespace SysManager.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// <see cref="MainWindowViewModel"/>'s parameterless constructor is the designer/test path, so it calls
-/// <c>BuildDesignerGraph()</c> and builds all 58 tab view models eagerly — including the ones that launch
+/// <c>BuildDesignerGraph()</c> and builds all 59 tab view models eagerly — including the ones that launch
 /// real <c>winget</c> and <c>powershell</c> child processes. Those children outlive the test, and the cost
 /// is superlinear in the number of constructions rather than in the number of assertions: this class ran
 /// 1 construction in 0.9&#160;s, 41 in 9.7&#160;s and 43 in 27.3&#160;s.
@@ -137,11 +137,19 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         Assert.Same(ping.Shared, ((NetworkRepairViewModel)TabContent(vm, "nav-network-repair")).Shared);
     }
 
+    /// <summary>
+    /// Every nav id the shell builds, and the total.
+    /// </summary>
+    /// <remarks>
+    /// The total is a deliberate tripwire: adding a tab should make someone look at this list and the
+    /// README counts beside it. It is asserted rather than derived for that reason. The number used to be
+    /// in the method NAME too, which meant every new tab renamed a test — one place is enough.
+    /// </remarks>
     [Fact]
-    public void NavItems_ContainAll58()
+    public void NavItems_ContainEveryTab()
     {
         var vm = _nav;
-        Assert.Equal(58, vm.NavItems.Count);
+        Assert.Equal(59, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
@@ -180,8 +188,9 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         Assert.Contains("nav-shortcut-cleaner", ids);
         Assert.Contains("nav-scheduled-maintenance", ids);
 
-        // Storage & Files (3) — File Lock Detector is per-file work, not continuous monitoring
+        // Storage & Files (4) — File Lock Detector is per-file work, not continuous monitoring
         Assert.Contains("nav-disk-analyzer", ids);
+        Assert.Contains("nav-large-files", ids);
         Assert.Contains("nav-duplicates", ids);
         Assert.Contains("nav-file-lock", ids);
 
@@ -404,6 +413,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
         var ids = storage.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-disk-analyzer", ids);
+        Assert.Contains("nav-large-files", ids);
         Assert.Contains("nav-duplicates", ids);
     }
 

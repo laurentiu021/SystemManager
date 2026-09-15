@@ -103,6 +103,17 @@ public class OtherTabsUiTests
         Assert.NotNull(_fx.FindButtonById("btn-fixes-rebuild-icon-cache"));
     }
 
+    // ---------------- Large Files ----------------
+
+    // Asserted on nav-large-files rather than nav-deep-cleanup, so the move out of Deep Cleanup (#1523)
+    // is pinned end to end in a live app.
+    [Fact]
+    public void LargeFiles_ScanButton_Exists()
+    {
+        _fx.GoToTab("nav-large-files");
+        Assert.NotNull(_fx.FindButtonById("btn-large-files-scan"));
+    }
+
     // ---------------- Drivers ----------------
 
     [Fact]

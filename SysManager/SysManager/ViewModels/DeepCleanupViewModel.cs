@@ -21,17 +21,12 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
 
     private readonly DeepCleanupService _cleanup;
-    private readonly LargeFileScanner _largeFiles;
-    private readonly FixedDriveService _drives;
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _cleanCts;
-    private CancellationTokenSource? _largeCts;
     private readonly EtaCalculator _scanEta = new();
     private readonly EtaCalculator _cleanEta = new();
 
     public BulkObservableCollection<CleanupCategory> Categories { get; } = new();
-    public BulkObservableCollection<LargeFileEntry> LargeFiles { get; } = new();
-    public ObservableCollection<ScanLocation> ScanLocations { get; } = new();
 
     /// <summary>Whether this session is elevated. Read by the shared <c>AdminBanner</c> from the DataContext.</summary>
     /// <remarks>
@@ -45,7 +40,6 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private bool _isCleaning;
-    [ObservableProperty] private bool _isLargeScanning;
 
     // Scan progress (determinate, category-based)
     [ObservableProperty] private int _scanProgress;          // 0..100
@@ -55,17 +49,8 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     [ObservableProperty] private string _cleanStatusLine = string.Empty;
     [ObservableProperty] private string _cleanEtaText = string.Empty;
 
-    // Large files progress (indeterminate, counter-based)
-    [ObservableProperty] private long _largeFilesScanned;
-    [ObservableProperty] private long _largeBytesScanned;
-    [ObservableProperty] private string _largeCurrentFolder = string.Empty;
-
     [ObservableProperty] private string _scanSummary = "Press 'Scan' to discover what can be safely freed.";
     [ObservableProperty] private string _cleanSummary = string.Empty;
-    [ObservableProperty] private string _largeScanStatus = string.Empty;
-    [ObservableProperty] private int _minSizeMB = 500;
-    [ObservableProperty] private ScanLocation? _selectedLocation;
-    [ObservableProperty] private int _topCount = 100;
 
     public long TotalSelectedBytes => Categories.Where(c => c.IsSelected).Sum(c => c.TotalSizeBytes);
     public string TotalSelectedDisplay => FormatHelper.FormatSize(TotalSelectedBytes);
@@ -78,17 +63,14 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     /// </summary>
     private bool CanClean => !IsCleaning && Categories.Any(c => c.IsSelected);
 
-    public string LargeBytesScannedDisplay => FormatHelper.FormatSize(LargeBytesScanned);
-
-    public DeepCleanupViewModel(DeepCleanupService cleanup, LargeFileScanner largeFiles, FixedDriveService drives)
+    public DeepCleanupViewModel(DeepCleanupService cleanup)
     {
         _cleanup = cleanup;
-        _largeFiles = largeFiles;
-        _drives = drives;
-        // Read synchronously, before InitAsync: the banner is above the fold and its two states must not
-        // flicker from "needs administrator" to "running as administrator" after the page has painted.
+        // Read synchronously rather than from an async init: the banner is above the fold and its two
+        // states must not flicker from "needs administrator" to "running as administrator" after the page
+        // has painted. Nothing else needs initialising here — the locations list this tab used to build
+        // left with the large-files finder (#1523), so there is no InitializeAsync call any more.
         IsElevated = AdminHelper.IsElevated();
-        InitializeAsync(InitAsync);
     }
 
     /// <summary>Restarts SysManager elevated, so the five <c>%WinDir%</c> buckets stop being skipped.</summary>
@@ -99,58 +81,13 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             App.RequestShutdown();
     }
 
-    private async Task InitAsync()
-    {
-        try { await LoadLocationsAsync(); }
-        catch (IOException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
-        catch (UnauthorizedAccessException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
-        catch (InvalidOperationException ex) { Log.Warning("Deep cleanup location load failed: {Error}", ex.Message); }
-    }
-
-    private async Task LoadLocationsAsync()
-    {
-        try
-        {
-            ScanLocations.Clear();
-
-            AddLocation("📥  Downloads", Helpers.KnownFolders.GetDownloadsPath());
-            AddLocation("📄  Documents", Helpers.KnownFolders.GetDocumentsPath());
-            AddLocation("🖥️  Desktop", Helpers.KnownFolders.GetDesktopPath());
-            AddLocation("🎬  Videos", Helpers.KnownFolders.GetVideosPath());
-            AddLocation("🖼️  Pictures", Helpers.KnownFolders.GetPicturesPath());
-            AddLocation("🎵  Music", Helpers.KnownFolders.GetMusicPath());
-
-            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            AddLocation("💼  Program Files", pf);
-            AddLocation("💼  Program Files (x86)", pfx86);
-
-            var drives = await _drives.EnumerateAsync();
-            foreach (var d in drives)
-                AddLocation($"💾  Whole drive  {d.Letter}  ({d.SizeGB:F0} GB)", d.Letter + @"\");
-
-            SelectedLocation = ScanLocations.FirstOrDefault();
-        }
-        catch (IOException) { /* location enumeration is best-effort */ }
-        catch (UnauthorizedAccessException) { /* location enumeration is best-effort */ }
-    }
-
-    private void AddLocation(string label, string path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !System.IO.Directory.Exists(path)) return;
-        ScanLocations.Add(new ScanLocation(label, path));
-    }
-
-    partial void OnLargeBytesScannedChanged(long value) => OnPropertyChanged(nameof(LargeBytesScannedDisplay));
-
     // Forward any running state to IsBusy so the sidebar progress indicator works
-    partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+    partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning;
     partial void OnIsCleaningChanged(bool value)
     {
-        IsBusy = IsScanning || IsCleaning || IsLargeScanning;
+        IsBusy = IsScanning || IsCleaning;
         CleanCommand.NotifyCanExecuteChanged();
     }
-    partial void OnIsLargeScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning || IsLargeScanning;
 
     /// <summary>
     /// Copies the ticks the user set onto a freshly scanned set of categories, so a rescan does not throw
@@ -202,8 +139,6 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             _scanCts?.Dispose();
             _cleanCts?.Cancel();
             _cleanCts?.Dispose();
-            _largeCts?.Cancel();
-            _largeCts?.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -369,78 +304,5 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     {
         _scanCts?.Cancel();
         _cleanCts?.Cancel();
-        _largeCts?.Cancel();
-    }
-
-    // ---------- large files finder ----------
-
-    [RelayCommand]
-    private async Task ScanLargeFilesAsync()
-    {
-        if (IsLargeScanning) return;
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Large File Scan");
-        if (opLock is null)
-        {
-            LargeScanStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
-            return;
-        }
-        if (SelectedLocation is null)
-        {
-            LargeScanStatus = "Pick a location first.";
-            return;
-        }
-
-        IsLargeScanning = true;
-        LargeFiles.Clear();
-        LargeFilesScanned = 0;
-        LargeBytesScanned = 0;
-        LargeCurrentFolder = string.Empty;
-        LargeScanStatus = $"Scanning {SelectedLocation.Label.Trim()}...";
-        _largeCts?.Dispose();
-        _largeCts = new CancellationTokenSource();
-        try
-        {
-            var progress = new Progress<LargeFileScanner.LargeFileProgress>(p =>
-            {
-                LargeFilesScanned = p.FilesScanned;
-                LargeBytesScanned = p.BytesScanned;
-                LargeCurrentFolder = p.CurrentFolder;
-            });
-            var list = await _largeFiles.ScanAsync(
-                rootPath: SelectedLocation.Path,
-                minSizeBytes: (long)MinSizeMB * 1024L * 1024L,
-                top: TopCount,
-                progress: progress,
-                ct: _largeCts.Token);
-            LargeFiles.ReplaceWith(list);
-            LargeScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
-            ToastService.Instance.Show("Large file scan complete", $"{list.Count} files found ≥ {MinSizeMB} MB");
-            Log.Information("Large file scan completed: {Count} files ≥ {MinSize} MB",
-                list.Count, MinSizeMB);
-        }
-        catch (OperationCanceledException) { LargeScanStatus = "Scan cancelled."; }
-        catch (IOException ex) { LargeScanStatus = $"Error: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { LargeScanStatus = $"Error: {ex.Message}"; }
-        finally { IsLargeScanning = false; LargeCurrentFolder = string.Empty; }
-    }
-
-    [RelayCommand]
-    private void ShowInExplorer(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
-        try { Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe"), $"/select,\"{path}\"") { UseShellExecute = true })?.Dispose(); }
-        catch (InvalidOperationException) { /* best-effort */ }
-        catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
-    }
-
-    [RelayCommand]
-    private void CopyPath(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path)) return;
-        try { System.Windows.Clipboard.SetText(path); }
-        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard may be locked */ }
     }
 }
-
-/// <summary>Labelled location the user can pick in the large-files finder.</summary>
-public sealed record ScanLocation(string Label, string Path);

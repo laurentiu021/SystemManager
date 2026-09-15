@@ -1,6 +1,6 @@
 # SysManager for Windows
 
-One portable app for keeping a Windows PC healthy — 58 tabs of network diagnostics, cleanup, privacy
+One portable app for keeping a Windows PC healthy — 59 tabs of network diagnostics, cleanup, privacy
 controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
@@ -32,7 +32,7 @@ winget install laurentiu021.SysManager
 
 - [What it is](#what-it-is)
 - [Why SysManager?](#why-sysmanager)
-- [Features](#features) — all 58 tabs, grouped
+- [Features](#features) — all 59 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
@@ -81,7 +81,7 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-Beyond those, the rest of the 58 tabs cover performance tuning, DNS and hosts editing, duplicate files,
+Beyond those, the rest of the 59 tabs cover performance tuning, DNS and hosts editing, duplicate files,
 battery health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
 new-install alerts and Windows optional features. [The full list is below](#features), grouped as the sidebar
 groups them.
@@ -126,12 +126,12 @@ Sponsorship goes toward that certificate — see [Support](#support).</sub>
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
+The sidebar organises 59 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
 selected background, and stronger label while you move between groups. Every tab
 row and every group header is also keyboard-operable with a visible focus cue. All
-58 tabs are fully implemented:
+59 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
@@ -153,7 +153,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 **Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
 actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
 Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
-finds Deep Cleanup. 54 of the 58 tabs carry keywords for this; typing clears the groups and shows a flat
+finds Deep Cleanup. 55 of the 59 tabs carry keywords for this; typing clears the groups and shows a flat
 list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
@@ -557,13 +557,6 @@ System → System Fixes, where the tab name matches what they do.
 - Safe by design: never touches browsers, passwords, the registry, active
   drivers, or actual game files. Locked files are skipped, never forced.
 
-#### Large files finder (part of Deep Cleanup)
-- Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program
-  Files, or a whole drive.
-- Configurable min-size (default 500 MB) and top-N (default 100).
-- **Read-only** — only "Show in Explorer" and "Copy path" actions. Deletion
-  is disabled by design so a mis-click can never hurt anything.
-
 ### Startup Manager
 - Lists the programs that run at Windows boot: the Run and RunOnce registry keys for both your
   account and the whole machine, **including the separate location 64-bit Windows uses for programs
@@ -663,6 +656,19 @@ System → System Fixes, where the tab name matches what they do.
   last scan on 12 Jul" — so a one-off number becomes an answer to "why did my disk fill up?". It is
   always phrased as *since your last scan*, never as live monitoring, because you choose when to
   scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there)
+
+### Large Files
+Answers "what is actually using my space?" by listing the biggest files in one place.
+- Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program Files, or a whole drive
+- Configurable minimum size (default 500 MB) and how many to list (default 100)
+- **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy path".
+  Deletion is disabled by design, even with administrator rights, so a mis-click here can
+  never cost you a file. Deleting is a decision to make in Explorer, where you can see what
+  else is in the folder
+- Lives beside [Disk Analyzer](#disk-analyzer) and [Duplicate Finder](#duplicate-finder) because
+  all three answer the same question and none of them delete anything. It used to sit below Deep
+  Cleanup's scan-and-delete list, where it was both hard to find and easy to mistake for part of
+  the deletion
 
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, status, and when each one started

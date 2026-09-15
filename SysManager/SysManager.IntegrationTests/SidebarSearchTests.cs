@@ -7,7 +7,7 @@ using SysManager.ViewModels;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Search over the 58 tabs, and the keywords that make it work for someone who does not know the
+/// Search over the 59 tabs, and the keywords that make it work for someone who does not know the
 /// vocabulary (#1498, #1505).
 /// </summary>
 /// <remarks>

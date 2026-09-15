@@ -2916,7 +2916,7 @@ public partial class ArchitectureTests
     /// own, so over raw text it counts as a 59th gutter-carrying file on the strength of an example. It is not
     /// an offender either way — the header check excludes it, since nothing in it says
     /// <c>28,24,28,0</c> — but a floor measured against prose is a floor that moves when a comment is
-    /// reworded. Reading through <see cref="XamlCode"/> is what makes 58 mean 58 files of markup.</para>
+    /// reworded. Reading through <see cref="XamlCode"/> is what makes 59 mean 59 files of markup.</para>
     /// <para>Part (a) of #1616. The original report also named Ping and Traceroute as flush to the edge;
     /// re-derived from current source both now end on the documented footer, so that half was already fixed
     /// and this guard is what stops it recurring.</para>
@@ -2955,11 +2955,11 @@ public partial class ArchitectureTests
                 offenders.Add($"{name} ends on {last}");
         }
 
-        // Vacuity floors, both measured today: 58 views carry a 28 gutter and 18 of them are per-section.
+        // Vacuity floors, both re-measured: 59 views carry a 28 gutter and 18 of them are per-section.
         // A collapse in either means the Margin or header match stopped matching real markup, and a pass
         // would then prove nothing about any view.
         Assert.True(gutterViews >= 50,
-            $"only {gutterViews} views were found with a 28 side gutter, out of 58 measured — the Margin "
+            $"only {gutterViews} views were found with a 28 side gutter, out of 59 measured — the Margin "
             + "pattern is out of date, so this guard is reading almost nothing.");
         Assert.True(perSection.Count >= 15,
             $"only {perSection.Count} per-section views were found, out of 18 measured — the header match is "
@@ -3311,7 +3311,7 @@ public partial class ArchitectureTests
     /// <summary>Every tab in the sidebar has a row in the navigation smoke table.</summary>
     /// <remarks>
     /// The smoke test drives each tab by its nav id and asserts its header renders — the cheapest possible
-    /// proof that a tab is not simply broken. It listed 57 of the 58 tabs. The missing one was Tweaks Hub,
+    /// proof that a tab is not simply broken. It listed 57 of the 58 tabs then in the app. The missing one was Tweaks Hub,
     /// which is flagged <c>inDevelopment</c>, so the single tab with no coverage at all was the one most
     /// likely to regress.
     /// <para>Nothing detected that. The table is a hand-maintained list of literals in a different project
@@ -3338,13 +3338,13 @@ public partial class ArchitectureTests
             .Select(m => m.Groups["id"].Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        // Vacuity floor: 58 tabs. If the literal pattern stops matching in either file, the set difference is
+        // Vacuity floor: 59 tabs. If the literal pattern stops matching in either file, the set difference is
         // empty and the guard passes on nothing.
         Assert.True(declared.Count >= 50,
-            $"only {declared.Count} nav ids were read from MainWindowViewModel, out of 58 — the literal "
+            $"only {declared.Count} nav ids were read from MainWindowViewModel, out of 59 — the literal "
             + "pattern is out of date, so a pass proves nothing.");
         Assert.True(covered.Count >= 50,
-            $"only {covered.Count} nav ids were read from the smoke table, out of 58 — same problem.");
+            $"only {covered.Count} nav ids were read from the smoke table, out of 59 — same problem.");
 
         var uncovered = declared.Except(covered, StringComparer.Ordinal)
             .OrderBy(id => id, StringComparer.Ordinal)
@@ -4597,7 +4597,7 @@ public partial class ArchitectureTests
     /// Every issue template that asks which tab is affected must offer the real tabs. Two of the three
     /// templates were still offering an 18-entry list from when the app had roughly that many tabs, with
     /// names that no longer matched the sidebar ("Cleanup" for "Quick Cleanup") and one entry — "Network"
-    /// — that is a nav group, not a tab. A reporter could not name 41 of the 58 tabs, so reports arrived
+    /// — that is a nav group, not a tab. A reporter could not name 41 of the tabs then in the app, so reports arrived
     /// mis-labelled or unlabelled. Nothing compiles a YAML dropdown, so only a test catches the drift.
     /// </summary>
     [Theory]
@@ -4661,7 +4661,7 @@ public partial class ArchitectureTests
     /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
     /// the same sentence is what tells a screen-reader user whether this app is worth trying.
     /// <para>Two different denominators are claimed and they are NOT interchangeable: the total tab count
-    /// (58, from the sidebar) and the number of tabs carrying an announced status line (53, which is fewer
+    /// (59, from the sidebar) and the number of tabs carrying an announced status line (53, which is fewer
     /// because a tab with nothing long-running has nothing to report). A guard that accepted either would
     /// pass on the two being swapped, so each claim is classified by the phrase that follows it.</para>
     /// <para>Screenshot filenames carry numbers too — <c>52-system-logs.png</c>, <c>55-about.png</c> — and
@@ -6784,11 +6784,11 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor: 58 views carry a Display header, measured. A drop means the style read stopped
+        // Vacuity floor: 59 views carry a Display header, measured. A drop means the style read stopped
         // matching and an absence-of-offenders pass would prove nothing.
         Assert.True(tabsChecked >= 55,
             $"only {tabsChecked} views with a page title were found across {files.Length} view files, out of "
-            + "58 measured — the Display header read is out of date, so a pass here means nothing.");
+            + "59 measured — the Display header read is out of date, so a pass here means nothing.");
 
         Assert.True(offenders.Count == 0,
             "these tabs do not explain themselves under their own title, which is the one thing every other "
@@ -7394,7 +7394,7 @@ public partial class ArchitectureTests
     /// <summary>
     /// Every tab must have exactly ONE name: the label in the sidebar and the header on the page must
     /// read the same.
-    /// <para>Five of 58 pairs disagreed — "App Alerts" under a page headed "App Installation Alerts",
+    /// <para>Five of the 58 pairs then in the app disagreed — "App Alerts" under a page headed "App Installation Alerts",
     /// "Profile Export/Import" under "Profile Export / Import". For the target persona a mismatch is a
     /// small dose of doubt about having clicked the right thing, and it costs nothing to remove. The point
     /// of asserting it is that the invariant survives the NEXT tab: a label and a header are edited in two
@@ -7426,7 +7426,7 @@ public partial class ArchitectureTests
         var vm = File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
         var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
         Assert.True(nav.Length > 2000,
-            $"the BuildNavGroups slice is {nav.Length} chars — too short to hold 58 tabs, so this guard "
+            $"the BuildNavGroups slice is {nav.Length} chars — too short to hold 59 tabs, so this guard "
             + "would compare almost nothing.");
 
         var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();

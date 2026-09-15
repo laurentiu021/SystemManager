@@ -395,7 +395,8 @@ public sealed class HealthScoreService
                 recs.Add(new HealthRecommendation
                 {
                     Message = $"Only {drive.FreeGB:0} GB free on {drive.Letter} — Deep Cleanup can reclaim space",
-                    Severity = freeSpaceScore <= 25 ? "critical" : "warning"
+                    Severity = freeSpaceScore <= 25 ? "critical" : "warning",
+                    NavTargetId = "nav-deep-cleanup"
                 });
             }
         }
@@ -419,7 +420,8 @@ public sealed class HealthScoreService
             recs.Add(new HealthRecommendation
             {
                 Message = $"{diskName} health degraded — consider backup",
-                Severity = diskScore < 50 ? "critical" : "warning"
+                Severity = diskScore < 50 ? "critical" : "warning",
+                NavTargetId = "nav-system-health"
             });
         }
 
@@ -429,7 +431,8 @@ public sealed class HealthScoreService
             recs.Add(new HealthRecommendation
             {
                 Message = $"High memory usage ({snapshot.Memory.UsedPercent:0}%) — close unused apps",
-                Severity = ramScore <= 40 ? "critical" : "warning"
+                Severity = ramScore <= 40 ? "critical" : "warning",
+                NavTargetId = "nav-processes"
             });
         }
 

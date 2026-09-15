@@ -19,7 +19,8 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class DashboardViewModelTests
 {
-    private static DashboardViewModel NewVm(IWingetService? winget = null)
+    private static DashboardViewModel NewVm(IWingetService? winget = null,
+                                            INavigationService? navigation = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -33,7 +34,11 @@ public class DashboardViewModelTests
             // defaulted to) these tests would delete a genuine crash report before the user was ever
             // told about it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
-            new MemoryTestService());
+            new MemoryTestService(),
+            // A substitute by default, so a test that navigates asserts against it instead of reaching for
+            // a live window. An unbound real NavigationService would also be inert, but then "did it
+            // navigate?" would be unanswerable rather than merely unasked.
+            navigation ?? Substitute.For<INavigationService>());
     }
 
     // ---------- empty states on the cards ----------

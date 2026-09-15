@@ -409,6 +409,9 @@ a confirmation before it runs:
   recent average
 - Lists the apps, drivers, services, and devices Windows flagged as slowing boot,
   with the delay attributed to each
+- **Each row links to the tab that can switch it off** — a slow service opens Services already
+  filtered to that service; a slow app or background task opens Startup Manager. Drivers and devices
+  get no link, because SysManager cannot disable one and sending you looking would waste your time
 - Read-only; reading the log requires administrator (elevation banner shown)
 
 ### Task Scheduler
@@ -1210,6 +1213,11 @@ offers, "rate us" prompts:
 ### Dashboard
 - One-line OS / CPU / RAM / disk summary
 - Live uptime counter
+- **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the
+  tab that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
+  updates to App Updates, critical events to System Logs, low disk space to Deep Cleanup, high memory to
+  Process Manager. Findings with nothing wrong show no link, and neither do the two pieces of advice no
+  tab here can carry out — restarting, and replacing a worn battery
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots.

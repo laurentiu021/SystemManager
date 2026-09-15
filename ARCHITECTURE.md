@@ -181,13 +181,22 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Fifteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Sixteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
-`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `IGamingProfileService`, and
-`ISessionRestorePoint` (the last two via a factory).
+`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `INavigationService`
+(NavigationService), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
+
+`INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
+something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and
+those view models take the service, so the service cannot take the shell in its constructor — the shell
+calls `NavigationService.Bind(this)` instead, implementing `INavigationTarget`. A destination that
+implements `IFilterable` can be arrived at pre-filtered, which is how Boot Analyzer opens Services already
+narrowed to the service that slowed boot. This replaced a
+`Application.Current.MainWindow.DataContext as MainWindowViewModel` lookup in `DashboardViewModel`;
+`NoViewModelReachesTheShellThroughTheLiveWindow` stops that returning.
 
 Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:

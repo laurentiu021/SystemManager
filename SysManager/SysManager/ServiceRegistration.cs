@@ -109,6 +109,12 @@ public static class ServiceRegistration
             sp.GetRequiredService<ISessionRestorePoint>(),
             Helpers.AdminHelper.IsElevated()));
 
+        // Registered as the concrete type as well, because the shell needs Bind() while every tab needs
+        // only the interface. One instance either way — two registrations of the same object, not two
+        // objects, or the shell would bind an instance nobody navigates through.
+        services.AddSingleton<NavigationService>();
+        services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
+
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<AppUpdatesViewModel>();

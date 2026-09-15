@@ -32,7 +32,8 @@ public class DashboardHealthFlagTests
             // CONSUMES it, and pointed at the real profile a test would delete a genuine crash report
             // before the user was ever told about it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-crash")),
-            new MemoryTestService());
+            new MemoryTestService(),
+            new NavigationService());
     }
 
     /// <summary>

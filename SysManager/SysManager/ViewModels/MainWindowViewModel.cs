@@ -15,7 +15,7 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
-public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable, INavigationTarget
 {
     // The DI container (runtime) or null (designer/tests). When present, tab VMs are
     // resolved lazily — each tab's NavItem builds its VM on first open (see NavItem.Content).
@@ -105,6 +105,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             // Designer / test path: no container → build the whole VM graph eagerly up front.
             _designerVms = BuildDesignerGraph();
         }
+
+        // Bound before any tab view model is resolved below. A tab takes INavigationService in its
+        // constructor, so the service cannot take the shell in ITS constructor — that is the cycle this
+        // late bind exists to break. Nothing can navigate before the user clicks, which is long after here.
+        _sp?.GetService<NavigationService>()?.Bind(this);
 
         // NetworkSharedState is shared by the four network tabs and disposed explicitly below.
         _networkShared = Eager<NetworkSharedState>();
@@ -501,10 +506,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Public navigation seam for out-of-tree callers (e.g. the system-tray "Volume mixer"
-    /// shortcut). Selects the tab by its nav id; unknown ids are ignored.
+    /// Public navigation seam for out-of-tree callers — the system-tray shortcuts, and every tab that
+    /// links to another through <see cref="INavigationService"/>. Unknown ids are ignored.
     /// </summary>
-    public void NavigateTo(string navId) => SelectNavById(navId);
+    /// <param name="navId">The nav id to select.</param>
+    /// <param name="filter">
+    /// Optional text to pre-fill the destination's search box. Applied only if the destination view model
+    /// implements <see cref="IFilterable"/> — the difference between arriving at a list of 200 services
+    /// and arriving at the one the user was just told about.
+    /// </param>
+    /// <remarks>
+    /// The filter is applied AFTER selection, because selecting the tab is what builds its view model on
+    /// the lazy path: reading Content first would construct it a navigation early, and on the eager
+    /// designer path it would still be the wrong order to reason about.
+    /// </remarks>
+    public void NavigateTo(string navId, string? filter = null)
+    {
+        SelectNavById(navId);
+
+        if (string.IsNullOrWhiteSpace(filter)) return;
+
+        if (SelectedNav?.Id == navId
+            && SelectedNav is { IsContentCreated: true, Content: IFilterable filterable })
+        {
+            filterable.FilterText = filter;
+        }
+    }
 
     // Only the About shortcut is bound (MainWindow.xaml's update banner, "View details"). Five
     // sibling commands — OpenDeepCleanupTab, OpenDiskAnalyzerTab, OpenDuplicatesTab, OpenCleanupTab
@@ -579,9 +606,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             new StandbyMemoryService(), sessionRestorePoint,
             Helpers.AdminHelper.IsElevated());
 
+        // A real navigation service, bound to this shell, so the designer/test path can navigate for
+        // real rather than holding a no-op. It is what lets a test click a Dashboard "Fix this" link and
+        // assert which tab it landed on; under DI the container supplies the same type, bound in the
+        // constructor above.
+        var designerNavigation = new NavigationService();
+        designerNavigation.Bind(this);
+
         return new Dictionary<Type, object>
         {
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService()),
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
@@ -622,7 +656,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService()),
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
-            [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer),
+            [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer, designerNavigation),
             [typeof(TimerResolutionViewModel)] = new TimerResolutionViewModel(new TimerResolutionService()),
             [typeof(FileLockViewModel)] = new FileLockViewModel(new FileLockService()),
             [typeof(DisplayProfileViewModel)] = new DisplayProfileViewModel(new DisplayProfileService()),

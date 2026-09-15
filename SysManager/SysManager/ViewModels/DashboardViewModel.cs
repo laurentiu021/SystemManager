@@ -29,6 +29,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // The 30-day WHEA scan the memory alert is named after. Already a registered singleton; it was simply
     // never reached from here, so the alert classified on a usage percentage instead.
     private readonly MemoryTestService _memTest;
+    private readonly INavigationService _navigation;
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -134,8 +135,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// </param>
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
-        CrashMarkerService crashMarkers, MemoryTestService memTest)
+        CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation)
     {
+        _navigation = navigation;
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
@@ -527,6 +529,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             alert.Title = title;
             alert.Severity = severity;
+            alert.NavTargetId = NavTargetFor(severity, "nav-system-health");
         });
     }
 
@@ -541,12 +544,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     internal static (string Title, AlertSeverity Severity) ClassifySmartHealth(int diskScore, bool unavailable)
     {
         if (unavailable)
-            return ("Disk health could not be read — see System Health", AlertSeverity.Yellow);
+            return ("Disk health could not be read", AlertSeverity.Yellow);
 
         return diskScore switch
         {
             >= 90 => ("All SMART indicators healthy", AlertSeverity.Green),
-            >= 60 => ("Disk health degrading — check System Health", AlertSeverity.Yellow),
+            >= 60 => ("Disk health degrading", AlertSeverity.Yellow),
             _ => ("Disk health critical — immediate attention needed", AlertSeverity.Red)
         };
     }
@@ -566,6 +569,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             {
                 alert.Title = title;
                 alert.Severity = severity;
+                alert.NavTargetId = NavTargetFor(severity, "nav-app-updates");
             });
         }
         catch (Exception ex)
@@ -625,7 +629,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         MemoryTestService.MemoryErrorSummary? summary)
     {
         if (summary is null)
-            return ("Memory errors could not be checked — see System Health", AlertSeverity.Yellow);
+            return ("Memory errors could not be checked", AlertSeverity.Yellow);
 
         if (summary.WheaMemoryErrors > 0)
             return ($"{summary.WheaMemoryErrors} memory hardware error{(summary.WheaMemoryErrors == 1 ? "" : "s")} in 30 days — test your RAM",
@@ -662,6 +666,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
             {
                 alert.Title = title;
                 alert.Severity = severity;
+                alert.NavTargetId = NavTargetFor(severity, "nav-logs");
+                alert.NavTargetId = NavTargetFor(severity, "nav-system-health");
             });
         }
         catch (Exception ex)
@@ -695,6 +701,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             {
                 alert.Title = title;
                 alert.Severity = severity;
+                alert.NavTargetId = NavTargetFor(severity, "nav-windows-update");
             });
         }
         catch (Exception ex)
@@ -860,16 +867,29 @@ public sealed partial class DashboardViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(navId)) SelectTab(navId);
     }
 
-    private static void SelectTab(string navId)
-    {
-        // The shell owns navigation; the Dashboard reaches it through the live MainWindow DataContext,
-        // which is the pattern this view model already used for the quick-action "go to tab" link.
-        if (System.Windows.Application.Current?.MainWindow?.DataContext is MainWindowViewModel main)
-        {
-            var target = main.NavItems.FirstOrDefault(n => n.Id == navId);
-            if (target is not null) main.SelectedNav = target;
-        }
-    }
+    /// <summary>
+    /// Where an alert of this severity sends the user: the given tab, or nowhere when it is green.
+    /// </summary>
+    /// <remarks>
+    /// A green alert has nothing to fix, so offering "Fix this" beside "All SMART indicators healthy"
+    /// would teach the user that the button means nothing. The rule is one function rather than five
+    /// copies of a ternary so it can be asserted once, and each scan names its own destination next to
+    /// the classification that produced the severity (#1496).
+    /// <para>Not folded into the Classify* helpers, which return <c>(Title, Severity)</c> and are called
+    /// from 28 assertions: widening those tuples to carry a nav id would rewrite every one of them to
+    /// express a mapping that has nothing to do with what they classify.</para>
+    /// </remarks>
+    internal static string NavTargetFor(AlertSeverity severity, string navId)
+        => severity == AlertSeverity.Green ? "" : navId;
+
+    /// <summary>Opens a tab through the shell's navigation seam.</summary>
+    /// <remarks>
+    /// Was <c>Application.Current.MainWindow.DataContext as MainWindowViewModel</c> — a service locator
+    /// reaching for a live window, untestable and silently inert whenever no window is up. #1504 pointed
+    /// out that copying it to the next caller would deepen the anti-pattern, so it became an injected
+    /// <see cref="INavigationService"/> instead, which a test can substitute and assert against.
+    /// </remarks>
+    private void SelectTab(string navId, string? filter = null) => _navigation.GoTo(navId, filter);
 
     [RelayCommand]
     private void DismissQuickAction()

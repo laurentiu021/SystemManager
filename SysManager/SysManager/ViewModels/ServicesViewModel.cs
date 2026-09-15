@@ -17,7 +17,7 @@ namespace SysManager.ViewModels;
 /// Services tab — lists all Windows services with gaming recommendations,
 /// allows start/stop and startup type changes.
 /// </summary>
-public sealed partial class ServicesViewModel : ViewModelBase
+public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;

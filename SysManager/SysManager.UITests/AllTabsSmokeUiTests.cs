@@ -64,6 +64,7 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-scheduled-maintenance", "Scheduled Maintenance" },
         // ── Storage ──
         new object[] { "nav-disk-analyzer", "Disk Analyzer" },
+        new object[] { "nav-large-files", "Large Files" },
         new object[] { "nav-duplicates", "Duplicate Finder" },
         // ── Network ──
         new object[] { "nav-ping", "Ping" },

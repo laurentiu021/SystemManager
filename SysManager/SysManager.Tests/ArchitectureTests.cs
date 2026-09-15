@@ -6597,7 +6597,7 @@ public partial class ArchitectureTests
         // the fast half here.
         string[] mustStaySilent =
         [
-            "ScanProgress", "LargeCurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout",
+            "ScanProgress", "CurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout",
         ];
 
         var appDir = FindAppProjectDir();

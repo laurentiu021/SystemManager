@@ -14,11 +14,12 @@ namespace SysManager.Tests;
 /// <summary>
 /// Pure unit tests for <see cref="DeepCleanupViewModel"/>.
 /// Heavier scan/clean tests that hit the real filesystem live in IntegrationTests.
+/// <para>The large-files half moved to <see cref="LargeFilesViewModelTests"/> with the feature (#1523).</para>
 /// </summary>
 [Collection("ProcessWideStatics")]
 public class DeepCleanupViewModelTests
 {
-    private static DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService(), new Services.LargeFileScanner(), new Services.FixedDriveService());
+    private static DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService());
 
     // ---------- construction & defaults ----------
 
@@ -38,47 +39,11 @@ public class DeepCleanupViewModelTests
     }
 
     [Fact]
-    public void Constructor_LargeScanStatusEmpty()
-    {
-        var vm = NewVm();
-        Assert.Equal(string.Empty, vm.LargeScanStatus);
-    }
-
-    [Fact]
     public void Constructor_CategoriesEmpty()
     {
         var vm = NewVm();
         Assert.NotNull(vm.Categories);
         Assert.Empty(vm.Categories);
-    }
-
-    [Fact]
-    public void Constructor_LargeFilesEmpty()
-    {
-        var vm = NewVm();
-        Assert.NotNull(vm.LargeFiles);
-        Assert.Empty(vm.LargeFiles);
-    }
-
-    [Fact]
-    public void Constructor_ScanLocationsCollection_Exists()
-    {
-        var vm = NewVm();
-        Assert.NotNull(vm.ScanLocations);
-    }
-
-    [Fact]
-    public void Constructor_MinSizeMB_DefaultsTo500()
-    {
-        var vm = NewVm();
-        Assert.Equal(500, vm.MinSizeMB);
-    }
-
-    [Fact]
-    public void Constructor_TopCount_DefaultsTo100()
-    {
-        var vm = NewVm();
-        Assert.Equal(100, vm.TopCount);
     }
 
     // ---------- running flags ----------
@@ -95,13 +60,6 @@ public class DeepCleanupViewModelTests
     {
         var vm = NewVm();
         Assert.False(vm.IsCleaning);
-    }
-
-    [Fact]
-    public void IsLargeScanning_DefaultsFalse()
-    {
-        var vm = NewVm();
-        Assert.False(vm.IsLargeScanning);
     }
 
     // ---------- progress defaults ----------
@@ -134,27 +92,6 @@ public class DeepCleanupViewModelTests
         Assert.Equal(string.Empty, vm.CleanStatusLine);
     }
 
-    [Fact]
-    public void LargeFilesScanned_DefaultsZero()
-    {
-        var vm = NewVm();
-        Assert.Equal(0, vm.LargeFilesScanned);
-    }
-
-    [Fact]
-    public void LargeBytesScanned_DefaultsZero()
-    {
-        var vm = NewVm();
-        Assert.Equal(0, vm.LargeBytesScanned);
-    }
-
-    [Fact]
-    public void LargeCurrentFolder_DefaultsEmpty()
-    {
-        var vm = NewVm();
-        Assert.Equal(string.Empty, vm.LargeCurrentFolder);
-    }
-
     // ---------- computed properties ----------
 
     [Fact]
@@ -169,26 +106,6 @@ public class DeepCleanupViewModelTests
     {
         var vm = NewVm();
         Assert.StartsWith("0", vm.TotalSelectedDisplay);
-    }
-
-    [Fact]
-    public void LargeBytesScannedDisplay_DefaultsToZero()
-    {
-        var vm = NewVm();
-        Assert.StartsWith("0", vm.LargeBytesScannedDisplay);
-    }
-
-    [Fact]
-    public void LargeBytesScanned_Change_FiresDisplayPropertyChanged()
-    {
-        var vm = NewVm();
-        var fired = false;
-        vm.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(vm.LargeBytesScannedDisplay)) fired = true;
-        };
-        vm.LargeBytesScanned = 1024 * 1024;
-        Assert.True(fired);
     }
 
     // ---------- TotalSelectedBytes with real categories ----------
@@ -230,9 +147,6 @@ public class DeepCleanupViewModelTests
     [InlineData("CleanCommand")]
     [InlineData("SelectAllCommand")]
     [InlineData("CancelCommand")]
-    [InlineData("ScanLargeFilesCommand")]
-    [InlineData("ShowInExplorerCommand")]
-    [InlineData("CopyPathCommand")]
     public void Command_IsExposedAndNotNull(string name)
     {
         var vm = NewVm();
@@ -257,7 +171,6 @@ public class DeepCleanupViewModelTests
         var vm = NewVm();
         var scanCts = new CancellationTokenSource();
         var cleanCts = new CancellationTokenSource();
-        var largeCts = new CancellationTokenSource();
 
         typeof(DeepCleanupViewModel)
             .GetField("_scanCts", BindingFlags.NonPublic | BindingFlags.Instance)!
@@ -265,15 +178,11 @@ public class DeepCleanupViewModelTests
         typeof(DeepCleanupViewModel)
             .GetField("_cleanCts", BindingFlags.NonPublic | BindingFlags.Instance)!
             .SetValue(vm, cleanCts);
-        typeof(DeepCleanupViewModel)
-            .GetField("_largeCts", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(vm, largeCts);
 
         vm.CancelCommand.Execute(null);
 
         Assert.True(scanCts.IsCancellationRequested);
         Assert.True(cleanCts.IsCancellationRequested);
-        Assert.True(largeCts.IsCancellationRequested);
     }
 
     // ---------- SelectAll ----------
@@ -383,161 +292,11 @@ public class DeepCleanupViewModelTests
         Assert.Equal("marker", vm.CleanSummary);
     }
 
-    [Fact]
-    public async Task ScanLargeFiles_WhenAlreadyScanning_ReturnsImmediately()
-    {
-        var vm = NewVm();
-        vm.IsLargeScanning = true;
-        vm.LargeScanStatus = "marker";
-
-        await vm.ScanLargeFilesCommand.ExecuteAsync(null);
-
-        Assert.Equal("marker", vm.LargeScanStatus);
-    }
-
-    /// <summary>
-    /// The constructor's background load picks a default location — which is why the test below awaits it.
-    /// </summary>
-    /// <remarks>
-    /// This is the mechanism behind the CI failure, observed directly rather than inferred from a timing
-    /// race. Clearing <c>SelectedLocation</c> and then letting the load finish shows the value coming back:
-    /// the load ends with <c>SelectedLocation = ScanLocations.FirstOrDefault()</c> and does not check
-    /// whether anything set it in the meantime. Any test that clears the property without first awaiting
-    /// initialization is racing that assignment, and on a slower machine it loses.
-    /// <para>Picking a default is deliberate product behaviour — the tab opens ready to scan rather than
-    /// demanding a choice first — so this pins it rather than treating it as the bug. The bug is only ever
-    /// a test that does not account for it.</para>
-    /// </remarks>
-    [Fact]
-    public async Task TheConstructorLoad_PicksADefaultLocation_EvenAfterOneWasCleared()
-    {
-        var vm = NewVm();
-        vm.SelectedLocation = null;
-
-        await vm.InitializationComplete;
-
-        // Conditional on the machine having any scannable folder at all, so this cannot fail on an
-        // environment with no Downloads, Documents or fixed drive rather than on the behaviour.
-        if (vm.ScanLocations.Count == 0) return;
-
-        Assert.NotNull(vm.SelectedLocation);
-        Assert.Same(vm.ScanLocations[0], vm.SelectedLocation);
-    }
-
-    /// <summary>
-    /// With no location picked, the scan says so instead of scanning something the user did not choose.
-    /// </summary>
-    /// <remarks>
-    /// <b>Awaiting <c>InitializationComplete</c> is what makes this deterministic, and it is not
-    /// decoration.</b> The constructor launches its location enumeration fire-and-forget, and that load
-    /// ends by assigning <c>SelectedLocation = ScanLocations.FirstOrDefault()</c>. Setting the property to
-    /// null before the load finishes therefore gets overwritten mid-test, and the scan runs against
-    /// Downloads — the assertion then fails with "Found 0 files ≥ 500 MB in Downloads", which reads like a
-    /// broken feature rather than a race.
-    /// <para>It went red in CI on the pull request that added an unrelated test class, because that shifted
-    /// the timing enough to lose a race this machine happened to win. <c>ViewModelBase</c> exposes
-    /// <c>InitializationComplete</c> for exactly this ("tests can await it to observe the loaded state
-    /// deterministically instead of racing the fire-and-forget load"), so the seam existed and this test
-    /// simply was not using it. The wider sweep of tests with the same exposure is #2201.</para>
-    /// </remarks>
-    [Fact]
-    public async Task ScanLargeFiles_NoLocation_SetsErrorStatus()
-    {
-        var vm = NewVm();
-        await vm.InitializationComplete;
-
-        vm.SelectedLocation = null;
-
-        await vm.ScanLargeFilesCommand.ExecuteAsync(null);
-
-        Assert.Contains("location", vm.LargeScanStatus, StringComparison.OrdinalIgnoreCase);
-    }
-
     // ---------- ShowInExplorer / CopyPath safe calls ----------
-
-    [Fact]
-    public void ShowInExplorer_NullPath_DoesNotThrow()
-    {
-        var vm = NewVm();
-        var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(null));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void ShowInExplorer_EmptyPath_DoesNotThrow()
-    {
-        var vm = NewVm();
-        var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(""));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void ShowInExplorer_NonExistentPath_DoesNotThrow()
-    {
-        var vm = NewVm();
-        var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(@"C:\no_such_" + Guid.NewGuid().ToString("N")));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void CopyPath_NullPath_DoesNotThrow()
-    {
-        var vm = NewVm();
-        var ex = Record.Exception(() => vm.CopyPathCommand.Execute(null));
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public void CopyPath_EmptyPath_DoesNotThrow()
-    {
-        var vm = NewVm();
-        var ex = Record.Exception(() => vm.CopyPathCommand.Execute(""));
-        Assert.Null(ex);
-    }
 
     // ---------- setters ----------
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(100)]
-    [InlineData(500)]
-    [InlineData(1024)]
-    [InlineData(10_000)]
-    public void MinSizeMB_Settable(int v)
-    {
-        var vm = NewVm();
-        vm.MinSizeMB = v;
-        Assert.Equal(v, vm.MinSizeMB);
-    }
-
-    [Theory]
-    [InlineData(10)]
-    [InlineData(100)]
-    [InlineData(500)]
-    public void TopCount_Settable(int v)
-    {
-        var vm = NewVm();
-        vm.TopCount = v;
-        Assert.Equal(v, vm.TopCount);
-    }
-
     // ---------- ScanLocation record ----------
-
-    [Fact]
-    public void ScanLocation_ValueEquality()
-    {
-        var a = new ScanLocation("A", "p");
-        var b = new ScanLocation("A", "p");
-        Assert.Equal(a, b);
-    }
-
-    [Fact]
-    public void ScanLocation_DifferentValues_NotEqual()
-    {
-        var a = new ScanLocation("A", "p1");
-        var b = new ScanLocation("A", "p2");
-        Assert.NotEqual(a, b);
-    }
 
     // ---------- IsBusy forwarding ----------
 
@@ -563,14 +322,6 @@ public class DeepCleanupViewModelTests
     {
         var vm = NewVm();
         vm.IsCleaning = true;
-        Assert.True(vm.IsBusy);
-    }
-
-    [Fact]
-    public void IsLargeScanning_True_SetsIsBusy()
-    {
-        var vm = NewVm();
-        vm.IsLargeScanning = true;
         Assert.True(vm.IsBusy);
     }
 

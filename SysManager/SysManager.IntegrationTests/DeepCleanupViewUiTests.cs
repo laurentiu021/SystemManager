@@ -29,7 +29,7 @@ public class DeepCleanupViewUiTests
         StaHelper.Run(() =>
         {
             AppResources.Ensure();
-            var view = new DeepCleanupView { DataContext = new DeepCleanupViewModel(new DeepCleanupService(), new LargeFileScanner(), new FixedDriveService()) };
+            var view = new DeepCleanupView { DataContext = new DeepCleanupViewModel(new DeepCleanupService()) };
             Assert.IsType<DeepCleanupViewModel>(view.DataContext);
         });
     }

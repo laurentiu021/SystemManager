@@ -12,7 +12,7 @@
                 <DockPanel>
                     <StackPanel>
                         <TextBlock Text="Deep Cleanup" Style="{StaticResource Display}"/>
-                        <TextBlock Text="Find safe-to-remove installer leftovers, caches and large files. Everything is scan-first — you pick what goes."
+                        <TextBlock Text="Find safe-to-remove installer leftovers and caches. Everything is scan-first — nothing is deleted until you tick it and press Clean. Looking for your biggest files instead? That is Storage &amp; Files → Large Files."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
                     </StackPanel>
                 </DockPanel>
@@ -80,6 +80,16 @@
                             <TextBlock Text="{Binding ScanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
                                        Visibility="{Binding ScanEtaText, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
+
+                        <!-- Before the first scan Categories is empty, and this card is otherwise a heading
+                             over blank space. ScanSummary above says what to do, but it is always visible
+                             and so is not an empty state — this is. The gap was masked while the large-files
+                             card below carried the view's only <v:EmptyState/>, since the guard that checks
+                             for one reads the whole file; the card left in #1523 and the gap surfaced. -->
+                        <v:EmptyState Glyph="&#xE74D;"
+                                      Title="Nothing scanned yet"
+                                      Message="Press Scan above and SysManager will list what it found, with sizes, so you can pick what goes."
+                                      Visibility="{Binding Categories.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
                         <ItemsControl ItemsSource="{Binding Categories}">
                             <ItemsControl.ItemTemplate>
@@ -153,108 +163,6 @@
                             <TextBlock Text="{Binding CleanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
                                        Visibility="{Binding CleanEtaText, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- LARGE FILES -->
-                <Border Style="{StaticResource Card}" Margin="0,16,0,0">
-                    <StackPanel>
-                        <DockPanel>
-                            <TextBlock Text="Large files finder" Style="{StaticResource SectionTitle}"/>
-                            <Button Content="Scan drive" Command="{Binding ScanLargeFilesCommand}"
-                                    Style="{StaticResource PrimaryButton}" HorizontalAlignment="Right" DockPanel.Dock="Right"
-                                    IsEnabled="{Binding IsLargeScanning, Converter={StaticResource BoolInvert}}"/>
-                        </DockPanel>
-                        <TextBlock Text="Read-only — shows biggest files so you know where your space went. Results have 'Show in Explorer' and 'Copy path' only. Deletion is disabled by design, even with admin."
-                                   Style="{StaticResource Subtle}" Margin="0,4,0,10" TextWrapping="Wrap"/>
-
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Location:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <ComboBox Grid.Column="1" AutomationProperties.Name="Scan location" ItemsSource="{Binding ScanLocations}" SelectedItem="{Binding SelectedLocation, Mode=TwoWay}"
-                                      MaxWidth="380" HorizontalAlignment="Left" TextSearch.TextPath="Label">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <TextBlock Grid.Column="2" Text="Min size (MB):" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
-                            <TextBox Grid.Column="3" AutomationProperties.Name="Minimum file size in megabytes" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
-                            <TextBlock Grid.Column="4" Text="Top:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
-                            <TextBox Grid.Column="5" AutomationProperties.Name="Number of top results to show" Text="{Binding TopCount, Mode=TwoWay}" Width="60"/>
-                        </Grid>
-
-                        <TextBlock Text="{Binding LargeScanStatus}" Style="{StaticResource Subtle}" Margin="0,0,0,8"
-                                   Visibility="{Binding LargeScanStatus, Converter={StaticResource FlexVis}}"/>
-
-                        <!-- Large-files scan progress — indeterminate bar + live counters -->
-                        <StackPanel Margin="0,0,0,10" Visibility="{Binding IsLargeScanning, Converter={StaticResource FlexVis}}">
-                            <ProgressBar AutomationProperties.Name="Large-file scan progress" Height="6" IsIndeterminate="True"/>
-                            <Grid Margin="0,6,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{Binding LargeFilesScanned, StringFormat={}{0:N0} files}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="2" Text="{Binding LargeBytesScannedDisplay, StringFormat=scanned {0}}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                                <Button Grid.Column="3" Content="Cancel" AutomationProperties.Name="Cancel large file scan" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Padding="10,4"/>
-                            </Grid>
-                            <TextBlock Text="{Binding LargeCurrentFolder}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-
-                        <!-- Grid wrapper so the empty state overlays the table rather than stacking under it:
-                             the parent is a StackPanel, where a sibling would appear BELOW the header row
-                             instead of in place of the missing rows. -->
-                        <Grid>
-                        <DataGrid AutomationProperties.Name="Large files" ItemsSource="{Binding LargeFiles}"
-                                  AutoGenerateColumns="False" HeadersVisibility="Column"
-                                  GridLinesVisibility="None" IsReadOnly="True"
-                                  CanUserResizeColumns="True"
-                                  Background="Transparent" BorderThickness="0"
-                                  MaxHeight="380"
-                                  VirtualizingPanel.IsVirtualizing="True"
-                                  VirtualizingPanel.VirtualizationMode="Recycling">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="110" MinWidth="70"/>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="100"/>
-                                <DataGridTextColumn Header="Modified" Binding="{Binding LastModifiedDisplay}" Width="110" MinWidth="80"/>
-                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*" MinWidth="120"/>
-                                <DataGridTemplateColumn Header="Actions" Width="210" MinWidth="210" CanUserResize="False">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Content="Show" Padding="10,4"
-                                                        AutomationProperties.Name="{Binding Name, StringFormat='Show {0} in Explorer'}"
-                                                        Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Path}"
-                                                        Style="{StaticResource SecondaryButton}"/>
-                                                <Button Content="Copy" Padding="10,4" Margin="6,0,0,0"
-                                                        AutomationProperties.Name="{Binding Name, StringFormat='Copy path of {0}'}"
-                                                        Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Path}"
-                                                        Style="{StaticResource GhostButton}"/>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <v:EmptyState Glyph="&#xE838;"
-                                      Title="No large files listed yet"
-                                      Message="Pick a location above and press Scan drive to list the biggest files it holds."
-                                      Visibility="{Binding LargeFiles.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
-                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

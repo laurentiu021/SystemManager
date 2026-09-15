@@ -1,0 +1,133 @@
+<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+<UserControl x:Class="SysManager.Views.LargeFilesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:SysManager.ViewModels"
+             xmlns:v="clr-namespace:SysManager.Views"
+             d:DataContext="{d:DesignInstance vm:LargeFilesViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{DynamicResource Surface0}">
+
+    <!-- Root-gutter layout (Strategy 1): header + content, no elevation banner — this tab needs no
+         administrator rights because it only reads. -->
+    <Grid Margin="28,24,28,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Large Files" Style="{StaticResource Display}"/>
+            <TextBlock Text="Find the biggest files in a folder or on a whole drive, so you can see what is actually using your space. Read-only — results offer 'Show' and 'Copy' only, and nothing here deletes anything, even with administrator rights. Deleting is your decision to make in Explorer."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Location:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Grid.Column="1" AutomationProperties.Name="Scan location" ItemsSource="{Binding ScanLocations}" SelectedItem="{Binding SelectedLocation, Mode=TwoWay}"
+                              MaxWidth="380" HorizontalAlignment="Left" TextSearch.TextPath="Label">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Grid.Column="2" Text="Min size (MB):" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                    <TextBox Grid.Column="3" AutomationProperties.Name="Minimum file size in megabytes" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
+                    <TextBlock Grid.Column="4" Text="Top:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                    <TextBox Grid.Column="5" AutomationProperties.Name="Number of top results to show" Text="{Binding TopCount, Mode=TwoWay}" Width="60"/>
+                    <Button Grid.Column="6" Content="Scan" Command="{Binding ScanCommand}" Margin="16,0,0,0"
+                            AutomationProperties.AutomationId="btn-large-files-scan"
+                            AutomationProperties.Name="Scan — list the biggest files in this location"
+                            Style="{StaticResource PrimaryButton}"
+                            IsEnabled="{Binding IsScanning, Converter={StaticResource BoolInvert}}"/>
+                </Grid>
+
+                <!-- Scan progress — indeterminate bar + live counters. Indeterminate because the scanner
+                     cannot know how many files a location holds until it has walked it, so there is no
+                     percentage to report. The counters are what show it is making progress. -->
+                <StackPanel Margin="0,10,0,0" Visibility="{Binding IsScanning, Converter={StaticResource FlexVis}}">
+                    <ProgressBar AutomationProperties.Name="Large-file scan progress" Height="6" IsIndeterminate="True"/>
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding FilesScanned, StringFormat={}{0:N0} files}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{Binding BytesScannedDisplay, StringFormat=scanned {0}}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                        <Button Grid.Column="3" Content="Cancel" AutomationProperties.Name="Cancel large file scan" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Padding="10,4"/>
+                    </Grid>
+                    <TextBlock Text="{Binding CurrentFolder}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Results. Grid wrapper so the empty state overlays the table rather than stacking under it. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="12">
+            <Grid>
+                <DataGrid AutomationProperties.Name="Large files" ItemsSource="{Binding Files}"
+                          AutoGenerateColumns="False" HeadersVisibility="Column"
+                          GridLinesVisibility="None" IsReadOnly="True"
+                          CanUserResizeColumns="True"
+                          Background="Transparent" BorderThickness="0"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="110" MinWidth="70"/>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" MinWidth="100"/>
+                        <DataGridTextColumn Header="Modified" Binding="{Binding LastModifiedDisplay}" Width="110" MinWidth="80"/>
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="2*" MinWidth="120"/>
+                        <DataGridTemplateColumn Header="Actions" Width="210" MinWidth="210" CanUserResize="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="Show" Padding="10,4"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='Show {0} in Explorer'}"
+                                                Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Path}"
+                                                Style="{StaticResource SecondaryButton}"/>
+                                        <Button Content="Copy" Padding="10,4" Margin="6,0,0,0"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='Copy path of {0}'}"
+                                                Command="{Binding DataContext.CopyPathCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Path}"
+                                                Style="{StaticResource GhostButton}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <v:EmptyState Glyph="&#xE838;"
+                              Title="No large files listed yet"
+                              Message="Pick a location above and press Scan to list the biggest files it holds."
+                              Visibility="{Binding Files.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
+
+        <!-- Status bar -->
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
+            <TextBlock Text="{Binding ScanStatus}" Style="{StaticResource StatusLine}"
+                       AutomationProperties.LiveSetting="Polite"/>
+        </DockPanel>
+    </Grid>
+</UserControl>

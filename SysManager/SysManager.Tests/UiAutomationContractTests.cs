@@ -19,6 +19,9 @@ public partial class UiAutomationContractTests
             ["btn-cleanup-empty-recycle-bin"] = "Empty Recycle Bin",
             // On System Fixes since #1493, where the repairs belong; Quick Cleanup keeps the two
             // component-store buttons below, which reclaim space rather than repair anything.
+            // Large Files moved out of Deep Cleanup into its own Storage tab (#1523); its Scan button is
+            // the one action on the page, so it carries an id like every other tab's primary action.
+            ["btn-large-files-scan"] = "Scan — list the biggest files in this location",
             ["btn-fixes-sfc"] = "Run — repair damaged Windows files with SFC",
             ["btn-fixes-dism"] = "Run — repair the Windows component store with DISM",
             // The two shell fixes need no administrator rights (#1490), which is why they sit in their

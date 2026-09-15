@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.109.0] - 2026-09-15
+
+**"Large Files" is its own tab now, next to Disk Analyzer and Duplicate Finder.** It used to sit at the
+bottom of Deep Cleanup, underneath a list of things to tick and delete — which made it hard to find and
+easy to mistake for part of the deleting. It is not: it only ever shows you which files are biggest, and
+it cannot delete anything even with administrator rights. All three tabs in Storage & Files now answer the
+same question — where did my disk space go? — and none of them removes a thing. Deep Cleanup keeps doing
+exactly one job: listing what is safe to remove, and removing what you tick.
+
+### Changed
+
+- **Moved "Large files finder" out of Deep Cleanup into its own "Large Files" tab** in the Storage & Files
+  group, between Disk Analyzer and Duplicate Finder. Same scan, same locations, same read-only results with
+  "Show" and "Copy" — it just has room of its own and a name you can find.
+- **Deep Cleanup's description now says what the tab actually does**, and points at Large Files for the
+  other question. Its own list of what to clean also got the missing "nothing scanned yet" message, so
+  before your first scan the page explains itself instead of showing a heading over blank space.
+- Large Files has its own status line and its own Cancel, rather than sharing Deep Cleanup's.
+
 ## [1.108.0] - 2026-09-15
 
 **System Fixes can fix a frozen taskbar and blank icons now — and neither needs administrator rights.**

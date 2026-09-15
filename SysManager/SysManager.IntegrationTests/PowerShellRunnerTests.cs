@@ -613,8 +613,8 @@ public class PowerShellRunnerTests
     }
 
     /// <summary>
-    /// A single long BLOCKING call cannot be interrupted — but the cancellation must still be reported when
-    /// it finally returns.
+    /// Cancelling during a single long BLOCKING call reports the cancellation, however long the call
+    /// takes to come back.
     /// </summary>
     /// <remarks>
     /// The real limit behind #2206, pinned rather than wished away. <c>ps.Stop()</c> interrupts a pipeline
@@ -628,11 +628,11 @@ public class PowerShellRunnerTests
     /// what this asserts: the call takes the script's full duration, and it still raises
     /// <c>OperationCanceledException</c> rather than returning as though nothing had been asked.</para>
     ///
-    /// <para>Three seconds of real waiting, deliberately. A shorter block would not reliably outlast the
-    /// cancel on a loaded runner, and the value being pinned is precisely that the call does NOT come back
-    /// early. <c>Thread::Sleep</c> rather than <c>Start-Sleep</c> because the latter needs
-    /// <c>Microsoft.PowerShell.Utility</c>, which the in-process runspace does not load — it would fail
-    /// instantly on a dev box and pin nothing at all.</para>
+    /// <para>Three seconds of real waiting, deliberately: a shorter block would not reliably still be
+    /// running when the cancel arrives, and a cancel that lands before the script starts is a different
+    /// scenario with its own test. <c>Thread::Sleep</c> rather than <c>Start-Sleep</c> because the latter
+    /// needs <c>Microsoft.PowerShell.Utility</c>, which the in-process runspace does not load — it would
+    /// fail instantly on a dev box and pin nothing at all.</para>
     ///
     /// <para><b>Either cancellation message is correct here, and finding out why corrected the model above.</b>
     /// Running this locally reported "stopped by cancellation" after the full three seconds: the stop stays
@@ -642,9 +642,14 @@ public class PowerShellRunnerTests
     /// simply finished. Three outcomes, then, not two: interrupted promptly, stopped late at a boundary, or
     /// never noticed. Asserting one message would pin the transport rather than the contract, and the
     /// contract is that the cancellation reaches the caller either way.</para>
+    ///
+    /// <para>Which is why nothing here asserts the CLOCK. All three outcomes are legitimate, and they differ
+    /// only in how long the call takes to come back — so a bound in either direction is a bound on which
+    /// race the runner happened to win. The first outcome is the fast one, and asserting the call was slow
+    /// is what made this test fail on main while the product behaved better than the test expected.</para>
     /// </remarks>
     [Fact]
-    public async Task RunAsync_CancellingASingleBlockingCall_CannotInterruptItButStillReportsIt()
+    public async Task RunAsync_CancellingASingleBlockingCall_AlwaysReportsTheCancellation()
     {
         var runner = new PowerShellRunner();
         var warm = await runner.RunAsync("1 + 1");
@@ -660,12 +665,17 @@ public class PowerShellRunnerTests
 
         var diagnosis = $"elapsed {sw.Elapsed}; exception {ex?.GetType().Name ?? "NONE"} ({ex?.Message ?? "-"})";
 
-        // The premise: the call really did outlast the cancel. If this ever stops holding, ps.Stop() has
-        // become able to interrupt a blocking call and the rest of this test is about nothing.
-        Assert.True(sw.Elapsed > TimeSpan.FromMilliseconds(2500),
-            "the blocking call returned early, so ps.Stop() now interrupts inside one — which would be good "
-            + "news and makes this test obsolete rather than failing. " + diagnosis);
-
+        // The elapsed time is CONTEXT, never an assertion — see the last paragraph of the remarks. This
+        // used to assert `> 2500 ms` as a premise, on the reasoning that a fast return meant ps.Stop() had
+        // become able to interrupt a blocking call and the test was about nothing. It fired on main on
+        // 2026-09-15 at 1.83 s with "stopped by cancellation": the third outcome the remarks already
+        // describe — the stop stayed pending and took effect at a statement boundary sooner than the
+        // script's own 3 s. So the test failed on a behaviour its own documentation calls legitimate.
+        //
+        // Same defect and same fix as the sibling above (#2286): a wall-clock bound on a race the file
+        // documents as sometimes going either way. The scenario is established by CONSTRUCTION — the warm-up
+        // call opens the runspace first, so the cancel necessarily lands after the script is under way —
+        // rather than by a stopwatch reading after the fact.
         Assert.True(ex is OperationCanceledException,
             "a cancelled run whose script could not be interrupted returned without reporting the "
             + "cancellation, so the caller sees a completed operation. " + diagnosis);

@@ -21,7 +21,20 @@ public enum OperationCategory
     Network,
 
     /// <summary>System modification: performance tweaks, driver operations, Windows Update.</summary>
-    SystemModification
+    SystemModification,
+
+    /// <summary>
+    /// Restarting the Windows shell: the Context Menu tab applying a menu style, and System Fixes
+    /// repairing a frozen taskbar or rebuilding the icon cache.
+    /// </summary>
+    /// <remarks>
+    /// Its own category rather than <see cref="SystemModification"/>, because the two must NOT exclude
+    /// each other: an SFC scan runs for up to fifteen minutes, and a user whose taskbar froze during one
+    /// still needs to be able to restart the shell. What must be exclusive is two shell restarts —
+    /// overlapping ones can leave the user with no desktop at all, and now that two tabs can start one,
+    /// a per-view-model IsBusy flag cannot prevent it.
+    /// </remarks>
+    Shell
 }
 
 /// <summary>

@@ -67,7 +67,9 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         // (ApplyPreset also restarts Explorer); disabling them while one runs prevents
         // overlapping runs from corrupting that list or racing two Explorer restarts.
         // RestartExplorer is in that set for the racing reason specifically: two overlapping
-        // restarts can leave the user without a shell.
+        // restarts can leave the user without a shell. Since #1490 that hazard also crosses TABS —
+        // System Fixes can restart the shell too — so both restart paths additionally take the
+        // process-wide OperationCategory.Shell lock, which this per-view-model flag cannot replace.
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
     }
@@ -218,13 +220,24 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(message, $"Apply \"{preset.Name}\""))
             return;
 
+        // Holds the shell lock for the whole apply when the preset restarts Explorer, for the same
+        // reason RestartExplorerAsync does — this path calls the same restart.
+        using var shellLock = needsRestart
+            ? OperationLockService.Instance.TryAcquire(OperationCategory.Shell, $"Applying \"{preset.Name}\"")
+            : null;
+        if (needsRestart && shellLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Shell)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = $"Applying \"{preset.Name}\"...";
 
         try
         {
-            // Registry writes + RestartExplorer are synchronous and can take a moment
+            // Registry writes + the Explorer restart are synchronous and can take a moment
             // (Explorer restart especially) — run them off the UI thread so the window
             // stays responsive. No UI state is touched inside the Task.Run body.
             var (disabled, enabled) = await Task.Run(() =>
@@ -254,7 +267,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                 }
 
                 if (needsRestart)
-                    ContextMenuService.RestartExplorer();
+                    ExplorerShell.Restart();
 
                 return (dis, en);
             });
@@ -302,13 +315,22 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                 "Restart Explorer"))
             return;
 
+        // Cross-TAB exclusion. NotBusy above is per-view-model, and System Fixes can restart the shell
+        // too since #1490 — two overlapping restarts can leave the user with no desktop at all.
+        using var shellLock = OperationLockService.Instance.TryAcquire(OperationCategory.Shell, "Explorer restart");
+        if (shellLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Shell)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Restarting Explorer...";
 
         try
         {
-            await Task.Run(ContextMenuService.RestartExplorer);
+            await Task.Run(ExplorerShell.Restart);
             StatusMessage = "Explorer restarted — right-click menu changes are now in effect.";
             ToastService.Instance.Show("Explorer restarted", "Right-click menu changes are now in effect");
         }

@@ -381,7 +381,22 @@ Edit Windows environment variables without the cramped built-in dialog:
 
 ### System Fixes
 One-click repairs for common Windows breakages, each with a clear description and
-a confirmation before it runs:
+a confirmation before it runs. Split into two groups by whether the fix needs
+administrator rights, so it is obvious what you can do without elevating.
+
+**Fix the desktop and taskbar** — no administrator rights needed, and the quickest
+things to try first:
+- **Restart Windows Explorer** — for a taskbar that has stopped responding, a Start
+  menu that will not open, or a desktop with no icons. Every Explorer instance is
+  ended individually, so one unkillable process cannot leave you without a shell
+- **Rebuild icon & thumbnail cache** — for icons or previews that come up blank,
+  wrong, or as a plain white page. Explorer is stopped first, because it holds those
+  cache files open — a delete with the shell running clears only the files that are
+  *not* the problem. Explorer is brought back even if the delete fails, and Windows
+  rebuilds the cache as you browse
+
+**Repair Windows itself** — these change system files, services or settings, so they
+need administrator rights:
 - **Repair damaged Windows files (SFC)** — runs `SFC /scannow`, which checks every
   protected Windows file against Windows' own known-good copy and replaces the damaged
   ones. Takes 5–15 minutes in the background, with a live percentage, an ETA, and a
@@ -528,7 +543,12 @@ System → System Fixes, where the tab name matches what they do.
   any investigation into the crash) and the **Explorer thumbnail & icon cache**, which
   Windows rebuilds and whose clearing is the standard fix for blank or wrong thumbnails.
   Its folder also holds your recent-files jump lists, so only `thumbcache_*.db` and
-  `iconcache_*.db` are counted, and only those are deleted.
+  `iconcache_*.db` are counted, and only those are deleted — the same two patterns
+  System Fixes uses, from one shared list. Note that Explorer keeps some of those files
+  open while it runs, so a clean from here removes the ones it is not using and reports
+  the rest as skipped; **System → System Fixes → "Rebuild icon & thumbnail cache"**
+  stops Explorer first and gets all of them, which is what you want if the goal is to
+  fix blank icons rather than to reclaim space.
 - **Gamer buckets** — launcher *caches only*, never game files or logins:
   Steam (appcache, htmlcache, depotcache, shader cache), Epic Games
   Launcher, Battle.net, Riot / League of Legends, GOG Galaxy, EA Desktop.

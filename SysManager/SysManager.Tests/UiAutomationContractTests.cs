@@ -21,6 +21,10 @@ public partial class UiAutomationContractTests
             // component-store buttons below, which reclaim space rather than repair anything.
             ["btn-fixes-sfc"] = "Run — repair damaged Windows files with SFC",
             ["btn-fixes-dism"] = "Run — repair the Windows component store with DISM",
+            // The two shell fixes need no administrator rights (#1490), which is why they sit in their
+            // own section on that tab rather than under the elevation banner's claim.
+            ["btn-fixes-restart-explorer"] = "Restart — restart Windows Explorer",
+            ["btn-fixes-rebuild-icon-cache"] = "Rebuild — rebuild the icon and thumbnail cache",
             ["btn-cleanup-analyze-store"] = "Check component store — report what Windows considers reclaimable",
             ["btn-cleanup-clean-store"] = "Clean up component store — remove the superseded components Windows keeps",
             ["btn-cleanup-cancel"] = "Cancel the running operation",

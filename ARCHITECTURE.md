@@ -458,9 +458,13 @@ Key services:
 - `IconExtractorService` — extracts application icons from executables
   for display in process/app lists; caches results.
 - `OperationLockService` — prevents concurrent conflicting operations by
-  category (Disk / Network / SystemModification) via a thread-safe
+  category (Disk / Network / SystemModification / Shell) via a thread-safe
   `ConcurrentDictionary` try-acquire. Returns a disposable handle, or `null`
   immediately if that category is already locked (non-blocking; no timeout).
+  `Shell` is deliberately separate from `SystemModification` rather than folded into
+  it: the two must NOT exclude each other, because an SFC scan runs for up to fifteen
+  minutes and a user whose taskbar froze during one still has to be able to restart the
+  shell. What must be exclusive is two shell restarts.
 - `ProcessDescriptionService` — enriches process entries with friendly
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
@@ -814,6 +818,20 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   prevent because nothing holds those files open yet.
 - `RecycleBinHelper` — empties the Recycle Bin via the shell API; shared by Deep
   Cleanup and the One-Click Tune-Up so the interop has one source of truth.
+- `ExplorerShell` — stops, starts and restarts the Windows shell, and owns the
+  `thumbcache_*.db` / `iconcache_*.db` pattern list that Deep Cleanup's cache category
+  shares. Shared by Context Menu (applying a menu style) and System Fixes (a frozen
+  taskbar, a rebuilt icon cache) so the kill loop has one source of truth — it ends each
+  instance individually, so one unkillable process cannot abort the loop and leave the
+  user with no shell. `Stop`/`Start` are exposed separately from `Restart` because the
+  cache delete has to happen *between* them: Explorer holds those files open, so a delete
+  with the shell running removes only the files that are not the problem. Both callers
+  hold the `OperationCategory.Shell` lock, since two overlapping restarts can leave the
+  user with no desktop and a per-view-model `IsBusy` cannot see another tab
+  (`EveryCallerThatEndsTheShell_HoldsTheShellLock`,
+  `NothingKillsExplorer_OutsideTheSharedHelper`). The cache sweep takes the directory as
+  a parameter so the part with logic is testable; the process control is not tested,
+  because a test that ran it would end the desktop.
 - `UiThread` — the one way background work updates the UI. Runs the action inline
   when already on the UI thread and posts it otherwise, so the caller never waits
   for the dispatcher. It replaced ten hand-written synchronous marshals, each

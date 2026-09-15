@@ -83,6 +83,26 @@ public class OtherTabsUiTests
         Assert.NotNull(_fx.FindButtonById("btn-fixes-dism"));
     }
 
+    // Presence only, deliberately. The interesting property of these two is that they need NO elevation
+    // (#1490) — but the CI runner is elevated, so an IsEnabled assertion here would pass for every button
+    // on the tab and prove nothing. That claim is asserted in the unit suite, where
+    // AdminHelper.ForceElevation makes the condition explicit
+    // (SystemFixesViewModelTests.EveryShellFix_IsClickableWithoutElevation).
+
+    [Fact]
+    public void SystemFixes_RestartExplorerButton_Exists()
+    {
+        _fx.GoToTab("nav-system-fixes");
+        Assert.NotNull(_fx.FindButtonById("btn-fixes-restart-explorer"));
+    }
+
+    [Fact]
+    public void SystemFixes_RebuildIconCacheButton_Exists()
+    {
+        _fx.GoToTab("nav-system-fixes");
+        Assert.NotNull(_fx.FindButtonById("btn-fixes-rebuild-icon-cache"));
+    }
+
     // ---------------- Drivers ----------------
 
     [Fact]

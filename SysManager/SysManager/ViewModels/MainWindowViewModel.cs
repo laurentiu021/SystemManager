@@ -238,9 +238,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true),
             Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView)),
             Tab<AppAlertsViewModel>("nav-app-alerts",           "New App Alerts",     typeof(Views.AppAlertsView)),
-            Tab<FileLockViewModel>("nav-file-lock",             "File Lock Detector", typeof(Views.FileLockView)),
-            Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true),
-            Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView))),
+            Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true)),
 
         Group("grp-cleanup", "Cleanup", "\uE74D", "Free up space and tidy up",  // Delete
             Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(Views.CleanupView)),
@@ -248,14 +246,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<ShortcutCleanerViewModel>("nav-shortcut-cleaner",    "Shortcut Cleaner",      typeof(Views.ShortcutCleanerView)),
             Tab<ScheduledMaintenanceViewModel>("nav-scheduled-maintenance", "Scheduled Maintenance", typeof(Views.ScheduledMaintenanceView), inDevelopment: true)),
 
-        Group("grp-storage", "Storage", "\uEDA2", "See what is filling the disk",  // HardDrive
-            Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",    typeof(Views.DiskAnalyzerView)),
-            Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder", typeof(Views.DuplicateFileView))),
+        // "Storage & Files" rather than "Storage": File Lock Detector is per-FILE work, not capacity,
+        // and the group is where someone looks when the errand is about a file (#1521). File Shredder
+        // stays in Privacy on purpose \u2014 shredding is a destroy-the-traces intent, and it is the most
+        // destructive operation in the app, so it keeps the Privacy group's warning context.
+        Group("grp-storage", "Storage & Files", "\uEDA2", "What fills the disk, what locks a file",  // HardDrive
+            Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",      typeof(Views.DiskAnalyzerView)),
+            Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder",   typeof(Views.DuplicateFileView)),
+            Tab<FileLockViewModel>("nav-file-lock",         "File Lock Detector", typeof(Views.FileLockView))),
 
         Group("grp-network", "Network", "\uE968", "Test the connection, fix the internet",  // NetworkTower
             Tab<PingViewModel>("nav-ping",                   "Ping",           typeof(Views.PingView)),
             Tab<TracerouteViewModel>("nav-traceroute",       "Traceroute",     typeof(Views.TracerouteView)),
             Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(Views.SpeedTestView)),
+            // Directly after Speed Test, because they answer the two halves of one question: how fast
+            // the connection is, and what is using it. Split across two groups, finding one never led
+            // to the other (#1514).
+            Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView)),
             Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView)),
             Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView))),
 
@@ -271,14 +278,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Tab<DebloaterViewModel>("nav-debloater",        "Debloater & Ads",       typeof(Views.DebloaterView)),
             Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView)),
             Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView)),
-            Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView)),
-            Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true)),
+            Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView))),
 
         Group("grp-customization", "Customization", "\uE790", "Right-click menu, dark mode, volume",  // Personalize
             Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView)),
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
             EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>()),
-            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView))),
+            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView)),
+            // Muting an app that nags is the same wish as the rest of this group — make Windows behave
+            // the way I want — and the same risk level: per-app Windows switches, no administrator, one
+            // flip to undo. Under "Privacy & Security" it both overstated the stakes and hid the tab
+            // from where someone would look for it (#1522). Debloater stays in Privacy because it
+            // REMOVES software; this only silences it.
+            Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true)),
 
         Group("grp-info", "Info", "\uE946", "Drivers, battery, logs and reports",  // Info
             Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(Views.DriversView)),

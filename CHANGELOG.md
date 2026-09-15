@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.103.0] - 2026-09-15
+
+**Three tabs moved to where you would actually look for them.** Nothing changed about what they do —
+only which category they sit under, because a few were filed by how they work internally rather than by
+what you came to do. Bandwidth Monitor now sits directly under Speed Test in Network, since "how fast is
+my connection" and "what is using my connection" are two halves of one question. File Lock Detector moved
+to Storage, now called **Storage & Files**, because you get there from Windows' own "this file is open in
+another program" message. And Notification Blocker moved out of Privacy & Security into Customization,
+since muting an app that nags you is not a security decision and does not need administrator rights.
+
+### Changed
+
+- **Bandwidth Monitor** moved from Monitor to Network, placed immediately after Speed Test. While they
+  were in different groups, finding one never led you to the other.
+- **File Lock Detector** moved from Monitor to Storage, and that group is now **Storage & Files**.
+  "Monitor" promises something watching continuously; this tab is a one-off scan of a file you pick. The
+  group name now covers per-file work rather than only disk space.
+- **Notification Blocker** moved from Privacy & Security to Customization. Every other tab in Privacy &
+  Security either changes a protected Windows setting or removes software; this one flips the same
+  per-app switches Windows Settings does, needs no administrator, and is one flip from undone. Filing it
+  under "Security" made it look riskier than it is, and hid it from where the wish belongs.
+- File Shredder deliberately stays in Privacy & Security despite also being a per-file tool: shredding is
+  about destroying traces, and it is the most destructive thing in the app, so it keeps that group's
+  warnings around it.
+
 ## [1.102.0] - 2026-09-15
 
 **You can now switch off the add-ons that make right-click slow.** Context Menu already listed them — the

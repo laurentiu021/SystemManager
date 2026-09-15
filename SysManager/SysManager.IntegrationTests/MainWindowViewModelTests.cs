@@ -134,14 +134,12 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-cpu-affinity", ids);
         Assert.Contains("nav-display-profiles", ids);
 
-        // Monitor (7)
+        // Monitor (5)
         Assert.Contains("nav-processes", ids);
         Assert.Contains("nav-resource-history", ids);
         Assert.Contains("nav-privacy-monitor", ids);
         Assert.Contains("nav-app-alerts", ids);
-        Assert.Contains("nav-file-lock", ids);
         Assert.Contains("nav-settings-watchdog", ids);
-        Assert.Contains("nav-bandwidth-monitor", ids);
 
         // Cleanup (4)
         Assert.Contains("nav-cleanup", ids);
@@ -149,14 +147,16 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-shortcut-cleaner", ids);
         Assert.Contains("nav-scheduled-maintenance", ids);
 
-        // Storage (2)
+        // Storage & Files (3) — File Lock Detector is per-file work, not continuous monitoring
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
+        Assert.Contains("nav-file-lock", ids);
 
-        // Network (5) — DNS changer + hosts editor merged into one DNS & Hosts tab
+        // Network (6) — DNS changer + hosts editor merged into one DNS & Hosts tab
         Assert.Contains("nav-ping", ids);
         Assert.Contains("nav-traceroute", ids);
         Assert.Contains("nav-speed-test", ids);
+        Assert.Contains("nav-bandwidth-monitor", ids);
         Assert.Contains("nav-network-repair", ids);
         Assert.Contains("nav-dns-hosts", ids);
 
@@ -165,7 +165,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-bulk-installer", ids);
         Assert.Contains("nav-uninstaller", ids);
 
-        // Privacy & Security (8)
+        // Privacy & Security (7)
         Assert.Contains("nav-privacy-settings", ids);
         Assert.Contains("nav-file-shredder", ids);
         Assert.Contains("nav-app-blocker", ids);
@@ -173,12 +173,12 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-browser-cleaner", ids);
         Assert.Contains("nav-edge-onedrive", ids);
         Assert.Contains("nav-defender-tweaks", ids);
-        Assert.Contains("nav-notification-blocker", ids);
 
-        // Customization (3)
+        // Customization (4)
         Assert.Contains("nav-context-menu", ids);
         Assert.Contains("nav-dark-mode", ids);
         Assert.Contains("nav-volume-control", ids);
+        Assert.Contains("nav-notification-blocker", ids);
 
         // Info (6)
         Assert.Contains("nav-drivers", ids);
@@ -373,6 +373,63 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
     }
+
+    /// <summary>
+    /// Three tabs are filed by the errand that brings someone to them, not by how they work inside.
+    /// </summary>
+    /// <remarks>
+    /// One test and one view model for all three placements, deliberately. Every test in this class
+    /// builds its own <see cref="MainWindowViewModel"/>, and on the test path that constructs the whole
+    /// tab graph eagerly — including the view models that launch real winget and PowerShell child
+    /// processes. Those children outlive the test: adding three more constructions here took the CI
+    /// integration run from ~6 minutes to 22, with a pile of `winget_*_hang.log` artifacts and a host
+    /// process that could no longer exit. The suite still reported every test passing, because that job
+    /// is `continue-on-error`. So this asserts three placements against one graph rather than three.
+    /// <para><b>File Lock Detector</b> → Storage &amp; Files: someone arrives from Windows' own "the file
+    /// is open in another program" dialog, which is a files errand. "Monitor" promises continuous
+    /// watching, and this tab has no timer and no poll loop — it is a one-shot scan of a path the user
+    /// typed (#1521).</para>
+    /// <para><b>Bandwidth Monitor</b> → directly after Speed Test in Network. "How fast is my connection"
+    /// and "what is using my connection" are halves of one errand, and while they sat in different groups
+    /// finding one never led to the other. The adjacency is the point, so the position is asserted and not
+    /// just the membership. This tab genuinely IS a live monitor — one of the few with a visibility-gated
+    /// poll loop — so Monitor was defensible on mechanism; it is placed on the errand instead, because
+    /// nobody whose internet feels slow looks under Monitor (#1514).</para>
+    /// <para><b>Notification Blocker</b> → Customization. Every other tab in Privacy &amp; Security either
+    /// changes a privileged surface or removes software. This one flips the same per-app switches Windows
+    /// Settings does, needs no administrator, and is one flip from undone. Under a group named Security it
+    /// overstated the stakes and hid the tab from where the wish belongs (#1522).</para>
+    /// </remarks>
+    [Fact]
+    public void NavGroups_FileTabsAreGroupedByErrand_NotByMechanism()
+    {
+        var vm = new MainWindowViewModel();
+
+        var monitor = Ids(vm, "grp-monitor");
+        var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
+        var network = Ids(vm, "grp-network");
+        var customization = Ids(vm, "grp-customization");
+        var privacy = Ids(vm, "grp-privacy");
+
+        // #1521 — File Lock Detector, plus the group rename that makes the name cover per-file work.
+        Assert.Contains("nav-file-lock", storage.Children.Select(c => c.Id));
+        Assert.DoesNotContain("nav-file-lock", monitor);
+        Assert.Equal("Storage & Files", storage.Label);
+
+        // #1514 — Bandwidth Monitor, asserted by POSITION: immediately after Speed Test.
+        Assert.DoesNotContain("nav-bandwidth-monitor", monitor);
+        var speedTest = network.IndexOf("nav-speed-test");
+        Assert.True(speedTest >= 0,
+            "Network no longer contains Speed Test, so the adjacency this pins cannot be checked at all.");
+        Assert.Equal("nav-bandwidth-monitor", network[speedTest + 1]);
+
+        // #1522 — Notification Blocker.
+        Assert.Contains("nav-notification-blocker", customization);
+        Assert.DoesNotContain("nav-notification-blocker", privacy);
+    }
+
+    private static List<string> Ids(MainWindowViewModel vm, string groupId)
+        => vm.NavGroups.First(g => g.Id == groupId).Children.Select(c => c.Id).ToList();
 
     [Fact]
     public void NavGroups_CleanupGroup_Has4Items()

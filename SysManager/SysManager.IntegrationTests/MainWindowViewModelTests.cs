@@ -374,6 +374,77 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-duplicates", ids);
     }
 
+    /// <summary>
+    /// File Lock Detector is a per-file tool, so it belongs with the other file tools rather than with
+    /// the live monitors.
+    /// </summary>
+    /// <remarks>
+    /// Someone arrives at this tab from Windows' own "the file is open in another program" dialog while
+    /// trying to delete or move something — a files errand. "Monitor" promises continuous watching of the
+    /// machine, and this tab has no timer and no poll loop at all; it is a one-shot scan of a path the
+    /// user typed. The move also retired the app's worst size imbalance, a 2-child group whose expander
+    /// cost more than it saved (#1521).
+    /// </remarks>
+    [Fact]
+    public void NavGroups_FileLock_LivesInStorageNotMonitor()
+    {
+        var vm = new MainWindowViewModel();
+        var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
+        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
+
+        Assert.Contains("nav-file-lock", storage.Children.Select(c => c.Id));
+        Assert.DoesNotContain("nav-file-lock", monitor);
+
+        // The label carries the rename: "Storage" alone described capacity, which a file-lock scan is not.
+        Assert.Equal("Storage & Files", storage.Label);
+    }
+
+    /// <summary>
+    /// Bandwidth Monitor sits directly after Speed Test, because the two answer one question between them.
+    /// </summary>
+    /// <remarks>
+    /// "How fast is my connection" and "what is using my connection" are halves of the same errand, and
+    /// while they lived in different groups, finding one never led to the other. Adjacency is the point,
+    /// so the position is asserted and not merely the membership (#1514).
+    /// <para>Bandwidth Monitor genuinely is a live monitor — it is one of the few VMs with a
+    /// visibility-gated poll loop — so "Monitor" was defensible on mechanism. It is placed on the errand
+    /// instead: nobody with a slow connection thinks to look under Monitor.</para>
+    /// </remarks>
+    [Fact]
+    public void NavGroups_BandwidthMonitor_SitsRightAfterSpeedTestInNetwork()
+    {
+        var vm = new MainWindowViewModel();
+        var network = vm.NavGroups.First(g => g.Id == "grp-network").Children.Select(c => c.Id).ToList();
+        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
+
+        Assert.DoesNotContain("nav-bandwidth-monitor", monitor);
+
+        var speedTest = network.IndexOf("nav-speed-test");
+        Assert.True(speedTest >= 0, "Network no longer contains Speed Test, so this guard cannot check the adjacency.");
+        Assert.Equal("nav-bandwidth-monitor", network[speedTest + 1]);
+    }
+
+    /// <summary>
+    /// Notification Blocker belongs with the other "make Windows behave" tabs, not under Security.
+    /// </summary>
+    /// <remarks>
+    /// Every other tab in Privacy &amp; Security either changes a privileged surface or removes software.
+    /// This one flips the same per-app switches Windows Settings does, needs no administrator, and is one
+    /// flip from undone. Filing it under a group named Security overstated the stakes for someone who
+    /// hesitates over anything security-shaped, and hid it from where the wish ("stop this app nagging
+    /// me") would be looked for (#1522).
+    /// </remarks>
+    [Fact]
+    public void NavGroups_NotificationBlocker_LivesInCustomizationNotPrivacy()
+    {
+        var vm = new MainWindowViewModel();
+        var customization = vm.NavGroups.First(g => g.Id == "grp-customization").Children.Select(c => c.Id).ToList();
+        var privacy = vm.NavGroups.First(g => g.Id == "grp-privacy").Children.Select(c => c.Id).ToList();
+
+        Assert.Contains("nav-notification-blocker", customization);
+        Assert.DoesNotContain("nav-notification-blocker", privacy);
+    }
+
     [Fact]
     public void NavGroups_CleanupGroup_Has4Items()
     {

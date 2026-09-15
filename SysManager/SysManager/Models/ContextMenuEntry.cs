@@ -21,7 +21,8 @@ public enum ContextMenuEntryKind
     /// <summary>
     /// A COM shell extension registered under <c>shellex\ContextMenuHandlers</c> as a CLSID — the kind
     /// 7-Zip, Dropbox and antivirus software install, and the kind that makes the menu slow to open.
-    /// Hidden by adding the CLSID to the machine-wide Blocked list, which needs administrator rights.
+    /// Hidden by adding the CLSID to the machine-wide Blocked list, which needs administrator rights and
+    /// takes effect when Explorer next starts.
     /// </summary>
     Handler
 }
@@ -51,15 +52,18 @@ public sealed partial class ContextMenuEntry : ObservableObject
     public string KindLabel => Kind == ContextMenuEntryKind.Handler ? "Handler" : "Menu entry";
 
     /// <summary>
-    /// Whether the row's switch can actually change anything.
+    /// Whether hiding this row needs administrator rights.
     /// </summary>
     /// <remarks>
-    /// False for handlers, because hiding one writes the machine-wide Blocked list and that path is not
-    /// wired yet. The switch is disabled rather than absent so the row still reads as part of the same
-    /// list — but it must be disabled, because a switch that moves and changes nothing is the worst of
-    /// the three options.
+    /// True for handlers and only for handlers: the Blocked list lives in HKLM, so it is a machine-wide
+    /// change, while a verb falls back to an HKCU override when HKCR is not writable and therefore
+    /// succeeds unelevated.
+    /// <para>This replaced a <c>CanToggle</c> that was permanently false for handlers, back when the
+    /// Blocked list was unwritten and their switch had to be dead. Both are now toggleable, so the honest
+    /// distinction is no longer "can this move" but "what does moving it cost" — and that one has to reach
+    /// the UI, or an unelevated user gets a failure with no warning that one was coming.</para>
     /// </remarks>
-    public bool CanToggle => Kind == ContextMenuEntryKind.MenuEntry;
+    public bool RequiresElevation => Kind == ContextMenuEntryKind.Handler;
 
     /// <summary>Display name (from the shell key's Default value or key name).</summary>
     public required string Name { get; init; }

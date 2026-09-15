@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.102.0] - 2026-09-15
+
+**You can now switch off the add-ons that make right-click slow.** Context Menu already listed them — the
+extras that archivers, cloud-sync clients and antivirus add to your right-click menu — but their switch was
+disabled, so the tab showed you the problem and could not do anything about it. Now it can. Windows keeps a
+list of add-ons it refuses to load, and switching a row off puts it on that list: nothing the program
+installed is deleted, and switching the row back on takes it off again. Because the list applies to the
+whole PC it needs administrator rights, and because Explorer decides which add-ons to load when it starts,
+there is a Restart Explorer button so the change actually shows up.
+
+### Added
+
+- Add-on rows in Context Menu can be switched off and back on, using the blocked-extensions list Windows
+  checks before it loads a shell add-on. The row's tooltip explains that this needs administrator rights
+  and applies once Explorer restarts, before you click rather than after.
+- A **Restart Explorer** button in the Context Menu toolbar, which confirms first and explains that open
+  File Explorer windows will close. Without it a blocked add-on stays in the menu until the next sign-in,
+  which reads as the switch not working.
+- Add-ons that were already blocked — here, or by another tool such as Autoruns — now show as switched off
+  instead of active, so the list matches what Windows is really doing and the block can be undone here.
+
+### Changed
+
+- Add-ons implemented from inside the Windows folder are treated as system entries: hidden until you tick
+  "Show system entries", and never changed by a preset. They are part of the shell rather than something a
+  program added.
+- The Win10 and Win11 presets only ever change plain menu entries, never add-ons. Applying one used to be a
+  menu-style change; with add-ons now switchable, one click would otherwise have blocked every third-party
+  add-on on the PC — including cloud-sync menus and antivirus scan items — which is far more than the button
+  says it does.
+
 ## [1.101.6] - 2026-09-14
 
 **The last three lists keep what you ticked.** Debloater, Uninstaller and App Blocker each threw your

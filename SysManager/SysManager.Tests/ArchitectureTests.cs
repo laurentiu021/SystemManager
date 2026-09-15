@@ -7680,34 +7680,45 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A Context Menu preset may only act on rows it can actually change, and the number it promises in
-    /// the confirmation must come from the same predicate the loop uses.
+    /// A Context Menu preset may only act on verb rows, never on a COM shell-extension handler, and every
+    /// decision it makes has to come through the one predicate that says so.
     /// </summary>
     /// <remarks>
-    /// The tab now lists COM shell-extension handlers alongside verbs (#1510). A handler is third-party
-    /// and reports as enabled, so a preset predicate without <c>CanToggle</c> selects every one of them —
-    /// and hiding a handler needs the machine-wide Blocked list, not <c>LegacyDisable</c>. The service
-    /// refuses that write, which is proven behaviourally, so the damage stops at the dialog: it would
-    /// promise to disable N add-ons and the summary would then report none disabled.
+    /// The tab lists handlers alongside verbs (#1510) and both are now individually toggleable — so the
+    /// reason for this guard changed, and got sharper. It used to be that a preset would select handlers
+    /// and the write would be REFUSED, leaving the confirmation promising a count it could not deliver.
+    /// Now that write SUCCEEDS: one click on "Win11 Default" would put every third-party shell extension
+    /// on the machine-wide Blocked list — an HKLM change needing elevation that takes out archive menus,
+    /// cloud-sync overlays and antivirus items together. The button says it changes a menu style.
+    /// <para>So the requirement is no longer "the row can be toggled" but "the row is a verb", which is
+    /// strictly narrower. A handler is blocked one row at a time, deliberately.</para>
     /// <para>Source-shape rather than behavioural because the command's own path is unreachable from a
     /// test — it confirms through <c>DialogService</c> and can restart Explorer. The predicate's clauses
-    /// and both of its call sites are checkable without running it.</para>
+    /// and all of its call sites are checkable without running it.</para>
     /// </remarks>
     [Fact]
-    public void EveryPresetDecisionOverTheEntryList_RequiresTheRowToBeToggleable()
+    public void EveryPresetDecisionOverTheEntryList_IsLimitedToVerbRows()
     {
         var source = WithoutComments(File.ReadAllText(
             Path.Combine(FindAppProjectDir(), "ViewModels", "ContextMenuViewModel.cs")));
 
-        const string decl = "private static bool IsPresetTarget(ContextMenuEntry entry) =>";
-        var at = source.IndexOf(decl, StringComparison.Ordinal);
-        Assert.True(at >= 0,
-            "ContextMenuViewModel no longer declares IsPresetTarget as an expression-bodied predicate, so "
-            + "this guard is reading nothing at all. Re-point it at whatever now decides which rows a "
-            + "preset switches off.");
+        // The gate itself must compare Kind. Asserted as the whole comparison, not just the enum name:
+        // ContextMenuEntryKind.MenuEntry appears in this file in places that decide nothing, so matching
+        // the bare name would stay green with the clause deleted.
+        var eligible = ExpressionBody(source, "IsPresetEligible");
+        Assert.False(eligible.Length == 0,
+            "ContextMenuViewModel no longer declares IsPresetEligible as an expression-bodied predicate, "
+            + "so this guard is reading nothing at all. Re-point it at whatever now decides which rows a "
+            + "preset may act on.");
+        Assert.Contains("entry.Kind == ContextMenuEntryKind.MenuEntry", Collapse(eligible), StringComparison.Ordinal);
 
-        var predicate = source[(at + decl.Length)..source.IndexOf(';', at)];
-        Assert.Contains("entry.CanToggle", predicate, StringComparison.Ordinal);
+        // Both concrete predicates have to route through that gate rather than restating its clauses.
+        foreach (var name in (string[])["IsPresetTarget", "IsPresetRestorable"])
+        {
+            var body = ExpressionBody(source, name);
+            Assert.False(body.Length == 0, $"{name} is no longer an expression-bodied predicate.");
+            Assert.Contains("IsPresetEligible(entry)", Collapse(body), StringComparison.Ordinal);
+        }
 
         // Every Where/Count over the backing list, body included, so an inlined predicate is visible.
         var queries = EntryListQuery().Matches(source)
@@ -7718,15 +7729,73 @@ public partial class ArchitectureTests
             + "matching, which would let this pass while inspecting nothing.");
 
         var loose = queries
-            .Where(q => !q.Contains("IsPresetTarget", StringComparison.Ordinal)
-                     && !q.Contains("CanToggle", StringComparison.Ordinal))
+            .Where(q => !PresetPredicate().IsMatch(q))
             .ToList();
 
         Assert.True(loose.Count == 0,
-            "These queries over the entry list decide what a preset touches without requiring the row to "
-            + "be toggleable, so they select shell-extension handlers the write path then refuses — the "
-            + "confirmation dialog states a count it cannot deliver. Go through IsPresetTarget, or test "
-            + "CanToggle:\n  " + string.Join("\n  ", loose));
+            "These queries over the entry list decide what a preset touches without going through the "
+            + "preset predicates, so they can select shell-extension handlers — and blocking one is a "
+            + "machine-wide, admin-gated change that a menu-style button does not announce. Route them "
+            + "through IsPresetTarget / IsPresetRestorable:\n  " + string.Join("\n  ", loose));
+    }
+
+    /// <summary>The right-hand side of an expression-bodied predicate, or empty when it is not one.</summary>
+    private static string ExpressionBody(string source, string methodName)
+    {
+        var decl = $"private static bool {methodName}(ContextMenuEntry entry) =>";
+        var at = source.IndexOf(decl, StringComparison.Ordinal);
+        if (at < 0) return "";
+
+        var end = source.IndexOf(';', at);
+        return end < 0 ? "" : source[(at + decl.Length)..end];
+    }
+
+    [GeneratedRegex(@"IsPreset(?:Target|Restorable|Eligible)")]
+    private static partial Regex PresetPredicate();
+
+    /// <summary>
+    /// The Context Menu tab has to tell the user that hiding an add-on costs administrator rights and an
+    /// Explorer restart, not just know it internally.
+    /// </summary>
+    /// <remarks>
+    /// Both halves of the row's switch are now live, but they are not equally cheap: a verb falls back to
+    /// an HKCU override and works unelevated, while blocking a handler writes HKLM. Unelevated, that fails
+    /// — and the failure is answered with an offer to relaunch, which is a UAC prompt arriving with no
+    /// warning that one was coming. The project's contract is that an admin-requiring control says WHY
+    /// before it is used.
+    /// <para>Read as XML rather than text on purpose: a comment is an <c>XComment</c> node, so no amount of
+    /// explanatory prose above the control can satisfy an assertion about an attribute. This repo has had a
+    /// source-text guard pass on its own comment before.</para>
+    /// <para>The other half of the same risk — the flag existing, tested, and bound by nothing — is this
+    /// codebase's most repeated defect, so the binding is what is asserted, not the property.</para>
+    /// </remarks>
+    [Fact]
+    public void TheContextMenuToggle_WarnsThatBlockingAnAddOnNeedsAdmin()
+    {
+        var view = Path.Combine(FindAppProjectDir(), "Views", "ContextMenuView.xaml");
+        var triggers = XDocument.Load(view).Descendants()
+            .Where(e => e.Name.LocalName == "DataTrigger")
+            .Where(e => ((string?)e.Attribute("Binding") ?? "").Contains("RequiresElevation", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(triggers.Count >= 1,
+            "ContextMenuView no longer binds RequiresElevation, so a handler row looks exactly like a verb "
+            + "row — the user learns that blocking an add-on needs administrator rights by being refused "
+            + "and handed a UAC prompt. Bind it back, or move the explanation somewhere this can see it.");
+
+        var explanations = triggers
+            .SelectMany(t => t.Descendants().Where(e => e.Name.LocalName == "Setter"))
+            .Where(s => (string?)s.Attribute("Property") == "ToolTip")
+            .Select(s => Collapse((string?)s.Attribute("Value") ?? ""))
+            .Where(v => v.Length > 0)
+            .ToList();
+
+        Assert.True(explanations.Count >= 1,
+            "The RequiresElevation trigger sets no ToolTip, so nothing explains the cost to the user.");
+
+        // Both facts, because either alone leaves the persona guessing: what it needs, and when it applies.
+        Assert.Contains(explanations, v => v.Contains("administrator", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(explanations, v => v.Contains("Explorer", StringComparison.OrdinalIgnoreCase));
     }
 
     [GeneratedRegex(@"_allEntries\s*\.\s*(?:Where|Count)\(")]

@@ -241,7 +241,9 @@ announced everything would look like an improvement.
 
 ### Context Menu Manager
 Manage Windows Explorer right-click entries — toggle them on or off without
-deleting anything (uses the standard `LegacyDisable` registry mechanism):
+deleting anything. Plain menu entries use the standard `LegacyDisable` registry
+mechanism; add-ons use Windows' own blocked-extensions list. Neither removes
+anything a program registered, so both are undone by turning the switch back on:
 - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
 - The preset currently applied is marked with a tick, so you can see which style you are on without applying one
 - Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
@@ -253,9 +255,18 @@ deleting anything (uses the standard `LegacyDisable` registry mechanism):
   that make a right-click take a second to open, because Explorer loads each add-on's DLL and
   waits for it before drawing the menu. A **"Type" column** says which kind each row is, and an
   add-on's row names the program behind it instead of the raw class id
-- **Add-ons are read-only for now** — hiding one needs a machine-wide setting SysManager does not
-  write yet, so its switch is plainly disabled rather than moving without effect. Uninstalling the
-  program that added it removes it
+- **Add-ons can be switched off too** — hiding one adds its class id to the blocked-extensions list
+  Windows checks before loading a shell add-on, which is the same reversible mechanism Autoruns
+  writes. Nothing the program installed is deleted; switching the row back on removes the entry.
+  It is a machine-wide setting, so it needs administrator rights, and the row's tooltip says so
+  before you click
+- **Restart Explorer button** — Explorer decides which add-ons to load when it starts, so a blocked
+  add-on is still in the menu until it restarts. The button does it after confirming, rather than
+  leaving you to conclude the switch did nothing
+- **Windows' own add-ons stay out of the way** — an add-on implemented from inside the Windows
+  folder is treated as a system entry: hidden behind "Show system entries" and never touched by a
+  preset. Presets only ever change plain menu entries, so one click cannot block every add-on on
+  the machine
 - **"Applies to" column** — shows whether the entry affects Files, Folders, Files and folders,
   Desktop, or Directory Background
 - **HKCU fallback** — system-protected entries can be toggled via user-level registry override

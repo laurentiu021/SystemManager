@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using Microsoft.Win32;
 using NSubstitute;
 using SysManager.Models;
@@ -27,22 +28,57 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     private const string Sync = "{aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}";
     private const string Orphan = "{99999999-8888-7777-6666-555555555555}";
 
-    private readonly string _rootName = @"Software\SysManagerTests\ContextMenu_" + Guid.NewGuid().ToString("N");
+    private const string BlockedListPath =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked";
+
+    private readonly string _treeName = @"Software\SysManagerTests\ContextMenu_" + Guid.NewGuid().ToString("N");
+
+    /// <summary>Stands in for HKEY_CLASSES_ROOT.</summary>
     private readonly RegistryKey _root;
 
-    // A class name unique to this test run, used only by the refusal tests. If the service's refusal ever
-    // regresses, its HKCU fallback writes under Software\Classes\<this>, which Dispose then removes —
-    // so a regression is caught by an assertion rather than by littering the developer's registry.
+    /// <summary>
+    /// Stands in for HKEY_LOCAL_MACHINE, which is where the shell-extension Blocked list lives.
+    /// </summary>
+    /// <remarks>
+    /// Without this seam the block/unblock tests would have to write the real
+    /// <c>HKLM\…\Shell Extensions\Blocked</c> — needing administrator rights, and changing which add-ons
+    /// load on the machine running the suite, to prove something about a registry value. Both stand-ins
+    /// live under one disposable tree so a single delete cleans up.
+    /// </remarks>
+    private readonly RegistryKey _machine;
+
+    // A class name unique to this test run, used by the tests that assert LegacyDisable is NOT the
+    // mechanism for a handler. If that ever regresses, the HKCU fallback writes under
+    // Software\Classes\<this>, which Dispose then removes — so a regression is caught by an assertion
+    // rather than by littering the developer's registry.
     private readonly string _refusalClass = "SysManagerTests_Handler_" + Guid.NewGuid().ToString("N");
 
-    public ContextMenuServiceShellExTests() =>
-        _root = Registry.CurrentUser.CreateSubKey(_rootName, writable: true)!;
+    public ContextMenuServiceShellExTests()
+    {
+        _root = Registry.CurrentUser.CreateSubKey(_treeName + @"\Classes", writable: true)!;
+        _machine = Registry.CurrentUser.CreateSubKey(_treeName + @"\Machine", writable: true)!;
+    }
 
     public void Dispose()
     {
         _root.Dispose();
-        try { Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
+        _machine.Dispose();
+        try { Registry.CurrentUser.DeleteSubKeyTree(_treeName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
         try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + _refusalClass, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
+    }
+
+    /// <summary>Puts a CLSID on the fake machine's Blocked list, the way blocking one does.</summary>
+    private void GivenBlocked(string clsid, string name = "Already blocked")
+    {
+        using var key = _machine.CreateSubKey(BlockedListPath, writable: true)!;
+        key.SetValue(clsid, name, RegistryValueKind.String);
+    }
+
+    /// <summary>The Blocked-list value for a CLSID, or null when it is not blocked.</summary>
+    private object? BlockedValue(string clsid)
+    {
+        using var key = _machine.OpenSubKey(BlockedListPath);
+        return key?.GetValue(clsid);
     }
 
     /// <summary>Registers a handler under one shellex root, the way a real installer does.</summary>
@@ -71,7 +107,11 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         cmd.SetValue("", command);
     }
 
-    private List<ContextMenuEntry> Scan() => new ContextMenuService(_root).ScanEntries();
+    // Both hives are the fakes, so a scan asserts what the test set up and nothing the developer's
+    // machine happens to have blocked.
+    private ContextMenuService Service() => new(_root, _machine);
+
+    private List<ContextMenuEntry> Scan() => Service().ScanEntries();
 
     [Fact]
     public void ScanEntries_ReadsAHandlerAndResolvesItsNameAndDll()
@@ -210,11 +250,117 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
 
         var verb = Assert.Single(entries, e => e.Kind == ContextMenuEntryKind.MenuEntry);
         Assert.Equal("Menu entry", verb.KindLabel);
-        Assert.True(verb.CanToggle);
+        Assert.False(verb.RequiresElevation, "A verb falls back to an HKCU override, so it works unelevated.");
         Assert.Equal("", verb.Clsid);
 
         var handler = Assert.Single(entries, e => e.Kind == ContextMenuEntryKind.Handler);
-        Assert.False(handler.CanToggle, "A handler is hidden through the machine-wide Blocked list, which is not wired yet.");
+        Assert.True(handler.RequiresElevation, "Blocking a handler writes HKLM, so the row has to say it needs admin.");
+    }
+
+    // ---- The read side of the Blocked list: a blocked add-on has to show as off ----
+
+    [Fact]
+    public void ScanEntries_ReportsABlockedHandlerAsDisabled()
+    {
+        // Without this the tab shows every add-on as active, so a user who blocked one — here, or in
+        // Autoruns — is told it is still running and has no way to undo it from this list.
+        GivenHandler("*", "TestArchiver", Archiver);
+        GivenComClass(Archiver, "Test Archiver Shell Extension", @"C:\Program Files\TestArchiver\ext.dll");
+        GivenBlocked(Archiver);
+
+        Assert.False(Assert.Single(Scan()).IsEnabled);
+    }
+
+    [Fact]
+    public void ScanEntries_ReportsAHandlerThatIsNotOnTheListAsEnabled()
+    {
+        GivenHandler("*", "TestArchiver", Archiver);
+        GivenComClass(Archiver, "Test Archiver Shell Extension", @"C:\Program Files\TestArchiver\ext.dll");
+        GivenBlocked(Sync);   // a different add-on is blocked
+
+        Assert.True(Assert.Single(Scan()).IsEnabled);
+    }
+
+    [Fact]
+    public void ScanEntries_MatchesTheBlockedListRegardlessOfCase()
+    {
+        // Registry value names are case-insensitive and installers are inconsistent about GUID casing, so
+        // a case-sensitive comparison would report a blocked add-on as active roughly half the time.
+        GivenHandler("*", "TestArchiver", Archiver.ToUpperInvariant());
+        GivenComClass(Archiver.ToUpperInvariant(), "Test Archiver Shell Extension");
+        GivenBlocked(Archiver.ToLowerInvariant());
+
+        Assert.False(Assert.Single(Scan()).IsEnabled);
+    }
+
+    [Fact]
+    public void ReadBlockedClsids_IgnoresAValueNameThatIsNotAClsid()
+    {
+        using (var key = _machine.CreateSubKey(BlockedListPath, writable: true)!)
+        {
+            key.SetValue(Archiver, "A real one", RegistryValueKind.String);
+            key.SetValue("NotAClsid", "junk", RegistryValueKind.String);
+        }
+
+        Assert.Equal([Archiver], Service().ReadBlockedClsids());
+    }
+
+    [Fact]
+    public void ReadBlockedClsids_IsEmptyWhenNothingHasEverBeenBlocked()
+    {
+        // The key is absent on most machines. That is the normal case, not a failure to read.
+        Assert.Empty(Service().ReadBlockedClsids());
+    }
+
+    // ---- Windows' own handlers belong behind the "show system entries" filter ----
+
+    // Derived rather than written as "C:\Windows": the directory is not guaranteed to be there, and the
+    // sibling case below has to be a real sibling of whatever it actually is to test anything.
+    private static string WindowsDir => Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+
+    [Fact]
+    public void ScanEntries_TreatsAHandlerInsideWindowsAsASystemEntry()
+    {
+        // Part of the shell rather than something a program added, so it belongs off-screen by default and
+        // out of every preset's reach — the same treatment the internal verbs get.
+        GivenHandler("*", "TestSystemHandler", Archiver);
+        GivenComClass(Archiver, "Test System Handler", Path.Combine(WindowsDir, "system32", "shell32.dll"));
+
+        Assert.True(Assert.Single(Scan()).IsSystemEntry);
+    }
+
+    [Fact]
+    public void ScanEntries_TreatsAnUnexpandedWindowsPathAsASystemEntry()
+    {
+        // How the built-in handlers actually register. Compared before expansion, %SystemRoot% matches
+        // nothing and every one of them reads as third-party — visible by default and inside a preset's
+        // reach, which is the wrong answer twice.
+        GivenHandler("*", "TestSystemHandler", Archiver);
+        GivenComClass(Archiver, "Test System Handler", @"%SystemRoot%\system32\shell32.dll");
+
+        Assert.True(Assert.Single(Scan()).IsSystemEntry);
+    }
+
+    [Fact]
+    public void ScanEntries_DoesNotMistakeASiblingOfTheWindowsDirectoryForIt()
+    {
+        // A prefix comparison without a separator sweeps in C:\Windows-Anything, which would hide a
+        // third-party add-on behind the system filter and make it untouchable by a preset.
+        GivenHandler("*", "TestArchiver", Archiver);
+        GivenComClass(Archiver, "Test Archiver Shell Extension", WindowsDir + "-NotReally\\ext.dll");
+
+        Assert.False(Assert.Single(Scan()).IsSystemEntry);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Program Files\TestArchiver\ext.dll")]
+    [InlineData("")]   // an orphan, whose DLL is gone
+    public void ScanEntries_TreatsAHandlerOutsideWindowsAsThirdParty(string dll)
+    {
+        GivenHandler("*", "TestArchiver", Archiver);
+        GivenComClass(Archiver, "Test Archiver Shell Extension", dll.Length == 0 ? null : dll);
+
+        Assert.False(Assert.Single(Scan()).IsSystemEntry);
     }
 
     [Fact]
@@ -238,12 +384,12 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         Assert.Equal(@"C:\Program Files\TestArchiver\ext.dll", new ContextMenuService(_root).ResolveClsid(Archiver).Dll);
     }
 
-    // ---- The write side: a handler must be refused, not silently written to ----
+    // ---- The write side: a handler is hidden through the Blocked list, never through LegacyDisable ----
 
-    private ContextMenuEntry AHandlerRow() => new()
+    private ContextMenuEntry AHandlerRow(string? clsid = null) => new()
     {
         Kind = ContextMenuEntryKind.Handler,
-        Clsid = Archiver,
+        Clsid = clsid ?? Archiver,
         Name = "Test Archiver Shell Extension",
         Command = @"C:\Program Files\TestArchiver\ext.dll",
         RegistryPath = $@"HKCR\{_refusalClass}\shellex\ContextMenuHandlers\TestArchiver",
@@ -252,25 +398,78 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     };
 
     [Fact]
-    public void DisableEntry_RefusesAHandler_AndWritesNothing()
+    public void DisableEntry_BlocksAHandlerByClsid_AndNeverWritesLegacyDisable()
     {
         // LegacyDisable on a shellex key SUCCEEDS and does nothing: Explorer only honours it on a verb.
-        // Without the refusal the tab would report the add-on as disabled, leave a junk value behind, and
-        // the menu would open exactly as slowly as before — worse than declining the toggle.
+        // So the disable path has to go somewhere else entirely, and the two halves of that are asserted
+        // together — the CLSID reaches the Blocked list, and no value is left on the handler's own key.
         var entry = AHandlerRow();
 
-        Assert.False(new ContextMenuService(_root).DisableEntry(entry));
-        Assert.True(entry.IsEnabled, "A refused disable must leave the row's state alone.");
+        Assert.True(Service().DisableEntry(entry));
+        Assert.False(entry.IsEnabled);
+        Assert.Equal("Test Archiver Shell Extension", BlockedValue(Archiver));
         AssertNoFallbackKeyWasCreated();
     }
 
     [Fact]
-    public void EnableEntry_RefusesAHandler_AndDeletesNothing()
+    public void DisableEntry_CreatesTheBlockedList_WhenNothingHasEverBeenBlocked()
     {
-        // The enable path only ever DELETES a value, so against a key that does not exist it does nothing
-        // whether or not the refusal is there — an assertion on the missing key would pass either way and
-        // prove nothing. So the value it would delete is put there first: surviving the call is the
-        // evidence.
+        // The common case on a real machine: the key does not exist at all. A disable that quietly did
+        // nothing here would be the whole feature failing on exactly the machines that need it.
+        Assert.Null(_machine.OpenSubKey(BlockedListPath));
+
+        Assert.True(Service().DisableEntry(AHandlerRow()));
+
+        Assert.NotNull(BlockedValue(Archiver));
+    }
+
+    [Fact]
+    public void EnableEntry_RemovesTheClsidFromTheBlockedList()
+    {
+        GivenBlocked(Archiver);
+        var entry = AHandlerRow();
+        entry.IsEnabled = false;
+
+        Assert.True(Service().EnableEntry(entry));
+
+        Assert.True(entry.IsEnabled);
+        Assert.Null(BlockedValue(Archiver));
+    }
+
+    [Fact]
+    public void EnableEntry_LeavesOtherBlockedHandlersAlone()
+    {
+        // Deleting one value, not clearing the list. Worth pinning because the list is machine-wide and
+        // shared with anything else that blocks handlers, so over-deleting would silently re-enable an
+        // add-on the user blocked somewhere else.
+        GivenBlocked(Archiver);
+        GivenBlocked(Sync, "Someone else's choice");
+
+        Assert.True(Service().EnableEntry(AHandlerRow()));
+
+        Assert.Null(BlockedValue(Archiver));
+        Assert.Equal("Someone else's choice", BlockedValue(Sync));
+    }
+
+    [Fact]
+    public void EnableEntry_SucceedsWhenTheHandlerWasNotBlocked()
+    {
+        // Asking for a state that is already true is not a failure — reporting one would put the switch
+        // back and tell the user something went wrong when the add-on is exactly as they asked.
+        var entry = AHandlerRow();
+        entry.IsEnabled = false;
+
+        Assert.True(Service().EnableEntry(entry));
+        Assert.True(entry.IsEnabled);
+    }
+
+    [Fact]
+    public void EnableEntry_DoesNotDeleteLegacyDisableFromAHandlersOwnKey()
+    {
+        // The mirror of the disable assertion. The verb path DELETES a value, so against a key that does
+        // not exist it does nothing whether or not the routing is right — an assertion on a missing key
+        // would pass either way. So the value it would delete is put there first: surviving the call is
+        // the evidence that the handler went down the Blocked-list path instead.
         var handlerKeyPath = $@"Software\Classes\{_refusalClass}\shellex\ContextMenuHandlers\TestArchiver";
         using (var seeded = Registry.CurrentUser.CreateSubKey(handlerKeyPath, writable: true)!)
             seeded.SetValue("LegacyDisable", "", RegistryValueKind.String);
@@ -278,22 +477,38 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         var entry = AHandlerRow();
         entry.IsEnabled = false;
 
-        Assert.False(new ContextMenuService(_root).EnableEntry(entry));
-        Assert.False(entry.IsEnabled);
+        Assert.True(Service().EnableEntry(entry));
 
         using var after = Registry.CurrentUser.OpenSubKey(handlerKeyPath);
         Assert.NotNull(after);
         Assert.NotNull(after.GetValue("LegacyDisable"));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("NotAGuidAtAll")]
+    [InlineData("11111111-2222-3333-4444-555555555555")]
+    [InlineData(@"{11111111-2222-3333-4444-555555555555}\..\..\Run")]
+    public void DisableEntry_RefusesAHandlerWhoseClsidIsNotOne_AndWritesNothing(string junk)
+    {
+        // SEC: the CLSID becomes a registry VALUE NAME under HKLM, and it was enumerated out of HKCR,
+        // which merges the user-writable HKCU\Software\Classes. The scan drops non-CLSIDs already; this is
+        // the check standing next to the write, which is the one that usually runs elevated.
+        var entry = AHandlerRow(junk);
+
+        Assert.False(Service().DisableEntry(entry));
+        Assert.True(entry.IsEnabled, "A refused disable must leave the row's state alone.");
+        Assert.Null(_machine.OpenSubKey(BlockedListPath));
+    }
+
     /// <summary>
-    /// Proves the refusal happened before any write, not merely that it returned false.
+    /// Proves nothing was written to the handler's own key, not merely that the call reported success.
     /// </summary>
     /// <remarks>
-    /// The toggle path writes through <c>Registry.ClassesRoot</c>, not the injected root, and falls back
-    /// to <c>HKCU\Software\Classes</c> when HKCR is not writable — which it is not for a class that does
-    /// not exist. So a regressed refusal leaves a key behind under a name unique to this test run, and
-    /// that key's absence is the assertion.
+    /// The verb path writes through <c>Registry.ClassesRoot</c>, not the injected root, and falls back to
+    /// <c>HKCU\Software\Classes</c> when HKCR is not writable — which it is not for a class that does not
+    /// exist. So a handler wrongly sent down that path leaves a key behind under a name unique to this
+    /// test run, and that key's absence is the assertion.
     /// </remarks>
     private void AssertNoFallbackKeyWasCreated()
     {

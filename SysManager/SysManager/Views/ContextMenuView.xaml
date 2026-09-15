@@ -197,6 +197,13 @@
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             AutomationProperties.Name="Refresh entries"
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <!-- Explorer decides which add-ons to load when it starts, so blocking one is
+                         invisible until it restarts. Without this the tab would say "blocked" while the
+                         item stayed in the menu. -->
+                    <Button Content="Restart Explorer" Command="{Binding RestartExplorerCommand}"
+                            AutomationProperties.Name="Restart Explorer to apply add-on changes"
+                            ToolTip="Applies changes to add-ons. Closes all open File Explorer windows and starts it again — your files are not affected."
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <CheckBox Content="Show system entries"
                               IsChecked="{Binding ShowSystemEntries}"
                               AutomationProperties.Name="Show system entries"
@@ -228,12 +235,13 @@
                     <DataGridTemplateColumn Header="" Width="62" MinWidth="62" CanUserResize="False" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <!-- IsEnabled bound to CanToggle, which is false for handler rows: hiding a
-                                     handler writes the machine-wide Blocked list, and that path is not wired
-                                     yet (#1510). A switch that moves and changes nothing is worse than one
-                                     that plainly cannot move, and the tooltip says which case this is. -->
+                                <!-- Both kinds of row toggle now: a verb through LegacyDisable, a handler
+                                     through the machine-wide Blocked list (#1510). The switch is live in
+                                     both cases, and the trigger explains what the handler case costs —
+                                     administrator rights, plus an Explorer restart before the menu
+                                     changes. The failure path offers to relaunch elevated, so an
+                                     unelevated click is answered rather than ignored. -->
                                 <ToggleButton IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
-                                              IsEnabled="{Binding CanToggle}"
                                               Command="{Binding DataContext.ToggleEntryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                               CommandParameter="{Binding}"
                                               AutomationProperties.Name="{Binding Name, StringFormat='Toggle {0}'}"
@@ -241,9 +249,9 @@
                                     <ToggleButton.Style>
                                         <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleSwitch}">
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding CanToggle}" Value="False">
+                                                <DataTrigger Binding="{Binding RequiresElevation}" Value="True">
                                                     <Setter Property="ToolTip"
-                                                            Value="Hiding an add-on is not available yet — it needs a machine-wide setting SysManager does not write. Uninstalling the program that added it removes it."/>
+                                                            Value="This is an add-on, so hiding it is a machine-wide setting: it needs administrator rights, and it applies once Explorer restarts. Nothing the program installed is deleted — turning this back on undoes it."/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

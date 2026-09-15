@@ -66,6 +66,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         // Refresh and ApplyPreset all mutate the shared _allEntries list off the UI thread
         // (ApplyPreset also restarts Explorer); disabling them while one runs prevents
         // overlapping runs from corrupting that list or racing two Explorer restarts.
+        // RestartExplorer is in that set for the racing reason specifically: two overlapping
+        // restarts can leave the user without a shell.
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
     }
@@ -84,6 +86,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         ScanCommand.NotifyCanExecuteChanged();
         RefreshCommand.NotifyCanExecuteChanged();
         ApplyPresetCommand.NotifyCanExecuteChanged();
+        RestartExplorerCommand.NotifyCanExecuteChanged();
     }
 
     protected override void Dispose(bool disposing)
@@ -158,7 +161,13 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             ActivePresetId = "custom";
             PresetDescription = ContextMenuPreset.All["custom"].Description;
             UpdateCounts();
-            StatusMessage = $"{entry.Name} {(desiredState ? "enabled" : "disabled")}.";
+
+            // A verb change shows up on the next right-click; a handler change does not, because Explorer
+            // decided which handlers to load when it started. Saying so is the difference between "the
+            // toggle worked" and "the toggle did nothing", which is what it looks like otherwise.
+            StatusMessage = entry.Kind == ContextMenuEntryKind.Handler
+                ? $"{entry.Name} {(desiredState ? "allowed" : "blocked")} — restart Explorer to see the change."
+                : $"{entry.Name} {(desiredState ? "enabled" : "disabled")}.";
             Log.Information("Context menu entry toggled: {Name} -> {State}", entry.Name, desiredState ? "enabled" : "disabled");
         }
         else
@@ -175,7 +184,11 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             }
             else
             {
-                StatusMessage = $"Could not toggle {entry.Name} — protected by Windows (owned by TrustedInstaller).";
+                // Already elevated, so the cause is not permission. Naming TrustedInstaller for a handler
+                // would be a guess at the wrong mechanism — it is not what guards the Blocked list.
+                StatusMessage = entry.Kind == ContextMenuEntryKind.Handler
+                    ? $"Could not change {entry.Name} — Windows would not accept the change to its blocked add-ons list."
+                    : $"Could not toggle {entry.Name} — protected by Windows (owned by TrustedInstaller).";
             }
         }
     }
@@ -234,8 +247,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
                 // Enable any default Windows entries that were previously disabled
                 var en = 0;
-                foreach (var entry in _allEntries.Where(e =>
-                             e.CanToggle && !e.IsSystemEntry && !e.IsEnabled && IsDefaultWindowsEntry(e)))
+                foreach (var entry in _allEntries.Where(IsPresetRestorable))
                 {
                     if (_service.EnableEntry(entry))
                         en++;
@@ -268,6 +280,40 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private Task RefreshAsync() => ScanAsync();
+
+    /// <summary>
+    /// Restarts Explorer so a blocked or allowed add-on takes effect.
+    /// </summary>
+    /// <remarks>
+    /// Needed because Explorer reads the Blocked list when it loads a handler, so a change to it is
+    /// invisible until then. Without this the tab would report "blocked" while the add-on stayed in the
+    /// menu, and the user's only correct conclusion would be that the toggle does not work.
+    /// <para>Confirmed first: it closes every open File Explorer window, which is disruptive enough that
+    /// it must not happen from a single click. Preset application restarts Explorer too, but there it is
+    /// part of a change the user already confirmed.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task RestartExplorerAsync()
+    {
+        if (!DialogService.Instance.Confirm(
+                "Restart Windows Explorer now?\n\nAll open File Explorer windows will close. Your files are "
+                + "not affected, and the desktop comes back on its own. This is what applies changes to "
+                + "add-ons in the list below.",
+                "Restart Explorer"))
+            return;
+
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Restarting Explorer...";
+
+        try
+        {
+            await Task.Run(ContextMenuService.RestartExplorer);
+            StatusMessage = "Explorer restarted — right-click menu changes are now in effect.";
+            ToastService.Instance.Show("Explorer restarted", "Right-click menu changes are now in effect");
+        }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
 
     private void ApplyFilter()
     {
@@ -316,18 +362,30 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// A row a preset may switch off: third-party, currently on, and actually hideable.
+    /// A row a preset is allowed to touch at all: an ordinary verb, never a shell-extension handler.
     /// </summary>
     /// <remarks>
-    /// <c>CanToggle</c> is the load-bearing clause. Shell-extension handlers are third-party and report
-    /// as enabled, so without it a preset would call <c>DisableEntry</c> on every one of them; the write
-    /// targets a key <c>LegacyDisable</c> has no effect on, so the confirmation would promise to disable
-    /// N add-ons, the summary would claim it did, and the right-click menu would be unchanged.
-    /// <para>Counted and iterated through the same predicate on purpose: the confirmation dialog states
-    /// the number, so a predicate that drifted from the loop's would make the dialog lie (#1510).</para>
+    /// The <c>Kind</c> clause is the load-bearing one, and it stayed load-bearing when handlers became
+    /// toggleable — for a different reason than before. Previously a preset would have called
+    /// <c>DisableEntry</c> on every handler and the write would have been refused, so the dialog promised
+    /// a count it could not deliver. Now the write would SUCCEED, and one click on "Win11 Default" would
+    /// block every third-party shell extension on the machine: an HKLM change, needing elevation, that
+    /// takes out archive menus, cloud-sync overlays and antivirus scan items together. That is far more
+    /// than the button says it does.
+    /// <para>So a handler is hidden one row at a time, deliberately, and a preset stays what it claims to
+    /// be — a menu-style change. The two preset queries go through here so the confirmation's count and
+    /// the loop's selection cannot drift apart (#1510).</para>
     /// </remarks>
+    private static bool IsPresetEligible(ContextMenuEntry entry) =>
+        entry.Kind == ContextMenuEntryKind.MenuEntry && !entry.IsSystemEntry;
+
+    /// <summary>A row a preset switches off: eligible, currently on, and not a Windows default.</summary>
     private static bool IsPresetTarget(ContextMenuEntry entry) =>
-        entry.CanToggle && !entry.IsSystemEntry && entry.IsEnabled && !IsDefaultWindowsEntry(entry);
+        IsPresetEligible(entry) && entry.IsEnabled && !IsDefaultWindowsEntry(entry);
+
+    /// <summary>A row a preset switches back on: eligible, currently off, and a Windows default.</summary>
+    private static bool IsPresetRestorable(ContextMenuEntry entry) =>
+        IsPresetEligible(entry) && !entry.IsEnabled && IsDefaultWindowsEntry(entry);
 
     private static bool IsDefaultWindowsEntry(ContextMenuEntry entry)
     {

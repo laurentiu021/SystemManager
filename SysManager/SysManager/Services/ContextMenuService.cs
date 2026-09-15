@@ -15,11 +15,16 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Reads context menu shell entries from HKEY_CLASSES_ROOT and provides
-/// non-destructive enable/disable via the <c>LegacyDisable</c> value.
-/// Windows Explorer respects this value to hide the menu entry without
-/// removing the registration — safe and fully reversible.
+/// Reads context menu entries from HKEY_CLASSES_ROOT and hides or restores them without removing any
+/// registration.
 /// </summary>
+/// <remarks>
+/// Two shapes, two mechanisms, both fully reversible. A verb under a class's <c>shell</c> key is hidden
+/// with the <c>LegacyDisable</c> value, which Explorer honours to skip the entry. A COM shell extension
+/// under <c>shellex\ContextMenuHandlers</c> is hidden by naming its CLSID in the machine-wide Blocked
+/// list, which is what Explorer consults before loading a handler at all.
+/// <para>Neither deletes anything the program registered, so undoing either is removing one value.</para>
+/// </remarks>
 public sealed partial class ContextMenuService : IContextMenuService
 {
     // Registry locations that define context menu entries
@@ -62,9 +67,39 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </remarks>
     private readonly RegistryKey _classesRoot;
 
-    /// <summary>Reads from <c>HKEY_CLASSES_ROOT</c> unless handed somewhere else to read from.</summary>
-    public ContextMenuService(RegistryKey? classesRoot = null) =>
+    /// <summary>
+    /// Stands in for <c>HKEY_LOCAL_MACHINE</c>, which is where the shell-extension Blocked list lives.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="_classesRoot"/> because the two are genuinely different hives, and both
+    /// are needed: a handler row is READ from HKCR and BLOCKED in HKLM. Injectable for the same reason —
+    /// a test that had to write the real
+    /// <c>HKLM\…\Shell Extensions\Blocked</c> would need administrator rights and would be changing the
+    /// developer's machine to prove a point about a registry value.
+    /// </remarks>
+    private readonly RegistryKey _localMachine;
+
+    /// <summary>
+    /// Reads from <c>HKEY_CLASSES_ROOT</c> and <c>HKEY_LOCAL_MACHINE</c> unless handed somewhere else.
+    /// </summary>
+    public ContextMenuService(RegistryKey? classesRoot = null, RegistryKey? localMachine = null)
+    {
         _classesRoot = classesRoot ?? Registry.ClassesRoot;
+        _localMachine = localMachine ?? Registry.LocalMachine;
+    }
+
+    /// <summary>
+    /// Where Windows keeps the list of shell extensions it refuses to load. A value named with the CLSID
+    /// is all it takes; the data is ignored by Explorer and is used here to record a readable name.
+    /// </summary>
+    /// <remarks>
+    /// This is the documented, fully reversible mechanism — enabling again is deleting the value, and
+    /// nothing about the extension's own registration is touched. It is also what Autoruns writes, which
+    /// matters: an add-on blocked here can be un-blocked with a tool the user may already trust, and one
+    /// blocked THERE shows correctly as off here.
+    /// </remarks>
+    private const string BlockedListPath =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked";
 
     /// <summary>
     /// Scans all known registry shell locations and returns discovered
@@ -174,6 +209,10 @@ public sealed partial class ContextMenuService : IContextMenuService
         List<ContextMenuEntry> handlers = [];
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Read once for the whole scan rather than per handler: the list is small, and opening HKLM for
+        // every one of a hundred-odd rows is work with no answer that could differ.
+        var blocked = ReadBlockedClsids();
+
         foreach (var (subKey, location) in ShellExLocations)
         {
             try
@@ -217,11 +256,14 @@ public sealed partial class ContextMenuService : IContextMenuService
                             RegistryPath = $@"HKCR\{subKey}\{handlerName}",
                             Location = location,
                             Source = ExtractSourceFromPath(dll),
-                            // Blocked-list state is machine-wide and is not read yet, so every handler
-                            // reports as active. That is honest for the common case — a handler on the
-                            // Blocked list is rare — and the row's switch is disabled either way.
-                            IsEnabled = true,
-                            IsSystemEntry = false,
+                            IsEnabled = !blocked.Contains(clsid),
+                            // A handler implemented by a DLL inside the Windows directory is part of the
+                            // shell rather than something a program added, so it belongs behind the same
+                            // "Show system entries" filter as the internal verbs — off by default, and
+                            // never a preset's business. Still individually toggleable once revealed:
+                            // hiding it is reversible, and refusing outright would be guessing at what
+                            // the user is allowed to want.
+                            IsSystemEntry = IsWindowsOwned(dll),
                             Explanation = HandlerExplanation(dll)
                         });
                     }
@@ -236,6 +278,68 @@ public sealed partial class ContextMenuService : IContextMenuService
         }
 
         return handlers;
+    }
+
+    /// <summary>
+    /// The CLSIDs Windows has been told not to load, read from the machine-wide Blocked list.
+    /// </summary>
+    /// <remarks>
+    /// The key is absent on a machine where nothing has ever been blocked, which is the common case and
+    /// not an error — an empty set is the right answer for it.
+    /// <para>Value names that are not CLSIDs are ignored rather than trusted. The list is HKLM and so is
+    /// not user-writable, but a non-CLSID name there cannot correspond to a row either, and matching one
+    /// loosely could only ever mark the wrong handler as blocked.</para>
+    /// </remarks>
+    internal HashSet<string> ReadBlockedClsids()
+    {
+        var blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var key = _localMachine.OpenSubKey(BlockedListPath, writable: false);
+            if (key is null) return blocked;
+
+            foreach (var name in key.GetValueNames())
+                if (ClsidPattern().IsMatch(name))
+                    blocked.Add(name);
+        }
+        catch (SecurityException ex) { Log.Debug("Blocked list inaccessible: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Blocked list access denied: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Debug("Blocked list I/O error: {Error}", ex.Message); }
+
+        return blocked;
+    }
+
+    /// <summary>
+    /// Whether a handler's implementing file lives inside the Windows directory, i.e. it is part of the
+    /// shell rather than something a program installed.
+    /// </summary>
+    /// <remarks>
+    /// Decided on location rather than a signature check: verifying an Authenticode chain is slow enough
+    /// to matter across every handler on the machine, needs the network for revocation to mean anything,
+    /// and answers a different question — plenty of third-party DLLs are validly signed by their vendor.
+    /// "Windows installed this" is exactly "it is under %SystemRoot%".
+    /// <para>Compared with a trailing separator so a sibling directory that merely starts with the same
+    /// text — <c>C:\Windows-Apps\…</c> against <c>C:\Windows</c> — is not swept in.</para>
+    /// </remarks>
+    internal static bool IsWindowsOwned(string dllPath)
+    {
+        if (string.IsNullOrWhiteSpace(dllPath)) return false;
+
+        try
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(dllPath.Trim('"', ' '));
+            var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            if (string.IsNullOrEmpty(windows)) return false;
+
+            return Path.GetFullPath(expanded)
+                       .StartsWith(windows.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                                   StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException) { return false; }
+        catch (NotSupportedException) { return false; }
+        catch (PathTooLongException) { return false; }
+        catch (SecurityException) { return false; }
     }
 
     /// <summary>
@@ -285,25 +389,94 @@ public sealed partial class ContextMenuService : IContextMenuService
     private static partial Regex ClsidPattern();
 
     /// <summary>
-    /// Whether <c>LegacyDisable</c> is the mechanism that hides this row, refusing and logging when it
-    /// is not.
+    /// Adds or removes a shell extension's CLSID in the machine-wide Blocked list.
     /// </summary>
     /// <remarks>
-    /// Explorer honours <c>LegacyDisable</c> on a verb key only. Written onto a
-    /// <c>shellex\ContextMenuHandlers</c> key it SUCCEEDS — that key is usually writable — and changes
-    /// nothing. Without this refusal the tab would report handlers as disabled, leave a junk value in
-    /// each one, and the menu would open exactly as slowly as before: a worse outcome than not offering
-    /// the toggle at all. Hiding a handler needs the machine-wide Blocked list, a separate admin-gated
-    /// change (#1510 stage 2).
-    /// <para>The row's switch is already disabled through <c>CanToggle</c>, so this is not the only
-    /// guard — but the preset path reaches these methods without going through a switch, so the refusal
-    /// belongs where the write is.</para>
+    /// The reason a handler cannot go through <c>LegacyDisable</c> like a verb: Explorer honours that
+    /// value on a verb key only. Written onto a <c>shellex\ContextMenuHandlers</c> key it SUCCEEDS — that
+    /// key is usually writable — and changes nothing, so the tab would report the add-on as hidden, leave
+    /// a junk value behind, and the menu would open exactly as slowly as before. Blocking is the
+    /// mechanism Windows actually reads.
+    /// <para>SEC: the CLSID becomes a registry VALUE NAME, and it was enumerated out of HKEY_CLASSES_ROOT,
+    /// which merges the user-writable <c>HKCU\Software\Classes</c>. The scan already drops anything that is
+    /// not exactly a CLSID, so this is the second check on the same value — deliberately, because this one
+    /// is the one standing next to an HKLM write that usually runs elevated.</para>
+    /// <para>Takes effect when Explorer next loads the handler, which in practice means after a restart of
+    /// Explorer — hence the button for it rather than leaving the user to conclude nothing happened.</para>
     /// </remarks>
-    private static bool CanBeHiddenByLegacyDisable(ContextMenuEntry entry)
+    private bool SetHandlerBlocked(ContextMenuEntry entry, bool blocked)
     {
-        if (entry.Kind != ContextMenuEntryKind.Handler) return true;
-        Log.Debug("Refused LegacyDisable on handler {Name} ({Clsid}) — Explorer ignores it there", entry.Name, entry.Clsid);
-        return false;
+        if (!ClsidPattern().IsMatch(entry.Clsid))
+        {
+            Log.Warning("Refused to write the Blocked list for {Name} — {Clsid} is not a CLSID", entry.Name, entry.Clsid);
+            return false;
+        }
+
+        BackupRegistry($@"HKLM\{BlockedListPath}");
+
+        if (blocked)
+        {
+            using var key = _localMachine.CreateSubKey(BlockedListPath, writable: true);
+            if (key is null)
+            {
+                Log.Warning("Cannot block {Name} — the Blocked list could not be opened for writing", entry.Name);
+                return false;
+            }
+
+            // The data is what Explorer ignores and a person reads, so the row's own name goes in it —
+            // which is also what Autoruns puts there.
+            key.SetValue(entry.Clsid, entry.Name, RegistryValueKind.String);
+            Log.Information("Shell extension blocked: {Name} ({Clsid})", entry.Name, entry.Clsid);
+            return true;
+        }
+
+        using var existing = _localMachine.OpenSubKey(BlockedListPath, writable: true);
+        if (existing is null)
+        {
+            // Nothing has ever been blocked on this machine, so the handler is already not blocked. The
+            // caller asked for a state that is already true, which is a success, not a failure.
+            Log.Debug("Nothing to unblock for {Name} — the Blocked list does not exist", entry.Name);
+            return true;
+        }
+
+        existing.DeleteValue(entry.Clsid, throwOnMissingValue: false);
+        Log.Information("Shell extension unblocked: {Name} ({Clsid})", entry.Name, entry.Clsid);
+        return true;
+    }
+
+    /// <summary>
+    /// Runs a Blocked-list change and reports whether it took, shaped like the verb path so the caller
+    /// handles one contract rather than two.
+    /// </summary>
+    /// <remarks>
+    /// The denied case is the interesting one and it is not an error: the Blocked list is HKLM, so an
+    /// unelevated run cannot write it. Returning false rather than throwing is what lets the view model
+    /// put the switch back and offer to restart elevated, which is the same thing it already does for a
+    /// verb owned by TrustedInstaller.
+    /// </remarks>
+    private bool TryBlock(ContextMenuEntry entry, bool blocked)
+    {
+        try
+        {
+            if (!SetHandlerBlocked(entry, blocked)) return false;
+            entry.IsEnabled = !blocked;
+            return true;
+        }
+        catch (SecurityException ex)
+        {
+            Log.Warning("Cannot change the Blocked list — access denied: {Error}", ex.Message);
+            return false;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning("Cannot change the Blocked list — requires elevation: {Error}", ex.Message);
+            return false;
+        }
+        catch (IOException ex)
+        {
+            Log.Warning("Cannot change the Blocked list — I/O error: {Error}", ex.Message);
+            return false;
+        }
     }
 
     /// <summary>
@@ -314,7 +487,8 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </summary>
     public bool DisableEntry(ContextMenuEntry entry)
     {
-        if (!CanBeHiddenByLegacyDisable(entry)) return false;
+        if (entry.Kind == ContextMenuEntryKind.Handler)
+            return TryBlock(entry, blocked: true);
 
         try
         {
@@ -356,7 +530,8 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </summary>
     public bool EnableEntry(ContextMenuEntry entry)
     {
-        if (!CanBeHiddenByLegacyDisable(entry)) return false;
+        if (entry.Kind == ContextMenuEntryKind.Handler)
+            return TryBlock(entry, blocked: false);
 
         try
         {

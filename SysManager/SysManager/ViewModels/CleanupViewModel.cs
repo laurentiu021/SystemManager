@@ -26,44 +26,30 @@ public sealed partial class CleanupViewModel : ViewModelBase
     // times over in one unit-test file, one of which then asserted the walk finished inside fifteen seconds.
     private readonly ICleanupPreScanService _preScan;
 
-    private readonly EtaCalculator _sfcEta = new();
-    private readonly EtaCalculator _dismEta = new();
-
     private readonly EtaCalculator _storeEta = new();
 
     private CancellationTokenSource? _tempCts;
     private CancellationTokenSource? _binCts;
-    private CancellationTokenSource? _sfcCts;
-    private CancellationTokenSource? _dismCts;
     private CancellationTokenSource? _storeCts;
 
-    // Temp Cleanup, SFC, and DISM all stream through the single shared _runner and its
-    // LineReceived/ProgressChanged events into the one Console, so only one may run at a
+    // Temp Cleanup and both component-store operations stream through the single shared _runner
+    // and its LineReceived/ProgressChanged events into the one Console, so only one may run at a
     // time — otherwise their output and progress cross-contaminate. The per-category
-    // OperationLockService locks don't close this gap: Temp Cleanup is a Disk operation
-    // while SFC/DISM are SystemModification, so those locks never exclude Temp from
-    // SFC/DISM. This intra-VM guard does. (Empty-Recycle-Bin doesn't touch _runner, so it
-    // is intentionally not gated.) Set and read only on the UI thread.
+    // OperationLockService locks don't close this gap: Temp Cleanup is a Disk operation while the
+    // component-store operations are SystemModification, so those locks never exclude Temp from
+    // them. This intra-VM guard does. (Empty-Recycle-Bin doesn't touch _runner, so it is
+    // intentionally not gated.) Set and read only on the UI thread.
     private bool _runnerBusy;
 
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _isElevated;
 
-    // Per-task running flags so buttons stay independent and the main thread
-    // doesn't block a user navigating away while SFC grinds for 10 minutes.
+    // Per-task running flags so buttons stay independent and the main thread doesn't block a user
+    // navigating away while a component-store cleanup grinds for half an hour.
     [ObservableProperty] private bool _isTempRunning;
     [ObservableProperty] private bool _isBinRunning;
-    [ObservableProperty] private bool _isSfcRunning;
-    [ObservableProperty] private bool _isDismRunning;
     [ObservableProperty] private bool _isStoreRunning;
-
-    [ObservableProperty] private string _sfcStatus = "Idle";
-    [ObservableProperty] private string _sfcVerdict = "";
-    [ObservableProperty] private string _sfcVerdictColorHex = StatusColors.Neutral;
-    [ObservableProperty] private string _dismStatus = "Idle";
-    [ObservableProperty] private string _dismVerdict = "";
-    [ObservableProperty] private string _dismVerdictColorHex = StatusColors.Neutral;
 
     [ObservableProperty] private string _storeStatus = "Idle";
     [ObservableProperty] private string _storeVerdict = "";
@@ -83,8 +69,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(CleanComponentStoreCommand))]
     private bool _canCleanStore;
 
-    [ObservableProperty] private string _sfcEtaText = string.Empty;
-    [ObservableProperty] private string _dismEtaText = string.Empty;
     [ObservableProperty] private string _storeEtaText = string.Empty;
 
     // Pre-scan info so the tab doesn't look empty on first load
@@ -92,7 +76,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     [ObservableProperty] private string _recycleBinLabel = "Scanning…";
 
     /// <summary>True whenever any background task is running — for a small badge.</summary>
-    public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsSfcRunning || IsDismRunning || IsStoreRunning;
+    public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsStoreRunning;
 
     public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan)
     {
@@ -109,7 +93,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private void OnRunnerProgressChanged(int p) => Progress = p;
 
     // Claims the shared _runner for one console/repair op; returns false if another already
-    // holds it. internal for the regression test (mirrors ParseSfcResult's test visibility).
+    // holds it. internal for the regression test (mirrors ParseComponentStoreResult's visibility).
     internal bool TryBeginConsoleOp()
     {
         if (_runnerBusy) return false;
@@ -141,10 +125,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
             _tempCts?.Dispose();
             _binCts?.Cancel();
             _binCts?.Dispose();
-            _sfcCts?.Cancel();
-            _sfcCts?.Dispose();
-            _dismCts?.Cancel();
-            _dismCts?.Dispose();
             _storeCts?.Cancel();
             _storeCts?.Dispose();
         }
@@ -165,7 +145,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// constructor: touching the flag there would make its value depend on when that task resumes
     /// relative to construction finishing.
     /// <para>Separate from <c>OnAnyRunningChanged</c>'s derived flag either way — a pre-scan is not
-    /// one of the four cleanup operations.</para>
+    /// one of the cleanup operations.</para>
     /// </param>
     private async Task PreScanAsync(bool reportProgress)
     {
@@ -194,8 +174,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
     // button is disabled when nothing is running and enabled the moment a task starts.
     partial void OnIsTempRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsBinRunningChanged(bool value) => OnAnyRunningChanged();
-    partial void OnIsSfcRunningChanged(bool value) => OnAnyRunningChanged();
-    partial void OnIsDismRunningChanged(bool value) => OnAnyRunningChanged();
     partial void OnIsStoreRunningChanged(bool value)
     {
         OnAnyRunningChanged();
@@ -210,15 +188,15 @@ public sealed partial class CleanupViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAnyRunning));
         CancelCommand.NotifyCanExecuteChanged();
         // The status-bar progress bar and the sidebar spinner are bound to IsBusy, which this VM
-        // never set — so neither could appear while SFC or DISM ran, which is minutes of work.
-        // Derived from the per-operation flags rather than assigned in each command, so the four
-        // operations can overlap without one finishing and clearing the bar for the others.
+        // never set — so neither could appear while a component-store operation ran, which is up to
+        // half an hour of work. Derived from the per-operation flags rather than assigned in each
+        // command, so the operations can overlap without one finishing and clearing the bar for
+        // the others.
         IsBusy = IsAnyRunning;
-        // Temp and Recycle-Bin cleanup report no percentage, but SFC/DISM do (via the runner's
-        // ProgressChanged → Progress). Marquee only when nothing is reporting a real number,
-        // otherwise the determinate value would be ignored. The component-store operations are
-        // DISM too and report the same decimal percentage, so they count as determinate here.
-        IsProgressIndeterminate = IsAnyRunning && !(IsSfcRunning || IsDismRunning || IsStoreRunning);
+        // Temp and Recycle-Bin cleanup report no percentage, but the component-store operations do
+        // (DISM's decimal percentage, parsed off the runner's output). Marquee only when nothing is
+        // reporting a real number, otherwise the determinate value would be ignored.
+        IsProgressIndeterminate = IsAnyRunning && !IsStoreRunning;
     }
 
     [RelayCommand]
@@ -339,209 +317,6 @@ public sealed partial class CleanupViewModel : ViewModelBase
         finally { IsBinRunning = false; }
     }
 
-    [RelayCommand]
-    private async Task RunSfcAsync()
-    {
-        if (IsSfcRunning) return;
-        if (!AdminHelper.IsElevated())
-        {
-            if (!DialogService.Instance.Confirm(
-                "SFC requires admin privileges. Restart the application with elevated privileges?",
-                "Admin Required"))
-            {
-                StatusMessage = "SFC cancelled — admin privileges required.";
-                return;
-            }
-            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
-            return;
-        }
-
-        // SFC and DISM share the single _runner (and its LineReceived event) with each other
-        // AND with Temp Cleanup, so running two at once cross-contaminates their captured
-        // output and progress. The SystemModification lock makes SFC and DISM mutually
-        // exclusive (and blocks the other system-repair operations); the _runnerBusy guard
-        // below additionally excludes Temp Cleanup, which holds a different (Disk) lock and
-        // so is not covered by this one.
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
-        if (opLock is null)
-        {
-            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            return;
-        }
-        if (!TryBeginConsoleOp())
-        {
-            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
-            return;
-        }
-
-        IsSfcRunning = true;
-        IsProgressIndeterminate = true;
-        SfcStatus = "Running — can take 5–15 minutes";
-        SfcVerdict = "";
-        SfcVerdictColorHex = StatusColors.Neutral;
-        SfcEtaText = string.Empty;
-        _sfcEta.Reset();
-        StatusMessage = "SFC running in background. You can keep using the app.";
-        _sfcCts?.Dispose();
-        _sfcCts = new CancellationTokenSource();
-        var captured = new System.Collections.Generic.List<string>();
-        void Collect(PowerShellLine l)
-        {
-            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
-            if (l.Text.Contains('%') || l.Text.Contains("complete", StringComparison.OrdinalIgnoreCase))
-            {
-                var m = SfcPercentRegex().Match(l.Text);
-                if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
-                {
-                    Progress = pct;
-                    SfcEtaText = _sfcEta.Update(pct);
-                    IsProgressIndeterminate = false;
-                }
-            }
-        }
-        _runner.LineReceived += Collect;
-        try
-        {
-            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token, PowerShellRunner.OemEncoding);
-            var (verdict, color) = ParseSfcResult(captured, exit);
-            SfcVerdict = verdict;
-            SfcVerdictColorHex = color;
-            SfcStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
-            StatusMessage = verdict;
-        }
-        catch (OperationCanceledException) { SfcStatus = "Cancelled."; SfcVerdict = "Scan was cancelled."; SfcVerdictColorHex = StatusColors.Neutral; StatusMessage = SfcStatus; }
-        catch (InvalidOperationException ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
-        catch (System.ComponentModel.Win32Exception ex) { SfcStatus = $"Error: {ex.Message}"; SfcVerdict = ex.Message; SfcVerdictColorHex = StatusColors.Bad; StatusMessage = SfcStatus; }
-        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsSfcRunning = false; IsProgressIndeterminate = false; SfcEtaText = string.Empty; }
-    }
-
-    /// <summary>
-    /// Parses the captured SFC output lines to produce a human-readable verdict
-    /// with an appropriate color. SFC writes its results in the OEM code page,
-    /// so we match on key phrases that appear in all locales.
-    /// </summary>
-    internal static (string Verdict, string ColorHex) ParseSfcResult(IReadOnlyList<string> lines, int exitCode)
-    {
-        var all = string.Join(" ", lines);
-
-        // "did not find any integrity violations"
-        if (all.Contains("did not find any integrity violations", StringComparison.OrdinalIgnoreCase))
-            return ("No integrity violations found — your system files are healthy.", StatusColors.Good);
-
-        // "found corrupt files and successfully repaired them"
-        if (all.Contains("successfully repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files were found and successfully repaired.", StatusColors.Warning);
-
-        // "found corrupt files but was unable to fix some of them"
-        if (all.Contains("unable to fix", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files found but SFC could not repair them. Try running DISM /RestoreHealth first, then SFC again.", StatusColors.Bad);
-
-        // "could not perform the requested operation"
-        if (all.Contains("could not perform", StringComparison.OrdinalIgnoreCase))
-            return ("SFC could not run. Try rebooting into Safe Mode or running DISM first.", StatusColors.Bad);
-
-        // Fallback based on exit code
-        return exitCode == 0
-            ? ("Scan completed successfully.", StatusColors.Good)
-            : ($"Scan finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
-    }
-
-    [RelayCommand]
-    private async Task RunDismAsync()
-    {
-        if (IsDismRunning) return;
-        if (!AdminHelper.IsElevated())
-        {
-            if (!DialogService.Instance.Confirm(
-                "DISM requires admin privileges. Restart the application with elevated privileges?",
-                "Admin Required"))
-            {
-                StatusMessage = "DISM cancelled — admin privileges required.";
-                return;
-            }
-            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
-            return;
-        }
-
-        // Mutually exclusive with SFC and the other system-repair ops (SystemModification
-        // lock) AND with Temp Cleanup (the _runnerBusy guard below): all three share the
-        // single _runner and its LineReceived event, so concurrent runs would cross-
-        // contaminate captured output and progress. Temp holds a different (Disk) lock, so
-        // only the guard — not this lock — excludes it.
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
-        if (opLock is null)
-        {
-            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            return;
-        }
-        if (!TryBeginConsoleOp())
-        {
-            StatusMessage = "Cannot start — a repair is already using the console. Wait for it to finish.";
-            return;
-        }
-
-        IsDismRunning = true;
-        IsProgressIndeterminate = true;
-        DismStatus = "Running — can take 10–30 minutes";
-        DismVerdict = "";
-        DismVerdictColorHex = StatusColors.Neutral;
-        DismEtaText = string.Empty;
-        _dismEta.Reset();
-        StatusMessage = "DISM running in background. You can keep using the app.";
-        _dismCts?.Dispose();
-        _dismCts = new CancellationTokenSource();
-        var captured = new System.Collections.Generic.List<string>();
-        void Collect(PowerShellLine l)
-        {
-            if (l.Kind == OutputKind.Output) captured.Add(l.Text);
-            if (l.Text.Contains('%'))
-            {
-                var m = DismPercentRegex().Match(l.Text);
-                if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var pct) && pct is >= 0 and <= 100)
-                {
-                    Progress = (int)pct;
-                    DismEtaText = _dismEta.Update((int)pct);
-                    IsProgressIndeterminate = false;
-                }
-            }
-        }
-        _runner.LineReceived += Collect;
-        try
-        {
-            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token, PowerShellRunner.OemEncoding);
-            var (verdict, color) = ParseDismResult(captured, exit);
-            DismVerdict = verdict;
-            DismVerdictColorHex = color;
-            DismStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
-            StatusMessage = verdict;
-        }
-        catch (OperationCanceledException) { DismStatus = "Cancelled."; DismVerdict = "Repair was cancelled."; DismVerdictColorHex = StatusColors.Neutral; StatusMessage = DismStatus; }
-        catch (InvalidOperationException ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
-        catch (System.ComponentModel.Win32Exception ex) { DismStatus = $"Error: {ex.Message}"; DismVerdict = ex.Message; DismVerdictColorHex = StatusColors.Bad; StatusMessage = DismStatus; }
-        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsDismRunning = false; IsProgressIndeterminate = false; DismEtaText = string.Empty; }
-    }
-
-    /// <summary>
-    /// Parses DISM RestoreHealth output into a verdict with color.
-    /// </summary>
-    internal static (string Verdict, string ColorHex) ParseDismResult(IReadOnlyList<string> lines, int exitCode)
-    {
-        var all = string.Join(" ", lines);
-
-        if (all.Contains("The restore operation completed successfully", StringComparison.OrdinalIgnoreCase))
-            return ("Component store is healthy — no repairs needed.", StatusColors.Good);
-
-        if (all.Contains("The component store corruption was repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Component store was corrupted and has been repaired. Run SFC /scannow next.", StatusColors.Warning);
-
-        if (all.Contains("source files could not be found", StringComparison.OrdinalIgnoreCase))
-            return ("DISM could not find source files for repair. Try connecting to the internet or using a Windows ISO.", StatusColors.Bad);
-
-        return exitCode == 0
-            ? ("Repair completed successfully.", StatusColors.Good)
-            : ($"DISM finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
-    }
-
     // ---------- component store (WinSxS) ----------
 
     /// <summary>
@@ -554,7 +329,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// leaves the removal to a second, separate press.
     /// <para>Never given <c>/ResetBase</c>: that variant also discards the ability to uninstall installed
     /// updates, which is not something a cleanup button may decide on the user's behalf. Enforced by
-    /// <c>NoComponentStoreCall_PassesResetBase</c> rather than left to review.</para>
+    /// <c>NoDismCall_PassesResetBase_AndEveryWindowsRepairCommandIsBound</c> rather than left to review.</para>
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRunStoreOp))]
     private Task AnalyzeComponentStoreAsync()
@@ -600,9 +375,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
             return;
         }
 
-        // Same two guards as SFC/DISM, for the same two reasons: the SystemModification lock keeps the
-        // system-repair operations mutually exclusive, and _runnerBusy keeps anything else off the single
-        // shared runner whose LineReceived feeds the one Console.
+        // Two guards, two reasons. The SystemModification lock is cross-TAB: System Fixes' SFC and
+        // DISM /RestoreHealth hold the same one, and running either against the online image while
+        // this rearranges the component store would have them fight over the same servicing stack.
+        // _runnerBusy is intra-VM: it keeps Temp Cleanup — a Disk operation, so not excluded by that
+        // lock — off the single shared runner whose LineReceived feeds the one Console.
         using var opLock = OperationLockService.Instance.TryAcquire(
             OperationCategory.SystemModification, analyzing ? "Component store analysis" : "Component store cleanup");
         if (opLock is null)
@@ -679,7 +456,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// </summary>
     /// <remarks>
     /// Matches on the English phrases DISM prints, the same approach and the same limitation as
-    /// <see cref="ParseSfcResult"/> and <see cref="ParseDismResult"/>, with an exit-code fallback for
+    /// <see cref="SystemFixesViewModel.ParseSfcResult"/> and
+    /// <see cref="SystemFixesViewModel.ParseDismResult"/>, with an exit-code fallback for
     /// everything else. <c>Component Store Cleanup Recommended : No</c> is a real and common answer, and
     /// saying so is more useful than an empty result — a store already cleaned should not present a button
     /// that would spend half an hour reclaiming nothing.
@@ -733,14 +511,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
     {
         _tempCts?.Cancel();
         _binCts?.Cancel();
-        _sfcCts?.Cancel();
-        _dismCts?.Cancel();
         _storeCts?.Cancel();
     }
-
-    // SFC reports progress as a whole-number percentage, e.g. "50 %".
-    [GeneratedRegex(@"(\d+)\s*%")]
-    private static partial Regex SfcPercentRegex();
 
     // DISM reports progress as a decimal percentage, e.g. "50.0%".
     [GeneratedRegex(@"([\d.]+)%")]

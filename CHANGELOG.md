@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.107.0] - 2026-09-15
+
+**Windows' two repair tools are on the tab called System Fixes now, not the one called Quick Cleanup.**
+If Windows itself is misbehaving, you open System Fixes — and until now the two repairs most likely to
+help, SFC and DISM, were filed under housekeeping, on a tab whose name promised something quick and then
+offered a 15-minute scan. Nothing was removed and nothing works differently: the same two repairs, the
+same live percentage, ETA and plain-English verdict, moved to where you would look for them. Quick Cleanup
+now does only what its name says, and each tab points at the other so neither is a dead end.
+
+### Changed
+
+- **Moved "SFC /scannow" and "DISM /RestoreHealth" from Quick Cleanup to System Fixes**, where they are
+  now the first two entries — above the more specific Windows Update and WinGet repairs, because they are
+  what you reach for when you do not yet know what broke. Both keep their live progress percentage, ETA
+  and verdict.
+- **Rewrote both tab descriptions to match what each tab now does.** Quick Cleanup is about disk space;
+  System Fixes is about a broken Windows. Both carry a one-line pointer to the other.
+- **Renamed Quick Cleanup's second section from "Repair Windows" to "Old Windows update files"** and
+  explained it without the jargon. The component-store operations stayed on Quick Cleanup deliberately:
+  they happen to be DISM too, but what they do is free up disk space, and the split is by what you are
+  trying to achieve rather than by which Windows tool does it.
+- The repair buttons' names for screen readers now lead with what they repair rather than with the tool's
+  command line.
+
+### Fixed
+
+- **Every repair on System Fixes now re-checks administrator rights when it runs**, not only when deciding
+  whether to enable its button. A disabled button is not a guard — the command can still be invoked — and
+  the two scripted repairs previously relied on that alone. The confirmation dialog is no longer shown for
+  a repair that could not have run anyway.
+
 ## [1.106.0] - 2026-09-15
 
 **You can search for a tab now, in your own words.** SysManager has 58 tabs behind 11 collapsed groups, and

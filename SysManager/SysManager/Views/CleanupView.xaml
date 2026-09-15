@@ -15,14 +15,14 @@
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Quick Cleanup" Style="{StaticResource Display}"/>
-            <TextBlock Text="Free up space and repair damaged Windows files: clear out temporary files and the Recycle Bin, or run Windows' own repair tools (SFC and DISM) when something feels broken. The repairs take a while and change nothing you can see — they only replace files that are already damaged."
+            <TextBlock Text="Free up disk space: clear out temporary files and the Recycle Bin, and reclaim the old Windows update files Windows keeps in reserve. Nothing here touches your documents, photos or installed programs."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="28,12,28,0"
-                       NotElevatedMessage="Running SFC and DISM system repairs requires administrator privileges."
-                       ElevatedMessage="Running as administrator — you can run system file checks and repairs."/>
+                       NotElevatedMessage="Clearing Windows' own temp folder and reclaiming old update files requires administrator privileges."
+                       ElevatedMessage="Running as administrator — every cleanup option is available."/>
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
@@ -63,23 +63,16 @@
                             AutomationProperties.Name="Rescan cleanup sizes"/>
                 </WrapPanel>
 
-                <!-- Repair section — Windows system-file repairs, distinct from cleanup -->
-                <TextBlock Text="Repair Windows" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
-                <TextBlock Text="SFC /scannow checks Windows system files for corruption and repairs them. DISM /RestoreHealth repairs the Windows component store using Windows Update as a source. Checking the component store reports how much of it Windows considers reclaimable, and cleaning it up removes the older component versions Windows keeps — after that, installed updates can no longer be uninstalled. All of these run in the background — you can keep using the app."
+                <!-- Old Windows update files (the component store). Still a space-reclaiming operation,
+                     which is why it stayed here when SFC and DISM /RestoreHealth moved to System Fixes
+                     (#1493): those two repair a broken Windows, these two free up disk space. -->
+                <TextBlock Text="Old Windows update files" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
+                <TextBlock Text="Windows keeps the older version of every file an update replaced, so updates can be uninstalled later. Checking reports how much of that Windows itself says is worth reclaiming, and cleaning it up removes it — after which installed updates can no longer be uninstalled. Nothing you have installed stops working. This runs in the background — you can keep using the app."
                            Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
                 <WrapPanel Orientation="Horizontal">
-                    <Button Content="SFC /scannow" Command="{Binding RunSfcCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
-                            AutomationProperties.AutomationId="btn-cleanup-sfc"
-                            AutomationProperties.Name="SFC /scannow — run SFC system file check"
-                            IsEnabled="{Binding IsSfcRunning, Converter={StaticResource BoolInvert}}"/>
-                    <Button Content="DISM RestoreHealth" Command="{Binding RunDismCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
-                            AutomationProperties.AutomationId="btn-cleanup-dism"
-                            AutomationProperties.Name="Run DISM RestoreHealth"
-                            IsEnabled="{Binding IsDismRunning, Converter={StaticResource BoolInvert}}"/>
                     <!-- Two buttons, not one, and the second starts disabled: the analysis is read-only and
                          its result is what enables the cleanup, so nothing is removed before the user has
-                         been told what it costs. Same SecondaryButton style and 0,0,8,8 spacing as SFC/DISM
-                         beside them. -->
+                         been told what it costs. -->
                     <Button Content="Check component store" Command="{Binding AnalyzeComponentStoreCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-analyze-store"
                             AutomationProperties.Name="Check component store — report what Windows considers reclaimable"/>
@@ -91,60 +84,9 @@
                             AutomationProperties.Name="Cancel the running operation"/>
                 </WrapPanel>
 
-                <!-- Background-task indicators. Stay visible while SFC/DISM
-                     are running so the user can navigate away freely. -->
+                <!-- Background-task indicator. Stays visible while the component-store operation
+                     runs so the user can navigate away freely. -->
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
-                            Visibility="{Binding IsSfcRunning, Converter={StaticResource FlexVis}}">
-                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Success}"/>
-                    <TextBlock Text="SFC /scannow is running in background — " Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SfcStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SfcEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
-                               Visibility="{Binding SfcEtaText, Converter={StaticResource FlexVis}}"/>
-                </StackPanel>
-                <!-- SFC verdict (shown after completion) -->
-                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
-                        Background="{DynamicResource Surface1}"
-                        Visibility="{Binding SfcVerdict, Converter={StaticResource FlexVis}}">
-                    <!-- DockPanel, not a horizontal StackPanel: the verdict is a full sentence, and inside a
-                         horizontal StackPanel its TextWrapping is inert — the child is measured with infinite
-                         width, so long verdicts were clipped rather than wrapped. -->
-                    <DockPanel>
-                        <TextBlock Text="SFC result:" DockPanel.Dock="Left" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <!-- Announced: an SFC repair runs for many minutes with the window in the
-                             background, and this is the sentence that says how it ended. The "SFC /scannow
-                             is running" label above is static text, so a live region could not announce it
-                             even if it carried one — what changes there is visibility, not content. Start
-                             and progress are covered by the status line at the bottom of the tab. -->
-                        <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
-                                   AutomationProperties.LiveSetting="Polite"
-                                   Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
-                    </DockPanel>
-                </Border>
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
-                            Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
-                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
-                    <TextBlock Text="DISM is running in background — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DismStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DismEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
-                               Visibility="{Binding DismEtaText, Converter={StaticResource FlexVis}}"/>
-                </StackPanel>
-                <!-- DISM verdict (shown after completion) -->
-                <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
-                        Background="{DynamicResource Surface1}"
-                        Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
-                    <!-- DockPanel for the same reason as the SFC verdict above. -->
-                    <DockPanel>
-                        <TextBlock Text="DISM result:" DockPanel.Dock="Left" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
-                                   AutomationProperties.LiveSetting="Polite"
-                                   Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
-                    </DockPanel>
-                </Border>
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                             Visibility="{Binding IsStoreRunning, Converter={StaticResource FlexVis}}">
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
                     <TextBlock Text="Component store — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -156,8 +98,10 @@
                 <Border Margin="0,8,0,0" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
                         Background="{DynamicResource Surface1}"
                         Visibility="{Binding StoreVerdict, Converter={StaticResource FlexVis}}">
-                    <!-- DockPanel for the same reason as the SFC verdict above, and it matters more here:
-                         this verdict names a size and what cleaning it up costs, so it is a long sentence. -->
+                    <!-- DockPanel, not a horizontal StackPanel: inside one, a child's TextWrapping is
+                         inert — it is measured with infinite width, so a long verdict is clipped rather
+                         than wrapped. This verdict names a size and what cleaning it up costs, so it is
+                         a long sentence. -->
                     <DockPanel>
                         <TextBlock Text="Component store:" DockPanel.Dock="Left" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}"
@@ -167,6 +111,11 @@
                                    Foreground="{Binding StoreVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
                 </Border>
+
+                <!-- Where the repairs went. Mirrors the pointer System Fixes carries for the
+                     network-stack reset, so a user who came here looking for SFC is not left guessing. -->
+                <TextBlock Margin="0,12,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                           Text="Is Windows itself misbehaving rather than just full? The repair tools — SFC and DISM — are on the System → System Fixes tab."/>
             </StackPanel>
         </Border>
 

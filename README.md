@@ -382,6 +382,13 @@ Edit Windows environment variables without the cramped built-in dialog:
 ### System Fixes
 One-click repairs for common Windows breakages, each with a clear description and
 a confirmation before it runs:
+- **Repair damaged Windows files (SFC)** — runs `SFC /scannow`, which checks every
+  protected Windows file against Windows' own known-good copy and replaces the damaged
+  ones. Takes 5–15 minutes in the background, with a live percentage, an ETA, and a
+  plain-English verdict at the end rather than a raw exit code
+- **Repair Windows' own repair source (DISM)** — runs `DISM /RestoreHealth`, which rebuilds
+  the store of known-good copies that SFC draws from, downloading replacements through
+  Windows Update. Run this first when SFC reports files it could not fix
 - **Reset Windows Update** — stop the update services, clear the
   SoftwareDistribution and catroot2 caches, and restart the services
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
@@ -390,6 +397,10 @@ a confirmation before it runs:
 - Live output, honest success/failure reporting, admin elevation banner
 - *Network-stack reset (Winsock / TCP-IP / DNS flush) lives on the Network → Network
   Repair tab, which offers those as individual one-click tools.*
+- *Freeing up disk space lives on Cleanup → Quick Cleanup. The two tabs are split by what
+  you are trying to achieve rather than by which Windows tool does it: SFC and
+  `DISM /RestoreHealth` repair a broken Windows and are here, while
+  `DISM /AnalyzeComponentStore` and `/StartComponentCleanup` reclaim space and are there.*
 
 ### Tweaks Hub
 - **One place for safe, reversible optimizations** that are otherwise spread across
@@ -480,10 +491,10 @@ a confirmation before it runs:
   version changed
 
 ### Quick Cleanup
+Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
+System → System Fixes, where the tab name matches what they do.
 - Clear TEMP folders
 - Empty the Recycle Bin
-- Run `SFC /scannow` and `DISM /RestoreHealth` in the background — keep
-  using the app while they grind
 - **Component store (WinSxS), reported before it is touched.** WinSxS routinely holds
   several gigabytes of superseded Windows components, and it is where the free editions of
   the mainstream cleaners find their biggest number. "Check component store" runs the
@@ -1799,7 +1810,7 @@ Windows 10 / 11 x64 machine.
 
 1. Launch the app — it opens on the Dashboard.
 2. Go to Network and press Start — live ping begins.
-3. For anything in Windows Update, Cleanup (SFC/DISM), or system-wide App
+3. For anything in Windows Update, System Fixes (SFC/DISM), or system-wide App
    updates, click the yellow "Run as Administrator" banner when it appears.
    The app relaunches elevated.
 

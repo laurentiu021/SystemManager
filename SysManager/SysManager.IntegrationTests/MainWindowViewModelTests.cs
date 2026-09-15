@@ -375,75 +375,61 @@ public class MainWindowViewModelTests
     }
 
     /// <summary>
-    /// File Lock Detector is a per-file tool, so it belongs with the other file tools rather than with
-    /// the live monitors.
+    /// Three tabs are filed by the errand that brings someone to them, not by how they work inside.
     /// </summary>
     /// <remarks>
-    /// Someone arrives at this tab from Windows' own "the file is open in another program" dialog while
-    /// trying to delete or move something — a files errand. "Monitor" promises continuous watching of the
-    /// machine, and this tab has no timer and no poll loop at all; it is a one-shot scan of a path the
-    /// user typed. The move also retired the app's worst size imbalance, a 2-child group whose expander
-    /// cost more than it saved (#1521).
+    /// One test and one view model for all three placements, deliberately. Every test in this class
+    /// builds its own <see cref="MainWindowViewModel"/>, and on the test path that constructs the whole
+    /// tab graph eagerly — including the view models that launch real winget and PowerShell child
+    /// processes. Those children outlive the test: adding three more constructions here took the CI
+    /// integration run from ~6 minutes to 22, with a pile of `winget_*_hang.log` artifacts and a host
+    /// process that could no longer exit. The suite still reported every test passing, because that job
+    /// is `continue-on-error`. So this asserts three placements against one graph rather than three.
+    /// <para><b>File Lock Detector</b> → Storage &amp; Files: someone arrives from Windows' own "the file
+    /// is open in another program" dialog, which is a files errand. "Monitor" promises continuous
+    /// watching, and this tab has no timer and no poll loop — it is a one-shot scan of a path the user
+    /// typed (#1521).</para>
+    /// <para><b>Bandwidth Monitor</b> → directly after Speed Test in Network. "How fast is my connection"
+    /// and "what is using my connection" are halves of one errand, and while they sat in different groups
+    /// finding one never led to the other. The adjacency is the point, so the position is asserted and not
+    /// just the membership. This tab genuinely IS a live monitor — one of the few with a visibility-gated
+    /// poll loop — so Monitor was defensible on mechanism; it is placed on the errand instead, because
+    /// nobody whose internet feels slow looks under Monitor (#1514).</para>
+    /// <para><b>Notification Blocker</b> → Customization. Every other tab in Privacy &amp; Security either
+    /// changes a privileged surface or removes software. This one flips the same per-app switches Windows
+    /// Settings does, needs no administrator, and is one flip from undone. Under a group named Security it
+    /// overstated the stakes and hid the tab from where the wish belongs (#1522).</para>
     /// </remarks>
     [Fact]
-    public void NavGroups_FileLock_LivesInStorageNotMonitor()
+    public void NavGroups_FileTabsAreGroupedByErrand_NotByMechanism()
     {
         var vm = new MainWindowViewModel();
-        var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
-        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
 
+        var monitor = Ids(vm, "grp-monitor");
+        var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
+        var network = Ids(vm, "grp-network");
+        var customization = Ids(vm, "grp-customization");
+        var privacy = Ids(vm, "grp-privacy");
+
+        // #1521 — File Lock Detector, plus the group rename that makes the name cover per-file work.
         Assert.Contains("nav-file-lock", storage.Children.Select(c => c.Id));
         Assert.DoesNotContain("nav-file-lock", monitor);
-
-        // The label carries the rename: "Storage" alone described capacity, which a file-lock scan is not.
         Assert.Equal("Storage & Files", storage.Label);
-    }
 
-    /// <summary>
-    /// Bandwidth Monitor sits directly after Speed Test, because the two answer one question between them.
-    /// </summary>
-    /// <remarks>
-    /// "How fast is my connection" and "what is using my connection" are halves of the same errand, and
-    /// while they lived in different groups, finding one never led to the other. Adjacency is the point,
-    /// so the position is asserted and not merely the membership (#1514).
-    /// <para>Bandwidth Monitor genuinely is a live monitor — it is one of the few VMs with a
-    /// visibility-gated poll loop — so "Monitor" was defensible on mechanism. It is placed on the errand
-    /// instead: nobody with a slow connection thinks to look under Monitor.</para>
-    /// </remarks>
-    [Fact]
-    public void NavGroups_BandwidthMonitor_SitsRightAfterSpeedTestInNetwork()
-    {
-        var vm = new MainWindowViewModel();
-        var network = vm.NavGroups.First(g => g.Id == "grp-network").Children.Select(c => c.Id).ToList();
-        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
-
+        // #1514 — Bandwidth Monitor, asserted by POSITION: immediately after Speed Test.
         Assert.DoesNotContain("nav-bandwidth-monitor", monitor);
-
         var speedTest = network.IndexOf("nav-speed-test");
-        Assert.True(speedTest >= 0, "Network no longer contains Speed Test, so this guard cannot check the adjacency.");
+        Assert.True(speedTest >= 0,
+            "Network no longer contains Speed Test, so the adjacency this pins cannot be checked at all.");
         Assert.Equal("nav-bandwidth-monitor", network[speedTest + 1]);
-    }
 
-    /// <summary>
-    /// Notification Blocker belongs with the other "make Windows behave" tabs, not under Security.
-    /// </summary>
-    /// <remarks>
-    /// Every other tab in Privacy &amp; Security either changes a privileged surface or removes software.
-    /// This one flips the same per-app switches Windows Settings does, needs no administrator, and is one
-    /// flip from undone. Filing it under a group named Security overstated the stakes for someone who
-    /// hesitates over anything security-shaped, and hid it from where the wish ("stop this app nagging
-    /// me") would be looked for (#1522).
-    /// </remarks>
-    [Fact]
-    public void NavGroups_NotificationBlocker_LivesInCustomizationNotPrivacy()
-    {
-        var vm = new MainWindowViewModel();
-        var customization = vm.NavGroups.First(g => g.Id == "grp-customization").Children.Select(c => c.Id).ToList();
-        var privacy = vm.NavGroups.First(g => g.Id == "grp-privacy").Children.Select(c => c.Id).ToList();
-
+        // #1522 — Notification Blocker.
         Assert.Contains("nav-notification-blocker", customization);
         Assert.DoesNotContain("nav-notification-blocker", privacy);
     }
+
+    private static List<string> Ids(MainWindowViewModel vm, string groupId)
+        => vm.NavGroups.First(g => g.Id == groupId).Children.Select(c => c.Id).ToList();
 
     [Fact]
     public void NavGroups_CleanupGroup_Has4Items()

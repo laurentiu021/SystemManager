@@ -79,6 +79,59 @@
                       CanUserResizeColumns="True"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
+                <!--
+                    Right-click / Menu key / Shift+F10 on a row, mirroring the Actions column (#1551).
+
+                    The Actions buttons are correctly labelled but only REACHABLE by arrowing to the row
+                    and then Tabbing through every preceding cell — on a list of several hundred processes
+                    that is the difference between "possible" and "usable", and Shift+F10 is the Windows
+                    idiom Task Manager honours and this app did not, anywhere.
+
+                    Anchored to the ROW, not to the DataGrid. A menu on the grid would have to act on
+                    SelectedItem, and WPF's DataGrid does not select on right-click — so right-clicking the
+                    200th row while the 2nd was selected would have ended the wrong process. Placed on the
+                    row, the menu is bound to whichever row opened it, for pointer and keyboard alike.
+
+                    One instance shared by every row, which is what a Style setter gives: PlacementTarget is
+                    set when the menu opens, so the bindings resolve per invocation rather than per row.
+
+                    Tag carries the view model because a ContextMenu lives in its own popup tree, so the
+                    RelativeSource AncestorType=UserControl hop that every row BUTTON uses to reach the
+                    commands finds nothing from inside one.
+
+                    Headers are the SAME strings the buttons expose as their accessible names, and no
+                    AutomationProperties.Name is set here — a MenuItem announces its Header, so the visible
+                    and spoken label are one value and cannot drift apart (WCAG 2.5.3).
+
+                    Both items route to the SAME commands as the buttons, never to a bypass, so
+                    KillProcessCommand's DialogService confirmation still stands in front of the kill.
+                -->
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                        <Setter Property="Tag"
+                                Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                        <Setter Property="ContextMenu">
+                            <Setter.Value>
+                                <ContextMenu>
+                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Open file location for {0}'}"
+                                              Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              IsEnabled="{Binding PlacementTarget.DataContext.CanOpenFileLocation, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                    <Separator/>
+                                    <!-- Same HelpText as the row button, and the same reason: a screen
+                                         reader announcing only "Kill chrome.exe" says nothing about what
+                                         activating it costs. DangerMenuItem so the item that ends a
+                                         program does not look like the one that opens a folder. -->
+                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Kill {0}'}"
+                                              AutomationProperties.HelpText="Ends this program straight away, losing anything it has not saved. SysManager asks you to confirm first."
+                                              Style="{StaticResource DangerMenuItem}"
+                                              Command="{Binding PlacementTarget.Tag.KillProcessCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                </ContextMenu>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="55" MinWidth="55"
                                         SortMemberPath="Pid" CanUserResize="False">

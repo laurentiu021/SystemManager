@@ -134,14 +134,12 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-cpu-affinity", ids);
         Assert.Contains("nav-display-profiles", ids);
 
-        // Monitor (7)
+        // Monitor (5)
         Assert.Contains("nav-processes", ids);
         Assert.Contains("nav-resource-history", ids);
         Assert.Contains("nav-privacy-monitor", ids);
         Assert.Contains("nav-app-alerts", ids);
-        Assert.Contains("nav-file-lock", ids);
         Assert.Contains("nav-settings-watchdog", ids);
-        Assert.Contains("nav-bandwidth-monitor", ids);
 
         // Cleanup (4)
         Assert.Contains("nav-cleanup", ids);
@@ -149,14 +147,16 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-shortcut-cleaner", ids);
         Assert.Contains("nav-scheduled-maintenance", ids);
 
-        // Storage (2)
+        // Storage & Files (3) — File Lock Detector is per-file work, not continuous monitoring
         Assert.Contains("nav-disk-analyzer", ids);
         Assert.Contains("nav-duplicates", ids);
+        Assert.Contains("nav-file-lock", ids);
 
-        // Network (5) — DNS changer + hosts editor merged into one DNS & Hosts tab
+        // Network (6) — DNS changer + hosts editor merged into one DNS & Hosts tab
         Assert.Contains("nav-ping", ids);
         Assert.Contains("nav-traceroute", ids);
         Assert.Contains("nav-speed-test", ids);
+        Assert.Contains("nav-bandwidth-monitor", ids);
         Assert.Contains("nav-network-repair", ids);
         Assert.Contains("nav-dns-hosts", ids);
 
@@ -165,7 +165,7 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-bulk-installer", ids);
         Assert.Contains("nav-uninstaller", ids);
 
-        // Privacy & Security (8)
+        // Privacy & Security (7)
         Assert.Contains("nav-privacy-settings", ids);
         Assert.Contains("nav-file-shredder", ids);
         Assert.Contains("nav-app-blocker", ids);
@@ -173,12 +173,12 @@ public class MainWindowViewModelTests
         Assert.Contains("nav-browser-cleaner", ids);
         Assert.Contains("nav-edge-onedrive", ids);
         Assert.Contains("nav-defender-tweaks", ids);
-        Assert.Contains("nav-notification-blocker", ids);
 
-        // Customization (3)
+        // Customization (4)
         Assert.Contains("nav-context-menu", ids);
         Assert.Contains("nav-dark-mode", ids);
         Assert.Contains("nav-volume-control", ids);
+        Assert.Contains("nav-notification-blocker", ids);
 
         // Info (6)
         Assert.Contains("nav-drivers", ids);

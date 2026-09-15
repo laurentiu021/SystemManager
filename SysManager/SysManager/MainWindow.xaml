@@ -1,4 +1,4 @@
-<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
+﻿<!-- SysManager · Author: laurentiu021 · https://github.com/laurentiu021/SystemManager · License: MIT -->
 <Window x:Class="SysManager.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -141,6 +141,69 @@
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- Declared LAST on purpose: this template references SidebarNavButton, SidebarNavRow,
+             SidebarActiveMark, SidebarHoverMark and SidebarNavText as StaticResource, which
+             resolves in document order — placed above them it fails at parse rather than at
+             compile, i.e. when the window opens. -->
+        <DataTemplate x:Key="NavLeafRow">
+            <Button x:Name="ChildBd"
+                    Click="NavChild_Click"
+                    Tag="{Binding}"
+                    Style="{StaticResource SidebarNavButton}"
+                    AutomationProperties.AutomationId="{Binding Id}"
+                    AutomationProperties.Name="{Binding Label}"
+                    AutomationProperties.ItemStatus="{Binding SelectionStatus}">
+                <Border CornerRadius="{StaticResource RadiusMd}" Padding="28,9,14,9"
+                        Style="{StaticResource SidebarNavRow}">
+                    <Grid>
+                        <Rectangle x:Name="ActiveMark"
+                                   Style="{StaticResource SidebarActiveMark}"
+                                   Margin="-28,0,0,0"/>
+                        <Rectangle x:Name="HoverMark"
+                                   Style="{StaticResource SidebarHoverMark}"
+                                   Margin="-28,0,0,0"/>
+                        <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
+                             children infinite width, so the label's grid never constrained and the
+                             PREVIEW pill overflowed the 220px sidebar. Kept now that the leaf glyph
+                             is gone, because the label/pill grid still needs a real width to
+                             constrain against.
+                             No glyph on a leaf: 58 icons in a 220px rail is noise, and the group
+                             header is what a reader scans. The gutter that used to sit here always
+                             empty is reclaimed by the label instead. -->
+                        <DockPanel>
+                            <StackPanel VerticalAlignment="Center">
+                                <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
+                                     a horizontal StackPanel measured with infinite width, so on a long
+                                     label the pill was pushed past the 220px sidebar edge and clipped to
+                                     "PR". The label now ellipsizes and the pill always renders in full. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
+                                               Style="{StaticResource SidebarNavText}"
+                                               FontFamily="{StaticResource UiFont}"
+                                               FontSize="13"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <!-- PREVIEW pill: implemented but not yet QA-verified -->
+                                    <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="{StaticResource RadiusSm}"
+                                            Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
+                                            Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
+                                                   Foreground="{DynamicResource Info}"/>
+                                    </Border>
+                                </Grid>
+                                <ProgressBar AutomationProperties.Name="{Binding Label, StringFormat='Working on {0}'}" Height="2" Margin="0,3,0,0"
+                                             IsIndeterminate="True"
+                                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+            </Button>
+        </DataTemplate>
+
     </Window.Resources>
 
     <Grid>
@@ -167,12 +230,71 @@
                                Foreground="{DynamicResource TextPrimary}"
                                FontFamily="{StaticResource UiFont}"/>
                     <TextBlock Text="System toolkit" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+
+                    <!--
+                        Search over the 58 tabs (#1498). There was none: every SearchText in the app
+                        filtered one tab's own grid, and nothing filtered the navigation — so reaching a tab
+                        meant guessing which of 11 collapsed groups held it and opening them one by one.
+
+                        Same TextBox + placeholder-TextBlock-gated-by-FlexVis-Inverse shape used ten times
+                        elsewhere (DebloaterView is the reference), so it is uniform by construction rather
+                        than by intention.
+
+                        It matches keywords as well as labels, which is the half that makes it work for
+                        someone who does not know the vocabulary: "slow startup" finds Boot Analyzer,
+                        "popups" finds Notification Blocker, "webcam" finds Camera/Mic/Location (#1505).
+                    -->
+                    <Grid Margin="0,12,0,0">
+                        <TextBox Text="{Binding NavFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Search all tabs"
+                                 VerticalContentAlignment="Center"
+                                 Padding="0,0,22,0"
+                                 ToolTip="Type what you want to do — &quot;free up space&quot;, &quot;slow startup&quot;, &quot;popups&quot;."/>
+                        <TextBlock Text="Search all tabs…" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
+                                   VerticalAlignment="Center" FontSize="12"
+                                   Visibility="{Binding NavFilter, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                        <!-- A way back to the tree. After opening a result the box is still filled in, so
+                             clearing has to be reachable without selecting the text and deleting it. -->
+                        <Button Command="{Binding ClearNavFilterCommand}"
+                                Content="&#xE711;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                AutomationProperties.Name="Clear the tab search"
+                                ToolTip="Clear search"
+                                Style="{StaticResource GhostButton}"
+                                Padding="4,0" FontSize="10" Width="20" Height="20"
+                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
+                                Visibility="{Binding NavFilter, Converter={StaticResource FlexVis}}"/>
+                    </Grid>
+
+                    <TextBlock Text="{Binding NavResultSummary}" Style="{StaticResource Caption}"
+                               Margin="0,6,0,0"
+                               Visibility="{Binding IsSearchingNav, Converter={StaticResource BoolToVis}}"/>
                 </StackPanel>
+
+                <!-- Search results: a flat list of matching tabs, shown instead of the tree while the
+                     search box has text (#1498). Same NavLeafRow template as the tree's children, so a
+                     result looks and behaves exactly like the row it corresponds to — including its
+                     PREVIEW pill, its busy spinner and its selected state.
+
+                     Padding 10,0 like the tree, but the rows lose the tree's 28px left inset because
+                     there is no group header to sit under: NavLeafRow supplies that inset itself, which is
+                     why the results are indented the same. Left as-is deliberately rather than adding a
+                     second template just to shift 14px. -->
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding IsSearchingNav, Converter={StaticResource BoolToVis}}">
+                    <ItemsControl ItemsSource="{Binding NavResults}"
+                                  Padding="10,0"
+                                  Focusable="False"
+                                  ItemTemplate="{StaticResource NavLeafRow}"/>
+                </ScrollViewer>
 
                 <!-- Nav tree -->
                 <ScrollViewer Grid.Row="1"
                               VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding IsSearchingNav, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                 <ItemsControl ItemsSource="{Binding NavGroups}"
                               Padding="10,0"
                               Focusable="False">
@@ -340,67 +462,8 @@
                                             </Grid>
                                         </Border>
                                     </Expander.Header>
-                                    <ItemsControl ItemsSource="{Binding Children}" Focusable="False">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button x:Name="ChildBd"
-                                                        Click="NavChild_Click"
-                                                        Tag="{Binding}"
-                                                        Style="{StaticResource SidebarNavButton}"
-                                                        AutomationProperties.AutomationId="{Binding Id}"
-                                                        AutomationProperties.Name="{Binding Label}"
-                                                        AutomationProperties.ItemStatus="{Binding SelectionStatus}">
-                                                    <Border CornerRadius="{StaticResource RadiusMd}" Padding="28,9,14,9"
-                                                            Style="{StaticResource SidebarNavRow}">
-                                                        <Grid>
-                                                            <Rectangle x:Name="ActiveMark"
-                                                                       Style="{StaticResource SidebarActiveMark}"
-                                                                       Margin="-28,0,0,0"/>
-                                                            <Rectangle x:Name="HoverMark"
-                                                                       Style="{StaticResource SidebarHoverMark}"
-                                                                       Margin="-28,0,0,0"/>
-                                                            <!-- DockPanel (not a horizontal StackPanel): a StackPanel gives its
-                                                                 children infinite width, so the label's grid never constrained and the
-                                                                 PREVIEW pill overflowed the 220px sidebar. Kept now that the leaf glyph
-                                                                 is gone, because the label/pill grid still needs a real width to
-                                                                 constrain against.
-                                                                 No glyph on a leaf: 58 icons in a 220px rail is noise, and the group
-                                                                 header is what a reader scans. The gutter that used to sit here always
-                                                                 empty is reclaimed by the label instead. -->
-                                                            <DockPanel>
-                                                                <StackPanel VerticalAlignment="Center">
-                                                                    <!-- Label + PREVIEW pill in a 2-column grid (label = *, pill = Auto):
-                                                                         a horizontal StackPanel measured with infinite width, so on a long
-                                                                         label the pill was pushed past the 220px sidebar edge and clipped to
-                                                                         "PR". The label now ellipsizes and the pill always renders in full. -->
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="*"/>
-                                                                            <ColumnDefinition Width="Auto"/>
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="0" Text="{Binding Label}"
-                                                                                   Style="{StaticResource SidebarNavText}"
-                                                                                   FontFamily="{StaticResource UiFont}"
-                                                                                   FontSize="13"
-                                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                                        <!-- PREVIEW pill: implemented but not yet QA-verified -->
-                                                                        <Border Grid.Column="1" Background="{DynamicResource AccentSoft}" CornerRadius="{StaticResource RadiusSm}"
-                                                                                Padding="5,1" Margin="7,0,0,0" VerticalAlignment="Center"
-                                                                                Visibility="{Binding IsInDevelopment, Converter={StaticResource BoolToVis}}">
-                                                                            <TextBlock Text="PREVIEW" FontSize="9" FontWeight="Bold"
-                                                                                       Foreground="{DynamicResource Info}"/>
-                                                                        </Border>
-                                                                    </Grid>
-                                                                    <ProgressBar AutomationProperties.Name="{Binding Label, StringFormat='Working on {0}'}" Height="2" Margin="0,3,0,0"
-                                                                                 IsIndeterminate="True"
-                                                                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                                                                </StackPanel>
-                                                            </DockPanel>
-                                                        </Grid>
-                                                    </Border>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
+                                    <ItemsControl ItemsSource="{Binding Children}" Focusable="False"
+                                                  ItemTemplate="{StaticResource NavLeafRow}">
                                     </ItemsControl>
                                 </Expander>
                             </Grid>

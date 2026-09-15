@@ -7913,6 +7913,112 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// <c>ConverterParameter=Inverse</c> is only honoured by <c>FlexVis</c>, never by <c>BoolToVis</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>BoolToVis</c> is WPF's built-in <c>BooleanToVisibilityConverter</c>, which ignores
+    /// <c>ConverterParameter</c> entirely. So the combination compiles, binds, raises no warning, and
+    /// quietly does the OPPOSITE of what it reads as — an element meant to hide stays visible.
+    /// <para>Found by writing it. The sidebar's grouped tree was gated
+    /// <c>BoolToVis, ConverterParameter=Inverse</c> against the search flag, which would have shown the
+    /// tree and the search results at the same time (#1498). Nothing in the codebase had done it before,
+    /// so this guard exists to keep that true rather than to clean anything up.</para>
+    /// </remarks>
+    [Fact]
+    public void NoInverseConverterParameter_IsGivenToTheConverterThatIgnoresIt()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var files = Directory.GetFiles(viewsDir, "*.xaml")
+            .Append(Path.Combine(FindAppProjectDir(), "MainWindow.xaml"))
+            .ToList();
+
+        Assert.True(files.Count >= 50,
+            $"only {files.Count} XAML files found — this guard is reading almost nothing.");
+
+        var offenders = new List<string>();
+        var inverseUses = 0;
+
+        foreach (var file in files)
+        {
+            var xaml = XamlCode(file);
+            inverseUses += InverseParameter().Matches(xaml).Count;
+
+            foreach (var m in DeadInverseParameter().Matches(xaml).Cast<Match>())
+                offenders.Add($"{Path.GetFileName(file)} — {Collapse(m.Value)}");
+        }
+
+        Assert.True(inverseUses >= 20,
+            $"only {inverseUses} ConverterParameter=Inverse uses found — the pattern stopped matching, so "
+            + "the offender search below is looking at nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "BoolToVis is WPF's BooleanToVisibilityConverter and ignores ConverterParameter, so these "
+            + "bindings read as inverted and are not — use FlexVis:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Nearly every tab carries plain-language search keywords, and the jargon-named ones all do.
+    /// </summary>
+    /// <remarks>
+    /// A search that matches only labels serves someone who already knows the vocabulary. The person this
+    /// app is built for types "slow startup", "popups", "webcam", "free up space" — none of which appear in
+    /// "Boot Analyzer", "Notification Blocker", "Camera/Mic/Location" or "Deep Cleanup" (#1505). Keywords
+    /// are what close that gap, and they are pure data, so the only thing that can go wrong is forgetting
+    /// them on a new tab.
+    /// <para>Two assertions, because either alone is weak. The NAMED list is the one that matters: those
+    /// labels are jargon or product-internal, so a user cannot find them by typing what they want. The
+    /// COUNT floor catches a new tab shipping bare without anyone adding it to the named list.</para>
+    /// <para>Dashboard and About deliberately have none — one is where you already are, the other is
+    /// findable by its own name, and inventing synonyms for them would only widen every query.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryJargonNamedTab_CanBeFoundByPlainWords()
+    {
+        var nav = MemberSlice(
+            File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")),
+            "private NavGroup[] BuildNavGroups()");
+
+        var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
+        Assert.True(entries.Length >= 50,
+            $"only {entries.Length} nav entries parsed — the sidebar is not being read.");
+
+        var withKeywords = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < entries.Length; i++)
+        {
+            var from = entries[i].Index + entries[i].Length;
+            var to = i + 1 < entries.Length ? entries[i + 1].Index : nav.Length;
+            if (nav[from..to].Contains("keywords:", StringComparison.Ordinal))
+                withKeywords.Add(entries[i].Groups[1].Value);
+        }
+
+        // Labels a user cannot guess: Windows terms, product-internal naming, or a word for the mechanism
+        // rather than the errand. Each of these MUST be reachable by something a person would type.
+        string[] jargon =
+        [
+            "nav-standby-cleaner", "nav-timer-resolution", "nav-cpu-affinity", "nav-debloater",
+            "nav-legacy-panels", "nav-privacy-monitor", "nav-duplicates", "nav-boot-analyzer",
+            "nav-env-variables", "nav-tweaks-hub", "nav-notification-blocker", "nav-context-menu",
+            "nav-settings-watchdog", "nav-file-lock", "nav-dns-hosts", "nav-privacy-settings",
+        ];
+
+        var bare = jargon.Where(id => !withKeywords.Contains(id)).ToList();
+        Assert.True(bare.Count == 0,
+            "These tabs have names a user would never type, and no keywords to find them by — so they are "
+            + "reachable only by opening every group and reading:\n  " + string.Join("\n  ", bare));
+
+        Assert.True(withKeywords.Count >= 54,
+            $"only {withKeywords.Count} of {entries.Length} tabs carry keywords, down from 54 measured. A "
+            + "tab was added without any, which means it can only be found by someone who already knows "
+            + "its name.");
+    }
+
+    [GeneratedRegex(@"ConverterParameter\s*=\s*Inverse")]
+    private static partial Regex InverseParameter();
+
+    [GeneratedRegex(@"StaticResource\s+BoolToVis\s*\}\s*,\s*ConverterParameter\s*=\s*Inverse")]
+    private static partial Regex DeadInverseParameter();
+
+    /// <summary>
     /// No view model reaches the shell through <c>Application.Current.MainWindow</c>.
     /// </summary>
     /// <remarks>

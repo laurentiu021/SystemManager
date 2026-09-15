@@ -48,6 +48,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// <summary>Flat list of every leaf NavItem (backward compat + lookup).</summary>
     public ObservableCollection<NavItem> NavItems { get; } = new();
 
+    /// <summary>
+    /// What the user typed into the sidebar's search box. Empty means "show the normal grouped tree".
+    /// </summary>
+    /// <remarks>
+    /// Before this there was no search over tabs at all — 58 of them behind 11 collapsed groups, and the
+    /// only way to reach one was to guess which group held it and open it (#1498). Every per-tab filter in
+    /// the app searched that tab's own grid; nothing searched the navigation.
+    /// </remarks>
+    [ObservableProperty] private string _navFilter = "";
+
+    /// <summary>The flat list of tabs matching <see cref="NavFilter"/>, shown instead of the tree.</summary>
+    /// <remarks>
+    /// A second collection with the tree hidden, rather than swapping the tree's ItemsSource between a
+    /// group list and an item list: one ItemsControl whose items change TYPE needs its ItemTemplate to
+    /// handle both, and the group template renders an expander around children. Two sources, one visible
+    /// at a time, keeps each template describing exactly one shape.
+    /// </remarks>
+    public ObservableCollection<NavItem> NavResults { get; } = new();
+
+    /// <summary>True while a search is active, so the view swaps the tree for the results.</summary>
+    [ObservableProperty] private bool _isSearchingNav;
+
+    /// <summary>What the results header says, including the no-matches case.</summary>
+    [ObservableProperty] private string _navResultSummary = "";
+
     [ObservableProperty] private NavItem? _selectedNav;
     [ObservableProperty] private string _title = "SysManager";
     [ObservableProperty] private bool _isElevated;
@@ -125,6 +150,49 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         InitNavigation();
     }
 
+    /// <summary>
+    /// Rebuilds the flat result list whenever the search text changes.
+    /// </summary>
+    /// <remarks>
+    /// Trimmed, because a trailing space from a paste would otherwise match nothing and read as the search
+    /// being broken. The summary names the count rather than leaving an empty panel: "No tabs match
+    /// 'whatever'" is an answer, and blank space is not.
+    /// <para>Filters <see cref="NavItems"/>, the flat list of all 58 — never touching
+    /// <see cref="NavItem.Content"/>, so searching does not construct a single tab view model. Reading
+    /// Content here would build every matching tab on every keystroke, undoing the lazy-startup fix.</para>
+    /// </remarks>
+    partial void OnNavFilterChanged(string value)
+    {
+        var text = value?.Trim() ?? "";
+        IsSearchingNav = text.Length > 0;
+
+        NavResults.Clear();
+        if (!IsSearchingNav)
+        {
+            NavResultSummary = "";
+            return;
+        }
+
+        foreach (var item in NavItems.Where(i => i.Matches(text)))
+            NavResults.Add(item);
+
+        NavResultSummary = NavResults.Count switch
+        {
+            0 => $"No tabs match “{text}”",
+            1 => "1 tab",
+            _ => $"{NavResults.Count} tabs",
+        };
+    }
+
+    /// <summary>Clears the search and returns the sidebar to its grouped tree.</summary>
+    /// <remarks>
+    /// Bound to a button inside the box, because the alternative is selecting the text and deleting it —
+    /// and after opening a result the search is still filled in, so a way back to the tree is needed
+    /// whether or not the user found what they wanted.
+    /// </remarks>
+    [RelayCommand]
+    private void ClearNavFilter() => NavFilter = "";
+
     private void InitNavigation()
     {
         IsElevated = AdminHelper.IsElevated();
@@ -168,7 +236,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     // At runtime each returns a lazy NavItem (VM resolved from DI on first open). In the
     // designer/test path (no container) they build the VM eagerly and register it for disposal.
 
-    private NavItem Tab<TVm>(string id, string label, Type viewType, bool inDevelopment = false)
+    private NavItem Tab<TVm>(string id, string label, Type viewType, bool inDevelopment = false,
+                             string keywords = "")
         where TVm : class
     {
         if (_sp is not null)
@@ -179,17 +248,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
                 Label = label,
                 ViewType = viewType,
                 IsInDevelopment = inDevelopment,
+                Keywords = keywords,
                 ContentFactory = () => _sp.GetRequiredService<TVm>(),
             };
         }
         // Designer/test path: no container → build eagerly from the manual graph.
         var vm = _designerVms![typeof(TVm)];
-        return EagerItem(id, label, viewType, vm, inDevelopment);
+        return EagerItem(id, label, viewType, vm, inDevelopment, keywords);
     }
 
     // An eagerly-provided VM (Dashboard and the designer/test graph). The instance is set as the
     // NavItem's Content, so NavItem.Dispose disposes it on teardown like any other tab.
-    private static NavItem EagerItem(string id, string label, Type viewType, object content, bool inDevelopment = false)
+    private static NavItem EagerItem(string id, string label, Type viewType, object content,
+                                     bool inDevelopment = false, string keywords = "")
         => new()
         {
             Id = id,
@@ -197,6 +268,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             ViewType = viewType,
             Content = content,
             IsInDevelopment = inDevelopment,
+            Keywords = keywords,
         };
 
     // Resolve an eager VM: from DI when available, else from the designer graph.
@@ -219,98 +291,99 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             EagerItem("nav-dashboard", "Dashboard", typeof(Views.DashboardView), _dashboard ?? Eager<DashboardViewModel>())),
 
         Group("grp-system", "System", "\uE770", "Updates, startup, repairs, restore points",  // SettingsDisplaySound
-            Tab<SystemHealthViewModel>("nav-system-health",    "System Health",    typeof(Views.SystemHealthView)),
-            Tab<WindowsUpdateViewModel>("nav-windows-update",  "Windows Update",   typeof(Views.WindowsUpdateView)),
-            Tab<PerformanceViewModel>("nav-performance",       "Performance Mode", typeof(Views.PerformanceView)),
-            Tab<ServicesViewModel>("nav-services",             "Services",         typeof(Views.ServicesView)),
-            Tab<StartupViewModel>("nav-startup",               "Startup Manager",  typeof(Views.StartupView)),
-            Tab<WindowsFeaturesViewModel>("nav-windows-features", "Windows Features", typeof(Views.WindowsFeaturesView)),
-            Tab<RestorePointsViewModel>("nav-restore-points",  "Restore Points",   typeof(Views.RestorePointsView)),
-            Tab<TaskSchedulerViewModel>("nav-task-scheduler",  "Task Scheduler",   typeof(Views.TaskSchedulerView)),
-            Tab<BootAnalyzerViewModel>("nav-boot-analyzer",    "Boot Analyzer",    typeof(Views.BootAnalyzerView)),
-            Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(Views.SystemFixesView)),
-            Tab<TweaksHubViewModel>("nav-tweaks-hub",          "Tweaks Hub",       typeof(Views.TweaksHubView), inDevelopment: true)),
+            Tab<SystemHealthViewModel>("nav-system-health",    "System Health",    typeof(Views.SystemHealthView), keywords: "is my pc ok, disk health, smart, memory test"),
+            Tab<WindowsUpdateViewModel>("nav-windows-update",  "Windows Update",   typeof(Views.WindowsUpdateView), keywords: "windows update, updates, patches"),
+            Tab<PerformanceViewModel>("nav-performance",       "Performance Mode", typeof(Views.PerformanceView), keywords: "faster, speed up, power plan, high performance"),
+            Tab<ServicesViewModel>("nav-services",             "Services",         typeof(Views.ServicesView), keywords: "background services, windows services"),
+            Tab<StartupViewModel>("nav-startup",               "Startup Manager",  typeof(Views.StartupView), keywords: "slow startup, programs at boot, autostart, startup apps"),
+            Tab<WindowsFeaturesViewModel>("nav-windows-features", "Windows Features", typeof(Views.WindowsFeaturesView), keywords: "turn features on, optional features"),
+            Tab<RestorePointsViewModel>("nav-restore-points",  "Restore Points",   typeof(Views.RestorePointsView), keywords: "system restore, undo changes, rollback"),
+            Tab<TaskSchedulerViewModel>("nav-task-scheduler",  "Task Scheduler",   typeof(Views.TaskSchedulerView), keywords: "scheduled tasks, automatic tasks"),
+            Tab<BootAnalyzerViewModel>("nav-boot-analyzer",    "Boot Analyzer",    typeof(Views.BootAnalyzerView), keywords: "slow startup, boot time, takes forever to start, slow to boot"),
+            Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(Views.SystemFixesView), keywords: "repair windows, sfc, dism, fix errors, broken"),
+            Tab<TweaksHubViewModel>("nav-tweaks-hub",          "Tweaks Hub",       typeof(Views.TweaksHubView), inDevelopment: true, keywords: "tweaks, settings, tune windows")),
 
         Group("grp-gaming", "Gaming & Profiles", "\uE7FC", "Make games run smoother",  // Game
-            Tab<GamingProfileViewModel>("nav-gaming-profile",   "Gaming Profile",       typeof(Views.GamingProfileView), inDevelopment: true),
-            Tab<StandbyMemoryViewModel>("nav-standby-cleaner",  "Standby List Cleaner", typeof(Views.StandbyMemoryView)),
-            Tab<TimerResolutionViewModel>("nav-timer-resolution", "Timer Resolution",   typeof(Views.TimerResolutionView)),
-            Tab<CpuAffinityViewModel>("nav-cpu-affinity",       "CPU Core Affinity",    typeof(Views.CpuAffinityView)),
-            Tab<DisplayProfileViewModel>("nav-display-profiles", "Display Profiles",    typeof(Views.DisplayProfileView))),
+            Tab<GamingProfileViewModel>("nav-gaming-profile",   "Gaming Profile",       typeof(Views.GamingProfileView), inDevelopment: true, keywords: "games, gaming, fps, performance for games"),
+            Tab<StandbyMemoryViewModel>("nav-standby-cleaner",  "Standby List Cleaner", typeof(Views.StandbyMemoryView), keywords: "memory, ram, free up, cached, standby"),
+            Tab<TimerResolutionViewModel>("nav-timer-resolution", "Timer Resolution",   typeof(Views.TimerResolutionView), keywords: "stutter, lag, smoothness, jitter, frame time"),
+            Tab<CpuAffinityViewModel>("nav-cpu-affinity",       "CPU Core Affinity",    typeof(Views.CpuAffinityView), keywords: "cores, processor, pin, assign cpu"),
+            Tab<DisplayProfileViewModel>("nav-display-profiles", "Display Profiles",    typeof(Views.DisplayProfileView), keywords: "resolution, refresh rate, monitor, screen")),
 
         Group("grp-monitor", "Monitor", "\uE9D9", "What is running, and what it is using",  // Diagnostic
-            Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView)),
-            Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true),
-            Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView)),
-            Tab<AppAlertsViewModel>("nav-app-alerts",           "New App Alerts",     typeof(Views.AppAlertsView)),
-            Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true)),
+            Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView), keywords: "task manager, whats running, end task, cpu usage"),
+            Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true, keywords: "cpu history, usage over time, graph"),
+            Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView), keywords: "webcam, camera, microphone, spying, watching, listening, location"),
+            Tab<AppAlertsViewModel>("nav-app-alerts",           "New App Alerts",     typeof(Views.AppAlertsView), keywords: "something installed itself, new programs, unwanted install"),
+            Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true, keywords: "settings changed, something changed my settings")),
 
         Group("grp-cleanup", "Cleanup", "\uE74D", "Free up space and tidy up",  // Delete
-            Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(Views.CleanupView)),
-            Tab<DeepCleanupViewModel>("nav-deep-cleanup",            "Deep Cleanup",          typeof(Views.DeepCleanupView)),
-            Tab<ShortcutCleanerViewModel>("nav-shortcut-cleaner",    "Shortcut Cleaner",      typeof(Views.ShortcutCleanerView)),
-            Tab<ScheduledMaintenanceViewModel>("nav-scheduled-maintenance", "Scheduled Maintenance", typeof(Views.ScheduledMaintenanceView), inDevelopment: true)),
+            Tab<CleanupViewModel>("nav-cleanup",                     "Quick Cleanup",         typeof(Views.CleanupView), keywords: "free up space, temp files, junk, disk full"),
+            Tab<DeepCleanupViewModel>("nav-deep-cleanup",            "Deep Cleanup",          typeof(Views.DeepCleanupView), keywords: "free up space, disk full, large files, junk"),
+            Tab<ShortcutCleanerViewModel>("nav-shortcut-cleaner",    "Shortcut Cleaner",      typeof(Views.ShortcutCleanerView), keywords: "broken shortcuts, dead links, desktop icons"),
+            Tab<ScheduledMaintenanceViewModel>("nav-scheduled-maintenance", "Scheduled Maintenance", typeof(Views.ScheduledMaintenanceView), inDevelopment: true, keywords: "automatic, schedule, run weekly, maintenance")),
 
         // "Storage & Files" rather than "Storage": File Lock Detector is per-FILE work, not capacity,
         // and the group is where someone looks when the errand is about a file (#1521). File Shredder
         // stays in Privacy on purpose \u2014 shredding is a destroy-the-traces intent, and it is the most
         // destructive operation in the app, so it keeps the Privacy group's warning context.
         Group("grp-storage", "Storage & Files", "\uEDA2", "What fills the disk, what locks a file",  // HardDrive
-            Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",      typeof(Views.DiskAnalyzerView)),
-            Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder",   typeof(Views.DuplicateFileView)),
-            Tab<FileLockViewModel>("nav-file-lock",         "File Lock Detector", typeof(Views.FileLockView))),
+            Tab<DiskAnalyzerViewModel>("nav-disk-analyzer", "Disk Analyzer",      typeof(Views.DiskAnalyzerView), keywords: "what is using my disk, disk full, biggest folders, space"),
+            Tab<DuplicateFileViewModel>("nav-duplicates",   "Duplicate Finder",   typeof(Views.DuplicateFileView), keywords: "same files, copies, wasted space, identical"),
+            Tab<FileLockViewModel>("nav-file-lock",         "File Lock Detector", typeof(Views.FileLockView), keywords: "file in use, cannot delete, locked, in another program")),
 
         Group("grp-network", "Network", "\uE968", "Test the connection, fix the internet",  // NetworkTower
             Tab<PingViewModel>("nav-ping",                   "Ping",           typeof(Views.PingView)),
             Tab<TracerouteViewModel>("nav-traceroute",       "Traceroute",     typeof(Views.TracerouteView)),
-            Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(Views.SpeedTestView)),
+            Tab<SpeedTestViewModel>("nav-speed-test",        "Speed Test",     typeof(Views.SpeedTestView), keywords: "how fast is my internet, download speed, slow internet"),
             // Directly after Speed Test, because they answer the two halves of one question: how fast
             // the connection is, and what is using it. Split across two groups, finding one never led
             // to the other (#1514).
-            Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView)),
-            Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView)),
-            Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView))),
+            Tab<BandwidthMonitorViewModel>("nav-bandwidth-monitor", "Bandwidth Monitor", typeof(Views.BandwidthMonitorView), keywords: "data usage, whats using my internet, bandwidth, upload"),
+            Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView), keywords: "no internet, wifi not working, fix connection"),
+            Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView), keywords: "dns, block websites, hosts file, faster browsing")),
 
         Group("grp-apps", "Apps", "\uE71D", "Install, update and remove programs",  // AllApps
-            Tab<AppUpdatesViewModel>("nav-app-updates",    "App Updates",    typeof(Views.AppUpdatesView)),
-            Tab<BulkInstallerViewModel>("nav-bulk-installer", "Bulk Installer", typeof(Views.BulkInstallerView)),
-            Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(Views.UninstallerView))),
+            Tab<AppUpdatesViewModel>("nav-app-updates",    "App Updates",    typeof(Views.AppUpdatesView), keywords: "update apps, out of date programs"),
+            Tab<BulkInstallerViewModel>("nav-bulk-installer", "Bulk Installer", typeof(Views.BulkInstallerView), keywords: "install apps, set up new pc, install several"),
+            Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(Views.UninstallerView), keywords: "remove program, uninstall, get rid of")),
 
         Group("grp-privacy", "Privacy & Security", "\uE72E", "Tracking, ads and preinstalled apps",  // Lock
-            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView)),
-            Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(Views.FileShredderView)),
-            Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView)),
-            Tab<DebloaterViewModel>("nav-debloater",        "Debloater & Ads",       typeof(Views.DebloaterView)),
-            Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView)),
-            Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView)),
-            Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView))),
+            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id"),
+            Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(Views.FileShredderView), keywords: "delete for good, wipe, unrecoverable, erase"),
+            Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView), keywords: "block program, stop app running, prevent"),
+            Tab<DebloaterViewModel>("nav-debloater",        "Debloater & Ads",       typeof(Views.DebloaterView), keywords: "ads, popups, bloatware, preinstalled, remove apps, junk"),
+            Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView), keywords: "clear history, cookies, browser cache"),
+            Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView), keywords: "remove edge, remove onedrive, uninstall microsoft apps"),
+            Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView), keywords: "antivirus, defender, virus protection")),
 
         Group("grp-customization", "Customization", "\uE790", "Right-click menu, dark mode, volume",  // Personalize
-            Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView)),
+            Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView), keywords: "right click, menu, shell, explorer menu"),
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
-            EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>()),
-            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView)),
+            EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>(),
+                      keywords: "dark mode, light mode, night, theme"),
+            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView), keywords: "volume, sound, mixer, per app audio, mute"),
             // Muting an app that nags is the same wish as the rest of this group — make Windows behave
             // the way I want — and the same risk level: per-app Windows switches, no administrator, one
             // flip to undo. Under "Privacy & Security" it both overstated the stakes and hid the tab
             // from where someone would look for it (#1522). Debloater stays in Privacy because it
             // REMOVES software; this only silences it.
-            Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true)),
+            Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true, keywords: "popups, notifications, nagging, alerts, stop bothering me")),
 
         Group("grp-info", "Info", "\uE946", "Drivers, battery, logs and reports",  // Info
-            Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(Views.DriversView)),
-            Tab<BatteryHealthViewModel>("nav-battery", "Battery Health", typeof(Views.BatteryHealthView)),
-            Tab<LogsViewModel>("nav-logs",             "System Logs",    typeof(Views.LogsView)),
-            Tab<SystemReportViewModel>("nav-system-report", "System Report", typeof(Views.SystemReportView)),
-            Tab<LegacyPanelsViewModel>("nav-legacy-panels", "Legacy Panels", typeof(Views.LegacyPanelsView)),
+            Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(Views.DriversView), keywords: "drivers, hardware, devices"),
+            Tab<BatteryHealthViewModel>("nav-battery", "Battery Health", typeof(Views.BatteryHealthView), keywords: "battery, laptop battery, wear, charge"),
+            Tab<LogsViewModel>("nav-logs",             "System Logs",    typeof(Views.LogsView), keywords: "event log, errors, crashes, what went wrong"),
+            Tab<SystemReportViewModel>("nav-system-report", "System Report", typeof(Views.SystemReportView), keywords: "report, send to support, system info, specs"),
+            Tab<LegacyPanelsViewModel>("nav-legacy-panels", "Legacy Panels", typeof(Views.LegacyPanelsView), keywords: "control panel, old settings, applets"),
             // About is eager (its startup update-check drives the shell banner); the tab reuses
             // that same instance so the sidebar version label and the tab show one shared VM.
             EagerItem("nav-about", "About", typeof(Views.AboutView), About)),
 
         Group("grp-advanced", "Advanced", "\uE713", "Command line and portable settings",  // Settings
-            Tab<ProfileViewModel>("nav-profile-export", "Profile Export / Import", typeof(Views.ProfileView)),
-            Tab<CliInterfaceViewModel>("nav-cli-interface", "CLI Interface",     typeof(Views.CliInterfaceView), inDevelopment: true),
-            Tab<EnvironmentVariablesViewModel>("nav-env-variables", "Environment Variables", typeof(Views.EnvironmentVariablesView))),
+            Tab<ProfileViewModel>("nav-profile-export", "Profile Export / Import", typeof(Views.ProfileView), keywords: "backup settings, move to new pc, export"),
+            Tab<CliInterfaceViewModel>("nav-cli-interface", "CLI Interface",     typeof(Views.CliInterfaceView), inDevelopment: true, keywords: "command line, terminal, script, cli"),
+            Tab<EnvironmentVariablesViewModel>("nav-env-variables", "Environment Variables", typeof(Views.EnvironmentVariablesView), keywords: "path, variables, environment")),
     ];
 
     /// <summary>

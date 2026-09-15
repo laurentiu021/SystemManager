@@ -162,6 +162,50 @@ public class SystemFixesViewModelTests
     }
 
     /// <summary>
+    /// The mirror image, and the reason the two shell fixes exist as a separate gate: they must be
+    /// clickable WITHOUT elevation.
+    /// </summary>
+    /// <remarks>
+    /// Explorer is the user's own process and the icon caches live under their profile, so requiring
+    /// admin would put the tab's cheapest, most common fixes behind a UAC prompt they do not need
+    /// (#1490). This cannot be asserted in the UI suite: the CI runner is elevated, so every button there
+    /// is enabled and the claim would be vacuous. `ForceElevation(false)` is what makes it mean something.
+    /// </remarks>
+    [Theory]
+    [InlineData("RestartExplorerCommand")]
+    [InlineData("RebuildIconCacheCommand")]
+    public void EveryShellFix_IsClickableWithoutElevation(string name)
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm();
+        Assert.False(vm.IsElevated, "the scope must reach the view-model's constructor");
+
+        var command = (System.Windows.Input.ICommand)vm.GetType().GetProperty(name)!.GetValue(vm)!;
+        Assert.True(command.CanExecute(null),
+            $"{name} is gated on elevation. It runs as the user, so a user without administrator rights "
+            + "would see it disabled and conclude the fix does not work.");
+    }
+
+    /// <summary>
+    /// And they still respect the tab's one-repair-at-a-time rule, so a shell restart cannot start
+    /// while SFC is grinding.
+    /// </summary>
+    [Theory]
+    [InlineData("RestartExplorerCommand")]
+    [InlineData("RebuildIconCacheCommand")]
+    public void EveryShellFix_IsBlockedWhileAnotherRepairRuns(string name)
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVm();
+        var command = (System.Windows.Input.ICommand)vm.GetType().GetProperty(name)!.GetValue(vm)!;
+        Assert.True(command.CanExecute(null));
+
+        vm.IsSfcRunning = true;
+
+        Assert.False(command.CanExecute(null));
+    }
+
+    /// <summary>
     /// And the gate is in the command BODY, not only in CanExecute.
     /// </summary>
     /// <remarks>

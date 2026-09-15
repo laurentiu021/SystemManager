@@ -134,6 +134,8 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         RunDismCommand.NotifyCanExecuteChanged();
         ResetWindowsUpdateCommand.NotifyCanExecuteChanged();
         ReinstallWinGetCommand.NotifyCanExecuteChanged();
+        RestartExplorerCommand.NotifyCanExecuteChanged();
+        RebuildIconCacheCommand.NotifyCanExecuteChanged();
     }
 
     // ConsoleViewModel.Append marshals to the UI thread, locks, and caps the line count —
@@ -363,6 +365,133 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
             Log.Information("SystemFix: {Fix} success={Success}", result.FixName, result.Success);
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        finally
+        {
+            IsFixRunning = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    // ---------- the desktop and taskbar (no administrator rights needed) ----------
+
+    /// <summary>
+    /// The two shell fixes run as the user: Explorer is the user's own process and the icon caches live
+    /// under their profile. So they gate on <see cref="IsAnyRunning"/> alone, NOT on
+    /// <see cref="CanRunFix"/> — requiring elevation for them would put the app's most common,
+    /// cheapest fixes behind a UAC prompt they do not need.
+    /// </summary>
+    private bool CanRunShellFix => !IsAnyRunning;
+
+    /// <summary>
+    /// Ends every Explorer instance and brings one back — the fix for a frozen taskbar or a desktop
+    /// that has vanished.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanRunShellFix))]
+    private async Task RestartExplorerAsync()
+    {
+        if (IsFixRunning) return;
+        if (!DialogService.Instance.Confirm(
+                "Restart Windows Explorer now?\n\nAll open File Explorer windows will close. Your files are "
+                + "not affected, and the taskbar and desktop come back on their own within a few seconds.",
+                "Restart Explorer"))
+        {
+            StatusMessage = "Cancelled.";
+            return;
+        }
+
+        await RunShellFixAsync("Explorer restart", () =>
+        {
+            ExplorerShell.Restart();
+            return "Explorer restarted — the taskbar and desktop have been rebuilt.";
+        });
+    }
+
+    /// <summary>
+    /// Deletes the icon and thumbnail caches with the shell stopped, then brings it back so Windows
+    /// rebuilds them — the fix for blank or wrong icons and thumbnails.
+    /// </summary>
+    /// <remarks>
+    /// Explorer must be stopped for this to work at all, which is what makes it a distinct operation
+    /// rather than a duplicate of Deep Cleanup's cache category. Measured on a live desktop, 13 of 30
+    /// cache files were held open — and the locked ones are precisely the ones caching the wrong icons,
+    /// so a delete with the shell running removes the harmless half.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRunShellFix))]
+    private async Task RebuildIconCacheAsync()
+    {
+        if (IsFixRunning) return;
+        if (!DialogService.Instance.Confirm(
+                "Rebuild the icon and thumbnail cache?\n\nWindows keeps a cache of every icon and picture "
+                + "preview, and clearing it fixes icons that show up blank or wrong. Explorer has to close "
+                + "for this, so all open File Explorer windows will close and the desktop will come back "
+                + "within a few seconds. Nothing of yours is deleted — Windows rebuilds the cache as you "
+                + "browse, so the first few folders may open a little slower.",
+                "Rebuild icon cache"))
+        {
+            StatusMessage = "Cancelled.";
+            return;
+        }
+
+        await RunShellFixAsync("Icon cache rebuild", () =>
+        {
+            // Stop -> delete -> start, and the start happens even if the delete throws: leaving the
+            // user without a desktop would be far worse than a cache that did not clear.
+            ExplorerShell.Stop();
+            ExplorerShell.CacheSweep sweep;
+            try
+            {
+                sweep = ExplorerShell.DeleteCacheFiles();
+            }
+            finally
+            {
+                ExplorerShell.Start();
+            }
+
+            if (sweep.Deleted == 0 && sweep.Failed == 0)
+                return "No cache files were there to clear — Windows had already rebuilt them.";
+
+            var freed = FormatHelper.FormatSize(sweep.BytesFreed);
+            return sweep.Failed == 0
+                ? $"Cleared {sweep.Deleted} cache file(s), {freed}. Icons rebuild as you browse."
+                : $"Cleared {sweep.Deleted} cache file(s), {freed}. {sweep.Failed} were still in use and "
+                  + "were left alone — running this again usually gets them.";
+        });
+    }
+
+    /// <summary>
+    /// Shared body for the two shell fixes: cross-tab lock, off the UI thread, honest status.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="OperationCategory.Shell"/> lock is what stops this racing the Context Menu tab's
+    /// restart. Two overlapping restarts can leave the user with no desktop at all, and
+    /// <see cref="IsAnyRunning"/> is per-view-model so it cannot see the other tab.
+    /// </remarks>
+    private async Task RunShellFixAsync(string name, Func<string> work)
+    {
+        using var shellLock = OperationLockService.Instance.TryAcquire(OperationCategory.Shell, name);
+        if (shellLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Shell)} is already running.";
+            return;
+        }
+
+        IsFixRunning = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"{name} in progress...";
+        try
+        {
+            // Off the UI thread: killing and relaunching the shell is synchronous and takes seconds.
+            var outcome = await Task.Run(work);
+            StatusMessage = outcome;
+            Console.Append(PowerShellLine.Output(outcome));
+            ToastService.Instance.Show(name, outcome);
+            Log.Information("SystemFix: {Fix} — {Outcome}", name, outcome);
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            StatusMessage = $"{name} failed: {ex.Message}";
+            Log.Warning("SystemFix: {Fix} failed: {Error}", name, ex.Message);
+        }
         finally
         {
             IsFixRunning = false;

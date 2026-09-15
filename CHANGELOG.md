@@ -10,6 +10,45 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.108.0] - 2026-09-15
+
+**System Fixes can fix a frozen taskbar and blank icons now — and neither needs administrator rights.**
+Two of the most common things people actually complain about had no one-click fix on the tab named for
+fixes: a taskbar that stops responding, and icons that come up blank or wrong. Both are on System Fixes
+now, in their own group clearly marked as needing no administrator rights, above the repairs that do. The
+icon fix is not the same as the cache category in Deep Cleanup: Windows holds those cache files open while
+it runs, so clearing them from a cleanup scan gets only the ones that are not the problem. This one closes
+the desktop first, clears all of them, and brings the desktop straight back.
+
+### Added
+
+- **Restart Windows Explorer**, on System Fixes. For a taskbar that has stopped responding, a Start menu
+  that will not open, or a desktop with no icons. The command already existed on the Context Menu tab,
+  where nobody with a frozen taskbar would think to look for it.
+- **Rebuild icon & thumbnail cache**, on System Fixes. Stops Explorer, clears the icon and thumbnail
+  caches, and starts it again — and starts it again *even if the clearing fails*, because being left
+  without a desktop would be far worse than a cache that did not clear. Reports exactly how many files it
+  cleared and how many were still in use, rather than claiming a success it did not get.
+- **The System Fixes card list is now grouped**, into "Repair Windows itself" (needs administrator
+  rights) and "Fix the desktop and taskbar" (does not). Without the split, the tab's elevation banner
+  spoke for every button on the page, so a user without administrator rights would reasonably assume
+  nothing there worked for them.
+
+### Changed
+
+- The Explorer restart is now one shared implementation used by both tabs, instead of living on the
+  context-menu service. It ends each Explorer instance individually, so one process that refuses to close
+  cannot abort the loop and leave you without a desktop — a second hand-written copy would almost
+  certainly have lost that, so a test now forbids one.
+
+### Fixed
+
+- **Two tabs can no longer restart Explorer at the same time.** Overlapping restarts can leave you with no
+  desktop at all. The Context Menu tab guarded against it within itself, but that guard could not see
+  another tab — and as of this release another tab can start one. Both now take a shared lock, which is
+  deliberately separate from the one the long repairs use: an SFC scan runs for up to fifteen minutes, and
+  a frozen taskbar during one still has to be fixable.
+
 ## [1.107.0] - 2026-09-15
 
 **Windows' two repair tools are on the tab called System Fixes now, not the one called Quick Cleanup.**

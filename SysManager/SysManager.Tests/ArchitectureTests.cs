@@ -12336,6 +12336,107 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every view-model that ends the Windows shell must hold the process-wide
+    /// <c>OperationCategory.Shell</c> lock while it does.
+    /// </summary>
+    /// <remarks>
+    /// Two overlapping Explorer restarts can leave the user with no desktop at all. That was safe while
+    /// only the Context Menu tab could start one — its own <c>IsBusy</c> flag was enough — but System
+    /// Fixes gained the same power in #1490, and a per-view-model flag cannot see another view-model.
+    /// <para>Asserted at source level because it cannot be asserted any other way: a test that actually
+    /// took the path would kill this machine's desktop, so there is no execution to observe. The
+    /// alternative is trusting whoever adds the third caller to remember, which is the class of thing
+    /// that has to be mechanical.</para>
+    /// <para>Scoped to <see cref="ExplorerShell.Stop"/> and <see cref="ExplorerShell.Restart"/>.
+    /// <see cref="ExplorerShell.Start"/> alone is NOT gated: relaunching a shell that is already
+    /// running is a no-op, and the fail-safe relaunch inside a <c>finally</c> must never be blocked by
+    /// a lock — leaving the user without a desktop is the outcome the lock exists to prevent.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryCallerThatEndsTheShell_HoldsTheShellLock()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var callers = new List<string>();
+        var unguarded = new List<string>();
+
+        foreach (var file in Directory.GetFiles(vmDir, "*.cs"))
+        {
+            var source = WithoutComments(File.ReadAllText(file));
+            // Stop() and Restart() END the shell; Start() on its own does not.
+            var endsTheShell = source.Contains("ExplorerShell.Stop", StringComparison.Ordinal)
+                               || source.Contains("ExplorerShell.Restart", StringComparison.Ordinal);
+            if (!endsTheShell) continue;
+
+            var name = Path.GetFileName(file);
+            callers.Add(name);
+            // The ACQUISITION, not the bare identifier. `OperationCategory.Shell` also appears in the
+            // "already running" status message that every one of these paths builds, so matching the
+            // identifier alone passed while the TryAcquire had been switched to a different category —
+            // measured, on the first mutation run of this guard.
+            if (!source.Contains("TryAcquire(OperationCategory.Shell", StringComparison.Ordinal))
+                unguarded.Add(name);
+        }
+
+        // Vacuity floor: if the helper were renamed, `unguarded` would be empty for the wrong reason.
+        Assert.True(callers.Count >= 2,
+            $"only {callers.Count} view-model(s) were found ending the shell, out of the 2 that do "
+            + "(ContextMenuViewModel, SystemFixesViewModel). The call match is out of date, so the lock "
+            + "check below proves nothing. Found: " + string.Join(", ", callers));
+
+        Assert.True(unguarded.Count == 0,
+            "these view-models end the Windows shell without taking the OperationCategory.Shell lock. Two "
+            + "overlapping restarts can leave the user with no desktop at all, and IsBusy is per-view-model "
+            + "so it cannot see the other tab:\n  " + string.Join("\n  ", unguarded));
+    }
+
+    /// <summary>
+    /// The shell may only be ended through <see cref="ExplorerShell"/> — never by killing
+    /// <c>explorer</c> directly somewhere else.
+    /// </summary>
+    /// <remarks>
+    /// The kill loop is hardened in one specific way that a fresh copy would lose: each process is killed
+    /// individually, so one unkillable instance (a higher-integrity or other-session explorer) cannot abort
+    /// the loop and leave the user shell-less. A second implementation would almost certainly be a plain
+    /// <c>Process.GetProcessesByName("explorer").Kill()</c>, and it would be wrong in exactly that way.
+    /// </remarks>
+    [Fact]
+    public void NothingKillsExplorer_OutsideTheSharedHelper()
+    {
+        var appDir = FindAppProjectDir();
+        var helper = Path.Combine(appDir, "Helpers", "ExplorerShell.cs");
+        Assert.True(File.Exists(helper),
+            $"{helper} not found — the shared shell helper is gone, so this guard would police nothing.");
+
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            if (string.Equals(file, helper, StringComparison.OrdinalIgnoreCase)) continue;
+
+            scanned++;
+            var source = WithoutComments(File.ReadAllText(file));
+            if (source.Contains("GetProcessesByName(\"explorer\")", StringComparison.OrdinalIgnoreCase))
+                offenders.Add(Path.GetFileName(file));
+        }
+
+        Assert.True(scanned >= 50,
+            $"only {scanned} source files were scanned, which is too few for this project — the file walk "
+            + "is broken and the check below proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these files enumerate Explorer processes directly instead of going through ExplorerShell. The "
+            + "shared helper kills each instance individually so one unkillable process cannot abort the "
+            + "loop and leave the user with no shell; a fresh copy loses that:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// No DISM call may pass <c>/ResetBase</c>, and every command that runs one of these Windows tools must
     /// be bound to a control on its own tab.
     /// </summary>
@@ -12395,7 +12496,10 @@ public partial class ArchitectureTests
         var expectedBindings = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
             ["CleanupView.xaml"] = ["AnalyzeComponentStoreCommand", "CleanComponentStoreCommand"],
-            ["SystemFixesView.xaml"] = ["RunSfcCommand", "RunDismCommand"],
+            // The two shell fixes (#1490) are here for the same reason as the DISM pair: a command that is
+            // implemented and unit-tested while nothing in the XAML invokes it ships unreachable.
+            ["SystemFixesView.xaml"] =
+                ["RunSfcCommand", "RunDismCommand", "RestartExplorerCommand", "RebuildIconCacheCommand"],
         };
 
         var markupByView = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -12414,8 +12518,9 @@ public partial class ArchitectureTests
         }
 
         // And the absence half of the split. Presence on the right tab does not stop a copy reappearing on
-        // the wrong one: CleanupViewModel no longer HAS these commands, so a re-added binding would be a
-        // silent dead button — WPF logs a binding failure and renders an enabled control that does nothing.
+        // the wrong one: CleanupViewModel has none of the System Fixes commands, so a binding to one there
+        // would be a silent dead button — WPF logs a binding failure and renders an enabled control that
+        // does nothing. It matters most for RunSfc/RunDism, which USED to live on that view.
         foreach (var command in expectedBindings["SystemFixesView.xaml"])
         {
             Assert.DoesNotContain($"{{Binding {command}}}", markupByView["CleanupView.xaml"], StringComparison.Ordinal);

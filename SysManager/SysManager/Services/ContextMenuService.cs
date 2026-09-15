@@ -758,43 +758,6 @@ public sealed partial class ContextMenuService : IContextMenuService
     }
 
     /// <summary>
-    /// Restarts Windows Explorer to apply context menu style changes.
-    /// Each process is killed individually so one unkillable instance (e.g. a
-    /// higher-integrity or other-session explorer) cannot abort the loop and
-    /// leave the user without a shell.
-    /// </summary>
-    public static void RestartExplorer()
-    {
-        foreach (var proc in Process.GetProcessesByName("explorer"))
-        {
-            try
-            {
-                proc.Kill();
-                proc.WaitForExit(3000);
-            }
-            catch (InvalidOperationException) { }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                Log.Debug("Could not kill explorer PID {Pid}: {Error}", proc.Id, ex.Message);
-            }
-            finally
-            {
-                proc.Dispose();
-            }
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(SysManager.Helpers.SystemPaths.ResolveSystemTool("explorer.exe")) { UseShellExecute = true })?.Dispose();
-            Log.Information("Explorer restarted to apply context menu changes");
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            Log.Warning("Failed to relaunch Explorer: {Error}", ex.Message);
-        }
-    }
-
-    /// <summary>
     /// Human-readable explanations for common context menu entries.
     /// Keyed by raw registry name (case-insensitive).
     /// </summary>

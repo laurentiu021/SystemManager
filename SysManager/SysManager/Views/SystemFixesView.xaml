@@ -34,6 +34,14 @@
         <!-- Fix cards -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
             <StackPanel>
+                <!-- Two sections, split by whether the fix needs administrator rights. The elevation
+                     banner above speaks for the first one; the second runs as the user, and saying so
+                     next to the buttons is what stops a user without admin assuming nothing here works.
+                     SectionTitle + Subtle description is the same shape Quick Cleanup uses. -->
+                <TextBlock Text="Repair Windows itself" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
+                <TextBlock Text="These change system files, services or settings, so they need administrator rights. The first two are the ones to reach for when you do not yet know what broke."
+                           Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
                 <!-- The two general-purpose repairs first: they are what fixes an unexplained
                      misbehaving Windows, and the targeted ones below only help if you already know
                      what broke. Moved here from Quick Cleanup, whose name promised housekeeping
@@ -100,21 +108,6 @@
                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
                 </Grid>
 
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Set up Auto Sign-in" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
-                        <TextBlock Text="Opens the built-in User Accounts dialog to enable automatic sign-in. Windows stores the credential securely — SysManager never sees your password."
-                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Content="Open" Command="{Binding OpenAutologinCommand}"
-                            AutomationProperties.Name="Open auto sign-in settings"
-                            Style="{StaticResource GhostButton}" VerticalAlignment="Center" MinWidth="80"/>
-                </Grid>
-
                 <!-- Live indicators for the two long repairs. A repair that grinds for half an hour has
                      to say WHICH one is running, which is why these are bound to per-repair flags rather
                      than to IsBusy. -->
@@ -169,6 +162,59 @@
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
                 </Border>
+
+                <TextBlock Text="Fix the desktop and taskbar" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
+                <TextBlock Text="No administrator rights needed — these restart your own desktop, and they are the quickest things to try first. Both close any open File Explorer windows; the taskbar and desktop come back on their own within a few seconds."
+                           Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Restart Windows Explorer" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="For a taskbar that has stopped responding, a Start menu that will not open, or a desktop with no icons. Ends the desktop and brings it straight back."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Restart" Command="{Binding RestartExplorerCommand}"
+                            AutomationProperties.AutomationId="btn-fixes-restart-explorer"
+                            AutomationProperties.Name="Restart — restart Windows Explorer"
+                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Rebuild icon &amp; thumbnail cache" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="For icons or picture previews that come up blank, wrong, or as a plain white page. Clears the cache Windows keeps of them and lets it build a fresh one as you browse."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Rebuild" Command="{Binding RebuildIconCacheCommand}"
+                            AutomationProperties.AutomationId="btn-fixes-rebuild-icon-cache"
+                            AutomationProperties.Name="Rebuild — rebuild the icon and thumbnail cache"
+                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Center" MinWidth="80"/>
+                </Grid>
+
+                <TextBlock Text="Sign-in" Style="{StaticResource SectionTitle}" Margin="0,14,0,4"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="Set up Auto Sign-in" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Opens the built-in User Accounts dialog to enable automatic sign-in. Windows stores the credential securely — SysManager never sees your password."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Open" Command="{Binding OpenAutologinCommand}"
+                            AutomationProperties.Name="Open auto sign-in settings"
+                            Style="{StaticResource GhostButton}" VerticalAlignment="Center" MinWidth="80"/>
+                </Grid>
 
                 <TextBlock Margin="0,12,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
                            Text="Looking to reset the network stack (Winsock / TCP-IP / DNS flush)? Use the Network → Network Repair tab, which provides those as individual one-click tools."/>

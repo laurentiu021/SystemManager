@@ -155,7 +155,10 @@ public sealed class DeepCleanupService
                 + "browse, and clearing them is the standard fix for thumbnails that show the wrong picture or "
                 + "come up blank.",
                 [Path.Combine(localAppData, "Microsoft", "Windows", "Explorer")],
-                FilePatterns: ["thumbcache_*.db", "iconcache_*.db"]),
+                // Shared with System Fixes' "Rebuild icon & thumbnail cache", which does the same delete
+                // with Explorer STOPPED — the only way to get the files it is holding open. One list so
+                // the two cannot drift; the directory stays local because `roots` is this scan's seam.
+                FilePatterns: ExplorerShell.CacheFilePatterns),
 
             new("Old Windows servicing logs (> 30 days)",
                 "CBS logs older than 30 days. Windows keeps rolling ones itself.",

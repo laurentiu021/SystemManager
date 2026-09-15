@@ -479,8 +479,11 @@ Key services:
   shapes Windows stores them in: `shell` verbs (a name and a command line,
   hidden with `LegacyDisable`) and `shellex\ContextMenuHandlers` COM
   extensions (a class id, resolved to a friendly name and its server DLL).
-  Toggling applies to verbs only. Takes an injectable stand-in for
-  `HKEY_CLASSES_ROOT` so the scan is testable against a disposable hive.
+  Both are hideable, by different mechanisms — a verb through `LegacyDisable`
+  with an HKCU override fallback, a COM handler through the machine-wide
+  `Shell Extensions\Blocked` list, which needs elevation. Takes injectable
+  stand-ins for `HKEY_CLASSES_ROOT` and `HKEY_LOCAL_MACHINE`, so both the scan
+  and the block/unblock writes are testable against a disposable hive.
 - `SystemReportService` — gathers a comprehensive system snapshot once
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained

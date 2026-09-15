@@ -6,9 +6,42 @@ using SysManager.ViewModels;
 
 namespace SysManager.IntegrationTests;
 
-[Collection("Network")]
-public class MainWindowViewModelTests
+/// <summary>
+/// One tab graph, built once, for the tests that only READ the navigation surface.
+/// </summary>
+/// <remarks>
+/// <see cref="MainWindowViewModel"/>'s parameterless constructor is the designer/test path, so it calls
+/// <c>BuildDesignerGraph()</c> and builds all 58 tab view models eagerly — including the ones that launch
+/// real <c>winget</c> and <c>powershell</c> child processes. Those children outlive the test, and the cost
+/// is superlinear in the number of constructions rather than in the number of assertions: this class ran
+/// 1 construction in 0.9&#160;s, 41 in 9.7&#160;s and 43 in 27.3&#160;s.
+/// <para>At 41 it had already passed the point where the test host cannot shut down — locally
+/// "Foreground threads were left running, forcing process exit"; in CI a 22-minute run, nine
+/// <c>winget_*_hang.log</c>/<c>powershell_*_hang.log</c> artifacts, a hang dump and exit
+/// <c>-532462766</c>, with <b>every test passing</b> (652/652, <c>failed: 0</c>, <c>error: 1</c>). Because
+/// that job is <c>continue-on-error</c>, the pull request showed a green check throughout (#2312).</para>
+/// <para>Shared rather than disposed-per-test on purpose: adding <c>using</c> to all 41 changed nothing,
+/// so whatever holds the process open is not released by <c>ViewModelBase.Dispose</c>. Not building the
+/// graph 41 times is the fix; disposing it 41 times is not.</para>
+/// <para>Only safe because the tests using it are read-only. The three that touch
+/// <c>SelectedNav</c> keep their own graph — two mutate the selection, and one asserts the INITIAL
+/// selection, so it cannot run after another test has navigated. If you add a test here that changes
+/// state, give it its own instance and say why.</para>
+/// </remarks>
+public sealed class NavSurfaceFixture : IDisposable
 {
+    public MainWindowViewModel Vm { get; } = new();
+
+    public void Dispose() => Vm.Dispose();
+}
+
+[Collection("Network")]
+public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture<NavSurfaceFixture>
+{
+    /// <summary>The shared read-only graph. See <see cref="NavSurfaceFixture"/> for why it is shared.</summary>
+    private readonly MainWindowViewModel _nav = fixture.Vm;
+
+
     // Tabs are addressed through the real navigation surface (NavItems → Content), not
     // through per-tab accessor properties: those were test-only sugar removed when tab
     // view-models became lazily built (the "eager-VM startup herd" fix). In the test path
@@ -20,7 +53,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void AllTabsAreInstantiated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.NotNull(TabContent(vm, "nav-dashboard"));
         Assert.NotNull(TabContent(vm, "nav-app-updates"));
         Assert.NotNull(TabContent(vm, "nav-windows-update"));
@@ -47,7 +80,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void About_IsEagerlyExposed_AndSharedWithItsTab()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.NotNull(vm.About);
         Assert.Same(vm.About, TabContent(vm, "nav-about"));
     }
@@ -55,7 +88,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void ElevationBadge_IsOneOfTwoValues()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.True(vm.ElevationBadge == "Administrator" || vm.ElevationBadge == "Standard user",
             $"Unexpected badge: {vm.ElevationBadge}");
     }
@@ -63,14 +96,14 @@ public class MainWindowViewModelTests
     [Fact]
     public void Title_NotEmpty()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.False(string.IsNullOrWhiteSpace(vm.Title));
     }
 
     [Fact]
     public void Title_ReflectsElevation()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         if (vm.IsElevated)
             Assert.Contains("Admin", vm.Title);
         else
@@ -80,7 +113,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void EachTabViewModel_HasCorrectType()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.IsType<DashboardViewModel>(TabContent(vm, "nav-dashboard"));
         Assert.IsType<AppUpdatesViewModel>(TabContent(vm, "nav-app-updates"));
         Assert.IsType<WindowsUpdateViewModel>(TabContent(vm, "nav-windows-update"));
@@ -107,7 +140,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavItems_ContainAll58()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.Equal(58, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
@@ -237,7 +270,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavItems_HaveUniqueIds()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var ids = vm.NavItems.Select(n => n.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct().Count());
     }
@@ -257,7 +290,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavItems_AllHaveLabelsAndAView()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.All(vm.NavItems, n =>
         {
             Assert.False(string.IsNullOrWhiteSpace(n.Label));
@@ -276,7 +309,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_CarryDistinctGlyphs()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.All(vm.NavGroups, g => Assert.False(string.IsNullOrWhiteSpace(g.Glyph)));
 
         var glyphs = vm.NavGroups.Select(g => g.Glyph).ToList();
@@ -288,14 +321,14 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_Has12Groups()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.Equal(12, vm.NavGroups.Count);
     }
 
     [Fact]
     public void NavGroups_HaveUniqueIds()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var ids = vm.NavGroups.Select(g => g.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct().Count());
     }
@@ -303,7 +336,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_AllHaveChildren()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.All(vm.NavGroups, g =>
         {
             Assert.NotEmpty(g.Children);
@@ -315,7 +348,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_SingleItemGroups_AreDashboardOnly()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var singles = vm.NavGroups.Where(g => g.IsSingleItem).Select(g => g.Id).ToList();
         Assert.Contains("grp-dashboard", singles);
         Assert.Single(singles);
@@ -324,7 +357,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_SystemGroup_Contains11Items()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
         Assert.Equal(11, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
@@ -346,7 +379,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_AppAlerts_LivesInMonitorNotPrivacy()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
         var privacy = vm.NavGroups.First(g => g.Id == "grp-privacy").Children.Select(c => c.Id).ToList();
         // App Alerts passively watches for new installs — it belongs with the monitoring tabs.
@@ -357,7 +390,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_LegacyPanels_LivesInInfoNotSystem()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var info = vm.NavGroups.First(g => g.Id == "grp-info").Children.Select(c => c.Id).ToList();
         var system = vm.NavGroups.First(g => g.Id == "grp-system").Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-legacy-panels", info);
@@ -367,7 +400,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_StorageGroup_ContainsDiskAnalyzerAndDuplicates()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
         var ids = storage.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-disk-analyzer", ids);
@@ -403,7 +436,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_FileTabsAreGroupedByErrand_NotByMechanism()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
 
         var monitor = Ids(vm, "grp-monitor");
         var storage = vm.NavGroups.First(g => g.Id == "grp-storage");
@@ -436,7 +469,7 @@ public class MainWindowViewModelTests
     {
         // Cleanup has: Quick, Deep, Shortcut Cleaner, Scheduled Maintenance.
         // File Shredder lives under Privacy & Security, not Cleanup.
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var cleanup = vm.NavGroups.First(g => g.Id == "grp-cleanup");
         Assert.Equal(4, cleanup.Children.Count);
     }
@@ -444,7 +477,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_FlatNavItems_MatchGroupChildren()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var fromGroups = vm.NavGroups.SelectMany(g => g.Children).ToList();
         Assert.Equal(fromGroups.Count, vm.NavItems.Count);
         for (int i = 0; i < fromGroups.Count; i++)
@@ -469,7 +502,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_ExactlyTheCleanupGroupStartsExpanded()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var collapsible = vm.NavGroups.Where(group => !group.IsSingleItem).ToList();
 
         var expanded = collapsible.Where(group => group.IsExpanded).ToList();
@@ -489,7 +522,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_EveryItemHasContentAndResolvableView()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         Assert.All(vm.NavItems, item =>
         {
             Assert.False(string.IsNullOrWhiteSpace(item.Id));
@@ -504,7 +537,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavGroups_EveryLeafBelongsToExactlyOneGroup()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         foreach (var item in vm.NavItems)
         {
             var owners = vm.NavGroups.Count(g => g.Children.Contains(item));
@@ -518,7 +551,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_TimerResolution_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-timer-resolution");
         Assert.Equal(typeof(SysManager.Views.TimerResolutionView), item.ViewType);
         Assert.IsType<TimerResolutionViewModel>(item.Content);
@@ -528,7 +561,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_FileLock_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-file-lock");
         Assert.Equal(typeof(SysManager.Views.FileLockView), item.ViewType);
         Assert.IsType<FileLockViewModel>(item.Content);
@@ -538,7 +571,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_DisplayProfiles_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-display-profiles");
         Assert.Equal(typeof(SysManager.Views.DisplayProfileView), item.ViewType);
         Assert.IsType<DisplayProfileViewModel>(item.Content);
@@ -548,7 +581,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_CpuAffinity_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-cpu-affinity");
         Assert.Equal(typeof(SysManager.Views.CpuAffinityView), item.ViewType);
         Assert.IsType<CpuAffinityViewModel>(item.Content);
@@ -558,7 +591,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_Defender_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-defender-tweaks");
         Assert.Equal(typeof(SysManager.Views.DefenderView), item.ViewType);
         Assert.IsType<DefenderViewModel>(item.Content);
@@ -568,7 +601,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_TaskScheduler_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-task-scheduler");
         Assert.Equal(typeof(SysManager.Views.TaskSchedulerView), item.ViewType);
         Assert.IsType<TaskSchedulerViewModel>(item.Content);
@@ -578,7 +611,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_DarkMode_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-dark-mode");
         Assert.Equal(typeof(SysManager.Views.DarkModeView), item.ViewType);
         Assert.IsType<DarkModeViewModel>(item.Content);
@@ -588,7 +621,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_StandbyCleaner_IsImplementedAndGraduated()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-standby-cleaner");
         Assert.Equal(typeof(SysManager.Views.StandbyMemoryView), item.ViewType);
         Assert.IsType<StandbyMemoryViewModel>(item.Content);
@@ -602,7 +635,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_ResourceHistory_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-resource-history");
         Assert.Equal(typeof(SysManager.Views.ResourceHistoryView), item.ViewType);
         Assert.IsType<ResourceHistoryViewModel>(item.Content);
@@ -613,7 +646,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_SettingsWatchdog_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-settings-watchdog");
         Assert.Equal(typeof(SysManager.Views.SettingsWatchdogView), item.ViewType);
         Assert.IsType<SettingsWatchdogViewModel>(item.Content);
@@ -624,7 +657,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_CliInterface_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-cli-interface");
         Assert.Equal(typeof(SysManager.Views.CliInterfaceView), item.ViewType);
         Assert.IsType<CliInterfaceViewModel>(item.Content);
@@ -635,7 +668,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_ScheduledMaintenance_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-scheduled-maintenance");
         Assert.Equal(typeof(SysManager.Views.ScheduledMaintenanceView), item.ViewType);
         Assert.IsType<ScheduledMaintenanceViewModel>(item.Content);
@@ -646,7 +679,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_TweaksHub_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-tweaks-hub");
         Assert.Equal(typeof(SysManager.Views.TweaksHubView), item.ViewType);
         Assert.IsType<TweaksHubViewModel>(item.Content);
@@ -659,7 +692,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void NavLeaf_NotificationBlocker_IsImplementedAndInPreview()
     {
-        var vm = new MainWindowViewModel();
+        var vm = _nav;
         var item = vm.NavItems.First(n => n.Id == "nav-notification-blocker");
         Assert.Equal(typeof(SysManager.Views.NotificationBlockerView), item.ViewType);
         Assert.IsType<NotificationBlockerViewModel>(item.Content);

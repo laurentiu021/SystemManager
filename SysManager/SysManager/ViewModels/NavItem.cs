@@ -28,6 +28,34 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     public required Type ViewType { get; init; }
 
     /// <summary>
+    /// Plain-language words that should find this tab, beyond its label.
+    /// </summary>
+    /// <remarks>
+    /// A search that matches only labels helps someone who already knows the vocabulary, and does nothing
+    /// for the person this app is built for. She types "slow startup", "popups", "webcam", "free up space"
+    /// — none of which appear in "Boot Analyzer", "Notification Blocker", "Camera/Mic/Location" or
+    /// "Standby List Cleaner" (#1505).
+    /// <para>Data, not a service: one string next to the label it belongs to, so adding a tab and adding
+    /// its keywords is one edit in one place. <c>EveryJargonNamedTab_CanBeFoundByPlainWords</c> pins that
+    /// the tabs whose names are jargon actually carry some.</para>
+    /// <para>Not shown anywhere. It exists to be matched, which is why the guard that catches unread
+    /// properties has to know that — see its exclusion list.</para>
+    /// </remarks>
+    public string Keywords { get; init; } = "";
+
+    /// <summary>
+    /// True when <paramref name="text"/> appears in this tab's label or keywords.
+    /// </summary>
+    /// <remarks>
+    /// Case-insensitive, and substring rather than word-prefix: someone typing "ram" should find
+    /// "memory, ram, free up", and someone typing "startup" should find "slow startup" without having to
+    /// start at a word boundary.
+    /// </remarks>
+    public bool Matches(string text) =>
+        Label.Contains(text, StringComparison.OrdinalIgnoreCase)
+        || Keywords.Contains(text, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The tab's ViewModel. Two ways to supply it:
     /// <list type="bullet">
     /// <item>Eager — assign a ready instance (<c>Content = vm</c>). Used by tests and by the

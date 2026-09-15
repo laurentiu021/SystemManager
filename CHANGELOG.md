@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.106.0] - 2026-09-15
+
+**You can search for a tab now, in your own words.** SysManager has 58 tabs behind 11 collapsed groups, and
+until now the only way to reach one was to guess which group held it and open them one at a time. There is
+a search box at the top of the sidebar, and it matches what you would actually type rather than only the
+tab's name — "slow startup" finds Boot Analyzer, "popups" finds Notification Blocker, "webcam" finds
+Camera/Mic/Location, "free up space" finds Deep Cleanup.
+
+### Added
+
+- **Search all tabs**, in the sidebar header. Type anything and the groups are replaced by a flat list of
+  matching tabs, with a count above it; clear it and the normal tree comes back. A matchless search says so
+  rather than leaving an empty panel.
+- **Plain-language keywords on 54 of the 58 tabs**, so search works for someone who does not know the
+  Windows vocabulary. Dashboard and About have none on purpose — one is where you already are, the other is
+  findable by its own name.
+- A clear button inside the search box, because after opening a result the box is still filled in.
+
 ## [1.105.0] - 2026-09-15
 
 **When SysManager tells you something is wrong, it can now take you to the fix.** The Dashboard used to

@@ -150,6 +150,12 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
 
+**Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
+actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
+Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
+finds Deep Cleanup. 54 of the 58 tabs carry keywords for this; typing clears the groups and shows a flat
+list of matches with a count, and clearing the box brings the groups back.
+
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
 used to start collapsed, so the first screen showed twelve category names and not one
 feature. Only one group opens, because the viewport has room for exactly one: at a

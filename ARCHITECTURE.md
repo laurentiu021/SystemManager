@@ -245,6 +245,10 @@ Key services:
   network probes on `System.Net.NetworkInformation.Ping`. Traceroute walks the TTL itself
   (`PingOptions(ttl, true)`, reading `TtlExpired` replies) rather than shelling out to a
   command-line tool, which is why it needs no admin rights.
+  `PingMonitorService` takes an optional `TimeProvider` (defaulting to `TimeProvider.System`) that
+  supplies its between-tick delay, so a test drives the cadence rather than measuring it: the
+  interval-change test used to sleep 1.2 real seconds and count samples, which reported the host's
+  spare CPU and went red on a loaded machine. It now asserts the exact delay the pump asks for.
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
   auto-downloaded on first use.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts

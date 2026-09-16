@@ -248,6 +248,14 @@ registration is covered.
   left System Fixes' bar frozen at 0 for the length of an SFC run (#2324). It checks each bar
   separately, because Dashboard has eight and Deep Cleanup has two, and a sibling bar binding the other
   property must not vouch for the missing one.
+- **A unit test must not reach the real filesystem through a service's default constructor.** The
+  seam is usually already there and simply not taken: `DeepCleanupService` has accepted an
+  `ICleanupRoots` since #2176 and `TempCleanupRoots` exists for it, but `DeepCleanupViewModelTests`
+  built the production one — and `CleanAsync` ends with a rescan, so one test scanned the whole machine
+  for **170 seconds**, 63% of the unit suite (#2333). Redirecting the roots took the suite from 269s to
+  **49s**. `ArchitectureTests.NoUnitTestBuildsADeepCleanupViewModel_OnTheRealMachinesScanRoots` holds
+  it. Note the failure mode: on a fresh CI runner the same scan is nearly free, so CI would never have
+  reported this — a cost that only appears locally still needs a guard.
 
 To generate a local coverage report:
 

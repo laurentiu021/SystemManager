@@ -17,9 +17,34 @@ namespace SysManager.Tests;
 /// <para>The large-files half moved to <see cref="LargeFilesViewModelTests"/> with the feature (#1523).</para>
 /// </summary>
 [Collection("ProcessWideStatics")]
-public class DeepCleanupViewModelTests
+public class DeepCleanupViewModelTests : IDisposable
 {
-    private static DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService());
+    /// <summary>
+    /// The scan roots every view model here is built on, redirected at a temp tree this class owns.
+    /// </summary>
+    /// <remarks>
+    /// Not an optimisation. <c>CleanAsync</c> ends with a rescan so the displayed sizes refresh after a
+    /// delete — correct product behaviour — and this class used to build its service through the
+    /// PARAMETERLESS constructor, which is production's, so that rescan walked the real machine. One test
+    /// took <b>170 seconds</b> on a used workstation while the other 31 in this class took 0.12s between
+    /// them, and it was 63% of the whole unit suite. It stayed invisible because a scan costs almost
+    /// nothing on a fresh CI runner with an empty temp tree, so the local number is the only one that ever
+    /// moves (#2333).
+    /// <para><c>DeepCleanupService</c> has taken an <c>ICleanupRoots</c> since #2176 and
+    /// <see cref="TempCleanupRoots"/> exists for exactly this; <c>DeepCleanupScanLogicTests</c> and
+    /// <c>DeepCleanupServiceTests</c> both took it and this class was never brought along.
+    /// <c>ArchitectureTests.NoUnitTestBuildsADeepCleanupViewModel_OnTheRealMachinesScanRoots</c> now stops
+    /// that happening a third time.</para>
+    /// </remarks>
+    private readonly TempCleanupRoots _roots = new();
+
+    public void Dispose()
+    {
+        _roots.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    private DeepCleanupViewModel NewVm() => new(new Services.DeepCleanupService(_roots));
 
     // ---------- construction & defaults ----------
 
@@ -382,6 +407,10 @@ public class DeepCleanupViewModelTests
         var file = Path.Combine(dir, "delete.dat");
         File.WriteAllText(file, "x");
 
+        // The whole assertion below is "this file is gone", which a file that was never there also satisfies.
+        // Stated up front so a broken fixture reads as a broken fixture rather than as a passing delete.
+        Assert.True(File.Exists(file), "the fixture file was not created, so the assertion below proves nothing");
+
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
@@ -422,7 +451,7 @@ public class DeepCleanupViewModelTests
     // Neither test creates a file or cleans anything: the user declines, so the assertion is purely on
     // the message text captured from the dialog.
 
-    private static string CapturedCleanPrompt(bool includeRecycleBin)
+    private string CapturedCleanPrompt(bool includeRecycleBin)
     {
         string? shown = null;
         var prevDialog = DialogService.Instance;

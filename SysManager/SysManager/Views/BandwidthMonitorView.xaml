@@ -169,7 +169,7 @@
                                                    RenderOptions.BitmapScalingMode="HighQuality"
                                                    VerticalAlignment="Center"/>
                                             <StackPanel VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold" FontSize="13"
+                                                <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold" Style="{StaticResource Body}"
                                                            Foreground="{DynamicResource TextPrimary}"/>
                                                 <TextBlock Text="{Binding RemoteSummary, StringFormat='ports: {0}'}"
                                                            FontSize="10" Foreground="{DynamicResource TextMuted}"

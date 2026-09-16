@@ -36,7 +36,7 @@
                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                FontSize="16" Margin="0,0,10,0" Foreground="{DynamicResource TextSecondary}"/>
                     <TextBlock Text="Uninstallers request administrator access themselves when needed."
-                               Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Body}" VerticalAlignment="Center"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -61,7 +61,7 @@
                            FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top"
                            Foreground="{DynamicResource TextSecondary}"/>
                 <TextBlock Text="Uninstalling is turned off while SysManager runs as administrator, so each app can show you its own permission prompt. Close SysManager and open it normally to uninstall."
-                           Foreground="{DynamicResource TextSecondary}" FontSize="13" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Body}" VerticalAlignment="Center"
                            TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
@@ -98,7 +98,7 @@
 
         <!-- Summary -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
         <!-- App list -->
@@ -139,7 +139,7 @@
                                            VerticalAlignment="Center" Margin="0,0,8,0"
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                         <TextBlock Text="{Binding Id}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextTrimming="CharacterEllipsis" MaxWidth="400"/>

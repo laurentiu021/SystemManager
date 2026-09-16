@@ -156,7 +156,7 @@
         <!-- Summary -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="12"
                 Visibility="{Binding TableSummary, Converter={StaticResource FlexVis}}">
-            <TextBlock Text="{Binding TableSummary}" FontWeight="SemiBold" FontSize="13"/>
+            <TextBlock Text="{Binding TableSummary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
         <!-- Update table (DataGrid) -->

@@ -24,7 +24,7 @@
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,12,0"
                               AutomationProperties.Name="{Binding Name, StringFormat='Select tweak: {0}'}"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                         <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                     </StackPanel>

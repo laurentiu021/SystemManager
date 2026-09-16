@@ -89,7 +89,7 @@
                                                            TextAlignment="Right"
                                                            Foreground="{DynamicResource TextSecondary}"/>
                                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
-                                                           FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                           Style="{StaticResource Body}" TextTrimming="CharacterEllipsis"/>
                                             </DockPanel>
                                             <!-- Drag (Thumb.DragStarted/Completed) and keyboard focus
                                                  both set IsUserAdjusting so a background refresh won't

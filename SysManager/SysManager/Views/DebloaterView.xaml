@@ -88,7 +88,7 @@
                                 <DataTemplate>
                                     <StackPanel Margin="0,4">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"
+                                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Style="{StaticResource Body}"
                                                        Foreground="{DynamicResource TextPrimary}"/>
                                             <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"

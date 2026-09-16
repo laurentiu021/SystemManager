@@ -226,7 +226,7 @@
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}"
-                                                       FontWeight="SemiBold" FontSize="13"
+                                                       FontWeight="SemiBold" Style="{StaticResource Body}"
                                                        Foreground="{DynamicResource TextPrimary}"/>
                                             <Border CornerRadius="{StaticResource RadiusSm}" Padding="4,2" Margin="8,0,0,0" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Success}" BorderThickness="1"
                                                     Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVis}}">

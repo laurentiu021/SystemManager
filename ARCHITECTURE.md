@@ -72,18 +72,37 @@ colour, accent included, falls to 1.00:1 against at least one of those.
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
 The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
-`SectionTitle` (14) → `Subtle` → `Caption`. **Numbers**: `MetricHero` (30), `MetricLarge` (26),
-`Metric` (22), `MetricSmall` (20). The metric rungs above and below `Metric` were added for sizes views
-were already rendering with raw `FontSize` attributes, and `Heading` was restored alongside its first
-real user — the sidebar wordmark — having been deleted once for having none (#1630). `Heading` and
-`MetricSmall` share a size and are deliberately separate: one is text, the other a number, and System
-Logs' severity counts take the metric one for that reason. The new rungs are `BasedOn` the implicit
-`TextBlock` style because an explicit style REPLACES it, which would otherwise drop
-`TextFormattingMode`/`TextRenderingMode`; `Display` and `Metric` predate that and still have the gap.
-`ArchitectureTests.EveryMetricRungSize_IsReachedThroughItsRung` enforces both directions — no raw
-`FontSize` at a metric rung's size, and no reference to a rung `App.xaml` does not define, the latter
-because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and would otherwise crash a tab
-rather than fail a build.
+`SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` (11). **Numbers**: `MetricHero` (30),
+`MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16). Every rung except `Display`
+was added for a size views were *already* rendering with raw `FontSize` attributes, so adopting one has
+never changed how anything looks — only where the number comes from. `Body` is the largest of those: 13 is
+what the app writes in, 54 TextBlocks set it by hand, and having no name for it is why a contributor
+reaches for the raw value (#1634). `Heading` was restored alongside its first real user — the sidebar
+wordmark — having been deleted once for having none (#1630).
+
+`Heading` and `MetricSmall` share a size and are deliberately separate: one is text, the other a number,
+and System Logs' severity counts take the metric one for that reason. Two 16/SemiBold headings on DNS &
+Hosts stay raw for the mirror-image reason — they are headings, and the nearest heading token would shrink
+them.
+
+Every rung is `BasedOn` the implicit `TextBlock` style, and that is load-bearing rather than tidy: an
+explicit style REPLACES the keyless `<Style TargetType="TextBlock">`, so without it a repointed TextBlock
+loses `TextRenderingMode="ClearType"` and — unless it names its own colour — its foreground with it.
+`Metric` was the one token that did neither, which made it a latent trap: it renders correctly only
+because all ten of its call sites set `Foreground` locally, and the eleventh would have been black text on
+a dark surface. #1634 gave it `BasedOn`; `Display` sets its own colour and family, so it never had the
+foreground half of the problem.
+
+Two guards hold the scale. `ArchitectureTests.EveryMetricRungSize_IsReachedThroughItsRung` enforces both
+directions — no raw `FontSize` on a styleless text `TextBlock` at a rung's size, and no reference to a rung
+`App.xaml` does not define, the latter because a `{StaticResource}` inside a `DataTemplate` resolves at
+runtime and would otherwise crash a tab rather than fail a build. It skips icon glyphs, because a
+`FontSize` on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon
+dimensions as well as text ones. `EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a
+`TextBlock` under a token that resolves no colour, and which names none itself, would render in the WPF
+default brush. `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight,
+foreground and rendering mode off a real `TextBlock` on an STA thread, which is the only way to check that
+`BasedOn` is actually doing its job — XAML compiles either way.
 
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was

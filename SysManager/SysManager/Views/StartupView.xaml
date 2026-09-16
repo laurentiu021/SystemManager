@@ -85,7 +85,7 @@
                                            VerticalAlignment="Center" Margin="0,0,8,0"
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                         <!-- Prefer the plain-language description from the built-in
                                              database; it says what the program IS, which is what the
                                              persona needs to judge whether to turn it off. Fall back to

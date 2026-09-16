@@ -60,7 +60,7 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0"
                 Visibility="{Binding HasData, Converter={StaticResource FlexVis}}">
             <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource TextSecondary}"
-                       FontSize="13" TextWrapping="Wrap"/>
+                       Style="{StaticResource Body}" TextWrapping="Wrap"/>
         </Border>
 
         <!-- Charts -->

@@ -85,7 +85,7 @@
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                         <TextBlock Text="{Binding Description}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>

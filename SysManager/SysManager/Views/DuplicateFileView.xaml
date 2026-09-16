@@ -57,7 +57,7 @@
         <!-- Summary bar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
-                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13"/>
+                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                 <!-- The keep-rule is stated, not hidden: a suggestion the user cannot see the reasoning
                      for is one they cannot sensibly disagree with. "Oldest" is a heuristic that a
                      timestamp-preserving copy or a cloud-sync rewrite will break, so it says "usually". -->
@@ -99,7 +99,7 @@
                             <StackPanel>
                                 <!-- Group header -->
                                 <DockPanel Margin="0,0,0,6">
-                                    <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" FontSize="13">
+                                    <TextBlock DockPanel.Dock="Left" FontWeight="SemiBold" Style="{StaticResource Body}">
                                         <Run Text="{Binding Count, Mode=OneWay, StringFormat='{}{0} files'}"/>
                                         <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>
                                         <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>

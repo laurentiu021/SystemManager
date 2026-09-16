@@ -3360,6 +3360,109 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"""(?<id>nav-[a-z0-9-]+)""", RegexOptions.Compiled)]
     private static partial Regex NavIdLiteral();
 
+    /// <summary>
+    /// Every <c>TextBlock</c> that takes a typography token must end up with a colour — from the style, or
+    /// from its own <c>Foreground</c>.
+    /// </summary>
+    /// <remarks>
+    /// An explicit style REPLACES the keyless <c>&lt;Style TargetType="TextBlock"&gt;</c> that gives every
+    /// other TextBlock its <c>TextPrimary</c> foreground. So a token that neither sets a colour nor is
+    /// <c>BasedOn</c> the implicit style hands its user the WPF default brush — black, on a dark surface.
+    /// <para><c>Metric</c> was exactly that for its whole life. It never showed, because all ten of its call
+    /// sites happen to name a colour; the eleventh would have been invisible text, and nothing would have
+    /// failed. #1634 gave it <c>BasedOn</c>, and this guard covers the other direction — a token that loses
+    /// its colour, or a call site added under a colourless token.</para>
+    /// <para>Checked at the CALL SITES rather than only on the style definitions, because that is where the
+    /// text either renders or does not. The style-definition half is what makes it cheap: a token that
+    /// resolves a colour clears every one of its uses at once.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTypographyStyleUse_ResolvesAColour()
+    {
+        var appDir = FindAppProjectDir();
+        var app = WithoutXamlComments(File.ReadAllText(Path.Combine(appDir, "App.xaml")));
+
+        // Which keyed TextBlock styles resolve a colour on their own? Either they set Foreground, or they
+        // are BasedOn the implicit style that does. Walked transitively, since StatusLine is BasedOn Caption.
+        var setsColour = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var basedOn = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var m in KeyedTextBlockStyle().Matches(app).Cast<Match>())
+        {
+            var key = m.Groups["key"].Value;
+            setsColour[key] = m.Groups["body"].Value.Contains("Property=\"Foreground\"", StringComparison.Ordinal);
+            // Non-greedy up to the closing `}"`, NOT a `[^}]` class: the implicit-style reference nests
+            // braces — `BasedOn="{StaticResource {x:Type TextBlock}}"` — so a class excluding `}` stops at
+            // the inner one and matches nothing at all. Measured: with that version every BasedOn style
+            // read as colourless and the guard flagged 24 correct call sites.
+            var bo = Regex.Match(m.Groups["attrs"].Value, @"BasedOn=""\{StaticResource (.*?)\}""");
+            if (bo.Success) basedOn[key] = bo.Groups[1].Value.Trim();
+        }
+
+        Assert.True(setsColour.Count >= 10,
+            $"only {setsColour.Count} keyed TextBlock styles were read from App.xaml, out of the 14 there — "
+            + "the style match is out of date, so the check below covers almost nothing.");
+
+        bool Resolves(string key, int depth = 0)
+        {
+            if (depth > 6) return false;                       // cycle guard
+            if (!setsColour.TryGetValue(key, out var own)) return false;
+            if (own) return true;
+            if (!basedOn.TryGetValue(key, out var parent)) return false;
+            // BasedOn the implicit style — "{x:Type TextBlock}" — is what inherits the colour.
+            if (parent.Contains("x:Type TextBlock", StringComparison.Ordinal)) return true;
+            return Resolves(parent, depth + 1);
+        }
+
+        var colourless = setsColour.Keys.Where(k => !Resolves(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+        var offenders = new List<string>();
+        var uses = 0;
+
+        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Concat([Path.Combine(appDir, "MainWindow.xaml")]))
+        {
+            var markup = WithoutXamlComments(File.ReadAllText(file));
+            var view = Path.GetFileName(file);
+
+            foreach (var tag in TextBlockStartTag().Matches(markup).Cast<Match>())
+            {
+                var flat = WhitespaceRun().Replace(tag.Value, " ");
+                var styled = Regex.Match(flat, @"Style=""\{StaticResource ([^}""]+)\}""");
+                if (!styled.Success) continue;
+                var key = styled.Groups[1].Value.Trim();
+                if (!setsColour.ContainsKey(key)) continue;    // not a TextBlock token (e.g. a local style)
+                uses++;
+                if (Resolves(key)) continue;
+                if (flat.Contains("Foreground=", StringComparison.Ordinal)) continue;
+                offenders.Add($"{view}: <TextBlock Style=\"{{StaticResource {key}}}\"> names no colour, and "
+                              + $"{key} resolves none");
+            }
+        }
+
+        // Vacuity floor: 59 Display headers alone, plus every Subtle/Caption/Metric use.
+        Assert.True(uses >= 200,
+            $"only {uses} styled TextBlocks were found across the views, out of the 380+ there — the tag "
+            + "match is out of date, so a pass here proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these TextBlocks would render with the WPF default brush — black text, on a dark surface — "
+            + "because neither the token nor the element names a colour. Give the style "
+            + "BasedOn=\"{StaticResource {x:Type TextBlock}}\", or set Foreground on the element:\n  "
+            + string.Join("\n  ", offenders)
+            + (colourless.Count > 0
+                ? "\n  (tokens that resolve no colour of their own: " + string.Join(", ", colourless) + ")"
+                : ""));
+    }
+
+    /// <summary>A keyed <c>TextBlock</c> style in App.xaml, with its attributes and its setters.</summary>
+    [GeneratedRegex(@"<Style x:Key=""(?<key>\w+)"" TargetType=""TextBlock""(?<attrs>[^>]*)>(?<body>.*?)</Style>",
+                    RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex KeyedTextBlockStyle();
+
+    /// <summary>A <c>TextBlock</c> start tag, self-closing or not.</summary>
+    [GeneratedRegex(@"<TextBlock\b(?:(?!/?>).)*?/?>", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex TextBlockStartTag();
+
     /// <summary>The ping stress test's add/remove churn builds targets that the pump will not ping.</summary>
     /// <remarks>
     /// <c>ParallelAddRemoveWhileRunning_IsThreadSafe</c> hammers the target map for two seconds with no
@@ -4936,7 +5039,7 @@ public partial class ArchitectureTests
         // guard looks for, or it would enforce a scale the app no longer has.
         var rungs = Regex.Matches(
                 appXaml,
-                @"<Style x:Key=""(?<key>Metric\w*|Heading)"" TargetType=""TextBlock""[^>]*>\s*<Setter Property=""FontSize"" Value=""(?<size>[\d.]+)""")
+                @"<Style x:Key=""(?<key>Metric\w*|Heading|Body)"" TargetType=""TextBlock""[^>]*>\s*<Setter Property=""FontSize"" Value=""(?<size>[\d.]+)""")
             .ToDictionary(m => m.Groups["key"].Value, m => m.Groups["size"].Value, StringComparer.Ordinal);
 
         Assert.True(rungs.Count >= 4,
@@ -4944,13 +5047,21 @@ public partial class ArchitectureTests
             + "(Metric, MetricSmall, MetricLarge, MetricHero) plus Heading. The pattern no longer matches "
             + "the style shape, so this guard is checking nothing.");
 
+        // Body is a rung for this purpose too, but not a METRIC one — it is text, so it is excluded from
+        // the "which rung should this have used" lookup only when a size is shared. No size is, today.
         var rungSizes = rungs
-            .Where(r => r.Key.StartsWith("Metric", StringComparison.Ordinal))
+            .Where(r => r.Key.StartsWith("Metric", StringComparison.Ordinal) || r.Key == "Body")
             .Select(r => r.Value)
             .ToHashSet(StringComparer.Ordinal);
 
+        // The two DNS & Hosts card headings, 16/SemiBold like the MetricCompact tiles but headings rather
+        // than values — the nearest heading token (SectionTitle, 14) would shrink them. Named here rather
+        // than converted because changing them is a visible decision. See App.xaml's MetricCompact comment.
+        string[] allowedRawText = ["DNS Server", "Hosts File"];
+
         var offenders = new List<string>();
         var referenced = 0;
+        var inspected = 0;
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
                      .Append(Path.Combine(appDir, "MainWindow.xaml"))
@@ -4959,12 +5070,32 @@ public partial class ArchitectureTests
             var markup = WithoutXamlComments(File.ReadAllText(file));
             var name = Path.GetFileName(file);
 
-            foreach (var m in Regex.Matches(markup, @"FontSize=""(?<size>[\d.]+)""").Cast<Match>())
+            // Element-aware since #1634 added rungs at 16 and 13. A bare `FontSize="…"` scan was fine while
+            // the rungs were 20/22/26/30, because nothing else in the app used those sizes — but 16 and 13
+            // are also ICON dimensions, and a FontSize on a Segoe Fluent TextBlock is a glyph box, not
+            // typography. Handing it a text token would be a category error, and a bare scan cannot tell
+            // the two apart. TextBox and ComboBox are skipped for the same reason: these are TextBlock
+            // styles, so there is no rung for them to use.
+            foreach (var tag in TextBlockStartTag().Matches(markup).Cast<Match>())
             {
-                var size = m.Groups["size"].Value;
-                if (!rungSizes.Contains(size)) continue;
-                var rung = rungs.First(r => r.Value == size && r.Key.StartsWith("Metric", StringComparison.Ordinal)).Key;
-                offenders.Add($"{name}: raw FontSize=\"{size}\" — use Style=\"{{StaticResource {rung}}}\"");
+                var flat = WhitespaceRun().Replace(tag.Value, " ");
+                inspected++;
+                var size = Regex.Match(flat, @"FontSize=""(?<size>[\d.]+)""");
+                if (!size.Success || !rungSizes.Contains(size.Groups["size"].Value)) continue;
+                if (flat.Contains("Segoe Fluent", StringComparison.Ordinal)
+                    || flat.Contains("Segoe MDL2", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                // An element that already names a style is overriding it on purpose (the sidebar rows do
+                // this); that is a different question from never reaching for the token at all.
+                if (flat.Contains("Style=\"", StringComparison.Ordinal)) continue;
+                if (allowedRawText.Any(a => flat.Contains($"Text=\"{a}\"", StringComparison.Ordinal))) continue;
+
+                var raw = size.Groups["size"].Value;
+                var rung = rungs.First(r => r.Value == raw
+                                            && (r.Key.StartsWith("Metric", StringComparison.Ordinal) || r.Key == "Body")).Key;
+                offenders.Add($"{name}: raw FontSize=\"{raw}\" — use Style=\"{{StaticResource {rung}}}\"");
             }
 
             // Every rung a view names must exist. This is what a compile cannot tell you.
@@ -4981,6 +5112,12 @@ public partial class ArchitectureTests
         Assert.True(referenced >= 12,
             $"only {referenced} rung references were found across the views, and twelve call sites use them. "
             + "The reference pattern stopped matching, so the 'every rung is defined' half proves nothing.");
+
+        // Vacuity floor for the element-aware scan above: ~700 TextBlocks across the views. A collapse means
+        // TextBlockStartTag stopped matching and the bypass half is reading almost nothing.
+        Assert.True(inspected >= 400,
+            $"only {inspected} TextBlocks were inspected across the views — the tag match is out of date, so "
+            + "the bypass half of this guard proves nothing.");
 
         Assert.True(offenders.Count == 0,
             "the type scale is being bypassed or a rung is missing:\n  " + string.Join("\n  ", offenders));

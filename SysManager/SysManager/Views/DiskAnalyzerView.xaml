@@ -54,7 +54,7 @@
         <!-- Drive info + summary -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
-                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                 <!-- What changed since the last scan of this folder. Collapsed until there is a prior
                      scan to compare against, so a first-ever scan shows nothing rather than a zero. -->
                 <TextBlock Text="{Binding TrendSummary}" FontSize="12" Margin="0,0,0,6"
@@ -138,7 +138,7 @@
                             <!-- Name + file count -->
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                     <!-- The scan already records when a folder could not be fully read
                                          (IsAccessDenied), but nothing showed it, so the size was quietly
                                          too small and the user was told nothing. Informational rather than

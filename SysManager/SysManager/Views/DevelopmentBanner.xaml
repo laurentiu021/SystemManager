@@ -18,7 +18,7 @@
                            FontSize="15" Foreground="{DynamicResource Info}"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Preview feature" FontSize="13" FontWeight="SemiBold"
+                    <TextBlock Text="Preview feature" Style="{StaticResource Body}" FontWeight="SemiBold"
                                Foreground="{DynamicResource Info}"/>
                     <!-- Names the About tab rather than a bare "on GitHub": that is where "Report a
                          problem" now lives (it opens the bug form pre-filled), so the instruction points

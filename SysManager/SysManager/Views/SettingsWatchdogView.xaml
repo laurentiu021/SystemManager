@@ -67,7 +67,7 @@
                 <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                            FontSize="15" Foreground="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <TextBlock Text="{Binding BaselineTaken}" Foreground="{DynamicResource TextSecondary}"
-                           FontSize="13" VerticalAlignment="Center"/>
+                           Style="{StaticResource Body}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 

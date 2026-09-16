@@ -35,7 +35,7 @@
             <StackPanel>
                 <TextBlock Text="Current schedule" Style="{StaticResource SectionTitle}"/>
                 <TextBlock Text="{Binding CurrentSummary}" Foreground="{DynamicResource TextSecondary}"
-                           FontSize="13" Margin="0,6,0,0"/>
+                           Style="{StaticResource Body}" Margin="0,6,0,0"/>
                 <Grid Margin="0,12,0,0" Visibility="{Binding IsScheduled, Converter={StaticResource FlexVis}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -59,7 +59,7 @@
                     <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0">
                         <StackPanel>
                             <TextBlock Text="LAST RESULT" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Text="{Binding LastResult}" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding LastResult}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
@@ -71,7 +71,7 @@
                      count is zero rather than showing a reassuring "0 missed", which would be noise. -->
                 <Border Style="{StaticResource CardInner}" Margin="0,12,0,0"
                         Visibility="{Binding MissedRunsWarning, Converter={StaticResource FlexVis}}">
-                    <TextBlock Text="{Binding MissedRunsWarning}" FontSize="13" TextWrapping="Wrap"
+                    <TextBlock Text="{Binding MissedRunsWarning}" Style="{StaticResource Body}" TextWrapping="Wrap"
                                Foreground="{DynamicResource WarningText}"/>
                 </Border>
             </StackPanel>

@@ -35,14 +35,14 @@
                     <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
                         <StackPanel>
                             <TextBlock Text="TEMP FOLDERS" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Text="{Binding TempSizeLabel}" FontSize="16" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding TempSizeLabel}" Style="{StaticResource MetricCompact}"
                                        Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,0,0">
                         <StackPanel>
                             <TextBlock Text="RECYCLE BIN" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Text="{Binding RecycleBinLabel}" FontSize="16" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding RecycleBinLabel}" Style="{StaticResource MetricCompact}"
                                        Foreground="{DynamicResource WarningText}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>

@@ -145,7 +145,7 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <TextBlock Text="Update available" FontSize="16" FontWeight="SemiBold"
+                                    <TextBlock Text="Update available" Style="{StaticResource MetricCompact}"
                                                Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding LatestVersionLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
@@ -275,7 +275,7 @@
                                     <Border Style="{StaticResource CardInner}" Margin="0,0,0,10">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Version}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                                <TextBlock Text="{Binding Version}" Style="{StaticResource MetricCompact}" Foreground="{DynamicResource TextPrimary}"/>
                                                 <Border Margin="10,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"
                                                         Style="{StaticResource BadgeAccent}">

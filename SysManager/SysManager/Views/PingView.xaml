@@ -130,7 +130,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center" Margin="0,0,6,0"
                                                               AutomationProperties.Name="{Binding Name, StringFormat='Enable {0}'}"/>
-                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Host}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>
                                         </StackPanel>
@@ -144,22 +144,22 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LastLatencyMs, StringFormat={}{0:F0} ms, FallbackValue=—}"
-                                                           Foreground="{DynamicResource Info}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource Info}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LATENCY" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding AverageMs, StringFormat={}{0:F1}, FallbackValue=—}"
-                                                           Foreground="{DynamicResource TextSecondary}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource TextSecondary}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="AVG" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding JitterMs, StringFormat={}{0:F0}, FallbackValue=—}"
-                                                           Foreground="{DynamicResource Warning}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource Warning}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="JITTER" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel HorizontalAlignment="Center">
                                                 <TextBlock Text="{Binding LossPercent, StringFormat={}{0:F0}%}"
-                                                           Foreground="{DynamicResource WarningText}" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center"/>
+                                                           Foreground="{DynamicResource WarningText}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LOSS" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                         </StackPanel>

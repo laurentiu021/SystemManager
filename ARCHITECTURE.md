@@ -918,10 +918,10 @@ than a name the shell guesses at:
   stop. One property rather than a flag beside a command, because the app answers "is
   something running?" five different ways (`IsBusy` on most tabs, plus `IsShredding`,
   `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
-  four tabs. 15 tabs override it.
+  four tabs. 16 tabs override it.
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
   agree on a name: 12 distinct spellings bind to a refresh-shaped button, and two views bind
-  two candidates each, so a convention-matching shell would have to guess. 40 tabs override
+  two candidates each, so a convention-matching shell would have to guess. 41 tabs override
   it, and the named command must begin with Refresh/Rescan/Reload/Scan/Load — which
   mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
 

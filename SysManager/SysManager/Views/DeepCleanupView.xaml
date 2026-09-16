@@ -132,7 +132,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="Selected total:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding TotalSelectedDisplay}" FontWeight="SemiBold" FontSize="16"
+                                    <TextBlock Text="{Binding TotalSelectedDisplay}" Style="{StaticResource MetricCompact}"
                                                Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">

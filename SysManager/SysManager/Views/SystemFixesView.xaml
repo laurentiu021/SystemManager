@@ -52,7 +52,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Repair damaged Windows files (SFC)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Repair damaged Windows files (SFC)" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Checks every protected Windows file against Windows' own known-good copy and replaces the damaged ones. Takes 5–15 minutes and runs in the background — you can keep using the app."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -68,7 +68,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Repair Windows' own repair source (DISM)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Repair Windows' own repair source (DISM)" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Rebuilds the store of known-good copies that the repair above draws from, downloading replacements through Windows Update. Run this first if SFC reports files it could not fix. Takes 10–30 minutes."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -84,7 +84,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Reset Windows Update" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Reset Windows Update" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Stop the update services, clear their caches, and restart them — fixes most stuck-update problems."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -99,7 +99,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Reinstall WinGet" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Reinstall WinGet" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Re-register the Windows Package Manager (App Installer) when app installs or uninstalls fail."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -173,7 +173,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Restart Windows Explorer" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Restart Windows Explorer" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="For a taskbar that has stopped responding, a Start menu that will not open, or a desktop with no icons. Ends the desktop and brings it straight back."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -189,7 +189,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Rebuild icon &amp; thumbnail cache" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Rebuild icon &amp; thumbnail cache" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="For icons or picture previews that come up blank, wrong, or as a plain white page. Clears the cache Windows keeps of them and lets it build a fresh one as you browse."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>
@@ -207,7 +207,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <TextBlock Text="Set up Auto Sign-in" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimary}"/>
+                        <TextBlock Text="Set up Auto Sign-in" FontWeight="SemiBold" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Opens the built-in User Accounts dialog to enable automatic sign-in. Windows stores the credential securely — SysManager never sees your password."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                     </StackPanel>

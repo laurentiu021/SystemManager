@@ -118,7 +118,7 @@
                         <Button.ToolTip>
                             <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
-                                    <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                                     <TextBlock Text="This is actually the Win11 menu after clicking &quot;Show more options&quot; — but applied permanently. All entries visible on first right-click, no extra clicks needed."
                                                Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
@@ -142,7 +142,7 @@
                         <Button.ToolTip>
                             <ToolTip Placement="Bottom" MaxWidth="520">
                                 <StackPanel>
-                                    <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                                     <TextBlock Text="Compact menu with icons. Custom entries appear only after clicking &quot;Show more options&quot; at the bottom. The expanded view is identical to Win10 Default."
                                                Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
@@ -275,7 +275,7 @@
                                             <TextBlock Text="{Binding RegistryPath}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </StackPanel.ToolTip>
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                     <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextMuted}"
                                                FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                                MaxWidth="450" HorizontalAlignment="Left" Margin="0,1,0,0"

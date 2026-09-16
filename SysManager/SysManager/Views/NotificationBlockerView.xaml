@@ -39,7 +39,7 @@
                               VerticalAlignment="Center" Margin="8,0,0,0"
                               ToolTip="Turn all Windows notifications on or off for your account"/>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Allow notifications" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="Allow notifications" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                     <TextBlock Text="The master switch. Off silences every notification — including calendar and reminder alerts — until you turn it back on."
                                FontSize="11" Foreground="{DynamicResource TextMuted}"
                                TextWrapping="Wrap" Margin="0,2,16,0"/>
@@ -106,7 +106,7 @@
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                         <TextBlock Text="{Binding ActivitySummary, Mode=OneTime}" FontSize="11"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>

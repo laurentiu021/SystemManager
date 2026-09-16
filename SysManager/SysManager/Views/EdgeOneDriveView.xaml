@@ -39,7 +39,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="OneDrive" Style="{StaticResource SectionTitle}"/>
-                        <TextBlock Text="{Binding OneDriveStateText}" FontSize="13" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding OneDriveStateText}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,0"/>
                         <TextBlock Text="Removing OneDrive stops it, uninstalls it for your account, and clears its File Explorer sidebar entry. Files already downloaded to this PC stay put; cloud-only files won't be downloaded. Reinstall it any time with Restore."
                                    Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"/>
@@ -60,7 +60,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="Microsoft Edge" Style="{StaticResource SectionTitle}"/>
-                        <TextBlock Text="{Binding EdgeStateText}" FontSize="13" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding EdgeStateText}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,0"/>
                         <TextBlock Text="Edge is never uninstalled — Windows relies on it (WebView2) and would reinstall it, and forcing it out breaks other apps. Instead, disabling turns off Edge's background mode and startup boost and disables its automatic-update tasks, so it stops launching and running on its own. You can still open Edge normally, and Restore undoes all of it. These changes need administrator rights."
                                    Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,6,0,0"/>

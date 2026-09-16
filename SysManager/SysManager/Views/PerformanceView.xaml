@@ -48,7 +48,7 @@
         <!-- Summary -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <StackPanel>
-                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+                <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                 <TextBlock Text="⚠ GPU changes require a reboot to take effect."
                            Foreground="{DynamicResource Danger}" FontSize="12" Margin="0,4,0,0"
                            Visibility="{Binding NeedsReboot, Converter={StaticResource BoolToVis}}"/>

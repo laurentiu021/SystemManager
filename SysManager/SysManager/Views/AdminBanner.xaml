@@ -47,7 +47,7 @@
                            FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondary}"/>
                 <TextBlock Text="{Binding NotElevatedMessage, ElementName=Root}"
-                           Foreground="{DynamicResource TextSecondary}" FontSize="13"
+                           Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Body}"
                            VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
@@ -68,7 +68,7 @@
                                FontSize="13" VerticalAlignment="Center"
                                Foreground="{DynamicResource WarningText}"/>
                     <TextBlock Text="{Binding ElevatedMessage, ElementName=Root}"
-                               Foreground="{DynamicResource WarningText}" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                Margin="8,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </DockPanel>
             </Grid>

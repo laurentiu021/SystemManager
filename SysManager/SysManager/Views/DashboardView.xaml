@@ -432,7 +432,7 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding Letter}" FontSize="13" FontWeight="SemiBold"
+                                    <TextBlock Grid.Column="0" Text="{Binding Letter}" Style="{StaticResource Body}" FontWeight="SemiBold"
                                                VerticalAlignment="Center"/>
                                     <ProgressBar AutomationProperties.Name="{Binding Letter, StringFormat='Space used on drive {0}'}"
                                                  Grid.Column="1" Height="8" Minimum="0" Maximum="100"

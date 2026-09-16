@@ -1190,7 +1190,17 @@
                 <Setter Property="AutomationProperties.LiveSetting" Value="Polite"/>
             </Style>
 
-            <Style x:Key="Metric" TargetType="TextBlock">
+            <!-- BasedOn added in #1634, and it closes a real trap rather than tidying: Metric was the one
+                 keyed TextBlock style that neither set Foreground nor inherited one. An explicit style
+                 REPLACES the keyless `<Style TargetType="TextBlock">`, so a TextBlock taking this token
+                 without naming its own colour fell back to the WPF default brush — black text on a dark
+                 surface. It never showed because all ten call sites happen to set Foreground locally; the
+                 eleventh would have been invisible. `EveryTypographyStyleUse_ResolvesAColour` now pins the
+                 invariant at the call sites too.
+                 The only observable change to those ten: TextRenderingMode goes from Auto to ClearType,
+                 which is what Auto already selects for static text. Foreground and FontFamily are
+                 overridden locally or set here, so neither moves. -->
+            <Style x:Key="Metric" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="22"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
@@ -1224,6 +1234,40 @@
             <Style x:Key="MetricHero" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="30"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <!-- The rung BELOW Metric, for the small value tiles: the temp/Recycle-Bin sizes on Quick
+                 Cleanup, Deep Cleanup's selected total, Defender's two state words, Timer Resolution's
+                 finest/coarsest figures and the version on About. Nine places, every one of them already
+                 16/SemiBold — as with the rungs above, the sizes are unchanged and only the source of the
+                 number moves (#1634).
+
+                 Named for what it holds rather than for its size, like the rest of this block. Two other
+                 16/SemiBold TextBlocks exist — the "DNS Server" and "Hosts File" headings on DNS & Hosts —
+                 and they deliberately do NOT take this: they are headings, not values, and the nearest
+                 heading token (SectionTitle, 14) would shrink them. Giving them a name is a separate
+                 decision because it changes how they render. -->
+            <Style x:Key="MetricCompact" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+
+            <!-- Body (13) is the size the app actually writes in: 54 TextBlocks across 30 views set it by
+                 hand, more than any other value, and until now there was no name for it. That is why a
+                 contributor hardcodes 13 — the scale had a token for the headline and the caption and
+                 nothing for the sentence in between (#1634).
+
+                 FontSize ONLY, no weight and no colour. Half of those 54 set their own FontWeight and
+                 Foreground, and a local attribute beats a style setter, so a token that also declared
+                 those would read as if it controlled them while doing nothing at 27 sites. What it does
+                 control it controls everywhere.
+
+                 BasedOn the implicit TextBlock style, and here that is not optional: an explicit style
+                 REPLACES the keyless `<Style TargetType="TextBlock">`, so without it every repointed
+                 TextBlock would lose TextRenderingMode="ClearType" and — at the 24 sites that do not name
+                 a colour — its Foreground as well. -->
+            <Style x:Key="Body" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="13"/>
             </Style>
 
             <!-- Heading (20) is back, and this time it has a user: the "SysManager" wordmark at the top of

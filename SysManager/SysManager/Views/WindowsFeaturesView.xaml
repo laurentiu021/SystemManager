@@ -59,7 +59,7 @@
 
         <!-- Summary -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
         <!-- Feature list -->

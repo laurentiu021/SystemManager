@@ -636,7 +636,7 @@
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="ToastTitle" FontSize="13" FontWeight="SemiBold"
+                        <TextBlock x:Name="ToastTitle" Style="{StaticResource Body}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock x:Name="ToastDetail" FontSize="11"
                                    Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>

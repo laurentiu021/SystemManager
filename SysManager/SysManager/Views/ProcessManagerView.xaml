@@ -65,7 +65,7 @@
 
         <!-- Summary -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
-            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="13"/>
+            <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
         <!-- Process list -->
@@ -152,7 +152,7 @@
                                            VerticalAlignment="Center" Margin="0,0,8,0"
                                            RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13"/>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
 
                                         <!-- The 108-entry database (Data/ProcessDescriptions.json) supplies a
                                              plain-English line for each known process, and this column bound the raw

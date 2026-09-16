@@ -9648,6 +9648,119 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A percentage a view model computes must reach a <c>ProgressBar</c>'s <c>Value</c>.
+    /// </summary>
+    /// <remarks>
+    /// #2324. <c>SystemFixesView</c> bound <c>IsIndeterminate="{Binding IsProgressIndeterminate}"</c> with no
+    /// <c>Value</c> binding at all, while its view model set <c>IsProgressIndeterminate = false</c> the moment
+    /// SFC reported its first percentage — so the bar would have dropped out of marquee into a determinate bar
+    /// frozen at 0 for the remaining 5 to 15 minutes. Caught by reading the markup, not by any check.
+    /// <para><b>Why the obvious rule does not work.</b> The first attempt was "a view model containing
+    /// <c>IsProgressIndeterminate = false</c> must have a view that binds <c>Value</c>". Measured against
+    /// source, 37 view models contain that assignment, and in most it is teardown in a <c>finally</c> —
+    /// clearing the flag when an operation ends, not a claim that a percentage exists. Ten views that are
+    /// correct as written would have been flagged. The assignment is a bad proxy.</para>
+    /// <para>So the population is keyed on the thing that actually implies a number: a view model that
+    /// ASSIGNS a <c>…Progress</c> property. Ten do, carrying twelve properties between them, and every one is
+    /// bound today — the guard is preventive, not a to-do list. <c>NavItem</c> and <c>ViewModelBase</c> are
+    /// excluded because their assignments are the shell mirroring a tab's value, not a computation.</para>
+    /// <para><b>The inverse shape is deliberately NOT flagged.</b> Ten views bind <c>IsIndeterminate</c> with
+    /// no <c>Value</c>: Boot Analyzer, CPU Affinity, Disk Analyzer, Display Profile, Duplicate Files, File
+    /// Locks, Gaming Profile, Standby Memory, Task Scheduler and the shell's status footer. Each was checked —
+    /// none of those view models computes a percentage, so a marquee is the honest thing to show and adding a
+    /// <c>Value</c> binding would mean inventing a number. Do not "fix" them.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryProgressPercentageAViewModelComputes_IsBoundToAProgressBar()
+    {
+        var appDir = FindAppProjectDir();
+        var vmDir = Path.Combine(appDir, "ViewModels");
+        var viewsDir = Path.Combine(appDir, "Views");
+
+        var offenders = new List<string>();
+        var viewModels = 0;
+        var properties = 0;
+
+        foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var vmName = Path.GetFileNameWithoutExtension(file);
+            var source = WithoutComments(File.ReadAllText(file));
+
+            // Assignments only. A mention of the identifier is not a computation — the recurring trap where a
+            // guard matches the name rather than the mechanism.
+            var computed = ProgressAssignment().Matches(source)
+                .Select(m => m.Groups["name"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+            if (computed.Count == 0) continue;
+
+            viewModels++;
+            properties += computed.Count;
+
+            var viewPath = Path.Combine(viewsDir, vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
+            if (!File.Exists(viewPath))
+            {
+                offenders.Add($"{vmName} computes {string.Join(", ", computed.Order(StringComparer.Ordinal))} "
+                            + "but has no matching view file");
+                continue;
+            }
+
+            // Every bar in the view, not just the first: Dashboard has eight and Deep Cleanup has two, one per
+            // operation, so asking "does this file bind Value anywhere" would let one bar vouch for the other.
+            var markup = WithoutXamlComments(File.ReadAllText(viewPath));
+            var bound = ProgressBarElement().Matches(markup)
+                .Select(m => WhitespaceRun().Replace(m.Value, " "))
+                .Select(bar => ProgressBarValueBinding().Match(bar))
+                .Where(m => m.Success)
+                .Select(m => m.Groups["path"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var property in computed.Order(StringComparer.Ordinal).Where(p => !bound.Contains(p)))
+            {
+                offenders.Add($"{vmName}.{property} is computed but no ProgressBar in "
+                            + $"{Path.GetFileName(viewPath)} binds Value to it "
+                            + $"(bars bind: {(bound.Count == 0 ? "nothing" : string.Join(", ", bound.Order(StringComparer.Ordinal)))})");
+            }
+        }
+
+        // Vacuity floors from an enumerated population: AppUpdates, BulkInstaller, Cleanup, Dashboard (×2),
+        // Debloater, DeepCleanup (×2), SpeedTest, SystemFixes, Uninstaller, WindowsUpdate — ten view models,
+        // twelve properties. A regex that stopped matching would otherwise make this pass over nothing.
+        Assert.True(viewModels >= 10,
+            $"only {viewModels} view models were found assigning a progress percentage, and ten do. "
+          + "ProgressAssignment() has stopped matching, so this guard is checking nothing.");
+        Assert.True(properties >= 12,
+            $"only {properties} progress properties were found across those view models, and there are twelve.");
+
+        Assert.True(offenders.Count == 0,
+            "a view model computes a percentage that no ProgressBar shows, so the bar sits at 0 while the "
+          + "operation runs:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// An ASSIGNMENT to a progress percentage, capturing the property name.
+    /// <para>Deliberately an assignment and not a mention: <c>Progress</c> appears as a bare identifier in
+    /// <c>new Progress&lt;T&gt;(…)</c> callbacks, in <c>nameof</c>, and in binding-change plumbing, none of
+    /// which is a computed number. The negative lookbehind keeps <c>tab.Progress =</c> and
+    /// <c>_something.Progress =</c> out (the shell mirroring a value it did not compute), and the
+    /// <c>(?!=)</c> keeps <c>==</c> out.</para>
+    /// </summary>
+    [GeneratedRegex(@"(?<![A-Za-z_.])(?<name>[A-Z]\w*Progress|Progress)\s*=\s*(?!=)", RegexOptions.Compiled)]
+    private static partial Regex ProgressAssignment();
+
+    /// <summary>One <c>ProgressBar</c> element, self-closing or with a body.</summary>
+    [GeneratedRegex(@"<ProgressBar\b.*?(?:/>|</ProgressBar>)",
+                    RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex ProgressBarElement();
+
+    /// <summary>
+    /// A <c>ProgressBar</c>'s <c>Value</c> bound to a view-model property, capturing the path. Stops at a
+    /// comma so <c>Value="{Binding Progress, Mode=OneWay}"</c> yields <c>Progress</c> rather than the rest of
+    /// the markup extension.
+    /// </summary>
+    [GeneratedRegex(@"Value=""\{Binding\s+(?:Path=)?(?<path>[A-Za-z_][\w.]*)", RegexOptions.Compiled)]
+    private static partial Regex ProgressBarValueBinding();
+
+    /// <summary>
     /// Names of the ETA text properties a view model owns. Matches the <c>[ObservableProperty]</c> backing
     /// field, whose generated property is what the view binds.
     /// </summary>

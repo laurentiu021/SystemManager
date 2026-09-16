@@ -236,8 +236,18 @@ registration is covered.
 - Pure logic tests (parsers, analyzers, converters) need no mocking.
 - Tests that depend on OS services should use NSubstitute to mock the
   service interface, keeping the test fast and deterministic.
-- Time-dependent tests should use injectable time sources or generous
-  tolerances to avoid flakiness on slow CI runners.
+- Time-dependent tests inject a time source. **A tolerance is not an alternative**, which this file
+  used to imply: a "generous bound" is still an assertion about the host, and it fails on a loaded
+  machine while telling you nothing about the code. `PingMonitorService`'s interval test counted how
+  many real ticks fitted in 1.2 real seconds and went red with `got 2` against a floor of 4 (#2323); it
+  now takes a `TimeProvider` whose timers fire on command and asserts the exact delay the pump requests,
+  in 0.07s. `EtaCalculator`, `EtwBandwidthSource` and `TemperatureService` take the same parameter.
+- A percentage a view model computes must reach a `ProgressBar`. `ArchitectureTests`
+  `.EveryProgressPercentageAViewModelComputes_IsBoundToAProgressBar` fails the build when a view model
+  assigns a `…Progress` property that no bar in its view binds to `Value` — the shape that would have
+  left System Fixes' bar frozen at 0 for the length of an SFC run (#2324). It checks each bar
+  separately, because Dashboard has eight and Deep Cleanup has two, and a sibling bar binding the other
+  property must not vouch for the missing one.
 
 To generate a local coverage report:
 

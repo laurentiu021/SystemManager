@@ -200,17 +200,17 @@ within a table or a row of filter chips. In the sidebar, `Enter` also opens the 
 on, the way it opens a folder in File Explorer. Opening the appearance panel moves focus into it, `Tab`
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
-`Escape` also stops whatever the open tab is doing — a disk scan, a cleanup, a speed test — on all fifteen
-tabs that can be cancelled. It only acts while something is running, and only after the control you are on
-has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
+`Escape` also stops whatever the open tab is doing — a disk scan, a cleanup, a speed test — on all
+16 tabs that can be cancelled. It only acts while something is running, and only after the control you are
+on has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all forty tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
 does nothing rather than starting a second one.
 
-**`Ctrl+F` jumps to the search box** on the twelve tabs that have one, and selects whatever is already
+**`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
 nothing to filter it does nothing at all, rather than moving your caret somewhere unexpected.
 

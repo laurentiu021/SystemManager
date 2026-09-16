@@ -4763,10 +4763,21 @@ public partial class ArchitectureTests
     /// reader is least able to check it: "announced on all 52 tabs that have one" while the real number was
     /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
     /// the same sentence is what tells a screen-reader user whether this app is worth trying.
-    /// <para>Two different denominators are claimed and they are NOT interchangeable: the total tab count
-    /// (59, from the sidebar) and the number of tabs carrying an announced status line (53, which is fewer
-    /// because a tab with nothing long-running has nothing to report). A guard that accepted either would
-    /// pass on the two being swapped, so each claim is classified by the phrase that follows it.</para>
+    /// <para>Five different denominators are claimed and they are NOT interchangeable: the total tab count
+    /// (59, from the sidebar), the number of tabs carrying an announced status line (53, fewer because a tab
+    /// with nothing long-running has nothing to report), and the three keyboard-accelerator subsets — tabs
+    /// that override <c>EscapeCancel</c>, tabs that override <c>RefreshOnF5</c>, and tabs binding a filter
+    /// box name Ctrl+F recognises. A guard that accepted any of them would pass on two being swapped, so
+    /// each claim is classified by the phrase that follows it, first match winning.
+    /// <para>The three accelerator claims were added after two of them went stale in exactly the way this
+    /// guard exists to prevent (#2336): v1.109.0 added a tab that overrides both properties, so the README's
+    /// Escape and F5 counts were each one short. They escaped because they were spelled as WORDS — "all
+    /// fifteen tabs", "all forty tabs" — and this pattern requires a digit. They are digits now, which is
+    /// what brings them inside the guard; the fix for the class is that a count only counts if it is written
+    /// in a form the guard can read.</para>
+    /// <para>Order matters in the discriminator list below. Ctrl+F's claim reads "the 12 tabs that have one,
+    /// and selects…" and the status-line claim reads "all 53 tabs that have one" — the second phrase is a
+    /// PREFIX of the first, so testing it first would compare Ctrl+F against the status count.</para></para>
     /// <para>Screenshot filenames carry numbers too — <c>52-system-logs.png</c>, <c>55-about.png</c> — and
     /// are not matched, because the pattern requires the word "tabs" after the number rather than a digit
     /// anywhere. That is the difference between this and the sweep that first found the drift.</para>
@@ -4794,41 +4805,106 @@ public partial class ArchitectureTests
             $"only {statusLines} announced status lines were counted, out of 53 measured — the count to "
             + "compare against is wrong, so the assertions below would enforce a stale number.");
 
+        // The accelerator subsets, each from the source that defines it rather than from a second list.
+        var escapeTabs = ViewModelsOverriding("EscapeCancel");
+        var refreshTabs = ViewModelsOverriding("RefreshOnF5");
+        var filterTabs = ViewsWithAFilterBoxCtrlFRecognises(viewsDir);
+
+        Assert.True(escapeTabs >= 15 && refreshTabs >= 38 && filterTabs >= 11,
+            $"the accelerator counts to compare against look wrong ({escapeTabs} Escape, {refreshTabs} F5, "
+            + $"{filterTabs} filter) — the parse is broken, so the assertions below would enforce a stale "
+            + "number rather than catch one.");
+
+        // First match wins, so a longer phrase must precede any phrase that is a prefix of it.
+        (string After, int Expected, string What)[] denominators =
+        [
+            ("tabs that can be cancelled", escapeTabs, "tabs override EscapeCancel, so Escape reaches them"),
+            ("tabs that have something to look at again", refreshTabs,
+                "tabs override RefreshOnF5, so F5 reaches them"),
+            ("tabs that have one, and selects", filterTabs,
+                "tabs bind a filter-box name Ctrl+F recognises"),
+            ("tabs that have one", statusLines, "tabs carry an announced status line"),
+        ];
+
         var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
         var wrong = new List<string>();
         var claims = 0;
-        var statusClaims = 0;
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var m in ReadmeTabCount().Matches(readme).Cast<Match>())
         {
             claims++;
             var claimed = int.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture);
 
-            // "…all 53 tabs that have one…" is about the status-line subset; anything else is the total.
-            var after = readme[m.Index..Math.Min(readme.Length, m.Index + m.Length + 20)];
-            var isStatusSubset = after.Contains("that have one", StringComparison.Ordinal);
-            if (isStatusSubset) statusClaims++;
+            // Enough following text to cover the longest discriminator, and no more: a wider window could
+            // reach the NEXT claim's phrase and classify this one by it.
+            var after = readme[m.Index..Math.Min(readme.Length, m.Index + m.Length + 45)];
+            var subset = denominators.FirstOrDefault(d => after.Contains(d.After, StringComparison.Ordinal));
 
-            var expected = isStatusSubset ? statusLines : tabs;
+            var expected = subset.After is null ? tabs : subset.Expected;
+            var what = subset.After is null ? "tabs" : subset.What;
+            if (subset.After is not null)
+                seen[subset.After] = seen.GetValueOrDefault(subset.After) + 1;
+
             if (claimed != expected)
-                wrong.Add($"\"{Collapse(m.Value)}\" — the source says {expected}"
-                          + (isStatusSubset ? " tabs carry an announced status line" : " tabs"));
+                wrong.Add($"\"{Collapse(m.Value)}\" — the source says {expected} {what}");
         }
 
-        // Both floors are enumerated: five total-count claims and one subset claim today. A pattern that
-        // stopped matching would otherwise let this pass having compared nothing.
-        Assert.True(claims >= 6,
-            $"only {claims} 'N tabs' claims were found in README.md, out of 6 measured — the pattern is out "
+        // Floors are enumerated: five total-count claims plus one each for the four subsets, nine today. Each
+        // subset gets its own floor, because a claim that stopped matching its phrase would silently fall
+        // back to the total tab count and compare against the wrong number rather than fail.
+        Assert.True(claims >= 9,
+            $"only {claims} 'N tabs' claims were found in README.md, out of 9 measured — the pattern is out "
             + "of date, so a pass proves nothing.");
-        Assert.True(statusClaims >= 1,
-            "the 'tabs that have one' claim was not found, so the status-line count is being compared "
-            + "against nothing and a drift in it would pass.");
+
+        foreach (var d in denominators)
+        {
+            Assert.True(seen.GetValueOrDefault(d.After) >= 1,
+                $"no README claim was classified as \"{d.After}\", so {d.What} is being compared against "
+                + "nothing and a drift in it would pass. Either the wording changed or the number is no "
+                + "longer written as a digit — a count only counts if this guard can read it.");
+        }
 
         Assert.True(wrong.Count == 0,
             "these README counts no longer match the source. A number a reader cannot verify is worse than "
             + "no number, and the accessibility claim is the one most likely to be taken on trust:\n  "
             + string.Join("\n  ", wrong));
     }
+
+    /// <summary>
+    /// How many view models override a <c>ViewModelBase</c> accelerator seam. Matches the override's
+    /// DECLARATION, not a mention: the property name also appears in comments (stripped) and in
+    /// <c>MainWindowViewModel.AcceleratorCommand</c>, which reads it rather than providing it.
+    /// </summary>
+    private static int ViewModelsOverriding(string property)
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var declaration = $"override IRelayCommand? {property}";
+        return Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly)
+            .Count(f => WithoutComments(File.ReadAllText(f))
+                .Contains(declaration, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// How many views hold a <c>TextBox</c> whose <c>Text</c> binds one of the names <c>Ctrl+F</c> looks
+    /// for. Reads the names from <c>Helpers.FilterBoxes.BindingPaths</c> rather than restating them, so the
+    /// shortcut and this count cannot disagree.
+    /// </summary>
+    private static int ViewsWithAFilterBoxCtrlFRecognises(string viewsDir)
+        => Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
+            .Count(f => TextBoxStartTag()
+                .Matches(WithoutXamlComments(File.ReadAllText(f)))
+                .Any(t => TextBindingPath().Match(WhitespaceRun().Replace(t.Value, " ")) is { Success: true } b
+                          && SysManager.Helpers.FilterBoxes.BindingPaths
+                              .Contains(b.Groups["path"].Value, StringComparer.Ordinal)));
+
+    /// <summary>One <c>TextBox</c> start tag, self-closing or not.</summary>
+    [GeneratedRegex(@"<TextBox\b[^>]*?>", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex TextBoxStartTag();
+
+    /// <summary>A <c>Text="{Binding …}"</c> path, stopping before any further markup-extension arguments.</summary>
+    [GeneratedRegex(@"Text=""\{Binding\s+(?:Path=)?(?<path>[A-Za-z_]\w*)", RegexOptions.Compiled)]
+    private static partial Regex TextBindingPath();
 
     /// <summary>Occurrences of a literal, which <c>string.Split</c> would over-count by one.</summary>
     private static int CountOccurrences(string haystack, string needle)

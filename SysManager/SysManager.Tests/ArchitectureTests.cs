@@ -4872,6 +4872,111 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The structural counts the docs state — nav groups and pages needing elevation — come from the source.
+    /// </summary>
+    /// <remarks>
+    /// A sibling to <see cref="EveryReadmeTabCount_MatchesTheSource"/> rather than more arms inside it. That
+    /// one is built around the noun "tabs" and classifies claims by the phrase that follows; these count
+    /// different things from different sources, so folding them in would turn a focused guard into a
+    /// grab-bag whose failure message no longer says what broke.
+    /// <para>Both are here because they drift the same way the two accelerator counts did (#2336): they change
+    /// when a tab or an admin-gated page ships, which is a reason unrelated to the sentence containing them.
+    /// A sweep of every numeric claim in the docs found these two and the accelerator counts to be the only
+    /// ones with that property — the theme presets, privacy toggles and the process database change only when
+    /// someone deliberately edits that data, and were all correct.</para>
+    /// <para>"Collapsible" is derived, not counted separately: a group with one child renders as a flat row,
+    /// so the collapsible count is the groups with more than one leaf. Today that is Dashboard flat and
+    /// eleven collapsible, which is exactly what both documents claim.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryDocumentedStructuralCount_MatchesTheSource()
+    {
+        var appDir = FindAppProjectDir();
+        var repoRoot = FindRepoRoot();
+        var nav = WithoutComments(
+            File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+
+        // Each Group(...) call and the leaves that belong to it, by slicing between successive calls.
+        var slices = NavGroupSplit().Split(nav).Skip(1).ToList();
+        var groups = slices
+            .Select(s => NavRegistration().Matches(s).Count)
+            .ToList();
+
+        Assert.True(groups.Count >= 10,
+            $"only {groups.Count} nav groups were parsed from MainWindowViewModel — the split is broken, so "
+          + "the assertions below would enforce a stale number rather than catch one.");
+
+        var collapsible = groups.Count(leaves => leaves > 1);
+
+        // Views embedding the shared elevation banner. The banner is one control now, so this counts the call
+        // sites and not a copied Border — and Uninstaller is correctly absent: elevation REMOVES capability
+        // there, so its hand-rolled neutral banner is not a "page needing elevation".
+        var elevated = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml",
+                                                SearchOption.TopDirectoryOnly)
+            .Count(f => AdminBannerElement().IsMatch(WithoutXamlComments(File.ReadAllText(f))));
+
+        Assert.True(elevated >= 25,
+            $"only {elevated} views were found embedding the shared elevation banner — the element match is "
+          + "out of date, so this guard is comparing against a wrong number.");
+
+        var wrong = new List<string>();
+
+        foreach (var docName in new[] { "README.md", "ARCHITECTURE.md" })
+        {
+            var doc = File.ReadAllText(Path.Combine(repoRoot, docName));
+            var seen = 0;
+
+            foreach (var m in DocumentedGroupCount().Matches(doc).Cast<Match>())
+            {
+                seen++;
+                var claimedGroups = int.Parse(m.Groups["groups"].Value, CultureInfo.InvariantCulture);
+                var claimedCollapsible = int.Parse(m.Groups["collapsible"].Value, CultureInfo.InvariantCulture);
+                if (claimedGroups != groups.Count)
+                    wrong.Add($"{docName} claims {claimedGroups} nav groups; the source has {groups.Count}");
+                if (claimedCollapsible != collapsible)
+                    wrong.Add($"{docName} claims {claimedCollapsible} collapsible groups; {collapsible} of the "
+                            + $"{groups.Count} have more than one tab");
+            }
+
+            Assert.True(seen >= 1,
+                $"{docName} no longer states \"N groups … M collapsible\", so the group counts are being "
+              + "compared against nothing. Reword the guard with the document, not the document alone.");
+        }
+
+        var readme = File.ReadAllText(Path.Combine(repoRoot, "README.md"));
+        var pages = DocumentedElevatedPageCount().Match(readme);
+        Assert.True(pages.Success,
+            "README.md no longer states \"N pages needing elevation\", so that count is unchecked.");
+
+        var claimedPages = int.Parse(pages.Groups["pages"].Value, CultureInfo.InvariantCulture);
+        if (claimedPages != elevated)
+            wrong.Add($"README.md claims {claimedPages} pages needing elevation; {elevated} views embed the "
+                    + "shared elevation banner");
+
+        Assert.True(wrong.Count == 0,
+            "these documented structural counts no longer match the source:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>Splits the nav table on each <c>Group(</c> call, so each slice holds one group's leaves.</summary>
+    [GeneratedRegex(@"\n\s*Group\(", RegexOptions.Compiled)]
+    private static partial Regex NavGroupSplit();
+
+    /// <summary>The shared elevation banner element, as embedded by a view.</summary>
+    [GeneratedRegex(@"<v:AdminBanner\b", RegexOptions.Compiled)]
+    private static partial Regex AdminBannerElement();
+
+    /// <summary>
+    /// "…into 12 groups — 11 collapsible groups…" / "…into 12 groups (11 collapsible…". Both documents phrase
+    /// it differently, so the separator between the two numbers is deliberately loose.
+    /// </summary>
+    [GeneratedRegex(@"(?<groups>\d+) groups[^.]{0,12}?(?<collapsible>\d+) collapsible", RegexOptions.Compiled)]
+    private static partial Regex DocumentedGroupCount();
+
+    /// <summary>"…appears on the 31 pages needing elevation." Tolerates the line break the README has here.</summary>
+    [GeneratedRegex(@"(?<pages>\d+)\s+pages needing elevation", RegexOptions.Compiled)]
+    private static partial Regex DocumentedElevatedPageCount();
+
+    /// <summary>
     /// The two counts <c>docs/screenshots/README.md</c> states are re-derived from the folder and the sidebar.
     /// </summary>
     /// <remarks>

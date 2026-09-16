@@ -389,10 +389,10 @@
                                          Fill="{Binding SelectedEntry.SeverityColor, Converter={StaticResource HexBrush}}"/>
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding SelectedEntry.SeverityLabel}" FontSize="18" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding SelectedEntry.SeverityLabel}" Style="{StaticResource Heading}"
                                                    Foreground="{Binding SelectedEntry.SeverityColor, Converter={StaticResource HexBrush}}"/>
-                                        <TextBlock Text=" — Event " FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                                        <TextBlock Text="{Binding SelectedEntry.EventId}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                        <TextBlock Text=" — Event " Style="{StaticResource Heading}"/>
+                                        <TextBlock Text="{Binding SelectedEntry.EventId}" Style="{StaticResource Heading}"/>
                                     </StackPanel>
                                     <TextBlock Text="{Binding SelectedEntry.ProviderName}" Style="{StaticResource Subtle}"/>
                                 </StackPanel>

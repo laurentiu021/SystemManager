@@ -211,7 +211,7 @@
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             BorderBrush="{Binding HealthResult.ColorHex, Converter={StaticResource HexBrush}}">
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                            <TextBlock Text="{Binding HealthResult.Score}" FontSize="28" FontWeight="Bold"
+                            <TextBlock Text="{Binding HealthResult.Score}" Style="{StaticResource MetricLarge}" FontWeight="Bold"
                                        HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                             <TextBlock Text="{Binding HealthResult.Label}" FontSize="10"
                                        HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>

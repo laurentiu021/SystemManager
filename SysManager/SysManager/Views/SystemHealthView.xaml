@@ -212,7 +212,7 @@
                                                 <StackPanel Margin="0,0,24,6" Width="120">
                                                     <TextBlock Text="HEALTH" Style="{StaticResource SectionLabel}"/>
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0}%, FallbackValue=—}" FontSize="18" FontWeight="Bold"
+                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0}%, FallbackValue=—}" Style="{StaticResource MetricCompact}" FontWeight="Bold"
                                                                    Foreground="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
                                                     </StackPanel>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">

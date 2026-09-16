@@ -25,7 +25,7 @@
                          at something the user can actually reach. The banner is a plain UserControl with
                          no DataContext, so it names the route rather than binding the command itself. -->
                     <TextBlock Text="This feature is newly added and still being verified. If something looks wrong, use “Report a problem” on the About tab."
-                               FontSize="11.5" Foreground="{DynamicResource TextSecondary}"
+                               Style="{StaticResource Subtle}"
                                Margin="0,2,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </StackPanel>

@@ -81,7 +81,7 @@
                 <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                            FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="Some settings have changed since your baseline. Review them below and restore if they weren't your doing."
-                           Foreground="{DynamicResource WarningText}" FontSize="12.5"
+                           Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}"
                            VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>

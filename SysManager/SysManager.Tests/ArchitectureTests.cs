@@ -4872,6 +4872,102 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The two counts <c>docs/screenshots/README.md</c> states are re-derived from the folder and the sidebar.
+    /// </summary>
+    /// <remarks>
+    /// Both went stale in the release that added a tab, and both are the kind of number a contributor reads to
+    /// decide what to capture next — "43 of the 58 tabs have a shot. The 16 without one are…" was 58/15 while
+    /// the source said 59/16, so the list was one name short and a reader would have believed it (#1664).
+    /// <para>Membership is checked as far as it can be without settling a naming question first: every name in
+    /// the list must be a real sidebar label, and the list's length must equal the uncovered count. What is NOT
+    /// asserted is which screenshot covers which tab, because deciding that mechanically means requiring the
+    /// filename slug to equal the label slug — and two files legitimately do not
+    /// (<c>14-standby-cleaner.png</c> for "Standby List Cleaner", <c>16-cpu-affinity.png</c> for "CPU Core
+    /// Affinity"), so the strict rule would fail on correct files. #1664 carries that decision.</para>
+    /// <para>The number prefix is deliberately not compared against sidebar position either. It was accurate
+    /// when each file was captured and 23 of 43 are now wrong, because inserting a tab renumbers every tab
+    /// below it without touching a filename. Asserting it today would fail 23 times over a convention nobody
+    /// has chosen to keep; the docs now say plainly that the number only orders the folder.</para>
+    /// </remarks>
+    [Fact]
+    public void TheScreenshotInventory_MatchesWhatIsOnDisk()
+    {
+        var repoRoot = FindRepoRoot();
+        var shotsDir = Path.Combine(repoRoot, "docs", "screenshots");
+
+        var labels = SidebarTabLabels();
+        Assert.True(labels.Count >= 50,
+            $"only {labels.Count} tab labels were parsed — the count to compare against is wrong");
+
+        var shots = Directory.EnumerateFiles(shotsDir, "*.png", SearchOption.TopDirectoryOnly).Count();
+        Assert.True(shots >= 40,
+            $"only {shots} screenshots were found in docs/screenshots — the folder scan is wrong, so the "
+          + "assertions below would enforce a stale number rather than catch one.");
+
+        var doc = File.ReadAllText(Path.Combine(shotsDir, "README.md"));
+
+        var coverage = ScreenshotCoverageClaim().Match(doc);
+        Assert.True(coverage.Success,
+            "docs/screenshots/README.md no longer states \"N of the M tabs have a shot\", so its coverage "
+          + "claim is being compared against nothing. Reword the guard with the file, not the file alone.");
+
+        var claimedShots = int.Parse(coverage.Groups["have"].Value, CultureInfo.InvariantCulture);
+        var claimedTabs = int.Parse(coverage.Groups["tabs"].Value, CultureInfo.InvariantCulture);
+
+        var wrong = new List<string>();
+        if (claimedShots != shots)
+            wrong.Add($"it claims {claimedShots} screenshots; the folder holds {shots}");
+        if (claimedTabs != labels.Count)
+            wrong.Add($"it claims {claimedTabs} tabs; the sidebar has {labels.Count}");
+
+        var uncovered = ScreenshotGapClaim().Match(doc);
+        Assert.True(uncovered.Success,
+            "docs/screenshots/README.md no longer states \"The N without one are …\", so the list of "
+          + "uncovered tabs is unchecked.");
+
+        var claimedGap = int.Parse(uncovered.Groups["gap"].Value, CultureInfo.InvariantCulture);
+        if (claimedGap != labels.Count - shots)
+            wrong.Add($"it claims {claimedGap} tabs have no screenshot; {labels.Count} tabs minus {shots} "
+                    + $"screenshots is {labels.Count - shots}");
+
+        // The listed names, split on the "A, B, C and D" prose the file is written in. Each must be a real
+        // sidebar label — a renamed tab left behind here is the other way this list goes quietly wrong.
+        var named = uncovered.Groups["names"].Value
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace(" and ", ", ", StringComparison.Ordinal)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(n => WhitespaceRun().Replace(n, " "))
+            .ToList();
+
+        Assert.True(named.Count >= 10,
+            $"only {named.Count} uncovered-tab names parsed out of docs/screenshots/README.md — the prose "
+          + "shape changed, so the membership check below ran over almost nothing.");
+
+        foreach (var name in named.Where(n => !labels.Contains(n)))
+            wrong.Add($"it lists \"{name}\" as having no screenshot, but no tab is called that");
+
+        if (named.Count != claimedGap)
+            wrong.Add($"it says {claimedGap} tabs have no screenshot but then names {named.Count}");
+
+        Assert.True(wrong.Count == 0,
+            "docs/screenshots/README.md no longer describes the folder. A contributor reads these numbers to "
+          + "decide what to capture next:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>The coverage sentence in <c>docs/screenshots/README.md</c>: "43 of the 59 tabs have a shot."</summary>
+    [GeneratedRegex(@"(?<have>\d+) of the (?<tabs>\d+) tabs have a shot", RegexOptions.Compiled)]
+    private static partial Regex ScreenshotCoverageClaim();
+
+    /// <summary>
+    /// The gap sentence: "The 16 without one are A, B … and C." Captures the count and the whole name list,
+    /// stopping at the sentence's full stop.
+    /// </summary>
+    [GeneratedRegex(@"The (?<gap>\d+) without one are (?<names>[^.]+)\.",
+                    RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex ScreenshotGapClaim();
+
+    /// <summary>
     /// How many view models override a <c>ViewModelBase</c> accelerator seam. Matches the override's
     /// DECLARATION, not a mention: the property name also appears in comments (stripped) and in
     /// <c>MainWindowViewModel.AcceleratorCommand</c>, which reads it rather than providing it.

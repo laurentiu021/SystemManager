@@ -7,18 +7,29 @@ conventions below so they render cleanly in the README.
 ## File naming
 
 Use zero-padded numbers so the file list stays in the same order as the
-nav on the left rail. The number matches the tab's position in the sidebar, so
-the missing numbers name the uncovered tabs exactly.
+nav on the left rail, and name the tab after the number.
 
-43 of the 58 tabs have a shot. The 15 without one are Bandwidth Monitor,
+**The number is not a reliable pointer to the tab's sidebar position, and you should
+not read it as one.** It was that when each file was captured, but every tab inserted
+above a screenshot shifts its position without touching its filename — 23 of the 43
+files here are now numbered for a different tab than the one they show, one of them by
+eight places. So the number orders the folder and nothing more; the *name* after it is
+what identifies the tab. Which convention to settle on is open — see issue #1664.
+
+43 of the 59 tabs have a shot. The 16 without one are Bandwidth Monitor,
 Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
-Remover, Environment Variables, Legacy Panels, Notification Blocker, Process
-Manager, Services, Startup Manager, Task Scheduler, Uninstaller and Volume
+Remover, Environment Variables, Large Files, Legacy Panels, Notification Blocker,
+Process Manager, Services, Startup Manager, Task Scheduler, Uninstaller and Volume
 Control. One of those — Notification Blocker — is still marked as a preview tab.
-The other fourteen are list-heavy pages: a usable shot of them is a screenful of
+Fourteen of the rest are list-heavy pages: a usable shot of them is a screenful of
 real service names, installed programs, file paths or environment values, and the
-redaction cost is the reason they are not here yet (see Privacy check below).
-None of the fifteen is missing because the tab is unfinished.
+redaction cost is the reason they are not here yet (see Privacy check below). Large
+Files is simply new, added in 1.109.0. None of the sixteen is missing because the tab
+is unfinished.
+
+Those two counts are held against the source by
+`ArchitectureTests.TheScreenshotInventory_MatchesWhatIsOnDisk`, because both of them
+went stale in the release that added a tab.
 
 A short animated tour also lives under [`docs/gifs/`](../gifs/)
 (`feature-tour.gif`, `cleanup-tools.gif`) and is embedded at the top of the

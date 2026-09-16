@@ -166,34 +166,10 @@ public class PingMonitorServiceTests
         }
     }
 
-    [Fact]
-    public async Task IntervalChange_IsRespectedOnNextTick()
-    {
-        using var svc = CreateFast();
-        svc.AddOrUpdate(new PingTarget("x", UnreachableHost, "#111"));
-
-        long count = 0;
-        svc.SampleReceived += _ => Interlocked.Increment(ref count);
-
-        // Fast phase: 100ms interval for 1.2s → expect 8-12 ticks (loose bound)
-        svc.Interval = TimeSpan.FromMilliseconds(100);
-        svc.Start();
-        await Task.Delay(1200);
-        var fastCount = Interlocked.Read(ref count);
-
-        // Slow phase: 1s interval for 2.5s → expect ~2 ticks.
-        svc.Interval = TimeSpan.FromSeconds(1);
-        var startSlow = Interlocked.Read(ref count);
-        await Task.Delay(2500);
-        var slowDelta = Interlocked.Read(ref count) - startSlow;
-        svc.Stop();
-
-        Assert.True(fastCount >= 4,
-            $"Fast phase (100ms interval / 1.2s) should produce plenty of samples, got {fastCount}");
-        // Slow phase rate must be meaningfully lower than fast phase rate.
-        var fastRate = fastCount / 1.2;  // samples per second
-        var slowRate = slowDelta / 2.5;
-        Assert.True(slowRate < fastRate,
-            $"Slow rate ({slowRate:F1}/s) should be lower than fast rate ({fastRate:F1}/s)");
-    }
+    // The interval-change test that used to live here counted how many real ticks fit in 1.2 real
+    // seconds, so it measured the host's spare CPU rather than the service, and went red once during
+    // a full local run (2 samples against a floor of 4). The pump's delay now comes from an injected
+    // TimeProvider, so the cadence is asserted exactly and without sleeping in
+    // SysManager.Tests.PingMonitorServiceLifecycleTests. What stays here is what genuinely needs the
+    // real network stack: that samples arrive at all, and that add/remove mid-pump is honoured.
 }

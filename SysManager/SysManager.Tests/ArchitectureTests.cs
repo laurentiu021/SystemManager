@@ -5023,11 +5023,16 @@ public partial class ArchitectureTests
     /// compiles cleanly and throws when the tab is opened. Several of these call sites are inside templates.
     /// Checking that every referenced rung is defined is the only thing standing between a rename and a
     /// crash in a tab nobody opened during review.</para>
-    /// <para>Scoped to the metric rungs (20, 22, 26, 30) on purpose. 14 is <c>SectionTitle</c>'s size and
-    /// appears raw 39 times as ordinary label sizing — a different and much larger question. 28 is
-    /// <c>Display</c>'s size and is still raw in two places (Battery Health's charge, Dashboard's health
-    /// score); pulling those onto a rung makes numbers visibly smaller, which is the open half of #1630(b)
-    /// and needs a decision rather than a guard.</para>
+    /// <para>Scoped to the metric rungs plus <c>Body</c> on purpose, which means 16, 20, 22, 26, 30 and 13.
+    /// The <b>text</b> tokens at 11, 12 and 14 (<c>Caption</c>, <c>Subtle</c>, <c>SectionTitle</c>) are
+    /// deliberately NOT enforced here, and not because nobody has got round to it: those three styles carry
+    /// no <c>BasedOn</c>, so applying one REPLACES the keyless <c>TextBlock</c> style instead of merging with
+    /// it and silently drops <c>TextFormattingMode=Ideal</c> and <c>TextRenderingMode=ClearType</c>. A guard
+    /// demanding the swap would be demanding a rendering change on 172 elements. #1634 carries the ordered
+    /// plan: <c>BasedOn</c> on the five older tokens first, then the conversions.</para>
+    /// <para>28 (<c>Display</c>'s size) and 18 were both raw on real numbers until v1.109.1 moved them onto
+    /// rungs; no bare TextBlock in the views is drawn at either size now, so neither needs an exception here.
+    /// The single remaining raw 24 is About's product name, which has no text rung within two points.</para>
     /// </remarks>
     [Fact]
     public void EveryMetricRungSize_IsReachedThroughItsRung()

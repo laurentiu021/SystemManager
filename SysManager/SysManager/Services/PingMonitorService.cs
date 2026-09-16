@@ -32,6 +32,18 @@ public sealed class PingMonitorService : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _loop;
     private readonly Lock _stateLock = new();
+    private readonly TimeProvider _time;
+
+    /// <summary>
+    /// Creates the monitor.
+    /// </summary>
+    /// <param name="timeProvider">
+    /// Source of the pump's between-tick delay, defaulting to <see cref="TimeProvider.System"/>.
+    /// A test passes a provider whose timers only fire when it says so, which is what makes the
+    /// cadence assertable: the alternative is counting how many real ticks fit in a real second,
+    /// which measures the host's spare CPU rather than this class.
+    /// </param>
+    public PingMonitorService(TimeProvider? timeProvider = null) => _time = timeProvider ?? TimeProvider.System;
 
     public bool IsRunning => _loop is { IsCompleted: false };
 
@@ -74,13 +86,21 @@ public sealed class PingMonitorService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Smallest delay the pump will wait between ticks. Floors a caller-supplied zero or negative
+    /// <see cref="Interval"/> so it cannot turn the pump into a CPU-bound busy loop.
+    /// </summary>
+    internal static readonly TimeSpan MinimumInterval = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>
+    /// The delay the pump will wait after the current tick, i.e. <see cref="Interval"/> floored at
+    /// <see cref="MinimumInterval"/>. Read fresh on every iteration, never captured, so a caller
+    /// changing <see cref="Interval"/> mid-run takes effect on the next tick.
+    /// </summary>
+    internal TimeSpan NextDelay => Interval < MinimumInterval ? MinimumInterval : Interval;
+
     private async Task PumpAsync(CancellationToken ct)
     {
-        // Floor the interval so a user-provided zero / negative value doesn't
-        // turn the pump into a CPU-bound busy loop.
-        static TimeSpan Clamp(TimeSpan t) =>
-            t < TimeSpan.FromMilliseconds(50) ? TimeSpan.FromMilliseconds(50) : t;
-
         while (!ct.IsCancellationRequested)
         {
             // Snapshot enabled targets for this tick.
@@ -91,7 +111,7 @@ public sealed class PingMonitorService : IDisposable
             foreach (var target in active)
                 _ = PingOnceAsync(target, ct);
 
-            try { await Task.Delay(Clamp(Interval), ct).ConfigureAwait(false); }
+            try { await Task.Delay(NextDelay, _time, ct).ConfigureAwait(false); }
             catch (OperationCanceledException) { return; }
         }
     }

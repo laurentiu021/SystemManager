@@ -58,7 +58,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="12" Height="12" Margin="0,0,10,0" VerticalAlignment="Center"
                                  Fill="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"/>
-                        <TextBlock Text="{Binding Shared.Health.Headline}" FontSize="18" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding Shared.Health.Headline}" Style="{StaticResource Heading}"
                                    Foreground="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding Shared.Health.Detail}" Foreground="{DynamicResource TextSecondary}"

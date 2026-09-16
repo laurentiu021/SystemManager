@@ -58,7 +58,7 @@
                             <StackPanel>
                                 <TextBlock Text="Charge" Style="{StaticResource Subtle}" FontSize="12"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                    <TextBlock FontSize="28" FontWeight="Bold">
+                                    <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold">
                                         <Run Text="{Binding Battery.ChargePercent, Mode=OneWay}"/><Run Text="%"/>
                                     </TextBlock>
                                     <TextBlock Text="{Binding Battery.Status}" VerticalAlignment="Center"
@@ -82,7 +82,7 @@
                                 <StackPanel Grid.Column="0">
                                     <TextBlock Text="Health" Style="{StaticResource Subtle}" FontSize="12"/>
                                     <TextBlock Text="{Binding Battery.HealthDisplay, Mode=OneWay}"
-                                               FontSize="24" FontWeight="Bold" Margin="0,4,0,0"/>
+                                               Style="{StaticResource Metric}" FontWeight="Bold" Margin="0,4,0,0"/>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1">
@@ -90,9 +90,12 @@
                                     <!-- Danger red only when a real wear figure exists; "Not available"
                                          is missing data, not a warning. -->
                                     <TextBlock Text="{Binding Battery.WearDisplay, Mode=OneWay}"
-                                               FontSize="24" FontWeight="Bold" Margin="0,4,0,0">
+                                               FontWeight="Bold" Margin="0,4,0,0">
+                                        <!-- The rung comes through BasedOn rather than a Style attribute:
+                                             this element already owns an inline Style for the wear-colour
+                                             trigger, and Style can only be set once. -->
                                         <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Metric}">
                                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Battery.HasCapacityData, Mode=OneWay}" Value="True">

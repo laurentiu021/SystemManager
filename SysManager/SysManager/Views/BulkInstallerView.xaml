@@ -125,7 +125,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                               FontSize="12.5" VerticalAlignment="Center"
+                                               Style="{StaticResource Body}" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextPrimary}"
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="1" Text="{Binding WingetId}"
@@ -234,7 +234,7 @@
                                             </Border>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}"
-                                                   FontSize="11.5" Margin="0,2,0,0"
+                                                   Style="{StaticResource Subtle}" Margin="0,2,0,0"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>

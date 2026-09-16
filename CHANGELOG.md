@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.109.1] - 2026-09-16
+
+**The big numbers on a few tabs were each their own size; now they share the app's.** A battery percentage,
+a health score, a memory figure — the same kind of thing on different tabs was drawn at 18, 24 or 28 points
+depending on which tab you were on, so moving between them felt like moving between apps. They now use the
+sizes the rest of the app already uses. Nothing moves by more than two points, and nothing changes colour,
+weight or position.
+
+### Changed
+
+- **Fifteen numbers and banner messages now take a shared size** instead of one written into the page:
+  Standby Memory's three figures and System Health's percentage (18 → 16), Battery Health's capacity and
+  wear (24 → 22), Battery Health's charge and the Dashboard health score (28 → 26), and seven warning
+  banners that sat on a half-point size for no stated reason (12.5 → 13, 11.5 → 12).
+- **The Dashboard health score and Battery Health's charge no longer compete with the tab title**, which
+  was drawn at exactly the same size as them.
+- **System Logs' event header and Ping's connection headline** take the shared heading size (18 → 20), so
+  they match the other headings rather than sitting between two of them.
+- Numbers that were deliberately bold stay bold. Only the size moved.
+
 ## [1.109.0] - 2026-09-15
 
 **"Large Files" is its own tab now, next to Disk Analyzer and Duplicate Finder.** It used to sit at the

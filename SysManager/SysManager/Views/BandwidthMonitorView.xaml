@@ -107,7 +107,7 @@
                 <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                            FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="{Binding AlertMessage}" Foreground="{DynamicResource WarningText}"
-                           FontSize="12.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                           Style="{StaticResource Body}" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
 

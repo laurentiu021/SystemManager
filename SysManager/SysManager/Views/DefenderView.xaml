@@ -45,7 +45,7 @@
                 <TextBlock Text="&#xE730;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                            FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
                 <TextBlock Text="Tamper Protection is ON. Windows may silently ignore changes here until you turn it off in Windows Security."
-                           Foreground="{DynamicResource WarningText}" FontSize="12.5" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                           Foreground="{DynamicResource WarningText}" Style="{StaticResource Body}" VerticalAlignment="Center" TextWrapping="Wrap"/>
             </DockPanel>
         </Border>
 

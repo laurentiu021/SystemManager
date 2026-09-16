@@ -9737,6 +9737,99 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No unit test builds a <c>DeepCleanupViewModel</c> on the real machine's scan roots.
+    /// </summary>
+    /// <remarks>
+    /// #2333. <c>DeepCleanupViewModel.CleanAsync</c> ends with a rescan so the displayed sizes refresh after a
+    /// delete. Correct product behaviour — but <c>DeepCleanupViewModelTests</c> built its service through the
+    /// PARAMETERLESS constructor, which is production's, so that rescan walked the whole machine.
+    /// <c>Clean_WhenUserConfirms_DeletesSelectedFiles</c> took <b>170 seconds</b> on a used workstation while
+    /// the other 31 tests in its class took 0.12s between them, and it was 63% of the entire unit suite.
+    /// <para>It hid for a long time because a scan's cost is proportional to what is on the host's disks: on a
+    /// fresh CI runner with an empty temp tree the whole unit job is 1m 13s, so nothing in CI would ever have
+    /// prompted a fix. The local number was the only symptom, and it swung between 97.7s and 269.2s in one
+    /// session as the disk state changed.</para>
+    /// <para><b>Why the rule is this narrow.</b> "No test may use the parameterless constructor" would flag ten
+    /// legitimate uses in <c>DeepCleanupServiceTests</c>: nine pass explicit categories to <c>CleanAsync</c>,
+    /// which never consults the roots, and the tenth calls <c>ScanAsync</c> with an already-cancelled token so
+    /// no work happens. The roots only matter when something reaches a real scan, and the one construction that
+    /// does so INDIRECTLY is the view model — its Clean rescans without being asked. So the guard is scoped to
+    /// the view model, in the unit project only; <c>SysManager.IntegrationTests</c> constructs it against real
+    /// roots on purpose.</para>
+    /// <para><b>Two things this guard got wrong before it worked</b>, both caught by its own floors rather than
+    /// by review. Matching <c>new DeepCleanupViewModel(new DeepCleanupService(…))</c> literally found NOTHING:
+    /// the call site is <c>=&gt; new(new DeepCleanupService(_roots))</c>, a target-typed <c>new</c> with the type
+    /// only in the return signature. And scanning every file made the guard flag ITSELF, because the error
+    /// message below spells out the shape it forbids — this file is excluded for that reason, and nothing is
+    /// lost since <c>ArchitectureTests</c> builds no view models. So the match is on the SERVICE construction,
+    /// widened to the enclosing statement, which catches both spellings.</para>
+    /// </remarks>
+    [Fact]
+    public void NoUnitTestBuildsADeepCleanupViewModel_OnTheRealMachinesScanRoots()
+    {
+        var testsDir = FindTestSourceDirectory();
+        var offenders = new List<string>();
+        var services = 0;
+        var reachingTheViewModel = 0;
+
+        foreach (var file in Directory.EnumerateFiles(testsDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)
+                              && !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)
+                              && !Path.GetFileName(p).Equals("ArchitectureTests.cs", StringComparison.Ordinal))
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var source = WithoutComments(File.ReadAllText(file));
+            foreach (var m in DeepCleanupServiceConstruction().Matches(source).Cast<Match>())
+            {
+                services++;
+
+                // The enclosing statement, back to the nearest boundary. A statement rather than a line so
+                // `=> new(new DeepCleanupService(_roots))` is read together with the signature that gives it
+                // its type, and rather than the whole file so a sibling test naming the view model cannot
+                // vouch for this one.
+                var boundary = Math.Max(
+                    source.LastIndexOf(';', m.Index),
+                    Math.Max(source.LastIndexOf('{', m.Index), source.LastIndexOf('}', m.Index)));
+                var statement = source[(boundary + 1)..m.Index];
+                if (!statement.Contains("DeepCleanupViewModel", StringComparison.Ordinal)) continue;
+
+                reachingTheViewModel++;
+
+                // Empty parentheses on the service is the production root set. Anything inside them is a
+                // supplied ICleanupRoots, which is the seam.
+                if (m.Groups["roots"].Value.Trim().Length == 0)
+                {
+                    offenders.Add($"{Path.GetFileName(file)}: a DeepCleanupViewModel is built on a "
+                                + "DeepCleanupService with no roots, so the rescan after Clean walks the real "
+                                + "machine — pass TempCleanupRoots");
+                }
+            }
+        }
+
+        // Two floors, because either half can go silently vacuous. 35 service constructions across
+        // DeepCleanupServiceTests, DeepCleanupScanLogicTests and DeepCleanupFilteredBucketTests; exactly one
+        // statement carries a view model, which is DeepCleanupViewModelTests.NewVm. The second floor is the
+        // one that matters: without it a regex that matched services but never a view model would pass.
+        Assert.True(services >= 30,
+            $"only {services} DeepCleanupService constructions were found in the unit project, and there are 35. "
+          + "DeepCleanupServiceConstruction() has stopped matching.");
+        Assert.True(reachingTheViewModel >= 1,
+            "no statement building a DeepCleanupViewModel from a DeepCleanupService was found in the unit "
+          + "project. The statement window has stopped working, so this guard is checking nothing.");
+
+        Assert.True(offenders.Count == 0, string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A <c>DeepCleanupService</c> construction, capturing its argument list so an empty one — the production
+    /// root set — can be told from a supplied <c>ICleanupRoots</c>.
+    /// </summary>
+    [GeneratedRegex(@"new\s+(?:Services\.)?DeepCleanupService\s*\((?<roots>[^)]*)\)", RegexOptions.Compiled)]
+    private static partial Regex DeepCleanupServiceConstruction();
+
+    /// <summary>
     /// An ASSIGNMENT to a progress percentage, capturing the property name.
     /// <para>Deliberately an assignment and not a mention: <c>Progress</c> appears as a bare identifier in
     /// <c>new Progress&lt;T&gt;(…)</c> callbacks, in <c>nameof</c>, and in binding-change plumbing, none of

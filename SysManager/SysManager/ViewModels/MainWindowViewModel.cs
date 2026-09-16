@@ -157,7 +157,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// Trimmed, because a trailing space from a paste would otherwise match nothing and read as the search
     /// being broken. The summary names the count rather than leaving an empty panel: "No tabs match
     /// 'whatever'" is an answer, and blank space is not.
-    /// <para>Filters <see cref="NavItems"/>, the flat list of all 58 — never touching
+    /// <para>Filters <see cref="NavItems"/>, the flat list of every tab — never touching
     /// <see cref="NavItem.Content"/>, so searching does not construct a single tab view model. Reading
     /// Content here would build every matching tab on every keystroke, undoing the lazy-startup fix.</para>
     /// </remarks>

@@ -60,7 +60,7 @@
                              ToolTip="Filter by name or publisher."/>
                     <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding SearchText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
             </WrapPanel>
@@ -106,7 +106,7 @@
                                                 <TextBlock Text="Common bloat" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
                                             </Border>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                        <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"
                                                    Visibility="{Binding Description, Converter={StaticResource FlexVis}}"/>
                                         <TextBlock Text="{Binding Name}" FontSize="10" Foreground="{DynamicResource TextMuted}"

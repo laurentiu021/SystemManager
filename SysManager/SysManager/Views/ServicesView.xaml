@@ -68,7 +68,7 @@
                      (Running/Stopped)" and "gaming recommendation". A WrapPanel rather than the previous
                      StackPanel so nine chips reflow instead of clipping on a narrow window. -->
                 <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                    <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="0,0,8,4"/>
                     <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
@@ -86,7 +86,7 @@
                                  Style="{StaticResource FilterChipCritical}"
                                  AutomationProperties.Name="Filter critical services"/>
 
-                    <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                    <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>
                     <RadioButton Content="{Binding RunningCount, StringFormat='Running ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
@@ -103,7 +103,7 @@
                          Safety answers "will this break Windows"; the recommendation answers "is this
                          worth turning off for games". It is the tab's headline capability and was the
                          least reachable part of it. -->
-                    <TextBlock Text="For gaming:" Foreground="{DynamicResource TextMuted}" FontSize="11"
+                    <TextBlock Text="For gaming:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>
                     <RadioButton Content="{Binding SafeToDisableCount, StringFormat='Safe to disable ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"

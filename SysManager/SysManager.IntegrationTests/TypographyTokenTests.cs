@@ -111,6 +111,92 @@ public class TypographyTokenTests
     }
 
     /// <summary>
+    /// The four body-text tokens resolve their own size, weight and colour AND the two rendering options the
+    /// keyless <c>&lt;Style TargetType="TextBlock"&gt;</c> hands out.
+    /// </summary>
+    /// <remarks>
+    /// This is the assertion that unblocks #1634's sweep. Until these four carried
+    /// <c>BasedOn="{StaticResource {x:Type TextBlock}}"</c>, swapping a bare <c>FontSize="11"</c> for
+    /// <c>Style="{StaticResource Caption}"</c> looked like a no-op and was not: the element gave up
+    /// <c>TextFormattingMode=Ideal</c> and <c>TextRenderingMode=ClearType</c>, because a keyed style replaces
+    /// the keyless one rather than merging with it. 172 elements were waiting on that.
+    /// <para>The colour column is the part worth reading twice. <c>SectionTitle</c> no longer restates
+    /// <c>TextPrimary</c> — it inherits it — so this asserts the inheritance actually delivers it rather than
+    /// a WPF default black. The other three deliberately differ from the inherited colour and keep their own
+    /// setter; asserting the difference is what stops a later "tidy-up" dropping those too on the theory that
+    /// BasedOn covers them.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("SectionTitle", 14, "SemiBold", "TextPrimary")]
+    [InlineData("Caption", 11, "Normal", "TextMuted")]
+    [InlineData("Subtle", 12, "Normal", "TextSecondary")]
+    [InlineData("SectionLabel", 11, "SemiBold", "TextMuted")]
+    public void EveryBodyTextToken_ResolvesItsOwnLookAndTheImplicitRendering(
+        string key, int expectedSize, string expectedWeight, string expectedColourKey)
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+
+            var block = WithStyle(key);
+
+            Assert.Equal((double)expectedSize, block.FontSize);
+            Assert.Equal(
+                expectedWeight == "SemiBold" ? FontWeights.SemiBold : FontWeights.Normal,
+                block.FontWeight);
+
+            var expectedColour = (Brush)Application.Current!.Resources[expectedColourKey];
+            Assert.Equal(expectedColour.ToString(), block.Foreground.ToString());
+            Assert.NotEqual(Brushes.Black.ToString(), block.Foreground.ToString());
+
+            // The two BasedOn is here for. Before it, both fell back to the WPF default on any element
+            // taking one of these tokens.
+            Assert.Equal(TextRenderingMode.ClearType, TextOptions.GetTextRenderingMode(block));
+            Assert.Equal(TextFormattingMode.Ideal, TextOptions.GetTextFormattingMode(block));
+        });
+    }
+
+    /// <summary>
+    /// <c>Display</c> is deliberately left off <c>BasedOn</c>, and that stays a decision rather than an
+    /// oversight until someone looks at it on a running machine.
+    /// </summary>
+    /// <remarks>
+    /// #1634 proposed adding it on the grounds that all 59 tab titles would move from
+    /// <c>TextFormattingMode=Display</c> to <c>Ideal</c>. Measured here, that premise is wrong: WPF's default
+    /// for <c>TextFormattingMode</c> IS <c>Ideal</c>, so the titles already render that way and BasedOn would
+    /// not touch it. The only difference it would make to <c>Display</c> is <c>TextRenderingMode</c>, from
+    /// <c>Auto</c> to <c>ClearType</c> — the same one-property change the other four just took.
+    /// <para>Left out anyway, because the decision was made on the larger claim and the smaller one deserves
+    /// its own look at 28px rather than being folded in as a rounding error. These two assertions are what
+    /// make that a decision instead of an oversight: the test fails the moment someone completes the set,
+    /// which is the prompt to check it on a machine that runs the app.</para>
+    /// <para>What it must NOT lose meanwhile is its colour: <c>Display</c> restates <c>TextPrimary</c>
+    /// itself, and that is load-bearing precisely because it inherits nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void Display_StillStandsAloneAndStillResolvesItsColour()
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+
+            var block = WithStyle("Display");
+
+            Assert.Equal(28d, block.FontSize);
+            Assert.Equal(FontWeights.SemiBold, block.FontWeight);
+            Assert.Equal(ExpectedForeground().ToString(), block.Foreground.ToString());
+            Assert.NotEqual(Brushes.Black.ToString(), block.Foreground.ToString());
+
+            Assert.Equal(
+                TextFormattingMode.Ideal,
+                TextOptions.GetTextFormattingMode(block));
+            Assert.Equal(
+                TextRenderingMode.Auto,
+                TextOptions.GetTextRenderingMode(block));
+        });
+    }
+
+    /// <summary>
     /// Every Metric rung resolves a colour, including <c>Metric</c> itself — which did not until #1634.
     /// </summary>
     /// <remarks>

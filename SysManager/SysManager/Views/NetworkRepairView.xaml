@@ -40,7 +40,7 @@
                     </Border.Style>
                     <DockPanel>
                         <StackPanel>
-                            <TextBlock Text="Flush DNS Cache" FontWeight="SemiBold" FontSize="14"/>
+                            <TextBlock Text="Flush DNS Cache" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Clears the local DNS resolver cache. Fixes stale DNS entries. Safe, instant, no reboot."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
@@ -67,7 +67,7 @@
                     </Border.Style>
                     <DockPanel>
                         <StackPanel>
-                            <TextBlock Text="Reset Winsock Catalog" FontWeight="SemiBold" FontSize="14"/>
+                            <TextBlock Text="Reset Winsock Catalog" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Resets the Windows socket API. Fixes corrupted network drivers. Requires admin + reboot."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
@@ -94,7 +94,7 @@
                     </Border.Style>
                     <DockPanel>
                         <StackPanel>
-                            <TextBlock Text="Reset TCP/IP Stack" FontWeight="SemiBold" FontSize="14"/>
+                            <TextBlock Text="Reset TCP/IP Stack" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="Restores all TCP/IP settings to defaults. Nuclear option. Requires admin + reboot."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="600" HorizontalAlignment="Left"/>
                             <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
@@ -109,7 +109,7 @@
                 <TextBlock Text="{Binding RepairStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
                            Visibility="{Binding RepairStatus, Converter={StaticResource FlexVis}}"/>
                 <TextBlock Text="⚠ A reboot is required for changes to take effect."
-                           Foreground="{DynamicResource Danger}" FontSize="12" Margin="0,8,0,0"
+                           Foreground="{DynamicResource Danger}" Style="{StaticResource Subtle}" Margin="0,8,0,0"
                            Visibility="{Binding RepairNeedsReboot, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </Border>

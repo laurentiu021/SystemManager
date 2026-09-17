@@ -45,14 +45,14 @@
                     <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0">
                         <StackPanel>
                             <TextBlock Text="LAST RUN" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Text="{Binding LastRun}" FontSize="14" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding LastRun}" Style="{StaticResource SectionTitle}"
                                        Foreground="{DynamicResource TextSecondary}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0,6,0">
                         <StackPanel>
                             <TextBlock Text="NEXT RUN" Style="{StaticResource SectionLabel}"/>
-                            <TextBlock Text="{Binding NextRun}" FontSize="14" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding NextRun}" Style="{StaticResource SectionTitle}"
                                        Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>

@@ -25,7 +25,7 @@
                               AutomationProperties.Name="{Binding Name, StringFormat='Select tweak: {0}'}"/>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
-                        <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                     </StackPanel>
                     <Border Grid.Column="2" CornerRadius="{StaticResource RadiusSm}" Padding="8,2" VerticalAlignment="Center"
@@ -95,7 +95,7 @@
                         <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
                                 BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,10">
                             <TextBlock Text="Higher-impact, machine-wide changes — review each one. Still fully reversible."
-                                       Foreground="{DynamicResource WarningText}" FontSize="12" TextWrapping="Wrap"/>
+                                       Foreground="{DynamicResource WarningText}" Style="{StaticResource Subtle}" TextWrapping="Wrap"/>
                         </Border>
                         <ItemsControl ItemsSource="{Binding Advanced}" ItemTemplate="{StaticResource TweakRow}"
                                       AutomationProperties.Name="Advanced tweaks"/>

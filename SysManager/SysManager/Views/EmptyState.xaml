@@ -22,7 +22,7 @@
                    Foreground="{DynamicResource TextSecondary}"
                    Visibility="{Binding Glyph, ElementName=Root, Converter={StaticResource FlexVis}}"/>
         <TextBlock Text="{Binding Title, ElementName=Root}"
-                   FontSize="14" FontWeight="SemiBold"
+                   Style="{StaticResource SectionTitle}"
                    Foreground="{DynamicResource TextSecondary}"
                    HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
         <TextBlock Text="{Binding Message, ElementName=Root}"

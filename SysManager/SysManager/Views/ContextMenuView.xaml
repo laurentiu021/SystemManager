@@ -109,7 +109,7 @@
         <!-- Menu Style (Presets) -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14">
             <StackPanel>
-                <TextBlock Text="MENU STYLE" FontSize="11" FontWeight="SemiBold"
+                <TextBlock Text="MENU STYLE" Style="{StaticResource Caption}" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextMuted}" Margin="0,0,0,10"/>
                 <StackPanel Orientation="Horizontal">
                     <!-- Win10 button with hover preview -->
@@ -120,7 +120,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Classic Full Context Menu (Win10 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                                     <TextBlock Text="This is actually the Win11 menu after clicking &quot;Show more options&quot; — but applied permanently. All entries visible on first right-click, no extra clicks needed."
-                                               Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                               Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
                                         <StackPanel Margin="0,0,12,0">
                                             <TextBlock Text="Default (clean)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
@@ -144,7 +144,7 @@
                                 <StackPanel>
                                     <TextBlock Text="Modern Compact Context Menu (Win11 Style)" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                                     <TextBlock Text="Compact menu with icons. Custom entries appear only after clicking &quot;Show more options&quot; at the bottom. The expanded view is identical to Win10 Default."
-                                               Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                               Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
                                         <StackPanel Margin="0,0,12,0">
                                             <TextBlock Text="Default (compact)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
@@ -170,9 +170,9 @@
                             ToolTip="Active menu style + your manual entry toggles from the list below. Toggle any entry to switch to Custom mode."/>
                 </StackPanel>
                 <TextBlock Text="ⓘ Hover over Win10/Win11 buttons for a visual preview of each menu style."
-                           FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,8,0,0" FontStyle="Italic"/>
+                           Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,8,0,0" FontStyle="Italic"/>
                 <TextBlock Text="{Binding PresetDescription}" Foreground="{DynamicResource TextMuted}"
-                           FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Style="{StaticResource Caption}" Margin="0,8,0,0" TextWrapping="Wrap"
                            Visibility="{Binding PresetDescription, Converter={StaticResource FlexVis}}"/>
             </StackPanel>
         </Border>
@@ -191,7 +191,7 @@
                                  AutomationProperties.Name="Search entries"/>
                         <TextBlock Text="Search entries…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                                   VerticalAlignment="Center" FontSize="12"
+                                   VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                    Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
@@ -277,7 +277,7 @@
                                     </StackPanel.ToolTip>
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                                     <TextBlock Text="{Binding Explanation}" Foreground="{DynamicResource TextMuted}"
-                                               FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                               Style="{StaticResource Caption}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
                                                MaxWidth="450" HorizontalAlignment="Left" Margin="0,1,0,0"
                                                Visibility="{Binding Explanation, Converter={StaticResource FlexVis}}"/>
                                 </StackPanel>

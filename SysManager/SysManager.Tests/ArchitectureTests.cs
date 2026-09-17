@@ -5642,13 +5642,26 @@ public partial class ArchitectureTests
     /// compiles cleanly and throws when the tab is opened. Several of these call sites are inside templates.
     /// Checking that every referenced rung is defined is the only thing standing between a rename and a
     /// crash in a tab nobody opened during review.</para>
-    /// <para>Scoped to the metric rungs plus <c>Body</c> on purpose, which means 16, 20, 22, 26, 30 and 13.
-    /// The <b>text</b> tokens at 11, 12 and 14 (<c>Caption</c>, <c>Subtle</c>, <c>SectionTitle</c>) are
-    /// deliberately NOT enforced here, and not because nobody has got round to it: those three styles carry
-    /// no <c>BasedOn</c>, so applying one REPLACES the keyless <c>TextBlock</c> style instead of merging with
-    /// it and silently drops <c>TextFormattingMode=Ideal</c> and <c>TextRenderingMode=ClearType</c>. A guard
-    /// demanding the swap would be demanding a rendering change on 172 elements. #1634 carries the ordered
-    /// plan: <c>BasedOn</c> on the five older tokens first, then the conversions.</para>
+    /// <para><b>The text tokens at 11, 12 and 14 are in scope now, conditionally.</b> They were excluded while
+    /// <c>Caption</c>, <c>Subtle</c> and <c>SectionTitle</c> carried no <c>BasedOn</c>: applying one replaced
+    /// the keyless <c>TextBlock</c> style rather than merging with it, so a guard demanding the swap would have
+    /// been demanding a rendering change on 172 elements. They carry it now, 145 of those swaps have been made,
+    /// and 24 elements legitimately keep a raw size — so the condition is the same one that decided which 145
+    /// were safe, rather than an allowlist that would rot:
+    /// <list type="bullet">
+    /// <item>at 11 or 12, an element is only required to take the token if it names its own
+    /// <c>Foreground</c>. <c>Caption</c> is <c>TextMuted</c> and <c>Subtle</c> is <c>TextSecondary</c>, both
+    /// different from the <c>TextPrimary</c> a bare TextBlock inherits, so an element with no colour of its
+    /// own would visibly change.</item>
+    /// <item>at 14, only if it names its own <c>FontWeight</c>. <c>SectionTitle</c> adds <c>SemiBold</c> and
+    /// inherits its colour, so the weight is the only thing that can change.</item>
+    /// </list>
+    /// The 24 that stay raw fail neither test, which is why no allowlist is needed. They are the ones #1634
+    /// still owes a decision on, and a NEW element that could have used a token fails here.</para>
+    /// <para>An element setting <c>Style</c> through a <c>&lt;TextBlock.Style&gt;</c> child rather than an
+    /// attribute is skipped, and finding those five is what the build error taught: giving one a <c>Style</c>
+    /// attribute as well is "property has already been set and can be set only once". An attribute scan
+    /// cannot see them.</para>
     /// <para>28 (<c>Display</c>'s size) and 18 were both raw on real numbers until v1.109.1 moved them onto
     /// rungs; no bare TextBlock in the views is drawn at either size now, so neither needs an exception here.
     /// The single remaining raw 24 is About's product name, which has no text rung within two points.</para>
@@ -5661,15 +5674,21 @@ public partial class ArchitectureTests
 
         // The rungs, read from App.xaml rather than restated: a size changed there must change what this
         // guard looks for, or it would enforce a scale the app no longer has.
-        var rungs = Regex.Matches(
-                appXaml,
-                @"<Style x:Key=""(?<key>Metric\w*|Heading|Body)"" TargetType=""TextBlock""[^>]*>\s*<Setter Property=""FontSize"" Value=""(?<size>[\d.]+)""")
-            .ToDictionary(m => m.Groups["key"].Value, m => m.Groups["size"].Value, StringComparer.Ordinal);
+        //
+        // The whole style body is captured and FontSize pulled out of it, rather than requiring FontSize to
+        // be the first setter. Subtle writes Foreground first, and a pattern that insisted on the order would
+        // have silently dropped it from the dictionary — a guard enforcing a scale with a hole in it.
+        var rungs = TypographyStyleBlock().Matches(appXaml)
+            .Select(m => (Key: m.Groups["key"].Value,
+                          Size: Regex.Match(m.Groups["body"].Value,
+                                            @"Property=""FontSize"" Value=""(?<size>[\d.]+)""")))
+            .Where(r => r.Size.Success)
+            .ToDictionary(r => r.Key, r => r.Size.Groups["size"].Value, StringComparer.Ordinal);
 
-        Assert.True(rungs.Count >= 4,
-            $"only {rungs.Count} metric/heading rungs were matched in App.xaml, and there are 4 "
-            + "(Metric, MetricSmall, MetricLarge, MetricHero) plus Heading. The pattern no longer matches "
-            + "the style shape, so this guard is checking nothing.");
+        Assert.True(rungs.Count >= 8,
+            $"only {rungs.Count} typography rungs were matched in App.xaml, out of 9 measured — the four "
+            + "metric rungs, Heading, Body, and the three text tokens Caption/Subtle/SectionTitle. The "
+            + "pattern no longer matches the style shape, so this guard is checking nothing.");
 
         // Body is a rung for this purpose too, but not a METRIC one — it is text, so it is excluded from
         // the "which rung should this have used" lookup only when a size is shared. No size is, today.
@@ -5677,6 +5696,16 @@ public partial class ArchitectureTests
             .Where(r => r.Key.StartsWith("Metric", StringComparison.Ordinal) || r.Key == "Body")
             .Select(r => r.Value)
             .ToHashSet(StringComparer.Ordinal);
+
+        // The three body-text tokens, keyed by the size they draw. Held to a weaker rule than the rungs
+        // above — see the remarks — because 24 elements legitimately keep a raw 11, 12 or 14.
+        var textTokenBySize = rungs
+            .Where(r => r.Key is "Caption" or "Subtle" or "SectionTitle")
+            .ToDictionary(r => r.Value, r => r.Key, StringComparer.Ordinal);
+
+        Assert.True(textTokenBySize.Count == 3,
+            $"{textTokenBySize.Count} of the three body-text tokens were found with a size, not 3. Without "
+            + "all three the conditional half of this guard silently stops covering one of them.");
 
         // The two DNS & Hosts card headings, 16/SemiBold like the MetricCompact tiles but headings rather
         // than values — the nearest heading token (SectionTitle, 14) would shrink them. Named here rather
@@ -5705,7 +5734,10 @@ public partial class ArchitectureTests
                 var flat = WhitespaceRun().Replace(tag.Value, " ");
                 inspected++;
                 var size = Regex.Match(flat, @"FontSize=""(?<size>[\d.]+)""");
-                if (!size.Success || !rungSizes.Contains(size.Groups["size"].Value)) continue;
+                if (!size.Success) continue;
+                var raw = size.Groups["size"].Value;
+                var isRung = rungSizes.Contains(raw);
+                if (!isRung && !textTokenBySize.ContainsKey(raw)) continue;
                 if (flat.Contains("Segoe Fluent", StringComparison.Ordinal)
                     || flat.Contains("Segoe MDL2", StringComparison.Ordinal))
                 {
@@ -5714,16 +5746,34 @@ public partial class ArchitectureTests
                 // An element that already names a style is overriding it on purpose (the sidebar rows do
                 // this); that is a different question from never reaching for the token at all.
                 if (flat.Contains("Style=\"", StringComparison.Ordinal)) continue;
+                if (SetsStyleAsAChildElement(markup, tag)) continue;
                 if (allowedRawText.Any(a => flat.Contains($"Text=\"{a}\"", StringComparison.Ordinal))) continue;
 
-                var raw = size.Groups["size"].Value;
-                var rung = rungs.First(r => r.Value == raw
+                string rung;
+                if (isRung)
+                {
+                    rung = rungs.First(r => r.Value == raw
                                             && (r.Key.StartsWith("Metric", StringComparison.Ordinal) || r.Key == "Body")).Key;
+                }
+                else
+                {
+                    // Only demanded where the swap cannot change what is drawn. At 11 and 12 the token's
+                    // colour differs from the inherited one, so an element with none of its own would visibly
+                    // change; at 14 the token adds SemiBold, so an element with no weight of its own would.
+                    rung = textTokenBySize[raw];
+                    var required = raw == "14"
+                        ? flat.Contains("FontWeight=\"", StringComparison.Ordinal)
+                        : flat.Contains("Foreground=\"", StringComparison.Ordinal);
+                    if (!required) continue;
+                }
+
                 offenders.Add($"{name}: raw FontSize=\"{raw}\" — use Style=\"{{StaticResource {rung}}}\"");
             }
 
             // Every rung a view names must exist. This is what a compile cannot tell you.
-            foreach (var m in Regex.Matches(markup, @"\{StaticResource (?<key>Metric\w*|Heading)\}").Cast<Match>())
+            foreach (var m in Regex.Matches(
+                         markup,
+                         @"\{StaticResource (?<key>Metric\w*|Heading|Caption|Subtle|SectionTitle)\}").Cast<Match>())
             {
                 referenced++;
                 var key = m.Groups["key"].Value;
@@ -5733,9 +5783,11 @@ public partial class ArchitectureTests
             }
         }
 
-        Assert.True(referenced >= 12,
-            $"only {referenced} rung references were found across the views, and twelve call sites use them. "
-            + "The reference pattern stopped matching, so the 'every rung is defined' half proves nothing.");
+        // Vacuity floor: 429 references measured, the bulk of them the three body-text tokens (Subtle alone
+        // is 257). It was 12 while only the metric rungs and Heading were counted.
+        Assert.True(referenced >= 350,
+            $"only {referenced} rung references were found across the views, out of 429 measured. The "
+            + "reference pattern stopped matching, so the 'every rung is defined' half proves nothing.");
 
         // Vacuity floor for the element-aware scan above: ~700 TextBlocks across the views. A collapse means
         // TextBlockStartTag stopped matching and the bypass half is reading almost nothing.
@@ -5745,6 +5797,39 @@ public partial class ArchitectureTests
 
         Assert.True(offenders.Count == 0,
             "the type scale is being bypassed or a rung is missing:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>One keyed TextBlock typography style and everything between its tags.</summary>
+    /// <remarks>
+    /// The body is captured rather than requiring <c>FontSize</c> to be the first setter, because
+    /// <c>Subtle</c> declares <c>Foreground</c> first. Restricted to the known token names so it cannot
+    /// wander into a control template whose <c>Setter.Value</c> holds a nested <c>&lt;Style&gt;</c> and
+    /// swallow the wrong closing tag.
+    /// </remarks>
+    [GeneratedRegex(
+        @"<Style x:Key=""(?<key>Metric\w*|Heading|Body|Caption|Subtle|SectionTitle)"" "
+        + @"TargetType=""TextBlock""[^>]*>(?<body>.*?)</Style>",
+        RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex TypographyStyleBlock();
+
+    /// <summary>
+    /// Whether a <c>TextBlock</c> sets its <c>Style</c> through a <c>&lt;TextBlock.Style&gt;</c> child rather
+    /// than an attribute.
+    /// </summary>
+    /// <remarks>
+    /// Five elements build a Style inline for its <c>Triggers</c>. An attribute scan cannot see that, and
+    /// #1634's sweep tried to give all five a <c>Style</c> attribute as well — "property has already been set
+    /// and can be set only once", five build errors. TextBlocks do not nest, so the first closing tag after
+    /// the start tag is the matching one.
+    /// </remarks>
+    private static bool SetsStyleAsAChildElement(string markup, Match startTag)
+    {
+        if (startTag.Value.TrimEnd().EndsWith("/>", StringComparison.Ordinal)) return false;
+
+        var after = startTag.Index + startTag.Length;
+        var close = markup.IndexOf("</TextBlock>", after, StringComparison.Ordinal);
+        var body = close < 0 ? markup[after..] : markup[after..close];
+        return body.Contains("<TextBlock.Style", StringComparison.Ordinal);
     }
 
     /// <summary>

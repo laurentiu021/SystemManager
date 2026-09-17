@@ -86,7 +86,7 @@
 
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
-                                        <TextBlock Text="{Binding Description}" FontSize="11"
+                                        <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                                         <TextBlock Text="{Binding Category}" FontSize="10"

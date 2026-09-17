@@ -34,15 +34,15 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                 <Border Style="{StaticResource BadgeAccent}" Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="White" FontWeight="SemiBold" FontSize="12"/>
+                                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="White" FontWeight="SemiBold" Style="{StaticResource Subtle}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                 <TextBlock Text="BUILD" Style="{StaticResource SectionLabel}"/>
-                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
+                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="LICENSE" Style="{StaticResource SectionLabel}"/>
-                                <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
+                                <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Margin="8,0,0,0" FontSize="12">
                                     <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
@@ -279,12 +279,12 @@
                                                 <Border Margin="10,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"
                                                         Style="{StaticResource BadgeAccent}">
-                                                    <TextBlock Text="Current" Foreground="White" FontSize="11" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="Current" Foreground="White" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
                                                 </Border>
                                                 <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                                 <!-- A named link rather than a card-wide click target: these
                                                      cards hold selectable text, and a clickable card fights
                                                      text selection. The arrow marks that it leaves the app,
@@ -324,12 +324,12 @@
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0">
                     <StackPanel>
                         <TextBlock Text="Legal" Style="{StaticResource SectionTitle}"/>
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="12">
+                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             SysManager is released under the MIT License. The software is provided "AS IS", without warranty of any kind.
                             All operations are local to your machine — no telemetry, no accounts. Updates are fetched from the public
                             GitHub Releases API and downloaded directly from GitHub.
                         </TextBlock>
-                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" FontSize="12">
+                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             Some tools change system settings, the registry, or delete files. Use them at your own risk: review each
                             action before confirming, and back up important data first. Where it can, SysManager creates a System
                             Restore point before a system-altering operation and makes changes individually reversible.

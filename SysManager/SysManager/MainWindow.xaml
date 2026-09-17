@@ -252,7 +252,7 @@
                                  ToolTip="Type what you want to do — &quot;free up space&quot;, &quot;slow startup&quot;, &quot;popups&quot;."/>
                         <TextBlock Text="Search all tabs…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                                   VerticalAlignment="Center" FontSize="12"
+                                   VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                    Visibility="{Binding NavFilter, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                         <!-- A way back to the tree. After opening a result the box is still filled in, so
                              clearing has to be reachable without selecting the text and deleting it. -->
@@ -388,7 +388,7 @@
                                                         <TextBlock Text="{Binding Label}"
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="{StaticResource UiFont}"
-                                                                   FontSize="12" FontWeight="SemiBold"
+                                                                   Style="{StaticResource Subtle}" FontWeight="SemiBold"
                                                                    Foreground="{DynamicResource TextSecondary}"/>
                                                         <TextBlock Text="{Binding ChildCount, StringFormat=' ({0})'}"
                                                                    VerticalAlignment="Center"
@@ -501,7 +501,7 @@
                                 </TextBlock.Style>
                             </TextBlock>
                             <TextBlock Text="{Binding ElevationBadge}"
-                                       FontSize="11" FontWeight="SemiBold"
+                                       Style="{StaticResource Caption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
@@ -589,7 +589,7 @@
                             <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding About.LatestVersionLabel}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                             <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding About.LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" FontSize="12" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding About.LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button Grid.Column="1" Content="View details" Command="{Binding OpenAboutTabCommand}"
                                 Style="{StaticResource PrimaryButton}" Padding="14,6"/>
@@ -638,7 +638,7 @@
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="ToastTitle" Style="{StaticResource Body}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}"/>
-                        <TextBlock x:Name="ToastDetail" FontSize="11"
+                        <TextBlock x:Name="ToastDetail" Style="{StaticResource Caption}"
                                    Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
                     </StackPanel>
                     <!-- Real Button so the dismiss is keyboard-focusable and Enter/Space-activatable

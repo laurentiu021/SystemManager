@@ -39,7 +39,7 @@
                     <Border CornerRadius="{StaticResource RadiusMd}" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center"
                             Background="{DynamicResource Surface3}"
                             Visibility="{Binding IsHighResolution, Converter={StaticResource FlexVis}}">
-                        <TextBlock Text="HIGH RESOLUTION" FontSize="11" FontWeight="Bold"
+                        <TextBlock Text="HIGH RESOLUTION" Style="{StaticResource Caption}" FontWeight="Bold"
                                    Foreground="{DynamicResource Success}"/>
                     </Border>
                 </StackPanel>

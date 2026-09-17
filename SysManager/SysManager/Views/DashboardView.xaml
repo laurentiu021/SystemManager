@@ -80,7 +80,7 @@
                         <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelTuneUpCommand}"
                                 AutomationProperties.Name="Cancel Quick Tune-Up"
                                 Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
-                        <TextBlock Text="Quick Tune-Up" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                        <TextBlock Text="Quick Tune-Up" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                     </DockPanel>
                     <ProgressBar AutomationProperties.Name="Tune-Up progress" Height="6" Minimum="0" Maximum="100"
                                  Value="{Binding TuneUpProgress}" Margin="0,10,0,0"/>
@@ -110,7 +110,7 @@
                             <TextBlock Text="Tune-Up complete" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center"/>
                             <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusMd}" Padding="8,2" Margin="10,0,0,0"
                                     VerticalAlignment="Center">
-                                <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                            Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
                             </Border>
                         </StackPanel>
@@ -227,7 +227,7 @@
                                         <TextBlock Text="{Binding IconGlyph}" FontFamily="Segoe Fluent Icons"
                                                    FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
-                                        <TextBlock Text="{Binding Message}" FontSize="12" VerticalAlignment="Center"
+                                        <TextBlock Text="{Binding Message}" Style="{StaticResource Subtle}" VerticalAlignment="Center"
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
                                         <!-- Each recommendation named a fix and gave no route to it (#1496).
                                              Not every one has a destination: "Restart recommended" and
@@ -264,7 +264,7 @@
                     Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
                     <ProgressBar AutomationProperties.Name="Computing health score" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Computing health score…" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
+                    <TextBlock Text="Computing health score…" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                 </StackPanel>
             </Border>
 
@@ -282,16 +282,16 @@
                 <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,8">
-                            <TextBlock Text="CPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                            <TextBlock Text="CPU" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource Success}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
                         <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource Success}">
                             <Run Text="{Binding CpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
-                        <TextBlock Text="{Binding CpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="{Binding CpuName}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
-                        <TextBlock Text="{Binding CpuCores}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding CpuCores}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                         <ProgressBar AutomationProperties.Name="CPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding CpuPercent, Mode=OneWay}"
                                      Foreground="{DynamicResource Success}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
@@ -301,20 +301,20 @@
                 <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,8">
-                            <TextBlock Text="MEMORY" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                            <TextBlock Text="MEMORY" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricBlue}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
                         <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricBlue}">
                             <Run Text="{Binding RamPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
-                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
+                        <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0">
                             <Run Text="{Binding RamUsedGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
                             <Run Text="/"/>
                             <Run Text="{Binding RamTotalGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
                             <Run Text="GB used"/>
                         </TextBlock>
-                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0">
+                        <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0">
                             <Run Text="{Binding RamAvailableGB, StringFormat='{}{0:F1}', Mode=OneWay}"/>
                             <Run Text="GB available"/>
                             <Run Text=" · "/>
@@ -329,16 +329,16 @@
                 <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,8">
-                            <TextBlock Text="GPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
+                            <TextBlock Text="GPU" Style="{StaticResource Caption}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}"
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricPurple}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
                         <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
                             <Run Text="{Binding GpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
                         </TextBlock>
-                        <TextBlock Text="{Binding GpuName}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="{Binding GpuName}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
-                        <TextBlock Text="{Binding GpuVram}" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
+                        <TextBlock Text="{Binding GpuVram}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                         <ProgressBar AutomationProperties.Name="GPU usage" Height="4" Minimum="0" Maximum="100" Value="{Binding GpuPercent, Mode=OneWay}"
                                      Foreground="{DynamicResource MetricPurple}" Background="{DynamicResource Surface3}" Margin="0,10,0,0"/>
                     </StackPanel>
@@ -350,7 +350,7 @@
                 <StackPanel>
                     <StackPanel Margin="0,0,0,12">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="TEMPERATURES" FontSize="11" FontWeight="SemiBold"
+                            <TextBlock Text="TEMPERATURES" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <Button Command="{Binding RelaunchAsAdminCommand}" Margin="10,0,0,0"
                                     AutomationProperties.Name="Run as administrator for all temperature sensors"
@@ -421,7 +421,7 @@
             <!-- ═══ ROW 7: Storage ═══ -->
             <Border Grid.Row="7" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
                 <StackPanel>
-                    <TextBlock Text="STORAGE" FontSize="11" FontWeight="SemiBold"
+                    <TextBlock Text="STORAGE" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                     <ItemsControl ItemsSource="{Binding Drives}">
                         <ItemsControl.ItemTemplate>
@@ -440,7 +440,7 @@
                                                  Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
                                                  Background="{DynamicResource Surface3}"
                                                  VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding DisplayUsed}" FontSize="11"
+                                    <TextBlock Grid.Column="2" Text="{Binding DisplayUsed}" Style="{StaticResource Caption}"
                                                Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
                                                MinWidth="120" TextAlignment="Right"/>
                                 </Grid>
@@ -463,7 +463,7 @@
                 <!-- Quick Actions -->
                 <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
-                        <TextBlock Text="QUICK ACTIONS" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="QUICK ACTIONS" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                         <Button Command="{Binding QuickCleanupCommand}"
                                 AutomationProperties.Name="Run Quick Cleanup"
@@ -510,14 +510,14 @@
                                 <DockPanel Margin="0,0,0,6">
                                     <TextBlock Text="{Binding QuickActionName}" FontSize="12" FontWeight="Medium"
                                                DockPanel.Dock="Left" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding QuickActionStatus}" FontSize="11"
+                                    <TextBlock Text="{Binding QuickActionStatus}" Style="{StaticResource Caption}"
                                                DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Foreground="{DynamicResource MetricBlue}"/>
                                 </DockPanel>
                                 <ProgressBar AutomationProperties.Name="Quick action progress" Height="4" Minimum="0" Maximum="100"
                                              Value="{Binding QuickActionProgress, Mode=OneWay}"
                                              Foreground="{DynamicResource MetricBlue}" Background="{DynamicResource Surface3}" Margin="0,0,0,6"/>
-                                <TextBlock Text="{Binding QuickActionDetail}" FontSize="11"
+                                <TextBlock Text="{Binding QuickActionDetail}" Style="{StaticResource Caption}"
                                            Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8"
                                            Visibility="{Binding QuickActionDetail, Converter={StaticResource FlexVis}}"/>
                                 <Button Content="{Binding QuickActionNavigateLabel}"
@@ -533,7 +533,7 @@
                 <!-- System Alerts -->
                 <Border Grid.Column="2" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
-                        <TextBlock Text="SYSTEM ALERTS" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="SYSTEM ALERTS" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                         <ItemsControl ItemsSource="{Binding Alerts}">
                             <ItemsControl.ItemTemplate>
@@ -574,7 +574,7 @@
                                                     </Style>
                                                 </Ellipse.Style>
                                             </Ellipse>
-                                            <TextBlock Text="{Binding Title}" FontSize="12"
+                                            <TextBlock Text="{Binding Title}" Style="{StaticResource Subtle}"
                                                        Foreground="{DynamicResource TextSecondary}"
                                                        TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
@@ -615,7 +615,7 @@
                 <!-- Recent Activity -->
                 <Border Grid.Column="4" Style="{StaticResource Card}" Padding="16">
                     <StackPanel>
-                        <TextBlock Text="RECENT ACTIVITY" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock Text="RECENT ACTIVITY" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                         <ItemsControl ItemsSource="{Binding RecentActivity}">
                             <ItemsControl.ItemTemplate>
@@ -624,7 +624,7 @@
                                         <TextBlock DockPanel.Dock="Right" Text="{Binding TimeAgo}" FontSize="10"
                                                    Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                         <StackPanel>
-                                            <TextBlock Text="{Binding Action}" FontSize="12" FontWeight="Medium"
+                                            <TextBlock Text="{Binding Action}" Style="{StaticResource Subtle}" FontWeight="Medium"
                                                        Foreground="{DynamicResource TextSecondary}"/>
                                             <TextBlock Text="{Binding Detail}" FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}"

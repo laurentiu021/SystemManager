@@ -159,7 +159,7 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="{Binding SelectedVariable.Name, StringFormat='PATH editor — {0}'}"
-                                   FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
+                                   Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}"/>
                         <TextBlock Text="Reorder with the arrows, remove entries, or strip duplicates. Missing folders are highlighted."
                                    Style="{StaticResource Subtle}" Margin="0,2,0,8" TextWrapping="Wrap"/>
                         <Button Content="Remove duplicates" Command="{Binding RemoveDuplicateDirectoriesCommand}"
@@ -193,7 +193,7 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Directory}" FontSize="12" TextWrapping="Wrap"
+                                                <TextBlock Text="{Binding Directory}" Style="{StaticResource Subtle}" TextWrapping="Wrap"
                                                            Foreground="{DynamicResource TextPrimary}"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                     <TextBlock Text="missing folder" FontSize="10" Foreground="{DynamicResource DangerText}" Margin="0,0,10,0"

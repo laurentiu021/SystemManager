@@ -51,7 +51,7 @@
                              AutomationProperties.Name="Filter processes"/>
                     <TextBlock Text="Search processes…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0"
@@ -264,7 +264,7 @@
                                         <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center"
                                                      Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
-                                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                                        Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
                                                        VerticalAlignment="Center" Margin="6,0,0,0"/>
                                         </StackPanel>
@@ -290,7 +290,7 @@
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                                  Fill="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
                                         <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource ProcSafetyText}}"
-                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
                                                    Foreground="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
                                     </StackPanel>
                                 </Border>
@@ -337,7 +337,7 @@
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                                  Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
                                         <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
-                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
                                                    Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
                                     </StackPanel>
                                 </Border>

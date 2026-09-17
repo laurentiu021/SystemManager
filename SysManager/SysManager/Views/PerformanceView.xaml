@@ -50,10 +50,10 @@
             <StackPanel>
                 <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                 <TextBlock Text="⚠ GPU changes require a reboot to take effect."
-                           Foreground="{DynamicResource Danger}" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Danger}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
                            Visibility="{Binding NeedsReboot, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="✓ Original settings snapshot saved — Restore All is available."
-                           Foreground="{DynamicResource Success}" FontSize="12" Margin="0,4,0,0"
+                           Foreground="{DynamicResource Success}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
                            Visibility="{Binding HasSnapshot, Converter={StaticResource BoolToVis}}"/>
             </StackPanel>
         </Border>
@@ -183,7 +183,7 @@
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
                                        Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"/>
                             <TextBlock Text="⚠ Locked to 100 % by the current power plan (High / Ultimate). Switch to Balanced to adjust."
-                                       Foreground="{DynamicResource Warning}" FontSize="11" Margin="20,0,0,4"
+                                       Foreground="{DynamicResource Warning}" Style="{StaticResource Caption}" Margin="20,0,0,4"
                                        TextWrapping="Wrap"
                                        Visibility="{Binding IsProcessorStateLocked, Converter={StaticResource BoolToVis}}"/>
                             <Button Content="Apply Processor State" Command="{Binding ApplyProcessorStateCommand}"
@@ -216,7 +216,7 @@
                                 Same as "Empty Working Set" in RAMMap. Useful before launching a game.
                             </TextBlock>
                             <TextBlock Text="⚠ Apps may feel briefly slower on next access as pages are faulted back in."
-                                       Foreground="{DynamicResource Warning}" FontSize="11" Margin="0,0,0,8"/>
+                                       Foreground="{DynamicResource Warning}" Style="{StaticResource Caption}" Margin="0,0,0,8"/>
                             <Button Content="Trim RAM Now" Command="{Binding TrimRamCommand}"
                                     AutomationProperties.Name="Trim RAM Now — the working set"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>

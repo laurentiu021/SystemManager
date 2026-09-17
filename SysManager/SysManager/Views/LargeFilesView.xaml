@@ -77,7 +77,7 @@
                         <TextBlock Grid.Column="2" Text="{Binding BytesScannedDisplay, StringFormat=scanned {0}}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                         <Button Grid.Column="3" Content="Cancel" AutomationProperties.Name="Cancel large file scan" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Padding="10,4"/>
                     </Grid>
-                    <TextBlock Text="{Binding CurrentFolder}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding CurrentFolder}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
             </StackPanel>
         </Border>

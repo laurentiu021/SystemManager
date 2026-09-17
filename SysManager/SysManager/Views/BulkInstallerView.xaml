@@ -48,7 +48,7 @@
                              AutomationProperties.Name="Filter catalog apps"/>
                     <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
                 <Button Content="Install Selected" Command="{Binding InstallSelectedCommand}"
@@ -94,7 +94,7 @@
                                  AutomationProperties.Name="Search winget packages"/>
                         <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                                   VerticalAlignment="Center" FontSize="12"
+                                   VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                    Visibility="{Binding SearchQuery, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
                 </DockPanel>
@@ -129,7 +129,7 @@
                                                Foreground="{DynamicResource TextPrimary}"
                                                TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Grid.Column="1" Text="{Binding WingetId}"
-                                               FontSize="11" VerticalAlignment="Center"
+                                               Style="{StaticResource Caption}" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextMuted}"
                                                Margin="12,0" TextTrimming="CharacterEllipsis"
                                                MaxWidth="220"/>
@@ -171,7 +171,7 @@
                                 <DataTemplate>
                                     <StackPanel Margin="16,20,16,6">
                                         <TextBlock Text="{Binding Name}"
-                                                   FontWeight="SemiBold" FontSize="14"
+                                                   Style="{StaticResource SectionTitle}"
                                                    Foreground="{DynamicResource TextPrimary}"/>
                                         <Rectangle Height="1" Fill="{DynamicResource Border1}" Margin="0,8,0,0"/>
                                     </StackPanel>
@@ -247,7 +247,7 @@
                                         <Grid>
                                             <Border Background="{DynamicResource Border2}" Width="3" HorizontalAlignment="Left"
                                                     CornerRadius="2" Margin="-8,-4,0,-4"/>
-                                            <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                                            <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                                        FontWeight="SemiBold" Margin="4,0,0,0"
                                                        TextTrimming="CharacterEllipsis" MaxWidth="120"/>
                                         </Grid>
@@ -278,7 +278,7 @@
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-            <TextBlock Text="{Binding InstallEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center"
+            <TextBlock Text="{Binding InstallEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,0,8,0" VerticalAlignment="Center"
                        Visibility="{Binding InstallEtaText, Converter={StaticResource FlexVis}}" DockPanel.Dock="Left"/>
             <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}"/>
         </DockPanel>

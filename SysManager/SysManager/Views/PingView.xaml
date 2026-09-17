@@ -132,7 +132,7 @@
                                                               AutomationProperties.Name="{Binding Name, StringFormat='Enable {0}'}"/>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Host}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="22,2,0,0"/>
+                                            <TextBlock Text="{Binding Host}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="22,2,0,0"/>
                                         </StackPanel>
                                         <Button Content="&#x2715;" DockPanel.Dock="Right" Padding="6,2" FontSize="10"
                                                 VerticalAlignment="Center" Style="{StaticResource GhostButton}"

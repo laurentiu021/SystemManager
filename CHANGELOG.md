@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.109.3] - 2026-09-17
+
+**A tab that failed to load could say nothing at all.** Every tab starts loading in the background the
+moment you open it, and that background work was wrapped in a net that only caught six kinds of failure.
+Anything else vanished: no message, no log line, no crash — the tab simply sat there half-filled, and there
+was no way to tell it apart from a tab that had nothing to show. One of those invisible failures had been
+happening on Preinstalled Apps at every launch. The net now catches everything and records it.
+
+### Fixed
+
+- **A view model's background load no longer loses an unexpected failure.** The boundary that wraps every
+  tab's start-up work caught six exception types and let the rest through, where they were not merely
+  unlogged but unobservable: nothing awaits that work, so the failure stayed on a task that is kept alive by
+  the tab itself and therefore never reaches the process-wide unobserved-task handler, which only runs when
+  such a task is finalised. It is now logged at Fatal with the tab's name and the failure's type, and
+  recorded on the view model so a test — or, later, the tab itself — can see it.
+- **A `NullReferenceException` thrown on every launch by Preinstalled Apps' package parser** was one of
+  those. It was found only because an unrelated test was changed to wait for the load, which is exactly the
+  shape of the problem: the sole way to notice was to wait for something the application never waits for.
+
+### Changed
+
+- **A failure nobody predicted is rethrown when a debugger is attached**, so it is loud while someone is
+  working on the code and quiet in a released build. Gated on the debugger rather than on a debug build,
+  because every build this project produces is Release — a `#if DEBUG` branch here would compile into
+  nothing that ever runs and could not be tested.
+
 ## [1.109.2] - 2026-09-17
 
 **A tab promised to turn off ads and could not, and the tab that catches sneaky installs was filed away

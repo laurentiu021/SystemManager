@@ -77,17 +77,50 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     public Task InitializationComplete { get; private set; } = Task.CompletedTask;
 
     /// <summary>
+    /// The exception that ended this tab's initialization, or <c>null</c> if init succeeded or was
+    /// cancelled during shutdown.
+    /// </summary>
+    /// <remarks>
+    /// The boundary below logs what it catches, and a log line is the only trace a swallowed init fault
+    /// leaves. That makes the promise in <see cref="InitializeAsync"/>'s summary unassertable: proving it
+    /// through Serilog means assigning the global <c>Log.Logger</c>, which every test in the run shares and
+    /// which this suite deliberately never does (see <c>LogServiceLogDirTests</c>). Recording the fault on
+    /// the view model makes the same thing observable without touching process-wide state, and states WHICH
+    /// exception was caught rather than merely that something was written.
+    /// <para>Cancellation is not recorded. A tab closing mid-load is the expected path, not a fault, and
+    /// treating it as one would make this property true for almost every tab on shutdown.</para>
+    /// </remarks>
+    public Exception? InitializationFault { get; private set; }
+
+    /// <summary>
+    /// Whether an exception no specific handler in <see cref="InitializeAsync"/> expected is rethrown after
+    /// being logged, instead of being swallowed. Defaults to "only under a debugger".
+    /// </summary>
+    /// <remarks>
+    /// #2258 settled on logging at Fatal and rethrowing in a developer build. The condition is
+    /// <see cref="System.Diagnostics.Debugger.IsAttached"/> rather than <c>#if DEBUG</c> because every build
+    /// this project produces is Release — CI builds Release in all nine of its build steps, and the only
+    /// binary anyone runs is the published one — so a <c>#if DEBUG</c> branch would compile into nothing
+    /// that ever executes AND could not be covered by a test. A debugger is the accurate spelling of "a
+    /// developer is watching", and it leaves both branches compiled and asserted.
+    /// <para>Overridable so a test can pin each branch without mutating global state.</para>
+    /// </remarks>
+    protected internal virtual bool RethrowsUnexpectedInitFaults
+        => System.Diagnostics.Debugger.IsAttached;
+
+    /// <summary>
     /// Safely launches an async task from a constructor or non-async context.
     /// Exceptions are caught and logged instead of becoming unobserved task
     /// exceptions that could crash the application (CQ-M3). The running task is exposed
-    /// via <see cref="InitializationComplete"/> for deterministic test observation.
+    /// via <see cref="InitializationComplete"/> for deterministic test observation, and whatever ended it
+    /// via <see cref="InitializationFault"/>.
     /// </summary>
     protected void InitializeAsync(Func<Task> asyncAction, [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
     {
         InitializationComplete = RunInitAsync(asyncAction, callerName);
     }
 
-    private static async Task RunInitAsync(Func<Task> asyncAction, string callerName)
+    private async Task RunInitAsync(Func<Task> asyncAction, string callerName)
     {
         try
         {
@@ -99,23 +132,50 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
         }
         catch (InvalidOperationException ex)
         {
+            InitializationFault = ex;
             Log.Error(ex, "Invalid operation in async initialization of {Caller}", callerName);
         }
         catch (UnauthorizedAccessException ex)
         {
+            InitializationFault = ex;
             Log.Error(ex, "Access denied in async initialization of {Caller}", callerName);
         }
         catch (System.IO.IOException ex)
         {
+            InitializationFault = ex;
             Log.Error(ex, "I/O error in async initialization of {Caller}", callerName);
         }
         catch (System.Net.Http.HttpRequestException ex)
         {
+            InitializationFault = ex;
             Log.Error(ex, "Network error in async initialization of {Caller}", callerName);
         }
         catch (TimeoutException ex)
         {
+            InitializationFault = ex;
             Log.Error(ex, "Timeout in async initialization of {Caller}", callerName);
+        }
+        // The final net, and the one place in this codebase where catching Exception is the correct
+        // answer rather than a tolerated one. The five handlers above name the faults an init is EXPECTED
+        // to hit; that list cannot converge, and it did not — it had six entries and missed the first real
+        // fault anyone went looking for, a NullReferenceException from DebloaterService.ParsePackages that
+        // had been thrown on every launch and reported by nothing (#2258).
+        //
+        // Without this, the exception is not merely unlogged, it is unobservable. Nothing in production
+        // awaits InitializationComplete, so the fault stays on the task; App wires
+        // TaskScheduler.UnobservedTaskException, but that fires from the task's FINALIZER, and this task is
+        // rooted by InitializationComplete on a view model the nav table caches for the process lifetime.
+        // A rooted task is never finalized, so that handler never runs. The tab simply stays half-loaded.
+        //
+        // Fatal, not Error: the five above describe a specific operation failing, which a tab can be
+        // half-useful after. Arriving here means an assumption the code makes about itself was wrong, and
+        // whoever reads the log has no other trace that this tab never finished.
+        catch (Exception ex)
+        {
+            InitializationFault = ex;
+            Log.Fatal(ex, "Unhandled {Fault} in async initialization of {Caller}; the tab is left "
+                        + "half-initialised", ex.GetType().FullName, callerName);
+            if (RethrowsUnexpectedInitFaults) throw;
         }
     }
 

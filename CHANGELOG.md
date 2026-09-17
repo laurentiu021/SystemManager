@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.109.2] - 2026-09-17
+
+**A tab promised to turn off ads and could not, and the tab that catches sneaky installs was filed away
+from the one that removes them.** "Debloater & Ads" only ever removed preinstalled Store apps — it has no ad
+controls at all, and the five switches that do turn ads and suggestions off are in Privacy & Telemetry. So
+anyone who came to it for that reason found a list of apps and left none the wiser. It is called
+**Preinstalled Apps** now, it says where the ad switches actually are, and searching "ads" finally leads to
+them. Separately, **New App Alerts moved to the Apps group**, directly above Uninstaller: it tells you when
+something installed itself, and the next thing you want is to get rid of it.
+
+### Changed
+
+- **"Debloater & Ads" is now "Preinstalled Apps."** The old name promised a capability the tab never had.
+  The page now ends with a line pointing at Privacy & Telemetry for ads and suggestions, and "debloat" still
+  finds the tab from the sidebar search for anyone who knows the old word.
+- **Searching "ads" now finds Privacy & Telemetry.** It did not before — the word was only attached to the
+  tab that cannot change anything about ads, which is the whole reason the name misled.
+- **New App Alerts sits in Apps, above Uninstaller**, instead of under Monitor. Detection and its remedy are
+  now one click apart. "App Alerts" under Monitor also read as "notifications from apps", which is a
+  different tab entirely (Notification Blocker).
+- **Apps' sidebar subtitle** reads "Install, update, remove and catch new installs" to match its four tabs.
+
+### Fixed
+
+- **The README's group table was missing Large Files** and would have kept listing New App Alerts under
+  Monitor. That table is the first complete picture of the app a reader gets, and nothing checked it against
+  the sidebar until now.
+
 ## [1.109.1] - 2026-09-16
 
 **The big numbers on a few tabs were each their own size; now they share the app's.** A battery percentage,

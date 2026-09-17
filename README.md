@@ -138,12 +138,12 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 | 🏠 Dashboard | Dashboard |
 | 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub 🔬 |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
-| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · New App Alerts · Settings Watchdog 🔬 |
+| 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · Settings Watchdog 🔬 |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
-| 💾 Storage & Files | Disk Analyzer · Duplicate Finder · File Lock Detector |
+| 💾 Storage & Files | Disk Analyzer · Large Files · Duplicate Finder · File Lock Detector |
 | 🌐 Network | Ping · Traceroute · Speed Test · Bandwidth Monitor · Network Repair · DNS & Hosts |
-| 📦 Apps | App Updates · Bulk Installer · Uninstaller |
-| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Debloater & Ads · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks |
+| 📦 Apps | App Updates · Bulk Installer · New App Alerts · Uninstaller |
+| 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Preinstalled Apps · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control · Notification Blocker 🔬 |
 | ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export / Import · CLI Interface 🔬 · Environment Variables |
@@ -1007,8 +1007,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   blocking and unblocking write the same protected setting, and each says so
   before asking you to confirm anything
 
-### Debloater & Ads
-Remove preinstalled Windows Store apps you don't use:
+### Preinstalled Apps
+Remove preinstalled Windows Store apps you don't use. This tab has no ad or suggestion controls —
+those are in **Privacy & Telemetry**, and it used to be called "Debloater & Ads", which promised
+them:
 - **Scan** all installed Store apps with name, publisher, and a short description
 - **Curated "common bloat" preset** pre-selects safe, frequently-removed apps
   (Bing News/Weather, Clipchamp, Solitaire, Xbox apps, consumer Teams, and more)
@@ -1442,14 +1444,11 @@ offers, "rate us" prompts:
 </details>
 
 <details>
-<summary><strong>📊 Monitor</strong> — Resource History · New App Alerts · File Lock · Settings Watchdog</summary>
+<summary><strong>📊 Monitor</strong> — Resource History · File Lock · Settings Watchdog</summary>
 <br>
 <p>
 <a href="docs/screenshots/19-resource-history.png"><img src="docs/screenshots/19-resource-history.png" width="280" alt="Resource History"></a>&nbsp;
-<a href="docs/screenshots/21-app-alerts.png"><img src="docs/screenshots/21-app-alerts.png" width="280" alt="App Installation Alerts"></a>&nbsp;
-<a href="docs/screenshots/22-file-lock.png"><img src="docs/screenshots/22-file-lock.png" width="280" alt="File Lock Detector"></a>
-</p>
-<p>
+<a href="docs/screenshots/22-file-lock.png"><img src="docs/screenshots/22-file-lock.png" width="280" alt="File Lock Detector"></a>&nbsp;
 <a href="docs/screenshots/23-settings-watchdog.png"><img src="docs/screenshots/23-settings-watchdog.png" width="280" alt="Settings Watchdog"></a>
 </p>
 <p><em>Bandwidth Monitor is implemented but its screenshot is still being recaptured — the
@@ -1493,16 +1492,17 @@ of real file paths, which needs redacting before it can ship.</em></p>
 </details>
 
 <details>
-<summary><strong>📦 Apps</strong> — App Updates · Bulk Installer</summary>
+<summary><strong>📦 Apps</strong> — App Updates · Bulk Installer · New App Alerts</summary>
 <br>
 <p>
 <a href="docs/screenshots/36-app-updates.png"><img src="docs/screenshots/36-app-updates.png" width="280" alt="App Updates"></a>&nbsp;
-<a href="docs/screenshots/37-bulk-installer.png"><img src="docs/screenshots/37-bulk-installer.png" width="280" alt="Bulk Installer"></a>
+<a href="docs/screenshots/37-bulk-installer.png"><img src="docs/screenshots/37-bulk-installer.png" width="280" alt="Bulk Installer"></a>&nbsp;
+<a href="docs/screenshots/21-app-alerts.png"><img src="docs/screenshots/21-app-alerts.png" width="280" alt="New App Alerts"></a>
 </p>
 </details>
 
 <details>
-<summary><strong>🛡️ Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Debloater · Browser Cleaner · Defender</summary>
+<summary><strong>🛡️ Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Preinstalled Apps · Browser Cleaner · Defender</summary>
 <br>
 <p>
 <a href="docs/screenshots/39-privacy-telemetry.png"><img src="docs/screenshots/39-privacy-telemetry.png" width="280" alt="Privacy &amp; Telemetry"></a>&nbsp;
@@ -1510,7 +1510,7 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <a href="docs/screenshots/41-app-blocker.png"><img src="docs/screenshots/41-app-blocker.png" width="280" alt="App Blocker"></a>
 </p>
 <p>
-<a href="docs/screenshots/42-debloater.png"><img src="docs/screenshots/42-debloater.png" width="280" alt="Debloater &amp; Ads"></a>&nbsp;
+<a href="docs/screenshots/42-debloater.png"><img src="docs/screenshots/42-debloater.png" width="280" alt="Preinstalled Apps"></a>&nbsp;
 <a href="docs/screenshots/43-browser-cleaner.png"><img src="docs/screenshots/43-browser-cleaner.png" width="280" alt="Browser Cleaner"></a>&nbsp;
 <a href="docs/screenshots/45-defender-tweaks.png"><img src="docs/screenshots/45-defender-tweaks.png" width="280" alt="Defender Tweaks"></a>
 </p>

@@ -314,7 +314,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView), keywords: "task manager, whats running, end task, cpu usage"),
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true, keywords: "cpu history, usage over time, graph"),
             Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView), keywords: "webcam, camera, microphone, spying, watching, listening, location"),
-            Tab<AppAlertsViewModel>("nav-app-alerts",           "New App Alerts",     typeof(Views.AppAlertsView), keywords: "something installed itself, new programs, unwanted install"),
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true, keywords: "settings changed, something changed my settings")),
 
         Group("grp-cleanup", "Cleanup", "\uE74D", "Free up space and tidy up",  // Delete
@@ -346,16 +345,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<NetworkRepairViewModel>("nav-network-repair", "Network Repair", typeof(Views.NetworkRepairView), keywords: "no internet, wifi not working, fix connection"),
             Tab<DnsHostsViewModel>("nav-dns-hosts", "DNS & Hosts", typeof(Views.DnsHostsView), keywords: "dns, block websites, hosts file, faster browsing")),
 
-        Group("grp-apps", "Apps", "\uE71D", "Install, update and remove programs",  // AllApps
+        Group("grp-apps", "Apps", "\uE71D", "Install, update, remove and catch new installs",  // AllApps
             Tab<AppUpdatesViewModel>("nav-app-updates",    "App Updates",    typeof(Views.AppUpdatesView), keywords: "update apps, out of date programs"),
             Tab<BulkInstallerViewModel>("nav-bulk-installer", "Bulk Installer", typeof(Views.BulkInstallerView), keywords: "install apps, set up new pc, install several"),
+            Tab<AppAlertsViewModel>("nav-app-alerts",      "New App Alerts", typeof(Views.AppAlertsView), keywords: "something installed itself, new programs, unwanted install"),
             Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(Views.UninstallerView), keywords: "remove program, uninstall, get rid of")),
 
         Group("grp-privacy", "Privacy & Security", "\uE72E", "Tracking, ads and preinstalled apps",  // Lock
-            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id"),
+            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id, ads, adverts, suggestions, tips, spotlight"),
             Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(Views.FileShredderView), keywords: "delete for good, wipe, unrecoverable, erase"),
             Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView), keywords: "block program, stop app running, prevent"),
-            Tab<DebloaterViewModel>("nav-debloater",        "Debloater & Ads",       typeof(Views.DebloaterView), keywords: "ads, popups, bloatware, preinstalled, remove apps, junk"),
+            Tab<DebloaterViewModel>("nav-debloater",        "Preinstalled Apps",     typeof(Views.DebloaterView), keywords: "debloat, debloater, bloatware, preinstalled, came with the laptop, remove apps, junk, games"),
             Tab<BrowserCleanerViewModel>("nav-browser-cleaner", "Browser Cleaner",   typeof(Views.BrowserCleanerView), keywords: "clear history, cookies, browser cache"),
             Tab<EdgeOneDriveViewModel>("nav-edge-onedrive", "Edge/OneDrive Remover", typeof(Views.EdgeOneDriveView), keywords: "remove edge, remove onedrive, uninstall microsoft apps"),
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView), keywords: "antivirus, defender, virus protection")),
@@ -401,8 +401,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// <para>The subtitle is written, not generated. It used to be every child label joined with " · ",
     /// which for System came to 175 characters in a slot about 26 characters wide: two of eleven tabs
     /// survived the ellipsis, and the same was true of ten other groups. It also answered the wrong
-    /// question. Someone looking for why ads keep appearing does not scan for "Debloater &amp; Ads"; the
-    /// subtitle now says "ads" in the words she would use. Two lines, so it fits whole.</para>
+    /// question. Someone looking for why ads keep appearing does not scan a group for a tab name; the
+    /// subtitle now says "ads" in the words she would use. Two lines, so it fits whole.
+    /// <para>That example used to name the tab called "Debloater &amp; Ads". It is "Preinstalled Apps" now,
+    /// because the name promised ad controls the tab never had — those are five toggles in Privacy &amp;
+    /// Telemetry, which is also where "ads" as a search word now leads (#1515).</para></para>
     /// <para>Written copy can drift from the tabs it describes when one moves group, which is why it lives
     /// on the same line as the group it belongs to — the two are edited together, and the full list of
     /// children is still available verbatim in the tooltip below.</para>

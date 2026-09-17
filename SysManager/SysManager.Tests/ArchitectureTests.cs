@@ -4917,9 +4917,11 @@ public partial class ArchitectureTests
     /// <para>Order matters in the discriminator list below. Ctrl+F's claim reads "the 12 tabs that have one,
     /// and selects…" and the status-line claim reads "all 53 tabs that have one" — the second phrase is a
     /// PREFIX of the first, so testing it first would compare Ctrl+F against the status count.</para></para>
-    /// <para>Screenshot filenames carry numbers too — <c>52-system-logs.png</c>, <c>55-about.png</c> — and
-    /// are not matched, because the pattern requires the word "tabs" after the number rather than a digit
-    /// anywhere. That is the difference between this and the sweep that first found the drift.</para>
+    /// <para>The pattern requires the word "tabs" after the number rather than a digit anywhere, which is the
+    /// difference between this and the sweep that first found the drift. It also kept screenshot filenames out
+    /// of the population back when they carried a position prefix (<c>52-system-logs.png</c>); #1664 removed
+    /// those numbers, so that particular collision can no longer arise, but a README is prose and the next
+    /// digit next to a noun will not be a filename.</para>
     /// </remarks>
     [Fact]
     public void EveryReadmeTabCount_MatchesTheSource()
@@ -5225,16 +5227,11 @@ public partial class ArchitectureTests
     /// Both went stale in the release that added a tab, and both are the kind of number a contributor reads to
     /// decide what to capture next — "43 of the 58 tabs have a shot. The 16 without one are…" was 58/15 while
     /// the source said 59/16, so the list was one name short and a reader would have believed it (#1664).
-    /// <para>Membership is checked as far as it can be without settling a naming question first: every name in
-    /// the list must be a real sidebar label, and the list's length must equal the uncovered count. What is NOT
-    /// asserted is which screenshot covers which tab, because deciding that mechanically means requiring the
-    /// filename slug to equal the label slug — and two files legitimately do not
-    /// (<c>14-standby-cleaner.png</c> for "Standby List Cleaner", <c>16-cpu-affinity.png</c> for "CPU Core
-    /// Affinity"), so the strict rule would fail on correct files. #1664 carries that decision.</para>
-    /// <para>The number prefix is deliberately not compared against sidebar position either. It was accurate
-    /// when each file was captured and 23 of 43 are now wrong, because inserting a tab renumbers every tab
-    /// below it without touching a filename. Asserting it today would fail 23 times over a convention nobody
-    /// has chosen to keep; the docs now say plainly that the number only orders the folder.</para>
+    /// <para>Membership is checked here: every name in the list must be a real sidebar label, and the list's
+    /// length must equal the uncovered count. WHICH screenshot covers which tab is checked separately by
+    /// <see cref="EveryScreenshotSlug_NamesARealTab"/>, which the filenames only became able to answer once
+    /// #1664 dropped their position prefix — while the prefix was there, a filename numbered for the wrong
+    /// tab was indistinguishable from one numbered for the right tab.</para>
     /// </remarks>
     [Fact]
     public void TheScreenshotInventory_MatchesWhatIsOnDisk()
@@ -5315,6 +5312,109 @@ public partial class ArchitectureTests
     private static partial Regex ScreenshotGapClaim();
 
     /// <summary>
+    /// Every screenshot filename names a real tab, and every gallery image's alt text names the same tab
+    /// its filename does.
+    /// </summary>
+    /// <remarks>
+    /// The files used to be prefixed with the tab's position on the left rail, and that prefix re-broke on
+    /// every insertion: inserting one tab shifts every tab below it and touches no filename, so 23 of the 43
+    /// files were numbered for a different tab than the one they showed, one by eight places. #1664 settled
+    /// on the label alone, which has no such failure mode, and this is the guard that convention buys —
+    /// with a number in the name there was nothing mechanical to check, because a wrong number is
+    /// indistinguishable from a right one.
+    /// <para>The cost is that renaming a tab leaves its screenshot orphaned here until the file is renamed
+    /// too, and that is the point rather than a side effect: the header rendered INSIDE the image says the
+    /// old name as well, so the file needs recapturing, not moving. v1.109.2 renamed "Debloater &amp; Ads" to
+    /// "Preinstalled Apps" and the shot still shows the old header today — this names the file that has to
+    /// change.</para>
+    /// <para>The alt text is checked against the same source for a different reader. It is what someone
+    /// using a screen reader gets INSTEAD of the picture, so an alt text left on the old name is worse than
+    /// a stale filename, not better: a sighted reader sees the current header in the image and works it out,
+    /// and that reader has nothing else to go on. Compared as slugs so the honest HTML escaping in
+    /// <c>alt="Privacy &amp;amp; Telemetry"</c> is not a failure.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryScreenshotSlug_NamesARealTab()
+    {
+        var labels = SidebarTabLabels();
+        Assert.True(labels.Count >= 50,
+            $"only {labels.Count} tab labels were parsed from MainWindowViewModel — the set every filename "
+          + "below is checked against is wrong, so a pass proves nothing.");
+
+        // Two tabs whose labels reduce to one slug would leave one of them permanently unable to have a
+        // shot of its own. None do today; if two ever did, the naming rule itself needs a decision, and
+        // that is a different failure from a stale filename.
+        var collisions = labels
+            .GroupBy(TabSlug, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key}.png would have to serve: "
+                       + string.Join(", ", g.OrderBy(l => l, StringComparer.Ordinal)))
+            .ToList();
+        Assert.True(collisions.Count == 0,
+            "two tabs reduce to the same screenshot name, so one of them can never be shown here:\n  "
+          + string.Join("\n  ", collisions));
+
+        var known = labels.Select(TabSlug).ToHashSet(StringComparer.Ordinal);
+
+        var shotsDir = Path.Combine(FindRepoRoot(), "docs", "screenshots");
+        var onDisk = Directory.EnumerateFiles(shotsDir, "*.png", SearchOption.TopDirectoryOnly)
+            .Select(f => Path.GetFileNameWithoutExtension(f))
+            .ToList();
+
+        // Vacuity floor: 43 files today.
+        Assert.True(onDisk.Count >= 40,
+            $"only {onDisk.Count} screenshots were found in docs/screenshots, out of 43 measured — the "
+          + "folder scan is wrong, so the check below ran over almost nothing.");
+
+        var orphans = onDisk
+            .Where(slug => !known.Contains(slug))
+            .OrderBy(slug => slug, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            $"{orphans.Count} screenshot(s) are named for no tab in the sidebar. Either the tab was renamed "
+          + "and the file was not, or the file is for a tab that no longer exists. See the File naming "
+          + "section of docs/screenshots/README.md, and recapture rather than only renaming — the header "
+          + $"inside the image says the old name too:\n  {string.Join("\n  ", orphans.Select(s => s + ".png"))}");
+
+        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var gallery = GalleryImage().Matches(readme).ToList();
+
+        // Vacuity floor: 43 gallery images today, one per file. A markup change that stopped the pairs
+        // parsing would pass an empty loop and leave every alt text unchecked.
+        Assert.True(gallery.Count >= 40,
+            $"only {gallery.Count} gallery images parsed from README.md, out of 43 measured — the markup "
+          + "shape changed, so no alt text was compared against anything.");
+
+        var mislabelled = gallery
+            .Where(m => TabSlug(m.Groups["alt"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
+                        != m.Groups["slug"].Value)
+            .Select(m => $"{m.Groups["slug"].Value}.png is captioned \"{m.Groups["alt"].Value}\"")
+            .ToList();
+
+        Assert.True(mislabelled.Count == 0,
+            $"{mislabelled.Count} gallery image(s) are captioned for a different tab than the file shows. "
+          + "That caption is what a screen-reader user gets instead of the picture, so it is the half that "
+          + $"matters most:\n  {string.Join("\n  ", mislabelled)}");
+    }
+
+    /// <summary>
+    /// A tab's screenshot name: the sidebar label lowercased, with each run of non-alphanumeric characters
+    /// collapsed to one hyphen. "Profile Export / Import" becomes <c>profile-export-import</c>.
+    /// </summary>
+    private static string TabSlug(string label)
+        => NonSlugRun().Replace(label.ToLowerInvariant(), "-").Trim('-');
+
+    /// <summary>Any run of characters a screenshot filename spells as a single hyphen.</summary>
+    [GeneratedRegex(@"[^a-z0-9]+", RegexOptions.Compiled)]
+    private static partial Regex NonSlugRun();
+
+    /// <summary>One gallery image, capturing its file stem and its alt text.</summary>
+    [GeneratedRegex(@"<img\s+src=""docs/screenshots/(?<slug>[0-9A-Za-z-]+)\.png""[^>]*?alt=""(?<alt>[^""]*)""",
+                    RegexOptions.Compiled)]
+    private static partial Regex GalleryImage();
+
+    /// <summary>
     /// How many view models override a <c>ViewModelBase</c> accelerator seam. Matches the override's
     /// DECLARATION, not a mention: the property name also appears in comments (stripped) and in
     /// <c>MainWindowViewModel.AcceleratorCommand</c>, which reads it rather than providing it.
@@ -5361,8 +5461,8 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A "N tabs" claim, allowing one qualifier ("58 feature tabs"). The word is REQUIRED, so a screenshot
-    /// filename like <c>52-system-logs.png</c> cannot match.
+    /// A "N tabs" claim, allowing one qualifier ("58 feature tabs"). The word is REQUIRED, so a bare digit
+    /// elsewhere on the line — an image width, a version, a KB size — cannot be read as a tab count.
     /// </summary>
     [GeneratedRegex(@"(?<n>\d+) (?:\w+ )?tabs\b", RegexOptions.Compiled)]
     private static partial Regex ReadmeTabCount();

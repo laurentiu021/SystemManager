@@ -84,7 +84,7 @@
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <DockPanel Margin="0,0,0,4">
                                                 <TextBlock DockPanel.Dock="Right"
-                                                           Text="{Binding VolumeDisplay}" FontSize="12"
+                                                           Text="{Binding VolumeDisplay}" Style="{StaticResource Subtle}"
                                                            FontWeight="SemiBold" MinWidth="40"
                                                            TextAlignment="Right"
                                                            Foreground="{DynamicResource TextSecondary}"/>
@@ -135,7 +135,7 @@
                                                               VerticalContentAlignment="Center"
                                                               ToolTip="SysManager can send this app to a specific device, but Windows does not report which one it is using now."
                                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Output device for {0}'}"/>
-                                                    <TextBlock Text="Choose a device" FontSize="12"
+                                                    <TextBlock Text="Choose a device" Style="{StaticResource Subtle}"
                                                                Margin="10,0,0,0" VerticalAlignment="Center"
                                                                IsHitTestVisible="False"
                                                                Foreground="{DynamicResource TextMuted}"

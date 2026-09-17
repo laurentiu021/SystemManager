@@ -43,7 +43,7 @@
                                   IsChecked="{Binding HideWindowsEntries}" Margin="12,0,6,0"
                                   VerticalAlignment="Center" ToolTip="Hide Windows/Microsoft system entries"
                                   AutomationProperties.Name="Hide Windows/Microsoft system entries"/>
-                    <TextBlock Text="Hide system" FontSize="11" Foreground="{DynamicResource TextMuted}"
+                    <TextBlock Text="Hide system" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="{Binding ScanSummary}" Style="{StaticResource Subtle}"
@@ -151,7 +151,7 @@
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                                  Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
                                         <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
-                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
                                                    Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
                                     </StackPanel>
                                 </Border>
@@ -198,7 +198,7 @@
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                                  Fill="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
                                         <TextBlock Text="{Binding Safety, Converter={StaticResource ProcSafetyText}}"
-                                                   FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
                                                    Foreground="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
                                     </StackPanel>
                                 </Border>

@@ -41,7 +41,7 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Allow notifications" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                     <TextBlock Text="The master switch. Off silences every notification — including calendar and reminder alerts — until you turn it back on."
-                               FontSize="11" Foreground="{DynamicResource TextMuted}"
+                               Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                TextWrapping="Wrap" Margin="0,2,16,0"/>
                 </StackPanel>
             </DockPanel>
@@ -72,7 +72,7 @@
                              AutomationProperties.Name="Filter notification senders"/>
                     <TextBlock Text="Search apps…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding SearchText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
             </WrapPanel>
@@ -107,7 +107,7 @@
 
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
-                                        <TextBlock Text="{Binding ActivitySummary, Mode=OneTime}" FontSize="11"
+                                        <TextBlock Text="{Binding ActivitySummary, Mode=OneTime}" Style="{StaticResource Caption}"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
                                         <TextBlock Text="{Binding Aumid, Mode=OneTime}" FontSize="10"

@@ -91,7 +91,7 @@
             <ProgressBar AutomationProperties.Name="App update progress" Grid.Column="0" Height="6" Minimum="0" Maximum="100"
                          Value="{Binding Progress}"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"/>
-            <TextBlock Grid.Column="1" Text="{Binding UpgradeEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" Text="{Binding UpgradeEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Center"
                        Visibility="{Binding UpgradeEtaText, Converter={StaticResource FlexVis}}"/>
             <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{Binding StatusMessage}" Style="{StaticResource SubtleStatusLine}"/>
         </Grid>

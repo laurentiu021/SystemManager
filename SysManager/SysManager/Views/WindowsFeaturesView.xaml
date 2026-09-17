@@ -42,12 +42,12 @@
                              AutomationProperties.Name="Filter Windows features"/>
                     <TextBlock Text="Search features…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding FilterText, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
                 <Border Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}" BorderThickness="1" CornerRadius="{StaticResource RadiusSm}" Padding="6,2" Margin="4,0"
                         Visibility="{Binding PendingReboot, Converter={StaticResource BoolToVis}}">
-                    <TextBlock Text="⚠ Reboot pending" FontSize="11" Foreground="{DynamicResource Warning}"/>
+                    <TextBlock Text="⚠ Reboot pending" Style="{StaticResource Caption}" Foreground="{DynamicResource Warning}"/>
                 </Border>
             </WrapPanel>
         </Border>

@@ -19,7 +19,7 @@
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center"
                                  Fill="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
-                        <TextBlock Text="{Binding Headline}" FontSize="14" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding Headline}" Style="{StaticResource SectionTitle}"
                                    VerticalAlignment="Center"
                                    Foreground="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
                     </StackPanel>
@@ -28,7 +28,7 @@
                          clipped instead of wrapped (#1807). These two lines are the whole point of the
                          callout, so they must not be the ones that get cut. -->
                     <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextSecondary}"
-                               FontSize="12" TextWrapping="Wrap" Margin="18,6,0,0"/>
+                               Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="18,6,0,0"/>
                     <TextBlock Text="{Binding Comparison}" Style="{StaticResource Caption}"
                                TextWrapping="Wrap" Margin="18,4,0,0"
                                Visibility="{Binding Comparison, Converter={StaticResource FlexVis}}"/>
@@ -97,7 +97,7 @@
                              progress tick; nothing bound it, so the "time remaining" for a test that can
                              run for minutes was computed and thrown away. Same shape as the ETA lines in
                              AppUpdatesView / BulkInstallerView / CleanupView. -->
-                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
                                    Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel Ookla speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
@@ -131,7 +131,7 @@
                         <!-- Shares the single EstimatedTime property with the Ookla card above; only one
                              engine runs at a time (both are gated on the shared SpeedProgress/CTS), so the
                              two lines can never show conflicting figures. -->
-                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
                                    Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel HTTP speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
@@ -143,7 +143,7 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="14" Foreground="{DynamicResource Info}" VerticalAlignment="Top" Margin="0,0,10,0"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" FontSize="12">
+                        <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">Ookla</Run><Run Text=" measures raw TCP throughput to a nearby server — most accurate for ISP bandwidth. "/>
                             <Run FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}">HTTP</Run><Run Text=" tests download/upload via Cloudflare CDN — reflects real web browsing speed but may show lower results due to HTTP overhead and CDN routing."/>
                         </TextBlock>

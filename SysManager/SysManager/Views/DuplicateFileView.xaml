@@ -105,7 +105,7 @@
                                         <Run Text="{Binding FileSize, Mode=OneWay, StringFormat='{}{0:N0} bytes each'}"/>
                                     </TextBlock>
                                     <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right"
-                                               Foreground="{DynamicResource Accent}" FontSize="12">
+                                               Foreground="{DynamicResource Accent}" Style="{StaticResource Subtle}">
                                         <Run Text="Hash: "/>
                                         <Run Text="{Binding Hash, Mode=OneWay}" FontFamily="Consolas" FontSize="11"/>
                                     </TextBlock>
@@ -147,7 +147,7 @@
                                                         BorderBrush="{DynamicResource SuccessBorder}" BorderThickness="1"
                                                         ToolTip="Oldest copy in this group — usually the original"
                                                         Visibility="{Binding IsSelected, Converter={StaticResource FlexVis}}">
-                                                    <TextBlock Text="{Binding KeepLabel}" FontSize="11" FontWeight="SemiBold"
+                                                    <TextBlock Text="{Binding KeepLabel}" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource SuccessText}"/>
                                                 </Border>
                                                 <TextBlock VerticalAlignment="Center" FontSize="12"

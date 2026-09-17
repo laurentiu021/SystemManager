@@ -91,7 +91,7 @@
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
                     <TextBlock Text="Component store — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding StoreStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding StoreEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                    <TextBlock Text="{Binding StoreEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Center"
                                Visibility="{Binding StoreEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
                 <!-- Component store verdict (shown after completion) -->
@@ -114,7 +114,7 @@
 
                 <!-- Where the repairs went. Mirrors the pointer System Fixes carries for the
                      network-stack reset, so a user who came here looking for SFC is not left guessing. -->
-                <TextBlock Margin="0,12,0,0" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                <TextBlock Margin="0,12,0,0" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
                            Text="Is Windows itself misbehaving rather than just full? The repair tools — SFC and DISM — are on the System → System Fixes tab."/>
             </StackPanel>
         </Border>

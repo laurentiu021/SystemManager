@@ -39,7 +39,7 @@
                 <DockPanel>
                     <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
                                FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,8,0"/>
-                    <TextBlock Foreground="{DynamicResource WarningText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+                    <TextBlock Foreground="{DynamicResource WarningText}" Style="{StaticResource Subtle}" TextWrapping="Wrap" VerticalAlignment="Center"
                                Text="SSD users: overwrite-based shredding is unreliable on solid-state drives due to wear-leveling. Use full-disk encryption (BitLocker/VeraCrypt) for secure data disposal on SSDs."/>
                 </DockPanel>
             </Border>

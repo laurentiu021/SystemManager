@@ -19,7 +19,7 @@
                 <StackPanel>
                     <TextBlock Text="Appearance" FontSize="15" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimary}"/>
-                    <TextBlock Text="Personalize your workspace" FontSize="11"
+                    <TextBlock Text="Personalize your workspace" Style="{StaticResource Caption}"
                                Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                 </StackPanel>
             </Border>
@@ -83,7 +83,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Accent" Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12" VerticalAlignment="Center"/>
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <!-- The four colour swatches are deliberately NOT tab stops. Their only
                                      action is to focus and select the hex box immediately beside them, and
                                      that box is already the next tab stop with its own accessible name — so a
@@ -116,7 +116,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Background" Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12" VerticalAlignment="Center"/>
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomBgPreview"
                                         Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#070A0F"
                                         Margin="0,0,10,0" Cursor="Hand"
@@ -141,7 +141,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Surface" Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12" VerticalAlignment="Center"/>
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomSurfacePreview"
                                         Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#0E1218"
                                         Margin="0,0,10,0" Cursor="Hand"
@@ -166,7 +166,7 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="Text" Foreground="{DynamicResource TextSecondary}"
-                                           FontSize="12" VerticalAlignment="Center"/>
+                                           Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" x:Name="CustomTextPreview"
                                         Width="24" Height="24" CornerRadius="{StaticResource RadiusMd}" Background="#F1F3F7"
                                         Margin="0,0,10,0" Cursor="Hand"

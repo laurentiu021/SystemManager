@@ -57,7 +57,7 @@
                 <TextBlock Text="{Binding ScanSummary}" FontWeight="SemiBold" Style="{StaticResource Body}" Margin="0,0,0,6"/>
                 <!-- What changed since the last scan of this folder. Collapsed until there is a prior
                      scan to compare against, so a first-ever scan shows nothing rather than a zero. -->
-                <TextBlock Text="{Binding TrendSummary}" FontSize="12" Margin="0,0,0,6"
+                <TextBlock Text="{Binding TrendSummary}" Style="{StaticResource Subtle}" Margin="0,0,0,6"
                            Foreground="{DynamicResource TextSecondary}"
                            AutomationProperties.Name="Change since last scan"
                            Visibility="{Binding HasTrend, Converter={StaticResource BoolToVis}}"/>
@@ -79,7 +79,7 @@
                     </Grid.ColumnDefinitions>
                     <ProgressBar AutomationProperties.Name="Drive space used" Grid.Column="0" Height="8" Minimum="0" Maximum="100"
                                  Value="{Binding DriveUsedPercent, Mode=OneWay}"/>
-                    <TextBlock Grid.Column="1" Margin="12,0,0,0" FontSize="12"
+                    <TextBlock Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource Subtle}"
                                Foreground="{DynamicResource TextMuted}">
                         <Run Text="{Binding DriveUsedPercent, Mode=OneWay, StringFormat='{}{0:F1}%'}"/>
                         <Run Text=" used"/>
@@ -150,7 +150,7 @@
                                                ToolTip="Part of this folder could not be read, so it may be using more space than shown."
                                                Visibility="{Binding IsAccessDenied, Converter={StaticResource FlexVis}}"/>
                                 </StackPanel>
-                                <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}">
                                     <Run Text="{Binding FileCount, Mode=OneWay, StringFormat='{}{0:N0} files'}"/>
                                     <Run Text=" · " Foreground="{DynamicResource TextDisabled}"/>
                                     <Run Text="{Binding FolderCount, Mode=OneWay, StringFormat='{}{0:N0} folders'}"/>

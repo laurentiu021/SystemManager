@@ -36,7 +36,7 @@
                                    FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0"/>
                         <StackPanel>
                             <TextBlock Text="Safe by design" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
-                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" MaxWidth="900" Margin="0,4,0,0" FontSize="12">
+                            <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" MaxWidth="900" Margin="0,4,0,0" Style="{StaticResource Subtle}">
                                 Only locations documented as safe by vendors (NVIDIA, AMD, Microsoft) are scanned. We never touch browser caches, passwords,
                                 live app settings, the registry, active drivers, or Program Files. A file that's locked or in use is skipped — nothing is forced.
                             </TextBlock>
@@ -77,7 +77,7 @@
                             <ProgressBar AutomationProperties.Name="Scan progress" Height="6" Minimum="0" Maximum="100" Value="{Binding ScanProgress}" Margin="0,6,0,0"/>
                             <!-- The VM already runs an EtaCalculator over ScanProgress; nothing bound the
                                  result, so the estimate for a scan that can take minutes was discarded. -->
-                            <TextBlock Text="{Binding ScanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                            <TextBlock Text="{Binding ScanEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
                                        Visibility="{Binding ScanEtaText, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
 
@@ -104,17 +104,17 @@
                                             <CheckBox Grid.Column="0" AutomationProperties.Name="{Binding Name, StringFormat='Select {0} for cleanup'}" IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                             <StackPanel Grid.Column="1">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}"/>
+                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}"/>
                                                     <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="{StaticResource RadiusPill}"
                                                             Background="{DynamicResource DangerBgSubtle}" BorderBrush="{DynamicResource DangerBorder}" BorderThickness="1"
                                                             Visibility="{Binding IsDestructiveHint, Converter={StaticResource BoolToVis}}">
-                                                        <TextBlock Text="Irreversible" Foreground="{DynamicResource DangerText}" FontSize="11" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="Irreversible" Foreground="{DynamicResource DangerText}" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding Description}" Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="10,0,0,0">
-                                                <TextBlock Text="{Binding SizeDisplay}" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Right"/>
+                                                <TextBlock Text="{Binding SizeDisplay}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Right"/>
                                                 <TextBlock Text="{Binding CountDisplay}" Style="{StaticResource Caption}" HorizontalAlignment="Right"/>
                                             </StackPanel>
                                         </Grid>
@@ -160,7 +160,7 @@
                             <ProgressBar AutomationProperties.Name="Cleanup progress" Height="6" Minimum="0" Maximum="100" Value="{Binding CleanProgress}" Margin="0,6,0,0"/>
                             <!-- Same for the clean phase, which deletes real files — knowing how long is
                                  left is what stops someone killing the app mid-delete. -->
-                            <TextBlock Text="{Binding CleanEtaText}" Foreground="{DynamicResource TextMuted}" FontSize="11" Margin="0,4,0,0"
+                            <TextBlock Text="{Binding CleanEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
                                        Visibility="{Binding CleanEtaText, Converter={StaticResource FlexVis}}"/>
                         </StackPanel>
                     </StackPanel>

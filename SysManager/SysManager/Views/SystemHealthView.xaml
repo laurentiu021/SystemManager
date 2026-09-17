@@ -196,7 +196,7 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,10,0"
                                                          Fill="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"/>
-                                                <TextBlock Text="{Binding FriendlyName}" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding FriendlyName}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
@@ -344,18 +344,18 @@
                                                     <TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextSecondary}"/>
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                    <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
                                                     <!-- Free space decides whether a check can run at all, and it was the one
                                                          thing the picker computed and never showed. -->
-                                                    <TextBlock Text="{Binding FreeGB, StringFormat={}{0:F0} GB free}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="{Binding FileSystem}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
-                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" FontSize="12"
+                                                    <TextBlock Text="{Binding FreeGB, StringFormat={}{0:F0} GB free}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
+                                                    <TextBlock Text="{Binding FileSystem}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
+                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"
                                                                Visibility="{Binding MediaType, Converter={StaticResource FlexVis}}"/>
-                                                    <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
                                                     <TextBlock Text="  "/>
-                                                    <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextMuted}" FontSize="12"/>
+                                                    <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
                                                 </StackPanel>
                                             </StackPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{DynamicResource TextSecondary}"

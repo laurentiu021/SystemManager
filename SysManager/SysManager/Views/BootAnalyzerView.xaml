@@ -40,10 +40,10 @@
                     <TextBlock Text="{Binding BootSecondsDisplay}" Style="{StaticResource MetricLarge}" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12">
+                        <TextBlock Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}">
                             <Run Text="Core (main path): "/><Run Text="{Binding MainPathDisplay, Mode=OneWay}"/>
                         </TextBlock>
-                        <TextBlock Foreground="{DynamicResource TextMuted}" FontSize="12">
+                        <TextBlock Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}">
                             <Run Text="Desktop ready-up: "/><Run Text="{Binding PostBootDisplay, Mode=OneWay}"/>
                         </TextBlock>
                     </StackPanel>

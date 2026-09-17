@@ -66,7 +66,7 @@
                                    Foreground="{DynamicResource Danger}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                         <!-- Bold + ▲ glyph distinguish Critical from Error without relying on hue
                              (both are reds — a colorblind-safe, non-color cue). -->
-                        <TextBlock FontSize="12" Foreground="{DynamicResource TextMuted}" FontWeight="SemiBold"
+                        <TextBlock Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}" FontWeight="SemiBold"
                                    VerticalAlignment="Center" Margin="10,0,0,0">
                             <Run Text="&#x25B2; Critical"/>
                         </TextBlock>
@@ -90,7 +90,7 @@
                         <!-- Plain "Errors" — the coloured SevDot already marks the row; the leading
                              glyph is reserved for Critical (▲) as its colourblind-safe "most severe red"
                              cue, so Errors/Warnings/Info stay glyph-free for a consistent set. -->
-                        <TextBlock Text="Errors" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="Errors" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>
@@ -113,7 +113,7 @@
                         </Ellipse>
                         <TextBlock Text="{Binding WarningCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Warnings" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="Warnings" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>
@@ -132,7 +132,7 @@
                         </Ellipse>
                         <TextBlock Text="{Binding InfoCount}" Style="{StaticResource MetricSmall}" FontWeight="Bold"
                                    Foreground="{DynamicResource Info}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="Info" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                        <TextBlock Text="Info" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="10,0,0,0"/>
                     </StackPanel>
                 </Grid>

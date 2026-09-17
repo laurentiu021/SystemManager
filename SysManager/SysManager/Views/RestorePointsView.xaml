@@ -41,7 +41,7 @@
                              ToolTip="Optional description for the new restore point."/>
                     <TextBlock Text="Describe this restore point…" IsHitTestVisible="False"
                                Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
-                               VerticalAlignment="Center" FontSize="12"
+                               VerticalAlignment="Center" Style="{StaticResource Subtle}"
                                Visibility="{Binding NewDescription, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
                 <Button Content="Create restore point" Command="{Binding CreateCommand}"

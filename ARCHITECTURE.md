@@ -85,20 +85,40 @@ and System Logs' severity counts take the metric one for that reason. Two 16/Sem
 Hosts stay raw for the mirror-image reason — they are headings, and the nearest heading token would shrink
 them.
 
-Every rung is `BasedOn` the implicit `TextBlock` style, and that is load-bearing rather than tidy: an
-explicit style REPLACES the keyless `<Style TargetType="TextBlock">`, so without it a repointed TextBlock
-loses `TextRenderingMode="ClearType"` and — unless it names its own colour — its foreground with it.
-`Metric` was the one token that did neither, which made it a latent trap: it renders correctly only
-because all ten of its call sites set `Foreground` locally, and the eleventh would have been black text on
-a dark surface. #1634 gave it `BasedOn`; `Display` sets its own colour and family, so it never had the
-foreground half of the problem.
+Every rung except `Display` is `BasedOn` the implicit `TextBlock` style, and that is load-bearing rather
+than tidy: an explicit style REPLACES the keyless `<Style TargetType="TextBlock">`, so without it a
+repointed TextBlock loses `TextRenderingMode="ClearType"` and — unless it names its own colour — its
+foreground with it. `Metric` was the first token found without it, which made it a latent trap: it rendered
+correctly only because all ten of its call sites set `Foreground` locally, and the eleventh would have been
+black text on a dark surface.
+
+`Caption`, `Subtle`, `SectionTitle` and `SectionLabel` were the four still missing it, which is what blocked
+the rest of #1634: while they lacked `BasedOn`, swapping a raw `FontSize="11"` for the token *looked* like a
+no-op and was not. With it the swap is appearance-neutral wherever the token's colour and weight are already
+what the element gets, and those are the ones now converted. The elements where the token would visibly
+differ — no colour of their own at 11 or 12, no weight of their own at 14 — deliberately keep their raw size,
+and the guard's condition below is what tells the two apart, so no allowlist is involved.
+
+`SectionLabel` is defined next to the other text tokens rather than beside the control templates it used to
+sit in, and it had to move: `BasedOn` is a `StaticResource` reference, and a `StaticResource` cannot resolve a
+key defined later in the same dictionary. Left where it was it would have thrown while `App.xaml` parsed.
+
+`Display` stays out. #1634 proposed including it because the 59 tab titles would move from
+`TextFormattingMode=Display` to `Ideal`; measured on a real TextBlock, that premise is wrong — `Ideal` is
+WPF's default, so they already render that way, and the only difference `BasedOn` would make is
+`TextRenderingMode`, `Auto` to `ClearType`. Left out because the decision was taken on the larger claim and
+the smaller one deserves its own look at 28px. `TypographyTokenTests.Display_StillStandsAloneAndStillResolvesItsColour`
+fails if someone completes the set, which is the prompt to do that look first.
 
 Two guards hold the scale. `ArchitectureTests.EveryMetricRungSize_IsReachedThroughItsRung` enforces both
 directions — no raw `FontSize` on a styleless text `TextBlock` at a rung's size, and no reference to a rung
 `App.xaml` does not define, the latter because a `{StaticResource}` inside a `DataTemplate` resolves at
 runtime and would otherwise crash a tab rather than fail a build. It skips icon glyphs, because a
 `FontSize` on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon
-dimensions as well as text ones. `EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a
+dimensions as well as text ones, and it skips the five elements that set `Style` through a
+`<TextBlock.Style>` child, which an attribute scan cannot see. At 11, 12 and 14 it demands the token only
+where the swap cannot change what is drawn, which is the same condition described above.
+`EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a
 `TextBlock` under a token that resolves no colour, and which names none itself, would render in the WPF
 default brush. `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight,
 foreground and rendering mode off a real `TextBlock` on an STA thread, which is the only way to check that

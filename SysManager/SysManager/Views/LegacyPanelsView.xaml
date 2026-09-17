@@ -48,7 +48,7 @@
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"
                                                            Foreground="{DynamicResource TextPrimary}"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="11"
+                                                <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
                                                            Foreground="{DynamicResource TextMuted}"
                                                            TextWrapping="Wrap" Margin="0,4,0,0" Height="48"/>
                                             </StackPanel>

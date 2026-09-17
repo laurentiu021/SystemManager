@@ -343,13 +343,6 @@
                 </Setter>
             </Style>
 
-            <Style x:Key="SectionLabel" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="11"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
-            </Style>
-
             <!-- ============================================================ -->
             <!-- Global defaults — every Control gets a modern base look       -->
             <!-- ============================================================ -->
@@ -1140,23 +1133,48 @@
                  enforcing "use an existing style" would point at a style that had never rendered. The
                  condition set for its return — "only alongside a view that needs it" — is met now, by the
                  sidebar wordmark; it is defined next to the Metric rungs below. -->
-            <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <!-- BasedOn on the four body-text tokens, for the reason the Metric rungs below already carry
+                 it: an explicit keyed style REPLACES the keyless `<Style TargetType="TextBlock">` instead of
+                 merging with it, so whatever a token does not restate is LOST rather than inherited. That
+                 made "swap FontSize=11 for Style=Caption" a rendering change dressed as a cleanup — the
+                 element gave up TextFormattingMode=Ideal and TextRenderingMode=ClearType on the way. With
+                 BasedOn the swap is what it looks like, which is what unblocks #1634's sweep.
+
+                 `FontFamily` and a `TextPrimary` `Foreground` are dropped where BasedOn now supplies the
+                 same value; `Caption`, `Subtle` and `SectionLabel` keep theirs because they deliberately
+                 differ from the inherited colour.
+
+                 `Display` is deliberately NOT included, and TypographyTokenTests pins the exclusion so it
+                 stays a decision. #1634 proposed adding it because all 59 tab titles would move from
+                 TextFormattingMode=Display to Ideal; measured, that premise is wrong — Ideal is the WPF
+                 default, so the titles already render that way. The real delta is TextRenderingMode, Auto to
+                 ClearType, exactly what the four above just took. Left out anyway: the decision was made on
+                 the larger claim, and the smaller one deserves its own look at 28px on a machine that runs
+                 the app rather than being folded in as a rounding error.
+
+                 SectionLabel moved here from the control-template block above. It had to: BasedOn is a
+                 StaticResource reference, and a StaticResource cannot resolve a key defined LATER in the
+                 same dictionary — the keyless TextBlock style sits below where SectionLabel used to. Left in
+                 place it would have thrown while App.xaml parsed, which is to say at startup. -->
+            <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="14"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             </Style>
 
-            <Style x:Key="Caption" TargetType="TextBlock">
+            <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             </Style>
 
-            <Style x:Key="Subtle" TargetType="TextBlock">
+            <Style x:Key="Subtle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="FontSize" Value="12"/>
+            </Style>
+
+            <Style x:Key="SectionLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
             </Style>
 
             <!-- ============================================================ -->

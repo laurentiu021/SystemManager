@@ -853,6 +853,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Optional "only when I'm not using the PC"** condition, off by default
 - **The schedule you are about to save is spelled out in words**, conditions included, and
   updates as you change the settings
+- **One schedule at a time, said out loud.** Saving replaces the schedule you already had
+  rather than adding a second, so the page says so — in the header and again beside the Save
+  button — and the confirmation names the time the old one was next due, so you can tell what
+  you are about to lose. One task by name is what keeps this feature from needing
+  administrator rights and from being able to touch anything else Windows schedules
 - **Windows' own count of skipped runs is shown** when it is not zero — the only signal
   Windows gives for a run its conditions blocked
 - Update or remove the schedule any time, each with a confirmation

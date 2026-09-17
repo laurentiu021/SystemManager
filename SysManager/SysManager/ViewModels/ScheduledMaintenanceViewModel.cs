@@ -119,6 +119,24 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// </remarks>
     public string PendingSummary => BuildSchedule().Summary;
 
+    /// <summary>
+    /// The one-schedule rule, stated where the user is about to act on it.
+    /// </summary>
+    /// <remarks>
+    /// This tab registers a single Windows task at a fixed name, so Save does not add a second schedule — it
+    /// overwrites the first. Nothing said so. The header mentioned "one Windows scheduled task" as an
+    /// implementation detail, the Configure card offered an action and a time as though each Save were a new
+    /// entry, and the confirmation dialog said "This creates a Windows scheduled task" even when one already
+    /// existed. Someone who wanted a weekly cleanup AND a monthly standby purge would have set the second and
+    /// silently lost the first, with the tab then reporting the survivor as though nothing had gone (#1509).
+    /// <para>Supporting more than one schedule was considered and deliberately not done: the whole design
+    /// rests on touching exactly one task by name, which is what makes it safe to register without admin and
+    /// impossible for it to disturb anything else Windows schedules. Saying so plainly is the fix.</para>
+    /// </remarks>
+    public string OneScheduleNote => IsScheduled
+        ? "SysManager keeps one schedule at a time, so saving this replaces the one above."
+        : "SysManager keeps one schedule at a time. You can change it or remove it whenever you like.";
+
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
@@ -154,14 +172,43 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         RemoveScheduleCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// What the Save confirmation asks. Two different questions, because Save does two different things.
+    /// </summary>
+    /// <remarks>
+    /// The wording IS the behaviour for this gate. One text served both cases and it described only the first:
+    /// "This creates a Windows scheduled task" was shown while about to overwrite an existing one, so the
+    /// dialog that exists to stop an unwanted change actively concealed which change it was (#1509).
+    /// <para>The replacement text names the existing task's next run, which is as specific as it can be: the
+    /// status read-back reports state and times, not which action or trigger Windows is holding. That is still
+    /// enough to tell the user WHICH schedule they are about to lose, and it comes from the same read the
+    /// card above displays, so the two cannot disagree.</para>
+    /// </remarks>
+    private string ConfirmSavePrompt(MaintenanceSchedule schedule)
+    {
+        if (!IsScheduled)
+        {
+            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n"
+                 + "This creates a Windows scheduled task that launches SysManager in the background. "
+                 + "SysManager keeps one schedule at a time, so saving again later replaces this one.";
+        }
+
+        var existing = string.IsNullOrEmpty(NextRun) || NextRun == "—"
+            ? "the schedule already registered"
+            : $"the schedule already registered, whose next run was {NextRun}";
+
+        return $"Replace the maintenance schedule with \"{schedule.ActionLabel}\"?\n\n{schedule.Summary}\n\n"
+             + $"SysManager keeps one schedule at a time, so this REPLACES {existing}. Nothing else on your "
+             + "PC is changed, and you can remove the schedule at any time.";
+    }
+
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task SaveScheduleAsync()
     {
         var schedule = BuildSchedule();
         if (!DialogService.Instance.Confirm(
-                $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n" +
-                "This creates a Windows scheduled task that launches SysManager in the background.",
-                "Schedule Maintenance — Confirm"))
+                ConfirmSavePrompt(schedule),
+                IsScheduled ? "Replace Schedule — Confirm" : "Schedule Maintenance — Confirm"))
             return;
 
         IsBusy = true;
@@ -204,7 +251,13 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         finally { IsBusy = false; }
     }
 
-    partial void OnIsScheduledChanged(bool value) => RemoveScheduleCommand.NotifyCanExecuteChanged();
+    partial void OnIsScheduledChanged(bool value)
+    {
+        RemoveScheduleCommand.NotifyCanExecuteChanged();
+        // OneScheduleNote reads this, and the whole point of the note is that it changes from "you can
+        // change it whenever" to "saving replaces the one above" the moment a schedule exists.
+        OnPropertyChanged(nameof(OneScheduleNote));
+    }
 
     protected override void Dispose(bool disposing)
     {

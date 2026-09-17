@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.109.4] - 2026-09-17
+
+**Saving a second maintenance schedule quietly threw away the first.** Scheduled Maintenance keeps one
+schedule, by design — it is what makes it safe to set up without administrator rights and impossible for it
+to disturb anything else Windows has scheduled. But nothing on the page said so. Pick an action and a time,
+press Save, and the schedule you already had was gone, with the tab then reporting the new one as though
+nothing had happened. The page now says there is one schedule, and the confirmation says plainly that Save
+is replacing the existing one and when that one was next due.
+
+### Fixed
+
+- **The Scheduled Maintenance page states that there is one schedule**, in the header and again beside the
+  Save button, where the wording changes to "saving this replaces the one above" as soon as a schedule
+  exists. Previously the only hint was the header's passing mention of "one Windows scheduled task", which
+  reads as an internal detail rather than a limit that affects you.
+- **The confirmation before saving now asks the question that matches what the button will do.** One text
+  served both cases and described only the first: "This creates a Windows scheduled task" appeared while
+  about to overwrite an existing one, so the dialog whose whole purpose is to stop an unwanted change hid
+  which change it was. Replacing now says so in those words and names the time the old schedule was next
+  due, so you can tell which one you are about to lose.
+
+### Changed
+
+- **Scheduled Maintenance keeps exactly one schedule, and that is now a stated decision rather than an
+  unstated limit.** Supporting several was considered and deliberately not done: the whole design rests on
+  touching exactly one Windows task by name, which is what keeps it from needing administrator rights and
+  what makes it incapable of disturbing anything else on the machine.
+
 ## [1.109.3] - 2026-09-17
 
 **A tab that failed to load could say nothing at all.** Every tab starts loading in the background the

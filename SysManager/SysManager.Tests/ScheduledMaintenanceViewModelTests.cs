@@ -198,6 +198,126 @@ public class ScheduledMaintenanceViewModelTests
                                           Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// A view model over a runner that answers "a task IS registered", with the next run Windows reports.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <c>MaintenanceSchedulerServiceTests.StatusRow</c>. The next run matters here rather than being
+    /// filler: the replace confirmation names it, so it is the thing that tells the user WHICH schedule they
+    /// are about to lose.
+    /// </remarks>
+    private static async Task<(ScheduledMaintenanceViewModel vm, IPowerShellRunner ps)> NewScheduledVmAsync()
+    {
+        var row = new PSObject();
+        row.Properties.Add(new PSNoteProperty("State", "Ready"));
+        row.Properties.Add(new PSNoteProperty("LastRunTime", new DateTime(2026, 6, 29, 3, 0, 0)));
+        row.Properties.Add(new PSNoteProperty("NextRunTime", new DateTime(2026, 6, 30, 3, 0, 0)));
+        row.Properties.Add(new PSNoteProperty("LastTaskResult", 0));
+
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject> { row });
+        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
+        await vm.InitializationComplete;
+        return (vm, ps);
+    }
+
+    /// <summary>
+    /// The one-schedule rule is on screen before the user acts, and it says which of the two situations they
+    /// are in.
+    /// </summary>
+    /// <remarks>
+    /// Nothing stated it. Saving does not add a second schedule, it overwrites the first, and someone who
+    /// wanted a weekly cleanup AND a monthly standby purge would have set the second and silently lost the
+    /// first (#1509).
+    /// </remarks>
+    [Fact]
+    public void OneScheduleNote_WithNothingScheduled_SaysTheRuleWithoutWarning()
+    {
+        var (vm, _) = NewVm();
+
+        Assert.False(vm.IsScheduled);
+        Assert.Contains("one schedule at a time", vm.OneScheduleNote, StringComparison.Ordinal);
+        Assert.DoesNotContain("replaces", vm.OneScheduleNote, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task OneScheduleNote_WithOneScheduled_SaysSavingReplacesIt()
+    {
+        var (vm, _) = await NewScheduledVmAsync();
+
+        Assert.True(vm.IsScheduled);
+        Assert.Contains("one schedule at a time", vm.OneScheduleNote, StringComparison.Ordinal);
+        Assert.Contains("replaces the one above", vm.OneScheduleNote, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The save confirmation asks the question that matches what the click will do.
+    /// </summary>
+    /// <remarks>
+    /// One text served both cases and described only the first: "This creates a Windows scheduled task" was
+    /// shown while about to overwrite an existing one, so the dialog whose whole job is to stop an unwanted
+    /// change concealed which change it was. Asserted through <see cref="DialogAnswer"/> rather than by
+    /// calling a helper directly, because what matters is the text that reaches the user from the real command
+    /// path — and the surrounding tests' hand-rolled swap cannot read the wording at all.
+    /// </remarks>
+    [Fact]
+    public async Task SaveSchedule_WithNothingScheduled_SaysItCreatesATask()
+    {
+        var (vm, _) = NewVm();
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SaveScheduleCommand.Execute(null);
+        if (vm.SaveScheduleCommand.ExecutionTask is { } running) await running;
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Contains("Schedule Maintenance — Confirm", shown, StringComparison.Ordinal);
+        Assert.Contains("creates a Windows scheduled task", shown, StringComparison.Ordinal);
+        // Even here it says the rule, so the limit is known before there is anything to lose.
+        Assert.Contains("one schedule at a time", shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveSchedule_WithOneAlreadyScheduled_SaysItReplacesAndNamesTheNextRun()
+    {
+        var (vm, _) = await NewScheduledVmAsync();
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SaveScheduleCommand.Execute(null);
+        if (vm.SaveScheduleCommand.ExecutionTask is { } running) await running;
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Contains("Replace Schedule — Confirm", shown, StringComparison.Ordinal);
+        Assert.Contains("REPLACES", shown, StringComparison.Ordinal);
+        // The one detail available about the schedule being lost, and it comes from the same status read the
+        // card above displays, so the dialog and the card cannot disagree.
+        Assert.Contains("2026-06-30 03:00", shown, StringComparison.Ordinal);
+        Assert.DoesNotContain("creates a Windows scheduled task", shown, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Declining the replace confirmation leaves the existing schedule alone.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to the wording tests: a dialog that says the right thing is worth nothing if No does
+    /// not mean no. Asserted on the runner, because "the task is unchanged" is only observable as "no register
+    /// script was sent".
+    /// </remarks>
+    [Fact]
+    public async Task SaveSchedule_WhenTheUserDeclinesAReplacement_LeavesTheTaskAlone()
+    {
+        var (vm, ps) = await NewScheduledVmAsync();
+        ps.ClearReceivedCalls(); // the constructor's status read is not what this asserts about
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SaveScheduleCommand.Execute(null);
+        if (vm.SaveScheduleCommand.ExecutionTask is { } running) await running;
+
+        Assert.Equal(1, dialog.Calls);
+        await ps.DidNotReceive().RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(),
+                                          Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public void MissedRunsWarning_IsEmptyWhenNoTaskIsRegistered()
     {

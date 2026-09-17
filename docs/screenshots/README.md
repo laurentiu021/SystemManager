@@ -6,15 +6,23 @@ conventions below so they render cleanly in the README.
 
 ## File naming
 
-Use zero-padded numbers so the file list stays in the same order as the
-nav on the left rail, and name the tab after the number.
+`<tab>.png`, where `<tab>` is the tab's sidebar label lowercased with every run of
+non-alphanumeric characters turned into a single hyphen. No number. So "Standby List
+Cleaner" is `standby-list-cleaner.png`, "Privacy & Telemetry" is
+`privacy-telemetry.png`, "Camera/Mic/Location" is `camera-mic-location.png`, and
+"Profile Export / Import" is `profile-export-import.png`.
 
-**The number is not a reliable pointer to the tab's sidebar position, and you should
-not read it as one.** It was that when each file was captured, but every tab inserted
-above a screenshot shifts its position without touching its filename — 23 of the 43
-files here are now numbered for a different tab than the one they show, one of them by
-eight places. So the number orders the folder and nothing more; the *name* after it is
-what identifies the tab. Which convention to settle on is open — see issue #1664.
+These files used to carry a zero-padded number for the tab's position on the left rail,
+and that number re-broke on every insertion: adding one tab shifts every tab below it
+without touching a single filename, so 23 of the 43 files were numbered for a different
+tab than the one they showed, one of them by eight places (#1664). A name has no such
+failure mode — adding a tab now touches nothing that already exists.
+
+The trade is that renaming a tab renames its screenshot, and
+`ArchitectureTests.EveryScreenshotSlug_NamesARealTab` fails until you do. That is
+deliberate rather than tolerated: a renamed tab almost always means the header inside
+the image now says the old name too, so the file needs recapturing and not just moving.
+The guard tells you which files, by name.
 
 43 of the 59 tabs have a shot. The 16 without one are Bandwidth Monitor,
 Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
@@ -70,7 +78,8 @@ On the machine you use day-to-day:
    you picked above).
 3. Navigate to each tab in order, let it populate, and take a shot with
    the Windows **Snipping Tool** (`Win+Shift+S`) using the **Window** mode.
-4. Paste each into a new file and save as `NN-<tab>.png` here.
+4. Paste each into a new file and save it here under the name the File naming
+   section above derives from that tab's sidebar label.
 5. For tabs with live data (Network, Dashboard uptime), wait a few seconds
    so the charts have data to display.
 
@@ -97,7 +106,7 @@ The README's **Screenshots** section uses this pattern:
 
 ```markdown
 ### Dashboard
-![Dashboard](docs/screenshots/01-dashboard.png)
+![Dashboard](docs/screenshots/dashboard.png)
 ```
 
 Once you've added new shots, update [README.md](../../README.md) to

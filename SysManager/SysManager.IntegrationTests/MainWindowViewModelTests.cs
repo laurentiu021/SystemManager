@@ -386,17 +386,6 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     }
 
     [Fact]
-    public void NavGroups_AppAlerts_LivesInMonitorNotPrivacy()
-    {
-        var vm = _nav;
-        var monitor = vm.NavGroups.First(g => g.Id == "grp-monitor").Children.Select(c => c.Id).ToList();
-        var privacy = vm.NavGroups.First(g => g.Id == "grp-privacy").Children.Select(c => c.Id).ToList();
-        // App Alerts passively watches for new installs — it belongs with the monitoring tabs.
-        Assert.Contains("nav-app-alerts", monitor);
-        Assert.DoesNotContain("nav-app-alerts", privacy);
-    }
-
-    [Fact]
     public void NavGroups_LegacyPanels_LivesInInfoNotSystem()
     {
         var vm = _nav;
@@ -418,16 +407,16 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     }
 
     /// <summary>
-    /// Three tabs are filed by the errand that brings someone to them, not by how they work inside.
+    /// Four tabs are filed by the errand that brings someone to them, not by how they work inside.
     /// </summary>
     /// <remarks>
-    /// One test and one view model for all three placements, deliberately. Every test in this class
+    /// One test and one view model for all four placements, deliberately. Every test in this class
     /// builds its own <see cref="MainWindowViewModel"/>, and on the test path that constructs the whole
     /// tab graph eagerly — including the view models that launch real winget and PowerShell child
     /// processes. Those children outlive the test: adding three more constructions here took the CI
     /// integration run from ~6 minutes to 22, with a pile of `winget_*_hang.log` artifacts and a host
     /// process that could no longer exit. The suite still reported every test passing, because that job
-    /// is `continue-on-error`. So this asserts three placements against one graph rather than three.
+    /// is `continue-on-error`. So this asserts four placements against one graph rather than four.
     /// <para><b>File Lock Detector</b> → Storage &amp; Files: someone arrives from Windows' own "the file
     /// is open in another program" dialog, which is a files errand. "Monitor" promises continuous
     /// watching, and this tab has no timer and no poll loop — it is a one-shot scan of a path the user
@@ -442,6 +431,19 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     /// changes a privileged surface or removes software. This one flips the same per-app switches Windows
     /// Settings does, needs no administrator, and is one flip from undone. Under a group named Security it
     /// overstated the stakes and hid the tab from where the wish belongs (#1522).</para>
+    /// <para><b>New App Alerts</b> → Apps, between Bulk Installer and Uninstaller. This one REVERSES an
+    /// earlier placement that this class asserted, with its reason recorded — "App Alerts passively watches
+    /// for new installs, it belongs with the monitoring tabs" — so the reversal is deliberate and the old
+    /// argument is kept here rather than deleted. The mechanism claim was true: the tab owns a live
+    /// FileSystemWatcher and a 30-second registry timer. It is the errand that moved. The question is "did
+    /// something install itself without me asking?", and the next thing she wants is to get rid of it — so
+    /// detection now sits beside its remedy, and the tab's own subtitle already pointed there ("removing a
+    /// program is Apps → Uninstaller"). It also reads the SAME two registry trees as Uninstaller
+    /// (<c>Uninstall</c> and the WOW6432Node twin), which is what makes this app-inventory work rather than
+    /// resource monitoring. Under Monitor the name invited a third reading — notifications FROM apps, which
+    /// is Notification Blocker, a different tab (#1528).</para>
+    /// <para>Position is asserted for this one, like Bandwidth Monitor: adjacency to Uninstaller is the
+    /// whole point, so being anywhere in Apps is not enough.</para>
     /// </remarks>
     [Fact]
     public void NavGroups_FileTabsAreGroupedByErrand_NotByMechanism()
@@ -453,6 +455,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         var network = Ids(vm, "grp-network");
         var customization = Ids(vm, "grp-customization");
         var privacy = Ids(vm, "grp-privacy");
+        var apps = Ids(vm, "grp-apps");
 
         // #1521 — File Lock Detector, plus the group rename that makes the name cover per-file work.
         Assert.Contains("nav-file-lock", storage.Children.Select(c => c.Id));
@@ -469,6 +472,15 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         // #1522 — Notification Blocker.
         Assert.Contains("nav-notification-blocker", customization);
         Assert.DoesNotContain("nav-notification-blocker", privacy);
+
+        // #1528 — New App Alerts, asserted by POSITION: immediately before Uninstaller, because sitting
+        // beside the remedy is the reason it moved. Membership alone would pass with it filed anywhere in
+        // Apps, including above App Updates where the adjacency is lost.
+        Assert.DoesNotContain("nav-app-alerts", monitor);
+        var uninstaller = apps.IndexOf("nav-uninstaller");
+        Assert.True(uninstaller > 0,
+            "Apps no longer contains Uninstaller, or it is first, so the adjacency this pins cannot be checked.");
+        Assert.Equal("nav-app-alerts", apps[uninstaller - 1]);
     }
 
     private static List<string> Ids(MainWindowViewModel vm, string groupId)

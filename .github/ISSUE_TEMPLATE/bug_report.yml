@@ -72,7 +72,6 @@ body:
         - Process Manager
         - Resource History
         - Camera/Mic/Location
-        - New App Alerts
         - File Lock Detector
         - Settings Watchdog
         - Bandwidth Monitor
@@ -90,11 +89,12 @@ body:
         - DNS & Hosts
         - App Updates
         - Bulk Installer
+        - New App Alerts
         - Uninstaller
         - Privacy & Telemetry
         - File Shredder
         - App Blocker
-        - Debloater & Ads
+        - Preinstalled Apps
         - Browser Cleaner
         - Edge/OneDrive Remover
         - Defender Tweaks

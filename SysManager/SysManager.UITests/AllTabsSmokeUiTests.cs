@@ -80,7 +80,7 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-privacy-settings", "Privacy" },
         new object[] { "nav-file-shredder", "File Shredder" },
         new object[] { "nav-app-blocker", "App Blocker" },
-        new object[] { "nav-debloater", "Debloater" },
+        new object[] { "nav-debloater", "Preinstalled Apps" },
         new object[] { "nav-browser-cleaner", "Browser Cleaner" },
         new object[] { "nav-edge-onedrive", "Edge/OneDrive Remover" },
         new object[] { "nav-defender-tweaks", "Defender Tweaks" },

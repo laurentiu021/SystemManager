@@ -3361,6 +3361,145 @@ public partial class ArchitectureTests
     private static partial Regex NavIdLiteral();
 
     /// <summary>
+    /// Every header the navigation smoke table waits for is text the tab it names actually renders.
+    /// </summary>
+    /// <remarks>
+    /// <c>EverySidebarTab_HasASmokeRow</c> above checks each tab HAS a row.
+    /// <c>EveryUiTextAssertion_QuotesCopyTheAppActuallyShips</c> checks UI waits quote real copy. Neither
+    /// checks the PAIR, and renaming a tab header proved it: "Debloater &amp; Ads" became "Preinstalled Apps"
+    /// (#1515) and the row still waited for "Debloater", so the smoke test went permanently red — reported
+    /// only by the <c>continue-on-error</c> UI job, which prints <c>success</c> at the check level.
+    /// <para><b>Two independent reasons the existing copy guard could not see it</b>, and the second is the
+    /// one that matters. (1) <c>IsUserFacingSentence</c> requires at least one space, and "Debloater" is a
+    /// single word. (2) Far worse: that guard matches a literal at the CALL SITE
+    /// (<c>HasTextInCurrentTab("…")</c>), while this table feeds its literals through <c>[MemberData]</c> —
+    /// the call is <c>HasTextInCurrentTab(expectedHeader)</c>, a parameter. So NO row of the table was ever
+    /// checked, at any length. A three-word header would have been just as invisible.</para>
+    /// <para>Which is why this guard is population-driven rather than heuristic: the table is an enumerated
+    /// list of (nav id, header) pairs and the nav table says which view each id opens, so each pair can be
+    /// compared exactly, with no word-count bar to fall under.</para>
+    /// <para>Substring, case-insensitive, whitespace-normalised — the row is deliberately a FRAGMENT of the
+    /// header, and XAML wraps attribute values across lines.</para>
+    /// <para><b>It is compared against the view's <c>Display</c> header ALONE, and the first version of this
+    /// guard proved why.</b> Written against the view's whole renderable text it stayed GREEN on the very
+    /// defect it was written for: <c>DebloaterView.xaml</c> still contains the word "Debloater" in
+    /// <c>x:Class="SysManager.Views.DebloaterView"</c> and in its designer <c>DataContext</c>, so a row
+    /// waiting for "Debloater" matched markup rather than copy. That is the same corpus-too-wide mistake the
+    /// older copy guard made with <c>///</c> comments, arriving from a new direction — a type name is not
+    /// something a user can read. All 59 tab views carry exactly one literal <c>Display</c> header and none is
+    /// a binding, so the narrow corpus is also the complete one.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySmokeRowHeader_IsTextItsOwnTabRenders()
+    {
+        var appDir = FindAppProjectDir();
+        var shell = WithoutComments(
+            File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+        var smokePath = Path.Combine(
+            FindRepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
+        Assert.True(File.Exists(smokePath), $"{smokePath} not found — this guard would compare nothing.");
+
+        // nav id -> the view type the sidebar opens for it.
+        var viewOf = NavRowWithView().Matches(shell)
+            .ToDictionary(m => m.Groups["id"].Value, m => m.Groups["view"].Value, StringComparer.Ordinal);
+        Assert.True(viewOf.Count >= 50,
+            $"only {viewOf.Count} nav rows carried a view type, out of 59 — the pattern is out of date, so "
+          + "this guard would compare almost nothing.");
+
+        var rows = SmokeRow().Matches(WithoutComments(File.ReadAllText(smokePath))).Cast<Match>().ToList();
+        Assert.True(rows.Count >= 50,
+            $"only {rows.Count} rows parsed out of the navigation smoke table, out of 59 — the row shape "
+          + "changed, so a pass proves nothing.");
+
+        var offenders = new List<string>();
+        var headersRead = 0;
+
+        foreach (var row in rows)
+        {
+            var id = row.Groups["id"].Value;
+            var expected = row.Groups["header"].Value;
+
+            if (!viewOf.TryGetValue(id, out var view))
+            {
+                offenders.Add($"{id} has a smoke row but no nav row naming a view, so nothing can open it");
+                continue;
+            }
+
+            var viewPath = Path.Combine(appDir, "Views", view + ".xaml");
+            if (!File.Exists(viewPath))
+            {
+                offenders.Add($"{id} opens {view}, and Views/{view}.xaml does not exist");
+                continue;
+            }
+
+            var header = DisplayHeaderText(viewPath);
+            if (header is null)
+            {
+                offenders.Add($"{view}.xaml has no literal Display-styled header, so there is nothing for "
+                            + $"{id}'s smoke row to be a fragment of");
+                continue;
+            }
+
+            headersRead++;
+            if (!WhitespaceRun().Replace(header, " ")
+                    .Contains(WhitespaceRun().Replace(expected, " "), StringComparison.OrdinalIgnoreCase))
+            {
+                offenders.Add($"{id} waits for \"{expected}\", but {view}.xaml's header reads \"{header}\" — "
+                            + "the smoke test can never pass for that tab");
+            }
+        }
+
+        // Third floor, and the one the first version of this guard needed: a corpus that silently stopped
+        // resolving would make every Contains() succeed or every row skip, either way proving nothing.
+        Assert.True(headersRead >= 50,
+            $"only {headersRead} Display headers were resolved for the {rows.Count} smoke rows — the header "
+          + "pattern is out of date, so this guard compared almost nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these navigation smoke rows quote a header their own tab does not render. Each one is a test "
+          + "that cannot pass, and only the non-blocking UI job would say so:\n  "
+          + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The literal text of a view's <c>Display</c>-styled header, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// The tab's page title, and the only thing a smoke row is meant to be a fragment of. Deliberately NOT
+    /// the view's whole renderable text: that corpus includes <c>x:Class</c> and the designer
+    /// <c>DataContext</c>, so a row quoting a tab's old name can match its own type name and never fail.
+    /// </remarks>
+    private static string? DisplayHeaderText(string viewPath)
+    {
+        var markup = WithoutXamlComments(File.ReadAllText(viewPath));
+        foreach (var tag in TextBlockStartTag().Matches(markup).Cast<Match>())
+        {
+            var flat = WhitespaceRun().Replace(tag.Value, " ");
+            if (!flat.Contains("Style=\"{StaticResource Display}\"", StringComparison.Ordinal)) continue;
+
+            var text = Regex.Match(flat, @"Text=""(?<text>[^""]*)""");
+            if (!text.Success) continue;
+
+            var value = text.Groups["text"].Value;
+            // A binding is computed at runtime and cannot be compared with a literal. None exist today.
+            if (value.StartsWith('{')) continue;
+            return value;
+        }
+
+        return null;
+    }
+
+    /// <summary>A nav row, capturing its id and the view type it opens.</summary>
+    [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""(?<id>nav-[a-z0-9-]+)""\s*,\s*""[^""]*""\s*,\s*"
+                    + @"typeof\(Views\.(?<view>\w+)\)", RegexOptions.Compiled)]
+    private static partial Regex NavRowWithView();
+
+    /// <summary>One row of the navigation smoke table: <c>new object[] { "nav-x", "Header" }</c>.</summary>
+    [GeneratedRegex(@"new object\[\]\s*\{\s*""(?<id>nav-[a-z0-9-]+)""\s*,\s*""(?<header>[^""]+)""",
+                    RegexOptions.Compiled)]
+    private static partial Regex SmokeRow();
+
+    /// <summary>
     /// Every <c>TextBlock</c> that takes a typography token must end up with a colour — from the style, or
     /// from its own <c>Foreground</c>.
     /// </summary>
@@ -4960,6 +5099,109 @@ public partial class ArchitectureTests
     /// <summary>Splits the nav table on each <c>Group(</c> call, so each slice holds one group's leaves.</summary>
     [GeneratedRegex(@"\n\s*Group\(", RegexOptions.Compiled)]
     private static partial Regex NavGroupSplit();
+
+    /// <summary>
+    /// The README's "Group | Tabs" table lists, for every group, exactly the tabs that group contains.
+    /// </summary>
+    /// <remarks>
+    /// This table is the first complete picture of the app a reader gets, and it had drifted twice by the time
+    /// it was guarded — both times silently, because nothing reads it. Large Files was added in v1.109.0 and
+    /// never appeared under Storage &amp; Files, and moving New App Alerts to Apps would have left it listed
+    /// under Monitor (#1528). The counts guard next door checks HOW MANY groups there are; nothing checked
+    /// WHICH tabs each one claims.
+    /// <para>Membership only, deliberately not order. The table is prose a human maintains, and reordering two
+    /// tabs inside a group is not a defect — naming a tab that moved, or omitting one that shipped, is. The one
+    /// adjacency that genuinely matters (New App Alerts beside Uninstaller) is asserted on the real graph in
+    /// <c>MainWindowViewModelTests.NavGroups_FileTabsAreGroupedByErrand_NotByMechanism</c>, not here.</para>
+    /// <para>The preview marker is stripped before comparing: 🔬 means "implemented, still settling in", which
+    /// is a fact about the tab and not part of its name.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryReadmeGroupRow_ListsExactlyItsGroupsTabs()
+    {
+        var nav = WithoutComments(
+            File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")));
+
+        // group label -> its leaf labels, sliced between successive Group( calls.
+        var source = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var slice in NavGroupSplit().Split(nav).Skip(1))
+        {
+            var header = NavGroupHeader().Match(slice);
+            if (!header.Success) continue;
+            source[header.Groups["label"].Value] = NavRegistration().Matches(slice)
+                .Select(m => m.Groups[1].Value)
+                .ToList();
+        }
+
+        Assert.True(source.Count >= 10,
+            $"only {source.Count} nav groups were parsed from MainWindowViewModel — the split is broken, so "
+          + "this guard would compare against almost nothing.");
+
+        var table = ReadmeGroupTable().Match(File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md")));
+        Assert.True(table.Success,
+            "README.md no longer contains a \"| Group | Tabs |\" table, so the group listing is unchecked. "
+          + "Reword the guard with the README, not the README alone.");
+
+        var wrong = new List<string>();
+        var rows = 0;
+
+        foreach (var line in table.Groups["body"].Value
+                     .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var cells = line.Trim('|').Split('|');
+            if (cells.Length < 2) continue;
+
+            // The emoji prefix is decoration; the label is what follows it.
+            var label = ReadmeGroupLabel().Replace(cells[0].Trim(), string.Empty).Trim();
+            if (label.Length == 0) continue;
+            rows++;
+
+            if (!source.TryGetValue(label, out var expected))
+            {
+                wrong.Add($"the table has a row for \"{label}\", which is not a nav group");
+                continue;
+            }
+
+            var listed = cells[1].Split('·', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(t => t.Replace("🔬", string.Empty, StringComparison.Ordinal).Trim())
+                .ToList();
+
+            foreach (var missing in expected.Where(t => !listed.Contains(t, StringComparer.Ordinal)))
+                wrong.Add($"\"{label}\" contains {missing}, which the README row does not list");
+            foreach (var extra in listed.Where(t => !expected.Contains(t, StringComparer.Ordinal)))
+                wrong.Add($"the \"{label}\" row lists {extra}, which is not in that group");
+        }
+
+        Assert.True(rows >= 10,
+            $"only {rows} group rows parsed out of the README table, and there are 12 — the row shape changed, "
+          + "so a pass proves nothing.");
+
+        Assert.True(wrong.Count == 0,
+            "the README's group table no longer describes the sidebar. It is the first complete picture of the "
+          + "app a reader gets:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>A <c>Group(</c> slice's own id and label, which are its first two string arguments.</summary>
+    [GeneratedRegex(@"^\s*""[\w-]+""\s*,\s*""(?<label>[^""]+)""", RegexOptions.Compiled)]
+    private static partial Regex NavGroupHeader();
+
+    /// <summary>The README's group table, capturing every row after the header separator.</summary>
+    [GeneratedRegex(@"\|\s*Group\s*\|\s*Tabs\s*\|\r?\n\|[-\s|]+\|\r?\n(?<body>(?:\|.*\r?\n)+)",
+                    RegexOptions.Compiled)]
+    private static partial Regex ReadmeGroupTable();
+
+    /// <summary>
+    /// The emoji (and any variation selector) a README group row is prefixed with.
+    /// </summary>
+    /// <remarks>
+    /// Keyed on ASCII letters rather than the seemingly-tidier <c>\p{L}</c>, and that is not a preference.
+    /// Eleven of the twelve prefixes are Unicode category <c>So</c>, but <b>ℹ U+2139 INFORMATION SOURCE is
+    /// <c>Ll</c></b> — a lowercase LETTER — so <c>^[^\p{L}]+</c> matched nothing on the Info row and left the
+    /// emoji in the label. Every group label is ASCII, so anchoring on that is both simpler and immune to a
+    /// character's Unicode category being a surprise.
+    /// </remarks>
+    [GeneratedRegex(@"^[^A-Za-z]+", RegexOptions.Compiled)]
+    private static partial Regex ReadmeGroupLabel();
 
     /// <summary>The shared elevation banner element, as embedded by a view.</summary>
     [GeneratedRegex(@"<v:AdminBanner\b", RegexOptions.Compiled)]

@@ -20,8 +20,13 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Debloater &amp; Ads" Style="{StaticResource Display}"/>
+            <TextBlock Text="Preinstalled Apps" Style="{StaticResource Display}"/>
             <TextBlock Text="Remove preinstalled Store apps you don't use. A curated preset pre-selects commonly-removed bloat; system-critical apps are protected and can't be removed. Everything is uninstalled for your account only and can be reinstalled from the Microsoft Store."
+                       Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            <!-- This tab has no ad controls at all, and its old name ("Debloater & Ads") promised them: the
+                 five switches that actually turn ads and suggestions off live in Privacy & Telemetry. Someone
+                 who came here for that reason found a list of Store apps and left none the wiser (#1515). -->
+            <TextBlock Text="Looking to turn off ads and suggestions? Those switches are in Privacy &amp; Security → Privacy &amp; Telemetry."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 

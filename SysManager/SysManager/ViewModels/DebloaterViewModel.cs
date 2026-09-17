@@ -12,7 +12,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Debloater &amp; Ads tab. Lists removable Windows Store apps, lets the
+/// ViewModel for the Preinstalled Apps tab. Lists removable Windows Store apps, lets the
 /// user select them (with a curated "common bloat" preset), and removes the selection
 /// per-user after an impact confirmation. System-critical packages are denylisted by the
 /// service and shown disabled. Removal is reversible — apps can be reinstalled from the Store.

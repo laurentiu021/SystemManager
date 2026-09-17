@@ -1407,25 +1407,25 @@ offers, "rate us" prompts:
 <details open>
 <summary><strong>🏠 Dashboard</strong></summary>
 <br>
-<a href="docs/screenshots/01-dashboard.png"><img src="docs/screenshots/01-dashboard.png" width="600" alt="Dashboard"></a>
+<a href="docs/screenshots/dashboard.png"><img src="docs/screenshots/dashboard.png" width="600" alt="Dashboard"></a>
 </details>
 
 <details>
 <summary><strong>🔧 System</strong> — Health · Windows Update · Performance · Windows Features · Restore Points · Boot Analyzer · System Fixes · Tweaks Hub</summary>
 <br>
 <p>
-<a href="docs/screenshots/02-system-health.png"><img src="docs/screenshots/02-system-health.png" width="280" alt="System Health"></a>&nbsp;
-<a href="docs/screenshots/03-windows-update.png"><img src="docs/screenshots/03-windows-update.png" width="280" alt="Windows Update"></a>&nbsp;
-<a href="docs/screenshots/04-performance-mode.png"><img src="docs/screenshots/04-performance-mode.png" width="280" alt="Performance Mode"></a>
+<a href="docs/screenshots/system-health.png"><img src="docs/screenshots/system-health.png" width="280" alt="System Health"></a>&nbsp;
+<a href="docs/screenshots/windows-update.png"><img src="docs/screenshots/windows-update.png" width="280" alt="Windows Update"></a>&nbsp;
+<a href="docs/screenshots/performance-mode.png"><img src="docs/screenshots/performance-mode.png" width="280" alt="Performance Mode"></a>
 </p>
 <p>
-<a href="docs/screenshots/07-windows-features.png"><img src="docs/screenshots/07-windows-features.png" width="280" alt="Windows Features"></a>&nbsp;
-<a href="docs/screenshots/08-restore-points.png"><img src="docs/screenshots/08-restore-points.png" width="280" alt="Restore Points"></a>&nbsp;
-<a href="docs/screenshots/10-boot-analyzer.png"><img src="docs/screenshots/10-boot-analyzer.png" width="280" alt="Boot Analyzer"></a>
+<a href="docs/screenshots/windows-features.png"><img src="docs/screenshots/windows-features.png" width="280" alt="Windows Features"></a>&nbsp;
+<a href="docs/screenshots/restore-points.png"><img src="docs/screenshots/restore-points.png" width="280" alt="Restore Points"></a>&nbsp;
+<a href="docs/screenshots/boot-analyzer.png"><img src="docs/screenshots/boot-analyzer.png" width="280" alt="Boot Analyzer"></a>
 </p>
 <p>
-<a href="docs/screenshots/11-system-fixes.png"><img src="docs/screenshots/11-system-fixes.png" width="280" alt="System Fixes"></a>&nbsp;
-<a href="docs/screenshots/12-tweaks-hub.png"><img src="docs/screenshots/12-tweaks-hub.png" width="280" alt="Tweaks Hub"></a>
+<a href="docs/screenshots/system-fixes.png"><img src="docs/screenshots/system-fixes.png" width="280" alt="System Fixes"></a>&nbsp;
+<a href="docs/screenshots/tweaks-hub.png"><img src="docs/screenshots/tweaks-hub.png" width="280" alt="Tweaks Hub"></a>
 </p>
 </details>
 
@@ -1433,13 +1433,13 @@ offers, "rate us" prompts:
 <summary><strong>🎮 Gaming &amp; Profiles</strong> — Gaming Profile · Standby Cleaner · Timer Resolution · CPU Affinity · Display Profiles</summary>
 <br>
 <p>
-<a href="docs/screenshots/13-gaming-profile.png"><img src="docs/screenshots/13-gaming-profile.png" width="280" alt="Gaming Profile"></a>&nbsp;
-<a href="docs/screenshots/14-standby-cleaner.png"><img src="docs/screenshots/14-standby-cleaner.png" width="280" alt="Standby List Cleaner"></a>&nbsp;
-<a href="docs/screenshots/15-timer-resolution.png"><img src="docs/screenshots/15-timer-resolution.png" width="280" alt="Timer Resolution"></a>
+<a href="docs/screenshots/gaming-profile.png"><img src="docs/screenshots/gaming-profile.png" width="280" alt="Gaming Profile"></a>&nbsp;
+<a href="docs/screenshots/standby-list-cleaner.png"><img src="docs/screenshots/standby-list-cleaner.png" width="280" alt="Standby List Cleaner"></a>&nbsp;
+<a href="docs/screenshots/timer-resolution.png"><img src="docs/screenshots/timer-resolution.png" width="280" alt="Timer Resolution"></a>
 </p>
 <p>
-<a href="docs/screenshots/16-cpu-affinity.png"><img src="docs/screenshots/16-cpu-affinity.png" width="280" alt="CPU Core Affinity"></a>&nbsp;
-<a href="docs/screenshots/17-display-profiles.png"><img src="docs/screenshots/17-display-profiles.png" width="280" alt="Display Profiles"></a>
+<a href="docs/screenshots/cpu-core-affinity.png"><img src="docs/screenshots/cpu-core-affinity.png" width="280" alt="CPU Core Affinity"></a>&nbsp;
+<a href="docs/screenshots/display-profiles.png"><img src="docs/screenshots/display-profiles.png" width="280" alt="Display Profiles"></a>
 </p>
 </details>
 
@@ -1447,9 +1447,9 @@ offers, "rate us" prompts:
 <summary><strong>📊 Monitor</strong> — Resource History · File Lock · Settings Watchdog</summary>
 <br>
 <p>
-<a href="docs/screenshots/19-resource-history.png"><img src="docs/screenshots/19-resource-history.png" width="280" alt="Resource History"></a>&nbsp;
-<a href="docs/screenshots/22-file-lock.png"><img src="docs/screenshots/22-file-lock.png" width="280" alt="File Lock Detector"></a>&nbsp;
-<a href="docs/screenshots/23-settings-watchdog.png"><img src="docs/screenshots/23-settings-watchdog.png" width="280" alt="Settings Watchdog"></a>
+<a href="docs/screenshots/resource-history.png"><img src="docs/screenshots/resource-history.png" width="280" alt="Resource History"></a>&nbsp;
+<a href="docs/screenshots/file-lock-detector.png"><img src="docs/screenshots/file-lock-detector.png" width="280" alt="File Lock Detector"></a>&nbsp;
+<a href="docs/screenshots/settings-watchdog.png"><img src="docs/screenshots/settings-watchdog.png" width="280" alt="Settings Watchdog"></a>
 </p>
 <p><em>Bandwidth Monitor is implemented but its screenshot is still being recaptured — the
 previous one showed the tab while it was a placeholder, which no longer reflects the app.</em></p>
@@ -1459,12 +1459,12 @@ previous one showed the tab while it was a placeholder, which no longer reflects
 <summary><strong>🧹 Cleanup</strong> — Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance</summary>
 <br>
 <p>
-<a href="docs/screenshots/25-quick-cleanup.png"><img src="docs/screenshots/25-quick-cleanup.png" width="280" alt="Quick Cleanup"></a>&nbsp;
-<a href="docs/screenshots/26-deep-cleanup.png"><img src="docs/screenshots/26-deep-cleanup.png" width="280" alt="Deep Cleanup"></a>&nbsp;
-<a href="docs/screenshots/27-shortcut-cleaner.png"><img src="docs/screenshots/27-shortcut-cleaner.png" width="280" alt="Shortcut Cleaner"></a>
+<a href="docs/screenshots/quick-cleanup.png"><img src="docs/screenshots/quick-cleanup.png" width="280" alt="Quick Cleanup"></a>&nbsp;
+<a href="docs/screenshots/deep-cleanup.png"><img src="docs/screenshots/deep-cleanup.png" width="280" alt="Deep Cleanup"></a>&nbsp;
+<a href="docs/screenshots/shortcut-cleaner.png"><img src="docs/screenshots/shortcut-cleaner.png" width="280" alt="Shortcut Cleaner"></a>
 </p>
 <p>
-<a href="docs/screenshots/28-scheduled-maintenance.png"><img src="docs/screenshots/28-scheduled-maintenance.png" width="280" alt="Scheduled Maintenance"></a>
+<a href="docs/screenshots/scheduled-maintenance.png"><img src="docs/screenshots/scheduled-maintenance.png" width="280" alt="Scheduled Maintenance"></a>
 </p>
 </details>
 
@@ -1472,7 +1472,7 @@ previous one showed the tab while it was a placeholder, which no longer reflects
 <summary><strong>💾 Storage</strong> — Disk Analyzer</summary>
 <br>
 <p>
-<a href="docs/screenshots/29-disk-analyzer.png"><img src="docs/screenshots/29-disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
+<a href="docs/screenshots/disk-analyzer.png"><img src="docs/screenshots/disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
 </p>
 <p><em>Duplicate Finder is implemented and has no screenshot yet — a shot of it would be a list
 of real file paths, which needs redacting before it can ship.</em></p>
@@ -1482,12 +1482,12 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>🌐 Network</strong> — Ping · Traceroute · Speed Test · Repair</summary>
 <br>
 <p>
-<a href="docs/screenshots/31-ping.png"><img src="docs/screenshots/31-ping.png" width="280" alt="Ping"></a>&nbsp;
-<a href="docs/screenshots/32-traceroute.png"><img src="docs/screenshots/32-traceroute.png" width="280" alt="Traceroute"></a>&nbsp;
-<a href="docs/screenshots/33-speed-test.png"><img src="docs/screenshots/33-speed-test.png" width="280" alt="Speed Test"></a>
+<a href="docs/screenshots/ping.png"><img src="docs/screenshots/ping.png" width="280" alt="Ping"></a>&nbsp;
+<a href="docs/screenshots/traceroute.png"><img src="docs/screenshots/traceroute.png" width="280" alt="Traceroute"></a>&nbsp;
+<a href="docs/screenshots/speed-test.png"><img src="docs/screenshots/speed-test.png" width="280" alt="Speed Test"></a>
 </p>
 <p>
-<a href="docs/screenshots/34-network-repair.png"><img src="docs/screenshots/34-network-repair.png" width="280" alt="Network Repair"></a>
+<a href="docs/screenshots/network-repair.png"><img src="docs/screenshots/network-repair.png" width="280" alt="Network Repair"></a>
 </p>
 </details>
 
@@ -1495,9 +1495,9 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>📦 Apps</strong> — App Updates · Bulk Installer · New App Alerts</summary>
 <br>
 <p>
-<a href="docs/screenshots/36-app-updates.png"><img src="docs/screenshots/36-app-updates.png" width="280" alt="App Updates"></a>&nbsp;
-<a href="docs/screenshots/37-bulk-installer.png"><img src="docs/screenshots/37-bulk-installer.png" width="280" alt="Bulk Installer"></a>&nbsp;
-<a href="docs/screenshots/21-app-alerts.png"><img src="docs/screenshots/21-app-alerts.png" width="280" alt="New App Alerts"></a>
+<a href="docs/screenshots/app-updates.png"><img src="docs/screenshots/app-updates.png" width="280" alt="App Updates"></a>&nbsp;
+<a href="docs/screenshots/bulk-installer.png"><img src="docs/screenshots/bulk-installer.png" width="280" alt="Bulk Installer"></a>&nbsp;
+<a href="docs/screenshots/new-app-alerts.png"><img src="docs/screenshots/new-app-alerts.png" width="280" alt="New App Alerts"></a>
 </p>
 </details>
 
@@ -1505,14 +1505,14 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>🛡️ Privacy &amp; Security</strong> — Privacy &amp; Telemetry · File Shredder · App Blocker · Preinstalled Apps · Browser Cleaner · Defender</summary>
 <br>
 <p>
-<a href="docs/screenshots/39-privacy-telemetry.png"><img src="docs/screenshots/39-privacy-telemetry.png" width="280" alt="Privacy &amp; Telemetry"></a>&nbsp;
-<a href="docs/screenshots/40-file-shredder.png"><img src="docs/screenshots/40-file-shredder.png" width="280" alt="File Shredder"></a>&nbsp;
-<a href="docs/screenshots/41-app-blocker.png"><img src="docs/screenshots/41-app-blocker.png" width="280" alt="App Blocker"></a>
+<a href="docs/screenshots/privacy-telemetry.png"><img src="docs/screenshots/privacy-telemetry.png" width="280" alt="Privacy &amp; Telemetry"></a>&nbsp;
+<a href="docs/screenshots/file-shredder.png"><img src="docs/screenshots/file-shredder.png" width="280" alt="File Shredder"></a>&nbsp;
+<a href="docs/screenshots/app-blocker.png"><img src="docs/screenshots/app-blocker.png" width="280" alt="App Blocker"></a>
 </p>
 <p>
-<a href="docs/screenshots/42-debloater.png"><img src="docs/screenshots/42-debloater.png" width="280" alt="Preinstalled Apps"></a>&nbsp;
-<a href="docs/screenshots/43-browser-cleaner.png"><img src="docs/screenshots/43-browser-cleaner.png" width="280" alt="Browser Cleaner"></a>&nbsp;
-<a href="docs/screenshots/45-defender-tweaks.png"><img src="docs/screenshots/45-defender-tweaks.png" width="280" alt="Defender Tweaks"></a>
+<a href="docs/screenshots/preinstalled-apps.png"><img src="docs/screenshots/preinstalled-apps.png" width="280" alt="Preinstalled Apps"></a>&nbsp;
+<a href="docs/screenshots/browser-cleaner.png"><img src="docs/screenshots/browser-cleaner.png" width="280" alt="Browser Cleaner"></a>&nbsp;
+<a href="docs/screenshots/defender-tweaks.png"><img src="docs/screenshots/defender-tweaks.png" width="280" alt="Defender Tweaks"></a>
 </p>
 </details>
 
@@ -1520,7 +1520,7 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>🎨 Customization</strong> — Dark Mode Scheduler</summary>
 <br>
 <p>
-<a href="docs/screenshots/48-dark-mode.png"><img src="docs/screenshots/48-dark-mode.png" width="280" alt="Dark Mode Scheduler"></a>
+<a href="docs/screenshots/dark-mode-scheduler.png"><img src="docs/screenshots/dark-mode-scheduler.png" width="280" alt="Dark Mode Scheduler"></a>
 </p>
 </details>
 
@@ -1528,13 +1528,13 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>ℹ️ Info</strong> — Drivers · Battery · Logs · System Report · About</summary>
 <br>
 <p>
-<a href="docs/screenshots/50-drivers.png"><img src="docs/screenshots/50-drivers.png" width="280" alt="Drivers"></a>&nbsp;
-<a href="docs/screenshots/51-battery-health.png"><img src="docs/screenshots/51-battery-health.png" width="280" alt="Battery Health"></a>&nbsp;
-<a href="docs/screenshots/52-system-logs.png"><img src="docs/screenshots/52-system-logs.png" width="280" alt="System Logs"></a>
+<a href="docs/screenshots/drivers.png"><img src="docs/screenshots/drivers.png" width="280" alt="Drivers"></a>&nbsp;
+<a href="docs/screenshots/battery-health.png"><img src="docs/screenshots/battery-health.png" width="280" alt="Battery Health"></a>&nbsp;
+<a href="docs/screenshots/system-logs.png"><img src="docs/screenshots/system-logs.png" width="280" alt="System Logs"></a>
 </p>
 <p>
-<a href="docs/screenshots/53-system-report.png"><img src="docs/screenshots/53-system-report.png" width="280" alt="System Report"></a>&nbsp;
-<a href="docs/screenshots/55-about.png"><img src="docs/screenshots/55-about.png" width="280" alt="About"></a>
+<a href="docs/screenshots/system-report.png"><img src="docs/screenshots/system-report.png" width="280" alt="System Report"></a>&nbsp;
+<a href="docs/screenshots/about.png"><img src="docs/screenshots/about.png" width="280" alt="About"></a>
 </p>
 </details>
 
@@ -1542,8 +1542,8 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <summary><strong>⚙️ Advanced</strong> — Profile Export / Import · CLI Interface</summary>
 <br>
 <p>
-<a href="docs/screenshots/56-profile-export.png"><img src="docs/screenshots/56-profile-export.png" width="280" alt="Profile Export / Import"></a>&nbsp;
-<a href="docs/screenshots/57-cli-interface.png"><img src="docs/screenshots/57-cli-interface.png" width="280" alt="CLI Interface"></a>
+<a href="docs/screenshots/profile-export-import.png"><img src="docs/screenshots/profile-export-import.png" width="280" alt="Profile Export / Import"></a>&nbsp;
+<a href="docs/screenshots/cli-interface.png"><img src="docs/screenshots/cli-interface.png" width="280" alt="CLI Interface"></a>
 </p>
 </details>
 

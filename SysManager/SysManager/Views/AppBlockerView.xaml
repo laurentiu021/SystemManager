@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -32,13 +33,30 @@
             <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
         </StackPanel>
 
+        <!-- Rescue banner for a block that cannot be undone from here. Sits ABOVE the elevation banner
+             because it is the more urgent of the two: the elevation banner explains a permission, this one
+             says the permission may already be unreachable. Same shape as DefenderView's Tamper Protection
+             warning — DockPanel rather than a horizontal StackPanel, which measures children with infinite
+             width and would leave TextWrapping inert (#1807). -->
+        <Border Grid.Row="1" Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningBg}"
+                BorderThickness="1" CornerRadius="{StaticResource RadiusLg}" Padding="12,10" Margin="0,0,0,12"
+                Visibility="{Binding HasUnrecoverableBlock, Converter={StaticResource FlexVis}}">
+            <DockPanel>
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" DockPanel.Dock="Left"
+                           FontSize="14" Foreground="{DynamicResource WarningText}" VerticalAlignment="Top" Margin="0,0,10,0"/>
+                <TextBlock Text="{Binding UnrecoverableWarning}" Foreground="{DynamicResource WarningText}"
+                           Style="{StaticResource Subtle}" TextWrapping="Wrap" VerticalAlignment="Center"
+                           AutomationProperties.Name="Unrecoverable block warning"/>
+            </DockPanel>
+        </Border>
+
         <!-- Elevation banner -->
-        <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
+        <v:AdminBanner Grid.Row="2" Margin="0,0,0,12"
                        NotElevatedMessage="Blocking applications modifies system registry keys and requires administrator privileges."
                        ElevatedMessage="Running as administrator — you can block and unblock applications."/>
 
         <!-- Block input -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
             <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4"
                      VerticalAlignment="Center" Margin="0,0,8,0"
                      AutomationProperties.Name="Executable name to block" />
@@ -47,7 +65,7 @@
         </StackPanel>
 
         <!-- Toolbar -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
             <Button Content="Unblock Selected" Command="{Binding UnblockSelectedCommand}" Style="{StaticResource SecondaryButton}" Padding="12,6" Margin="0,0,8,0" />
             <Button Content="Refresh" Command="{Binding RefreshListCommand}" Style="{StaticResource GhostButton}" Padding="8,6" Margin="0,0,16,0" />
             <Separator Margin="0,0,16,0" />
@@ -56,7 +74,7 @@
         </StackPanel>
 
         <!-- Blocked apps list -->
-        <DataGrid Grid.Row="4" ItemsSource="{Binding BlockedApps}"
+        <DataGrid Grid.Row="5" ItemsSource="{Binding BlockedApps}"
                   AutoGenerateColumns="False" IsReadOnly="False"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeColumns="True"
@@ -84,18 +102,36 @@
                         </Style>
                     </DataGridCheckBoxColumn.EditingElementStyle>
                 </DataGridCheckBoxColumn>
-                <DataGridTextColumn Header="Executable" Binding="{Binding ExecutableName}" Width="*" MinWidth="120" IsReadOnly="True" />
+                <!-- A template column rather than a text one so the entry the banner is about is marked in
+                     the list too. Without it the row that cost someone their permission prompt looks exactly
+                     like a game launcher they chose to block (#2357). SortMemberPath keeps the column
+                     sortable, which a template column loses by default. -->
+                <DataGridTemplateColumn Header="Executable" Width="*" MinWidth="120" SortMemberPath="ExecutableName">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                           FontSize="13" Foreground="{DynamicResource WarningText}"
+                                           VerticalAlignment="Center" Margin="0,0,6,0"
+                                           ToolTip="Undoing this block needs administrator rights it may have taken away."
+                                           Visibility="{Binding IsUnrecoverable, Converter={StaticResource FlexVis}}"/>
+                                <TextBlock Text="{Binding ExecutableName}" VerticalAlignment="Center"
+                                           AutomationProperties.Name="{Binding ExecutableName}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
             </DataGrid.Columns>
         </DataGrid>
 
         <!-- Empty state -->
-        <v:EmptyState Grid.Row="4" Glyph="&#xE730;"
+        <v:EmptyState Grid.Row="5" Glyph="&#xE730;"
                       Title="No blocked applications"
                       Message="Block an app above to stop it from launching."
                       Visibility="{Binding BlockedApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,8,0,0">
+        <StackPanel Grid.Row="6" Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Opacity="0.6" VerticalAlignment="Center"
                        Foreground="{DynamicResource TextSecondary}">
                 <Run Text="{Binding BlockedCount, Mode=OneWay}" />

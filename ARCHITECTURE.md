@@ -517,7 +517,11 @@ Key services:
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
-  Execution Options (IFEO) debugger redirect.
+  Execution Options (IFEO) debugger redirect. Injectable registry root for tests.
+  One predicate decides both which targets are refused and which existing blocks
+  cannot be lifted from inside the app, so refusal and detection cannot disagree;
+  `GetBlockedApps` stamps that verdict onto each row it returns. Detection only —
+  the service never removes a block without going through the confirmed unblock path.
 - `NotificationBlockerService` — mutes app notification nags via the documented
   per-user registry switches Windows Settings writes (per-app `Enabled` under
   `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable

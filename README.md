@@ -1026,6 +1026,16 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Requires admin privileges for registry modifications, in **both** directions —
   blocking and unblocking write the same protected setting, and each says so
   before asking you to confirm anything
+- **Refuses any target whose block could not be undone** — the processes Windows needs
+  to start, the permission prompt (`consent.exe`), and SysManager itself. Each refusal
+  says which one it is rather than blaming your admin rights
+- **Warns about a block it could not lift**, including one written by an older version
+  before that refusal existed. Such an entry is marked in the list, raised on the
+  Dashboard, and the banner gives the recovery step — including the exact registry
+  location, for the case where no permission prompt can appear to grant it
+- The confirmation tells you what a block actually looks like: Windows reports that it
+  cannot find `SysManager_Blocked.exe`. That missing file **is** the mechanism, not a
+  fault, and nothing is deleted
 
 ### Preinstalled Apps
 Remove preinstalled Windows Store apps you don't use. This tab has no ad or suggestion controls —

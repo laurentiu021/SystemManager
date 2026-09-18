@@ -133,11 +133,24 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// worth a defaulting path into user data; the DI container and the designer graph both have one
     /// to hand (#1772).
     /// </param>
+    /// <summary>
+    /// Reads the IFEO blocked list for the stranded-machine alert, or null when no caller supplied one.
+    /// </summary>
+    /// <remarks>
+    /// Optional so the six existing construction sites keep compiling unchanged — the same shape
+    /// <see cref="AboutViewModel"/> uses for its diagnostics service. Null simply omits the sixth alert,
+    /// which is also what makes the alert testable in both directions: a test supplies a service over a
+    /// redirected registry hive to assert it fires, and omits it to assert nothing else moved.
+    /// </remarks>
+    private readonly IAppBlockerService? _appBlocker;
+
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
-        CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation)
+        CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
+        IAppBlockerService? appBlocker = null)
     {
         _navigation = navigation;
+        _appBlocker = appBlocker;
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
@@ -451,7 +464,62 @@ public sealed partial class DashboardViewModel : ViewModelBase
         _ = RunAlertScanAsync(memoryAlert, ScanMemoryHealthAsync);
         _ = RunAlertScanAsync(eventLogAlert, ScanEventLogAsync);
         _ = RunAlertScanAsync(featuresAlert, ScanWindowsFeaturesAsync);
+
+        // Sixth alert, added last and only when the shell supplied the service, because it answers a
+        // question the other five do not: has this machine been left in a state it cannot get out of?
+        // An IFEO block a build published before #2030 could write on consent.exe removes elevation, and
+        // the damage is INVISIBLE until the first time something asks for administrator rights — so the
+        // App Blocker tab, where the evidence lives, is the last place anyone would think to look (#2357).
+        if (_appBlocker is not null)
+        {
+            var blockAlert = new DashboardAlert { Title = "Checking blocked applications...", State = AlertLoadingState.Loading };
+            Alerts.Add(blockAlert);
+            _ = RunAlertScanAsync(blockAlert, ScanUnrecoverableBlocksAsync);
+        }
     }
+
+    /// <summary>
+    /// Reports an existing IFEO block that could not be lifted from inside the app.
+    /// </summary>
+    /// <remarks>
+    /// Read-only. It reports and routes; it never removes a value, elevated or not — an unattended
+    /// registry write is exactly the kind of repair that should be the user's decision, and the Unblock
+    /// button already asks for confirmation.
+    /// <para>Red rather than yellow when it fires. Every other alert here describes something degraded;
+    /// this one describes a machine that cannot grant administrator rights, which is not a shade of
+    /// warning.</para>
+    /// </remarks>
+    private Task ScanUnrecoverableBlocksAsync(DashboardAlert alert)
+    {
+        var stranded = _appBlocker!.GetBlockedApps().Where(a => a.IsUnrecoverable).ToList();
+        var (title, severity) = ClassifyStrandedBlocks(stranded.Count, stranded.FirstOrDefault()?.ExecutableName);
+
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            alert.Title = title;
+            alert.Severity = severity;
+            alert.NavTargetId = NavTargetFor(severity, "nav-app-blocker");
+        });
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Pure decision for the stranded-block alert. Testable without WPF.</summary>
+    /// <remarks>
+    /// Separated from the scan for the same reason as the other <c>Classify…</c> methods here: the scan's
+    /// only other statement is a <c>Dispatcher.BeginInvoke</c>, and with no <c>Application.Current</c> — a
+    /// test host, or the CLI — that call short-circuits and writes nothing. A test driving the scan would
+    /// therefore assert against an untouched alert and pass while saying nothing about the wording.
+    /// <para>Red, not yellow. Every other alert on this page reports something degraded; this one reports a
+    /// machine that can no longer grant administrator rights.</para>
+    /// </remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifyStrandedBlocks(int count, string? firstName) =>
+        count switch
+        {
+            0 => ("No blocked apps need attention", AlertSeverity.Green),
+            1 => ($"{firstName} is blocked and cannot be unblocked normally", AlertSeverity.Red),
+            _ => ($"{count} blocked apps cannot be unblocked normally", AlertSeverity.Red),
+        };
 
     /// <summary>
     /// Says "this is taking a moment" after five seconds, and deliberately does NOT say how much

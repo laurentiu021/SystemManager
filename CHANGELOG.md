@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.111.0] - 2026-09-18
+
+**If SysManager misbehaves, you can now hand somebody one file instead of four.** Producing evidence for a
+bug used to mean copying the environment info, exporting the system report, then leaving the app, opening a
+hidden folder inside `AppData`, and working out which of up to fourteen daily log files covered the moment it
+went wrong. The last two steps are not something most people can do, which meant most bugs simply could not
+be reported. **About now has a "Save diagnostics bundle" button** that puts all of it into one `.zip` wherever
+you choose. Nothing is sent anywhere — there is nowhere for SysManager to send it.
+
+### Added
+
+- **"Save diagnostics bundle" on the About tab.** One `.zip` holding the system report, your environment
+  info, and the three most recent daily log files. A `README.txt` inside names every file, says plainly that
+  nothing was uploaded, and lists what was deliberately left out.
+- **The bundle leaves out your hardware addresses.** Your network adapters' MAC addresses are not included,
+  and the last two parts of each local IP are replaced with `x`. A MAC address identifies your hardware
+  permanently, it survives reinstalling Windows, and it cannot be taken back once it is posted somewhere
+  public — and neither it nor your exact IP answers any question a bug report asks. Your Windows user name is
+  already removed from every log line before it is written to disk.
+- **An oversized log is cut to its most recent activity** rather than left out or making the zip too large to
+  attach, and says at the top of the file how much was dropped. The end of a log is kept, not the beginning:
+  a log reads in order, so the problem being reported is at the end.
+
+### Changed
+
+- **`SECURITY.md` supported version** moved to 1.111.x.
+
 ## [1.110.0] - 2026-09-18
 
 **There was nowhere to go when you got stuck.** Everything a confused person needs was already in the app —

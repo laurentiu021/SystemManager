@@ -550,6 +550,25 @@ Key services:
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained
   HTML, or JSON so all three exports share a single source of truth.
+  `GenerateSharableReportAsync` renders the same payload with each adapter's MAC
+  dropped and its IPv4 host part masked, for the diagnostics bundle. Redacted from
+  the DATA rather than by pattern-matching the rendered text: a four-part version
+  string has four valid octets, so a generic IPv4 regex over the finished report
+  would rewrite the version line while claiming to protect an address. Whether the
+  existing exports should redact by default is #2352.
+- `DiagnosticsBundleService` — packages the sharable report, the About tab's
+  environment block and the three newest rolling log files into one zip the user
+  chooses where to save. Nothing is uploaded and there is no network code in the
+  class. Logs are picked by FILENAME rather than by `LastWriteTime`, because the
+  names sort chronologically and a sync client touching a file would otherwise
+  select the wrong three; an oversized one is cut from its FRONT, since a log is
+  chronological and the failure being reported is at the tail. `PackAsync` is the
+  internal seam that takes an already-gathered report, so the packaging is unit
+  testable while the redaction decision stays on the one path a caller can reach.
+  `SysManager.IntegrationTests.DiagnosticsBundleRedactionTests` asserts against
+  this machine's real adapters — and asserts the FULL report still carries them,
+  so "nothing found" cannot pass for "something was removed". Neither of its
+  failure messages prints a value, because they reach a public CI log.
 - `EnvironmentVariableService`: reads/writes User and Machine environment
   variables directly through HKCU/HKLM so `REG_EXPAND_SZ` values round-trip
   without flattening, then broadcasts `WM_SETTINGCHANGE`. It provides name

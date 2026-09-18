@@ -25,6 +25,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     private readonly UpdateService _updates;
     private readonly SystemReportService _reportService;
+    private readonly DiagnosticsBundleService _bundle;
     private readonly UpdateCheckPreferenceService _preferences;
 
     /// <summary>Overrides where the retained previous build is looked for. Null = the real profile.</summary>
@@ -153,12 +154,17 @@ public sealed partial class AboutViewModel : ViewModelBase
         SystemReportService reportService,
         bool autoCheck,
         UpdateCheckPreferenceService? preferences = null,
-        string? updatesDir = null)
+        string? updatesDir = null,
+        DiagnosticsBundleService? bundle = null)
     {
         _updates = updates;
         _reportService = reportService;
         _preferences = preferences ?? new UpdateCheckPreferenceService();
         _updatesDir = updatesDir;
+        // Overridable for the same reason as `preferences` and `updatesDir`: the default reads the real log
+        // directory under %LocalAppData%, and a test must be able to point it at a temp folder rather than
+        // read whatever is in the developer's own profile.
+        _bundle = bundle ?? new DiagnosticsBundleService(reportService);
 
         // Load before any check can run, and suppress the save that binding the value would
         // otherwise trigger — restoring a preference must not rewrite the file it came from.
@@ -700,6 +706,65 @@ public sealed partial class AboutViewModel : ViewModelBase
         catch (InvalidOperationException ex)
         {
             ReportStatus = $"Failed to generate report: {ex.Message}";
+        }
+        finally { IsGeneratingReport = false; }
+    }
+
+    /// <summary>
+    /// Writes one zip holding the report, the environment block and the newest log files.
+    /// </summary>
+    /// <remarks>
+    /// The four steps this replaces were: copy the environment block, export the full report, then leave the
+    /// app, open <c>%LOCALAPPDATA%\SysManager\logs\</c> in Explorer and work out which of up to fourteen
+    /// daily rolling files covers the moment the bug happened. The target user cannot do the last two, so
+    /// their bug was unreportable — not badly reported, unreportable (#1650).
+    /// <para>Uses the SHARABLE report, not the full one. The bundle exists to be attached to a public issue,
+    /// and the full report carries the adapter's MAC address, which is permanent and cannot be withdrawn once
+    /// posted. <see cref="DiagnosticsBundleService"/> holds that decision and the README inside the zip says
+    /// what was left out and why.</para>
+    /// <para>Nothing is uploaded. The dialog comes first, so cancelling costs nothing, and the file goes
+    /// exactly where the user pointed it.</para>
+    /// </remarks>
+    [RelayCommand]
+    private async Task SaveDiagnosticsBundleAsync()
+    {
+        if (IsGeneratingReport) return;
+
+        var dlg = new SaveFileDialog
+        {
+            FileName = $"SysManager-diagnostics-{DateTime.Now.ToString("yyyy-MM-dd-HHmmss", CultureInfo.InvariantCulture)}.zip",
+            Filter = "Zip archive (*.zip)|*.zip|All files (*.*)|*.*"
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        IsGeneratingReport = true;
+        ReportStatus = "Collecting diagnostics…";
+        try
+        {
+            var environment = await Task.Run(CollectEnvironmentInfo).ConfigureAwait(true);
+            var contents = await _bundle.WriteAsync(dlg.FileName, environment).ConfigureAwait(true);
+
+            var logs = contents.LogFilesIncluded switch
+            {
+                0 => "no log files were found",
+                1 => "1 log file",
+                var n => string.Create(CultureInfo.InvariantCulture, $"{n} log files"),
+            };
+            ReportStatus = string.Create(CultureInfo.InvariantCulture,
+                $"Saved {Path.GetFileName(dlg.FileName)} — report, environment info and {logs}. Nothing was sent anywhere.");
+            ToastService.Instance.Show("Diagnostics bundle saved", Path.GetFileName(dlg.FileName));
+        }
+        catch (IOException ex)
+        {
+            ReportStatus = $"Failed to save the diagnostics bundle: {ex.Message}";
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ReportStatus = $"Failed to save the diagnostics bundle (access denied): {ex.Message}";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ReportStatus = $"Failed to collect diagnostics: {ex.Message}";
         }
         finally { IsGeneratingReport = false; }
     }

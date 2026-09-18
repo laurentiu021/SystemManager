@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -117,6 +118,105 @@ public class TrayIconServiceTests
         var ex = Record.Exception(() => svc.CheckAndNotify(snapshot));
         Assert.Null(ex);
         svc.Dispose();
+    }
+
+    // ---------- the one-line readout the context menu header shows ----------
+
+    /// <summary>
+    /// Builds a snapshot with every figure the menu header renders under the test's control.
+    /// </summary>
+    private static SystemSnapshot Reading(double cpuPct, double usedGB, double totalGB, TimeSpan uptime) =>
+        new(new OsInfo("Windows 11", "10.0", "22631", uptime, "64-bit"),
+            new CpuInfo("Test CPU", 8, 16, 3600, cpuPct),
+            new MemoryInfo(totalGB, totalGB - usedGB, usedGB, usedGB / totalGB * 100, new List<MemoryModule>()),
+            new List<DiskInfo>(),
+            DateTime.Now);
+
+    [Fact]
+    public void MenuStatusText_ReadsCpuThenMemoryThenUptime()
+    {
+        // The whole string, not fragments: this is the first thing visible when the menu opens, and the
+        // order is the point — the CPU figure sits directly above the "What's using my PC" item, which is
+        // what makes the menu a short diagnostic path rather than a list of links.
+        var text = TrayIconService.MenuStatusText(
+            Reading(cpuPct: 12, usedGB: 9.4, totalGB: 31.9, uptime: new TimeSpan(3, 4, 30, 0)));
+
+        Assert.Equal("CPU 12%  ·  RAM 9.4/31.9 GB  ·  up 3d 4h", text);
+    }
+
+    [Fact]
+    public void MenuStatusText_IsOneLine()
+    {
+        // A MenuItem header renders a newline literally and would grow the row rather than wrap. The
+        // tooltip's three-line shape is next to this in the same file, so the two are easy to mix up.
+        var text = TrayIconService.MenuStatusText(Reading(50, 8, 16, TimeSpan.FromHours(5)));
+
+        Assert.DoesNotContain('\n', text);
+        Assert.DoesNotContain('\r', text);
+    }
+
+    [Theory]
+    [InlineData("ro-RO")]   // comma decimal separator
+    [InlineData("de-DE")]
+    [InlineData("tr-TR")]   // the dotted-I culture, which also breaks casing
+    public void MenuStatusText_UsesInvariantNumbers_OnAnyRegionalSetting(string culture)
+    {
+        // The figures are formatted through CultureInfo.InvariantCulture deliberately, matching the tooltip
+        // beside it and FormatHelper. Without it the same menu reads "9,4/31,9 GB" for most of Europe while
+        // every other number in the app stays dotted — a mixed screen, which is worse than either choice.
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var text = TrayIconService.MenuStatusText(Reading(12, 9.4, 31.9, new TimeSpan(3, 4, 0, 0)));
+
+            Assert.Contains("9.4/31.9 GB", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("9,4", text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData(12.4, "CPU 12%")]
+    [InlineData(12.6, "CPU 13%")]
+    [InlineData(0, "CPU 0%")]
+    [InlineData(100, "CPU 100%")]
+    public void MenuStatusText_RoundsCpuToAWholeNumber(double cpuPct, string expected)
+    {
+        // No decimal place on a figure that moves every poll: "CPU 12.6%" implies a precision a 60-second
+        // sample does not have, and the extra character buys nothing at a glance.
+        Assert.Contains(expected, TrayIconService.MenuStatusText(Reading(cpuPct, 8, 16, TimeSpan.FromHours(1))),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0, 4, "up 0d 4h")]      // under a day still says the day
+    [InlineData(0, 0, "up 0d 0h")]      // freshly booted
+    [InlineData(21, 23, "up 21d 23h")]
+    public void MenuStatusText_ShowsUptimeAsDaysAndHours(int days, int hours, string expected)
+    {
+        // Days are kept even at zero rather than switching shape below 24 hours: a header that changes
+        // format is harder to read at a glance than one that always has the same three parts.
+        var text = TrayIconService.MenuStatusText(Reading(10, 8, 16, new TimeSpan(days, hours, 0, 0)));
+
+        Assert.Contains(expected, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MenuStatusText_ReportsTheSameFiguresAsTheTooltip()
+    {
+        // The two renderings are deliberately separate — one line versus three, capped at 127 characters
+        // versus uncapped — but they read ONE snapshot, so they must never disagree about the numbers.
+        // That is the part a user would notice, and the only part worth pinning across both.
+        var snapshot = Reading(cpuPct: 37, usedGB: 12.5, totalGB: 64, uptime: new TimeSpan(2, 9, 0, 0));
+        var text = TrayIconService.MenuStatusText(snapshot);
+
+        Assert.Contains("37%", text, StringComparison.Ordinal);
+        Assert.Contains("12.5/64.0 GB", text, StringComparison.Ordinal);
+        Assert.Contains("2d 9h", text, StringComparison.Ordinal);
     }
 
     // ---------- helpers ----------

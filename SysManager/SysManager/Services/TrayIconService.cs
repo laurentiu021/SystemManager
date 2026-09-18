@@ -29,6 +29,26 @@ public sealed class TrayIconService : IDisposable
     private bool _disposed;
     private int _updating; // PERF-M4: re-entrancy guard for WMI calls
 
+    /// <summary>
+    /// The one-line CPU/RAM/uptime readout the context menu shows, refreshed by the same 60-second poll
+    /// that writes the tooltip.
+    /// </summary>
+    /// <remarks>
+    /// A field rather than a live-bound item, because the menu is built once and opened many times: the
+    /// header's text is set from here in the <c>Opened</c> handler, so it is current when the menu appears
+    /// without anything being rebuilt on every tick.
+    /// <para>No synchronisation. The timer is a <see cref="DispatcherTimer"/>, so the write happens on the UI
+    /// thread, and the menu opening reads it on that same thread.</para>
+    /// <para><c>internal</c> rather than private so a test can stand in for a completed poll. The real writer
+    /// is <see cref="UpdateTooltipAsync"/>, which returns early when there is no tray icon — so without a
+    /// shell-registered icon the value can never change, and the refresh-on-open behaviour would be
+    /// untestable without either creating one or exposing this.</para>
+    /// </remarks>
+    internal string MenuStatusLine { get; set; } = "Reading system status…";
+
+    /// <summary>The menu item that shows <see cref="MenuStatusLine"/>, or null before the menu is built.</summary>
+    private System.Windows.Controls.MenuItem? _statusItem;
+
     // Notification cooldowns — don't spam the user
     private DateTime _lastRamNotification = DateTime.MinValue;
     private DateTime _lastUptimeNotification = DateTime.MinValue;
@@ -61,9 +81,10 @@ public sealed class TrayIconService : IDisposable
     /// <summary>
     /// Initializes the tray icon. Must be called from the UI thread.
     /// <para><paramref name="navigateToTab"/> is an optional callback the caller (the View layer,
-    /// which legitimately knows the shell view-model) supplies to jump to a tab by nav id — used by
-    /// the "Volume mixer" menu shortcut. Keeping it a callback rather than referencing the shell VM
+    /// which legitimately knows the shell view-model) supplies to jump to a tab by nav id — used by every
+    /// item in <see cref="QuickJumps"/>. Keeping it a callback rather than referencing the shell VM
     /// here preserves the Services→(not ViewModels) layering the architecture tests enforce.</para>
+    /// <para>Supplying nothing is supported and omits those items rather than leaving them dead.</para>
     /// </summary>
     public void Initialize(Window mainWindow, Action<string>? navigateToTab = null)
     {
@@ -134,26 +155,75 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
-    private static System.Windows.Controls.ContextMenu BuildContextMenu(Window mainWindow, Action<string>? navigateToTab)
+    /// <summary>
+    /// The tabs the tray offers a shortcut to, in menu order: nav id and the label the item shows.
+    /// </summary>
+    /// <remarks>
+    /// Three, and the ceiling is deliberate — the tray is where this app spends most of its uptime, since
+    /// minimize-to-tray is the default, so its menu is the primary interface for most of that time and it is
+    /// also the easiest surface in the app to turn into clutter (#1589).
+    /// <para><b>Every item is navigation only.</b> The CLI already implements <c>--cleanup</c> and
+    /// <c>--trim-ram</c> headlessly, and it would have been one line to fire either from here. Neither is
+    /// offered: a confirmation dialog is not visible from the tray, so a one-click <c>--cleanup</c> would
+    /// delete files with nothing standing in front of it, which is exactly what the destructive-op rule
+    /// exists to prevent.</para>
+    /// <para><b>Process Manager sits directly under the CPU readout on purpose.</b> The header says the CPU
+    /// is at 80%; the next question is what is using it. That ordering makes the menu a short diagnostic path
+    /// rather than a list of links.</para>
+    /// <para>Dashboard is deliberately NOT here. "Show SysManager" already opens whichever tab was last used,
+    /// and Dashboard is the default, so an item for it would mostly duplicate the one above it.</para>
+    /// </remarks>
+    /// <remarks>
+    /// <c>internal</c> so a test can assert the menu's jump items are built FROM this array rather than
+    /// listing the same labels a second time. Raising Click on the items instead is not an option: the
+    /// handler calls <c>ShowWindow</c>, and showing a window is exactly what a test must not do.
+    /// </remarks>
+    internal static readonly (string NavId, string Label)[] QuickJumps =
+    [
+        ("nav-processes", "What's using my PC"),
+        ("nav-cleanup", "Free up space"),
+        ("nav-volume-control", "Volume mixer"),
+    ];
+
+    /// <summary>
+    /// Builds the tray context menu. <c>internal</c> so its structure can be asserted without creating a
+    /// shell-registered tray icon: <see cref="Initialize"/> calls <c>ForceCreate</c>, which talks to the
+    /// Windows notification area, while the menu itself is ordinary WPF and only needs an STA thread.
+    /// </summary>
+    internal System.Windows.Controls.ContextMenu BuildContextMenu(Window mainWindow, Action<string>? navigateToTab)
     {
         var menu = new System.Windows.Controls.ContextMenu();
+
+        // A disabled header, not a clickable item: it is a readout, and making it look pressable would
+        // promise an action it does not have. Refreshed on Opened rather than per tick — see MenuStatusLine.
+        _statusItem = new System.Windows.Controls.MenuItem { Header = MenuStatusLine, IsEnabled = false };
+        menu.Items.Add(_statusItem);
+        menu.Items.Add(new System.Windows.Controls.Separator());
+        menu.Opened += (_, _) =>
+        {
+            if (_statusItem is not null) _statusItem.Header = MenuStatusLine;
+        };
 
         var showItem = new System.Windows.Controls.MenuItem { Header = "Show SysManager" };
         showItem.Click += (_, _) => ShowWindow(mainWindow);
         menu.Items.Add(showItem);
 
-        // Quick access to the per-app Volume Control tab (#332 tray-integration ask): show the
-        // window and, via the caller-supplied navigation callback, jump straight to the mixer.
-        // Only added when a navigation callback was provided (keeps this VM-agnostic).
+        // The quick jumps show the window and then navigate, via the caller-supplied callback (#332 asked
+        // for the mixer; #1589 for the rest). Only added when a callback was provided, which keeps this
+        // service VM-agnostic — and means a shell that wires no navigation gets the old two-item menu
+        // rather than three dead entries.
         if (navigateToTab is not null)
         {
-            var volumeItem = new System.Windows.Controls.MenuItem { Header = "Volume mixer" };
-            volumeItem.Click += (_, _) =>
+            foreach (var (navId, label) in QuickJumps)
             {
-                ShowWindow(mainWindow);
-                navigateToTab("nav-volume-control");
-            };
-            menu.Items.Add(volumeItem);
+                var item = new System.Windows.Controls.MenuItem { Header = label };
+                item.Click += (_, _) =>
+                {
+                    ShowWindow(mainWindow);
+                    navigateToTab(navId);
+                };
+                menu.Items.Add(item);
+            }
         }
 
         menu.Items.Add(new System.Windows.Controls.Separator());
@@ -167,6 +237,20 @@ public sealed class TrayIconService : IDisposable
 
         return menu;
     }
+
+    /// <summary>
+    /// The one-line readout the menu header shows: CPU, memory and uptime.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the tooltip's rendering rather than shared, because the two have different shapes for
+    /// good reasons — the tooltip is three lines and capped at the 127 characters a taskbar tooltip allows,
+    /// while a menu header is one line and has no cap. Both read the same snapshot, so they cannot disagree
+    /// about the numbers, which is the part that would matter if they drifted.
+    /// <para>Pure and <c>internal</c> so the wording is testable without a tray icon, a window or a timer.</para>
+    /// </remarks>
+    internal static string MenuStatusText(SystemSnapshot snapshot) =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"CPU {snapshot.Cpu.LoadPercent:0}%  ·  RAM {snapshot.Memory.UsedGB:0.0}/{snapshot.Memory.TotalGB:0.0} GB  ·  up {snapshot.Os.Uptime.Days}d {snapshot.Os.Uptime.Hours}h");
 
     private async void OnTimerTick(object? sender, EventArgs e)
     {
@@ -213,6 +297,11 @@ public sealed class TrayIconService : IDisposable
 
             // TaskbarIcon tooltip max 127 chars
             _trayIcon.ToolTipText = tooltip.Length > 127 ? tooltip[..127] : tooltip;
+
+            // Same snapshot, one-line rendering, for the context menu's header. Stored rather than pushed
+            // into the item here: the menu reads it when it opens, so a menu that is never opened costs
+            // nothing and one that is opened between ticks still shows the latest figures (#1589).
+            MenuStatusLine = MenuStatusText(snapshot);
 
             // Check for notification conditions
             if (NotificationsEnabled)

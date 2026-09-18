@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.0] - 2026-09-21
+
+**The tray menu now tells you how the PC is doing and gets you somewhere useful in one click.** Because
+SysManager keeps running in the notification area by default, the tray is where it spends most of its life —
+and right-clicking it offered three items that did almost nothing. It now opens with the current CPU, memory
+and uptime on a single line, followed by shortcuts to the three things people actually go looking for: what is
+using the PC, freeing up space, and the volume mixer. Nothing that changes your system is one click away from
+there.
+
+### Added
+
+- **A live status line at the top of the tray menu**, showing CPU, memory used against total, and uptime. It
+  reads the same 60-second poll the tooltip already used, so the two can never disagree about the numbers, and
+  it refreshes when you open the menu rather than the menu being rebuilt every minute — a menu nobody opens
+  costs nothing. It is deliberately not clickable: it is a readout, and making it look pressable would promise
+  an action it does not have.
+- **Three shortcuts: "What's using my PC", "Free up space" and "Volume mixer."** Process Manager sits directly
+  under the CPU figure on purpose — the header says the CPU is at 80%, and the next line answers what is using
+  it, which makes the menu a short diagnostic path rather than a list of links.
+
+### Changed
+
+- **Three shortcuts is a ceiling, not a coincidence.** The tray is the easiest surface in the app to turn into
+  clutter, so a fourth item is now a decision that breaks a test rather than something added quietly.
+  Dashboard was considered and left out: "Show SysManager" already reopens whichever tab you used last, and
+  that is usually Dashboard.
+- **Every tray item is navigation or read-only.** The app already runs `--cleanup` and `--trim-ram` headlessly
+  from the command line, and wiring either into the menu would have been one line. Neither is there: no
+  confirmation dialog is visible from the tray, so a one-click cleanup would delete files with nothing
+  standing in front of it.
+
 ## [1.111.3] - 2026-09-21
 
 **The Dashboard's "critical events in Event Log" button opened the wrong page.** It said how many critical

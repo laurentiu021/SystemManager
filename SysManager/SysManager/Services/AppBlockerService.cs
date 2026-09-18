@@ -61,6 +61,54 @@ public sealed partial class AppBlockerService : IAppBlockerService
         "consent.exe"
     };
 
+    /// <summary>
+    /// True when an IFEO block on this executable name is one <see cref="TryBlockApp"/> refuses because
+    /// blocking it removes the means of unblocking it.
+    /// </summary>
+    /// <remarks>
+    /// Extracted so the refusal rule has ONE definition. It is needed in two places — refusing a new block,
+    /// and recognising a block an OLDER build already wrote — and a second copy of the list is exactly how
+    /// the two would come to disagree about which entries are dangerous.
+    /// <para>Normalises the name the same way the block path does, so a bare "consent" and a padded
+    /// " CONSENT.EXE " reach the same verdict as the value IFEO actually stores.</para>
+    /// </remarks>
+    internal static bool IsElevationOrBootCritical(string? exeName)
+    {
+        if (string.IsNullOrWhiteSpace(exeName)) return false;
+
+        var name = exeName.Trim();
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name += ".exe";
+
+        return BootCriticalExecutables.Contains(name);
+    }
+
+    /// <summary>
+    /// True when a block that ALREADY EXISTS on this executable cannot be lifted from inside the app.
+    /// </summary>
+    /// <remarks>
+    /// The guard in <see cref="TryBlockApp"/> only prevents a NEW block. It does nothing for a machine an
+    /// older build already wrote one on — and that is the case that strands someone, because the undo is
+    /// circular: <see cref="UnblockApp"/> writes to HKLM, which needs elevation, which for
+    /// <c>consent.exe</c> needs the very process the block disabled. Before this, such an entry appeared in
+    /// the blocked list as an ordinary row beside the deliberate ones, with an Unblock button that could
+    /// never succeed and nothing saying why (#2357).
+    /// <para>Wider than the static set by one case: the app's OWN executable. Blocking it is refused now,
+    /// but a block written under the running name takes effect at the NEXT launch, so the app is still
+    /// able to report it — and it is the one entry where saying nothing means the user simply finds the
+    /// app gone tomorrow.</para>
+    /// </remarks>
+    public bool IsUnrecoverableBlock(string? exeName)
+    {
+        if (IsElevationOrBootCritical(exeName)) return true;
+
+        if (string.IsNullOrWhiteSpace(exeName) || OwnExecutableName is not { } self) return false;
+
+        var name = exeName.Trim();
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name += ".exe";
+
+        return name.Equals(self, StringComparison.OrdinalIgnoreCase);
+    }
+
     private readonly RegistryKey _baseKey;
 
     /// <summary>
@@ -164,7 +212,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
         // Never block a boot/logon-critical process: an IFEO redirection here is
         // honoured during boot/login and would render Windows unbootable (reboot
         // loop / BSOD) with no way to launch this app to unblock it.
-        if (BootCriticalExecutables.Contains(exeName))
+        if (IsElevationOrBootCritical(exeName))
         {
             Log.Warning("Refusing to block boot-critical executable: {ExeName}", exeName);
             return BlockResult.BootCritical;
@@ -328,7 +376,13 @@ public sealed partial class AppBlockerService : IAppBlockerService
                     var debugger = appKey.GetValue("Debugger") as string;
                     if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
                     {
-                        blocked.Add(new BlockedApp { ExecutableName = subKeyName });
+                        // Classified here rather than in the view model so the flag travels with the data
+                        // and cannot be derived a second, differing way by whoever displays it.
+                        blocked.Add(new BlockedApp
+                        {
+                            ExecutableName = subKeyName,
+                            IsUnrecoverable = IsUnrecoverableBlock(subKeyName),
+                        });
                     }
                 }
                 catch (IOException) { /* skip */ }

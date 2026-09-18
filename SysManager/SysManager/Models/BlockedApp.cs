@@ -25,4 +25,16 @@ public sealed partial class BlockedApp : ObservableObject, Helpers.ISelectableRo
 
     /// <summary>Whether this entry is selected in the UI.</summary>
     [ObservableProperty] private bool _isSelected;
+
+    /// <summary>
+    /// True when lifting this block needs something the block itself took away.
+    /// </summary>
+    /// <remarks>
+    /// Set by the service that reads the list, never by the view, so one rule decides it — see
+    /// <c>AppBlockerService.IsUnrecoverableBlock</c>. A build published before #2030 could write an IFEO
+    /// block on <c>consent.exe</c>, the UAC consent UI; unblocking writes to HKLM, which needs elevation,
+    /// which needs consent.exe. Without this flag such an entry is indistinguishable in the list from a
+    /// game launcher somebody chose to block (#2357).
+    /// </remarks>
+    [ObservableProperty] private bool _isUnrecoverable;
 }

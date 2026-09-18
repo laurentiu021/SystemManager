@@ -20,7 +20,8 @@ namespace SysManager.Tests;
 public class DashboardViewModelTests
 {
     private static DashboardViewModel NewVm(IWingetService? winget = null,
-                                            INavigationService? navigation = null)
+                                            INavigationService? navigation = null,
+                                            IAppBlockerService? appBlocker = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -38,7 +39,10 @@ public class DashboardViewModelTests
             // A substitute by default, so a test that navigates asserts against it instead of reaching for
             // a live window. An unbound real NavigationService would also be inert, but then "did it
             // navigate?" would be unanswerable rather than merely unasked.
-            navigation ?? Substitute.For<INavigationService>());
+            navigation ?? Substitute.For<INavigationService>(),
+            // Null by default, which omits the stranded-block alert entirely — so the 58 tests written
+            // before it existed keep asserting against the same five alerts they always did.
+            appBlocker);
     }
 
     // ---------- empty states on the cards ----------
@@ -505,5 +509,65 @@ public class DashboardViewModelTests
 
         Assert.Contains("1 memory hardware error ", one);
         Assert.Contains("2 memory hardware errors ", two);
+    }
+
+    // ---------- the stranded-block alert (#2357) ----------
+
+    private static IAppBlockerService BlockerReporting(params (string Name, bool Unrecoverable)[] rows)
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.GetBlockedApps().Returns([.. rows.Select(r => new BlockedApp
+        {
+            ExecutableName = r.Name,
+            IsUnrecoverable = r.Unrecoverable,
+        })]);
+        return blocker;
+    }
+
+    [Fact]
+    public void ClassifyStrandedBlocks_OneStranded_IsRedAndNamesIt()
+    {
+        // The alert exists because the damage is invisible: an IFEO block on consent.exe removes elevation
+        // and nothing says so until something asks for administrator rights. The Dashboard is the landing
+        // page, so it is the only place someone would see it without already suspecting it.
+        var (title, severity) = DashboardViewModel.ClassifyStrandedBlocks(1, "consent.exe");
+
+        Assert.Contains("consent.exe", title, StringComparison.Ordinal);
+        Assert.Equal(AlertSeverity.Red, severity);
+        Assert.Equal("nav-app-blocker", DashboardViewModel.NavTargetFor(severity, "nav-app-blocker"));
+    }
+
+    [Fact]
+    public void ClassifyStrandedBlocks_NoneStranded_IsGreenAndCarriesNoButton()
+    {
+        // Green makes NavTargetFor return "", so the alert offers nowhere to go. A deliberate block must not
+        // produce a Dashboard entry inviting the user to do something about it.
+        var (title, severity) = DashboardViewModel.ClassifyStrandedBlocks(0, null);
+
+        Assert.Equal(AlertSeverity.Green, severity);
+        Assert.DoesNotContain("cannot", title, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("", DashboardViewModel.NavTargetFor(severity, "nav-app-blocker"));
+    }
+
+    [Fact]
+    public void ClassifyStrandedBlocks_SeveralStranded_CountsThemWithoutNamingOne()
+    {
+        // Naming only the first of several would read as "one problem" on a machine with more, and the
+        // banner on the tab is where the full list belongs.
+        var (title, severity) = DashboardViewModel.ClassifyStrandedBlocks(3, "consent.exe");
+
+        Assert.Contains("3 blocked apps", title, StringComparison.Ordinal);
+        Assert.DoesNotContain("consent.exe", title, StringComparison.Ordinal);
+        Assert.Equal(AlertSeverity.Red, severity);
+    }
+
+    [Fact]
+    public void NoBlockerSupplied_AddsNoSixthAlert()
+    {
+        // The optional parameter's other half: a caller that supplies nothing gets the five alerts it
+        // always got, and no scan touches the registry.
+        var vm = NewVm();
+
+        Assert.DoesNotContain(vm.Alerts, a => a.Title.Contains("blocked", StringComparison.OrdinalIgnoreCase));
     }
 }

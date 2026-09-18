@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.111.2] - 2026-09-18
+
+**If App Blocker ever blocked something it should not have, it now says so instead of leaving you to find
+out.** Version 1.111.0 and later refuse to block the processes Windows needs, the permission prompt, and
+SysManager itself — but that only stopped new mistakes. A machine where an older version already blocked one
+was left listing it as an ordinary entry, next to an Unblock button that could not work, with nothing
+explaining why. Such an entry is now marked, raised on the Dashboard, and the warning carries the recovery
+step. Nothing is removed automatically: it tells you and hands you the undo.
+
+### Fixed
+
+- **A block the app cannot lift is now identified instead of hidden in the list.** `consent.exe` is the
+  Windows permission prompt, and unblocking writes a protected setting that needs the permission prompt to
+  approve it — so a block on it removes its own undo. Versions before 1.111.0 could write one. The blocked
+  list marks such an entry, and the tab shows what was lost and how to get it back.
+- **The recovery step is the right one for the state the PC is in.** Running as administrator, the banner
+  points at the Unblock button. Not running as administrator — the case where no prompt can appear at all —
+  it names the exact registry value and location to delete, so the answer does not have to be found
+  somewhere else.
+- **The Dashboard reports it too.** The damage is invisible until the first time something asks for
+  administrator rights, which makes the App Blocker tab the last place anyone would think to look. It is now
+  a red alert on the landing page that opens the right tab.
+- **One rule decides which targets are dangerous.** The list of executables the app refuses to block, and the
+  check that recognises a block an older version already wrote, now read the same definition rather than two
+  copies that could drift apart about which entries matter.
+
+### Changed
+
+- **The block confirmation says what a block looks like.** It reported only that the program would be
+  prevented from launching. What you actually see is a Windows error saying it cannot find
+  `SysManager_Blocked.exe` — a file that deliberately does not exist, because a path that does not resolve
+  is how the block works. That read as SysManager having broken something; the dialog now sets the
+  expectation, and repeats that nothing is deleted.
+
 ## [1.111.1] - 2026-09-18
 
 **Thirty buttons were too small to hit reliably, and one of them deletes something.** Buttons that sit inside

@@ -3,11 +3,18 @@
 SysManager is a solo-maintained hobby project, but I genuinely want it to be
 useful. Here's where to go depending on what you need.
 
+Two Discussions threads cover the ground this file does and a little more:
+[**Start here**](https://github.com/laurentiu021/SystemManager/discussions/2346)
+is the same routing as below plus what to expect and how long it takes, and
+[**Roadmap**](https://github.com/laurentiu021/SystemManager/discussions/2345)
+answers the recurring ones — why the download is unsigned, why there is no
+telemetry, why there is no Store build.
+
 ## Where to ask
 
 | Kind of question                                    | Go here                                                               |
 | --------------------------------------------------- | --------------------------------------------------------------------- |
-| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions/categories/q-a) — nobody has asked anything there yet, so yours will be the first rather than buried |
+| "How do I...?" / "Is this possible?"                | [Discussions › Q&A](https://github.com/laurentiu021/SystemManager/discussions/categories/q-a) — quiet enough that a question gets an answer rather than being buried |
 | "This feature would be useful"                      | [Feature request issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml) — or [Discussions › Ideas](https://github.com/laurentiu021/SystemManager/discussions/categories/ideas) if it's still a half-formed thought |
 | "Something is broken"                               | [Bug report issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml) |
 | "I found a security problem"                        | [Security Advisory](https://github.com/laurentiu021/SystemManager/security/advisories/new) (private) · see [SECURITY.md](SECURITY.md) |
@@ -47,7 +54,9 @@ Two things people hit before the app even starts, both answered in the README ra
 needing an issue:
 
 - **"Windows protected your PC"** on first launch —
-  [what that box means and why](README.md#first-launch-windows-will-warn-you).
+  [what that box means and why](README.md#first-launch-windows-will-warn-you), or the
+  [Q&A thread](https://github.com/laurentiu021/SystemManager/discussions/2347) if you'd
+  rather read it as a question and an answer, with both verification steps spelled out.
 - **Your antivirus flagged or quarantined the download** —
   [why an unsigned single-file build gets scored that way, and how to check the file for
   yourself](README.md#if-your-antivirus-flags-the-download).

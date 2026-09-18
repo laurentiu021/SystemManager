@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.110.0] - 2026-09-18
+
+**There was nowhere to go when you got stuck.** Everything a confused person needs was already in the app —
+the version to quote, the release notes, a "Report a problem" button that fills in your version for you, an
+"Ask a question" button — and all of it was on the About page, which is the last entry inside the eleventh of
+twelve sidebar groups, in a group that starts closed. So it was there and it was unfindable. There is now a
+**`?` button at the bottom of the sidebar**, next to the appearance button, and **`F1`** does the same thing
+from anywhere in the app.
+
+### Added
+
+- **A `?` button in the sidebar footer** opens the help page. Same size and behaviour as the appearance
+  button beside it, so it works with the mouse, with Tab and Enter, and with a screen reader.
+- **`F1` opens the help page** from any tab. Unlike Escape and F5, which ask the tab you are on what to do,
+  F1 works from the very first moment the window appears — a key you press because you are lost has to
+  answer immediately rather than waiting for the current tab to finish loading.
+
+### Changed
+
+- **The README's keyboard section documents F1** alongside Escape, F5 and Ctrl+F, including the reason F1
+  behaves differently from the other three.
+
 ## [1.109.4] - 2026-09-17
 
 **Saving a second maintenance schedule quietly threw away the first.** Scheduled Maintenance keeps one

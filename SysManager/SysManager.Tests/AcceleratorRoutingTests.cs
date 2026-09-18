@@ -184,13 +184,72 @@ public class AcceleratorRoutingTests
         // travel together and a second gate would only add a way for Escape to go quiet. Pinned because
         // the F5 work above introduced a CanExecute check next door, and copying it here would be the
         // easy mistake.
-        var shell = System.IO.File.ReadAllText(ShellSourcePath());
-
-        var at = shell.IndexOf("private void Window_KeyDown", StringComparison.Ordinal);
-        Assert.True(at >= 0, "Window_KeyDown not found — this test would otherwise assert nothing");
-        var handler = shell[at..Math.Min(shell.Length, at + 1200)];
+        var handler = MethodBody(System.IO.File.ReadAllText(ShellSourcePath()), "private void Window_KeyDown");
 
         Assert.Contains("Key.F5 && !command.CanExecute(null)", handler, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The shell handler actually asks <c>ShellAcceleratorCommand</c>, and asks it BEFORE the per-tab
+    /// lookup.
+    /// </summary>
+    /// <remarks>
+    /// Every other test here drives the view model's routing directly, which means all of them would still
+    /// pass with the call deleted from the handler: F1 would resolve correctly to a command nothing ever
+    /// executed. That is the dominant shape of defect in this codebase — a view-model surface that is tested
+    /// and bound by nothing — and the handler is code-behind, so a source check is the only thing that
+    /// reaches it without a Window.
+    /// <para>The ORDER is asserted, not just the presence. The per-tab branch begins with an early
+    /// <c>return</c> for anything that is not Escape or F5, so a shell lookup placed after it would never
+    /// see F1 at all, and the routing test would still be green (#1640).</para>
+    /// </remarks>
+    [Fact]
+    public void TheShell_AsksForAShellAccelerator_BeforeTheOpenTabsOwn()
+    {
+        var handler = MethodBody(System.IO.File.ReadAllText(ShellSourcePath()), "private void Window_KeyDown");
+
+        var shellLookup = handler.IndexOf("ShellAcceleratorCommand(e.Key)", StringComparison.Ordinal);
+        Assert.True(shellLookup >= 0,
+            "the shell KeyDown handler no longer calls ShellAcceleratorCommand, so F1 resolves to a command "
+            + "nothing executes. Every other test in this file would still pass.");
+
+        var perTabGate = handler.IndexOf("Key.Escape or Key.F5", StringComparison.Ordinal);
+        Assert.True(perTabGate >= 0,
+            "the per-tab gate is gone from the handler — re-derive this guard against whatever replaced it "
+            + "rather than deleting the ordering check.");
+
+        Assert.True(shellLookup < perTabGate,
+            "the shell accelerator lookup runs AFTER the per-tab gate, which returns early for any key that "
+            + "is not Escape or F5 — so F1 can never reach it. Move the shell lookup above that gate.");
+    }
+
+    /// <summary>
+    /// One method's body, from its signature to its matching closing brace.
+    /// </summary>
+    /// <remarks>
+    /// Brace-matched rather than a fixed number of characters from the signature. It WAS
+    /// <c>source[at..(at + 1200)]</c>, and adding the F1 branch ahead of the F5 check pushed that check past
+    /// 1200 — so this test went red over a line that had not changed, and the obvious repair is to raise the
+    /// number, which just moves the next false failure further out. A window that ends where the method ends
+    /// cannot go stale on an edit above the thing it is looking for.
+    /// </remarks>
+    private static string MethodBody(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"{signature} not found — this test would otherwise assert nothing");
+
+        var open = source.IndexOf('{', at);
+        Assert.True(open > at, $"{signature} has no body — the slice below would be empty");
+
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0) return source[at..(i + 1)];
+        }
+
+        Assert.Fail($"{signature}'s body is unterminated — the source did not parse as expected");
+        return "";
     }
 
     private static string ShellSourcePath()

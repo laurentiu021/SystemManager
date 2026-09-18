@@ -12,27 +12,30 @@ prospective user reads. CI fails a pull request whose newest entry is missing it
 
 ## [1.111.1] - 2026-09-18
 
-**The smallest button in the app was the one that ends a running process.** Buttons inside table rows trim
-themselves to fit, and nothing stopped them getting too small to hit reliably. Measured on a real window, the
-worst was 15 by 20 pixels — the **X** in Process Manager, sitting one glyph away from the button next to it.
-Every button is now at least 28 by 28 however short its label, so a cramped label makes a button narrow to
-look at rather than narrow to click.
+**Thirty buttons were too small to hit reliably, and one of them deletes something.** Buttons that sit inside
+a table row or a toolbar trim themselves to fit, and nothing stopped them getting too small. Every button in
+the app that sets its own padding was rendered and measured: 30 came out under the accessible minimum, across
+16 screens, and the worst was the **X that removes an entry from your hosts file** at 20 by 19 pixels. Every
+button is now at least 28 by 28 however short its label, so a cramped label makes a button narrow to look at
+rather than narrow to click.
 
 ### Fixed
 
-- **Every button has a minimum clickable size of 28 by 28 pixels.** Twenty-six of them live inside table rows
-  — Process Manager, Disk Analyzer, Duplicate Finder, Environment Variables, Services, System Logs, Ping —
-  and cut their padding to fit the row. Six of those were under the accessible minimum on width as well as
-  height, which matters most for anyone whose pointing is not precise: a missed click in Process Manager
-  lands next to a button that terminates a program.
+- **Every button has a minimum clickable size of 28 by 28 pixels.** 110 buttons set their own padding to fit a
+  compact row; measured with their real style, padding, font size and label, 30 fell under the 24 by 24 that
+  WCAG 2.5.8 asks for — 26 of them on height, 4 on both height and width. That matters most for anyone whose
+  pointing is not precise, and the smallest of the thirty was one of the few that removes something.
 - **28 rather than the 24 WCAG 2.5.8 asks for.** A floor set exactly at the threshold leaves nothing for a
   fractional display scale, and 28 by 28 is already the size of the small round buttons at the bottom of the
-  sidebar, so this makes the rows consistent with a decision the app had already taken.
+  sidebar, so this makes the rest consistent with a decision the app had already taken.
+- **The sidebar search box makes room for its clear button.** That button asked to be 20 by 20 and the new
+  floor overrules it, so without widening the space reserved for it, it would have sat on top of what you
+  typed.
 
 ### Changed
 
-- **Rows in the tables that hold those buttons are slightly taller.** That is the cost of the larger targets,
-  and it is the intended trade — the buttons that grew are the ones that were too small to aim at.
+- **Rows and toolbars holding those buttons are slightly taller.** That is the cost of the larger targets, and
+  it is the intended trade — the buttons that grew are the ones that were too small to aim at.
 
 ## [1.111.0] - 2026-09-18
 

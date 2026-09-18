@@ -85,6 +85,46 @@ public class HitTargetSizeTests
     }
 
     /// <summary>
+    /// An explicit <c>Width</c>/<c>Height</c> smaller than the floor does not win.
+    /// </summary>
+    /// <remarks>
+    /// WPF resolves a size as <c>Max(MinWidth, Min(MaxWidth, Width))</c>, so the floor clamps an explicit
+    /// size upward rather than being overridden by it. Asserted rather than assumed, because the opposite
+    /// belief is the intuitive one — and one button in the app relies on the answer: the sidebar's
+    /// clear-search glyph was <c>Width="20" Height="20"</c>, overlaid inside a TextBox that reserved exactly
+    /// 22px of right padding for it. If the floor did NOT apply it would still be a 20 x 15 target; because
+    /// it does, the reserved padding had to grow with it, which is the change that accompanies this test.
+    /// </remarks>
+    [Fact]
+    public void AnExplicitlySizedSmallButton_IsStillRaisedToTheFloor()
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+
+            var style = Application.Current!.Resources["GhostButton"] as Style;
+            Assert.NotNull(style);
+
+            var button = new Button
+            {
+                Style = style,
+                Content = "",
+                Padding = new Thickness(4, 0, 4, 0),
+                FontSize = 10,
+                Width = 20,
+                Height = 20,
+            };
+            button.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+            var size = button.DesiredSize;
+            Assert.True(size.Width >= MinimumTarget && size.Height >= MinimumTarget,
+                $"a button with an explicit Width/Height of 20 measures {size.Width:F1} x {size.Height:F1}. "
+                + "If the explicit size wins over MinWidth/MinHeight, then the floor on ButtonBase does not "
+                + "protect any button that sets its own size — and the sidebar's clear-search glyph is one.");
+        });
+    }
+
+    /// <summary>
     /// The ordinary buttons are unaffected: the floor never binds on them.
     /// </summary>
     /// <remarks>

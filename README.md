@@ -228,13 +228,13 @@ one colour disappears against at least one of those. With two, one line always c
 underneath. Measured across all 12 themes, the outline stays at 4.5:1 or better against every surface
 it is drawn on — above the 3:1 WCAG asks of a non-text indicator.
 
-**Every button is at least 28 by 28 pixels**, however small its label. Twenty-six of them sit inside table
-rows and trim their padding to fit, and measured on a real window the worst of those came out at 15 by 20 —
-including the **X that ends a running process**, which is the smallest target and the highest consequence in
-the app, one glyph away from the button beside it. There is now a floor on the shared button style, so a
-cramped label makes a button narrow to look at and not to click. 28 rather than the 24 that WCAG 2.5.8 asks
-for, because a floor set exactly at the threshold leaves nothing for a fractional display scale, and because
-28 is already the size of the small round buttons at the bottom of the sidebar.
+**Every button is at least 28 by 28 pixels**, however small its label. Every button in the app that sets its
+own padding — 110 of them — was rendered and measured, and **30 came out smaller than the 24 by 24 that WCAG
+2.5.8 asks for**, spread across 16 screens. The worst was the **X that removes an entry from your hosts
+file**, at 20 by 19: the smallest target in the app and one of the few that deletes something. There is now a
+floor on the shared button style, so a cramped label makes a button narrow to look at and not to click. 28
+rather than 24, because a floor set exactly at the threshold leaves nothing for a fractional display scale,
+and because 28 is already the size of the small round buttons at the bottom of the sidebar.
 
 ### Screen readers
 The six controls that do something you cannot take back explain themselves, not just their label. Landing on

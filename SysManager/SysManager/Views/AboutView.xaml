@@ -67,6 +67,18 @@
                                     Command="{Binding CopyEnvironmentInfoCommand}"
                                     Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
                                     ToolTip="Copy your SysManager version, Windows version, architecture and elevation state — ready to paste into a bug report."/>
+                            <!-- One file instead of four manual steps. Producing evidence for a bug used to
+                                 mean copying the environment block, exporting the report, then leaving the
+                                 app to find the right day's log in a hidden AppData folder — which the
+                                 person most likely to hit a bug cannot do (#1650). The tooltip says what
+                                 goes in and that nothing is sent, because a zip whose contents you have to
+                                 take on trust is one a careful user will not attach. -->
+                            <Button Content="Save diagnostics bundle"
+                                    Command="{Binding SaveDiagnosticsBundleCommand}"
+                                    Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                                    IsEnabled="{Binding IsGeneratingReport, Converter={StaticResource BoolInvert}}"
+                                    AutomationProperties.Name="Save diagnostics bundle — one zip file to attach to a bug report"
+                                    ToolTip="Save one zip holding the system report, your environment info and the newest log files — everything a bug report needs. Nothing is sent anywhere; you choose where the file goes and whether to attach it."/>
                             <!-- Only appears when a previous build was actually retained, so this is never
                                  a button that cannot do anything. The updater used to be the one mutation
                                  in the app with no way back: the atomic move that makes an INTERRUPTED

@@ -1320,6 +1320,16 @@ offers, "rate us" prompts:
   reason rather than half-doing it when the swap would not be safe.
 - **Export or copy a full system report**, and a separate "Copy environment info" for
   pasting into a bug report
+- **Save diagnostics bundle** writes one `.zip` with everything a bug report needs: the
+  system report, your environment info, and the three most recent daily log files. It
+  replaces four manual steps, the last two of which were finding a hidden `AppData` folder
+  and working out which day's log covered the problem. **Nothing is sent anywhere** — you
+  choose where the file goes and whether to attach it, and a `README.txt` inside names every
+  file and says what was deliberately left out. Your network adapters' hardware addresses are
+  not included and the host part of each local IP is masked, because a hardware address is
+  permanent and cannot be withdrawn once it is posted in public. Your Windows user name is
+  already stripped from every log line before it reaches disk. An oversized log is cut to its
+  most recent activity so the zip stays small enough to attach, and says so at the top.
 - **Report a problem** and **Ask a question** open the right GitHub page directly; **View
   license** and **What's new** open the licence and the changelog
 - **The startup version check is a checkbox here** — "Check GitHub for a new version when

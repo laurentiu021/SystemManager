@@ -53,6 +53,60 @@ public sealed class SystemReportService
     public async Task<string> GenerateReportAsync(CancellationToken ct = default)
         => BuildText(await GenerateDataAsync(ct).ConfigureAwait(false));
 
+    /// <summary>
+    /// The same plain-text report with the two fields that identify the machine itself removed.
+    /// </summary>
+    /// <remarks>
+    /// Built for the diagnostics bundle, whose whole purpose is to be attached to a public issue. The report
+    /// carries the adapter's MAC address and its local IPv4, and a MAC is permanent: it survives a Windows
+    /// reinstall, and nobody can un-publish it once it is in a GitHub thread. Everything else in the report
+    /// is generic hardware or transient state, and there is no user name or machine name anywhere in it.
+    /// <para>Redacted from the DATA rather than by pattern-matching the rendered text, which is the only way
+    /// to be certain what is being replaced. A generic IPv4 regex over the finished report would also match
+    /// a four-part version string — <c>1.110.0.0</c> has four valid octets — so it would have quietly
+    /// corrupted the version line while claiming to protect an address.</para>
+    /// <para>The full report is deliberately left alone. A file you keep for yourself is a different thing
+    /// from one you hand to a stranger, and #2352 carries the question of whether the sharable default
+    /// should change for the existing exports too.</para>
+    /// </remarks>
+    public async Task<string> GenerateSharableReportAsync(CancellationToken ct = default)
+        => BuildText(WithoutMachineIdentifiers(await GenerateDataAsync(ct).ConfigureAwait(false)));
+
+    /// <summary>A copy of the payload with each adapter's MAC dropped and its IPv4 host part masked.</summary>
+    /// <remarks>
+    /// The network half of the IPv4 is kept on purpose. "Is there a private address, a static one, or a
+    /// <c>169.254</c> self-assigned one" is the actual signal in a report attached to a "no internet"
+    /// complaint; the host number answers nothing anyone has ever asked.
+    /// </remarks>
+    internal static SystemReportData WithoutMachineIdentifiers(SystemReportData d) =>
+        d with
+        {
+            NetworkAdapters =
+            [
+                .. d.NetworkAdapters.Select(n => n with
+                {
+                    IPv4 = MaskHostPart(n.IPv4),
+                    // A placeholder rather than an empty string, so a reader can tell "removed on purpose"
+                    // from "the adapter did not report one" — the text builder prints this field either way.
+                    MacAddress = n.MacAddress.Length == 0 ? "" : "(not included)",
+                })
+            ],
+        };
+
+    /// <summary>
+    /// <c>192.168.1.42</c> becomes <c>192.168.x.x</c>. Anything that is not four numeric parts is returned
+    /// unchanged rather than guessed at.
+    /// </summary>
+    internal static string MaskHostPart(string ipv4)
+    {
+        if (ipv4.Length == 0) return ipv4;
+
+        var parts = ipv4.Split('.');
+        if (parts.Length != 4 || parts.Any(p => p.Length == 0 || !p.All(char.IsAsciiDigit))) return ipv4;
+
+        return $"{parts[0]}.{parts[1]}.x.x";
+    }
+
     /// <summary>Generates a self-contained, styled HTML system report.</summary>
     public async Task<string> GenerateHtmlAsync(CancellationToken ct = default)
         => BuildHtml(await GenerateDataAsync(ct).ConfigureAwait(false));

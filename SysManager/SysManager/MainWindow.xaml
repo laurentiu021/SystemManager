@@ -245,10 +245,17 @@
                         "popups" finds Notification Blocker, "webcam" finds Camera/Mic/Location (#1505).
                     -->
                     <Grid Margin="0,12,0,0">
+                        <!-- The TextBox's right padding reserves room for the clear button overlaid on it:
+                             32 rather than the 22 it was. That button is 28 wide now, because ButtonBase
+                             grew a 28x28 floor and WPF resolves a size as Max(MinWidth, Width) — so its
+                             explicit Width="20" stopped winning and it would have sat on top of the text
+                             beside it (#1556). Asserted by
+                             HitTargetSizeTests.AnExplicitlySizedSmallButton_IsStillRaisedToTheFloor,
+                             because the intuitive belief is the opposite one. -->
                         <TextBox Text="{Binding NavFilter, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="Search all tabs"
                                  VerticalContentAlignment="Center"
-                                 Padding="0,0,22,0"
+                                 Padding="0,0,32,0"
                                  ToolTip="Type what you want to do — &quot;free up space&quot;, &quot;slow startup&quot;, &quot;popups&quot;."/>
                         <TextBlock Text="Search all tabs…" IsHitTestVisible="False"
                                    Foreground="{DynamicResource TextMuted}" Margin="6,0,0,0"
@@ -261,7 +268,7 @@
                                 AutomationProperties.Name="Clear the tab search"
                                 ToolTip="Clear search"
                                 Style="{StaticResource GhostButton}"
-                                Padding="4,0" FontSize="10" Width="20" Height="20"
+                                Padding="4,0" FontSize="10"
                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
                                 Visibility="{Binding NavFilter, Converter={StaticResource FlexVis}}"/>
                     </Grid>

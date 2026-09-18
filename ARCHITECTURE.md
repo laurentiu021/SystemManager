@@ -71,6 +71,28 @@ colour, accent included, falls to 1.00:1 against at least one of those.
 `ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
+`ButtonBase` carries `MinWidth`/`MinHeight` of 28, and all five derived styles inherit it. Without a floor a
+button was exactly its padding plus its content, and many trim their padding to fit a compact row or toolbar.
+Every one of the 110 buttons in the views naming an explicit `Padding` was rendered on the STA thread with its
+own style, padding, font size and label: **30 measured under WCAG 2.5.8 AA's 24 × 24**, across 16 files — 26
+failing on height alone, 4 on both axes, none on width alone. The worst two are DNS & Hosts' remove-entry `X`
+at 20.2 × 19.3, which is the smallest destructive target in the app, and the sidebar's clear-search glyph at
+49.1 × 15.3 (#1556).
+
+28 rather than 24 because a floor at the threshold leaves nothing for a fractional DPI scale, and because
+28 × 28 is already the size of the sidebar footer chips. The floor also **clamps an explicit size upward** —
+WPF resolves a size as `Max(MinWidth, Min(MaxWidth, Width))` — so the clear-search button's `Width="20"` no
+longer wins, and the reserved right padding on the TextBox it overlays had to grow from 22 to 32 with it. That
+is the one knock-on the change had, and it was found by measuring rather than on screen.
+
+`SysManager.IntegrationTests.HitTargetSizeTests` **measures** rather than reading the setters — a test
+asserting `MinWidth` would pass while a derived style, a template or a call-site `Padding` made the rendered
+box smaller, and the rendered box is what a user has to hit. Its floor is the WCAG 24, deliberately below the
+28 the style sets, so a deliberate rise to 32 does not fail a guard meant to catch a regression. Two companion
+tests bound the cost: one asserts the ordinary buttons are still sized by their content, since a minimum is
+only free while it does not reshape what was already large enough; the other pins the `Max(MinWidth, Width)`
+resolution, because the intuitive belief is the opposite and one button in the shell depends on the answer.
+
 The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
 `SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` (11). **Numbers**: `MetricHero` (30),
 `MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16). Every rung except `Display`

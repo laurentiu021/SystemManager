@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.111.1] - 2026-09-18
+
+**The smallest button in the app was the one that ends a running process.** Buttons inside table rows trim
+themselves to fit, and nothing stopped them getting too small to hit reliably. Measured on a real window, the
+worst was 15 by 20 pixels — the **X** in Process Manager, sitting one glyph away from the button next to it.
+Every button is now at least 28 by 28 however short its label, so a cramped label makes a button narrow to
+look at rather than narrow to click.
+
+### Fixed
+
+- **Every button has a minimum clickable size of 28 by 28 pixels.** Twenty-six of them live inside table rows
+  — Process Manager, Disk Analyzer, Duplicate Finder, Environment Variables, Services, System Logs, Ping —
+  and cut their padding to fit the row. Six of those were under the accessible minimum on width as well as
+  height, which matters most for anyone whose pointing is not precise: a missed click in Process Manager
+  lands next to a button that terminates a program.
+- **28 rather than the 24 WCAG 2.5.8 asks for.** A floor set exactly at the threshold leaves nothing for a
+  fractional display scale, and 28 by 28 is already the size of the small round buttons at the bottom of the
+  sidebar, so this makes the rows consistent with a decision the app had already taken.
+
+### Changed
+
+- **Rows in the tables that hold those buttons are slightly taller.** That is the cost of the larger targets,
+  and it is the intended trade — the buttons that grew are the ones that were too small to aim at.
+
 ## [1.111.0] - 2026-09-18
 
 **If SysManager misbehaves, you can now hand somebody one file instead of four.** Producing evidence for a

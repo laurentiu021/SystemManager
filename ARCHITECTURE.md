@@ -71,6 +71,18 @@ colour, accent included, falls to 1.00:1 against at least one of those.
 `ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
+`ButtonBase` carries `MinWidth`/`MinHeight` of 28, and all five derived styles inherit it. Without a floor a
+button was exactly its padding plus its content, and 26 row actions trim their padding to `4,2` or `6,1` with
+`FontSize` 10–12 to fit a DataGrid row: measured on the STA thread, Process Manager's kill button came out at
+15.4 × 20.0 and Ping's help glyph at 16.4 × 15.3, against WCAG 2.5.8 AA's 24 × 24 (#1556). 28 rather than 24
+because a floor at the threshold leaves nothing for a fractional DPI scale, and because 28 × 28 is already the
+size of the sidebar footer chips. `SysManager.IntegrationTests.HitTargetSizeTests` **measures** rather than
+reading the setters — a test asserting `MinWidth` would pass while a derived style, a template or a call-site
+`Padding` made the rendered box smaller, and the rendered box is what a user has to hit. Its floor is the WCAG
+24, deliberately below the 28 the style sets, so a deliberate rise to 32 does not fail a guard meant to catch
+a regression. A companion test asserts the ordinary buttons are still sized by their content, since a minimum
+is only free while it does not reshape the buttons that were already large enough.
+
 The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
 `SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` (11). **Numbers**: `MetricHero` (30),
 `MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16). Every rung except `Display`

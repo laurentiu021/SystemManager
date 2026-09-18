@@ -516,13 +516,46 @@
                             <TextBlock Text="{Binding About.CurrentVersion, StringFormat=v{0}}" Style="{StaticResource Caption}"/>
                             <TextBlock Text="by laurentiu021" Style="{StaticResource Caption}" Opacity="0.7" Margin="0,2,0,0"/>
                         </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Help chip. The About tab already carries every support route — Report a
+                             problem, Ask a question, the changelog, the repo — but it is the last child
+                             of the 11th of 12 sidebar groups, and every group except Cleanup starts
+                             collapsed. So the help was there and unreachable: a confused user had to
+                             expand a group they had no reason to open (#1640). This and F1 are the two
+                             ways in that do not require knowing where to look.
+                             Same 28x28 Border construction as the Appearance chip beside it, including
+                             the explicit accessibility a Border needs and a Button would partly supply. -->
+                        <Border x:Name="HelpBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
+                                Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
+                                BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="HelpBtn_Click"
+                                KeyDown="HelpBtn_KeyDown"
+                                Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                AutomationProperties.Name="Help and support"
+                                ToolTip="Help and support (F1) — version, release notes, report a problem, ask a question"
+                                Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsKeyboardFocused" Value="True">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="&#xE897;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                       FontSize="13" Foreground="{DynamicResource TextSecondary}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                         <!-- Theme button — a Border rather than a Button (to keep the compact
                              28x28 chip visual), so it needs explicit accessibility: a UIA name,
                              a tab stop, keyboard focus, and Enter/Space activation.
                              A Button would supply the peer and Space, but NOT Enter: ButtonBase
                              honours Enter only where KeyboardNavigation.AcceptsReturn is set, which
                              is why the nav rows set it explicitly. -->
-                        <Border Grid.Column="1" x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
+                        <Border x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
                                 Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
                                 KeyDown="ThemeBtn_KeyDown"
@@ -545,6 +578,7 @@
                                        FontSize="13" Foreground="{DynamicResource TextSecondary}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        </StackPanel>
                     </Grid>
                     <!-- Theme popup -->
                     <!-- A Popup is not a Window: it gets no Escape-to-close and no focus containment of

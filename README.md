@@ -214,6 +214,13 @@ does nothing rather than starting a second one.
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
 nothing to filter it does nothing at all, rather than moving your caret somewhere unexpected.
 
+**`F1` opens About**, where the version, the release notes, "Report a problem" and "Ask a question" all
+live. The same place is one click away from the `?` chip at the bottom of the sidebar, beside the
+appearance button. Both exist because everything a stuck person needs was already in About and none of it
+was findable: About is the last entry in the eleventh of twelve sidebar groups, and every group except
+Cleanup starts closed. Unlike the three keys above, F1 works immediately — it does not wait for the tab
+you are on to be ready, because a key you press when you are lost has to answer on the first frame.
+
 The focus outline is deliberately two thin lines of opposite shade — one light, one dark — rather
 than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up
 on a purple primary button, a red delete button, a grey secondary button and a plain card, and any

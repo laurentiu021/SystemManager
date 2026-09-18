@@ -931,8 +931,8 @@ which restarts the process with `runas` and the current command-line args.
 
 ## Keyboard accelerators
 
-Two keys are handled at the shell, and both route through a seam on `ViewModelBase` rather
-than a name the shell guesses at:
+Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, through a seam on
+`ViewModelBase` rather than a name the shell guesses at:
 
 - `EscapeCancel` — the command Escape runs, returned only while the tab has something to
   stop. One property rather than a flag beside a command, because the app answers "is
@@ -955,6 +955,22 @@ of every `TextBox` announced as a filter or search box found Task Scheduler bind
 `ArchitectureTests.EveryFilterBox_BindsANameCtrlFRecognises` holds it against the views in both
 directions, using the ACCESSIBLE NAME as the independent test of "is this a filter box" so the check
 is not circular.
+
+`F1` is the fourth, and the only one that asks the tab nothing: it opens About, where the version, the
+release notes, "Report a problem" and "Ask a question" already lived — behind the last entry of the
+eleventh of twelve sidebar groups, in a group that starts closed, so none of it was findable (#1640). The
+`?` chip in the sidebar footer is the pointing-device half of the same route, and it goes through
+`ShellAcceleratorCommand(Key.F1)` rather than executing `OpenAboutTabCommand` itself, so the chip and the
+key cannot drift into meaning two different things.
+
+`ShellAcceleratorCommand(Key)` is deliberately separate from `AcceleratorCommand` rather than a case inside
+it. That one returns `null` for a tab whose content is not built, which is right for F5 and Escape — nothing
+to refresh or cancel on a tab nobody opened — and would have made F1 silent on the first frame, exactly when
+a lost user reaches for it. `MainWindowViewModelTests.F1_ResolvesToAbout_WithoutConsultingTheOpenTab` pins
+the distinction by asserting both lookups side by side, and
+`AcceleratorRoutingTests.TheShell_AsksForAShellAccelerator_BeforeTheOpenTabsOwn` pins the ORDER in the
+handler — the per-tab branch returns early for anything that is not Escape or F5, so a shell lookup placed
+after it would resolve F1 correctly and never be reached.
 
 `MainWindowViewModel.AcceleratorCommand(NavItem?, Key)` is the pure routing decision, extracted
 so it is testable without a `Window`; `MainWindow.xaml.cs`'s bubbling `KeyDown` handler executes

@@ -522,6 +522,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     }
 
     /// <summary>
+    /// Which command a SHELL-level accelerator should run — one that means the same thing on every tab —
+    /// or <c>null</c> for "do nothing and let the key through".
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="AcceleratorCommand"/> and deliberately NOT folded into it. That one asks a
+    /// tab what it wants and returns null when the tab is not built yet, which is right for F5 and Escape:
+    /// there is nothing to refresh or cancel on a tab that has never been opened. F1 has to work at any
+    /// moment, including on the very first frame, so routing it through the per-tab lookup would have made
+    /// the help key silent exactly when a lost user is most likely to press it.
+    /// <para>An instance method rather than static, because the command it returns belongs to this view
+    /// model. Still pure and <c>internal</c> for the same reason as its sibling: the routing decision is
+    /// the part worth pinning, and it cannot be reached through WPF in a unit test.</para>
+    /// <para><b>F1 opens About</b>, which is where every support route already lives — report a problem,
+    /// ask a question, the changelog, the repo, the version to quote. What it did not have was a way in:
+    /// About is the last child of the 11th of 12 sidebar groups and every group but Cleanup starts
+    /// collapsed (#1640). Navigation only, so like F5 and Escape this changes nothing on the machine.</para>
+    /// </remarks>
+    internal IRelayCommand? ShellAcceleratorCommand(Key key) => key switch
+    {
+        Key.F1 => OpenAboutTabCommand,
+        _ => null,
+    };
+
+    /// <summary>
     /// Re-reads the taskbar state after the selected tab, or that tab's own progress, moves.
     /// </summary>
     private void RaiseTaskbarProgressChanged()

@@ -266,6 +266,34 @@ public partial class MainWindow : Window
 
     private void ThemeBtn_Click(object sender, MouseButtonEventArgs e) => ToggleThemePopup();
 
+    /// <summary>
+    /// The help chip opens the About tab, which is where every support route already lives.
+    /// </summary>
+    /// <remarks>
+    /// Routed through <see cref="MainWindowViewModel.ShellAcceleratorCommand"/> with <c>Key.F1</c> rather
+    /// than executing <c>OpenAboutTabCommand</c> directly, so the chip and the key cannot come to mean two
+    /// different things. One of them going stale after a rename is otherwise invisible until someone tries
+    /// the one nobody tested.
+    /// </remarks>
+    private void OpenHelp()
+    {
+        if (DataContext is not MainWindowViewModel vm) return;
+        vm.ShellAcceleratorCommand(Key.F1)?.Execute(null);
+    }
+
+    private void HelpBtn_Click(object sender, MouseButtonEventArgs e) => OpenHelp();
+
+    // Enter/Space activate the help chip for keyboard users, for the same reason the theme chip needs
+    // them: it is a Border, so it gets neither for free.
+    private void HelpBtn_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            OpenHelp();
+            e.Handled = true;
+        }
+    }
+
     // Enter/Space activate the theme chip for keyboard users. The chip is a Border, so it gets
     // neither for free — and a Button would only have given it Space, since ButtonBase treats Enter
     // as a click only where KeyboardNavigation.AcceptsReturn is set.
@@ -304,7 +332,7 @@ public partial class MainWindow : Window
     private void ThemePopupHost_Closed(object sender, EventArgs e) => ThemeBtn.Focus();
 
     /// <summary>
-    /// Escape stops whatever the open tab is doing; F5 makes it look again.
+    /// Escape stops whatever the open tab is doing; F5 makes it look again; F1 opens the help tab.
     /// </summary>
     /// <remarks>
     /// Bubbling <c>KeyDown</c>, deliberately not <c>PreviewKeyDown</c>. A ComboBox closing its dropdown
@@ -323,15 +351,32 @@ public partial class MainWindow : Window
     /// a refresh that gates itself does nothing rather than starting a second one. Bubbling like Escape,
     /// so a control that wants F5 gets it first — and unlike Escape, F5 is not something a TextBox or
     /// ComboBox consumes, which is why it needs no busy gate to stay out of the way.</para>
-    /// <para>Both keys are read-only in effect: F5 re-reads, Escape cancels. Nothing that cleans, deletes,
-    /// applies or kills is reachable from a bare keypress, which is what makes an accelerator with no
-    /// confirmation dialog behind it acceptable at all.</para>
+    /// <para><b>F1</b> opens About, and is checked BEFORE the per-tab lookup because that lookup returns
+    /// null for a tab that has not been built — which would have left the help key silent on the first
+    /// frame, exactly when someone is most likely to reach for it. It is the one accelerator here that does
+    /// not ask the open tab anything, which is why it goes through
+    /// <see cref="MainWindowViewModel.ShellAcceleratorCommand"/> rather than
+    /// <see cref="MainWindowViewModel.AcceleratorCommand"/>.</para>
+    /// <para>All three keys are read-only in effect: F5 re-reads, Escape cancels, F1 navigates. Nothing
+    /// that cleans, deletes, applies or kills is reachable from a bare keypress, which is what makes an
+    /// accelerator with no confirmation dialog behind it acceptable at all.</para>
     /// </remarks>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key is Key.F && Keyboard.Modifiers is ModifierKeys.Control)
         {
             FocusTheFilterBox(e);
+            return;
+        }
+
+        // Shell-level keys first, and F1 is checked before the per-tab lookup on purpose: that lookup
+        // returns null for a tab that has not been built, which would have left the help key silent on
+        // the first frame — exactly when someone is most likely to reach for it.
+        if (DataContext is MainWindowViewModel shell
+            && shell.ShellAcceleratorCommand(e.Key) is { } shellCommand)
+        {
+            shellCommand.Execute(null);
+            e.Handled = true;
             return;
         }
 

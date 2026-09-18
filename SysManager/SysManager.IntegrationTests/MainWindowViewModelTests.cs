@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Windows.Input;
 using SysManager.ViewModels;
 
 namespace SysManager.IntegrationTests;
@@ -249,6 +250,50 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         Assert.False(dashboard.IsSelected);
         Assert.True(vm.SelectedNav.IsSelected);
         Assert.Single(vm.NavItems, item => item.IsSelected);
+    }
+
+    /// <summary>
+    /// F1 resolves to the About tab's command, and resolves it WITHOUT asking the open tab anything.
+    /// </summary>
+    /// <remarks>
+    /// The second half is the point. <c>AcceleratorCommand</c> returns null for a tab whose content has not
+    /// been built, which is right for F5 and Escape — there is nothing to refresh or cancel on a tab nobody
+    /// has opened — and would have been wrong for F1, leaving the help key silent on the first frame,
+    /// exactly when a lost user reaches for it (#1640). Asserting both lookups side by side is what pins
+    /// the distinction; a test that only checked F1 resolves to something would pass with the routing
+    /// folded back into the per-tab method.
+    /// <para>Reads the shared fixture and executes nothing, so it neither builds a second
+    /// <c>MainWindowViewModel</c> nor moves the selection other tests read.</para>
+    /// </remarks>
+    [Fact]
+    public void F1_ResolvesToAbout_WithoutConsultingTheOpenTab()
+    {
+        Assert.Same(_nav.OpenAboutTabCommand, _nav.ShellAcceleratorCommand(Key.F1));
+
+        // The per-tab lookup cannot answer F1 at all — not even with a tab supplied — which is why the
+        // shell has its own.
+        Assert.Null(MainWindowViewModel.AcceleratorCommand(null, Key.F1));
+        Assert.Null(MainWindowViewModel.AcceleratorCommand(_nav.SelectedNav, Key.F1));
+    }
+
+    /// <summary>
+    /// The shell lookup answers F1 and nothing else, so the per-tab keys still reach the tab.
+    /// </summary>
+    /// <remarks>
+    /// The shell handler checks this first and returns early when it answers, so a shell lookup that
+    /// claimed F5 or Escape would swallow them before the open tab ever saw them — refresh and cancel would
+    /// stop working everywhere, and no existing test would notice, because they all go through
+    /// <c>AcceleratorCommand</c> directly rather than through the handler's ordering.
+    /// </remarks>
+    [Theory]
+    [InlineData(Key.F5)]
+    [InlineData(Key.Escape)]
+    [InlineData(Key.F2)]
+    [InlineData(Key.F)]
+    [InlineData(Key.Enter)]
+    public void TheShellLookup_LeavesEveryOtherKeyAlone(Key key)
+    {
+        Assert.Null(_nav.ShellAcceleratorCommand(key));
     }
 
     [Fact]

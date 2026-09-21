@@ -582,12 +582,18 @@ Key services:
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained
   HTML, or JSON so all three exports share a single source of truth.
-  `GenerateSharableReportAsync` renders the same payload with each adapter's MAC
-  dropped and its IPv4 host part masked, for the diagnostics bundle. Redacted from
-  the DATA rather than by pattern-matching the rendered text: a four-part version
-  string has four valid octets, so a generic IPv4 regex over the finished report
-  would rewrite the version line while claiming to protect an address. Whether the
-  existing exports should redact by default is #2352.
+  `GenerateDataAsync` applies `WithoutMachineIdentifiers` before returning, so **every**
+  format — text, HTML, JSON, the on-screen report and the diagnostics bundle — drops each
+  adapter's MAC and masks its IPv4 host part. That choke point is the design: redaction used
+  to live in a separate `GenerateSharableReportAsync` that only the bundle called, so the
+  four export commands and the tab itself carried the full values (#2352). The separate
+  method is gone — one path cannot disagree with itself, and a format added later inherits
+  the protection instead of having to remember it.
+  `ArchitectureTests.EveryReportFormat_GoesThroughTheRedactingDataPath` rejects any public
+  generator that reads `BuildData` directly. Redacted from the DATA rather than by
+  pattern-matching the rendered text: a four-part version string has four valid octets, so a
+  generic IPv4 regex over the finished report would rewrite the version line while claiming
+  to protect an address.
 - `DiagnosticsBundleService` — packages the sharable report, the About tab's
   environment block and the three newest rolling log files into one zip the user
   chooses where to save. Nothing is uploaded and there is no network code in the

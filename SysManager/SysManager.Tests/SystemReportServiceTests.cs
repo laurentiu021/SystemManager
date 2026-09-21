@@ -94,7 +94,12 @@ public class SystemReportServiceTests
         Assert.StartsWith("<!DOCTYPE html>", html);
         Assert.Contains("<title>SysManager System Report</title>", html);
         Assert.EndsWith("</html>", html.TrimEnd());
-        Assert.Contains("no data leaves this machine", html);
+
+        // The footer used to read "no data leaves this machine" — true of the application, and beside the
+        // point at the bottom of a file whose purpose is to be sent to somebody. It now describes the FILE,
+        // which is the claim a reader actually needs (#2352). The exact sentence is pinned in
+        // SystemReportRedactionTests; here it is only that a footer exists at all.
+        Assert.Contains("safe to share", html);
     }
 
     [Fact]

@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.1] - 2026-09-21
+
+**The system report no longer carries your network card's permanent serial number.** The report is what the
+app tells you to attach to a bug report, and all three export formats included each adapter's hardware (MAC)
+address and full local IP address, with nothing anywhere saying so. A MAC address does not change when you
+reinstall Windows, and it cannot be taken back once it is in a public thread. Those two fields are now left
+out or shortened in every format, including on screen.
+
+### Fixed
+
+- **The MAC address is gone from the text, HTML and JSON exports, and from the report shown in the tab.** A
+  redacted variant already existed and was used only by the diagnostics bundle, so the four export commands
+  and the on-screen report still carried the full values. Redaction now happens once, where the report data is
+  gathered, so no format can miss it — including any format added later.
+- **The local IP address is shortened to `192.168.x.x` rather than removed.** The network half is the part
+  that answers a "no internet" question: whether the address is private, static, or a `169.254` self-assigned
+  one. The host number answers nothing anyone has asked.
+- **On-screen too, not just on export.** The tab shows the same text an export writes, so a screenshot of the
+  System Report tab published the MAC exactly as attaching the file did. That route is closed by the same
+  change.
+- **The HTML report's footer described the wrong thing.** It read "no data leaves this machine" — true of the
+  application, and beside the point printed at the bottom of a file whose purpose is to be sent to somebody.
+  It now says what is true of the file: that it lists your hardware and not you.
+
 ## [1.112.0] - 2026-09-21
 
 **The tray menu now tells you how the PC is doing and gets you somewhere useful in one click.** Because

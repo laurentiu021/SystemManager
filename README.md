@@ -359,6 +359,13 @@ Edit Windows environment variables without the cramped built-in dialog:
   **JSON** — or copy the text straight to the clipboard
 - Fully local: nothing on the system is changed and the report is written only
   to the file you choose — nothing leaves the machine
+- **Safe to hand to a stranger.** The report is what you attach to a bug report, so it
+  deliberately does not identify your machine: there is no user name and no computer name,
+  each adapter's hardware (MAC) address is left out, and its local address is shortened to
+  `192.168.x.x`. The network half is kept because that is the part that answers a "no
+  internet" question — whether the address is private, static, or a `169.254` self-assigned
+  one. A MAC address is permanent, it survives a Windows reinstall, and nobody can take one
+  back once it is posted, which is why it is not in there at all
 
 ### System Health
 - OS / CPU / RAM / storage overview

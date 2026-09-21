@@ -41,42 +41,49 @@ public sealed class SystemReportService
     /// <summary>
     /// Gathers the full report payload (OS/CPU/RAM/GPU/motherboard/disks/network) once.
     /// </summary>
+    /// <remarks>
+    /// <para><b>The machine identifiers are removed here, at the one point every format passes through.</b>
+    /// Redacting in each renderer instead would mean three places to remember and a fourth format shipping
+    /// unprotected — and the report already had exactly that shape: the sharable text variant was redacted
+    /// while the text, HTML and JSON exports were not (#2352).</para>
+    /// </remarks>
     public async Task<SystemReportData> GenerateDataAsync(CancellationToken ct = default)
     {
         var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
         var diskHealth = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
 
-        return await Task.Run(() => BuildData(snapshot, diskHealth), ct).ConfigureAwait(false);
+        var data = await Task.Run(() => BuildData(snapshot, diskHealth), ct).ConfigureAwait(false);
+        return WithoutMachineIdentifiers(data);
     }
 
     /// <summary>Generates a formatted plain-text system report.</summary>
     public async Task<string> GenerateReportAsync(CancellationToken ct = default)
         => BuildText(await GenerateDataAsync(ct).ConfigureAwait(false));
 
-    /// <summary>
-    /// The same plain-text report with the two fields that identify the machine itself removed.
-    /// </summary>
-    /// <remarks>
-    /// Built for the diagnostics bundle, whose whole purpose is to be attached to a public issue. The report
-    /// carries the adapter's MAC address and its local IPv4, and a MAC is permanent: it survives a Windows
-    /// reinstall, and nobody can un-publish it once it is in a GitHub thread. Everything else in the report
-    /// is generic hardware or transient state, and there is no user name or machine name anywhere in it.
-    /// <para>Redacted from the DATA rather than by pattern-matching the rendered text, which is the only way
-    /// to be certain what is being replaced. A generic IPv4 regex over the finished report would also match
-    /// a four-part version string — <c>1.110.0.0</c> has four valid octets — so it would have quietly
-    /// corrupted the version line while claiming to protect an address.</para>
-    /// <para>The full report is deliberately left alone. A file you keep for yourself is a different thing
-    /// from one you hand to a stranger, and #2352 carries the question of whether the sharable default
-    /// should change for the existing exports too.</para>
-    /// </remarks>
-    public async Task<string> GenerateSharableReportAsync(CancellationToken ct = default)
-        => BuildText(WithoutMachineIdentifiers(await GenerateDataAsync(ct).ConfigureAwait(false)));
-
     /// <summary>A copy of the payload with each adapter's MAC dropped and its IPv4 host part masked.</summary>
     /// <remarks>
-    /// The network half of the IPv4 is kept on purpose. "Is there a private address, a static one, or a
+    /// A MAC address is permanent: it survives a Windows reinstall, and nobody can un-publish it once it is in
+    /// a GitHub thread. Everything else in the report is generic hardware or transient state, and there is no
+    /// user name or machine name anywhere in it — those were handled carefully. These two fields were
+    /// different in kind, and the report is the app's own answer to "produce evidence for a bug": SUPPORT.md,
+    /// the issue template and the About tab's "Report a problem" button all funnel someone toward attaching
+    /// one, and the target persona attaches what the app hands them without reading it (#2352).
+    /// <para>The network half of the IPv4 is kept on purpose. "Is there a private address, a static one, or a
     /// <c>169.254</c> self-assigned one" is the actual signal in a report attached to a "no internet"
-    /// complaint; the host number answers nothing anyone has ever asked.
+    /// complaint; the host number answers nothing anyone has ever asked.</para>
+    /// <para>Redacted from the DATA rather than by pattern-matching the rendered text, which is the only way
+    /// to be certain what is being replaced. A generic IPv4 regex over the finished report would also match a
+    /// four-part version string — <c>1.112.0.0</c> has four valid octets — so it would have quietly corrupted
+    /// the version line while claiming to protect an address.</para>
+    /// <para><b>No full-value variant is offered.</b> Three options were weighed: redact everywhere, keep the
+    /// values and disclose them, or ship two reports. Disclosure puts the judgement on the person least
+    /// equipped to make it at the moment they are already frustrated, and two variants need two names a
+    /// non-technical user can tell apart, which is where that idea fails. The deciding argument is that the
+    /// full values answer no question a bug report asks — so this is not privacy against diagnostics, it is
+    /// privacy against a field nobody uses. The MAC appears nowhere else in the app, so nothing else lost a
+    /// capability.</para>
+    /// <para>It also covers the vector the options did not mention: the on-screen report is the same text,
+    /// so a screenshot of the System Report tab used to publish the MAC just as an export did.</para>
     /// </remarks>
     internal static SystemReportData WithoutMachineIdentifiers(SystemReportData d) =>
         d with
@@ -449,7 +456,12 @@ public sealed class SystemReportService
         else Row(sb, "Adapter", "(no active adapters)");
         CloseSection(sb);
 
-        sb.AppendLine("<div class=\"foot\">Generated locally by SysManager — no data leaves this machine.</div>");
+        // Reworded. It used to read "no data leaves this machine", which is true of the APPLICATION and
+        // beside the point printed at the bottom of a file whose whole purpose is to be sent to somebody —
+        // it reassured about the wrong thing (#2352). The footer now says what is true of the FILE.
+        sb.AppendLine("<div class=\"foot\">Generated locally by SysManager. This report is safe to share: it "
+                    + "lists your hardware, not you — no user name, no computer name, and network addresses "
+                    + "are shortened so they cannot identify your machine.</div>");
         sb.AppendLine("</div></body></html>");
         return sb.ToString();
     }

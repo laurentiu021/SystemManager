@@ -13729,4 +13729,91 @@ public partial class ArchitectureTests
     /// <summary>A calculated property's name: <c>@{N='Title';E={...}}</c> or <c>@{Name='Title';...}</c>.</summary>
     [GeneratedRegex(@"@\{\s*N(?:ame)?\s*=\s*'([A-Za-z0-9_]+)'", RegexOptions.Compiled)]
     private static partial Regex SelectedCalculatedProperty();
+
+    /// <summary>
+    /// No statement assigns the same target as the statement immediately before it.
+    /// </summary>
+    /// <remarks>
+    /// Two assignments in a row to one target means the first is dead, and the compiler does not say so for
+    /// a property, because a setter can have side effects. The Dashboard's Event Log alert set
+    /// <c>NavTargetId</c> to <c>nav-logs</c> and then to <c>nav-system-health</c> on the next line, so its
+    /// button opened a page that did not list the events it had just counted (#2359).
+    /// <para>Nothing else could catch it. Both values were real tabs, so the guard that checks nav ids
+    /// resolve was satisfied by either; the assignment happens inside a <c>Dispatcher.BeginInvoke</c>, which
+    /// no-ops with no <c>Application.Current</c>, so a test driving the scan would have asserted against an
+    /// untouched alert and passed.</para>
+    /// <para>App code only. A test legitimately sets a property one way and then the other to exercise
+    /// change notification, and nine do.</para>
+    /// </remarks>
+    [Fact]
+    public void NoPropertyIsAssignedTwiceInARow()
+    {
+        var appDir = FindAppProjectDir();
+
+        var offenders = new List<string>();
+        var assignments = 0;
+
+        foreach (var file in Directory
+                     .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        {
+            // Comments stripped first: this guard's own explanation contains example assignments, and a
+            // source-text check that can match its own prose goes false-red or false-green.
+            var lines = WithoutComments(File.ReadAllText(file)).Split('\n');
+
+            (string Target, string Rhs)? previous = null;
+
+            foreach (var raw in lines)
+            {
+                var line = raw.Trim();
+                var match = SimpleAssignment().Match(line);
+                if (!match.Success)
+                {
+                    // Only CONSECUTIVE statements count, so anything that is not an assignment — a brace, a
+                    // call, an if — breaks the pair. A blank line does not: it separates nothing.
+                    if (line.Length > 0) previous = null;
+                    continue;
+                }
+
+                var target = match.Groups["target"].Value;
+                var rhs = match.Groups["rhs"].Value;
+                assignments++;
+
+                // `_ = something;` is a discard, not a target. Six of these fire different tasks in a row.
+                if (target == "_") { previous = null; continue; }
+
+                // A step in a sequence rather than a repeat: `result = Replace(result, …)` reads what the
+                // previous line produced, so the earlier assignment is load-bearing.
+                if (Regex.IsMatch(rhs, $@"\b{Regex.Escape(target)}\b")) { previous = (target, rhs); continue; }
+
+                if (previous is { } p && p.Target == target && p.Rhs != rhs)
+                {
+                    offenders.Add($"{Path.GetFileName(file)} — {target} is set to {p.Rhs} and then "
+                                + $"immediately to {rhs}, so the first is dead");
+                }
+
+                previous = (target, rhs);
+            }
+        }
+
+        // Vacuity floor. The pattern has to actually match ordinary assignments, or this guard reports clean
+        // because it found nothing to compare. Several thousand exist across the app.
+        Assert.True(assignments >= 1500,
+            $"only {assignments} assignment statements matched across the app — the pattern stopped matching, "
+            + "so this guard is comparing almost nothing and would pass over a real dead assignment.");
+
+        Assert.True(offenders.Count == 0,
+            "These assignments are immediately overwritten, so the first value never takes effect. For a "
+            + "property with a setter the compiler says nothing, and if both values are individually valid "
+            + "no other guard can tell the difference:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A single-statement assignment: <c>Target = value;</c>, excluding <c>==</c> and compound operators.
+    /// </summary>
+    [GeneratedRegex(@"^(?<target>[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*\])?)\s*=(?!=)\s*(?<rhs>[^;]+);$",
+                    RegexOptions.Compiled)]
+    private static partial Regex SimpleAssignment();
 }

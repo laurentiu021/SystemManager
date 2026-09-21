@@ -27,7 +27,12 @@ public sealed partial class DashboardAlert : ObservableObject
     /// behind 11 collapsed groups creates the anxiety without the path.
     /// <para>An id rather than a command: a model carrying an <c>ICommand</c> would put the shell inside
     /// the model, while a string keeps the model a description of the finding. The view model owns the
-    /// navigation, and <c>EveryDashboardNavTarget_IsARealTab</c> pins that these ids resolve.</para>
+    /// navigation, and <c>ArchitectureTests.EveryNavIdWrittenInTheApp_ResolvesToARealTab</c> pins that
+    /// these ids resolve.</para>
+    /// <para>That an id RESOLVES is not the same as it being the RIGHT one. This property was assigned
+    /// twice in a row for the Event Log alert, with two different real tabs, and the resolve guard was
+    /// satisfied by both (#2359) — so the button opened a page that did not list the events it counted.
+    /// <c>NoPropertyIsAssignedTwiceInARow</c> covers that half.</para>
     /// </remarks>
     [ObservableProperty] private string _navTargetId = "";
 

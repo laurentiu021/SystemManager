@@ -18,10 +18,6 @@ namespace SysManager.IntegrationTests;
 public class AllViewModelsSweepTests
 {
     /// <summary>
-    /// A throwaway crash-marker store. Reading a marker CONSUMES it, so a Dashboard constructed
-    /// against the real profile would delete a genuine crash report before the user saw it (#1772).
-    /// </summary>
-    /// <summary>
     /// A throwaway config directory for AboutViewModel. Its startup-check preference lives in
     /// %AppData%\SysManager, and the convenience constructors used to resolve that unconditionally —
     /// so constructing it here rewrote the developer's real preference file (#1785).
@@ -29,6 +25,10 @@ public class AllViewModelsSweepTests
     private static string AboutConfigDir()
         => Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-about");
 
+    /// <summary>
+    /// A throwaway crash-marker store. Reading a marker CONSUMES it, so a Dashboard constructed
+    /// against the real profile would delete a genuine crash report before the user saw it (#1772).
+    /// </summary>
     private static CrashMarkerService TempCrashMarkers()
         => new(Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-crash"));
 

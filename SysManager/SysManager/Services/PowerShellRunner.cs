@@ -703,21 +703,6 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     private readonly record struct RunspaceLease(RunspaceResources Resources, bool Reusable);
 
     /// <summary>
-    /// Returns an open runspace: the cached one when it is still usable, otherwise a fresh one.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>Elevated only.</b> The in-process runspace the unelevated path uses starts no child process
-    /// and opens in a fraction of the time, so caching it would add a lifetime to reason about and buy
-    /// almost nothing. The out-of-process branch is the one that spawns <c>powershell.exe</c> 5.1 and
-    /// completes a remoting handshake, and it is the only branch #2149 is about.</para>
-    /// <para><b>State is re-checked every time, not assumed.</b> A cached runspace can be broken by things
-    /// outside this class — the child killed by a user or by cleanup, the remoting channel dropped — and a
-    /// runspace that is not <c>Opened</c> cannot run a pipeline. Anything other than <c>Opened</c> means
-    /// discard and rebuild, which also covers the state this code cannot enumerate in advance.</para>
-    /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
-    /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
-    /// </remarks>
-    /// <summary>
     /// True when <paramref name="ex"/> means "the pipeline was stopped", whichever transport reported it.
     /// </summary>
     /// <remarks>
@@ -774,6 +759,21 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         ex is System.Management.Automation.Remoting.PSRemotingDataStructureException
         || ex.InnerException is System.Management.Automation.Remoting.PSRemotingDataStructureException;
 
+    /// <summary>
+    /// Returns an open runspace: the cached one when it is still usable, otherwise a fresh one.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Elevated only.</b> The in-process runspace the unelevated path uses starts no child process
+    /// and opens in a fraction of the time, so caching it would add a lifetime to reason about and buy
+    /// almost nothing. The out-of-process branch is the one that spawns <c>powershell.exe</c> 5.1 and
+    /// completes a remoting handshake, and it is the only branch #2149 is about.</para>
+    /// <para><b>State is re-checked every time, not assumed.</b> A cached runspace can be broken by things
+    /// outside this class — the child killed by a user or by cleanup, the remoting channel dropped — and a
+    /// runspace that is not <c>Opened</c> cannot run a pipeline. Anything other than <c>Opened</c> means
+    /// discard and rebuild, which also covers the state this code cannot enumerate in advance.</para>
+    /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
+    /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
+    /// </remarks>
     private async Task<RunspaceLease> LeaseRunspaceAsync()
     {
         if (!_isElevated)

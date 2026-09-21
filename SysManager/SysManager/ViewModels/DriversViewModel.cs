@@ -175,9 +175,6 @@ public sealed partial class DriversViewModel : ViewModelBase
            d.Manufacturer.Contains("Windows", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// CIM dates come as "/Date(ticks)/" strings in JSON.
-    /// </summary>
-    /// <summary>
     /// Reads a CIM boolean, keeping "absent" distinct from "false".
     /// </summary>
     /// <remarks>
@@ -195,6 +192,9 @@ public sealed partial class DriversViewModel : ViewModelBase
         _ => null,
     };
 
+    /// <summary>
+    /// CIM dates come as "/Date(ticks)/" strings in JSON.
+    /// </summary>
     private static DateTime? ParseCimDate(JsonElement el)
     {
         if (el.ValueKind == JsonValueKind.Null || el.ValueKind == JsonValueKind.Undefined)

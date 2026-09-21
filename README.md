@@ -337,7 +337,7 @@ Edit Windows environment variables without the cramped built-in dialog:
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
-  to this tab
+  to this tab, alongside shortcuts to Process Manager and Quick Cleanup
 
 ### System Logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
@@ -1315,7 +1315,12 @@ offers, "rate us" prompts:
   recommendations. Auto-computes on load and refreshes with "Scan system".
 - **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
   Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
-  Context menu: Show SysManager / Volume mixer / Exit.
+- **A tray menu that is worth opening** — because minimize-to-tray is the default, the tray
+  is where the app spends most of its life. Right-clicking it shows the current CPU, memory
+  and uptime on one line, refreshed as you open it, then three shortcuts: **What's using my
+  PC**, **Free up space** and **Volume mixer**. Every item either opens a tab or reads a
+  number — nothing that changes your system is one click away from here, because a
+  confirmation dialog is not visible from the tray. Three is a deliberate ceiling.
 - **Closing is your choice** — the first time you close the window, SysManager asks
   whether it should keep running in the notification area or close completely, and
   remembers the answer. If you pick the notification area, it tells you where the

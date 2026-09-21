@@ -349,7 +349,13 @@ Key services:
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
   wear into a single 0–100 score with color-coded verdict and recommendations.
 - `TrayIconService` — system tray icon with background monitoring (60s),
-  tooltip updates, context menu, and Windows toast notifications.
+  tooltip updates, context menu, and Windows toast notifications. The menu's status header
+  is refreshed from the 60s poll on `Opened` rather than rebuilt per tick, so a menu nobody
+  opens costs nothing. Its shortcuts come from one `QuickJumps` table and route through a
+  caller-supplied `Action<string>` — the View layer knows the shell view-model, this service
+  does not, which is what keeps Services free of a ViewModels dependency. Navigation and
+  read-only only: no system-mutating verb is reachable from the tray, because a confirmation
+  dialog is not visible there.
 - `LogService` — Serilog wrapper with a rolling file sink, wrapped by
   `UserPathScrubbingSink`. That wrapper renders each event and runs the finished line through
   `SanitizePath` before writing, so the Windows user name cannot reach the log regardless of

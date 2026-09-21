@@ -578,6 +578,16 @@ Key services:
   `Shell Extensions\Blocked` list, which needs elevation. Takes injectable
   stand-ins for `HKEY_CLASSES_ROOT` and `HKEY_LOCAL_MACHINE`, so both the scan
   and the block/unblock writes are testable against a disposable hive.
+- `BackupRegistry` exports the affected key to `%LocalAppData%\SysManager\Backups\ContextMenu`
+  before each change, and `PruneBackups` keeps only `BackupsKeptPerKey` (3) per key. Ordered by
+  FILE NAME, whose `yyyyMMdd_HHmmss` tail sorts chronologically and cannot be rewritten by a copy
+  the way `CreationTime` can — same reasoning as `DiagnosticsBundleService.NewestLogs`. The
+  timestamp shape is re-checked in code rather than trusted to the glob, because one key's
+  sanitised name can be a PREFIX of another's (`A` and `A_B` both yield files starting `A_`), so a
+  bare `A_*.reg` sweep would delete a second key's history. Both the export and the prune are
+  best-effort: neither may fail the change the user asked for. Nothing reads these files back —
+  deliberately, since importing a stale export would re-create entries the user has since removed
+  — so the tab states they exist and the depth it keeps (#2369).
 - `SystemReportService` — gathers a comprehensive system snapshot once
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained

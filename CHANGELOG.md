@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.2] - 2026-09-21
+
+**Context Menu Manager was quietly filling a folder you were never told about.** Before each change it saves a
+copy of the affected registry key, which is sensible — but it kept every copy forever, nothing in the app ever
+read them, and nothing mentioned they existed. It now keeps the three most recent per entry and says so on the
+tab.
+
+### Fixed
+
+- **Only the three most recent registry copies per entry are kept.** One file was written per toggle and never
+  removed, so the folder grew for the life of the install. Three matches what the diagnostics bundle already
+  keeps for log files, rather than being a second number to remember.
+- **Pruning one entry can no longer delete another's copies.** A shorter entry name can be the start of a
+  longer one, and both produce files that begin the same way — so cleaning up after one could have swept away
+  the history of the other. The file names are matched on their exact date-and-time shape instead.
+- **The tab now says the copies exist, and where.** They are not needed to undo anything — the on/off switch
+  does that, and always did — but a file you can restore by hand is only useful if you know it is there.
+
 ## [1.112.1] - 2026-09-21
 
 **The system report no longer carries your network card's permanent serial number.** The report is what the

@@ -13816,6 +13816,70 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"public\s+async\s+Task<[^>]+>\s+(?<name>Generate\w*Async)\s*\(", RegexOptions.Compiled)]
     private static partial Regex PublicReportGenerator();
 
+    /// <summary>
+    /// Two documents never link a differently-numbered discussion under the same name.
+    /// </summary>
+    /// <remarks>
+    /// The human threads — Start here, Roadmap — are linked BY NUMBER from more than one document, because
+    /// GitHub Discussions sorts by recency and every release announcement pushes them down the list, so a
+    /// category link does not find them. A discussion cannot be pinned through the API, which is why these
+    /// direct links exist at all (#1665).
+    /// <para>The failure this catches: someone re-creates a thread, updates the number in one document and
+    /// not the other, and the second silently points at a discussion about something else. Nothing else
+    /// would notice — both links resolve, so even a link checker would pass.</para>
+    /// <para>Offline by construction. It compares the documents against each other rather than asking
+    /// GitHub, so it cannot fail because CI has no network and cannot pass merely because a number is a
+    /// valid discussion.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTwoDocuments_LinkADifferentDiscussionUnderTheSameName()
+    {
+        var root = FindRepoRoot();
+        var docs = new[] { "README.md", "SUPPORT.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md" }
+            .Select(f => Path.Combine(root, f))
+            .Where(File.Exists)
+            .ToList();
+
+        Assert.True(docs.Count >= 2,
+            $"only {docs.Count} of the community documents were found — this guard compares documents "
+            + "against each other, so with fewer than two it proves nothing.");
+
+        // label -> the numbers it is linked to, and where
+        var seen = new Dictionary<string, List<(string Doc, string Number)>>(StringComparer.OrdinalIgnoreCase);
+        var links = 0;
+
+        foreach (var path in docs)
+        {
+            foreach (var m in DiscussionLink().Matches(File.ReadAllText(path)).Cast<Match>())
+            {
+                // Strip the markdown emphasis so [**Start here**] and [Start here] are one label.
+                var label = m.Groups["label"].Value.Replace("*", "", StringComparison.Ordinal).Trim();
+                links++;
+                if (!seen.TryGetValue(label, out var list)) seen[label] = list = [];
+                list.Add((Path.GetFileName(path), m.Groups["n"].Value));
+            }
+        }
+
+        Assert.True(links >= 2,
+            $"only {links} numbered discussion links were found across the community documents — the pattern "
+            + "has stopped matching, so this guard is comparing almost nothing.");
+
+        var conflicts = seen
+            .Where(kv => kv.Value.Select(v => v.Number).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Select(kv => $"\"{kv.Key}\" is linked as "
+                        + string.Join(" and ", kv.Value.Select(v => $"#{v.Number} in {v.Doc}")))
+            .ToList();
+
+        Assert.True(conflicts.Count == 0,
+            "The same thread is linked under two different numbers, so at least one document sends a reader "
+            + "to the wrong discussion — and both links resolve, so nothing else will tell you:\n  "
+            + string.Join("\n  ", conflicts));
+    }
+
+    /// <summary>A markdown link to a numbered GitHub discussion: <c>[label](…/discussions/1234)</c>.</summary>
+    [GeneratedRegex(@"\[(?<label>[^\]]+)\]\([^)]*?/discussions/(?<n>\d+)\)", RegexOptions.Compiled)]
+    private static partial Regex DiscussionLink();
+
     /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
     [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
     private static partial Regex SummaryOpenTag();

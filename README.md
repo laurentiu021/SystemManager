@@ -1907,6 +1907,16 @@ Windows 10 / 11 x64 machine.
 
 Found something broken? Missing a feature you'd love to have?
 
+Two threads worth reading before you post — linked directly, because Discussions is sorted
+by recency and every release posts an announcement there, so these sit a long way down the
+list:
+
+- 📌 [**Start here**](https://github.com/laurentiu021/SystemManager/discussions/2346) — what
+  this project is, what it will not become, and where to put which kind of post.
+- 🗺️ [**Roadmap**](https://github.com/laurentiu021/SystemManager/discussions/2345) — what is
+  being worked on and what has been decided against, so you can tell whether your idea is
+  already answered.
+
 - 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml)
   using the bug report template.
 - 💡 **Features** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml)

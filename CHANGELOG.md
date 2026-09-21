@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.111.3] - 2026-09-21
+
+**The Dashboard's "critical events in Event Log" button opened the wrong page.** It said how many critical
+events Windows had logged in the last week, and its button took you to System Health, which does not list
+them. It now opens the Logs tab, where the events are. The line that sent you to the right place was there
+all along — it had been written twice, and the second copy won.
+
+### Fixed
+
+- **The Event Log alert opens the Logs tab.** `NavTargetId` was assigned twice in a row with two different
+  tabs, so the first assignment was dead. Both were real tabs, which is why the existing check that every
+  navigation id resolves to a real page was satisfied either way.
+- **A guard now rejects any value that is assigned twice in a row.** The compiler does not warn about it for
+  a property, because a setter can do work. The assignment also happens inside a dispatcher callback that
+  does nothing outside a running window, so a test exercising the alert would have passed while proving
+  nothing. The check reads the source instead, across the whole app, and excludes the two shapes that are
+  legitimate: a discarded result and a value built up in steps.
+
 ## [1.111.2] - 2026-09-18
 
 **If App Blocker ever blocked something it should not have, it now says so instead of leaving you to find

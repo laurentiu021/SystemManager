@@ -30,6 +30,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // never reached from here, so the alert classified on a usage percentage instead.
     private readonly MemoryTestService _memTest;
     private readonly INavigationService _navigation;
+
+    // Null when no caller supplied one, which omits the stranded-block alert entirely. See the
+    // constructor's appBlocker parameter for why it is optional.
+    private readonly IAppBlockerService? _appBlocker;
+
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _pollingCts;
 
@@ -133,17 +138,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// worth a defaulting path into user data; the DI container and the designer graph both have one
     /// to hand (#1772).
     /// </param>
-    /// <summary>
-    /// Reads the IFEO blocked list for the stranded-machine alert, or null when no caller supplied one.
-    /// </summary>
-    /// <remarks>
-    /// Optional so the six existing construction sites keep compiling unchanged — the same shape
-    /// <see cref="AboutViewModel"/> uses for its diagnostics service. Null simply omits the sixth alert,
-    /// which is also what makes the alert testable in both directions: a test supplies a service over a
-    /// redirected registry hive to assert it fires, and omits it to assert nothing else moved.
-    /// </remarks>
-    private readonly IAppBlockerService? _appBlocker;
-
+    /// <param name="appBlocker">
+    /// Reads the IFEO blocked list for the stranded-machine alert. Optional so the six existing
+    /// construction sites keep compiling unchanged — the same shape <see cref="AboutViewModel"/> uses for
+    /// its diagnostics service. Null omits the sixth alert, which is also what makes it testable in both
+    /// directions: a test supplies a service over a redirected registry hive to assert it fires, and omits
+    /// it to assert nothing else moved.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
@@ -734,8 +735,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
             {
                 alert.Title = title;
                 alert.Severity = severity;
+                // Logs, not System Health. This line was written twice with different tabs and the
+                // second won, so the button read as "take me to the events" and opened a page that does
+                // not list them. The title names the Event Log, so that is where it has to go (#2359).
                 alert.NavTargetId = NavTargetFor(severity, "nav-logs");
-                alert.NavTargetId = NavTargetFor(severity, "nav-system-health");
             });
         }
         catch (Exception ex)

@@ -11,7 +11,7 @@ using SysManager.Services;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// The report inside a diagnostics bundle carries none of THIS machine's network identifiers.
+/// The system report carries none of THIS machine's network identifiers, in the bundle or exported.
 /// </summary>
 /// <remarks>
 /// Integration rather than unit, because the only assertion worth making runs against the real adapters: a
@@ -111,17 +111,22 @@ public sealed class DiagnosticsBundleRedactionTests : IDisposable
     }
 
     /// <summary>
-    /// The FULL report still carries what the sharable one drops, so the two are genuinely different.
+    /// The redaction left its FOOTPRINT, so "no address found" means one was removed rather than absent.
     /// </summary>
     /// <remarks>
-    /// Without this, the redaction test above would pass just as happily against a machine whose report never
-    /// contained an address in the first place — a virtualised runner with no adapter, or a formatting change
-    /// that dropped the Network section entirely. Asserting the unredacted report DOES contain the value is
-    /// what turns the other test from "nothing found" into "something was removed".
+    /// This test used to assert the opposite thing: that the full report still CONTAINED the address, proving
+    /// the sharable variant differed from it. #2352 made redaction the default for every format, so no
+    /// unredacted report exists to compare against and that premise is gone — the test failed, and its own
+    /// message had named this exact outcome as one of the two possibilities.
+    /// <para>The non-vacuity now comes from the markers instead. A machine with a MAC must produce a report
+    /// saying <c>(not included)</c> where that MAC would have been, and a machine with a routable IPv4 must
+    /// produce a masked one. If the Network section were dropped, or the adapters stopped being enumerated,
+    /// neither marker would appear and this fails — which is the same protection the old comparison gave,
+    /// without needing a second report.</para>
     /// <para>Same rule about the message: it names the field, never the value.</para>
     /// </remarks>
     [Fact]
-    public async Task TheFullReport_StillCarriesTheAddress_SoTheRedactionIsRealRatherThanVacuous()
+    public async Task TheReport_ShowsTheRedactionMarkers_SoAnAbsentAddressMeansOneWasRemoved()
     {
         var macs = LocalHardwareAddresses();
         Assert.True(macs.Count > 0,
@@ -131,11 +136,17 @@ public sealed class DiagnosticsBundleRedactionTests : IDisposable
         var report = await new SystemReportService(new SystemInfoService(), new DiskHealthService())
             .GenerateReportAsync();
 
-        Assert.True(macs.Any(m => report.Contains(m, StringComparison.OrdinalIgnoreCase)),
-            "the FULL system report no longer contains any of this machine's hardware addresses. Either the "
-            + "report stopped emitting the field — in which case the sharable variant and its redaction are "
-            + "now pointless machinery and should go — or this machine has no adapter the report can see, in "
-            + "which case the companion redaction test is passing vacuously. Value not printed: this message "
-            + "reaches a public log.");
+        Assert.Contains("Network", report, StringComparison.Ordinal);
+
+        // The MAC placeholder. Deliberately distinct from an empty value so a reader can tell "removed on
+        // purpose" from "the adapter reported none" — and that distinction is what makes it usable here.
+        Assert.Contains("(not included)", report, StringComparison.Ordinal);
+
+        // The masked IPv4, but only where the machine actually has one to mask: a runner with no routable
+        // address would otherwise fail for the wrong reason.
+        if (LocalIPv4Addresses().Count > 0)
+        {
+            Assert.Contains(".x.x", report, StringComparison.Ordinal);
+        }
     }
 }

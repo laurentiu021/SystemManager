@@ -80,8 +80,11 @@ public sealed class DiagnosticsBundleService
     /// </param>
     /// <param name="ct">Cancellation.</param>
     public async Task<BundleContents> WriteAsync(string zipPath, string environment, CancellationToken ct = default)
+        // GenerateReportAsync, not a separate sharable variant: redaction moved into the report service's
+        // single data path, so every format is redacted and the variant this used to call was identical to
+        // the ordinary one (#2352). One method is one fewer thing that can drift.
         => await PackAsync(zipPath, environment,
-                           await _report.GenerateSharableReportAsync(ct).ConfigureAwait(false), ct)
+                           await _report.GenerateReportAsync(ct).ConfigureAwait(false), ct)
             .ConfigureAwait(false);
 
     /// <summary>

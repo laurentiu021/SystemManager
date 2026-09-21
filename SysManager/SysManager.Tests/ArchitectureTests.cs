@@ -13747,6 +13747,75 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"@\{\s*N(?:ame)?\s*=\s*'([A-Za-z0-9_]+)'", RegexOptions.Compiled)]
     private static partial Regex SelectedCalculatedProperty();
 
+    /// <summary>
+    /// Every public report format is rendered from the one data path that strips machine identifiers.
+    /// </summary>
+    /// <remarks>
+    /// The report carries each adapter's MAC address and local IPv4, and a MAC is permanent — it survives a
+    /// Windows reinstall and cannot be un-published once it is in a GitHub thread. Redaction lives in
+    /// <c>GenerateDataAsync</c> precisely so a format cannot forget it, and the previous shape is why: a
+    /// sharable text variant redacted while the text, HTML and JSON exports did not (#2352).
+    /// <para>So the thing worth pinning is not that the values are absent — the unit tests cover that — but
+    /// that no renderer is reachable from a public method WITHOUT passing through the redacting path. A
+    /// fourth format calling <c>BuildData</c> directly would compile, pass every existing test, and ship the
+    /// MAC.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryReportFormat_GoesThroughTheRedactingDataPath()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "SystemReportService.cs")));
+
+        // The redaction has to be IN that path, not merely defined somewhere in the file.
+        var dataPath = MemberSlice(source, "public async Task<SystemReportData> GenerateDataAsync");
+        Assert.False(string.IsNullOrWhiteSpace(dataPath),
+            "GenerateDataAsync was not found in SystemReportService — this guard's slice is empty, so every "
+            + "assertion below would pass over nothing.");
+        Assert.Contains("WithoutMachineIdentifiers", dataPath, StringComparison.Ordinal);
+
+        // Every public generator, and the one call each is allowed to make to obtain its payload.
+        var generators = PublicReportGenerator().Matches(source).Cast<Match>()
+            .Select(m => m.Groups["name"].Value)
+            .Where(n => n != "GenerateDataAsync")
+            .ToList();
+
+        Assert.True(generators.Count >= 3,
+            $"only {generators.Count} public report generators were parsed — the text, HTML and JSON entry "
+            + "points are the minimum, so the pattern has stopped matching and this guard is checking almost "
+            + "nothing.");
+
+        var offenders = new List<string>();
+        foreach (var name in generators)
+        {
+            var body = MemberSlice(source, $"public async Task<string> {name}");
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                offenders.Add($"{name} — could not be sliced, so it is unverified rather than clean");
+                continue;
+            }
+
+            if (!body.Contains("GenerateDataAsync", StringComparison.Ordinal))
+                offenders.Add($"{name} — does not read its payload from GenerateDataAsync");
+
+            // BuildData is the UNREDACTED payload. Only GenerateDataAsync may call it.
+            if (body.Contains("BuildData(", StringComparison.Ordinal))
+                offenders.Add($"{name} — calls BuildData directly, bypassing the redaction");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These report formats do not go through the data path that removes the machine's MAC address and "
+            + "masks its IPv4, so whatever they produce can be attached to a public issue carrying a "
+            + "permanent hardware identifier:\n  " + string.Join("\n  ", offenders));
+
+        // BuildData must stay unreachable from outside, or the guard above can be walked around entirely.
+        Assert.DoesNotContain("public static SystemReportData BuildData", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal static SystemReportData BuildData", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>A public <c>Generate…Async</c> entry point on the report service.</summary>
+    [GeneratedRegex(@"public\s+async\s+Task<[^>]+>\s+(?<name>Generate\w*Async)\s*\(", RegexOptions.Compiled)]
+    private static partial Regex PublicReportGenerator();
+
     /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
     [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
     private static partial Regex SummaryOpenTag();

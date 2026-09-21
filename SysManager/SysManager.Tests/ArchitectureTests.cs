@@ -13880,6 +13880,47 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\[(?<label>[^\]]+)\]\([^)]*?/discussions/(?<n>\d+)\)", RegexOptions.Compiled)]
     private static partial Regex DiscussionLink();
 
+    /// <summary>
+    /// The retention depth the Context Menu tab promises is the depth the service actually keeps.
+    /// </summary>
+    /// <remarks>
+    /// The tab tells the user "the three most recent per entry are kept", and
+    /// <c>ContextMenuService.BackupsKeptPerKey</c> decides how many actually are. A number written in two
+    /// places in two languages is the drift this codebase keeps producing: change the constant to 5 and the
+    /// sentence becomes a lie no test would notice, because each side is individually correct (#2369).
+    /// <para>Asserted against the spelled-out word rather than the digit, because that is how the copy reads —
+    /// matching "3" would pass on a sentence that says "three" while the constant is 3, and also on one that
+    /// happens to contain a 3 for another reason.</para>
+    /// </remarks>
+    [Fact]
+    public void TheBackupRetentionCopy_MatchesTheConstantItDescribes()
+    {
+        var appDir = FindAppProjectDir();
+        var source = File.ReadAllText(Path.Combine(appDir, "Services", "ContextMenuService.cs"));
+        var view = XamlCode(Path.Combine(appDir, "Views", "ContextMenuView.xaml"));
+
+        var declared = RetentionConstant().Match(source);
+        Assert.True(declared.Success,
+            "ContextMenuService.BackupsKeptPerKey was not found, so this guard has nothing to compare the "
+            + "tab's wording against.");
+
+        var kept = int.Parse(declared.Groups["n"].Value, CultureInfo.InvariantCulture);
+
+        string[] words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+        Assert.True(kept > 0 && kept < words.Length,
+            $"the retention constant is {kept}, which this guard has no word for — extend the list rather "
+            + "than letting the comparison silently stop happening.");
+
+        // Non-vacuity: the sentence has to be there at all, or "the word matches" is asserted about nothing.
+        Assert.Contains("most recent per entry are kept", view, StringComparison.Ordinal);
+
+        Assert.Contains($"the {words[kept]} most recent per entry are kept", view, StringComparison.Ordinal);
+    }
+
+    /// <summary>The declared per-key backup retention depth.</summary>
+    [GeneratedRegex(@"BackupsKeptPerKey\s*=\s*(?<n>\d+)", RegexOptions.Compiled)]
+    private static partial Regex RetentionConstant();
+
     /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
     [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
     private static partial Regex SummaryOpenTag();

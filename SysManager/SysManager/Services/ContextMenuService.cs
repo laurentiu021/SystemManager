@@ -638,10 +638,71 @@ public sealed partial class ContextMenuService : IContextMenuService
         && !registryPath.Contains('"')
         && !registryPath.Contains('\0');
 
+    /// <summary>How many exports are kept for one registry key. Older ones are deleted on each write.</summary>
+    /// <remarks>
+    /// Three, matching <c>DiagnosticsBundleService.NewestLogFiles</c> rather than inventing a second number.
+    /// Without a cap one file accumulated per toggle for the life of the install, in a folder nothing reads
+    /// and nothing mentioned (#2369). Depth rather than calendar age is the useful axis here: what an export
+    /// is worth is "the state before the last change", so the newest few matter and a month-old one does not.
+    /// </remarks>
+    internal const int BackupsKeptPerKey = 3;
+
+    /// <summary>
+    /// Deletes all but the newest <see cref="BackupsKeptPerKey"/> exports belonging to one registry key.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ordered by FILE NAME, not by timestamp on disk. The name ends in
+    /// <c>yyyyMMdd_HHmmss</c>, which sorts lexicographically in chronological order, and a name cannot be
+    /// rewritten by a copy or a restore the way <c>CreationTime</c> can. Same reasoning as
+    /// <c>DiagnosticsBundleService.NewestLogs</c>.</para>
+    /// <para><b>The timestamp shape is re-checked in code rather than trusted to the glob.</b> A key's
+    /// sanitised name can be a prefix of another's — a key <c>A</c> and a key <c>A_B</c> both produce files
+    /// beginning <c>A_</c> — so globbing <c>A_*.reg</c> would sweep up <c>A_B</c>'s exports and delete another
+    /// key's history. Enumerating broadly and then requiring exactly eight digits, an underscore and six
+    /// digits closes that.</para>
+    /// <para>Best-effort, like the export itself: a folder that cannot be pruned must never fail the
+    /// context-menu change the user actually asked for.</para>
+    /// </remarks>
+    internal static void PruneBackups(string backupDir, string safeName, int keep = BackupsKeptPerKey)
+    {
+        try
+        {
+            var stale = Directory
+                .EnumerateFiles(backupDir, $"{safeName}_*.reg", SearchOption.TopDirectoryOnly)
+                .Where(f => BackupStamp().IsMatch(Path.GetFileName(f)[safeName.Length..]))
+                .OrderByDescending(f => Path.GetFileName(f), StringComparer.Ordinal)
+                .Skip(keep)
+                .ToList();
+
+            foreach (var file in stale)
+            {
+                File.Delete(file);
+                Log.Debug("Pruned old registry backup: {File}", file);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                      or DirectoryNotFoundException or ArgumentException)
+        {
+            Log.Debug("Registry backup pruning failed (non-critical): {Error}", ex.Message);
+        }
+    }
+
+    /// <summary>The <c>_yyyyMMdd_HHmmss.reg</c> tail a backup file name ends with, anchored at both ends.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A_\d{8}_\d{6}\.reg\z",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex BackupStamp();
+
     /// <summary>
     /// Exports the registry key to a .reg file before modification.
     /// Uses <c>reg export</c> which is available on all Windows versions.
     /// </summary>
+    /// <remarks>
+    /// Kept rather than removed even though nothing in the app reads it back: it is a file someone who knows
+    /// what a <c>.reg</c> is can double-click, and the tab now says it exists and where. What it is not is a
+    /// restore button — importing a stale export rewrites the key wholesale, including re-creating entries the
+    /// user has since removed, which would be a larger mutation than anything else on that tab to reach a
+    /// state the enable/disable toggle already reaches (#2369).
+    /// </remarks>
     public static void BackupRegistry(string registryPath)
     {
         // Refuse before anything is built: a path that cannot be passed safely cannot be backed up
@@ -685,9 +746,14 @@ public sealed partial class ContextMenuService : IContextMenuService
             proc?.WaitForExit(5000);
 
             if (proc is { ExitCode: 0 })
+            {
                 Log.Debug("Registry backup created: {File}", backupFile);
+                PruneBackups(backupDir, safeName);
+            }
             else
+            {
                 Log.Debug("Registry backup skipped (reg export returned non-zero)");
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
         {

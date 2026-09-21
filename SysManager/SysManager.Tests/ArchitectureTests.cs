@@ -238,10 +238,6 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Walks up from the test binary to the directory holding this project's sources. The build copies
-    /// no .cs files to the output, so the assembly location alone cannot answer this.
-    /// </summary>
-    /// <summary>
     /// Locates the <c>SysManager.Tests</c> source directory.
     /// </summary>
     /// <remarks>
@@ -4872,29 +4868,6 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Every tab has a README section headed with its own name.
-    /// </summary>
-    /// <remarks>
-    /// "Every implemented feature MUST have its own README section" is a house rule that nothing enforced,
-    /// and it had drifted two ways at once.
-    /// <para><b>Four tabs shared one section.</b> Ping, Traceroute, Speed Test and Network Repair were
-    /// described together under a heading called "Network monitor" — a name no tab has, in a different part
-    /// of the reference from the other Network tab. Searching the README for "Speed Test" found the
-    /// screenshot gallery and a parenthetical list, and nothing that said what the tab does. Its Ookla
-    /// server picker, its per-engine history and its verdict copy were undocumented, and the shared section
-    /// had gone stale in a way a combined heading hides: it credited the Global preset with "your router",
-    /// which the preset does not contain — the gateway is detected and added separately.</para>
-    /// <para><b>Three headings named the tab something else.</b> "Cleanup (fast)" for Quick Cleanup, "Deep
-    /// cleanup (safe)" for Deep Cleanup, "Duplicate File Finder" for Duplicate Finder — and a reader
-    /// searching the sidebar name found nothing. The issue templates had the same defect and are pinned by
-    /// <see cref="EveryIssueTemplateTabList_OffersTheRealTabs"/>; this is the same question asked of the
-    /// README, which is where a prospective user looks first.</para>
-    /// <para>The heading must CONTAIN the label rather than equal it, so a descriptive qualifier stays
-    /// allowed ("Windows Update (Windows Update Agent COM API)", "Gaming Profile 🔬"). Matching is
-    /// case-sensitive on purpose: "System health" is not what the sidebar says, and a reader scanning for
-    /// the tab they are looking at should find its name written the same way.</para>
-    /// </remarks>
-    /// <summary>
     /// Every "N tabs" the README claims is re-derived from the source, not trusted.
     /// </summary>
     /// <remarks>
@@ -5467,6 +5440,29 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?<n>\d+) (?:\w+ )?tabs\b", RegexOptions.Compiled)]
     private static partial Regex ReadmeTabCount();
 
+    /// <summary>
+    /// Every tab has a README section headed with its own name.
+    /// </summary>
+    /// <remarks>
+    /// "Every implemented feature MUST have its own README section" is a house rule that nothing enforced,
+    /// and it had drifted two ways at once.
+    /// <para><b>Four tabs shared one section.</b> Ping, Traceroute, Speed Test and Network Repair were
+    /// described together under a heading called "Network monitor" — a name no tab has, in a different part
+    /// of the reference from the other Network tab. Searching the README for "Speed Test" found the
+    /// screenshot gallery and a parenthetical list, and nothing that said what the tab does. Its Ookla
+    /// server picker, its per-engine history and its verdict copy were undocumented, and the shared section
+    /// had gone stale in a way a combined heading hides: it credited the Global preset with "your router",
+    /// which the preset does not contain — the gateway is detected and added separately.</para>
+    /// <para><b>Three headings named the tab something else.</b> "Cleanup (fast)" for Quick Cleanup, "Deep
+    /// cleanup (safe)" for Deep Cleanup, "Duplicate File Finder" for Duplicate Finder — and a reader
+    /// searching the sidebar name found nothing. The issue templates had the same defect and are pinned by
+    /// <see cref="EveryIssueTemplateTabList_OffersTheRealTabs"/>; this is the same question asked of the
+    /// README, which is where a prospective user looks first.</para>
+    /// <para>The heading must CONTAIN the label rather than equal it, so a descriptive qualifier stays
+    /// allowed ("Windows Update (Windows Update Agent COM API)", "Gaming Profile 🔬"). Matching is
+    /// case-sensitive on purpose: "System health" is not what the sidebar says, and a reader scanning for
+    /// the tab they are looking at should find its name written the same way.</para>
+    /// </remarks>
     [Fact]
     public void EveryTab_HasItsOwnReadmeSection()
     {
@@ -5610,24 +5606,6 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?:Tab<\w+>|EagerItem)\(\s*""[\w-]+""\s*,\s*""([^""]+)""", RegexOptions.Compiled)]
     private static partial Regex NavRegistration();
 
-    /// <summary>
-    /// Only the tabs with a stated reason may be built at startup.
-    /// <para>Every tab view model used to be constructed in <c>MainWindowViewModel</c>'s constructor, so
-    /// launching the app ran ~40 constructors — several of which start a scan or a timer — before the
-    /// first frame. The lazy <c>Tab&lt;TVm&gt;</c> factory fixed that by resolving each view model on
-    /// first open, and three tabs were documented as legitimate exceptions: Dashboard (the initially
-    /// selected tab), DarkMode (owns the always-on theme schedule) and About (its update check feeds the
-    /// shell banner). DarkMode and About are resolved directly in the constructor, not through the nav
-    /// table, so only Dashboard appears here.</para>
-    /// <para>The four network tabs nevertheless stayed on the eager path, and the justification comment
-    /// was widened to say "network tabs" instead of the tabs being made lazy — so
-    /// <c>SpeedTestViewModel</c>'s constructor read its history file from disk at every launch whether or
-    /// not anyone opened Speed Test. Worse, each was built with <c>new</c> while the container already
-    /// registered it as a singleton, so the app carried two instances of each and the DI registrations
-    /// were dead.</para>
-    /// <para>A comment cannot hold that line, so this asserts it. Adding a new eager tab fails here,
-    /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
-    /// </summary>
     /// <summary>
     /// A number rendered at one of the metric rungs' sizes must use the rung, and every rung a view
     /// references must actually be defined.
@@ -5866,6 +5844,24 @@ public partial class ArchitectureTests
             + "against free to drift from the value the app actually uses.");
     }
 
+    /// <summary>
+    /// Only the tabs with a stated reason may be built at startup.
+    /// <para>Every tab view model used to be constructed in <c>MainWindowViewModel</c>'s constructor, so
+    /// launching the app ran ~40 constructors — several of which start a scan or a timer — before the
+    /// first frame. The lazy <c>Tab&lt;TVm&gt;</c> factory fixed that by resolving each view model on
+    /// first open, and three tabs were documented as legitimate exceptions: Dashboard (the initially
+    /// selected tab), DarkMode (owns the always-on theme schedule) and About (its update check feeds the
+    /// shell banner). DarkMode and About are resolved directly in the constructor, not through the nav
+    /// table, so only Dashboard appears here.</para>
+    /// <para>The four network tabs nevertheless stayed on the eager path, and the justification comment
+    /// was widened to say "network tabs" instead of the tabs being made lazy — so
+    /// <c>SpeedTestViewModel</c>'s constructor read its history file from disk at every launch whether or
+    /// not anyone opened Speed Test. Worse, each was built with <c>new</c> while the container already
+    /// registered it as a singleton, so the app carried two instances of each and the DI registrations
+    /// were dead.</para>
+    /// <para>A comment cannot hold that line, so this asserts it. Adding a new eager tab fails here,
+    /// which is the intended prompt to either justify it in the list below or use <c>Tab&lt;TVm&gt;</c>.</para>
+    /// </summary>
     [Fact]
     public void OnlyTheJustifiedTabs_AreBuiltAtStartup()
     {
@@ -6103,7 +6099,6 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"[^\w\s-]", RegexOptions.Compiled)]
     private static partial Regex NonAnchorCharacter();
 
-    /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
     /// <summary>
     /// The zero-based line of a named step in a workflow, failing with the same message wherever it is
     /// used: a renamed step must update its guard rather than silently lose it.
@@ -6146,6 +6141,7 @@ public partial class ArchitectureTests
         return code;
     }
 
+    /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -12716,6 +12712,21 @@ public partial class ArchitectureTests
                 var text = string.Join('\n', block);
                 var hasSummary = CarriesASummary().IsMatch(text);
                 if (hasSummary) summarised++;
+
+                // Two <summary> tags in ONE run of /// lines is always an accident, and a specific one: a
+                // declaration was inserted between a documentation comment and the member it described. The
+                // member below silently loses its documentation while the block above gains a second
+                // summary, and the compiler says nothing — Release builds clean with seven of these present.
+                // Six were historical; the seventh I wrote myself in #2358, where DashboardViewModel's
+                // constructor documentation ended up attached to a field (#2361).
+                var summaries = SummaryOpenTag().Matches(text).Count;
+                if (summaries > 1)
+                {
+                    offenders.Add($"{Path.GetFileName(path)}:{start + 1} is one documentation block with "
+                                  + $"{summaries} <summary> tags — a declaration was inserted into it, so "
+                                  + "whatever follows the block is now undocumented");
+                }
+
                 if (!DocumentsAMember().IsMatch(text)) continue;
 
                 documented++;
@@ -12739,10 +12750,16 @@ public partial class ArchitectureTests
             + "broken, not the code. Fix this guard rather than trusting it.");
 
         Assert.True(offenders.Count == 0,
-            "These documentation comments describe parameters, a return value or a thrown exception but "
-            + "never say what the member is for. Add a <summary>:\n  "
+            "These documentation comments either describe parameters, a return value or a thrown exception "
+            + "without saying what the member is for, or hold more than one <summary> because a declaration "
+            + "was inserted into the block:\n  "
             + string.Join("\n  ", offenders)
             + $"\n({documented} blocks document a member, {summarised} carry a summary)");
+
+        // The duplicate-summary detector, proved against literals rather than trusted — the same treatment
+        // the two detectors above get, because a silent regex is how a guard reports clean over nothing.
+        Assert.Equal(2, SummaryOpenTag().Matches("/// <summary>a</summary>\n/// <summary>b</summary>").Count);
+        Assert.Single(SummaryOpenTag().Matches("/// <summary>only one</summary>"));
 
         // The word boundary is load-bearing, not decoration: <paramref/> shares its first six characters
         // with <param>, and 109 summaries here use one. Without the boundary every one of them would read
@@ -13729,6 +13746,10 @@ public partial class ArchitectureTests
     /// <summary>A calculated property's name: <c>@{N='Title';E={...}}</c> or <c>@{Name='Title';...}</c>.</summary>
     [GeneratedRegex(@"@\{\s*N(?:ame)?\s*=\s*'([A-Za-z0-9_]+)'", RegexOptions.Compiled)]
     private static partial Regex SelectedCalculatedProperty();
+
+    /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
+    [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
+    private static partial Regex SummaryOpenTag();
 
     /// <summary>
     /// No statement assigns the same target as the statement immediately before it.

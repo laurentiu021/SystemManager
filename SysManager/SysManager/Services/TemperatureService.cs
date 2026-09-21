@@ -366,19 +366,6 @@ public sealed class TemperatureService : IDisposable
     }
 
     /// <summary>
-    /// Disk models from Win32_DiskDrive, or null when WMI could not answer.
-    /// </summary>
-    /// <remarks>
-    /// Null rather than empty on fault, so the caller's <c>??=</c> memoization does not cache a failure for
-    /// the whole session. A single transient fault on the first elevated poll used to strand LibreHardwareMonitor's
-    /// cryptic labels as "Drive 1", "Drive 2" until the app restarted.
-    /// <para>COMException is caught alongside ManagementException because WMI surfaces transient faults — RPC
-    /// server unavailable, repository errors — as COMException, which every other WMI reader in this codebase
-    /// already guards. It mattered more here than elsewhere: this prefetch runs BEFORE the hardware
-    /// enumeration loop, so an escaping COMException aborted the entire read through the outer catch-all and
-    /// the Temperatures card lost its CPU, GPU and motherboard rows as well.</para>
-    /// </remarks>
-    /// <summary>
     /// Replaces placeholder storage names with the friendly names at the same position, when — and only
     /// when — that position means anything.
     /// </summary>
@@ -423,6 +410,19 @@ public sealed class TemperatureService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Disk models from Win32_DiskDrive, or null when WMI could not answer.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than empty on fault, so the caller's <c>??=</c> memoization does not cache a failure for
+    /// the whole session. A single transient fault on the first elevated poll used to strand LibreHardwareMonitor's
+    /// cryptic labels as "Drive 1", "Drive 2" until the app restarted.
+    /// <para>COMException is caught alongside ManagementException because WMI surfaces transient faults — RPC
+    /// server unavailable, repository errors — as COMException, which every other WMI reader in this codebase
+    /// already guards. It mattered more here than elsewhere: this prefetch runs BEFORE the hardware
+    /// enumeration loop, so an escaping COMException aborted the entire read through the outer catch-all and
+    /// the Temperatures card lost its CPU, GPU and motherboard rows as well.</para>
+    /// </remarks>
     private static List<string>? GetDiskNamesFromWmi()
     {
         List<string> names = [];

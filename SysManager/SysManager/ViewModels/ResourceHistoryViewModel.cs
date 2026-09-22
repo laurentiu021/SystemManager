@@ -264,9 +264,35 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         };
     }
 
+    /// <summary>
+    /// The earliest tick count the time axis will render as a date: 2000-01-01.
+    /// </summary>
+    /// <remarks>
+    /// The guard used to be <c>v &gt; 0</c>, which admits any positive tick count — and a handful of ticks is
+    /// a date in the year 1, which formats as <c>01-01 00:00</c>. With no samples the axis has no range to
+    /// work from, so it laid ticks down near zero and printed that same string across the whole axis
+    /// (reported in #2371, with a screenshot).
+    /// <para>Hiding the empty chart is the real fix and it is in the view. This is the second line: a label
+    /// that cannot be a real sample time should render as nothing, wherever the axis range came from. No
+    /// sample can predate the app, so any Windows-era date is a safe floor and 2000 is the obvious one.</para>
+    /// </remarks>
+    private static readonly long EarliestPlausibleSampleTicks = new DateTime(2000, 1, 1).Ticks;
+
+    /// <summary>
+    /// Formats one time-axis tick, or returns an empty string when the value cannot be a sample time.
+    /// </summary>
+    /// <remarks>
+    /// Extracted from the axis so it can be tested directly: the defect was entirely inside this expression,
+    /// and reaching it through a constructed <c>Axis</c> would mean building the chart to assert a string.
+    /// </remarks>
+    internal static string TimeAxisLabel(double v) =>
+        v >= EarliestPlausibleSampleTicks && v < DateTime.MaxValue.Ticks
+            ? new DateTime((long)v).ToString("MM-dd HH:mm", CultureInfo.InvariantCulture)
+            : "";
+
     private static Axis BuildTimeAxis() => new()
     {
-        Labeler = v => v > 0 && v < DateTime.MaxValue.Ticks ? new DateTime((long)v).ToString("MM-dd HH:mm", CultureInfo.InvariantCulture) : "",
+        Labeler = TimeAxisLabel,
         TextSize = 12,
         NamePaint = new SolidColorPaint(SKColor.Parse("A3ADBF")),
         LabelsPaint = new SolidColorPaint(SKColor.Parse("E6E9EE")) { SKTypeface = SKTypeface.FromFamilyName("Segoe UI") },

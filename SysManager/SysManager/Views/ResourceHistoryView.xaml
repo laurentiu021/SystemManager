@@ -79,6 +79,7 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Usage" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
                     <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="180"
+                                        Visibility="{Binding HasData, Converter={StaticResource FlexVis}}"
                                         Series="{Binding UsageSeries}"
                                         XAxes="{Binding UsageXAxes}" YAxes="{Binding UsageYAxes}"
                                         LegendPosition="Bottom"
@@ -101,6 +102,7 @@
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Text="Temperature" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
                     <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="120"
+                                        Visibility="{Binding HasTemperatureData, Converter={StaticResource FlexVis}}"
                                         Series="{Binding TemperatureSeries}"
                                         XAxes="{Binding TemperatureXAxes}" YAxes="{Binding TemperatureYAxes}"
                                         LegendPosition="Bottom"

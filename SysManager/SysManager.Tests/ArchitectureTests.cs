@@ -8537,6 +8537,59 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The shredder's overwrite writes must not be cancellable: every <c>WriteAsync</c> / <c>FlushAsync</c>
+    /// inside <c>ShredFileAsync</c> passes <c>CancellationToken.None</c>.
+    /// </summary>
+    /// <remarks>
+    /// Cancelling an overwrite cannot undo it. Threading the caller's token into the writes produced three
+    /// end states the UI reported as "Cancelled" while the file was in fact destroyed: fully zeroed at its
+    /// original length (token seen at the top of the next pass), zeroed in its leading chunks with the tail
+    /// still plaintext (token seen mid-pass), and truncated to zero bytes but never deleted (token seen by
+    /// the flush after <c>SetLength(0)</c>) — #2374.
+    /// <para>The behaviour is covered by tests; this exists because the shape is one an ordinary tidy-up
+    /// reintroduces. Passing the ambient token to an async call is the correct habit almost everywhere in
+    /// this codebase, and an analyzer or reviewer would push it back IN. The refusal has to be recorded
+    /// where it is mechanical, not left to whoever reads the comment.</para>
+    /// <para>Comments are stripped first: the remarks above and the ones in the method both name
+    /// <c>CancellationToken.None</c> and the token, so prose would satisfy — or defeat — every match here.
+    /// A measured floor on the call count guards the other direction, where a rename makes the slice empty
+    /// and the guard passes having inspected nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void TheShredderOverwrite_CannotBeCancelledMidWrite()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "FileShredderService.cs"));
+        var slice = WithoutComments(MemberSlice(source, "public async Task<int> ShredFileAsync"));
+
+        Assert.True(slice.Length > 500,
+            $"the ShredFileAsync slice is {slice.Length} chars — not the method, so this guard would "
+            + "inspect nothing. If the signature changed, update this guard rather than deleting it.");
+
+        var writes = StreamWriteCall().Matches(slice).Cast<Match>().ToList();
+
+        // Floor measured against the real method: two FlushAsync (per pass, and after the truncate) plus
+        // one WriteAsync. Fewer means the slice or the regex stopped matching the code.
+        Assert.True(writes.Count >= 3,
+            $"found {writes.Count} stream write/flush calls in ShredFileAsync, expected at least 3 — the "
+            + "regex no longer matches the calls it is meant to police.");
+
+        var offenders = writes
+            .Where(m => !m.Groups["args"].Value.Contains("CancellationToken.None", StringComparison.Ordinal))
+            .Select(m => Collapse(m.Value))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "the shred overwrite is cancellable again, which leaves a destroyed file on disk while the "
+            + "caller is told the operation was cancelled (#2374). Cancellation is decided BETWEEN passes, "
+            + "on ct.IsCancellationRequested; the writes themselves must take CancellationToken.None:\n  - "
+            + string.Join("\n  - ", offenders));
+    }
+
+    [GeneratedRegex(@"stream\.(?:Write|Flush)Async\((?<args>[^;]*?)\)\s*\.ConfigureAwait")]
+    private static partial Regex StreamWriteCall();
+
+    /// <summary>
     /// Every CLI verb that changes the machine records it in the app's own history, and the read-only one
     /// does not.
     /// </summary>

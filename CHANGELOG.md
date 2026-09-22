@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.4] - 2026-09-22
+
+**Cancelling a shred could destroy the file and then tell you nothing had happened.** File Shredder read
+Cancel as "stop this instant", including in the middle of overwriting a file. The file stayed on disk under
+its own name with its contents already replaced, and the queue reported it as "Cancelled" — so the one
+operation in the app whose entire purpose is destroying data was the one that could quietly lie about it.
+Cancel now stops the *queue*: anything not started is left alone, and a file already being overwritten is
+finished and removed rather than left as a wreck.
+
+### Fixed
+
+- **A file whose overwrite had begun was abandoned half-done.** Three end states were reachable, all of them
+  reported as "Cancelled": the file fully overwritten at its original length (the token was checked at the top
+  of each pass, so pass one had already finished), the leading chunks zeroed with the rest still readable (the
+  token was also checked every 64 KB), and the file truncated to zero bytes but never deleted (the token was
+  checked by the flush that follows the final truncate). Cancellation is now decided only between passes, and
+  only while the file is still intact: once a byte has been written the pass in flight runs to completion, the
+  remaining passes are dropped, and the file is removed. The extra work is bounded by the rest of a single
+  pass.
+- **A cancelled folder is no longer reported as untouched.** Cancelling mid-folder raised an error that threw
+  away the count, so the whole folder showed "Cancelled" while the files already visited were gone for good.
+  The folder now returns what it did, and says so in plain English: how many files inside were destroyed
+  before you stopped, and that the rest are still there.
+- **The summary of a cancelled run is no longer blank.** Everything the run had to tell you — files left in
+  place, links deliberately skipped, a file finished with fewer passes — was collected and then discarded by
+  the cancellation path, which replaced it with the four words "Shredding cancelled." A stopped run now
+  reports the same counts and explanations a completed one does, and the items it did destroy are recorded in
+  the activity history rather than omitted.
+
+### Changed
+
+- **`ShredFileAsync` returns the number of passes that actually ran**, so the queue can tell "shredded as
+  asked" apart from "shredded with fewer passes because you cancelled" and word the difference.
+
 ## [1.112.3] - 2026-09-22
 
 **Charts drew on top of their own "nothing here yet" message.** On a PC with no temperature sensors, Resource

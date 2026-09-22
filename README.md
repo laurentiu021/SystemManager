@@ -908,7 +908,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Three shred methods: Quick (1 pass, zero fill), Standard (3 passes), Thorough (7 passes)
 - Cryptographically random overwrite data (RandomNumberGenerator)
 - Add files or entire folders via file picker dialogs
-- Progress tracking per-item with cancel support
+- Per-item progress, and **Cancel stops the queue rather than abandoning a file mid-overwrite.**
+  Nothing that has not started is touched; a file whose overwrite has already begun is finished
+  and removed, because once the first byte is replaced the original cannot come back — stopping
+  there would leave a file at its original name holding nothing while telling you the operation
+  was cancelled. The summary says how many items were destroyed before you stopped
 - Skips junction points and symbolic links (prevents symlink attacks)
 - Confirmation dialog before irreversible shred
 

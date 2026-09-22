@@ -8537,6 +8537,85 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No service may grow its own directory walk or its own reparse-point test. There is one
+    /// <c>SafeFileWalk</c>, and it is the only place the rules that make a walk safe are allowed to live.
+    /// </summary>
+    /// <remarks>
+    /// This is the guard the duplication needed and never had. There were five hand-copied walkers and four
+    /// private copies of <c>IsReparsePoint</c>, each with a comment claiming it mirrored the others, and two
+    /// separate rules had been added to one copy and not the rest — the reparse-point-FILE skip (#2376) and
+    /// the <c>MoveNext</c> guard (#2380). Per-service tests could never catch that: every copy passed its own.
+    /// <para>Bans the two shapes a new copy starts as — a private <c>IsReparsePoint</c>, and a recursive
+    /// <c>Stack&lt;string&gt;</c>/<c>Stack&lt;DirectoryInfo&gt;</c> walk over <c>EnumerateFiles</c> or
+    /// <c>GetFiles</c>. A one-directory <c>GetFiles</c> is fine and common; it is the stack that makes it a
+    /// tree walk, and a tree walk is what has to honour the boundary.</para>
+    /// <para><c>SafeFileWalk</c> itself is exempt, by being the implementation. The exemption is by path, so
+    /// a second file cannot claim it by adding the name to a comment.</para>
+    /// <para>Three scanners are exempt too, and listed rather than left to be discovered: they need a
+    /// per-DIRECTORY hook this walk does not offer — a throttled progress report naming the folder being
+    /// scanned. Migrating them means giving <c>SafeFileWalk</c> that hook, which is its own change and is
+    /// tracked separately. The list is deliberately explicit: adding a name to it is a decision someone has
+    /// to write down, which is exactly what the copied walkers never had to do.</para>
+    /// </remarks>
+    [Fact]
+    public void OnlySafeFileWalk_WalksATreeItMightDeleteFrom()
+    {
+        var appDir = FindAppProjectDir();
+        var theWalk = Path.Combine(appDir, "Helpers", "SafeFileWalk.cs");
+        Assert.True(File.Exists(theWalk),
+            $"SafeFileWalk.cs was not found at {theWalk} — this guard is named for a type that must exist.");
+
+        // Scanners whose walk reports progress per directory. Not "allowed to be unsafe" — they still skip
+        // reparse-point directories — but not yet routed through the shared walk.
+        string[] pendingMigration = ["DiskAnalyzerService.cs", "DuplicateFileService.cs", "LargeFileScanner.cs"];
+
+        var scanned = 0;
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)
+                                 && !string.Equals(f, theWalk, StringComparison.OrdinalIgnoreCase)
+                                 && !pendingMigration.Contains(Path.GetFileName(f))))
+        {
+            var code = WithoutComments(File.ReadAllText(file));
+            scanned++;
+            var name = Path.GetFileName(file);
+
+            if (Regex.IsMatch(code, @"\bbool\s+IsReparsePoint\s*\("))
+                offenders.Add($"{name}: declares its own IsReparsePoint — call SafeFileWalk.IsReparsePoint");
+
+            // A stack of directories PLUS a per-directory file listing is a tree walk. Either alone is not:
+            // plenty of code keeps a stack for unrelated reasons, and a single GetFiles on one known folder
+            // is ordinary.
+            var hasStack = Regex.IsMatch(code, @"Stack<(?:string|DirectoryInfo)>");
+            var listsFiles = Regex.IsMatch(code, @"\.(?:Enumerate|Get)(?:Files|Directories)\(");
+            if (hasStack && listsFiles)
+                offenders.Add($"{name}: walks a tree with its own stack — use SafeFileWalk.Files / "
+                    + "DirectoriesDeepestFirst, which carry the reparse boundary, the exclusions and the "
+                    + "MoveNext guard");
+        }
+
+        Assert.True(scanned > 100,
+            $"only {scanned} source files were scanned — the discovery is broken, so this guard would pass "
+            + "having inspected almost nothing.");
+
+        // The exemption list must stay live. A name on it that no longer walks a tree is a name nobody will
+        // remove, and the next file to take that name inherits a pass it never earned.
+        foreach (var exempt in pendingMigration)
+        {
+            var exemptPath = Path.Combine(appDir, "Services", exempt);
+            Assert.True(File.Exists(exemptPath),
+                $"{exempt} is exempted from this guard but no longer exists — drop it from the list.");
+            Assert.Matches(@"Stack<(?:string|DirectoryInfo)>", WithoutComments(File.ReadAllText(exemptPath)));
+        }
+
+        Assert.True(offenders.Count == 0,
+            "a second tree walk is growing, and that is how a safety rule goes missing from one copy:\n  - "
+            + string.Join("\n  - ", offenders));
+    }
+
+    /// <summary>
     /// The shredder's overwrite writes must not be cancellable: every <c>WriteAsync</c> / <c>FlushAsync</c>
     /// inside <c>ShredFileAsync</c> passes <c>CancellationToken.None</c>.
     /// </summary>
@@ -11629,78 +11708,81 @@ public partial class ArchitectureTests
             + $"TuneUpService.CleanTempFilesAsync instead of writing a third sweeper:\n  "
             + string.Join("\n  ", strays));
 
-        // The files to check: the two sanctioned sweepers, PLUS any other file that calls one of the
-        // walkers. Only TuneUpService's are reachable from outside (DeepCleanupService's are private), so an
-        // outside caller is always a `...SkippingReparsePoints` call — that is what makes discovery cheap and
-        // exact. Comments stripped before matching: the sweepers explain this rule in prose right beside the
-        // calls, so a guard that read comments would pass on code that had dropped the argument.
+        // The exclusions are no longer six repeated call-site arguments. Each temp-sweeping service declares
+        // one named SafeWalkOptions and hands it to every SafeFileWalk call, so there are two declarations to
+        // check and one way to get it wrong: passing a fresh `new SafeWalkOptions()` — which excludes nothing
+        // — where the named one belongs. Both halves are asserted, because either alone passes on the bug.
+        //
+        // BOTH exclusions, not either. OwnExtractionDirectory is one LEAF of BundleExtractionRoot, so on its
+        // own it spared this app's unpacked native libraries and left every other single-file .NET app's
+        // siblings under the same root to be deleted — the exact failure OwnExtractionDirectory's own
+        // documentation describes, inflicted on someone else. The leaf stays because for a non-single-file
+        // build BaseDirectory is the output folder, which no extraction root contains.
+        (string File, string Options)[] tempWalks =
+        [
+            ("TuneUpService.cs", "TempWalk"),
+            ("DeepCleanupService.cs", "CleanupWalk"),
+        ];
+
+        foreach (var (file, optionsName) in tempWalks)
+        {
+            var code = WithoutComments(File.ReadAllText(Path.Combine(appDir, "Services", file)));
+            var declaration = BalancedBlock(code, $"SafeWalkOptions {optionsName} {{ get; }} = new()");
+
+            Assert.True(declaration.Length > 20,
+                $"{file} no longer declares `SafeWalkOptions {optionsName}` in the shape this guard reads. If "
+                + "it was renamed or restructured, re-derive the check — a pass here would prove nothing.");
+
+            Assert.True(
+                declaration.Contains("SystemPaths.BundleExtractionRoot", StringComparison.Ordinal)
+                && declaration.Contains("SystemPaths.OwnExtractionDirectory", StringComparison.Ordinal),
+                $"{optionsName} in {file} excludes neither or only one extraction root, so the temp sweep can "
+                + "delete the .NET single-file extraction folder of this app or of another running one.");
+        }
+
+        // Every SafeFileWalk call in a file that sweeps or measures %TEMP% must use one of those named
+        // options. Discovered by looking for callers rather than from a fixed list: CleanupPreScanService
+        // began walking the temp tree and went unchecked for exactly that reason.
+        var namedOptions = tempWalks.Select(w => w.Options).ToArray();
         var callers = Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                                     StringComparison.Ordinal))
             .Select(f => (Path: f, Code: WithoutComments(File.ReadAllText(f))))
-            .Where(f => sweepers.Contains(Path.GetFileName(f.Path))
-                        || f.Code.Contains("SkippingReparsePoints(", StringComparison.Ordinal))
+            .Where(f => f.Code.Contains("SafeFileWalk.", StringComparison.Ordinal)
+                        && (sweepers.Contains(Path.GetFileName(f.Path))
+                            || namedOptions.Any(o => f.Code.Contains(o, StringComparison.Ordinal))))
             .ToList();
 
         foreach (var (path, code) in callers)
         {
-            foreach (var call in TempWalkerCall().Matches(code).Cast<Match>())
+            foreach (var call in SafeWalkCall().Matches(code).Cast<Match>())
             {
+                callsChecked++;
                 var args = call.Groups["args"].Value;
 
-                // Skip the declarations. Matching the bare type name was wrong: a call site passing
-                // `CancellationToken.None` contains it too, so both of CleanupPreScanService's calls were
-                // skipped as if they were declarations — the guard read them and checked nothing. A
-                // declaration is the type followed by a parameter NAME; a call is followed by a dot.
-                if (DeclaredCancellationParameter().IsMatch(args)) continue;
-
-                callsChecked++;
-                var where = $"{Path.GetFileName(path)}: {call.Value}";
-
-                // BOTH, not either. OwnExtractionDirectory is one LEAF of BundleExtractionRoot, so on
-                // its own it spared this app's unpacked native libraries and left every other
-                // single-file .NET app's siblings under the same root to be deleted — the exact failure
-                // OwnExtractionDirectory's own documentation describes, inflicted on someone else. The
-                // leaf stays because for a non-single-file build BaseDirectory is the output folder,
-                // which no extraction root contains.
-                Assert.True(args.Contains("SystemPaths.BundleExtractionRoot", StringComparison.Ordinal)
-                            && args.Contains("SystemPaths.OwnExtractionDirectory", StringComparison.Ordinal),
-                    $"this walker call passes neither or only one extraction exclusion — {where}");
+                Assert.True(namedOptions.Any(o => args.Contains(o, StringComparison.Ordinal)),
+                    $"{Path.GetFileName(path)} walks a temp tree with options that are not one of "
+                    + $"[{string.Join(", ", namedOptions)}] — {call.Value}. A bare `new SafeWalkOptions()` "
+                    + "excludes nothing, so this call can reach the extraction roots.");
             }
         }
 
-        // Vacuity floor, re-measured: six call sites across three files (four in the two sweepers, two in
-        // CleanupPreScanService). A collapse means the pattern or the declaration filter stopped matching,
-        // and this guard would then pass without reading a single call.
-        //
-        // It was seven until #1577. DeepCleanupService's scan and clean each walked files directly; both now
-        // go through EnumerateTargets, which owns the single walk and applies the per-bucket file filter, so
-        // two call sites became one. The floor moved because the population did, not because the pattern
-        // stopped matching — the distinction the message below asks the next reader to make.
+        // Vacuity floor, re-measured against the new shape: six calls across three files — TuneUpService and
+        // DeepCleanupService each make a Files and a DirectoriesDeepestFirst call, CleanupPreScanService makes
+        // two Files calls. Unchanged in count from the previous shape, which is the point: the exclusions
+        // moved from the arguments into a named options object without any call site disappearing.
         Assert.True(callsChecked >= 6,
-            $"only {callsChecked} walker calls were matched across {callers.Count} file(s) — the pattern no "
-            + "longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
+            $"only {callsChecked} SafeFileWalk calls were matched across {callers.Count} file(s) — the pattern "
+            + "no longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
             + "pass.");
     }
 
     /// <summary>
-    /// Matches a call to one of the temp-tree walkers and captures its argument list. Bounded to
-    /// argument lists without nested parentheses, which every current call site and declaration is.
+    /// Matches a <see cref="SysManager.Helpers.SafeFileWalk"/> call and captures its argument list. Bounded
+    /// to argument lists without nested parentheses, which every temp-sweeping call site is.
     /// </summary>
-    /// <remarks>
-    /// Deliberately loose on the name. DeepCleanupService's walkers are private and named plainly
-    /// (<c>EnumerateFiles</c>, <c>EnumerateDirectoriesDepthFirst</c>), so matching only
-    /// <c>...SkippingReparsePoints</c> silently dropped its three call sites — the vacuity floor is what
-    /// caught that. The <c>Directory.</c> lookbehind is what keeps the loose form from matching the BCL call
-    /// of the same name.
-    /// </remarks>
-    [GeneratedRegex(@"(?<!Directory\.)\bEnumerate(?:Files|Directories)\w*\((?<args>[^()]*)\)")]
-    private static partial Regex TempWalkerCall();
-
-    /// <summary>A <c>CancellationToken</c> PARAMETER, i.e. the type followed by a name — a declaration.</summary>
-    [GeneratedRegex(@"\bCancellationToken\s+\w")]
-    private static partial Regex DeclaredCancellationParameter();
-
+    [GeneratedRegex(@"SafeFileWalk\s*\.\s*(?:Files|DirectoriesDeepestFirst)\s*\((?<args>[^()]*)\)")]
+    private static partial Regex SafeWalkCall();
 
     /// <summary>
     /// A style that replaces a keyboard-operable control's template must still provide a focus visual.
@@ -13447,14 +13529,20 @@ public partial class ArchitectureTests
             + "bucket's path is then deleted, including Explorer's recent-files jump lists, which that "
             + "bucket's own scan never counted.");
 
-        // Directory.EnumerateFiles is the framework call inside the walker itself; the walk this is about
-        // is DeepCleanupService's own, which is unfiltered by design.
-        var directWalks = Regex.Matches(source, @"(?<!Directory\.)\bEnumerateFiles\(").Count;
-        Assert.True(directWalks == 2,
-            $"DeepCleanupService uses its raw EnumerateFiles walk {directWalks} times, and there are only "
-            + "two legitimate uses: the declaration, and the single call inside EnumerateTargets that "
-            + "applies the pattern filter. Anything else walks a bucket's files without filtering them — "
-            + "which for the Explorer bucket means deleting the user's jump lists.");
+        // The walk is unfiltered by design — the pattern is applied by EnumerateTargets, which wraps it —
+        // so exactly ONE place may call it. A second call reaches past the filter, which for the Explorer
+        // bucket means deleting the user's jump lists. Keyed on SafeFileWalk.Files now that the private
+        // walker is gone: the previous count of 2 included the declaration, which no longer lives here.
+        var fileWalks = Regex.Matches(source, @"SafeFileWalk\s*\.\s*Files\(").Count;
+        Assert.True(fileWalks == 1,
+            $"DeepCleanupService calls SafeFileWalk.Files {fileWalks} times, and there is one legitimate "
+            + "call: the one inside EnumerateTargets that applies the per-bucket pattern filter. Anything "
+            + "else walks a bucket's files without filtering them.");
+
+        var targets = WithoutComments(MemberSlice(source, "private static IEnumerable<string> EnumerateTargets"));
+        Assert.True(targets.Contains("SafeFileWalk.Files(", StringComparison.Ordinal),
+            "the one SafeFileWalk.Files call is no longer inside EnumerateTargets, so the walk and the "
+            + "pattern filter have come apart — which is the defect this guard exists for, not a rename.");
     }
 
     /// <summary>
@@ -13650,8 +13738,7 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// The cleanup walk must ABANDON a directory whose enumerator throws, not retry it. A throwing
-    /// <c>MoveNext</c> does not advance, so retrying it is an infinite loop.
+    /// The cleanup walk must absorb a directory listing that throws from <c>MoveNext</c>, not let it escape.
     /// </summary>
     /// <remarks>
     /// This was live code, and only a proof mutation reached it: 900 seconds of nothing on a run that takes
@@ -13664,33 +13751,55 @@ public partial class ArchitectureTests
     /// <c>Directory.Exists</c>. #1577 is what made a path that names a FILE legitimate (<c>MEMORY.DMP</c>),
     /// so the distance between this walker and a hang is now one edit, and nothing else would catch it: a
     /// spin fails no assertion, it just never finishes.</para>
-    /// <para>The two <c>catch (…) { continue; }</c> arms guarding the <c>EnumerateFiles</c> CALL are
-    /// deliberately untouched and must stay <c>continue</c> — they sit on the outer loop, where continuing
-    /// means "take the next directory off the stack", which is real progress. So this matches the shape
-    /// around <c>MoveNext</c> rather than banning the string.</para>
+    /// <para>Outer-loop <c>continue</c> arms elsewhere are legitimate and untouched — there, continuing means
+    /// "take the next directory off the stack", which is real progress. So this matches the shape around
+    /// <c>MoveNext</c> rather than banning the string.</para>
+    /// <para>It now lives in <c>SafeFileWalk</c>, which is the point of that type existing: the guarded
+    /// <c>MoveNext</c> was in one of five copied walkers, and <c>TuneUpService</c>'s copy iterated bare — so
+    /// one unreadable entry escaped the walk and ended the cleanup of an entire temp root (#2380).</para>
     /// </remarks>
     [Fact]
     public void TheCleanupWalk_AbandonsADirectoryWhoseEnumeratorThrows()
     {
-        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
-        Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
+        var path = Path.Combine(FindAppProjectDir(), "Helpers", "SafeFileWalk.cs");
+        Assert.True(File.Exists(path), $"SafeFileWalk.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
-        var match = Regex.Match(
-            source,
-            @"try \{ if \(!enumerator\.MoveNext\(\)\) break; item = enumerator\.Current; \}\s*"
-            + @"catch \([^)]*\) \{ (?<first>\w+); \}\s*catch \([^)]*\) \{ (?<second>\w+); \}");
+        // ── 1. The iteration itself sits inside the try ──
+        // This is the shape that does the work, and asserting anything else here was vacuous: an earlier
+        // draft of this guard pinned a try/catch around MoveNext INSIDE the try below, which a mutation
+        // proved redundant — removing it changed no behaviour, because the enclosing try already absorbed
+        // the throw. What cannot be removed is the iteration being enclosed at all.
+        var helper = WithoutComments(MemberSlice(source, "internal static List<T> EnumerateGuarded<T>"));
+        Assert.True(helper.Length > 150,
+            $"the EnumerateGuarded slice is {helper.Length} chars — not the method. Re-derive this guard "
+            + "rather than letting it pass having read nothing.");
 
-        Assert.True(match.Success,
-            "the MoveNext try/catch this guard is about was not found in DeepCleanupService. If the walk was "
-            + "rewritten, re-derive the check against the new shape — a pass here currently means nothing.");
+        // The ITERATION, not merely the call that creates the enumerator. Asserting the call alone is the
+        // defect itself dressed as a check: `try { source = enumerate(); } catch {...} foreach (… in source)`
+        // satisfies "enumerate() appears inside a try" while leaving every MoveNext unguarded, which is
+        // precisely the shape TuneUpService had.
+        var guarded = BalancedBlock(helper, "try");
+        Assert.Matches(@"foreach \([^)]*\bin enumerate\(\)\)", guarded);
 
-        var arms = new[] { match.Groups["first"].Value, match.Groups["second"].Value };
-        Assert.True(arms.All(a => a == "break"),
-            $"the walk retries a directory whose enumerator threw (arms: {string.Join(", ", arms)}). MoveNext "
-            + "does not advance when it throws — measured, it threw the same IOException ten times out of ten "
-            + "over a path that is a file — so `continue` here spins forever inside while(true), and the "
-            + "cancellation token is only checked on the outer loop. Use break: the directory is finished.");
+        var afterTry = helper[(helper.IndexOf(guarded, StringComparison.Ordinal) + guarded.Length)..];
+        Assert.True(afterTry.Contains("catch (IOException", StringComparison.Ordinal)
+                    && afterTry.Contains("catch (UnauthorizedAccessException", StringComparison.Ordinal),
+            "the enclosing try no longer catches both IOException and UnauthorizedAccessException, so one of "
+            + "the two ways a directory listing fails now escapes the walk.");
+
+        // ── 2. Nothing bypasses the helper ──
+        // Every directory listing in the walk must go through EnumerateGuarded. A second call that iterates
+        // dir.EnumerateFiles directly is unguarded again, and it would look entirely ordinary.
+        var listings = Regex.Matches(source, @"\bdir\.Enumerate(?:Files|Directories)\b").Count;
+        var viaHelper = Regex.Matches(source, @"\bEnumerateGuarded\(").Count;
+
+        Assert.True(listings >= 3,
+            $"only {listings} directory listings were found in SafeFileWalk, expected at least 3 (files and "
+            + "subdirectories in Files, subdirectories in DirectoriesDeepestFirst) — the pattern no longer "
+            + "matches the code it polices.");
+
+        Assert.Equal(listings, viaHelper);
     }
 
     /// <summary>

@@ -21,13 +21,13 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
     // profile with no override. As statics these two were called for real, walking the entire temp tree and
     // every per-SID Recycle Bin folder, and that guard sat there for twenty minutes. They return a size LABEL
     // rather than a path, so it was not even reporting anything — pure collateral cost.
-    // Both walks go through TuneUpService's walker rather than SearchOption.AllDirectories, which was wrong
-    // three ways at once. AllDirectories throws UnauthorizedAccessException out of MoveNext(), and the catch
-    // has to sit outside the foreach — so one protected subfolder ended the whole walk and the headline
-    // reported whatever had been summed up to that point, silently low. It also follows junctions, so bytes
-    // living outside the tree counted as freeable; in the Recycle Bin that is the common case, because
-    // deleting a junction puts a reparse point IN the bin. And the temp figure has to exclude what the sweep
-    // refuses to delete, or it promises space Clean TEMP will correctly leave alone.
+    // Both walks go through SafeFileWalk rather than SearchOption.AllDirectories, which was wrong three ways
+    // at once. AllDirectories throws UnauthorizedAccessException out of MoveNext(), and the catch has to sit
+    // outside the foreach — so one protected subfolder ended the whole walk and the headline reported
+    // whatever had been summed up to that point, silently low. It also follows junctions, so bytes living
+    // outside the tree counted as freeable; in the Recycle Bin that is the common case, because deleting a
+    // junction puts a reparse point IN the bin. And the temp figure has to exclude what the sweep refuses to
+    // delete, or it promises space Clean TEMP will correctly leave alone.
     private string MeasureTemp()
     {
         var paths = new[]
@@ -36,13 +36,12 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
             Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
         };
 
-        // The same two exclusions CleanTempFilesAsync passes, for the same reason: this number describes
-        // what that method would free, and it skips both extraction roots.
+        // TuneUpService.TempWalk, not a second copy of its exclusions: this number claims to describe what
+        // CleanTempFilesAsync would free, which is only true while both walk the same set.
         var bytes = paths
             .Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p))
-            .Sum(path => SumFileLengths(TuneUpService.EnumerateFilesSkippingReparsePoints(
-                path, CancellationToken.None,
-                SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory)));
+            .Sum(path => SumFileLengths(
+                SafeFileWalk.Files(path, CancellationToken.None, TuneUpService.TempWalk)));
 
         return Describe(bytes, "can be freed");
     }
@@ -59,9 +58,8 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
             foreach (var path in RecycleBinHelper.CurrentUserBinPaths())
             {
                 if (!Directory.Exists(path)) continue;
-                bytes += SumFileLengths(TuneUpService.EnumerateFilesSkippingReparsePoints(
-                    path, CancellationToken.None,
-                    SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory));
+                bytes += SumFileLengths(
+                    SafeFileWalk.Files(path, CancellationToken.None, TuneUpService.TempWalk));
             }
 
             return Describe(bytes, "in Recycle Bin");

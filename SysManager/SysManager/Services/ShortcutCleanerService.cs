@@ -40,7 +40,7 @@ public sealed partial class ShortcutCleanerService
 
             progress?.Report($"Scanning {label}...");
 
-            foreach (var lnk in EnumerateLnkFilesSafe(path, ct))
+            foreach (var lnk in SafeFileWalk.Files(path, ct, LnkWalk))
             {
                 if (ct.IsCancellationRequested) break;
 
@@ -83,51 +83,16 @@ public sealed partial class ShortcutCleanerService
     }
 
     /// <summary>
-    /// Recursively enumerates <c>*.lnk</c> files under <paramref name="root"/>, tolerating
-    /// per-directory access errors. <see cref="Directory.EnumerateFiles(string, string, SearchOption)"/>
-    /// with <see cref="SearchOption.AllDirectories"/> throws mid-iteration the first time it hits
-    /// a folder it can't read (e.g. a protected Start-Menu subfolder), which previously aborted
-    /// the entire scan for that location and silently dropped every shortcut after it. This walks
-    /// the tree directory-by-directory so one unreadable folder is skipped, not the whole scan.
-    /// Reparse points (junctions/symlinks) are skipped to avoid following links out of the tree.
+    /// How the shortcut scan walks: <c>*.lnk</c> only, no exclusions.
     /// </summary>
-    internal static IEnumerable<string> EnumerateLnkFilesSafe(string root, CancellationToken ct)
-    {
-        Stack<string> stack = [];
-        stack.Push(root);
-
-        while (stack.Count > 0)
-        {
-            if (ct.IsCancellationRequested) yield break;
-            var dir = stack.Pop();
-
-            string[] files;
-            try { files = Directory.GetFiles(dir, "*.lnk"); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-
-            foreach (var f in files)
-                yield return f;
-
-            string[] subDirs;
-            try { subDirs = Directory.GetDirectories(dir); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-
-            foreach (var sub in subDirs)
-            {
-                // Skip reparse points so a junction can't redirect the walk outside the tree.
-                try
-                {
-                    if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) continue;
-                }
-                catch (IOException) { continue; }
-                catch (UnauthorizedAccessException) { continue; }
-
-                stack.Push(sub);
-            }
-        }
-    }
+    /// <remarks>
+    /// Through <see cref="SafeFileWalk"/> rather than
+    /// <see cref="Directory.EnumerateFiles(string, string, SearchOption)"/> with
+    /// <see cref="SearchOption.AllDirectories"/>, which throws mid-iteration the first time it hits a folder
+    /// it cannot read (a protected Start-Menu subfolder, say) — that aborted the entire scan for a location
+    /// and silently dropped every shortcut after it.
+    /// </remarks>
+    private static SafeWalkOptions LnkWalk { get; } = new() { SearchPattern = "*.lnk" };
 
     /// <summary>
     /// Deletes selected shortcuts. Returns count of successfully deleted items.

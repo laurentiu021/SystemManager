@@ -10,6 +10,42 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.5] - 2026-09-22
+
+**Five copies of the same directory walk, and two safety rules that only lived in one of them.** Every part
+of the app that deletes files — Deep Cleanup, Quick Cleanup, the temp sweep, Browser Cleaner, Shortcut
+Cleaner, File Shredder — walked folders with its own hand-copied loop. Each copy had a comment saying it
+mirrored the others, and two rules had since been added to one and not the rest. They are now one walk, so a
+rule added to it is a rule every one of them gets.
+
+### Fixed
+
+- **Deep Cleanup stripped a file's Hidden and System attributes when it could not delete it.** Clearing
+  attributes before a delete is correct, but it was clearing *all* of them rather than the one that blocks a
+  delete, and the file it failed on then stayed on disk without them. Explorer's thumbnail and icon caches
+  are hidden system files that Explorer holds open, so the bucket that cleans them did this on every run.
+- **One unreadable entry could end the whole temp clean.** A folder listing can fail part-way through
+  rather than at the start, and the temp sweep let that stop it entirely — silently, reporting the space it
+  had freed up to that point as a finished clean. `%TEMP%` is the busiest folder on a Windows machine, with
+  other programs creating and deleting files in it while the sweep runs, which is exactly when a file stops
+  being readable between being listed and being opened. A folder that fails now costs that folder, not the
+  rest of the drive.
+- **A shortcut to a file, inside a folder being cleaned, was counted as its target's size.** Windows lets
+  a file be a link to another file, and deleting the link never touches what it points at — so the space
+  reported as reclaimable included bytes no delete could free. Links are now left alone by every cleaner,
+  which is what File Shredder already did.
+
+### Changed
+
+- **The reparse-point, exclusion, cancellation and enumerator rules live in one place.** Five walkers and
+  four copies of the same "is this a link?" test became one `SafeFileWalk`, and a test now fails the build
+  if a service grows its own tree walk again. Three read-only scanners (Disk Analyzer, Duplicate Finder,
+  Large Files) keep theirs for now, because they report progress per folder — they are a named, asserted
+  exemption rather than an oversight.
+- **Deep Cleanup and the temp sweep are slightly faster.** The old copies asked Windows for each
+  subdirectory's attributes a second time to test it; the shared walk reads them from the listing the OS
+  already returned.
+
 ## [1.112.4] - 2026-09-22
 
 **Cancelling a shred could destroy the file and then tell you nothing had happened.** File Shredder read

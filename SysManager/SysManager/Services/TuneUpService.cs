@@ -181,11 +181,7 @@ public sealed class TuneUpService
             ct.ThrowIfCancellationRequested();
             try
             {
-                // Walk manually and NEVER descend into reparse points (junctions /
-                // symbolic links). SearchOption.AllDirectories follows them, so a
-                // junction inside %TEMP% pointing elsewhere would let this delete real
-                // user data outside TEMP. Mirrors DeepCleanupService's safe traversal.
-                foreach (var file in EnumerateFilesSkippingReparsePoints(dir, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+                foreach (var file in SafeFileWalk.Files(dir, ct, TempWalk))
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -200,11 +196,9 @@ public sealed class TuneUpService
                     catch (UnauthorizedAccessException) { errors++; }
                 }
 
-                // Try to remove empty subdirectories, deepest first. Reparse points are
-                // excluded so a junction is never deleted/recursed as if it were a real
-                // directory. Depth = separator count (a deeper path can be shorter).
-                foreach (var sub in EnumerateDirectoriesSkippingReparsePoints(dir, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory)
-                             .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar)))
+                // Remove the emptied subdirectories, deepest first — the order the walk already returns,
+                // so there is no re-sort here to get wrong.
+                foreach (var sub in SafeFileWalk.DirectoriesDeepestFirst(dir, ct, TempWalk))
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -230,76 +224,14 @@ public sealed class TuneUpService
     }
 
     /// <summary>
-    /// Enumerates files under <paramref name="root"/> without ever descending into
-    /// reparse points (junctions / symbolic links), so cleanup can never follow a
-    /// link out of the temp tree and delete unrelated user data. Internal for testing.
+    /// How the temp sweep walks: reparse-point-safe, and never into the folder single-file .NET apps
+    /// unpack themselves into. Shared with <see cref="CleanupPreScanService"/> so the size it shows the
+    /// user is measured over exactly the files the clean would delete.
     /// </summary>
-    /// <param name="excludeSubtree">
-    /// A directory tree to skip entirely, or null for none. The temp sweep passes
-    /// <see cref="SystemPaths.OwnExtractionDirectory"/> so it cannot delete the running build's own
-    /// files.
-    /// </param>
-    internal static IEnumerable<string> EnumerateFilesSkippingReparsePoints(
-        string root, CancellationToken ct, params string?[] excludeSubtrees)
+    internal static SafeWalkOptions TempWalk { get; } = new()
     {
-        // Guard the traversal ROOT too: if the root itself is a junction/symlink,
-        // descending into it would follow the link out of the temp tree and yield
-        // (then delete) unrelated files — amplified when running elevated. Child dirs
-        // are already filtered below; the root needs the same check.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) yield break;
-        var stack = new Stack<string>();
-        stack.Push(root);
-        while (stack.Count > 0 && !ct.IsCancellationRequested)
-        {
-            var cur = stack.Pop();
-            IEnumerable<string> files;
-            IEnumerable<string> dirs;
-            try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
-            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
-
-            foreach (var file in files)
-                yield return file;
-
-            foreach (var d in dirs)
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
-        }
-    }
-
-    /// <summary>
-    /// Enumerates sub-directories under <paramref name="root"/> (excluding the root),
-    /// skipping reparse points so a junction is never deleted or recursed as a real dir.
-    /// </summary>
-    private static IEnumerable<string> EnumerateDirectoriesSkippingReparsePoints(
-        string root, CancellationToken ct, params string?[] excludeSubtrees)
-    {
-        List<string> all = [];
-        // Same root guard as EnumerateFilesSkippingReparsePoints: never recurse a
-        // junction/symlink root out of the temp tree.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) return all;
-        var stack = new Stack<string>();
-        stack.Push(root);
-        while (stack.Count > 0 && !ct.IsCancellationRequested)
-        {
-            var cur = stack.Pop();
-            IEnumerable<string> dirs;
-            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
-            foreach (var d in dirs)
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) { stack.Push(d); all.Add(d); }
-        }
-        return all;
-    }
-
-
-    /// <summary>True when the directory is a reparse point (junction or symbolic link).</summary>
-    private static bool IsReparsePoint(string path)
-    {
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
-        }
-        catch (IOException) { return true; }
-        catch (UnauthorizedAccessException) { return true; }
-    }
+        ExcludeSubtrees = [SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory],
+    };
 
     // ── Recycle Bin ────────────────────────────────────────────────────
 

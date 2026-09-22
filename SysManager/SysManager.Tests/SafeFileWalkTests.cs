@@ -26,6 +26,27 @@ public class SafeFileWalkTests
     private static string NewTempRoot() =>
         Path.Combine(Path.GetTempPath(), "smwalk_" + Guid.NewGuid().ToString("N"));
 
+    // Creating a symlink needs Developer Mode or elevation. Assert.Skip, not a bare `return`: a silent
+    // return is indistinguishable from a pass, so nothing would have told anyone whether these three cases
+    // ever ran on any machine. A reported skip shows up in the run summary's `skipped:` count, which is what
+    // makes "it runs in CI" a measured fact rather than an assumption.
+    private const string NoLinks =
+        "creating a symbolic link needs Developer Mode or elevation, and this machine has neither";
+
+    private static bool TryLinkDirectory(string link, string target)
+    {
+        try { Directory.CreateSymbolicLink(link, target); return true; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
+    private static bool TryLinkFile(string link, string target)
+    {
+        try { File.CreateSymbolicLink(link, target); return true; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     // ---------- reparse points: directories, the root, and files ----------
 
     [Fact]
@@ -43,9 +64,7 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(temp, "file.txt"), "ordinary file");
 
         var link = Path.Combine(temp, "link");
-        try { Directory.CreateSymbolicLink(link, real); }
-        catch (IOException) { Directory.Delete(root, recursive: true); return; }
-        catch (UnauthorizedAccessException) { Directory.Delete(root, recursive: true); return; }
+        if (!TryLinkDirectory(link, real)) { Directory.Delete(root, recursive: true); Assert.Skip(NoLinks); }
 
         try
         {
@@ -81,9 +100,7 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(outside, "secret.txt"), "must never be enumerated");
 
         var rootLink = Path.Combine(baseDir, "rootlink");
-        try { Directory.CreateSymbolicLink(rootLink, outside); }
-        catch (IOException) { Directory.Delete(baseDir, recursive: true); return; }
-        catch (UnauthorizedAccessException) { Directory.Delete(baseDir, recursive: true); return; }
+        if (!TryLinkDirectory(rootLink, outside)) { Directory.Delete(baseDir, recursive: true); Assert.Skip(NoLinks); }
 
         try
         {
@@ -114,9 +131,7 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(walked, "ordinary.dat"), "a real file");
 
         var link = Path.Combine(walked, "link.dat");
-        try { File.CreateSymbolicLink(link, target); }
-        catch (IOException) { Directory.Delete(root, recursive: true); return; }
-        catch (UnauthorizedAccessException) { Directory.Delete(root, recursive: true); return; }
+        if (!TryLinkFile(link, target)) { Directory.Delete(root, recursive: true); Assert.Skip(NoLinks); }
 
         try
         {

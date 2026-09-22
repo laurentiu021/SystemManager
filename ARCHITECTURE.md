@@ -410,6 +410,21 @@ Key services:
   filter exists only for Deep Cleanup, whose default is *measured*: an empty category was unticked
   by the scan, not the user, so it takes the default again once it has content. The other five
   default from constants and pass null.
+- `Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
+  finds goes through. Four rules live here rather than at eight copies of a stack loop: never enter a
+  reparse point (the root, a directory, **or a file**), skip the excluded subtrees, honour the
+  cancellation token between directories, and absorb a listing that throws from `MoveNext` rather
+  than from the call that created the enumerator. It exists because there WERE five copies, each
+  with a comment claiming it mirrored the others, and two of those four rules had been added to one
+  copy and not the rest — the reparse-point-file skip and the `MoveNext` guard. Per-service tests
+  could not see it: every copy passed its own. `EnumerateGuarded` returns a list rather than yielding,
+  and that is load-bearing — a `yield return` cannot sit inside a `try` with a `catch`, which is
+  exactly why four of the five copies never enclosed their own iteration. `SafeWalkOptions` is a
+  record rather than optional parameters so no caller can bind an exclusion path to the search
+  pattern by position. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
+  `LargeFileScanner`) still keep their own walk: they report progress per directory, which this walk
+  does not offer yet. That exemption is a named list in `ArchitectureTests`, asserted to stay live,
+  rather than something a reader has to notice.
 - `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
   because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
   safe for numbers and fixed-format timestamps but not for the app names, setting descriptions

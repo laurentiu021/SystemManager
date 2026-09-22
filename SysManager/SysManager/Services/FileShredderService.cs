@@ -8,6 +8,7 @@ using System.Security;
 using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -228,19 +229,21 @@ public sealed partial class FileShredderService
         if (!Directory.Exists(folderPath))
             throw new DirectoryNotFoundException($"Folder not found: {folderPath}");
 
-        // A junction/symlink AT THE ROOT would make EnumerateFilesSafe follow it into the
-        // link target and shred files OUTSIDE the selected folder — the reparse-point skip in
-        // EnumerateFilesSafe only guards CHILD entries, never the root it starts enumerating
-        // from. Refuse a reparse-point root; the user must select the real target folder to
-        // shred it. (SecurityException is already the shred services' "not allowed" signal and
-        // is handled by the caller.)
+        // Refuse a reparse-point root outright, rather than relying on SafeFileWalk quietly yielding
+        // nothing for one. The walk declining to enter it is correct but silent, and for a shred the
+        // difference matters: the user asked for this folder to be destroyed, so "there was nothing to do"
+        // is the wrong answer to "that is a link to data outside your selection". They must pick the real
+        // target. (SecurityException is already the shred services' "not allowed" signal and is handled by
+        // the caller.)
         if ((new DirectoryInfo(folderPath).Attributes & FileAttributes.ReparsePoint) != 0)
             throw new SecurityException(
                 $"The selected folder is a junction or symlink; shredding it would destroy data at its target outside the selected location: {folderPath}");
 
         // Links the walk refuses to follow. Collected rather than silently dropped: see ShredFolderReport.
         List<string> skippedLinks = [];
-        var files = EnumerateFilesSafe(folderPath, skippedLinks);
+        var files = SafeFileWalk
+            .Files(folderPath, ct, new SafeWalkOptions { SkippedLinks = skippedLinks })
+            .ToList();
         var totalFiles = files.Count;
 
         // Files whose secure overwrite did NOT complete (denied, locked, hard-linked, …). We
@@ -316,15 +319,17 @@ public sealed partial class FileShredderService
         // We only ever remove EMPTY directories (recursive:false), so this can never plain-delete
         // an un-overwritten file — the bug this replaces (the old recursive delete did).
         //
-        // The directory list comes from EnumerateDirectoriesSafe, which skips junctions and
-        // symlinks exactly like EnumerateFilesSafe. The framework's recursive enumerator
-        // (Directory.EnumerateDirectories with AllDirectories) would instead DESCEND THROUGH a
-        // child junction and hand TryRemoveIfEmpty a path at the link's target, letting
-        // Directory.Delete remove an empty directory OUTSIDE the selected folder. Sharing the
-        // file walk's reparse boundary confines cleanup to the real tree; a folder that contains
-        // a child junction is intentionally left in place rather than descended into.
-        foreach (var dir in EnumerateDirectoriesSafe(folderPath, [])
-                     .OrderByDescending(d => d.Count(c => c == Path.DirectorySeparatorChar)))
+        // The directory list comes from the same SafeFileWalk as the files, so it honours the same reparse
+        // boundary — that is the point of sharing it. The framework's recursive enumerator
+        // (Directory.EnumerateDirectories with AllDirectories) would instead DESCEND THROUGH a child
+        // junction and hand TryRemoveIfEmpty a path at the link's target, letting Directory.Delete remove an
+        // empty directory OUTSIDE the selected folder. A folder that contains a child junction is
+        // intentionally left in place rather than descended into.
+        //
+        // No SkippedLinks sink here, deliberately: this walk skips a SUBSET of what the file walk skips
+        // (directories only, not link files), so reporting from it as well would under-count and
+        // double-count at the same time.
+        foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions()))
         {
             TryRemoveIfEmpty(dir);
         }
@@ -370,109 +375,6 @@ public sealed partial class FileShredderService
         }
         catch (IOException ex) { Log.Debug(ex, "Shredder: could not remove directory {Dir}", dir); }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied removing directory {Dir}", dir); }
-    }
-
-    /// <summary>
-    /// Recursively enumerates files while skipping directories that are junctions or symlinks
-    /// (reparse points) to prevent traversal attacks.
-    /// </summary>
-    /// <param name="rootPath">Folder to walk. Its own reparse-point status is checked by the caller.</param>
-    /// <param name="skippedLinks">
-    /// Receives every link this walk refused to follow. The skip is the safe behaviour, but the caller has
-    /// to be able to tell the user about it: a folder holding a skipped link is not emptied, so reporting
-    /// the shred as complete without mentioning it would leave the user believing data was destroyed when
-    /// it is still there. Previously these skips were recorded nowhere at all, not even at Debug level.
-    /// </param>
-    private static List<string> EnumerateFilesSafe(string rootPath, List<string> skippedLinks)
-    {
-        List<string> results = [];
-        Stack<DirectoryInfo> stack = [];
-        stack.Push(new DirectoryInfo(rootPath));
-
-        while (stack.Count > 0)
-        {
-            var dir = stack.Pop();
-
-            FileInfo[] files;
-            try { files = dir.GetFiles(); }
-            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
-            catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
-
-            // Skip symlink/hardlink files: shredding would overwrite the LINK TARGET
-            // (which may live outside the selected folder), so only real files in the
-            // tree are collected — mirrors the reparse-point skip on directories below.
-            foreach (var file in files)
-            {
-                if ((file.Attributes & FileAttributes.ReparsePoint) == 0)
-                    results.Add(file.FullName);
-                else
-                    skippedLinks.Add(file.FullName);
-            }
-
-            DirectoryInfo[] subDirs;
-            try { subDirs = dir.GetDirectories(); }
-            catch (UnauthorizedAccessException) { continue; }
-            catch (IOException) { continue; }
-
-            // Skip junctions/symlinks to avoid following reparse points out of the tree.
-            foreach (var sub in subDirs)
-            {
-                if ((sub.Attributes & FileAttributes.ReparsePoint) == 0)
-                    stack.Push(sub);
-                else
-                    skippedLinks.Add(sub.FullName);
-            }
-        }
-
-        return results;
-    }
-
-    /// <summary>
-    /// Recursively enumerates sub-directories while skipping junctions and symlinks
-    /// (reparse points), mirroring <see cref="EnumerateFilesSafe"/>. Used to clean up the
-    /// emptied directory structure after a folder shred WITHOUT ever descending through a
-    /// reparse point: a child junction is left untouched, so the deepest-first
-    /// <see cref="TryRemoveIfEmpty"/> pass can never reach — and delete — an empty directory
-    /// at the link's target, outside the selected folder.
-    /// </summary>
-    /// <param name="rootPath">Folder to walk.</param>
-    /// <param name="skippedLinks">
-    /// Present so both walks share one signature and one boundary. The cleanup pass discards it: this
-    /// walk skips a subset of what <see cref="EnumerateFilesSafe"/> skips (directories only, not link
-    /// files), so reporting from here as well would under-count and double-count at the same time.
-    /// </param>
-    private static List<string> EnumerateDirectoriesSafe(string rootPath, List<string> skippedLinks)
-    {
-        List<string> results = [];
-        Stack<DirectoryInfo> stack = [];
-        stack.Push(new DirectoryInfo(rootPath));
-
-        while (stack.Count > 0)
-        {
-            var dir = stack.Pop();
-
-            DirectoryInfo[] subDirs;
-            try { subDirs = dir.GetDirectories(); }
-            catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied enumerating {Dir}", dir.FullName); continue; }
-            catch (IOException ex) { Log.Debug(ex, "Shredder: I/O error enumerating {Dir}", dir.FullName); continue; }
-
-            // Skip junctions/symlinks — never descend through a reparse point (identical
-            // boundary to EnumerateFilesSafe, so cleanup honors the exact scope that was shredded).
-            foreach (var sub in subDirs)
-            {
-                if ((sub.Attributes & FileAttributes.ReparsePoint) == 0)
-                {
-                    results.Add(sub.FullName);
-                    stack.Push(sub);
-                }
-                else
-                {
-                    skippedLinks.Add(sub.FullName);
-                }
-            }
-        }
-
-        return results;
     }
 
     private static void ValidatePath(string path)

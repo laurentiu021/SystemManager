@@ -4,6 +4,7 @@
 
 using System.IO;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -66,7 +67,7 @@ public sealed class BrowserCleanerService
     private IEnumerable<Def> ExpandChromiumDefs(string browser, string userDataRel)
     {
         var userDataAbs = Path.Combine(_localAppData, userDataRel);
-        if (!Directory.Exists(userDataAbs) || IsReparsePoint(userDataAbs)) yield break;
+        if (!Directory.Exists(userDataAbs) || SafeFileWalk.IsReparsePoint(userDataAbs)) yield break;
 
         string[] candidates;
         try { candidates = Directory.GetDirectories(userDataAbs); }
@@ -81,7 +82,7 @@ public sealed class BrowserCleanerService
                      .OrderBy(name => IsDefaultProfile(name!) ? 0 : 1)
                      .ThenBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
-            if (IsReparsePoint(Path.Combine(userDataAbs, dir!))) continue;
+            if (SafeFileWalk.IsReparsePoint(Path.Combine(userDataAbs, dir!))) continue;
 
             // Name the profile in the Browser column so the user can see WHICH Chrome is being
             // cleaned — the thing a flat "Google Chrome" checkbox in other cleaners never tells her.
@@ -175,7 +176,7 @@ public sealed class BrowserCleanerService
     {
         const string profilesRel = @"Mozilla\Firefox\Profiles";
         var profilesAbs = Path.Combine(_roamingAppData, profilesRel);
-        if (!Directory.Exists(profilesAbs) || IsReparsePoint(profilesAbs)) yield break;
+        if (!Directory.Exists(profilesAbs) || SafeFileWalk.IsReparsePoint(profilesAbs)) yield break;
 
         string[] profileDirs;
         try { profileDirs = Directory.GetDirectories(profilesAbs); }
@@ -212,7 +213,7 @@ public sealed class BrowserCleanerService
     {
         const string profilesRel = @"Mozilla\Firefox\Profiles";
         var profilesAbs = Path.Combine(_localAppData, profilesRel);
-        if (!Directory.Exists(profilesAbs) || IsReparsePoint(profilesAbs)) yield break;
+        if (!Directory.Exists(profilesAbs) || SafeFileWalk.IsReparsePoint(profilesAbs)) yield break;
 
         string[] profileDirs;
         try { profileDirs = Directory.GetDirectories(profilesAbs); }
@@ -311,11 +312,11 @@ public sealed class BrowserCleanerService
         {
             // Skip reparse-point leaves (a file/dir symlink or junction): following one
             // could measure — and later delete — data outside the browser's own tree.
-            if (IsReparsePoint(path)) return (0, 0);
+            if (SafeFileWalk.IsReparsePoint(path)) return (0, 0);
             if (File.Exists(path)) return (SafeLength(path), 1);
             if (!Directory.Exists(path)) return (0, 0);
             long size = 0; var files = 0;
-            foreach (var file in SafeEnumerateFiles(path, ct))
+            foreach (var file in SafeFileWalk.Files(path, ct, ProfileWalk))
             {
                 if (ct.IsCancellationRequested) break;
                 size += SafeLength(file);
@@ -336,14 +337,14 @@ public sealed class BrowserCleanerService
             // removes the link, but a junction standing in for an expected directory leaf
             // would otherwise be recursed into and its target's files deleted — data loss
             // outside the browser tree. Fail-closed IsReparsePoint is the gate (see below).
-            if (IsReparsePoint(path)) return 0;
+            if (SafeFileWalk.IsReparsePoint(path)) return 0;
             if (File.Exists(path))
             {
                 if (TryDeleteFile(path)) deleted++;
                 return deleted;
             }
             if (!Directory.Exists(path)) return 0;
-            foreach (var file in SafeEnumerateFiles(path, ct))
+            foreach (var file in SafeFileWalk.Files(path, ct, ProfileWalk))
             {
                 if (ct.IsCancellationRequested) break;
                 if (TryDeleteFile(file)) deleted++;
@@ -369,39 +370,7 @@ public sealed class BrowserCleanerService
     }
 
     /// <summary>
-    /// True when the path is a reparse point (junction or symbolic link). Fails SAFE:
-    /// returns true when the attributes can't be read, so an unreadable entry is treated
-    /// as a link and skipped rather than followed/deleted. Mirrors
-    /// <see cref="DeepCleanupService"/> and <see cref="FileShredderService"/>.
+    /// How a browser path is walked. No exclusions: a browser profile is never inside an extraction root.
     /// </summary>
-    private static bool IsReparsePoint(string path)
-    {
-        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
-        catch (IOException) { return true; }
-        catch (UnauthorizedAccessException) { return true; }
-    }
-
-    private static IEnumerable<string> SafeEnumerateFiles(string root, CancellationToken ct)
-    {
-        var stack = new Stack<string>();
-        stack.Push(root);
-        while (stack.Count > 0)
-        {
-            if (ct.IsCancellationRequested) yield break;
-            var cur = stack.Pop();
-            if (IsReparsePoint(cur)) continue;
-
-            string[] subDirs;
-            try { subDirs = Directory.GetDirectories(cur); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-            foreach (var d in subDirs) stack.Push(d);
-
-            string[] files;
-            try { files = Directory.GetFiles(cur); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-            foreach (var f in files) yield return f;
-        }
-    }
+    private static SafeWalkOptions ProfileWalk { get; } = new();
 }

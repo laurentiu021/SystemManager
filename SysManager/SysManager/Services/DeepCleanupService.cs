@@ -432,7 +432,14 @@ public sealed class DeepCleanupService
                                 if (fi.LastWriteTimeUtc >= cutoff.Value) continue;
                             }
                             var len = SafeLength(file);
-                            File.SetAttributes(file, FileAttributes.Normal);
+                            // Clear ONLY ReadOnly, which is the single attribute that blocks a delete.
+                            // FileAttributes.Normal is not a mask — it replaces the set, so it also dropped
+                            // Hidden, System and Archive. When the delete then failed, and in these buckets
+                            // it routinely does (Explorer holds thumbcache_*.db open), the file stayed on
+                            // disk having silently lost its attributes (#2376).
+                            var attrs = File.GetAttributes(file);
+                            if ((attrs & FileAttributes.ReadOnly) != 0)
+                                File.SetAttributes(file, attrs & ~FileAttributes.ReadOnly);
                             File.Delete(file);
                             freed += len;
                             filesDeleted++;
@@ -447,7 +454,7 @@ public sealed class DeepCleanupService
                     // own working folder, and removing a directory there — which the bucket's scan never
                     // counted — is outside what the user agreed to.
                     if (patterns is not null) continue;
-                    foreach (var dir in EnumerateDirectoriesDepthFirst(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+                    foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(path, ct, CleanupWalk))
                     {
                         try { Directory.Delete(dir, recursive: false); }
                         catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
@@ -497,16 +504,26 @@ public sealed class DeepCleanupService
         if (File.Exists(path) && !Directory.Exists(path))
         {
             // Guarded like a traversal root: a symlink here would make the caller delete its target,
-            // outside the bucket's tree. IsReparsePoint fails safe on an access error.
-            if (!IsReparsePoint(path) && Matches(path, patterns)) yield return path;
+            // outside the bucket's tree. IsReparsePoint fails safe on an access error. The walk below
+            // applies the same rule to every file it finds — they used to disagree (#2376).
+            if (!SafeFileWalk.IsReparsePoint(path) && Matches(path, patterns)) yield return path;
             yield break;
         }
 
-        foreach (var file in EnumerateFiles(path, ct, SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory))
+        foreach (var file in SafeFileWalk.Files(path, ct, CleanupWalk))
         {
             if (Matches(file, patterns)) yield return file;
         }
     }
+
+    /// <summary>
+    /// How every bucket is walked. The exclusions are why: "Temporary files" covers all of %TEMP%, which is
+    /// where single-file .NET apps unpack their native libraries.
+    /// </summary>
+    private static SafeWalkOptions CleanupWalk { get; } = new()
+    {
+        ExcludeSubtrees = [SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory],
+    };
 
     /// <summary>
     /// True when <paramref name="path"/>'s file name matches one of <paramref name="patterns"/>, or when
@@ -527,109 +544,6 @@ public sealed class DeepCleanupService
             if (FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: true)) return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Walks <paramref name="root"/> depth-first and yields every file under it, skipping reparse points
-    /// and the excluded subtrees. Enumeration errors skip that directory rather than abort the walk.
-    /// </summary>
-    /// <param name="root">Directory to walk. Yields nothing if it is itself a reparse point or excluded.</param>
-    /// <param name="ct">Stops the walk between directories; a cancelled walk simply ends.</param>
-    /// <param name="excludeSubtrees">
-    /// Directory trees to skip entirely. Callers pass <see cref="SystemPaths.BundleExtractionRoot"/> and
-    /// <see cref="SystemPaths.OwnExtractionDirectory"/>: the "Temporary files" definition covers all of
-    /// %TEMP%, which is where every single-file .NET app unpacks its native libraries. Deleting those made
-    /// a clean run report errors (loaded files refuse to delete) and broke a later lazy load for anything
-    /// unpacked but not yet opened — and excluding only this process's own leaf did that to every OTHER
-    /// app under the same root.
-    /// </param>
-    private static IEnumerable<string> EnumerateFiles(
-        string root, CancellationToken ct, params string?[] excludeSubtrees)
-    {
-        // Guard the traversal ROOT itself, not just its children: if a cleanup-root
-        // cache path is replaced by a junction/symlink (writable without admin, e.g.
-        // %LOCALAPPDATA%\NVIDIA\GLCache), EnumerateFiles(root) would yield the LINK
-        // TARGET's files and the caller would delete them — data loss outside the
-        // target tree. IsReparsePoint fails safe (returns true on access error).
-        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) yield break;
-        var stack = new Stack<string>();
-        stack.Push(root);
-        while (stack.Count > 0 && !ct.IsCancellationRequested)
-        {
-            var cur = stack.Pop();
-            IEnumerable<string> files;
-            IEnumerable<string> dirs;
-            try { files = Directory.EnumerateFiles(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
-            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { dirs = []; } catch (UnauthorizedAccessException) { dirs = []; }
-
-            // Wrap iteration because the enumerator can throw from MoveNext() rather than from the call
-            // above — a directory that stops being one mid-walk, or an entry that becomes unreadable.
-            //
-            // The throw ENDS this directory; it does not skip one entry. A throwing MoveNext leaves the
-            // enumerator terminal, so `continue` here re-threw the same exception forever and pinned a core
-            // in a loop cancellation cannot even reach (the ct check is on the outer loop). Measured, not
-            // reasoned: EnumerateFiles over a path that is a FILE returns fine, GetEnumerator returns fine,
-            // and MoveNext then threw IOException on all ten attempts without advancing once. `break` moves
-            // on to the next directory on the stack, which is the most this walk can honestly do.
-            using var enumerator = files.GetEnumerator();
-            while (true)
-            {
-                string? item;
-                try { if (!enumerator.MoveNext()) break; item = enumerator.Current; }
-                catch (IOException) { break; }
-                catch (UnauthorizedAccessException) { break; }
-                yield return item;
-            }
-
-            // Never descend into reparse points (junctions / symbolic links):
-            // following one could enumerate — and the caller could then delete —
-            // files that live outside the cleanup target tree (data-loss risk).
-            foreach (var d in dirs)
-            {
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
-            }
-        }
-    }
-
-    private static IEnumerable<string> EnumerateDirectoriesDepthFirst(
-        string root, CancellationToken ct, params string?[] excludeSubtrees)
-    {
-        List<string> all = [];
-        // Guard the root (see EnumerateFiles): a junction at the root must not be
-        // traversed, or its target's subdirectories could be reached for deletion.
-        if (IsReparsePoint(root) || SystemPaths.IsInsideAnySubtree(root, excludeSubtrees)) return all;
-        var stack = new Stack<string>();
-        stack.Push(root);
-        while (stack.Count > 0 && !ct.IsCancellationRequested)
-        {
-            var cur = stack.Pop();
-            IEnumerable<string> dirs;
-            try { dirs = Directory.EnumerateDirectories(cur); } catch (IOException) { continue; } catch (UnauthorizedAccessException) { continue; }
-            // Skip reparse points: deleting the target's contents (or even the
-            // link recursively) could reach outside the cleanup tree.
-            foreach (var d in dirs)
-            {
-                if (!IsReparsePoint(d) && !SystemPaths.IsInsideAnySubtree(d, excludeSubtrees)) stack.Push(d);
-            }
-            if (!string.Equals(cur, root, StringComparison.OrdinalIgnoreCase)) all.Add(cur);
-        }
-        all.Sort((a, b) => b.Length.CompareTo(a.Length));
-        return all;
-    }
-
-    /// <summary>
-    /// True when the directory is a reparse point (junction or symbolic link).
-    /// Such entries are skipped during traversal so cleanup can never follow a
-    /// link out of the target tree and delete unrelated user data.
-    /// </summary>
-    private static bool IsReparsePoint(string path)
-    {
-        try
-        {
-            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint;
-        }
-        catch (IOException) { return true; }
-        catch (UnauthorizedAccessException) { return true; }
     }
 
     // Recycle Bin is emptied via the shared RecycleBinHelper (shell API, not raw file

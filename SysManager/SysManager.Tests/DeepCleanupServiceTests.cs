@@ -336,6 +336,60 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     }
 
     [Fact]
+    public async Task CleanAsync_WhenADeleteFails_LeavesTheFilesAttributesAlone()
+    {
+        // The clean used to call File.SetAttributes(file, FileAttributes.Normal) before deleting.
+        // FileAttributes.Normal is not a mask — it REPLACES the set — so it also dropped Hidden, System and
+        // Archive, and when the delete then failed the file stayed on disk stripped of them. The Explorer
+        // cache bucket is where this bit: thumbcache_*.db and iconcache_*.db are hidden system files that
+        // Explorer holds open, so every clean cleared their attributes and could not remove them (#2376).
+        //
+        // An open handle is the deterministic way to make the delete fail — no privileges, no timing.
+        var root = Path.Combine(Path.GetTempPath(), "SysManagerAttrTest_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var locked = Path.Combine(root, "locked.db");
+        await File.WriteAllTextAsync(locked, "held open by the test");
+        File.SetAttributes(locked, FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReadOnly);
+
+        try
+        {
+            using (var hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var cat = new CleanupCategory
+                {
+                    Name = "Test",
+                    Description = "Test",
+                    Paths = [root],
+                    TotalSizeBytes = 1,
+                    FileCount = 1,
+                    IsSelected = true
+                };
+
+                var result = await new DeepCleanupService().CleanAsync([cat]);
+
+                Assert.Equal(0, result.FilesDeleted);
+                Assert.NotEmpty(result.Errors);
+            }
+
+            // ReadOnly is expected to be gone: clearing it is what a delete legitimately needs. Hidden and
+            // System were never in the way and must have survived.
+            var after = File.GetAttributes(locked);
+            Assert.True((after & FileAttributes.Hidden) != 0, "Hidden was stripped from a file that survived");
+            Assert.True((after & FileAttributes.System) != 0, "System was stripped from a file that survived");
+        }
+        finally
+        {
+            try
+            {
+                File.SetAttributes(locked, FileAttributes.Normal);
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException) { /* best effort */ }
+            catch (UnauthorizedAccessException) { /* best effort */ }
+        }
+    }
+
+    [Fact]
     public async Task CleanAsync_SkipsMissingPaths()
     {
         var cat = new CleanupCategory

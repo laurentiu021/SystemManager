@@ -13921,6 +13921,78 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"BackupsKeptPerKey\s*=\s*(?<n>\d+)", RegexOptions.Compiled)]
     private static partial Regex RetentionConstant();
 
+    /// <summary>
+    /// A chart overlaid with an empty state in the same grid cell hides itself when that state shows.
+    /// </summary>
+    /// <remarks>
+    /// Both are placed in one <c>Grid.Row</c> on purpose, so the message sits where the chart would be. But
+    /// only the empty state bound its <c>Visibility</c>, so the chart kept drawing underneath it: axis labels,
+    /// separators and legend on top of the message. Reported externally against v1.112.2 with a screenshot —
+    /// the Resource History temperature chart on a machine with no sensors (#2371).
+    /// <para>Three instances existed, in two views, and the reason only one was reported is that the other two
+    /// need rarer conditions: the usage chart needs a machine with no history at all, and the bandwidth chart
+    /// needs a chosen range with nothing in it. A source guard is the only thing that catches all three,
+    /// because each one renders correctly until its own empty condition happens to occur.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryChartOverlaidWithAnEmptyState_HidesItselfWhenEmpty()
+    {
+        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+
+        var offenders = new List<string>();
+        var pairs = 0;
+
+        foreach (var file in Directory.EnumerateFiles(viewsDir, "*.xaml"))
+        {
+            var xaml = XamlCode(file);
+
+            // Rows that hold an empty state, so only genuinely overlaid charts are considered.
+            var emptyStateRows = EmptyStateRow().Matches(xaml).Cast<Match>()
+                .Select(m => m.Groups["row"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (emptyStateRows.Count == 0) continue;
+
+            foreach (var m in ChartElement().Matches(xaml).Cast<Match>())
+            {
+                var tag = m.Value;
+                var row = ChartRow().Match(tag);
+                if (!row.Success || !emptyStateRows.Contains(row.Groups["row"].Value)) continue;
+
+                pairs++;
+                if (!tag.Contains("Visibility", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} — a chart shares Grid.Row="
+                                + $"\"{row.Groups["row"].Value}\" with an EmptyState but binds no Visibility, "
+                                + "so it draws its axes and legend on top of the message");
+                }
+            }
+        }
+
+        // Vacuity floor: the overlay pattern has to be found at all. Three pairs exist across two views, so a
+        // zero here means the element patterns stopped matching rather than that the views are clean.
+        Assert.True(pairs >= 3,
+            $"only {pairs} chart/EmptyState overlays were found — the pattern has stopped matching, so this "
+            + "guard would report clean over a view that has the defect.");
+
+        Assert.True(offenders.Count == 0,
+            "These charts stay visible behind the empty state that replaces them, so the two render on top of "
+            + "each other — and each looks correct until its own empty condition occurs:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>An <c>EmptyState</c> element and the grid row it occupies.</summary>
+    [GeneratedRegex(@"<v:EmptyState\b[^>]*?Grid\.Row=""(?<row>\d+)""", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex EmptyStateRow();
+
+    /// <summary>Any LiveCharts chart element, start tag and attributes.</summary>
+    [GeneratedRegex(@"<lvc:\w*Chart\b[^>]*?>", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex ChartElement();
+
+    /// <summary>The grid row named inside a chart's start tag.</summary>
+    [GeneratedRegex(@"Grid\.Row=""(?<row>\d+)""", RegexOptions.Compiled)]
+    private static partial Regex ChartRow();
+
     /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
     [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
     private static partial Regex SummaryOpenTag();

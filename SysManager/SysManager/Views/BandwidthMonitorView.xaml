@@ -133,6 +133,7 @@
                                    Visibility="{Binding HistorySummary, Converter={StaticResource FlexVis}}"/>
                     </DockPanel>
                     <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="160"
+                                        Visibility="{Binding HistoryIsEmpty, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
                                         Series="{Binding ThroughputSeries}"
                                         XAxes="{Binding ThroughputXAxes}" YAxes="{Binding ThroughputYAxes}"
                                         LegendPosition="Bottom"

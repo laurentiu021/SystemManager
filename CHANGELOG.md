@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.3] - 2026-09-22
+
+**Charts drew on top of their own "nothing here yet" message.** On a PC with no temperature sensors, Resource
+History's Temperature chart showed overlapping axis labels, a row of identical `01-01 00:00` timestamps, and the
+"No temperature data" message tangled up with the legend. Reported by **@smoutsio**, with a screenshot, against
+1.112.2 — thank you.
+
+### Fixed
+
+- **An empty chart now hides instead of drawing behind its message.** The message and the chart deliberately
+  occupy the same space, so the explanation appears where the chart would be — but only the message was being
+  hidden and shown. The chart carried on drawing its axes, gridlines and legend underneath it.
+- **Three charts had this, not one.** The same mistake was in Resource History's Usage chart and in Bandwidth
+  Monitor's throughput chart. Only the temperature one was reported because it is the only one whose empty
+  condition is common: most PCs expose no readable temperature sensors, while a PC with no usage history at all
+  is rare.
+- **No more `01-01 00:00` on a time axis.** With nothing to plot, the chart invented a range starting near
+  zero, and a value of a few ticks is a date in the year 1 — which is what that label is. A time label now
+  renders only for a value that could actually be a sample.
+
 ## [1.112.2] - 2026-09-21
 
 **Context Menu Manager was quietly filling a folder you were never told about.** Before each change it saves a

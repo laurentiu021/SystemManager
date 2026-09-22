@@ -13993,6 +13993,53 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"Grid\.Row=""(?<row>\d+)""", RegexOptions.Compiled)]
     private static partial Regex ChartRow();
 
+    /// <summary>
+    /// The release workflow checks the winget token before it uses it, not after.
+    /// </summary>
+    /// <remarks>
+    /// The token is a PAT with a finite lifetime and nothing announced its expiry in advance — the first sign
+    /// was a release publishing to GitHub and never reaching winget, reported as a permissions error. The
+    /// check reads GitHub's own headers for the expiry date and, for a classic PAT, the scope list (#1676).
+    /// <para>Position is the point. A check placed after the publish attempts still prints the warning, but
+    /// by then the release has already failed to reach winget — it would report a fact instead of preventing
+    /// one. So the order is asserted rather than left to review, exactly as it is for the smoke check.</para>
+    /// <para>It must also stay non-fatal: a warning about a token that expires next month must never block a
+    /// release whose binary is already built.</para>
+    /// </remarks>
+    [Fact]
+    public void TheReleaseWorkflow_ChecksTheWingetTokenBeforeUsingIt()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+
+        int StepLine(string name) => ReleaseStepLine(lines, name);
+
+        var check = StepLine("Check the winget token before using it");
+        var sync = StepLine("Sync the winget-pkgs fork with upstream");
+        var publish = StepLine("Update winget package (attempt 1)");
+
+        Assert.True(check < sync,
+            "the token check runs after the fork sync, which also uses the token — so a revoked token "
+            + "surfaces as a confusing sync failure before the check gets to explain it.");
+        Assert.True(check < publish,
+            "the token check runs after the winget publish it exists to warn about, so it reports a "
+            + "failure instead of preventing one.");
+
+        var body = ReleaseStepCode(lines, check);
+
+        Assert.Contains("github-authentication-token-expiration", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("x-oauth-scopes", body, StringComparison.OrdinalIgnoreCase);
+
+        // Non-fatal, or a token expiring next month stops a release that is otherwise fine.
+        Assert.Contains("continue-on-error: true",
+            string.Join('\n', lines.Skip(check).Take(4)), StringComparison.Ordinal);
+
+        // It must never echo the token itself. Reading the secret into an env var is how it authenticates;
+        // printing that var is what would put it in a public log.
+        Assert.DoesNotContain("echo \"$GH_TOKEN", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("echo $GH_TOKEN", body, StringComparison.Ordinal);
+    }
+
     /// <summary>An opening <c>&lt;summary&gt;</c> tag inside a documentation comment.</summary>
     [GeneratedRegex(@"<summary>", RegexOptions.Compiled)]
     private static partial Regex SummaryOpenTag();

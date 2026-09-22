@@ -555,6 +555,63 @@ jobs:
       # Non-fatal by design: a sync failure must not abort a release whose binary is
       # already published. If the fork is genuinely broken the winget step below fails
       # and reports it, which is the correct place for that error to surface.
+      # The PAT the three winget steps depend on has a finite lifetime, and nothing announced that in
+      # advance: the first sign was a release publishing to GitHub and never reaching winget, with the
+      # failure reported as a permissions error. This asks GitHub about the token BEFORE using it.
+      #
+      # GitHub returns `github-authentication-token-expiration` only for a token that actually has an
+      # expiry, and `X-Oauth-Scopes` only for a CLASSIC PAT — a fine-grained token has no scope header at
+      # all. So the two headers together identify which KIND of token the secret holds and how long it has
+      # left, which is precisely what the secret's name cannot tell anyone (#1676).
+      #
+      # Never fatal, and never prints the token: only the expiry date and the scope list, both safe in a
+      # public log. A release must not be blocked by a warning about a future problem.
+      - name: Check the winget token before using it
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          headers=$(gh api -i user 2>/dev/null | sed -n '1,40p' || true)
+
+          if [ -z "$headers" ]; then
+            echo "::warning::Could not query the winget token — it may already be expired or revoked."
+            exit 0
+          fi
+
+          expiry=$(printf '%s' "$headers" | grep -i '^github-authentication-token-expiration:' | cut -d' ' -f2- | tr -d '\r' || true)
+          scopes=$(printf '%s' "$headers" | grep -i '^x-oauth-scopes:' | cut -d' ' -f2- | tr -d '\r' || true)
+
+          if [ -n "$scopes" ]; then
+            echo "Token kind: CLASSIC personal access token"
+            echo "Scopes: $scopes"
+            echo "::warning::WINGET_TOKEN is a classic PAT with scopes [$scopes]. A classic repo scope grants read/write to every repository this account can reach, including private ones, in order to publish manifests to one fork. A fine-grained token limited to the winget-pkgs fork with contents:write is the least privilege this step needs (#1676)."
+          else
+            echo "Token kind: fine-grained (no OAuth scope header), which is the intended shape."
+          fi
+
+          if [ -z "$expiry" ]; then
+            echo "No expiry reported — this token does not expire."
+            exit 0
+          fi
+
+          echo "Expires: $expiry"
+          expiry_epoch=$(date -u -d "$expiry" +%s 2>/dev/null || echo "")
+          if [ -z "$expiry_epoch" ]; then
+            echo "::warning::Could not parse the token expiry '$expiry' — check it by hand."
+            exit 0
+          fi
+
+          days=$(( (expiry_epoch - $(date -u +%s)) / 86400 ))
+          echo "Days remaining: $days"
+
+          if [ "$days" -le 0 ]; then
+            echo "::error::WINGET_TOKEN has EXPIRED. The winget publish below will fail until it is replaced."
+          elif [ "$days" -le 30 ]; then
+            echo "::warning::WINGET_TOKEN expires in $days day(s), on $expiry. Replace it before then, or a release will publish to GitHub and silently not reach winget."
+          fi
+
       - name: Sync the winget-pkgs fork with upstream
         continue-on-error: true
         shell: bash

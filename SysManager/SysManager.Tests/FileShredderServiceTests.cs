@@ -209,12 +209,15 @@ public class FileShredderServiceTests
         }
     }
 
+    // ---------- cancellation: the end state on disk must match what the caller is told (#2374) ----------
+
     [Fact]
-    public async Task ShredFileAsync_AlreadyCancelledToken_DoesNotDeleteFile()
+    public async Task ShredFileAsync_AlreadyCancelledToken_LeavesTheFileIntact()
     {
         var svc = NewService();
         var file = Path.Combine(Path.GetTempPath(), "smtest_cancel_" + Guid.NewGuid().ToString("N") + ".dat");
-        await File.WriteAllTextAsync(file, "keep me, the operation was cancelled");
+        const string original = "keep me, the operation was cancelled";
+        await File.WriteAllTextAsync(file, original);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -224,10 +227,106 @@ public class FileShredderServiceTests
                 () => svc.ShredFileAsync(file, ShredMethod.Quick, null, cts.Token));
 
             Assert.True(File.Exists(file), "File was deleted despite cancellation before any pass ran");
+
+            // Existence alone does not prove the file survived: the defect this pins left a file
+            // present and full-length with every byte replaced by 0x00. Read it back.
+            Assert.Equal(original, await File.ReadAllTextAsync(file));
         }
         finally
         {
             if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_CancelledBetweenPasses_FinishesTheOverwriteAndRemovesTheFile()
+    {
+        // The defect: the token was checked at the top of every pass, so cancelling during a Standard
+        // shred threw once pass 1 had overwritten the whole file — leaving it on disk at its original
+        // name and length holding 0x00, while the queue reported "Cancelled". Data destroyed, user told
+        // nothing happened. Now the pass in flight finishes, the rest are dropped, and the file goes.
+        var svc = NewService();
+        var file = Path.Combine(Path.GetTempPath(), "smtest_cancelmid_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllBytesAsync(file, new byte[200_000]); // > one 64 KB buffer: several chunks per pass
+
+        using var cts = new CancellationTokenSource();
+        // Synchronous progress, so the cancel lands before the service evaluates the next pass —
+        // System.Progress would marshal the callback and race it.
+        var progress = new SyncProgress<int>(_ => cts.Cancel());
+
+        try
+        {
+            var passesRun = await svc.ShredFileAsync(file, ShredMethod.Standard, progress, cts.Token);
+
+            Assert.False(File.Exists(file),
+                "Cancelling after the overwrite began left the destroyed file on disk");
+            Assert.Equal(1, passesRun);
+        }
+        finally
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_CancelledAfterTheFinalPass_StillRemovesTheFile()
+    {
+        // A second, separate end state from the same root cause: with Quick there is no next pass to
+        // refuse, so the token was next observed by the FlushAsync that follows SetLength(0). It threw
+        // after the truncate, leaving a zero-byte file with the original name that was never deleted.
+        var svc = NewService();
+        var file = Path.Combine(Path.GetTempPath(), "smtest_canceltail_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(file, "one pass is all this gets");
+
+        using var cts = new CancellationTokenSource();
+        var progress = new SyncProgress<int>(_ => cts.Cancel());
+
+        try
+        {
+            var passesRun = await svc.ShredFileAsync(file, ShredMethod.Quick, progress, cts.Token);
+
+            Assert.False(File.Exists(file), "Cancelling on the final flush left a truncated file behind");
+            Assert.Equal(1, passesRun);
+        }
+        finally
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFolderAsync_CancelledBetweenFiles_ReportsWhatItAlreadyDestroyed()
+    {
+        // Cancelling a folder used to throw, which discarded the count and let the queue mark the whole
+        // folder "Cancelled" — with the files it had already visited gone for good. It now returns.
+        var svc = NewService();
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_cancelfolder_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        for (var i = 0; i < 4; i++)
+            await File.WriteAllTextAsync(Path.Combine(dir, $"f{i}.dat"), $"contents of file {i}");
+
+        using var cts = new CancellationTokenSource();
+        // Folder progress reports once per file, so cancelling on the first report stops the walk at the
+        // boundary after file one — deterministically, with no timing assumption.
+        var progress = new SyncProgress<int>(_ => cts.Cancel());
+
+        try
+        {
+            var report = await svc.ShredFolderAsync(dir, ShredMethod.Quick, progress, cts.Token);
+
+            Assert.True(report.WasCancelled);
+            Assert.Equal(1, report.FilesShredded);
+
+            // The honest end state: exactly one file destroyed and removed, the other three untouched
+            // and still readable — not three files silently missing, and not four still on disk.
+            Assert.Equal(3, Directory.GetFiles(dir).Length);
+            Assert.True(Directory.Exists(dir), "A cancelled folder shred removed the folder anyway");
+            Assert.NotNull(report.Notice);
+            Assert.Contains("1 file inside had already been destroyed", report.Notice);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         }
     }
 
@@ -603,6 +702,49 @@ public class FileShredderServiceTests
             Assert.Contains(skipped == 1 ? "shortcut inside was" : "shortcuts inside were", report.Notice);
             Assert.Contains("still on the computer", report.Notice);
         }
+    }
+
+    [Theory]
+    [InlineData(0, "before anything inside was destroyed")]
+    [InlineData(1, "1 file inside had already been destroyed")]
+    [InlineData(4, "4 files inside had already been destroyed")]
+    public void ShredFolderReport_Notice_ForACancelledFolder_SaysWhatWasAlreadyDestroyed(
+        int shredded, string expected)
+    {
+        // A cancelled folder shred returns instead of throwing, so this sentence is the only thing that
+        // corrects the user's reasonable assumption that stopping meant nothing was destroyed (#2374).
+        var report = new ShredFolderReport { FilesShredded = shredded, WasCancelled = true };
+
+        Assert.NotNull(report.Notice);
+        Assert.Contains(expected, report.Notice, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShredFolderReport_Notice_ForACancelledFolder_AlsoNamesFilesLeftInPlace()
+    {
+        // Cancelling does not throw away the failures the walk had already hit. Those files are still on
+        // disk and were NOT plainly deleted — a shredder that quietly downgraded to a recoverable delete
+        // would break the only promise it makes.
+        var report = new ShredFolderReport
+        {
+            FilesShredded = 2,
+            FilesLeftInPlace = 3,
+            WasCancelled = true
+        };
+
+        Assert.Contains("2 files inside had already been destroyed", report.Notice, StringComparison.Ordinal);
+        Assert.Contains("3 files could not be securely overwritten", report.Notice, StringComparison.Ordinal);
+        Assert.Contains("left in place", report.Notice, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShredFolderReport_Notice_StaysSilentWhenNothingHappenedWorthSaying()
+    {
+        // The negative half of both cases above: an ordinary completed shred with no skips and no
+        // cancellation must produce no notice at all, or every folder grows a warning nobody needs.
+        var report = new ShredFolderReport { FilesShredded = 9 };
+
+        Assert.Null(report.Notice);
     }
 
     [Fact]

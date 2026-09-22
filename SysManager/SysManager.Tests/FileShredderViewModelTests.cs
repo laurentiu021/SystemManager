@@ -358,4 +358,70 @@ public class FileShredderViewModelTests
             try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
         }
     }
+
+    // ---------- cancelling the queue still has to report what it destroyed (#2374) ----------
+
+    [Fact]
+    public async Task ShredAll_CancelledBetweenItems_ReportsTheItemsItAlreadyDestroyed()
+    {
+        // Cancelling used to throw past every line that reports: the status line read "Shredding
+        // cancelled." with no counts, the accumulated notices were dropped on the floor (the same defect
+        // that had already been fixed for the failure path), and the activity log never recorded the items
+        // that were in fact destroyed. A cancelled shred is a shred that stopped, not one that did nothing.
+        //
+        // Deterministic without any timing: ShredItem.Status raises PropertyChanged synchronously inside
+        // the queue loop, so cancelling the moment the first item reports "Done" lands exactly on the
+        // boundary before the second item is picked up.
+        var first = Path.Combine(Path.GetTempPath(), "smtest_shredstop1_" + Guid.NewGuid().ToString("N") + ".dat");
+        var second = Path.Combine(Path.GetTempPath(), "smtest_shredstop2_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(first, "this one goes");
+        const string survivor = "this one must survive the cancel";
+        await File.WriteAllTextAsync(second, survivor);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            var firstItem = new ShredItem
+            {
+                Path = first,
+                Name = Path.GetFileName(first),
+                SizeBytes = 1,
+                IsFolder = false
+            };
+            vm.Items.Add(firstItem);
+            vm.Items.Add(new ShredItem
+            {
+                Path = second,
+                Name = Path.GetFileName(second),
+                SizeBytes = 1,
+                IsFolder = false
+            });
+
+            firstItem.PropertyChanged += (_, _) =>
+            {
+                if (firstItem.Status == "Done") vm.CancelCommand.Execute(null);
+            };
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            Assert.Equal("Stopped — 1 shredded, 0 failed.", vm.StatusMessage);
+            Assert.False(File.Exists(first), "The item that completed before the cancel was not destroyed");
+
+            // The second file is the whole point: cancelling must stop the queue, not half-destroy the
+            // next item. Read it back rather than testing existence — the defect being pinned left a file
+            // present with every byte overwritten.
+            Assert.Equal(survivor, await File.ReadAllTextAsync(second));
+            Assert.Single(vm.Items); // the untouched item stays queued; only "Done" items are removed
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            if (File.Exists(first)) File.Delete(first);
+            if (File.Exists(second)) File.Delete(second);
+        }
+    }
 }

@@ -48,9 +48,20 @@ public sealed partial class FileShredderService
     }
 
     /// <summary>
-    /// Securely shreds a single file using the specified method.
+    /// Securely shreds a single file using the specified method, returning how many overwrite passes
+    /// actually ran. Fewer than <paramref name="method"/> asked for means the user cancelled after the
+    /// overwrite had begun — see the cancellation rule below.
     /// </summary>
-    public async Task ShredFileAsync(string filePath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
+    /// <remarks>
+    /// CANCELLATION: the token stops work that has not started; it does not abandon an overwrite in
+    /// progress. Before the first byte is written the file is untouched, so cancelling throws and the file
+    /// survives. After it, the original bytes are gone and no outcome can hand them back — stopping there
+    /// left a file at its original name and length holding <c>0x00</c> while the UI reported "Cancelled",
+    /// which is the one thing a shredder must never do (#2374). So the pass in flight always finishes, the
+    /// remaining passes are dropped, and the file is truncated and removed. The extra work is bounded by the
+    /// remainder of a single pass, and what is left on disk then matches what the caller is told.
+    /// </remarks>
+    public async Task<int> ShredFileAsync(string filePath, ShredMethod method, IProgress<int>? progress, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
         ValidatePath(filePath);
@@ -64,6 +75,12 @@ public sealed partial class FileShredderService
 
         var totalPasses = (int)method;
         var patterns = GetPatterns(method);
+
+        // Passes completed end to end, and whether a single byte has been written. Together they decide
+        // what a cancellation is allowed to do: throw while the file is still the user's, finish the job
+        // once it is not.
+        var passesRun = 0;
+        var overwriteBegan = false;
 
         // Open the file ONCE with an exclusive (FileShare.None) write handle and keep it open
         // for every pass and the final truncate. This closes the validate-by-path/act-by-path
@@ -109,7 +126,15 @@ public sealed partial class FileShredderService
 
             for (var pass = 0; pass < totalPasses; pass++)
             {
-                ct.ThrowIfCancellationRequested();
+                // Between passes is the only place a cancellation can be honoured without leaving a
+                // half-overwritten file behind. If nothing has been written the file is intact, so throw
+                // and leave it. Otherwise stop after this point: the data is already unrecoverable, so the
+                // honest end state is a removed file rather than a corrupt one kept (see the remarks above).
+                if (ct.IsCancellationRequested)
+                {
+                    if (!overwriteBegan) ct.ThrowIfCancellationRequested();
+                    break;
+                }
 
                 stream.Position = 0; // rewind for this pass (same handle, no reopen)
 
@@ -129,7 +154,10 @@ public sealed partial class FileShredderService
                 var bytesRemaining = fileLength;
                 while (bytesRemaining > 0)
                 {
-                    ct.ThrowIfCancellationRequested();
+                    // Only while the file is still intact. Past the first chunk, a mid-pass abort is what
+                    // produced the silently-corrupted file: the leading chunks zeroed, the tail still the
+                    // user's plaintext, and the operation reported as cancelled.
+                    if (!overwriteBegan) ct.ThrowIfCancellationRequested();
 
                     var writeSize = (int)Math.Min(BufferSize, bytesRemaining);
 
@@ -137,19 +165,26 @@ public sealed partial class FileShredderService
                     if (pattern is null)
                         RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
 
-                    await stream.WriteAsync(buffer.AsMemory(0, writeSize), ct).ConfigureAwait(false);
+                    // CancellationToken.None, deliberately: the token governs whether a pass STARTS, never
+                    // whether it finishes. A cancelled WriteAsync would tear the pass exactly where the
+                    // check above refuses to.
+                    await stream.WriteAsync(buffer.AsMemory(0, writeSize), CancellationToken.None).ConfigureAwait(false);
+                    overwriteBegan = true;
                     bytesRemaining -= writeSize;
                 }
 
-                await stream.FlushAsync(ct).ConfigureAwait(false);
+                await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                passesRun++;
 
                 var overallProgress = (int)((pass + 1) * 100.0 / totalPasses);
                 progress?.Report(overallProgress);
             }
 
-            // Final truncate on the SAME held handle — no by-path reopen.
+            // Final truncate on the SAME held handle — no by-path reopen. Unconditional: a token cancelled
+            // during the last pass used to throw out of this flush, leaving the file truncated to zero and
+            // never deleted, which is the worst of both outcomes.
             stream.SetLength(0);
-            await stream.FlushAsync(ct).ConfigureAwait(false);
+            await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         } // `await using` disposes the exclusive handle here, releasing FileShare.None for Delete.
 
         // The file contents are already securely overwritten and truncated to zero at
@@ -171,7 +206,14 @@ public sealed partial class FileShredderService
                 $"File contents were securely overwritten, but removal was denied: {ex.Message}", ex);
         }
 
-        Log.Information("File shredded successfully: {Path} ({Method})", filePath, method);
+        if (passesRun < totalPasses)
+            Log.Information(
+                "File shredded with {Passes} of {Total} passes after cancellation, then removed: {Path}",
+                passesRun, totalPasses, filePath);
+        else
+            Log.Information("File shredded successfully: {Path} ({Method})", filePath, method);
+
+        return passesRun;
     }
 
     /// <summary>
@@ -207,9 +249,15 @@ public sealed partial class FileShredderService
         // that guarantee. We leave them on disk and report them instead of force-deleting.
         List<string> failedFiles = [];
 
+        // Files destroyed before the user cancelled. Reported rather than thrown away: every one of them
+        // is gone, so ending with the folder marked "Cancelled" would tell the user nothing happened to
+        // data that no longer exists (#2374).
+        var cancelled = false;
+        var shredded = 0;
+
         for (var i = 0; i < totalFiles; i++)
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) { cancelled = true; break; }
 
             try
             {
@@ -219,6 +267,14 @@ public sealed partial class FileShredderService
                     File.SetAttributes(files[i], attrs & ~FileAttributes.ReadOnly);
 
                 await ShredFileAsync(files[i], method, null, ct).ConfigureAwait(false);
+                shredded++;
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled before this file's first byte, so it is untouched. ShredFileAsync no longer
+                // abandons one it has started, which is why this arm cannot leave a corrupt file behind.
+                cancelled = true;
+                break;
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -233,6 +289,25 @@ public sealed partial class FileShredderService
 
             var overallProgress = (int)((i + 1) * 100.0 / totalFiles);
             progress?.Report(overallProgress);
+        }
+
+        if (cancelled)
+        {
+            // No directory cleanup and no failure throw on this path. The folder was not emptied, so
+            // pruning parts of its structure would change the tree the user still has for no benefit, and
+            // an IOException here would replace "you cancelled, N files are gone" with a message about
+            // locked files. The report carries both numbers instead.
+            Log.Information(
+                "Folder shred cancelled after {Shredded} of {Total} file(s): {Path} ({Method})",
+                shredded, totalFiles, folderPath, method);
+
+            return new ShredFolderReport
+            {
+                FilesShredded = shredded,
+                SkippedLinks = skippedLinks,
+                FilesLeftInPlace = failedFiles.Count,
+                WasCancelled = true,
+            };
         }
 
         // Remove now-empty directories deepest-first. A securely-shredded file was already
@@ -270,7 +345,7 @@ public sealed partial class FileShredderService
         // returned rather than thrown. It still has to reach the user: the folder was not emptied, and
         // they asked for it to be destroyed. Reporting "shredded successfully" while the folder is still
         // sitting there is the one mistake a shredder cannot make.
-        var report = new ShredFolderReport { FilesShredded = totalFiles, SkippedLinks = skippedLinks };
+        var report = new ShredFolderReport { FilesShredded = shredded, SkippedLinks = skippedLinks };
 
         if (skippedLinks.Count > 0)
             Log.Information("Folder shredded, {Skipped} link(s) left alone: {Path} ({Method})",

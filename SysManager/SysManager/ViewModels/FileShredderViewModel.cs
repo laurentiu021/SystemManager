@@ -179,6 +179,11 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         // on your disk" is the wrong half of the sentence.
         List<string> notices = [];
 
+        // Cancellation ends the run through the SAME exit as a completed one, rather than by throwing past
+        // the reporting below. Everything already destroyed still has to be counted, announced and recorded
+        // in the activity log: a cancelled shred is a shred that stopped, not one that did nothing.
+        var cancelled = false;
+
         try
         {
             // Shred a SNAPSHOT of the queue, not the live collection: indexing Items across the
@@ -186,7 +191,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             // disabled while shredding via CanEditQueue; the snapshot is the belt-and-suspenders.)
             foreach (var item in Items.ToArray())
             {
-                ct.ThrowIfCancellationRequested();
+                if (ct.IsCancellationRequested) { cancelled = true; break; }
 
                 var totalPasses = (int)SelectedMethod;
 
@@ -209,11 +214,31 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         var report = await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct);
                         if (report.Notice is { } notice)
                             notices.Add($"{item.Name}: {notice}");
+
+                        // A cancelled folder is not done: the files it had not reached are still inside, so
+                        // it stays in the queue with an honest status instead of being marked Done and
+                        // silently removed from the list.
+                        if (report.WasCancelled)
+                        {
+                            item.Status = report.FilesShredded == 0 ? "Cancelled" : "Partly shredded";
+                            cancelled = true;
+                            break;
+                        }
                     }
                     else
                     {
                         item.Status = $"Shredding pass 1/{totalPasses}...";
-                        await _service.ShredFileAsync(item.Path, SelectedMethod, itemProgress, ct);
+                        var passesRun = await _service.ShredFileAsync(item.Path, SelectedMethod, itemProgress, ct);
+
+                        // Cancelling after the overwrite began cannot bring the file back, so the service
+                        // finishes and removes it rather than leaving a corrupt one behind. It IS shredded —
+                        // just with fewer passes than asked for, which the user has to be told because they
+                        // pressed Cancel and the file is gone anyway (#2374).
+                        if (passesRun < totalPasses)
+                            notices.Add(
+                                $"{item.Name}: you cancelled once the overwrite had started, so it was "
+                                + $"finished with {passesRun} of {totalPasses} passes and removed — the data "
+                                + "was already unrecoverable at that point.");
                     }
 
                     item.Status = "Done";
@@ -221,8 +246,12 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 }
                 catch (OperationCanceledException)
                 {
+                    // Reachable only BEFORE this item's first byte — the service no longer abandons an
+                    // overwrite it has started, so this arm can never again be the "file destroyed but
+                    // reported cancelled" case. "Cancelled" here is therefore literally true.
                     item.Status = "Cancelled";
-                    throw;
+                    cancelled = true;
+                    break;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
@@ -238,10 +267,14 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 }
             }
 
-            StatusMessage = notices.Count == 0
-                ? $"Complete — {completed} shredded, {failed} failed."
-                : $"Complete — {completed} shredded, {failed} failed. " + string.Join(" ", notices);
-            ToastService.Instance.Show("File Shredder complete", $"{completed} shredded, {failed} failed");
+            var headline = cancelled
+                ? $"Stopped — {completed} shredded, {failed} failed."
+                : $"Complete — {completed} shredded, {failed} failed.";
+
+            StatusMessage = notices.Count == 0 ? headline : headline + " " + string.Join(" ", notices);
+            ToastService.Instance.Show(
+                cancelled ? "File Shredder stopped" : "File Shredder complete",
+                $"{completed} shredded, {failed} failed");
 
             // COUNT ONLY — never a file name or path. activity.json is plain text under
             // %LocalAppData%, so recording the name of a file the user chose to destroy beyond
@@ -253,10 +286,6 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     string.Create(CultureInfo.InvariantCulture,
                         $"Securely erased {completed:N0} item{(completed == 1 ? "" : "s")} ({(int)SelectedMethod}-pass overwrite)"));
             }
-        }
-        catch (OperationCanceledException)
-        {
-            StatusMessage = "Shredding cancelled.";
         }
         finally
         {

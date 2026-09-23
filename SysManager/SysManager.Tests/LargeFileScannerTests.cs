@@ -248,20 +248,20 @@ public class LargeFileScannerTests : IDisposable
         CreateFile("swapfile.sys", 3000);
         CreateFile("holiday-video.mp4", 3000);
 
-        LargeFileScanner.LargeFileProgress? last = null;
-        var progress = new Progress<LargeFileScanner.LargeFileProgress>(p => last = p);
+        // SyncProgress captures reports synchronously — no Task.Delay race.
+        var progress = new SyncProgress<LargeFileScanner.LargeFileProgress>();
 
         var result = await _scanner.ScanAsync(_root, minSizeBytes: 1, top: 10, progress);
 
         Assert.Equal(["holiday-video.mp4"], result.Select(r => r.Name));
 
-        // The counters too, not just the list. The settling report after the walk is unconditional, so this
-        // is deterministic rather than a race with the 200 ms throttle. Skipping before the counters is what
-        // the sibling service does with its own discovered++, and it keeps "3000 bytes scanned" describing
-        // the files this tab would actually offer.
-        Assert.NotNull(last);
-        Assert.Equal(1, last.FilesScanned);
-        Assert.Equal(3000, last.BytesScanned);
+        // The counters too, not just the list. The settling report after the walk is unconditional, so the
+        // last report is always the settled one rather than one the 200 ms throttle happened to let through.
+        // Skipping before the counters is what the sibling service does with its own discovered++, and it
+        // keeps "3000 bytes scanned" describing the files this tab would actually offer.
+        Assert.NotEmpty(progress.Reports);
+        Assert.Equal(1, progress.Reports[^1].FilesScanned);
+        Assert.Equal(3000, progress.Reports[^1].BytesScanned);
     }
 
     [Fact]

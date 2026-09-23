@@ -415,7 +415,12 @@ public class FileShredderViewModelTests
             // next item. Read it back rather than testing existence — the defect being pinned left a file
             // present with every byte overwritten.
             Assert.Equal(survivor, await File.ReadAllTextAsync(second));
-            Assert.Single(vm.Items); // the untouched item stays queued; only "Done" items are removed
+
+            // The untouched item stays queued; what was destroyed is removed. Counted rather than
+            // Assert.Single, which prints the collection — and a ShredItem prints its Path, putting the
+            // temp path of whoever ran it into a public CI log.
+            Assert.True(vm.Items.Count == 1,
+                $"{vm.Items.Count} row(s) left in the queue, expected the one that was never reached.");
         }
         finally
         {
@@ -423,5 +428,156 @@ public class FileShredderViewModelTests
             if (File.Exists(first)) File.Delete(first);
             if (File.Exists(second)) File.Delete(second);
         }
+    }
+
+    // ---------- a late progress report must not un-finish a shred ----------
+
+    [Fact]
+    public async Task ShredAll_RemovesWhatItDestroyed_EvenWhenTheStatusLabelIsOverwrittenAfterwards()
+    {
+        // The queue used to be rebuilt by re-reading item.Status and removing whatever said "Done". Status
+        // is a display string that the per-item Progress<int> callback also writes, and Progress<T>
+        // delivers through SynchronizationContext.Post — with no context in a unit test, the post and the
+        // await continuation are both unordered ThreadPool work. So the service's last report could drain
+        // AFTER the continuation had recorded the outcome, overwriting "Done" with a pass counter: the file
+        // was gone and its row stayed in the list claiming it was still being shredded. That is what turned
+        // the sibling test above red on CI, once, having passed eight times.
+        //
+        // Deterministic with no timing at all: the test performs the overwrite itself, from the
+        // PropertyChanged that "Done" raises synchronously inside the queue loop. Whatever wrote it, a row
+        // whose label is no longer "Done" must still be removed — the file it named does not exist any more.
+        var file = Path.Combine(Path.GetTempPath(), "smtest_shredlabel_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(file, "destroyed, and the row must go with it");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            var item = new ShredItem
+            {
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
+            };
+            vm.Items.Add(item);
+
+            // Exactly what a late report did. Re-entrant and self-terminating: the nested set assigns a
+            // value that is no longer "Done", so the handler runs once more and falls straight through.
+            item.PropertyChanged += (_, _) =>
+            {
+                if (item.Status == "Done") item.Status = "Shredding pass 2/3...";
+            };
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            // Ordered deliberately: if the shred did not happen, the removal proves nothing.
+            Assert.False(File.Exists(file), "the file was not shredded, so this test exercised no removal");
+            Assert.NotEqual("Done", item.Status); // the overwrite stuck — otherwise the premise is gone
+
+            // Counted, not dumped: Assert.Empty prints the collection, and a ShredItem prints its Path —
+            // a temp path carrying the account name of whoever ran it, straight into a public CI log.
+            Assert.True(vm.Items.Count == 0,
+                $"the file was destroyed and {vm.Items.Count} row(s) stayed in the queue — removal still "
+                + "depends on the status label, so an erased file is left on screen as though it were "
+                + "still being shredded.");
+            Assert.Equal("Complete — 1 shredded, 0 failed.", vm.StatusMessage);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    /// <summary>
+    /// The other half of the same defect. The removal no longer depends on the label, but the label is
+    /// still what the user reads: a late report overwriting "Cancelled" or "Failed" leaves a finished row
+    /// saying "Shredding pass 2/3..." that never changes again. The queue loop therefore routes every final
+    /// status through a local <c>Settle</c>, which latches a flag the progress callback checks first.
+    /// </summary>
+    /// <remarks>
+    /// Asserted against the source rather than by behaviour, deliberately. Reproducing the late delivery
+    /// needs <c>Progress&lt;T&gt;</c> to post after the await continuation, and the only lever a test has
+    /// over those two is installing a <c>SynchronizationContext</c> — which replaces the scheduling under
+    /// test with a FIFO queue in which the report always arrives first and the defect cannot occur. Same
+    /// reason <c>BothAddPaths_ReportSkippedItemsOnScreen_NotOnlyToTheLog</c> above reads source.
+    /// </remarks>
+    [Fact]
+    public void EveryFinalShredStatus_IsSetThroughTheGateALateReportCannotCross()
+    {
+        var body = ShredAllBody();
+
+        // Comment tails stripped: the method explains this very fix in prose that quotes "Done" and
+        // "Cancelled", and prose is not code. No string literal in this body contains a "//".
+        var lines = body.Split('\n')
+            .Select(line => line.Split("//", StringSplitOptions.None)[0])
+            .ToArray();
+
+        string[] finalStatuses = ["\"Done\"", "\"Cancelled\"", "\"Failed\"", "\"Partly shredded\""];
+        var seen = finalStatuses.ToDictionary(status => status, _ => 0, StringComparer.Ordinal);
+        var offenders = new List<string>();
+
+        foreach (var line in lines)
+        {
+            foreach (var status in finalStatuses)
+            {
+                if (!line.Contains(status, StringComparison.Ordinal)) continue;
+
+                seen[status]++;
+                if (!line.Contains("Settle(", StringComparison.Ordinal))
+                    offenders.Add($"{status} → {line.Trim()}");
+            }
+        }
+
+        // Per status, not a total: two of them share one line, so a combined floor would be met by "Done"
+        // alone while a renamed "Partly shredded" went unpoliced and this test still read green.
+        foreach (var (status, hits) in seen)
+            Assert.True(hits >= 1,
+                $"the shred queue no longer mentions {status} anywhere, so this guard checks nothing for "
+                + "it. Either the status was renamed — update the list — or its branch is gone.");
+
+        Assert.True(offenders.Count == 0,
+            "these final statuses are assigned straight to item.Status. Go through Settle() instead: a "
+            + "progress report that drains after the queue loop has moved on overwrites a raw assignment, "
+            + "and the row is left saying it is still being shredded on an item that has finished:\n  "
+            + string.Join("\n  ", offenders));
+
+        // And the gate itself, both ends — a latch nothing reads would leave every assignment above
+        // exposed while this test still passed on the Settle() spelling alone.
+        Assert.Contains("Volatile.Write(ref settled", body, StringComparison.Ordinal);
+        var gates = lines.Where(line =>
+            line.Contains("Volatile.Read(ref settled)", StringComparison.Ordinal)
+            && line.Contains("return", StringComparison.Ordinal)).ToArray();
+        Assert.True(gates.Length == 1,
+            $"expected exactly one early return guarded by the settled latch, found {gates.Length} — "
+            + "without it the progress callback writes over a final status.");
+    }
+
+    /// <summary>
+    /// The body of the shred queue loop, with a floor so a wrong slice cannot read as health.
+    /// </summary>
+    private static string ShredAllBody()
+    {
+        var source = File.ReadAllText(ViewModelSourcePath());
+        const string signature = "private async Task ShredAllAsync()";
+
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, signature + " not found — update this guard.");
+
+        // The method's own closing brace: four spaces, since every brace inside it is indented deeper.
+        var end = source.IndexOf("\n    }", start, StringComparison.Ordinal);
+        Assert.True(end > start, "could not find the end of " + signature);
+
+        var body = source[start..end];
+        var length = body.Split('\n').Length;
+        Assert.True(length >= 100,
+            $"only {length} lines of {signature} were extracted, against the ~170 it spans — the slice is "
+            + "wrong, so a pass here proves nothing.");
+
+        return body;
     }
 }

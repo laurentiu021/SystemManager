@@ -172,6 +172,12 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         var completed = 0;
         var failed = 0;
 
+        // What was actually destroyed, tracked by IDENTITY. The finally below used to re-read item.Status
+        // and remove whatever said "Done", but Status is a display string the async progress callback also
+        // writes — so "was this destroyed?" depended on callback delivery order, and a report that arrived
+        // late left a file that no longer exists sitting in the queue claiming it was still being shredded.
+        List<ShredItem> destroyed = [];
+
         // Everything the user needs to be told, in the order it happened. Previously the service built a
         // careful explanation of what it could not shred and the catch below dropped it on the floor:
         // item.Status showed the word "Failed" and ex.Message went only to the log file. For an operation
@@ -195,8 +201,21 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
                 var totalPasses = (int)SelectedMethod;
 
+                // Set once this item reaches a status it will not leave. Progress<T> delivers through
+                // SynchronizationContext.Post, so the service's last report — raised from a
+                // ConfigureAwait(false) continuation — is not ordered against the await continuation that
+                // records the outcome. Without this gate, a report that drains afterwards overwrites the
+                // final status with a pass counter, and the item is left looking unfinished forever.
+                var settled = 0;
+                void Settle(string status)
+                {
+                    Volatile.Write(ref settled, 1);
+                    item.Status = status;
+                }
+
                 var itemProgress = new Progress<int>(p =>
                 {
+                    if (Volatile.Read(ref settled) != 0) return;
                     var currentPass = (int)Math.Ceiling(p / 100.0 * totalPasses);
                     item.Status = $"Shredding pass {currentPass}/{totalPasses}...";
                 });
@@ -220,7 +239,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         // silently removed from the list.
                         if (report.WasCancelled)
                         {
-                            item.Status = report.FilesShredded == 0 ? "Cancelled" : "Partly shredded";
+                            Settle(report.FilesShredded == 0 ? "Cancelled" : "Partly shredded");
                             cancelled = true;
                             break;
                         }
@@ -241,7 +260,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                                 + "was already unrecoverable at that point.");
                     }
 
-                    item.Status = "Done";
+                    Settle("Done");
+                    destroyed.Add(item);
                     completed++;
                 }
                 catch (OperationCanceledException)
@@ -249,13 +269,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     // Reachable only BEFORE this item's first byte — the service no longer abandons an
                     // overwrite it has started, so this arm can never again be the "file destroyed but
                     // reported cancelled" case. "Cancelled" here is therefore literally true.
-                    item.Status = "Cancelled";
+                    Settle("Cancelled");
                     cancelled = true;
                     break;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
-                    item.Status = "Failed";
+                    Settle("Failed");
                     failed++;
                     Log.Warning(ex, "Failed to shred: {Path}", item.Path);
 
@@ -292,12 +312,12 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             IsShredding = false;
             IsBusy = false;
 
-            // Remove successfully shredded items
-            for (var i = Items.Count - 1; i >= 0; i--)
-            {
-                if (Items[i].Status == "Done")
-                    Items.RemoveAt(i);
-            }
+            // Remove what was actually destroyed, by identity. Keying this on Status == "Done" made the
+            // queue a function of a display string that the async progress callback also writes, so a
+            // report draining late left an erased file sitting in the list under a "Shredding pass 2/3..."
+            // label that would never change.
+            foreach (var item in destroyed)
+                Items.Remove(item);
 
             ShredAllCommand.NotifyCanExecuteChanged();
         }

@@ -613,11 +613,15 @@ public class ServicesViewModelTests
     // command on this tab that did not, and its button renders on every row with no Visibility or
     // CanExecute guard — one click to a persistent, machine-scope service change.
     //
-    // Every assertion below holds whether or not the run is elevated. EnableServiceAsync returns at
-    // the elevation gate when not elevated and at the declined confirm when it is; neither path may
-    // reach sc.exe, which is what "did the startup type change?" measures. A test that only passed
-    // while elevated would be quarantined in CI, so the prompt-wording assertions skip explicitly
-    // when no prompt was reached rather than asserting something they cannot observe.
+    // The declined-confirm test below holds whether or not the run is elevated: EnableServiceAsync
+    // returns at the elevation gate when not elevated and at the declined confirm when it is, and
+    // neither path may reach sc.exe, which is what "did the startup type change?" measures.
+    //
+    // The two prompt-wording tests FORCE elevation, for the same reason as the #1512 block further
+    // down — the gate returns before any prompt, so on a non-elevated runner they would assert
+    // nothing. They used to return early when no prompt was reached, which is precisely that: a
+    // reported pass that observed nothing, on exactly the hosts where the wording mattered. Confirm
+    // always answers false, so no service is ever really enabled.
 
     [Fact]
     public async Task EnableService_WhenConfirmDeclined_ChangesNothing()
@@ -648,6 +652,7 @@ public class ServicesViewModelTests
         // SysManager — `previous` is null and StartTypeToScToken's `_ => "demand"` fallback sets the
         // service to MANUAL. A prompt saying "restored" would describe an action the app does not
         // perform, which is the failure this guard exists to prevent.
+        using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();   // deliberately empty
 
@@ -660,8 +665,6 @@ public class ServicesViewModelTests
 
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
-        if (dialog.Calls == 0) return;   // not elevated: returned at the gate, before any prompt
-
         DialogService.Instance.Received(1).Confirm(
             Arg.Is<string>(m => m.Contains("Manual") && !m.Contains("set back to")),
             Arg.Any<string>());
@@ -670,6 +673,7 @@ public class ServicesViewModelTests
     [Fact]
     public async Task EnableService_WithARememberedType_NamesThatTypeInThePrompt()
     {
+        using var elevated = AdminHelper.ForceElevation(true);
         using var temp = new TempLedgerDir();
         var ledger = temp.NewLedger();
         ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch);
@@ -683,8 +687,6 @@ public class ServicesViewModelTests
 
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
-        if (dialog.Calls == 0) return;   // not elevated
-
         DialogService.Instance.Received(1).Confirm(
             Arg.Is<string>(m => m.Contains("set back to Automatic")),
             Arg.Any<string>());
@@ -693,9 +695,10 @@ public class ServicesViewModelTests
     [Fact]
     public void EveryMutatingServiceCommand_GoesThroughAConfirm()
     {
-        // A source-level guard, because the runtime tests above cannot cover the elevated branch on a
-        // non-elevated CI runner. Enable was missing its confirm precisely because three siblings had
-        // one and nothing checked that the fourth did — so the count is asserted rather than assumed.
+        // A source-level guard, because the runtime tests above reach only Enable: they force elevation
+        // to get past the gate, but each one drives a single command. Enable was missing its confirm
+        // precisely because three siblings had one and nothing checked that the fourth did — so the
+        // count is asserted rather than assumed.
         var source = File.ReadAllText(Path.Combine(
             FindProjectDir(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
 

@@ -51,7 +51,9 @@ public class NetworkSharedStateTests
     {
         var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
         var first = state.Targets.FirstOrDefault(t => !t.IsCustom);
-        if (first == null) return;
+        // Asserted rather than returned on: the constructor ends with ApplyPreset(TargetPresets.Global), and
+        // AddTarget defaults isCustom to false, so a non-custom target always exists to try removing.
+        Assert.NotNull(first);
         var before = state.Targets.Count;
         state.RemoveTarget(first);
         Assert.Equal(before, state.Targets.Count);

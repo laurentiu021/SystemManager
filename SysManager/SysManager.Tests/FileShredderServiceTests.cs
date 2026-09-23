@@ -596,7 +596,10 @@ public class FileShredderServiceTests
         // short-name alias of a protected directory can't slip past the denylist.
         var progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var root = Path.GetPathRoot(progFiles); // e.g. "C:\"
-        if (string.IsNullOrEmpty(root)) return;
+        // Asserted rather than returned on: Program Files always has a path root, so an empty one is a
+        // broken host and worth failing on. Returning made this test pass without expanding anything.
+        Assert.False(string.IsNullOrEmpty(root),
+            "Program Files has no path root — GetFolderPath returned something unusable.");
         var shortForm = Path.Combine(root, "PROGRA~1");
 
         var expanded = FileShredderService.ExpandShortPath(shortForm);

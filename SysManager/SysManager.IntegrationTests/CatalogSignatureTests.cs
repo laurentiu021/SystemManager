@@ -41,9 +41,11 @@ public class CatalogSignatureTests
     {
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), relative);
 
-        // Skip rather than fail if a future Windows drops one of these: the claim is about catalog
-        // verification, not about which binaries ship.
-        if (!File.Exists(path)) return;
+        // A REPORTED skip rather than a bare return if a future Windows drops one of these. Not failing is
+        // right — the claim is about catalog verification, not about which binaries ship — but a silent
+        // return lands in the run summary's passed: count, so the row would claim the catalog path had been
+        // exercised on a machine where nothing was verified at all.
+        if (!File.Exists(path)) Assert.Skip($"{relative} is not present on this Windows build.");
 
         Assert.Equal(TrustResult.Trusted, WindowsTrust.Verify(path));
     }
@@ -125,7 +127,8 @@ public class CatalogSignatureTests
     public void RepeatedVerification_KeepsGivingTheSameAnswer()
     {
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"System32\cmd.exe");
-        if (!File.Exists(path)) return;
+        // Reported rather than returned on, for the same reason as the theory above.
+        if (!File.Exists(path)) Assert.Skip(@"System32\cmd.exe is not present on this Windows build.");
 
         var first = WindowsTrust.Verify(path);
         Assert.Equal(TrustResult.Trusted, first);

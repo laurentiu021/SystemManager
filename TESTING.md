@@ -224,6 +224,39 @@ early. `UninstallerUiTests.CurrentSession_ShowsMatchingGuidanceWithoutAdminRelau
 `ArchitectureTests.NoTestSkipsItselfBecauseTheSessionIsElevated` fails the build if the skip comes back,
 across all three test projects.
 
+### A missing precondition is a skip, never a return
+
+`if (!File.Exists(path)) return;` reports a **pass**. Twelve tests opened with a variant of it — no default
+gateway, no user SID to deny with, a `System32` binary a future Windows might drop, a health scan that
+produced no score — and each landed in the run summary's `passed:` count having asserted nothing, on
+exactly the hosts where the assertion mattered. Nothing anywhere said so, and that is what separates it
+from a skip: `skipped: 3` is a number a reader can act on.
+
+There are three honest endings and no fourth:
+
+- **The condition cannot occur on a real host** → assert it. `WindowsIdentity.GetCurrent().User` is
+  nullable only because an anonymous token has no user SID, and a process token is never anonymous — so
+  `Assert.NotNull(sid)` satisfies the nullable analysis the guard clause was really there for while making
+  the impossible case loud instead of reporting a pass that denied nothing.
+- **It genuinely can** → `Assert.Skip`, carrying the reason. `CatalogSignatureTests` skips the binary it
+  cannot find; `DashboardHealthFlagTests` skips when the scan produced no score.
+- **Both branches are real behaviour** → assert both.
+  `GatewayHelperTests.DetectDefaultGateway_ReturnsNullOrValidIPv4` asserts null when no eligible adapter
+  offers a gateway and a parseable, in-set IPv4 when one does, rather than describing only the half the
+  current machine happens to have.
+
+Where the absent precondition is elevation, the answer is `ForceElevation` — see the section above; two of
+the twelve were that shape, both prompt-wording assertions that the execute-time gate returned before.
+
+A fourth *resolution*, not a fourth ending, is deletion: a test that is a strict subset of one asserting
+more is coverage in name only. `QaAuditTests`' gateway parse check went that way, leaving a pointer
+comment where it stood.
+
+`ArchitectureTests.NoTest_ReportsAPassByReturningEarly` fails the build if one comes back, across all
+three test projects. It partitions each file into members by indentation rather than by counting braces:
+293 of the corpus's string literals hold an unbalanced brace and 89 lines are left net-skewed by them, and
+a brace matcher over it already ran one body into the next.
+
 ### Dependency-graph validation
 
 `ServiceRegistrationGraphTests` builds the real container from `ServiceRegistration.ConfigureServices`

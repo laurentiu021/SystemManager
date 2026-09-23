@@ -51,7 +51,11 @@ public class DashboardHealthFlagTests
         var vm = NewVm();
         await vm.InitializationComplete;
 
-        if (!vm.HasHealthScore) return;   // the scan itself failed on this host; nothing to imply
+        // The scan failing is a real host condition — it reads WMI and the disk — so declining to assert is
+        // right. It is REPORTED rather than returned on, because a bare return lands in the run summary's
+        // passed: count: the row would claim the flag had been checked against a scan that never produced a
+        // score, which is the one case where the implication below is unobserved.
+        if (!vm.HasHealthScore) Assert.Skip("the health scan produced no score on this host.");
         Assert.NotNull(vm.HealthResult);
         Assert.Equal(vm.HealthResult!.Recommendations.Count == 0, vm.HealthHasNothingToImprove);
     }

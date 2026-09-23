@@ -682,7 +682,10 @@ Key services:
   denylist of system-critical package families is enforced in code; the parser and
   denylist check are pure, unit-tested static methods.
 - `BrowserCleanerService` — scans + cleans per-browser data (Chromium family +
-  Firefox) under injectable LOCALAPPDATA/APPDATA roots. Scan is read-only (sizes);
+  Firefox) under injectable LOCALAPPDATA/APPDATA roots. Chrome, Edge, Brave and Vivaldi share
+  one per-profile expansion; Opera is the family exception (no `\Default\` segment, two roots)
+  and is driven by a channel table — Stable, GX, Beta, Developer — so each channel is its own
+  row rather than a copy of the code. Scan is read-only (sizes);
   Clean deletes only discovered files, skips locked files, and never follows
   reparse points. Cookies/sessions are flagged sensitive. Firefox cache lives under
   Local and its cookies/sessions under Roaming (like Opera's split); each targets

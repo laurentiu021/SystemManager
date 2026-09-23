@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.0] - 2026-09-23
+
+**If you use Opera GX, Browser Cleaner had nothing to show you.** It looked for Opera's cache and cookies
+only in the folder the ordinary Opera uses, so on a PC running Opera GX — the build made for gamers — the
+tab came back with no Opera rows at all and never said why. Every Opera channel is now covered, each as its
+own row, and Vivaldi is covered too.
+
+### Added
+
+- **Opera GX gets its own row.** It sits beside "Opera" in the Browser column, with the same four categories
+  (cache, history, cookies, sessions) and the same sizes. Cleaning one Opera channel never touches another,
+  so clearing GX leaves your ordinary Opera signed in and vice versa.
+- **Opera Beta and Opera Developer are covered as well.** They keep their profiles in the same place, in
+  their own folders, so covering them cost nothing. A channel you do not have installed simply never appears
+  in the list — the tab only ever shows rows it actually found data for.
+- **Vivaldi is covered.** It stores its data the way Chrome and Edge do, so it also gets the per-profile
+  handling those already had: if you keep two Vivaldi profiles, each is scanned and named in its own row
+  ("Vivaldi — Profile 1"), and cleaning one leaves the other alone.
+
+### Changed
+
+- The heading above the tab and the feature list in the README now name every browser the scan covers, so
+  what the app promises and what it looks for are the same list.
+
 ## [1.112.9] - 2026-09-23
 
 **Large Files led with two files you are not allowed to touch.** Scan the system drive and the top of the

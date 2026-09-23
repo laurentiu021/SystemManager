@@ -126,23 +126,6 @@ public sealed class BrowserCleanerServiceTests : IDisposable
     // inside a browser profile dir. The cleaner must NEVER follow it out of the tree to
     // measure or delete unrelated user data. ---
 
-    /// <summary>Creates an NTFS junction at <paramref name="linkPath"/> → <paramref name="targetPath"/>.</summary>
-    private static bool TryCreateJunction(string linkPath, string targetPath)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(linkPath)!);
-        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{linkPath}\" \"{targetPath}\"")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        using var p = System.Diagnostics.Process.Start(psi);
-        if (p is null) return false;
-        p.WaitForExit(10_000);
-        return p.ExitCode == 0 && Directory.Exists(linkPath);
-    }
-
     [Fact]
     public async Task Scan_DoesNotFollowJunction_OutOfBrowserTree()
     {
@@ -153,7 +136,7 @@ public sealed class BrowserCleanerServiceTests : IDisposable
 
         // Replace Chrome's Cache leaf with a junction pointing at the victim dir.
         var cacheLink = Path.Combine(_local, @"Google\Chrome\User Data\Default\Cache");
-        if (!TryCreateJunction(cacheLink, victimDir)) return; // skip if junctions unavailable
+        Symlinks.RequireJunction(cacheLink, victimDir);   // Dispose tears the tree down either way
 
         var items = await _svc.ScanAsync();
         var cache = items.FirstOrDefault(i => i.Browser == "Google Chrome" && i.Category == "Cache");
@@ -180,7 +163,7 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         File.WriteAllBytes(secret, new byte[4096]);
 
         var cacheLink = Path.Combine(_local, @"Google\Chrome\User Data\Default\Cache");
-        if (!TryCreateJunction(cacheLink, victimDir)) return; // skip if junctions unavailable
+        Symlinks.RequireJunction(cacheLink, victimDir);
 
         // Force the item through Clean directly (bypassing scan-time filtering) to prove
         // the deletion path itself refuses to follow the junction.
@@ -363,8 +346,7 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         File.WriteAllBytes(Path.Combine(victim, "important.dat"), new byte[4096]);
 
         var link = Path.Combine(_local, @"Google\Chrome\User Data\Profile 1");
-        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
-        if (!TryCreateJunction(link, victim)) return;   // skip where junctions are unavailable
+        Symlinks.RequireJunction(link, victim);
 
         var items = await _svc.ScanAsync();
 

@@ -412,6 +412,25 @@ Key services:
   filter exists only for Deep Cleanup, whose default is *measured*: an empty category was unticked
   by the scan, not the user, so it takes the default again once it has content. The other five
   default from constants and pass null.
+- `Helpers/SettlingProgress` — the `IProgress<T>` a tab hands to a service it awaits, defined once
+  for the eleven sites across nine view models whose callback writes a property their own post-await
+  code writes again as its final value. `Progress<T>` captures the `SynchronizationContext` in its
+  own constructor and delivers each report by POSTING to it, so the caller's terminal write wins
+  only by queue order — an ordering nothing states, and one `ConfigureAwait(false)`, one `Task.Run`
+  or one continuation that drains later revokes it. It has already happened: an erased file stayed
+  labelled `"Shredding pass 2/3..."` forever, and the required unit check went flaky because a test
+  has no context at all, which makes both writes unordered pool work (#2391, #2392). The worst of
+  the rest replaces an instruction the user has to act on — "Download complete. Click Install to
+  restart with the new version." — with a byte count. `SettleAfterAsync` is the entire surface: the
+  caller awaits the operation THROUGH the reporter, so the flag is set in the wrapper's `finally`
+  and the success arm, every catch arm and the enclosing `finally` are all past it without a line
+  each. Exposing the latch instead would have made the correct use the optional one. Dashboard's
+  Quick Tune-Up keeps the raw type on purpose — its callback writes nothing the method writes after
+  the await — and `ArchitectureTests` asserts it stays in the non-racing set, which is the tripwire
+  for the "from the first await onward" bound that decides which sites the rule reaches. That guard
+  checks BOTH halves, because they fail independently: the TYPE at each construction, and the
+  HANDOVER at every later use of the reporter. A site that builds the wrapper and then passes it to
+  the service directly is the original defect with the primitive sitting unused beside it.
 - `Helpers/SafeFileWalk` — the one directory walk every service that deletes or overwrites what it
   finds goes through. Four rules live here rather than at eight copies of a stack loop: never enter a
   reparse point (the root, a directory, **or a file**), skip the excluded subtrees, honour the

@@ -354,7 +354,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         DownloadStatus = "Downloading...";
         try
         {
-            var progress = new Progress<(long read, long? total)>(p =>
+            var progress = new SettlingProgress<(long read, long? total)>(p =>
             {
                 if (p.total is long t && t > 0)
                 {
@@ -367,7 +367,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 }
             });
 
-            var path = await _updates.DownloadAsync(_latest, progress);
+            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(_latest, reporter));
             if (path is not null && File.Exists(path))
             {
                 DownloadedPath = path;

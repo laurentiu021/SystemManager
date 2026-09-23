@@ -904,12 +904,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickActionDetail = "Running HTTP speed test (Cloudflare)...";
             QuickActionProgress = 20;
             var service = new SpeedTestService();
-            var progress = new Progress<(int Percent, string Message)>(p =>
+            var progress = new SettlingProgress<(int Percent, string Message)>(p =>
             {
                 QuickActionProgress = 20 + (int)(p.Percent * 0.8);
                 QuickActionDetail = p.Message;
             });
-            var result = await service.RunHttpAsync(progress, CancellationToken.None);
+            var result = await progress.SettleAfterAsync(
+                reporter => service.RunHttpAsync(reporter, CancellationToken.None));
 
             QuickActionProgress = 100;
             QuickActionDetail = $"↓ {result.DownloadMbps:F0} Mbps · ↑ {result.UploadMbps:F0} Mbps · Ping {result.PingMs:F0}ms";

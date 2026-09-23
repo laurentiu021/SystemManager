@@ -201,21 +201,11 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
                 var totalPasses = (int)SelectedMethod;
 
-                // Set once this item reaches a status it will not leave. Progress<T> delivers through
-                // SynchronizationContext.Post, so the service's last report — raised from a
-                // ConfigureAwait(false) continuation — is not ordered against the await continuation that
-                // records the outcome. Without this gate, a report that drains afterwards overwrites the
-                // final status with a pass counter, and the item is left looking unfinished forever.
-                var settled = 0;
-                void Settle(string status)
+                // Stops reporting the moment the shred ends, so none of the final statuses below can be
+                // overwritten by a report that drains afterwards and leaves an erased file looking
+                // unfinished forever. SettlingProgress carries why that is not theoretical (#2391).
+                var itemProgress = new SettlingProgress<int>(p =>
                 {
-                    Volatile.Write(ref settled, 1);
-                    item.Status = status;
-                }
-
-                var itemProgress = new Progress<int>(p =>
-                {
-                    if (Volatile.Read(ref settled) != 0) return;
                     var currentPass = (int)Math.Ceiling(p / 100.0 * totalPasses);
                     item.Status = $"Shredding pass {currentPass}/{totalPasses}...";
                 });
@@ -230,7 +220,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         // mutates the bound Items collection (RemoveAt in finally) and item.Status,
                         // which throw if run off the UI thread. The service's internal awaits keep
                         // ConfigureAwait(false).
-                        var report = await _service.ShredFolderAsync(item.Path, SelectedMethod, itemProgress, ct);
+                        var report = await itemProgress.SettleAfterAsync(
+                            reporter => _service.ShredFolderAsync(item.Path, SelectedMethod, reporter, ct));
                         if (report.Notice is { } notice)
                             notices.Add($"{item.Name}: {notice}");
 
@@ -239,7 +230,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                         // silently removed from the list.
                         if (report.WasCancelled)
                         {
-                            Settle(report.FilesShredded == 0 ? "Cancelled" : "Partly shredded");
+                            item.Status = report.FilesShredded == 0 ? "Cancelled" : "Partly shredded";
                             cancelled = true;
                             break;
                         }
@@ -247,7 +238,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     else
                     {
                         item.Status = $"Shredding pass 1/{totalPasses}...";
-                        var passesRun = await _service.ShredFileAsync(item.Path, SelectedMethod, itemProgress, ct);
+                        var passesRun = await itemProgress.SettleAfterAsync(
+                            reporter => _service.ShredFileAsync(item.Path, SelectedMethod, reporter, ct));
 
                         // Cancelling after the overwrite began cannot bring the file back, so the service
                         // finishes and removes it rather than leaving a corrupt one behind. It IS shredded —
@@ -260,7 +252,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                                 + "was already unrecoverable at that point.");
                     }
 
-                    Settle("Done");
+                    item.Status = "Done";
                     destroyed.Add(item);
                     completed++;
                 }
@@ -269,13 +261,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     // Reachable only BEFORE this item's first byte — the service no longer abandons an
                     // overwrite it has started, so this arm can never again be the "file destroyed but
                     // reported cancelled" case. "Cancelled" here is therefore literally true.
-                    Settle("Cancelled");
+                    item.Status = "Cancelled";
                     cancelled = true;
                     break;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
-                    Settle("Failed");
+                    item.Status = "Failed";
                     failed++;
                     Log.Warning(ex, "Failed to shred: {Path}", item.Path);
 

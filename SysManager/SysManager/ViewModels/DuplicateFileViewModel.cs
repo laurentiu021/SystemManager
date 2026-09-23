@@ -153,9 +153,10 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         try
         {
             var minBytes = MinBytesFor(MinSizeKb);
-            var progress = new Progress<DuplicateFileService.ScanProgress>(ApplyScanProgress);
+            var progress = new SettlingProgress<DuplicateFileService.ScanProgress>(ApplyScanProgress);
 
-            var results = await _service.ScanAsync(SelectedFolder, minBytes, progress, ct);
+            var results = await progress.SettleAfterAsync(
+                reporter => _service.ScanAsync(SelectedFolder, minBytes, reporter, ct));
 
             // Suggest a keeper per group BEFORE binding, so no group is ever shown as N equal rows with
             // no hint which file is the original.

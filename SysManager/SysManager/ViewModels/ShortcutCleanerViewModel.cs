@@ -87,8 +87,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
         try
         {
-            var progress = new Progress<string>(msg => CurrentLocation = msg);
-            var report = await _service.ScanAsync(progress, _cts.Token);
+            var progress = new SettlingProgress<string>(msg => CurrentLocation = msg);
+            var report = await progress.SettleAfterAsync(reporter => _service.ScanAsync(reporter, _cts.Token));
             var results = report.Broken;
 
             // Applied before subscribing, so re-applying a tick the user set earlier does not fire a

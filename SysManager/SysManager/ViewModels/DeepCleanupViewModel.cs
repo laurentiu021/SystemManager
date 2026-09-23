@@ -174,13 +174,13 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         _scanCts = new CancellationTokenSource();
         try
         {
-            var progress = new Progress<DeepCleanupService.ScanProgress>(p =>
+            var progress = new SettlingProgress<DeepCleanupService.ScanProgress>(p =>
             {
                 ScanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 ScanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
                 ScanEtaText = _scanEta.Update(ScanProgress);
             });
-            var cats = await _cleanup.ScanAsync(progress, _scanCts.Token);
+            var cats = await progress.SettleAfterAsync(reporter => _cleanup.ScanAsync(reporter, _scanCts.Token));
 
             // Carry the user's ticks across the rescan. Categories arrive pre-selected from the service
             // (size > 0 && !IsDestructiveHint) and ReplaceWith throws the old ones away, so a rescan
@@ -269,13 +269,14 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         _cleanCts = new CancellationTokenSource();
         try
         {
-            var progress = new Progress<DeepCleanupService.ScanProgress>(p =>
+            var progress = new SettlingProgress<DeepCleanupService.ScanProgress>(p =>
             {
                 CleanProgress = p.Total > 0 ? p.Current * 100 / p.Total : 0;
                 CleanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
                 CleanEtaText = _cleanEta.Update(CleanProgress);
             });
-            var result = await _cleanup.CleanAsync(Categories, progress, _cleanCts.Token);
+            var result = await progress.SettleAfterAsync(
+                reporter => _cleanup.CleanAsync(Categories, reporter, _cleanCts.Token));
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
             ToastService.Instance.Show("Deep cleanup complete", result.Summary);

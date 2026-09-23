@@ -496,15 +496,18 @@ public class FileShredderViewModelTests
     /// <summary>
     /// The other half of the same defect. The removal no longer depends on the label, but the label is
     /// still what the user reads: a late report overwriting "Cancelled" or "Failed" leaves a finished row
-    /// saying "Shredding pass 2/3..." that never changes again. The queue loop therefore routes every final
-    /// status through a local <c>Settle</c>, which latches a flag the progress callback checks first.
+    /// saying "Shredding pass 2/3..." that never changes again. The queue loop therefore reports through
+    /// <see cref="SettlingProgress{T}"/> and hands the shred to it, so the reporter has stopped by the time
+    /// any final status is written.
     /// </summary>
     /// <remarks>
-    /// Asserted against the source rather than by behaviour, deliberately. Reproducing the late delivery
-    /// needs <c>Progress&lt;T&gt;</c> to post after the await continuation, and the only lever a test has
-    /// over those two is installing a <c>SynchronizationContext</c> — which replaces the scheduling under
-    /// test with a FIFO queue in which the report always arrives first and the defect cannot occur. Same
-    /// reason <c>BothAddPaths_ReportSkippedItemsOnScreen_NotOnlyToTheLog</c> above reads source.
+    /// Asserted against the source rather than by behaviour, deliberately. Whether a report raised after the
+    /// operation ends is dropped is behaviour, and <c>SettlingProgressTests</c> measures it there. What no
+    /// test of this view model can reach is whether THIS site still goes through that primitive: reproducing
+    /// the late delivery needs <c>Progress&lt;T&gt;</c> to post after the await continuation, and the only
+    /// lever a test has over those two is installing a <c>SynchronizationContext</c> — which replaces the
+    /// scheduling under test with a FIFO queue in which the report always arrives first and the defect cannot
+    /// occur. Same reason <c>BothAddPaths_ReportSkippedItemsOnScreen_NotOnlyToTheLog</c> above reads source.
     /// </remarks>
     [Fact]
     public void EveryFinalShredStatus_IsSetThroughTheGateALateReportCannotCross()
@@ -517,19 +520,27 @@ public class FileShredderViewModelTests
             .Select(line => line.Split("//", StringSplitOptions.None)[0])
             .ToArray();
 
+        // The reporter settles in SettleAfterAsync's finally, so the handover line is the boundary: a final
+        // status written before it is a status the reporter is still free to overwrite.
+        var handover = Array.FindIndex(lines,
+            line => line.Contains("SettleAfterAsync(", StringComparison.Ordinal));
+        Assert.True(handover >= 0,
+            "the shred queue no longer hands its operation to SettleAfterAsync, so nothing here stops a "
+            + "progress report from overwriting a final status. This guard checks nothing as written.");
+
         string[] finalStatuses = ["\"Done\"", "\"Cancelled\"", "\"Failed\"", "\"Partly shredded\""];
         var seen = finalStatuses.ToDictionary(status => status, _ => 0, StringComparer.Ordinal);
         var offenders = new List<string>();
 
-        foreach (var line in lines)
+        for (var i = 0; i < lines.Length; i++)
         {
             foreach (var status in finalStatuses)
             {
-                if (!line.Contains(status, StringComparison.Ordinal)) continue;
+                if (!lines[i].Contains(status, StringComparison.Ordinal)) continue;
 
                 seen[status]++;
-                if (!line.Contains("Settle(", StringComparison.Ordinal))
-                    offenders.Add($"{status} → {line.Trim()}");
+                if (i < handover)
+                    offenders.Add($"{status} → {lines[i].Trim()}");
             }
         }
 
@@ -541,20 +552,50 @@ public class FileShredderViewModelTests
                 + "it. Either the status was renamed — update the list — or its branch is gone.");
 
         Assert.True(offenders.Count == 0,
-            "these final statuses are assigned straight to item.Status. Go through Settle() instead: a "
-            + "progress report that drains after the queue loop has moved on overwrites a raw assignment, "
-            + "and the row is left saying it is still being shredded on an item that has finished:\n  "
+            "these final statuses are written before the shred is handed to SettleAfterAsync, so the "
+            + "reporter is still live when they land: a progress report that drains afterwards overwrites "
+            + "them, and the row is left saying it is still being shredded on an item that has finished:\n  "
             + string.Join("\n  ", offenders));
 
-        // And the gate itself, both ends — a latch nothing reads would leave every assignment above
-        // exposed while this test still passed on the Settle() spelling alone.
-        Assert.Contains("Volatile.Write(ref settled", body, StringComparison.Ordinal);
-        var gates = lines.Where(line =>
-            line.Contains("Volatile.Read(ref settled)", StringComparison.Ordinal)
-            && line.Contains("return", StringComparison.Ordinal)).ToArray();
-        Assert.True(gates.Length == 1,
-            $"expected exactly one early return guarded by the settled latch, found {gates.Length} — "
-            + "without it the progress callback writes over a final status.");
+        // And the reporter itself — the statuses above are ordinary assignments now, so they are only safe
+        // for as long as the thing reporting over them is the settling one.
+        var built = lines.Count(line =>
+            line.Contains("new SettlingProgress<int>(", StringComparison.Ordinal));
+        Assert.True(built == 1,
+            $"expected exactly one SettlingProgress reporter in the queue loop, found {built} — a raw "
+            + "Progress<int> here reports straight over whatever the loop wrote last.");
+        // Assembled by concatenation, for the reason that guard gives about its own control string: a
+        // literal here would be found by the scan that bans a raw Progress<T> in a test — in this very
+        // file — and reported as the violation this line exists to prevent.
+        Assert.False(string.Join("\n", lines).Contains("new " + "Progress<", StringComparison.Ordinal),
+            "a raw Progress<int> is built in the queue loop beside the settling one, and it reports straight "
+            + "over whatever the loop wrote last.");
+
+        // One reporter per item, built inside the loop. Hoisting it above the foreach would settle it on the
+        // first item and leave every later one with no progress at all.
+        var loop = Array.FindIndex(lines,
+            line => line.Contains("foreach (var item in Items", StringComparison.Ordinal));
+        Assert.True(loop >= 0, "the queue loop over Items is gone — update this guard.");
+        Assert.True(Array.FindIndex(lines,
+                line => line.Contains("new SettlingProgress<int>(", StringComparison.Ordinal)) > loop,
+            "the reporter is built outside the queue loop, so it settles on the first item and every "
+            + "later one shreds with no progress reported at all.");
+
+        // Every shred goes through the wrapper. An awaited service call would run with a reporter nothing
+        // settles, which is the original bug with a shared primitive sitting unused next to it.
+        var serviceCalls = lines.Count(line => line.Contains("_service.Shred", StringComparison.Ordinal));
+        Assert.True(serviceCalls >= 2,
+            $"found {serviceCalls} shred calls in the queue loop, expected the file and folder branches — "
+            + "the slice or the branch names changed, so the check below proves nothing.");
+        var handovers = lines.Count(line => line.Contains("SettleAfterAsync(", StringComparison.Ordinal));
+        Assert.True(serviceCalls == handovers,
+            $"{serviceCalls} shred calls in the queue loop against {handovers} handed to SettleAfterAsync. A "
+            + "shred awaited directly runs with a reporter nothing settles, so its last report overwrites "
+            + "whichever final status its branch writes — half a migration is the original defect with the "
+            + "primitive sitting unused beside it.");
+        Assert.False(string.Join("\n", lines).Contains("await _service.", StringComparison.Ordinal),
+            "a shred is awaited straight from the service instead of through the reporter's SettleAfterAsync; "
+            + "the count above says how many.");
     }
 
     /// <summary>

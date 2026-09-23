@@ -99,11 +99,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         HttpStatus = "Starting HTTP speed test…";
         _speedCts?.Dispose();
         _speedCts = new CancellationTokenSource();
-        var progress = new Progress<(int p, string m)>(t =>
+        var progress = new SettlingProgress<(int p, string m)>(t =>
         { SpeedProgress = t.p; HttpStatus = t.m; EstimatedTime = _eta.Update(t.p); });
         try
         {
-            HttpResult = await Shared.Speed.RunHttpAsync(progress, _speedCts.Token);
+            HttpResult = await progress.SettleAfterAsync(
+                reporter => Shared.Speed.RunHttpAsync(reporter, _speedCts.Token));
             HttpStatus = "HTTP done";
             Log.Information("HTTP speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 HttpResult.DownloadMbps, HttpResult.UploadMbps);
@@ -153,11 +154,12 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         OoklaStatus = "Starting Ookla speed test…";
         _speedCts?.Dispose();
         _speedCts = new CancellationTokenSource();
-        var progress = new Progress<(int p, string m)>(t =>
+        var progress = new SettlingProgress<(int p, string m)>(t =>
         { SpeedProgress = t.p; OoklaStatus = t.m; EstimatedTime = _eta.Update(t.p); });
         try
         {
-            OoklaResult = await Shared.Speed.RunOoklaAsync(progress, _speedCts.Token, ParseServerId(SelectedOoklaServer));
+            OoklaResult = await progress.SettleAfterAsync(
+                reporter => Shared.Speed.RunOoklaAsync(reporter, _speedCts.Token, ParseServerId(SelectedOoklaServer)));
             OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);

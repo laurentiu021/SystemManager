@@ -144,18 +144,18 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         try
         {
-            var progress = new Progress<LargeFileScanner.LargeFileProgress>(p =>
+            var progress = new SettlingProgress<LargeFileScanner.LargeFileProgress>(p =>
             {
                 FilesScanned = p.FilesScanned;
                 BytesScanned = p.BytesScanned;
                 CurrentFolder = p.CurrentFolder;
             });
-            var list = await _scanner.ScanAsync(
+            var list = await progress.SettleAfterAsync(reporter => _scanner.ScanAsync(
                 rootPath: SelectedLocation.Path,
                 minSizeBytes: (long)MinSizeMB * 1024L * 1024L,
                 top: TopCount,
-                progress: progress,
-                ct: _cts.Token);
+                progress: reporter,
+                ct: _cts.Token));
             Files.ReplaceWith(list);
             ScanStatus = $"Found {list.Count} files ≥ {MinSizeMB} MB in {SelectedLocation.Label.Trim()}.";
             ToastService.Instance.Show("Large file scan complete", $"{list.Count} files found ≥ {MinSizeMB} MB");

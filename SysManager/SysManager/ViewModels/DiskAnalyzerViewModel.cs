@@ -186,9 +186,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             // Writes the SILENT half only. StatusMessage is set at the phase boundaries — "Analyzing…" above,
             // and the outcome below — so the announced line changes twice per scan instead of once per
             // folder. See ScanReadout for what over-announcing did here.
-            var progress = new Progress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
+            var progress = new SettlingProgress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
 
-            var results = await _service.AnalyzeAsync(SelectedPath, progress, ct);
+            var results = await progress.SettleAfterAsync(
+                reporter => _service.AnalyzeAsync(SelectedPath, reporter, ct));
 
             Entries.ReplaceWith(results);
 

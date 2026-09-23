@@ -855,6 +855,29 @@ public partial class ArchitectureTests
     {
         var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 
+        foreach (var (name, open, end) in MethodSpans(source))
+        {
+            if (!result.TryGetValue(name, out var bodies))
+                result[name] = bodies = [];
+            bodies.Add(source[open..end]);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Every method declared in one comment-stripped C# file, as its name plus the offsets of its body — the
+    /// index of the opening brace and the index just past the closing one.
+    /// </summary>
+    /// <remarks>
+    /// The offsets are what <see cref="MethodBodiesByName"/> throws away. A check that has to know WHICH
+    /// method one particular construction sits in — rather than what some named method contains — needs them;
+    /// <c>EveryProgressCallbackRacingItsCallersOutcome_ReportsThroughSettlingProgress</c> is the case. Both
+    /// read the one signature pattern from here, so they cannot drift into disagreeing about where a method
+    /// begins, and the guard that asserts these bodies end at their own closing brace covers both.
+    /// </remarks>
+    private static IEnumerable<(string Name, int Open, int End)> MethodSpans(string source)
+    {
         foreach (var m in Regex.Matches(
                      source,
                      @"\n    (?:\[[^\]]*\]\s*\n\s*)*(?:public|private|internal|protected)[^\n=;]*?\b(\w+)\s*\([^)]*\)\s*\n?\s*\{")
@@ -864,14 +887,8 @@ public partial class ArchitectureTests
             if (open < 0) continue;
 
             var close = SourceBraces.MatchingBrace(source, open);
-            var end = close < 0 ? source.Length : close;
-
-            if (!result.TryGetValue(m.Groups[1].Value, out var bodies))
-                result[m.Groups[1].Value] = bodies = [];
-            bodies.Add(source[open..end]);
+            yield return (m.Groups[1].Value, open, close < 0 ? source.Length : close);
         }
-
-        return result;
     }
 
     /// <summary>
@@ -11628,7 +11645,7 @@ public partial class ArchitectureTests
             var argument = m.Groups["arg"].Value;
 
             // A bare identifier is a method reference: read that method's body instead. Anything else is a
-            // lambda, whose body runs from the construction to the parenthesis that closes it.
+            // lambda, whose body runs from the argument list to the parenthesis that closes it.
             if (argument.Length > 0)
             {
                 if (MethodBodiesByName(code).TryGetValue(argument, out var overloads))
@@ -11637,7 +11654,8 @@ public partial class ArchitectureTests
                 continue;
             }
 
-            yield return BalancedFrom(code, m.Index);
+            var open = ProgressArgumentList(code, m);
+            if (open >= 0) yield return BalancedFrom(code, open);
         }
     }
 
@@ -11660,6 +11678,26 @@ public partial class ArchitectureTests
         return code[start..];
     }
 
+    /// <summary>
+    /// The index of the parenthesis that opens a progress construction's argument list — the one AFTER the
+    /// generic argument, which may itself be a tuple.
+    /// </summary>
+    /// <remarks>
+    /// Starting the paren walk at the construction instead balances out on the TUPLE's own closing
+    /// parenthesis and hands back <c>new Progress&lt;(int Step, string Message)</c>: a callback with no
+    /// statements in it, from which nothing is ever reported. Three of the twelve sites in ViewModels are
+    /// tuple-typed, so the reader above was silently reading a quarter of its own corpus as empty while its
+    /// site count stayed full — the site is counted at the construction and only the TEXT was truncated,
+    /// which is precisely the shape a count-based floor cannot see. Found while adding the sibling guard
+    /// below, which needs this offset for a second reason: where the construction ENDS is where the search
+    /// for the caller's own writes begins.
+    /// </remarks>
+    private static int ProgressArgumentList(string code, Match construction)
+    {
+        var generic = code.IndexOf('>', construction.Index);
+        return generic < 0 ? -1 : code.IndexOf('(', generic);
+    }
+
     /// <summary>The property names assigned in a block — the left side of a plain <c>X = …</c>.</summary>
     /// <remarks>
     /// <c>item.Status = …</c> is deliberately NOT matched: a row's own property is not a tab-level line, and
@@ -11672,19 +11710,343 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A <c>new Progress&lt;T&gt;(</c> construction. <c>arg</c> captures the argument only when it is a bare
-    /// identifier — a method group — and is empty for a lambda, which is how the reader tells them apart.
+    /// A <c>new Progress&lt;T&gt;(</c> or <c>new SettlingProgress&lt;T&gt;(</c> construction. <c>arg</c>
+    /// captures the argument only when it is a bare identifier — a method group — and is empty for a lambda,
+    /// which is how the reader tells them apart; <c>settling</c> says which of the two types it is.
     /// </summary>
     /// <remarks>
     /// The whole construction must match either way, or the lambda form would not be seen at all. Hence the
     /// optional group rather than requiring the identifier.
+    /// <para><b>Both types, because a callback is a callback.</b> The live-region rule is about the RATE a
+    /// callback writes at, which the wrapper delivering it does not change. Reading only the framework type
+    /// would have quietly emptied that corpus down to one site the moment the eleven racing ones moved to
+    /// <c>SettlingProgress</c> — the floor there would have caught it loudly, but the fix is to widen the
+    /// reader, never to lower the floor to match what it can still see.</para>
     /// </remarks>
-    [GeneratedRegex(@"new\s+Progress<[^>]*>\s*\((?:\s*(?<arg>[A-Za-z_]\w*)\s*\))?", RegexOptions.Compiled)]
+    [GeneratedRegex(@"new\s+(?<settling>Settling)?Progress<[^>]*>\s*\((?:\s*(?<arg>[A-Za-z_]\w*)\s*\))?",
+                    RegexOptions.Compiled)]
     private static partial Regex ProgressConstruction();
 
     /// <summary>An assignment to a bare property name at the start of a statement.</summary>
     [GeneratedRegex(@"(?:^|[;{}]|=>)\s*(?<name>[A-Z]\w*)\s*=(?!=)", RegexOptions.Compiled)]
     private static partial Regex PropertyAssignment();
+
+    /// <summary>
+    /// The reporter's own variable name, read from the declaration its construction sits in — anchored at the
+    /// end, so it is matched against the text between the start of that line and the <c>new</c>.
+    /// </summary>
+    [GeneratedRegex(@"var\s+(?<name>\w+)\s*=\s*$", RegexOptions.Compiled)]
+    private static partial Regex ReporterDeclaration();
+
+    /// <summary>
+    /// A whole-word use of the reporter variable <paramref name="name"/>, with the handover and the exempt
+    /// named-argument shapes captured. Whitespace-tolerant around the call, because a site formatted across
+    /// two lines settles exactly as much as one on a single line.
+    /// </summary>
+    /// <remarks>
+    /// Not a <see cref="GeneratedRegexAttribute"/>: the pattern is built from a name only known at run time.
+    /// Written once and called by both the guard and its own control assertion, so the shape the control
+    /// vouches for cannot drift from the shape the guard applies.
+    /// </remarks>
+    private static Regex ReporterUse(string name) => new(
+        $@"(?<![A-Za-z0-9_.]){Regex.Escape(name)}\b(?<handover>\s*\.\s*SettleAfterAsync\s*\()?(?<named>:)?",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A progress callback that writes a value its own caller writes again after the await must report
+    /// through <see cref="SettlingProgress{T}"/>, so the last report cannot land on top of the outcome.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The defect.</b> <c>Progress&lt;T&gt;</c> captures the <c>SynchronizationContext</c> in its
+    /// own constructor and delivers each report by POSTING to it. A post and an await continuation at the
+    /// same priority run in queue order, so on the dispatcher the report usually arrives first and the
+    /// caller's terminal write wins — usually, and by nothing the code states. One
+    /// <c>ConfigureAwait(false)</c> in the service, one <c>Task.Run</c>, one continuation that drains later,
+    /// and the order inverts: the per-item text lands after the outcome and stays there. That is what left
+    /// an erased file reading "Shredding pass 2/3..." forever (#2391), and in a unit test — where there is no
+    /// context at all, so both writes become unordered pool work — it is what made a required check flaky.
+    /// </para>
+    /// <para><b>Why this is asserted against source.</b> Reproducing the inversion needs the post to lose a
+    /// race it normally wins, and a test's only lever over those two is installing a context — which
+    /// replaces the scheduling under test with a FIFO queue in which the defect cannot occur.
+    /// <c>SettlingProgressTests</c> measures the primitive's behaviour; what no behavioural test can reach is
+    /// whether a given SITE still goes through it, and a site is one edit away from not.</para>
+    /// <para><b>What counts as racing.</b> The names the callback assigns, intersected with the names the
+    /// caller assigns from the FIRST await after the construction to the end of the enclosing method —
+    /// success arm, every catch, and the finally. Bounded at that await deliberately: a value written BEFORE
+    /// the operation starts is not a race, the callback overwriting it is the point. Dashboard's tune-up sets
+    /// <c>TuneUpProgress = 0</c> above its construction and writes nothing else its callback touches, which
+    /// is why it is the one site here that correctly keeps the raw type — and the assertion that it stays in
+    /// the non-racing set is what fails if this bound ever loosens to "anywhere in the method".</para>
+    /// <para><b>A method group is read through its body, every overload of it.</b> Two of the sites pass a
+    /// named handler rather than a lambda, so a call-site-only reader would clear them without looking at
+    /// what they write; and one overload that writes nothing must not vouch for one that does.</para>
+    /// <para><b>The type is not the handover, so both are checked.</b> A site that builds a
+    /// <c>SettlingProgress</c> and then awaits a service directly — passing the reporter without
+    /// <c>SettleAfterAsync</c> — is the original defect with the primitive sitting unused beside it, and the
+    /// racing verdict below would clear it, because that verdict is the TYPE at the construction. So every
+    /// whole-word use of the reporter's own variable, from its construction to the end of the method, must be
+    /// a <c>SettleAfterAsync</c> call. Written as "every use" rather than "at least one" deliberately: the
+    /// shred queue hands the SAME reporter over twice, once per branch, and half a migration there is exactly
+    /// the shape a floor on one handover would pass.</para>
+    /// <para>One shape is a use of the NAME without being a use of the OBJECT and is exempt:
+    /// <c>LargeFilesViewModel</c> passes its reporter as the named argument <c>progress: reporter</c>, whose
+    /// name collides with the variable's. The exemption is the literal <c>:</c> immediately after the name and
+    /// nothing else.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryProgressCallbackRacingItsCallersOutcome_ReportsThroughSettlingProgress()
+    {
+        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+
+        // The construction reader still tells the two types apart, positively AND negatively. That group is
+        // the whole verdict here: a migrated site misread as raw reports eleven false offenders, while a raw
+        // one misread as migrated reports none at all — and the silent direction is the one a floor cannot
+        // see. Assembled from pieces because a literal would be found by the scan that bans a raw
+        // Progress<T> in a test, in this very file.
+        var raw = "var p = new " + "Progress<int>(Apply);";
+        var wrapped = raw.Replace("new P", "new SettlingP", StringComparison.Ordinal);
+        Assert.False(ProgressConstruction().Match(raw).Groups["settling"].Success);
+        Assert.True(ProgressConstruction().Match(wrapped).Groups["settling"].Success);
+        Assert.Equal("Apply", ProgressConstruction().Match(raw).Groups["arg"].Value);
+
+        // And the assignment reader sees a row's own property, but neither a comparison nor a lambda arrow.
+        var control = AssignedNames(
+                "CurrentFile = p.Path; item.Status = \"Done\"; if (Total == 0) { } Percent => Percent")
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["CurrentFile", "item.Status"], control);
+
+        // And the reporter readers: the name comes off its declaration, and a use of it is classified into the
+        // three arms the loop below branches on — handed over, the exempt named-argument collision, or a bare
+        // pass that settles nothing. Both negatives matter as much: a longer identifier STARTING with the name
+        // is not a use of it, and neither is a member of something else that happens to share it.
+        Assert.Equal("itemProgress", ReporterDeclaration().Match("var itemProgress = ").Groups["name"].Value);
+        var classified = ReporterUse("progress")
+            .Matches("var list = await progress.SettleAfterAsync(r => _s.ScanAsync(progress: r));\n"
+                     + "await _s.ScanAsync(progress, ct);\nvar progressive = 1; this.progress = 2;")
+            .Cast<Match>()
+            .Select(u => u.Groups["handover"].Success ? "handover"
+                       : u.Groups["named"].Success ? "named"
+                       : "bare")
+            .ToArray();
+        Assert.Equal(["handover", "named", "bare"], classified);
+
+        var sites = 0;
+        var racing = 0;
+        var reporterUses = 0;
+        var handovers = 0;
+        var namedArguments = 0;
+        var blind = new List<string>();
+        var offenders = new List<string>();
+        var unsettled = new List<string>();
+        var settled = new List<string>();
+        var quiet = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly))
+        {
+            var vm = Path.GetFileNameWithoutExtension(file);
+            var code = WithoutComments(File.ReadAllText(file));
+            var methods = MethodSpans(code).ToList();
+            var handlers = MethodBodiesByName(code);
+
+            foreach (var m in ProgressConstruction().Matches(code).Cast<Match>())
+            {
+                sites++;
+                var site = $"{vm}:{code.AsSpan(0, m.Index).Count('\n') + 1}";
+
+                var open = ProgressArgumentList(code, m);
+                if (open < 0)
+                {
+                    blind.Add($"{site}  the argument list could not be located");
+                    continue;
+                }
+
+                var end = open + BalancedFrom(code, open).Length;
+                var argument = m.Groups["arg"].Value;
+                string callback;
+
+                if (argument.Length == 0)
+                {
+                    callback = code[open..end];
+                }
+                else if (handlers.TryGetValue(argument, out var overloads))
+                {
+                    callback = string.Join("\n", overloads);
+                }
+                else
+                {
+                    blind.Add($"{site}  {argument} is not a method declared in this file");
+                    continue;
+                }
+
+                // The innermost declared method containing the construction: a local function would
+                // otherwise be attributed to the method wrapping it, whose finally it cannot reach.
+                var enclosing = methods
+                    .Where(s => s.Open <= m.Index && m.Index < s.End)
+                    .OrderBy(s => s.End - s.Open)
+                    .ToList();
+                if (enclosing.Count == 0)
+                {
+                    blind.Add($"{site}  no enclosing method");
+                    continue;
+                }
+
+                var (method, _, methodEnd) = enclosing[0];
+
+                // The handover, for a migrated site: checked here, ahead of the racing verdict, because a
+                // reporter nothing settles is a defect whether or not its callback and its caller happen to
+                // write the same property.
+                if (m.Groups["settling"].Success)
+                {
+                    var lineStart = code.LastIndexOf('\n', m.Index) + 1;
+                    var declared = ReporterDeclaration().Match(code[lineStart..m.Index]);
+                    if (!declared.Success)
+                    {
+                        blind.Add($"{site}  the reporter's own variable name could not be read");
+                        continue;
+                    }
+
+                    var reporter = declared.Groups["name"].Value;
+
+                    // Scanned from the END of the construction, so the declaration's own occurrence of the
+                    // name is not counted as a use of it.
+                    var use = ReporterUse(reporter);
+                    var region = code[end..methodEnd];
+                    var handedOver = 0;
+                    foreach (var u in use.Matches(region).Cast<Match>())
+                    {
+                        reporterUses++;
+                        if (u.Groups["handover"].Success)
+                        {
+                            handedOver++;
+                            handovers++;
+                        }
+                        else if (u.Groups["named"].Success)
+                        {
+                            namedArguments++;
+                        }
+                        else
+                        {
+                            // The whole statement line, not the slice from the name onwards: "itemProgress,
+                            // ct);" says where to look and nothing about what is wrong there.
+                            var from = region.LastIndexOf('\n', u.Index) + 1;
+                            var lineEnd = region.IndexOf('\n', u.Index);
+                            var excerpt = (lineEnd < 0 ? region[from..] : region[from..lineEnd]).Trim();
+                            unsettled.Add($"{site} {method} — `{excerpt}`");
+                        }
+                    }
+
+                    if (handedOver == 0)
+                        unsettled.Add($"{site} {method} — {reporter} is never handed to SettleAfterAsync");
+                }
+
+                var firstAwait = code.IndexOf("await", end, StringComparison.Ordinal);
+                if (firstAwait < 0 || firstAwait >= methodEnd)
+                {
+                    quiet.Add($"{site} {method} — nothing is awaited after the construction");
+                    continue;
+                }
+
+                var afterward = AssignedNames(code[firstAwait..methodEnd]).ToHashSet(StringComparer.Ordinal);
+                var shared = AssignedNames(callback)
+                    .Where(afterward.Contains)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(n => n, StringComparer.Ordinal)
+                    .ToList();
+
+                if (shared.Count == 0)
+                {
+                    quiet.Add($"{site} {method} — writes nothing {method} writes after its await");
+                    continue;
+                }
+
+                racing++;
+                var description = $"{site} {method} → {string.Join(", ", shared)}";
+                if (m.Groups["settling"].Success) settled.Add(description);
+                else offenders.Add(description);
+            }
+        }
+
+        // Floors on both corpora. Measured when written: 12 constructions across ViewModels, 11 of them
+        // racing their caller and one — Dashboard's tune-up — genuinely not.
+        Assert.True(sites >= 10,
+            $"only {sites} progress constructions were found under {vmDir}, against the 12 this guard was "
+            + "written against — the construction shape is out of date, so nothing is being read.");
+        Assert.True(racing >= 9,
+            $"only {racing} of {sites} constructions were found to race their caller, against the 11 measured "
+            + "when this was written. Either the callbacks genuinely stopped writing what their callers write "
+            + "— in which case the primitive is no longer needed and this rule should go with it — or one of "
+            + "the two readers above silently stopped matching, which is the reading this floor rejects.");
+        Assert.True(blind.Count == 0,
+            "these constructions could not be resolved, so the rule below skipped them rather than clearing "
+            + "them — a site nothing reads is a site nothing protects:\n  " + string.Join("\n  ", blind));
+
+        // The handover half, measured when written: 11 migrated sites, 13 whole-word uses of their reporters,
+        // 12 of them handovers — the shred queue hands the same reporter over twice — and one the named
+        // argument `progress: reporter`, which collides with the variable's name without being a use of it.
+        Assert.True(handovers >= 11,
+            $"only {handovers} of {reporterUses} uses of a reporter variable were a SettleAfterAsync call "
+            + $"({namedArguments} were the exempt named argument), against the 12 measured when this was "
+            + "written. Either the handover is spelled differently now or the reader stopped matching it, and "
+            + "in both cases the check below is clearing sites it never read.");
+        Assert.True(unsettled.Count == 0,
+            "these sites build a SettlingProgress and then use the reporter without handing the operation to "
+            + "SettleAfterAsync, so nothing ever settles it. That is the original defect with the primitive "
+            + "sitting unused beside it: the report still lands after the outcome, and the type at the "
+            + "construction makes it read as migrated. Await through `<reporter>.SettleAfterAsync(r => …)` "
+            + "instead, at EVERY call the reporter serves:\n  "
+            + string.Join("\n  ", unsettled));
+
+        // The tripwire for the bound in the remarks above. Dashboard writes TuneUpProgress before its
+        // construction and nothing its callback touches afterwards, so it belongs in the non-racing set; if
+        // the bound ever loosened to "anywhere in the method", this is the site that would start demanding a
+        // primitive it does not need, and this assertion is what says so instead of a confusing offender.
+        Assert.True(quiet.Any(q => q.StartsWith("DashboardViewModel:", StringComparison.Ordinal)),
+            "DashboardViewModel's tune-up construction is no longer in the non-racing set. Either it now "
+            + "genuinely races — in which case migrate it and move this tripwire to another site that does "
+            + "not — or the racing test has widened past the first await, which would make every site that "
+            + $"merely initialises a value look like a defect. Non-racing:\n  {string.Join("\n  ", quiet)}");
+
+        Assert.True(offenders.Count == 0,
+            "these progress callbacks write a value their own caller writes again after the await, through a "
+            + "reporter nothing stops. The report is posted to the captured context, so it can be queued "
+            + "behind the await continuation and land AFTER the outcome, leaving the per-item text on screen "
+            + "for good. Report through SettlingProgress<T> and hand the operation to SettleAfterAsync, "
+            + "which settles the reporter in its finally so the success arm, every catch and the finally are "
+            + "all past it:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({settled.Count} of the {racing} racing sites already do)");
+    }
+
+    /// <summary>
+    /// The names assigned in a block, a row's own property included — the left side of <c>X = …</c> or of
+    /// <c>row.X = …</c>.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="AssignedProperties"/> above, which deliberately excludes <c>item.Status</c>
+    /// because a row's property is not a tab-level line and no view announces one. Here that form is the
+    /// CENTRAL case: the pair #2391 actually lost was a row's status, written by the callback and written
+    /// again by the queue loop. One shared reader would have to either blind that guard to a qualified write
+    /// or blind this one to the very defect it exists for.
+    /// </remarks>
+    private static IEnumerable<string> AssignedNames(string body)
+    {
+        foreach (var m in AssignedName().Matches(body).Cast<Match>())
+            yield return m.Groups["name"].Value;
+    }
+
+    /// <summary>
+    /// An assignment to a bare or singly-qualified name — not a comparison, and not a lambda arrow.
+    /// </summary>
+    /// <remarks>
+    /// Anchored on the name rather than on a statement start, because a callback writes as readily inside an
+    /// <c>if</c> or after a <c>&amp;&amp;</c> as at the head of a statement. The <c>(?![=&gt;])</c> is what
+    /// keeps <c>==</c> and <c>=&gt;</c> out; the lookbehind keeps the reader from taking the tail of a longer
+    /// path for a name of its own, so a static like <c>ToastService.Instance</c> contributes nothing.
+    /// </remarks>
+    [GeneratedRegex(@"(?<![\w.])(?<name>(?:[a-z_]\w*\.)?[A-Z]\w*)\s*=(?![=>])", RegexOptions.Compiled)]
+    private static partial Regex AssignedName();
 
     /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
     private static string FindAppProjectDir()
@@ -13961,8 +14323,15 @@ public partial class ArchitectureTests
     /// report had arrived at all — while the assertion about the actual fix passed.
     /// <para><c>SyncProgress&lt;T&gt;</c> has sat in this project since #2183 and is documented in
     /// TESTING.md; eleven call sites already used it, including one in the very file that reintroduced the
-    /// raw type. So this is a uniformity rule with teeth rather than a new constraint: there is no case in
-    /// either test project where the asynchronous dispatch is the thing under test.</para>
+    /// raw type. So this is a uniformity rule with teeth rather than a new constraint.</para>
+    /// <para><b>One case does measure the dispatch itself</b>, and it is why this bans the TYPE rather than
+    /// asynchronous delivery: <c>SettlingProgressTests</c> exists to prove that a report raised after an
+    /// operation has ended is dropped, so delivery is its subject. It still constructs no
+    /// <c>Progress&lt;T&gt;</c> — the primitive under test owns one internally — and it removes the race
+    /// rather than running it, by installing a <c>SynchronizationContext</c> that delivers a post inline, so
+    /// the report has either arrived or been dropped by the time <c>Report</c> returns. A test that needs
+    /// asynchronous delivery therefore has a shape available to it; none needs the unordered pool dispatch
+    /// this rule keeps out.</para>
     /// <para>Both test projects, because both have a synchronous recorder to use — under different names.
     /// The unit project declares <c>SyncProgress&lt;T&gt;</c> (a <c>List&lt;T&gt;</c> plus an optional
     /// per-report callback, for a test that has to act mid-operation); the integration project declares

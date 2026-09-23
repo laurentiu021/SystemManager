@@ -946,6 +946,85 @@ public partial class ArchitectureTests
     private static partial Regex ElevationSelfSkip();
 
     /// <summary>
+    /// Every link a test needs is asked for through <c>Symlinks</c>, never built where it is used.
+    /// </summary>
+    /// <remarks>
+    /// The reparse-point guards are this app's most safety-critical behaviour — following a junction out of a
+    /// cleanup target deletes a user's data — and the tests that prove them need a real link to point at. That
+    /// request had been copied per test class: five shell-outs to <c>mklink</c> across three files, four private
+    /// <c>IsReparse</c> helpers, and every single one ending in a bare <c>return</c> when the link could not be
+    /// made. A silent return is indistinguishable from a pass, so on any machine that cannot make the link the
+    /// suite reported nine green tests that had asserted nothing, and nothing anywhere said so.
+    /// <para>They also shared one defect that no reviewer would spot twice: each ignored what
+    /// <c>WaitForExit(10_000)</c> returned and then read <c>ExitCode</c>, which throws
+    /// <c>InvalidOperationException</c> on a process that is still running — so the one case they existed to
+    /// handle gracefully would have surfaced as an error about the wrong thing.</para>
+    /// <para>Both needles are assembled rather than spelled, and comment tails are stripped before matching,
+    /// because three files still describe <c>mklink</c> in prose to explain what the guards defend against —
+    /// and a guard that matches its own explanation, or those, goes red on correct code. The positive control
+    /// is real source rather than a string literal: <c>Symlinks.cs</c> must still contain both shapes, so a
+    /// needle that stopped matching cannot read as a clean codebase.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryLinkATestNeeds_IsAskedForInOnePlace()
+    {
+        // Assembled, never spelled: see the remark above.
+        string[] needles = ["mk" + "link", "Create" + "SymbolicLink"];
+        const string theOnePlace = "Symlinks.cs";
+
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        // Per needle, not a single total: the one place holds two CreateSymbolicLink calls and exactly one
+        // mklink, so a combined floor of two would still be met if the mklink needle stopped matching — and
+        // the offender check below would then police nothing while reporting the codebase clean.
+        var inTheOnePlace = needles.ToDictionary(n => n, _ => 0, StringComparer.Ordinal);
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var name = Path.GetFileName(file);
+                if (name == "ArchitectureTests.cs") continue;   // this file, prose and all
+
+                scanned++;
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var code = CommentTail().Replace(lines[i], string.Empty);
+                    foreach (var needle in needles)
+                    {
+                        if (!code.Contains(needle, StringComparison.Ordinal)) continue;
+                        if (name == theOnePlace) inTheOnePlace[needle]++;
+                        else offenders.Add($"{name}:{i + 1}  {needle}");
+                    }
+                }
+            }
+        }
+
+        Assert.True(scanned >= 100,
+            $"only {scanned} test source files were scanned across the three test projects, which is far "
+            + "below the ~140 that exist — the enumeration is wrong, so a pass here proves nothing.");
+
+        foreach (var (needle, hits) in inTheOnePlace)
+            Assert.True(hits >= 1,
+                $"{theOnePlace} makes no link of the '{needle}' shape, and it should hold every shape. Either "
+                + "the helper stopped making that kind of link — in which case nothing else does either — or "
+                + "that needle no longer matches, which would make the check below pass on any codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "these tests build a link where they use it. Ask " + theOnePlace + " instead — "
+            + "Symlinks.RequireJunction / RequireHardLink / RequireDirectoryLink / RequireFileLink — because a "
+            + "local copy ends in a bare return when the link cannot be made, and a silent return is "
+            + "indistinguishable from a pass: the case reports green on every machine that could not run it. "
+            + "The helper reports Assert.Skip instead, which lands in the run summary's skipped: count:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// No test hands the PowerShell runner a script that can run forever.
     /// </summary>
     /// <remarks>

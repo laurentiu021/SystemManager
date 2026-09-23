@@ -479,25 +479,10 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
         File.WriteAllText(precious, "do not delete me");
 
         var link = Path.Combine(cleanRoot, "link");
-        // mklink /J creates a directory junction; no admin rights required.
-        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{target}\"")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
         try
         {
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !IsReparse(link))
-                {
-                    // Environment can't create junctions (rare) — nothing to assert.
-                    return;
-                }
-            }
+            // A directory junction needs no admin rights, which is the point: a standard user can plant one.
+            Symlinks.RequireJunction(link, target);
 
             var cat = new CleanupCategory
             {
@@ -516,13 +501,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
         }
         finally
         {
-            try { Directory.Delete(baseDir, recursive: true); } catch { }
-        }
-
-        static bool IsReparse(string p)
-        {
-            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
-            catch { return false; }
+            Symlinks.RemoveLinkThenTree(link, baseDir);
         }
     }
 
@@ -542,24 +521,9 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
 
         // The cleanup ROOT itself is the junction (points at the target).
         var cleanRoot = Path.Combine(baseDir, "cacheLink");
-        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{cleanRoot}\" \"{target}\"")
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
         try
         {
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !IsReparse(cleanRoot))
-                {
-                    // Environment can't create junctions (rare) — nothing to assert.
-                    return;
-                }
-            }
+            Symlinks.RequireJunction(cleanRoot, target);
 
             var cat = new CleanupCategory
             {
@@ -579,13 +543,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
         }
         finally
         {
-            try { Directory.Delete(baseDir, recursive: true); } catch { }
-        }
-
-        static bool IsReparse(string p)
-        {
-            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
-            catch { return false; }
+            Symlinks.RemoveLinkThenTree(cleanRoot, baseDir);
         }
     }
 }

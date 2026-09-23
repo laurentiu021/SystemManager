@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.IO;
 using System.Xml.Linq;
 
 namespace SysManager.Tests;
@@ -37,7 +36,7 @@ public class UninstallerElevationBannerTests
     /// </summary>
     private static XElement ElevatedBanner()
     {
-        var doc = XDocument.Load(ViewPath());
+        var doc = XDocument.Load(TestPaths.AppFile("Views", "UninstallerView.xaml"));
         var banners = doc.Descendants(Presentation + "Border")
             .Where(b =>
             {
@@ -115,18 +114,5 @@ public class UninstallerElevationBannerTests
 
         vm.IsElevated = true;
         Assert.False(vm.UninstallSelectedCommand.CanExecute(null));
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", "UninstallerView.xaml");
-        Assert.True(File.Exists(path), $"UninstallerView.xaml not found at {path}");
-        return path;
     }
 }

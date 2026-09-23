@@ -137,7 +137,7 @@ public class WindowsTrustTests
     [Fact]
     public void AFileWithNoEmbeddedSignature_IsAlsoCheckedAgainstTheCatalogs()
     {
-        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "WindowsTrust.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "WindowsTrust.cs"));
         Assert.True(source.Length > 3000, "WindowsTrust.cs is too small to be the real file");
 
         // The fallback happens, and only on the no-signature answer.
@@ -200,7 +200,7 @@ public class WindowsTrustTests
     [Fact]
     public void TheTrustCall_AsksForNoNetwork()
     {
-        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "WindowsTrust.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "WindowsTrust.cs"));
         Assert.True(source.Length > 2000, "WindowsTrust.cs is too small to be the real file");
 
         // Revocation off: a lookup per file is what a list cannot afford.
@@ -218,17 +218,6 @@ public class WindowsTrustTests
         // The state the verify call allocates has to be released, once per file.
         Assert.Contains("Close(data)", source, StringComparison.Ordinal);
         Assert.Contains("WtdStateActionClose", source, StringComparison.Ordinal);
-    }
-
-    // Walks up to the app project — source is not copied to the test output.
-    private static string AppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Helpers")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        return Path.Combine(dir!.FullName, "SysManager");
     }
 
     private static string WriteTemp(byte[] bytes)

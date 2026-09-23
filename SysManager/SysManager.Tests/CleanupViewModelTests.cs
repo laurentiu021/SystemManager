@@ -444,7 +444,7 @@ public class CleanupViewModelTests
         // regardless: it looks at the call statement's shape, so it can only pass if the result is bound
         // to something, and only fail if the call stands alone as a discarded statement.
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "CleanupViewModel.cs"));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "CleanupViewModel.cs"));
 
         var callSites = source
             .Split('\n')
@@ -461,22 +461,5 @@ public class CleanupViewModelTests
         // …and the failure path has to actually SAY something different. Capturing the bool but
         // printing "Done" either way would satisfy the check above and fix nothing.
         Assert.Contains("Could not empty the Recycle Bin", source, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The app project directory. No .cs files are copied into the test output, so the assembly
-    /// location cannot answer this on its own.
-    /// </summary>
-    private static string FindAppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
-            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
 }

@@ -663,7 +663,7 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         // CanRollBack / RollBackStatus existing on the ViewModel proves nothing if the view never
         // binds them — that is precisely the dead-property class of defect this codebase has hit
         // repeatedly. Assert against the shipped markup.
-        var xaml = File.ReadAllText(ViewPath("AboutView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "AboutView.xaml"));
 
         Assert.Contains("RollBackCommand", xaml);
         Assert.Contains("CanRollBack", xaml);      // gates visibility
@@ -683,7 +683,7 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         // Both halves are asserted, because either alone passes on the broken code: the markup needs a
         // renderer whose gate a failure SETS, and the command has to actually set it. A substring check
         // for "DownloadStatus" would have passed before the fix, since the binding was already there.
-        var root = System.Xml.Linq.XDocument.Load(ViewPath("AboutView.xaml")).Root;
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "AboutView.xaml")).Root;
         Assert.NotNull(root);
 
         var parents = root!.Descendants()
@@ -712,7 +712,7 @@ public sealed class AboutViewModelRollbackTests : IDisposable
 
         // …and the flag that gate depends on is set by every failure path, or the row above can never
         // appear. Read from the source because the command needs a release and a network to run.
-        var command = MethodBody(File.ReadAllText(ViewModelPath("AboutViewModel.cs")),
+        var command = MethodBody(File.ReadAllText(TestPaths.AppFile("ViewModels", "AboutViewModel.cs")),
                                  "private async Task DownloadAsync()");
         var failureWrites = System.Text.RegularExpressions.Regex
             .Matches(command, @"AutoDownloadFailed\s*=\s*true").Count;
@@ -729,31 +729,5 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         var close = SourceBraces.MatchingBrace(source, open);
 
         return close < 0 ? source[open..] : source[open..(close + 1)];
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
-    }
-
-    /// <summary>The same walk, for a view-model source file — .cs is not copied to the output either.</summary>
-    private static string ViewModelPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "ViewModels")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "SysManager", "ViewModels", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

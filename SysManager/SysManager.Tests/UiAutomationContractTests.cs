@@ -63,11 +63,10 @@ public partial class UiAutomationContractTests
     [Fact]
     public void AssertedButtons_HaveUniqueStableAutomationIds()
     {
-        var solutionDirectory = FindSolutionDirectory();
         var uiTestSource = string.Join(
             Environment.NewLine,
             Directory.EnumerateFiles(
-                    Path.Combine(solutionDirectory.FullName, "SysManager.UITests"),
+                    Path.Combine(TestPaths.SolutionDir(), "SysManager.UITests"),
                     "*.cs",
                     SearchOption.TopDirectoryOnly)
                 .Select(File.ReadAllText));
@@ -80,7 +79,7 @@ public partial class UiAutomationContractTests
             .ToArray();
         Assert.DoesNotContain("FindButton(", uiTestSource, StringComparison.Ordinal);
 
-        var sourceXaml = EnumerateSourceXaml(solutionDirectory)
+        var sourceXaml = EnumerateSourceXaml()
             .Select(XDocument.Load)
             .ToArray();
         var actionElements = sourceXaml
@@ -126,26 +125,9 @@ public partial class UiAutomationContractTests
         Assert.Equal("{Binding SelectedNav.View}", (string?)currentViewHost.Attribute("Content"));
     }
 
-    private static DirectoryInfo FindSolutionDirectory()
+    private static IEnumerable<string> EnumerateSourceXaml()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (Directory.Exists(Path.Combine(directory.FullName, "SysManager.UITests"))
-                && Directory.Exists(Path.Combine(directory.FullName, "SysManager", "Views")))
-            {
-                return directory;
-            }
-        }
-
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager solution directory from the test output.");
-    }
-
-    private static IEnumerable<string> EnumerateSourceXaml(DirectoryInfo solutionDirectory)
-    {
-        var projectDirectory = Path.Combine(solutionDirectory.FullName, "SysManager");
+        var projectDirectory = TestPaths.AppProject();
         return Directory
             .EnumerateFiles(projectDirectory, "*.xaml", SearchOption.AllDirectories)
             .Where(path => !Path.GetRelativePath(projectDirectory, path)
@@ -179,7 +161,7 @@ public partial class UiAutomationContractTests
     public void EveryElevationButton_IsAnnouncedWithTheWordsPrintedOnIt()
     {
         const string label = "Run as administrator";
-        var views = Path.Combine(FindSolutionDirectory().FullName, "SysManager", "Views");
+        var views = TestPaths.AppDir("Views");
 
         var offenders = new List<string>();
         var checkedButtons = 0;
@@ -240,7 +222,7 @@ public partial class UiAutomationContractTests
     [Fact]
     public void EveryLabelledControl_IsAnnouncedWithTheWordsPrintedOnIt()
     {
-        var views = Path.Combine(FindSolutionDirectory().FullName, "SysManager", "Views");
+        var views = TestPaths.AppDir("Views");
         string[] controls = ["Button", "CheckBox", "RadioButton", "ToggleButton"];
         var offenders = new List<string>();
         var checkedControls = 0;
@@ -334,8 +316,7 @@ public partial class UiAutomationContractTests
     [Fact]
     public void LogsSeverityColumn_ConveysSeverityAsTextNotColourAlone()
     {
-        var logsView = Path.Combine(
-            FindSolutionDirectory().FullName, "SysManager", "Views", "LogsView.xaml");
+        var logsView = TestPaths.AppFile("Views", "LogsView.xaml");
         var document = XDocument.Load(logsView);
 
         var severityColumn = Assert.Single(
@@ -386,7 +367,7 @@ public partial class UiAutomationContractTests
     [Fact]
     public void EveryInputWithoutItsOwnText_CarriesAnAccessibleName()
     {
-        var appDir = Path.Combine(FindSolutionDirectory().FullName, "SysManager");
+        var appDir = TestPaths.AppProject();
         string[] inputs = ["TextBox", "PasswordBox", "ComboBox", "Slider", "DatePicker", "ProgressBar"];
         var offenders = new List<string>();
         var inspected = 0;

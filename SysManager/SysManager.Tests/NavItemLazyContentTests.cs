@@ -243,7 +243,7 @@ public class NavItemLazyContentTests
         // The repo's dominant defect shape: a view-model property that is computed, tested, and bound by
         // nothing. Neither half is an [ObservableProperty], so the general unreachable-property guard cannot
         // see them — only the shipped XAML can answer for this one.
-        var xaml = File.ReadAllText(Path.Combine(FindAppDir(), "MainWindow.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("MainWindow.xaml"));
         var markup = System.Text.RegularExpressions.Regex.Replace(
             xaml, "<!--.*?-->", string.Empty, System.Text.RegularExpressions.RegexOptions.Singleline);
 
@@ -251,18 +251,4 @@ public class NavItemLazyContentTests
         Assert.Contains("ProgressState=\"{Binding TaskbarProgressState}\"", markup, StringComparison.Ordinal);
         Assert.Contains("ProgressValue=\"{Binding TaskbarProgressValue}\"", markup, StringComparison.Ordinal);
     }
-
-    /// <summary>Walks up to the app project directory, the way the architecture guards do.</summary>
-    private static string FindAppDir()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir, "SysManager", "SysManager");
-            if (File.Exists(Path.Combine(candidate, "MainWindow.xaml"))) return candidate;
-            dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar));
-        }
-        throw new DirectoryNotFoundException("could not locate the app project from " + AppContext.BaseDirectory);
-    }
-
 }

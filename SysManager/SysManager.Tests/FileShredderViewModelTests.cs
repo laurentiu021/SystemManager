@@ -227,7 +227,7 @@ public class FileShredderViewModelTests
     [Fact]
     public void BothAddPaths_ReportSkippedItemsOnScreen_NotOnlyToTheLog()
     {
-        var source = File.ReadAllText(ViewModelSourcePath());
+        var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
 
         var offenders = new List<string>();
         foreach (var command in new[] { "private void AddFiles()", "private void AddFolder()" })
@@ -248,20 +248,6 @@ public class FileShredderViewModelTests
         Assert.True(offenders.Count == 0,
             "an item the user picked can vanish from the shred queue with nothing said on screen:\n  "
             + string.Join("\n  ", offenders));
-    }
-
-    private static string ViewModelSourcePath()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(
-                directory.FullName, "SysManager", "ViewModels", "FileShredderViewModel.cs");
-            if (File.Exists(candidate)) return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate FileShredderViewModel.cs from the test output.");
     }
     // ---------- the reason a shred failed has to reach the screen ----------
 
@@ -603,7 +589,7 @@ public class FileShredderViewModelTests
     /// </summary>
     private static string ShredAllBody()
     {
-        var source = File.ReadAllText(ViewModelSourcePath());
+        var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
         const string signature = "private async Task ShredAllAsync()";
 
         var start = source.IndexOf(signature, StringComparison.Ordinal);

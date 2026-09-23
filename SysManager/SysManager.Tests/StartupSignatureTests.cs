@@ -190,23 +190,10 @@ public class StartupSignatureTests
     [Fact]
     public void TheScan_GetsItsVerdictFromTheSharedDescriber()
     {
-        var source = File.ReadAllText(ServiceSourcePath("StartupService.cs"));
+        var source = File.ReadAllText(TestPaths.AppFile("Services", "StartupService.cs"));
 
         Assert.Contains("SignatureVerdict.Describe(path)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Authenticode.ReadSigner", source, StringComparison.Ordinal);
-    }
-
-    // Walks up to the app project — source is not copied to the test output.
-    private static string ServiceSourcePath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Services", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 
     // ── CommonName: the words that end up in the tooltip ──

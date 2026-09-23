@@ -143,7 +143,7 @@ public class UpdateServiceAuthenticodeTests
         // caller asks for online revocation by AuthenticodeTests.EveryFailClosedGate_AsksForOnlineRevocation.
         // This test going red when the build moved out is exactly what it is for — the assertions were
         // moved with the code rather than dropped.
-        var source = File.ReadAllText(ServiceSourcePath("UpdateService.cs"));
+        var source = File.ReadAllText(TestPaths.AppFile("Services", "UpdateService.cs"));
         var start = source.IndexOf("public static bool VerifyAuthenticode", StringComparison.Ordinal);
         Assert.True(start >= 0, "VerifyAuthenticode not found — this test would otherwise assert nothing");
         var end = source.IndexOf("private static void CleanupFile", start, StringComparison.Ordinal);
@@ -173,18 +173,5 @@ public class UpdateServiceAuthenticodeTests
             Assert.True(UpdateService.VerifyAuthenticode(path));
         }
         finally { File.Delete(path); }
-    }
-
-    // Walks up to the app project — source is not copied to the test output.
-    private static string ServiceSourcePath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Services", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

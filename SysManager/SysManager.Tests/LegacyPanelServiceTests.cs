@@ -97,24 +97,9 @@ public class LegacyPanelServiceTests
         // shape rather than a comment, and asserts the un-resolved form is gone, so deleting the call cannot
         // leave this green.
         var source = File.ReadAllText(Path.Combine(
-            FindRepoRoot(), "SysManager", "SysManager", "Services", "LegacyPanelService.cs"));
+            TestPaths.RepoRoot(), "SysManager", "SysManager", "Services", "LegacyPanelService.cs"));
 
         Assert.Contains("FileName = SystemPaths.ResolveSystemTool(panel.FileName),", source);
         Assert.DoesNotContain("FileName = panel.FileName,", source);
-    }
-
-    /// <summary>The repository root — the source this test reads is not copied to the test output.</summary>
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "SUPPORT.md"))
-                && File.Exists(Path.Combine(dir.FullName, "README.md")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException(
-            "Could not locate the repository root from " + AppContext.BaseDirectory);
     }
 }

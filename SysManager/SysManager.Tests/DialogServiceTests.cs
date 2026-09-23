@@ -77,7 +77,7 @@ public class DialogServiceTests
     [InlineData("public CloseChoice AskCloseOrMinimize(", "MessageBoxResult.Cancel")]
     public void EveryPromptFocusesItsSafeAnswer(string methodSignature, string expectedDefault)
     {
-        var source = File.ReadAllText(ServiceSourcePath("DialogService.cs"));
+        var source = File.ReadAllText(TestPaths.AppFile("Services", "DialogService.cs"));
 
         var start = source.IndexOf(methodSignature, StringComparison.Ordinal);
         Assert.True(start >= 0, $"{methodSignature} not found — update this guard rather than deleting it");
@@ -87,18 +87,5 @@ public class DialogServiceTests
 
         // MessageBox.Show without a defaultResult focuses the FIRST button, which is Yes.
         Assert.Contains(expectedDefault, body);
-    }
-
-    // Walks up from the test binaries to the app project — source is not copied to the output.
-    private static string ServiceSourcePath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Services", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

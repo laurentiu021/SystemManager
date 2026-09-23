@@ -726,13 +726,9 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         Assert.True(at >= 0, $"{signature} not found — the test would assert over the whole file");
 
         var open = source.IndexOf('{', at);
-        var depth = 0;
-        for (var i = open; i < source.Length; i++)
-        {
-            if (source[i] == '{') depth++;
-            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
-        }
-        return source[open..];
+        var close = SourceBraces.MatchingBrace(source, open);
+
+        return close < 0 ? source[open..] : source[open..(close + 1)];
     }
 
     // Walks up from the test binaries to the app project — .xaml is not copied to the output.

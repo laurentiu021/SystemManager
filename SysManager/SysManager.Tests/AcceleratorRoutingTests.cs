@@ -241,15 +241,10 @@ public class AcceleratorRoutingTests
         var open = source.IndexOf('{', at);
         Assert.True(open > at, $"{signature} has no body — the slice below would be empty");
 
-        var depth = 0;
-        for (var i = open; i < source.Length; i++)
-        {
-            if (source[i] == '{') depth++;
-            else if (source[i] == '}' && --depth == 0) return source[at..(i + 1)];
-        }
+        var close = SourceBraces.MatchingBrace(source, open);
+        Assert.True(close > 0, $"{signature}'s body is unterminated — the source did not parse as expected");
 
-        Assert.Fail($"{signature}'s body is unterminated — the source did not parse as expected");
-        return "";
+        return source[at..(close + 1)];
     }
 
     private static string ShellSourcePath()

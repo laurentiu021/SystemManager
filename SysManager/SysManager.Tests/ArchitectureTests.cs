@@ -863,21 +863,156 @@ public partial class ArchitectureTests
             var open = source.IndexOf('{', m.Index + m.Length - 1);
             if (open < 0) continue;
 
-            var depth = 0;
-            var end = open;
-            for (; end < source.Length; end++)
-            {
-                if (source[end] == '{') depth++;
-                else if (source[end] == '}' && --depth == 0) break;
-            }
+            var close = SourceBraces.MatchingBrace(source, open);
+            var end = close < 0 ? source.Length : close;
 
             if (!result.TryGetValue(m.Groups[1].Value, out var bodies))
                 result[m.Groups[1].Value] = bodies = [];
-            bodies.Add(source[open..Math.Min(end, source.Length)]);
+            bodies.Add(source[open..end]);
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Every body <see cref="MethodBodiesByName"/> hands back ends at its own member's closing brace, never at
+    /// one that only looked like a closer because it sat inside a literal.
+    /// </summary>
+    /// <remarks>
+    /// The entry regex matches members indented four spaces, so every body it returns must end at a brace in
+    /// that same column. A brace miscounted out of a string ends the body a nesting level early — eight columns
+    /// in or deeper — and the guards that read these bodies then assert about the wrong text: loudly, by
+    /// reporting a member whose compliance was truncated away, or silently, by losing the mention that put a
+    /// real offender in scope, which also quietly spends the vacuity floor that was supposed to notice.
+    /// <para>The corpus makes this live rather than theoretical, so the literals are counted here too: a pass
+    /// over a corpus holding none of them would prove nothing. Two sit one nesting level deep inside a method
+    /// of <c>FileShredderViewModelTests</c>, a file already read by
+    /// <c>EveryTestAssertingAStatusMessage_SettlesTheConstructorInitFirst</c> (#2396).</para>
+    /// </remarks>
+    [Fact]
+    public void EveryMethodBodyByName_EndsAtItsOwnClosingBrace_NotOneInsideALiteral()
+    {
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        var bodiesRead = 0;
+        var skewedLiterals = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var name = Path.GetFileName(file);
+                var source = File.ReadAllText(file);
+
+                foreach (var line in source.Split('\n'))
+                {
+                    var code = CommentTail().Replace(line, string.Empty);
+                    skewedLiterals += QuotedLiteral().Matches(code)
+                        .Select(m => m.Groups["text"].Value)
+                        .Count(text => text.AsSpan().Count('{') != text.AsSpan().Count('}'));
+                }
+
+                foreach (var (method, bodies) in MethodBodiesByName(source))
+                {
+                    foreach (var body in bodies)
+                    {
+                        var lastLine = body.LastIndexOf('\n');
+                        if (lastLine < 0) continue;   // a one-line body has no closing-brace column to read
+
+                        bodiesRead++;
+                        var column = body[(lastLine + 1)..];
+                        if (column != "    ")
+                            offenders.Add($"{name}  {method}  ends on \"{column}\", not a member's four columns");
+                    }
+                }
+            }
+        }
+
+        Assert.True(bodiesRead >= 4000,
+            $"only {bodiesRead} member bodies were parsed across the three test projects, well below the 4608 "
+            + "measured — the enumeration or the entry regex is broken, so a pass below proves nothing.");
+
+        // A floor, not a census: QuotedLiteral slices on bare quotes, so an escaped one splits a literal in
+        // two and either half can read as skewed. It only has to prove the shape is still present in bulk.
+        Assert.True(skewedLiterals >= 250,
+            $"only {skewedLiterals} quoted spans with an unbalanced brace were found, well below the 330 this "
+            + "count measured — either the count is broken or the corpus no longer holds the shape this guard "
+            + "is about, and in both cases the check below would pass without exercising anything.");
+
+        Assert.True(offenders.Count == 0,
+            "these member bodies do not end where their member does, which means a brace inside a literal or a "
+            + "comment was counted as structure. Every guard reading such a body asserts over the wrong text. "
+            + "Fix the walk in SourceBraces, not the caller:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Only one place decides where a C# block ends. No test counts braces of its own.
+    /// </summary>
+    /// <remarks>
+    /// Eight copies of the same six-line loop lived across three test files, and because each counted bare
+    /// characters, each was wrong on the same inputs — repairing one taught the others nothing (#2396). They
+    /// all call <c>SourceBraces.MatchingBrace</c> now, which steps over literals and comments. Copy nine would
+    /// reintroduce the defect in silence, since a mis-parsed body still yields a confident verdict.
+    /// <para>The needle is a comparison against a brace CHARACTER, which is the one thing a hand-rolled walk
+    /// cannot do without: locating an opening brace with <c>IndexOf('{')</c> is fine and stays. Comment tails
+    /// come off so this file's own prose is never read as code.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryBraceMatchATestNeeds_IsAskedForInOnePlace()
+    {
+        const string theOnePlace = "SourceBraces.cs";
+
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        var inTheOnePlace = 0;
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var name = Path.GetFileName(file);
+                scanned++;
+
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var code = CommentTail().Replace(lines[i], string.Empty);
+                    if (!BraceCharacterTest().IsMatch(code)) continue;
+
+                    if (name == theOnePlace) inTheOnePlace++;
+                    else offenders.Add($"{name}:{i + 1}  {code.Trim()}");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 300,
+            $"only {scanned} test source files were scanned across the three test projects, well below the 351 "
+            + "measured — the enumeration is wrong, so a pass here proves nothing.");
+
+        Assert.True(inTheOnePlace >= 1,
+            $"{theOnePlace} tests no character against a brace, though matching braces is its whole job. "
+            + "Either the walk moved out of it — in which case the offender check below is policing the wrong "
+            + "file — or the needle stopped matching, which would make that check pass on any codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "these tests decide where a block ends by reading brace characters themselves. Ask " + theOnePlace
+            + " instead — SourceBraces.MatchingBrace — because a local walk counts braces inside strings and "
+            + "comments as structure, so it ends the block in the wrong place and the assertion that follows "
+            + "reports on text it was never meant to read:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A character compared against a brace — the shape only a hand-rolled brace walk needs.</summary>
+    [GeneratedRegex(@"(?:==|!=|\bis)\s*'[{}]'|\bcase\s*'[{}]'", RegexOptions.Compiled)]
+    private static partial Regex BraceCharacterTest();
 
     /// <summary>
     /// No test may skip itself because the session happens to be elevated.
@@ -3049,13 +3184,9 @@ public partial class ArchitectureTests
         var open = source.IndexOf('{', match.Index + match.Length);
         if (open < 0) return "";
 
-        var depth = 0;
-        for (var i = open; i < source.Length; i++)
-        {
-            if (source[i] == '{') depth++;
-            else if (source[i] == '}' && --depth == 0) return source[open..(i + 1)];
-        }
-        return "";
+        var close = SourceBraces.MatchingBrace(source, open);
+
+        return close < 0 ? "" : source[open..(close + 1)];
     }
 
     /// <summary>
@@ -9528,14 +9659,9 @@ public partial class ArchitectureTests
         var open = source.IndexOf('{', at + opener.Length);
         if (open < 0) return "";
 
-        var depth = 0;
-        for (var i = open; i < source.Length; i++)
-        {
-            if (source[i] == '{') depth++;
-            else if (source[i] == '}' && --depth == 0) return source[(open + 1)..i];
-        }
+        var close = SourceBraces.MatchingBrace(source, open);
 
-        return "";   // unbalanced: report nothing rather than the rest of the file
+        return close < 0 ? "" : source[(open + 1)..close];   // unbalanced: report nothing, not the rest of the file
     }
 
     /// <summary>
@@ -10320,16 +10446,10 @@ public partial class ArchitectureTests
                      .Cast<Match>())
         {
             var open = m.Index + m.Length - 1;
-            var depth = 0;
-            for (var i = open; i < source.Length; i++)
-            {
-                if (source[i] == '{') depth++;
-                else if (source[i] == '}' && --depth == 0)
-                {
-                    yield return source[(open + 1)..i];
-                    break;
-                }
-            }
+            var close = SourceBraces.MatchingBrace(source, open);
+            if (close < 0) continue;
+
+            yield return source[(open + 1)..close];
         }
     }
 
@@ -11190,16 +11310,10 @@ public partial class ArchitectureTests
             var open = source.IndexOf('{', m.Index + m.Length - 1);
             if (open < 0) continue;
 
-            var depth = 0;
-            for (var i = open; i < source.Length; i++)
-            {
-                if (source[i] == '{') depth++;
-                else if (source[i] == '}' && --depth == 0)
-                {
-                    yield return source[(open + 1)..i];
-                    break;
-                }
-            }
+            var close = SourceBraces.MatchingBrace(source, open);
+            if (close < 0) continue;
+
+            yield return source[(open + 1)..close];
         }
     }
 
@@ -11224,17 +11338,11 @@ public partial class ArchitectureTests
             var open = source.IndexOf('{', keyword);
             if (open < 0) break;
 
-            var depth = 0;
-            for (var i = open; i < source.Length; i++)
-            {
-                if (source[i] == '{') depth++;
-                else if (source[i] == '}' && --depth == 0)
-                {
-                    yield return source[(open + 1)..i];
-                    at = i;
-                    break;
-                }
-            }
+            var close = SourceBraces.MatchingBrace(source, open);
+            if (close < 0) continue;
+
+            yield return source[(open + 1)..close];
+            at = close;
         }
     }
 

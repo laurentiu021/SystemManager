@@ -1079,11 +1079,13 @@ them:
 
 ### Browser Cleaner
 Reclaim space and clear browsing traces, per browser:
-- **Auto-detects** Chrome, Edge, Brave, Opera, and Firefox
-- **Every profile, not just the first** — if you keep separate Chrome/Edge/Brave profiles
+- **Auto-detects** Chrome, Edge, Brave, Vivaldi, Firefox, and every Opera channel —
+  including **Opera GX**, the gaming build, which is listed as its own row ("Opera GX") beside
+  Opera. Beta and Developer are covered too; a channel you don't have simply never appears
+- **Every profile, not just the first** — if you keep separate Chrome/Edge/Brave/Vivaldi profiles
   (personal and work, or one per person), each is scanned and named in its own row
   ("Google Chrome — Profile 1"), so you can see which one you're cleaning. Cleaning one
-  profile never touches another
+  profile never touches another, and the same holds between Opera channels
 - **Per-category** with size shown: Cache, History, Cookies, Sessions
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected

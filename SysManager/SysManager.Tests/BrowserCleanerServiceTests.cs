@@ -214,6 +214,120 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         Assert.False(cookies.IsSelected);            // never auto-selected
     }
 
+    // --- Opera channels: GX, Beta and Developer install beside Stable under the same
+    // "Opera Software" parent. The channel folder used to be hard-coded to "Opera Stable", so an
+    // Opera GX user's cache was invisible to the tab — and GX is the gaming build, the likeliest
+    // Opera on the machine of the user the Ping presets are aimed at (#2379). ---
+
+    [Fact]
+    public async Task Scan_FindsOperaGxCache_UnderItsOwnChannelFolder()
+    {
+        // Real Opera GX layout: same shape as Stable, different channel folder.
+        WriteFile(@"Opera Software\Opera GX Stable\Cache\data_0", 4096);
+
+        var items = await _svc.ScanAsync();
+        var cache = items.FirstOrDefault(i => i.Browser == "Opera GX" && i.Category == "Cache");
+
+        Assert.NotNull(cache);                       // was null before: only "Opera Stable" was looked at
+        Assert.Equal(4096, cache!.SizeBytes);
+        Assert.False(cache.IsSensitive);
+        Assert.All(cache.Paths, p => Assert.DoesNotContain(@"\Default\", p));
+    }
+
+    [Fact]
+    public async Task Scan_OperaGxCookies_KeepTheRoamingSplit_AndStaySensitive()
+    {
+        // The two-root split is a property of Opera, not of one channel: cache local, cookies roaming.
+        WriteRoamingFile(@"Opera Software\Opera GX Stable\Network\Cookies", 512);
+
+        var items = await _svc.ScanAsync();
+        var cookies = items.FirstOrDefault(i => i.Browser == "Opera GX" && i.Category == "Cookies");
+
+        Assert.NotNull(cookies);
+        Assert.True(cookies!.IsSensitive);
+        Assert.False(cookies.IsSelected);            // opt-in, exactly as on Stable
+    }
+
+    [Fact]
+    public async Task Scan_OperaBetaAndDeveloper_AreCoveredToo()
+    {
+        WriteFile(@"Opera Software\Opera Beta\Cache\data_0", 100);
+        WriteFile(@"Opera Software\Opera Developer\Cache\data_0", 200);
+
+        var items = await _svc.ScanAsync();
+
+        Assert.Equal(100, items.Single(i => i.Browser == "Opera Beta" && i.Category == "Cache").SizeBytes);
+        Assert.Equal(200, items.Single(i => i.Browser == "Opera Developer" && i.Category == "Cache").SizeBytes);
+    }
+
+    [Fact]
+    public async Task Scan_OperaChannels_AreSeparateRows_EachScopedToItsOwnFolder()
+    {
+        // The load-bearing safety property, the channel equivalent of
+        // Scan_EachProfilesPaths_StayInsideThatProfile: cleaning one channel must not be able to
+        // reach another. It is also what keeps (Browser, Category) a unique row identity, which is
+        // what BrowserCleanerViewModel.CarryForwardSelection uses to keep the user's ticks.
+        WriteFile(@"Opera Software\Opera Stable\Cache\data_0", 1000);
+        WriteFile(@"Opera Software\Opera GX Stable\Cache\data_0", 2000);
+
+        var items = await _svc.ScanAsync();
+
+        var stable = items.Single(i => i.Browser == "Opera" && i.Category == "Cache");
+        Assert.Equal(1000, stable.SizeBytes);
+        Assert.All(stable.Paths, p => Assert.DoesNotContain(@"\Opera GX Stable\", p));
+
+        var gx = items.Single(i => i.Browser == "Opera GX" && i.Category == "Cache");
+        Assert.Equal(2000, gx.SizeBytes);
+        Assert.All(gx.Paths, p => Assert.DoesNotContain(@"\Opera Stable\", p));
+    }
+
+    [Fact]
+    public async Task Clean_OneOperaChannel_LeavesTheOtherUntouched()
+    {
+        WriteFile(@"Opera Software\Opera Stable\Cache\data_0", 1000);
+        WriteFile(@"Opera Software\Opera GX Stable\Cache\data_0", 2000);
+
+        var items = await _svc.ScanAsync();
+        await _svc.CleanAsync([items.Single(i => i.Browser == "Opera GX" && i.Category == "Cache")]);
+
+        Assert.False(File.Exists(Path.Combine(_local, @"Opera Software\Opera GX Stable\Cache\data_0")));
+        Assert.True(File.Exists(Path.Combine(_local, @"Opera Software\Opera Stable\Cache\data_0")));
+    }
+
+    // --- Vivaldi: plain Chromium with the standard "User Data\<profile>" layout, so it goes through
+    // the same expansion that finds a second Chrome profile rather than a special case of its own. ---
+
+    [Fact]
+    public async Task Scan_FindsVivaldi_ThroughTheChromiumProfileExpansion()
+    {
+        WriteFile(@"Vivaldi\User Data\Default\Cache\data_0", 1000);
+        WriteFile(@"Vivaldi\User Data\Profile 1\Cache\data_0", 2000);
+        WriteFile(@"Vivaldi\User Data\Crashpad\Cache\data_0", 1);   // not a user profile
+
+        var items = await _svc.ScanAsync();
+        var caches = items.Where(i => i.Category == "Cache" && i.Browser.StartsWith("Vivaldi")).ToList();
+
+        // Default unlabelled + the named second profile, and the non-profile folder ignored — the
+        // whole per-profile contract inherited for free, which is the point of not special-casing it.
+        Assert.Equal(2, caches.Count);
+        Assert.Equal(1000, caches.Single(i => i.Browser == "Vivaldi").SizeBytes);
+        Assert.Equal(2000, caches.Single(i => i.Browser == "Vivaldi — Profile 1").SizeBytes);
+    }
+
+    [Fact]
+    public async Task Scan_VivaldiCookies_AreSensitive_AndUnderLocal()
+    {
+        // Vivaldi is a single-root Chromium browser: cookies live under Local, unlike Opera's split.
+        WriteFile(@"Vivaldi\User Data\Default\Network\Cookies", 512);
+
+        var items = await _svc.ScanAsync();
+        var cookies = items.FirstOrDefault(i => i.Browser == "Vivaldi" && i.Category == "Cookies");
+
+        Assert.NotNull(cookies);
+        Assert.True(cookies!.IsSensitive);
+        Assert.False(cookies.IsSelected);
+    }
+
     [Fact]
     public async Task Scan_FirefoxCache_TargetsCache2_NotProfileRoot()
     {

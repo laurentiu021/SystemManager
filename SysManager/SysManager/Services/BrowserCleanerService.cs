@@ -11,9 +11,9 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Scans and cleans per-browser cache / cookies / history / sessions for the Chromium
-/// family (Chrome, Edge, Brave, Opera) and Firefox. Scan is read-only (sizes only); Clean
-/// deletes only the discovered files. Cookies/sessions are flagged sensitive and default to
-/// unselected so a clean never silently signs the user out.
+/// family (Chrome, Edge, Brave, Vivaldi, every Opera channel) and Firefox. Scan is read-only
+/// (sizes only); Clean deletes only the discovered files. Cookies/sessions are flagged
+/// sensitive and default to unselected so a clean never silently signs the user out.
 ///
 /// The base data directories are injectable so the catalog/scan logic can be unit-tested
 /// against a temp directory tree without touching the real browser profiles.
@@ -112,27 +112,50 @@ public sealed class BrowserCleanerService
         return suffix.Length > 0 && suffix.All(char.IsAsciiDigit);
     }
 
-    // Opera Stable is Chromium-based but does NOT use a "\Default\" profile segment: the
-    // profile lives directly under "Opera Software\Opera Stable". It also splits its data
-    // across two roots — the cache is under LocalAppData, but Cookies/History/Sessions live
-    // under Roaming AppData. Routing it through ChromiumDefs pointed every path at a
-    // "\Default\" folder Opera never creates, so scan/clean silently matched nothing.
+    /// <summary>
+    /// Every Opera channel, as the folder it keeps its profile in and the name the Browser column shows.
+    /// </summary>
+    /// <remarks>
+    /// Opera installs its channels side by side under one <c>Opera Software</c> parent, and each is a
+    /// separate product with its own profile — not a profile of another, which is why each gets its own
+    /// Browser name rather than the "— <c>profile</c>" suffix a second Chromium profile gets.
+    /// <para>Opera GX is the reason this is a list at all: it is the build made for gamers, so it is the
+    /// likeliest Opera on the machine of the user this tab's Ping-preset audience describes, and the
+    /// channel folder was hard-coded to Stable — so a GX user's cache was invisible to the tab. Beta and
+    /// Developer are the same shape and included for completeness; a channel that is not installed costs
+    /// nothing, since <see cref="ScanAsync"/> already drops paths that do not exist.</para>
+    /// <para>Stable keeps the bare name "Opera" so every row an existing user already sees reads exactly
+    /// as it did before.</para>
+    /// </remarks>
+    private static readonly (string Folder, string Browser)[] OperaChannels =
+    [
+        ("Opera Stable", "Opera"),
+        ("Opera GX Stable", "Opera GX"),
+        ("Opera Beta", "Opera Beta"),
+        ("Opera Developer", "Opera Developer"),
+    ];
+
+    // Opera is Chromium-based but does NOT use a "\Default\" profile segment: the profile lives
+    // directly under "Opera Software\<channel>". It also splits its data across two roots — the
+    // cache is under LocalAppData, but Cookies/History/Sessions live under Roaming AppData.
+    // Routing it through ChromiumDefs pointed every path at a "\Default\" folder Opera never
+    // creates, so scan/clean silently matched nothing.
     // NOTE: each Def's Roaming flag applies to ALL its RelativePaths, so cache paths (local)
     // and the roaming data paths must stay in separate Defs.
-    private static Def[] OperaDefs()
+    private static Def[] OperaDefs(string channelFolder, string browser)
     {
-        const string profileRel = @"Opera Software\Opera Stable";
+        var profileRel = $@"Opera Software\{channelFolder}";
         return
         [
             // Cache lives under LocalAppData (Roaming: false).
-            new("Opera", "Cache", "Cached images and files.", false,
+            new(browser, "Cache", "Cached images and files.", false,
                 [$@"{profileRel}\Cache", $@"{profileRel}\Code Cache", $@"{profileRel}\GPUCache"]),
             // Cookies/History/Sessions live under Roaming AppData (Roaming: true).
-            new("Opera", "History", "Browsing and download history.", false,
+            new(browser, "History", "Browsing and download history.", false,
                 [$@"{profileRel}\History", $@"{profileRel}\History-journal"], Roaming: true),
-            new("Opera", "Cookies", "Cookies — clearing these signs you out of websites.", true,
+            new(browser, "Cookies", "Cookies — clearing these signs you out of websites.", true,
                 [$@"{profileRel}\Network\Cookies", $@"{profileRel}\Network\Cookies-journal"], Roaming: true),
-            new("Opera", "Sessions", "Open tabs / session restore data.", true,
+            new(browser, "Sessions", "Open tabs / session restore data.", true,
                 [$@"{profileRel}\Sessions", $@"{profileRel}\Session Storage"], Roaming: true),
         ];
     }
@@ -145,7 +168,13 @@ public sealed class BrowserCleanerService
         defs.AddRange(ExpandChromiumDefs("Google Chrome", @"Google\Chrome\User Data"));
         defs.AddRange(ExpandChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
         defs.AddRange(ExpandChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
-        defs.AddRange(OperaDefs());
+        // Vivaldi is plain Chromium with the standard "User Data\<profile>" layout, so it needs no
+        // special case of its own — the same expansion that finds a second Chrome profile finds it.
+        defs.AddRange(ExpandChromiumDefs("Vivaldi", @"Vivaldi\User Data"));
+        // Opera is the exception in the family (no "\Default\" segment, two roots), and it ships
+        // several channels side by side — Opera GX among them. One Def set per channel.
+        foreach (var (folder, browser) in OperaChannels)
+            defs.AddRange(OperaDefs(folder, browser));
         // Firefox keeps profiles in roaming AppData, but the cache lives under LocalAppData
         // in per-profile "<profile>\cache2" folders. We target the cache2 subfolders only —
         // never the Profiles root, which holds prefs.js, logins.json, key4.db and bookmarks.

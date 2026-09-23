@@ -424,13 +424,12 @@ public class QaAuditTests
     //  GatewayHelper — return value shape
     // ==================================================================
 
-    [Fact]
-    public void GatewayHelper_ReturnValue_IsParseable_WhenNotNull()
-    {
-        var gw = SysManager.Helpers.GatewayHelper.DetectDefaultGateway();
-        if (gw == null) return;
-        Assert.True(System.Net.IPAddress.TryParse(gw, out _));
-    }
+    // GatewayHelper_ReturnValue_IsParseable_WhenNotNull was deleted rather than repaired: it was a strict
+    // subset of SysManager.Tests.GatewayHelperTests.DetectDefaultGateway_ReturnsNullOrValidIPv4, which
+    // asserts the same parse plus the address family, the 0.0.0.0 exclusion, membership in the set the
+    // eligible adapters actually offer, AND the null answer this one returned early on — so on a host with
+    // no gateway, the row here reported a pass having asserted nothing. Nothing about it needed a real
+    // machine either, which is why the surviving copy lives in the unit suite.
 
     // ==================================================================
     //  EventLogQueryOptions — negative / extreme MaxResults

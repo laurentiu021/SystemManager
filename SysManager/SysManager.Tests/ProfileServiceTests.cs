@@ -192,7 +192,11 @@ public class ProfileServiceTests : IDisposable
         WriteConfig("speedtest-history.json", "[1,2,3]");
 
         var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User;
-        if (sid is null) return;   // no SID to deny — nothing to assert on this host
+        // Asserted rather than returned on. The property is nullable only because an anonymous token has no
+        // user SID, and a process token is never anonymous — so the check was there to satisfy nullable
+        // analysis, which Assert.NotNull does just as well while making the impossible case loud instead of
+        // reporting a pass that denied nothing.
+        Assert.NotNull(sid);
 
         var denied = new FileInfo(Path.Combine(_dir, "theme.json"));
         var acl = denied.GetAccessControl();

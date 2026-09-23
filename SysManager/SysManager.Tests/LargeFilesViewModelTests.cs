@@ -149,9 +149,11 @@ public class LargeFilesViewModelTests
 
         await vm.InitializationComplete;
 
-        // Conditional on the machine having any scannable folder at all, so this cannot fail on an
-        // environment with no Downloads, Documents or fixed drive rather than on the behaviour.
-        if (vm.ScanLocations.Count == 0) return;
+        // Asserted rather than returned on. The load cannot legitimately produce an empty list: the six
+        // known folders fall back instead of throwing, Program Files is added before the only call that can
+        // throw at all, and AddLocation swallows nothing but a missing directory. An empty list therefore
+        // means the enumeration failed — which returning here reported as a pass.
+        Assert.NotEmpty(vm.ScanLocations);
 
         Assert.NotNull(vm.SelectedLocation);
         Assert.Same(vm.ScanLocations[0], vm.SelectedLocation);

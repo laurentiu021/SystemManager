@@ -377,7 +377,11 @@ public class ResourceHistoryServiceDiskTests : IDisposable
         Seed(At(DateTime.Now.AddMinutes(-1)));
 
         var identity = WindowsIdentity.GetCurrent().User;
-        if (identity is null) return; // no SID to deny — nothing to assert on this host
+        // Asserted rather than returned on. The property is nullable only because an anonymous token has no
+        // user SID, and a process token is never anonymous — so the check was there to satisfy nullable
+        // analysis, which Assert.NotNull does just as well while making the impossible case loud instead of
+        // reporting a pass that denied nothing.
+        Assert.NotNull(identity);
 
         var info = new FileInfo(DataPath);
         var acl = info.GetAccessControl();

@@ -946,6 +946,186 @@ public partial class ArchitectureTests
     private static partial Regex ElevationSelfSkip();
 
     /// <summary>
+    /// No test reports a pass by returning early when a precondition it needed was not there.
+    /// </summary>
+    /// <remarks>
+    /// The generalisation of <see cref="NoTestSkipsItselfBecauseTheSessionIsElevated"/>. Elevation was only
+    /// the most common precondition; twelve tests returned on a different one — no default gateway, no SID
+    /// to deny, a <c>System32</c> binary a future Windows might drop — and a silent return is indistinguishable
+    /// from a pass. Each landed in the run summary's <c>passed:</c> count having asserted nothing, on exactly
+    /// the hosts where the assertion mattered, and nothing anywhere said so.
+    /// <para>There are three honest endings and no fourth. If the condition cannot occur on a real host it is
+    /// a precondition worth asserting, so assert it. If it genuinely can, <c>Assert.Skip</c> says so and lands
+    /// in <c>skipped:</c> where a reader sees it. If both branches are real behaviour, assert both — the way
+    /// <c>GatewayHelperTests</c> now asserts null-with-no-gateway and parseable-with-one rather than
+    /// describing only the half this machine happens to have.</para>
+    /// <para>The condition class is <c>[^;{}]*</c> so the needle cannot fuse a distant <c>return;</c> onto an
+    /// earlier <c>if</c>: <c>if (a) { Do(); } return;</c> is a harmless tail, not an early return. Whitespace
+    /// is collapsed because the offender is often spread over two lines, which is also why the space either
+    /// side of <c>return</c> is optional — collapsing squeezes RUNS of whitespace, so a one-line
+    /// <c>if (x) return;</c> keeps no space before its semicolon while the two-line form gains one, and a
+    /// needle demanding either shape alone silently found nothing.</para>
+    /// </remarks>
+    [Fact]
+    public void NoTest_ReportsAPassByReturningEarly()
+    {
+        // Assembled, never spelled: this file is not scanned, but the controls below would arm any future
+        // guard that did scan it.
+        var early = EarlyReturn();
+        Assert.Matches(early, "if (gw == null) " + "return;");
+        Assert.Matches(early, "if (!File.Exists(path)) " + "return;");
+        Assert.Matches(early, "if (x)" + "return;");                        // no space at all
+        Assert.DoesNotMatch(early, "if (gw == null) " + "return gw;");      // returns a value
+        Assert.DoesNotMatch(early, "if (gw == null) { Assert.Null(gw); }"); // asserts instead
+        Assert.DoesNotMatch(early, "Assert.NotNull(gw); " + "return;");     // unconditional tail
+        Assert.DoesNotMatch(early, "if (a) { Do(); } " + "return;");        // must not fuse across statements
+
+        // The scoping, proved on a fixture holding all three shapes in the order real files put them: a
+        // non-test member with an early return, a test with one, and a nested helper type with one. Only the
+        // middle one is in scope, and a bare `return;` outside a test stays legal.
+        string[] fixture =
+        [
+            "public class Sample",
+            "{",
+            "    public void Dispose()",
+            "    {",
+            "        if (_root == null) " + "return;",
+            "    }",
+            "",
+            "    [Fact]",
+            "    public void ATest()",
+            "    {",
+            "        if (gw == null) " + "return;",
+            "    }",
+            "",
+            "    private sealed class Nested",
+            "    {",
+            "        public void Forget()",
+            "        {",
+            "            if (_done) " + "return;",
+            "        }",
+            "    }",
+            "}",
+        ];
+        var fixtureBodies = TestMemberBodies(fixture);
+        Assert.Single(fixtureBodies);
+        Assert.Matches(early, fixtureBodies[0]);
+
+        var root = FindRepoRoot();
+        var offenders = new List<string>();
+        var scanned = 0;
+        var tests = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                if (Path.GetFileName(file) == "ArchitectureTests.cs") continue;   // this file, fixture and all
+
+                scanned++;
+                foreach (var body in TestMemberBodies(File.ReadAllLines(file)))
+                {
+                    tests++;
+                    foreach (var hit in early.Matches(body).Cast<Match>())
+                        offenders.Add($"{Path.GetFileName(file)}  {hit.Value}");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 200,
+            $"only {scanned} test source files were scanned across the three projects — the lookup is wrong "
+            + "and this guard is reading almost nothing.");
+
+        // The real vacuity floor. The partition recognising no tests would leave every body unread and this
+        // guard permanently green, and the file count above cannot see that.
+        Assert.True(tests >= 3500,
+            $"only {tests} test members were recognised across {scanned} files — the member partition has "
+            + "stopped seeing tests and this guard is scanning nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "These tests return early when a precondition was missing, so on the hosts where the assertion "
+            + "mattered they reported a pass having asserted nothing. Assert the precondition if it cannot "
+            + "really be absent, Assert.Skip if it can — a skip is counted and visible, a return is not — or "
+            + "assert both branches if both are real behaviour:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Partitions a test file into its 4-space members by LINE and returns the collapsed text of the ones
+    /// that carry a test attribute.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately counts no braces, unlike <see cref="MethodBodies"/>. The three test projects hold 84
+    /// string literals containing an unbalanced brace and 128 raw-string lines, so a brace matcher over this
+    /// corpus is not merely fragile, it is wrong: <c>"{ truncated"</c> in <c>ResourceHistoryServiceTests</c>
+    /// already made one scan run a body into the next and report a single line under two method names.
+    /// <para>Indentation is the partition instead. A 4-space attribute line arms the flag, and the next
+    /// 4-space declaration line opens a member and consumes it. A nested type's own members are indented
+    /// eight spaces and so never open a partition, which is what keeps a private helper like
+    /// <c>PingMonitorServiceLifecycleTests.ManualDelayProvider.Forget</c> out of scope with no allowlist to
+    /// maintain.</para>
+    /// <para>Its one failure mode is under-reporting, and that is structural rather than lucky: a member
+    /// indented differently splits a partition, and a partition opened mid-member inherits an already-consumed
+    /// flag, so it is always tagged NOT-a-test. Mis-partitioning can therefore only drop an offender, never
+    /// invent one. Comment tails go before matching, because a test explaining in prose what it replaced must
+    /// not fail the guard that replaced it, and truncating a line can only remove text.</para>
+    /// </remarks>
+    private static List<string> TestMemberBodies(string[] lines)
+    {
+        var bodies = new List<string>();
+        var current = new List<string>();
+        var sawTestAttribute = false;
+        var inTest = false;
+
+        void Flush()
+        {
+            if (inTest && current.Count > 0) bodies.Add(Collapse(string.Join(" ", current)));
+        }
+
+        foreach (var raw in lines)
+        {
+            if (!IsCode(raw)) continue;
+            var line = CommentTail().Replace(raw, string.Empty);
+
+            if (FourSpaceAttribute().IsMatch(line))
+            {
+                if (TestAttribute().IsMatch(line)) sawTestAttribute = true;
+                continue;
+            }
+
+            if (FourSpaceMember().IsMatch(line))
+            {
+                Flush();
+                inTest = sawTestAttribute && !NestedTypeDeclaration().IsMatch(line);
+                sawTestAttribute = false;
+                current.Clear();
+            }
+
+            current.Add(line);
+        }
+
+        Flush();
+        return bodies;
+    }
+
+    [GeneratedRegex(@"if \([^;{}]*\) ?return ?;", RegexOptions.Compiled)]
+    private static partial Regex EarlyReturn();
+
+    [GeneratedRegex(@"^ {4}\[", RegexOptions.Compiled)]
+    private static partial Regex FourSpaceAttribute();
+
+    [GeneratedRegex(@"\[(?:Sta)?(?:Fact|Theory)\b", RegexOptions.Compiled)]
+    private static partial Regex TestAttribute();
+
+    [GeneratedRegex(@"^ {4}[^\s{}\]]", RegexOptions.Compiled)]
+    private static partial Regex FourSpaceMember();
+
+    [GeneratedRegex(@"\b(?:class|record|struct|interface|enum)\s", RegexOptions.Compiled)]
+    private static partial Regex NestedTypeDeclaration();
+
+    /// <summary>
     /// Every link a test needs is asked for through <c>Symlinks</c>, never built where it is used.
     /// </summary>
     /// <remarks>

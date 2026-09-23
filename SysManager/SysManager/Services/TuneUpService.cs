@@ -67,8 +67,11 @@ public sealed class TuneUpService
         int brokenCount = 0;
         try
         {
-            var broken = await _shortcuts.ScanAsync(ct: ct).ConfigureAwait(false);
-            brokenCount = broken.Count;
+            // .Broken.Count, not every shortcut the scan looked at: the report also carries the ones whose
+            // target it could not reach, and those are explicitly NOT broken (#2378). Counting them here
+            // would put "3 broken shortcuts" on the Tune-Up card for a machine with an unplugged drive.
+            var report = await _shortcuts.ScanAsync(ct: ct).ConfigureAwait(false);
+            brokenCount = report.Broken.Count;
         }
         catch (IOException ex)
         {

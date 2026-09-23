@@ -88,7 +88,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
         try
         {
             var progress = new Progress<string>(msg => CurrentLocation = msg);
-            var results = await _service.ScanAsync(progress, _cts.Token);
+            var report = await _service.ScanAsync(progress, _cts.Token);
+            var results = report.Broken;
 
             // Applied before subscribing, so re-applying a tick the user set earlier does not fire a
             // change notification for state they have not just changed.
@@ -100,9 +101,16 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
             BrokenCount = BrokenShortcuts.Count;
             SelectedCount = BrokenShortcuts.Count(x => x.IsSelected);
-            ScanStatus = BrokenCount == 0
-                ? "No broken shortcuts found — your system is clean."
+
+            // "Your system is clean" is only true when the scan could see everywhere it looked. With targets
+            // it could not reach, an empty list means "I found nothing I could confirm" — a different
+            // statement, and the one the user needs when a drive is unplugged (#2378).
+            var headline = BrokenCount == 0
+                ? report.UnreachableTargets == 0
+                    ? "No broken shortcuts found — your system is clean."
+                    : "No broken shortcuts confirmed."
                 : $"Found {BrokenCount} broken shortcut{(BrokenCount == 1 ? "" : "s")}.";
+            ScanStatus = report.Notice is { } notice ? headline + " " + notice : headline;
             CurrentLocation = "";
             Log.Information("Shortcut scan completed: {Count} broken shortcuts found", BrokenCount);
             ToastService.Instance.Show("Shortcut scan complete", $"{BrokenCount} broken shortcut{(BrokenCount == 1 ? "" : "s")} found");

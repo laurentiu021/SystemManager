@@ -855,6 +855,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### Shortcut Cleaner
 - Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
   shortcuts whose targets no longer exist
+- **"Broken" means the scan proved the target is gone, never that it could not reach it.** A
+  shortcut to a file on a drive that is not plugged in, on a network folder that is not
+  answering, on a BitLocker volume still locked, or in a folder this user cannot read is
+  **left alone and counted**, not listed — because every listed shortcut arrives ticked for
+  deletion. The status line says how many were left alone and why, so an empty list on a PC
+  with an unplugged drive reads as "nothing confirmed" rather than "your PC is clean"
 - Lists results with name, location, and missing target path
 - **Export CSV** saves the list before you delete anything, naming both the shortcut and its
   missing target, so the change is reviewable rather than a batch of deletions nobody can audit

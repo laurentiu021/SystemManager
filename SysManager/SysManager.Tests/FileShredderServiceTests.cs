@@ -350,11 +350,8 @@ public class FileShredderServiceTests
 
         try
         {
-            // Creating a file symlink needs privilege/developer-mode. If unavailable,
-            // skip the assertion rather than fail on an environment limitation.
-            try { File.CreateSymbolicLink(link, protectedTarget); }
-            catch (IOException) { return; }
-            catch (UnauthorizedAccessException) { return; }
+            // Creating a file symlink needs privilege/developer-mode; the helper reports the skip.
+            Symlinks.RequireFileLink(link, protectedTarget);
 
             await Assert.ThrowsAsync<SecurityException>(
                 () => svc.ShredFileAsync(link, ShredMethod.Quick, null, CancellationToken.None));
@@ -402,20 +399,8 @@ public class FileShredderServiceTests
 
         try
         {
-            // mklink /J creates a directory junction; no admin rights required.
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{sys32}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !IsReparse(link))
-                    return; // environment can't create junctions (rare) — nothing to assert
-            }
+            // A directory junction needs no admin rights — which is the whole reason this guard has to exist.
+            Symlinks.RequireJunction(link, sys32);
 
             // A file that reliably exists under System32, reached THROUGH the junction.
             var throughJunction = Path.Combine(link, "notepad.exe");
@@ -427,16 +412,9 @@ public class FileShredderServiceTests
         }
         finally
         {
-            // Delete the junction itself (Directory.Delete on a junction removes the link,
-            // not its target), then the base dir.
-            try { Directory.Delete(link); } catch { /* ignore */ }
-            try { Directory.Delete(baseDir, recursive: true); } catch { /* ignore */ }
-        }
-
-        static bool IsReparse(string p)
-        {
-            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
-            catch { return false; }
+            // The junction goes first and as a link (Directory.Delete on a junction removes the link, not
+            // its target — and the target here is System32), then the base dir.
+            Symlinks.RemoveLinkThenTree(link, baseDir);
         }
     }
 
@@ -458,21 +436,8 @@ public class FileShredderServiceTests
 
         try
         {
-            // mklink /H creates a hard link on the same volume; no admin required. If the
-            // environment can't create one, skip rather than fail on an environment limitation.
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{link}\" \"{target}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !File.Exists(link))
-                    return; // couldn't create a hard link here — nothing to assert
-            }
+            // A hard link needs the same volume and no admin.
+            Symlinks.RequireHardLink(link, target);
 
             // Shredding through the link must be refused (IOException), and BOTH names plus the
             // shared data must remain intact.
@@ -508,19 +473,7 @@ public class FileShredderServiceTests
 
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /H \"{hardlink}\" \"{linkTarget}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !File.Exists(hardlink))
-                    return; // environment can't create a hard link — nothing to assert
-            }
+            Symlinks.RequireHardLink(hardlink, linkTarget);
 
             await Assert.ThrowsAsync<IOException>(
                 () => svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None));
@@ -564,21 +517,7 @@ public class FileShredderServiceTests
 
         try
         {
-            // mklink /J creates a directory junction; no admin rights required. If the environment
-            // can't create one, skip rather than fail on an environment limitation.
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{junction}\" \"{external}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || !IsReparse(junction))
-                    return; // environment can't create junctions (rare) — nothing to assert
-            }
+            Symlinks.RequireJunction(junction, external);
 
             // Shredding the folder must not descend through the junction: the normal in-scope file
             // is shredded, but the empty directory behind the junction (outside the folder) remains.
@@ -592,17 +531,10 @@ public class FileShredderServiceTests
         }
         finally
         {
-            // Remove the junction link itself first (Directory.Delete on a junction removes the
-            // link, not its target), then both trees.
-            try { Directory.Delete(junction); } catch { /* ignore */ }
-            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
-            try { Directory.Delete(external, recursive: true); } catch { /* ignore */ }
-        }
-
-        static bool IsReparse(string p)
-        {
-            try { return (File.GetAttributes(p) & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint; }
-            catch { return false; }
+            // The junction goes first and as a link, then both trees — the external one is the data this
+            // test proves survives, so a recursive delete must never reach it through the link.
+            Symlinks.RemoveLinkThenTree(junction, dir);
+            Symlinks.RemoveTree(external);
         }
     }
 
@@ -792,21 +724,7 @@ public class FileShredderServiceTests
         {
             await File.WriteAllTextAsync(Path.Combine(dir, "real.dat"), "shred me");
 
-            // mklink /J creates a directory junction and needs no admin rights — the same approach the
-            // mid-path junction test above uses.
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{outside}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || (File.GetAttributes(link) & FileAttributes.ReparsePoint) == 0)
-                    return; // environment can't create junctions (rare) — nothing to assert
-            }
+            Symlinks.RequireJunction(link, outside);
 
             var report = await svc.ShredFolderAsync(dir, ShredMethod.Quick, null, CancellationToken.None);
 
@@ -817,9 +735,8 @@ public class FileShredderServiceTests
         }
         finally
         {
-            try { Directory.Delete(link); } catch { /* ignore */ }
-            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
-            try { Directory.Delete(outside, recursive: true); } catch { /* ignore */ }
+            Symlinks.RemoveLinkThenTree(link, dir);
+            Symlinks.RemoveTree(outside);
         }
     }
     [Fact]
@@ -845,19 +762,7 @@ public class FileShredderServiceTests
 
         try
         {
-            var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{link}\" \"{outside}\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-            using (var proc = System.Diagnostics.Process.Start(psi)!)
-            {
-                proc.WaitForExit(10_000);
-                if (proc.ExitCode != 0 || (File.GetAttributes(link) & FileAttributes.ReparsePoint) == 0)
-                    return; // environment can't create junctions (rare) — nothing to assert
-            }
+            Symlinks.RequireJunction(link, outside);
 
             await Assert.ThrowsAsync<SecurityException>(
                 () => svc.ShredFolderAsync(link, ShredMethod.Quick, null, CancellationToken.None));
@@ -867,9 +772,8 @@ public class FileShredderServiceTests
         }
         finally
         {
-            try { Directory.Delete(link); } catch { /* ignore */ }
-            try { Directory.Delete(baseDir, recursive: true); } catch { /* ignore */ }
-            try { Directory.Delete(outside, recursive: true); } catch { /* ignore */ }
+            Symlinks.RemoveLinkThenTree(link, baseDir);
+            Symlinks.RemoveTree(outside);
         }
     }
 }

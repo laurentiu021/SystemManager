@@ -176,8 +176,17 @@ collection definitions (all defined in `TestCollections.cs`, each with
   AdminHelper.ForceElevation(false);`. **Construct the view-model inside the scope** — view-models read
   elevation once, in their constructor, so a scope opened afterwards changes nothing they will look at.
   Requires `[Collection("ProcessWideStatics")]`.
-- `SyncProgress<T>` — a synchronous `IProgress<T>` that records reports on the calling thread, so
-  progress assertions need no `Task.Delay`.
+- `SyncProgress<T>` — **`SysManager.Tests` only.** A synchronous `IProgress<T>` that records reports on
+  the calling thread, so progress assertions need no `Task.Delay`. A `List<T>` plus an optional
+  per-report callback, for the tests that have to act in the middle of the operation being reported on.
+- `SynchronousProgress<T>` — the same idea for `SysManager.IntegrationTests`, backed by a
+  `ConcurrentQueue<T>` because there the reporting thread is not the test's. Two declarations rather
+  than one linked file because the bodies differ; unifying them is worth doing on its own merits, not as
+  a precondition for anything. **Never capture progress through a bare `Progress<T>` in either project** —
+  it has no `SynchronizationContext` to post to in a test, so its callbacks land on the thread pool and
+  any assertion about the reports is a race that passes locally and fails under CI load.
+  `ArchitectureTests.NoTest_CapturesProgressThroughTheAsynchronousProgressType` fails the build on that
+  shape across both projects.
 - `PropertyChangeRecorder` — records what an `INotifyPropertyChanged` raises, into a collection that
   is safe to read while it is still being written: `var changed = vm.RecordPropertyChanges();` for the
   property NAMES, and `var seen = vm.RecordChangesOf(nameof(vm.IsBusy), () => vm.IsBusy);` for the

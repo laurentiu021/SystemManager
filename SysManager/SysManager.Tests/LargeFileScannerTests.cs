@@ -188,8 +188,12 @@ public class LargeFileScannerTests : IDisposable
 
         await _scanner.ScanAsync(_root, minSizeBytes: 500, top: 10, progress: progress);
 
-        // At minimum, the final "Done" report should be there.
-        Assert.True(progress.Reports.Count >= 1);
+        // The settling report at the end of the walk is unconditional, so one report is the floor however
+        // short the scan was. It used to name the folder "Done"; it now names none (#2273), and WHAT the
+        // first and last reports carry is asserted in the integration project, where the walk is the point.
+        Assert.True(progress.Reports.Count >= 1,
+            "the scan reported no progress at all, so the panel it feeds showed zero files and a blank "
+            + "folder line for its whole duration.");
     }
 
     // ---------- LargeFileEntry model ----------

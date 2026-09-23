@@ -166,27 +166,10 @@ public class LargeFileScannerTests
         }
     }
 
-    [Fact]
-    public async Task ScanAsync_Progress_Called()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "SysManagerLfTest_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        for (var i = 0; i < 20; i++) File.WriteAllText(Path.Combine(root, $"f{i}.txt"), "x");
-        try
-        {
-            var reports = new List<LargeFileScanner.LargeFileProgress>();
-            var prog = new Progress<LargeFileScanner.LargeFileProgress>(reports.Add);
-            var s = new LargeFileScanner();
-            await s.ScanAsync(root, 1, 10, progress: prog);
-            // Progress may or may not fire depending on file count threshold,
-            // but we check it did not error out.
-            Assert.NotNull(reports);
-        }
-        finally
-        {
-            try { Directory.Delete(root, recursive: true); } catch { }
-        }
-    }
+    // Progress is asserted in LargeFileScannerProgressTests, not here: the first report has to name a real
+    // folder with a non-zero count and the last one has to settle the counts naming no folder. The test that
+    // used to sit here was called ScanAsync_Progress_Called and asserted NotNull on a List it had
+    // constructed three lines earlier, so it could only ever report that the call did not throw.
 
     [Fact]
     public async Task ScanAsync_ZeroMinSize_IncludesEverything()

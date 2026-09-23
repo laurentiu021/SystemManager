@@ -687,6 +687,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Deletion is disabled by design, even with administrator rights, so a mis-click here can
   never cost you a file. Deleting is a decision to make in Explorer, where you can see what
   else is in the folder
+- Windows' own paging files are left out — `pagefile.sys`, `hiberfil.sys` and `swapfile.sys` are
+  usually the two biggest files on the system drive, and nothing you can do here affects them.
+  [Disk Analyzer](#disk-analyzer) still counts them, which is where to look if you want to know
+  how much they take
 - Lives beside [Disk Analyzer](#disk-analyzer) and [Duplicate Finder](#duplicate-finder) because
   all three answer the same question and none of them delete anything. It used to sit below Deep
   Cleanup's scan-and-delete list, where it was both hard to find and easy to mistake for part of

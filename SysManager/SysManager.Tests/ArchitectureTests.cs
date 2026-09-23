@@ -8677,6 +8677,58 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Both scanners that hand the user a list of individual FILES must refuse the ones Windows manages
+    /// itself, and refuse them by the same rule.
+    /// </summary>
+    /// <remarks>
+    /// This is the drift it exists to stop, because it already happened: <c>DuplicateFileService</c> carried a
+    /// <c>SkipFiles</c> list and a predicate that consulted it, while <c>LargeFileScanner</c> had the same
+    /// three names sitting in its DIRECTORY substring list, where nothing ever asked about a file — so the
+    /// biggest-files list was topped by a hibernation file and a page file on every drive that has them
+    /// (#2386). The names being present in the source was what made it invisible: a reader saw them listed and
+    /// had no reason to check which predicate consumed the list.
+    /// <para>Invoked rather than read as source text. The bug was precisely that the declaration looked right,
+    /// so a guard matching the declaration would have passed all along; only calling the predicate proves a
+    /// call site exists and reaches these names.</para>
+    /// <para><c>DiskAnalyzerService</c> is deliberately absent. It reports how space is USED, and a page file
+    /// occupies its bytes whether or not the user may delete it — hiding them there would make the total
+    /// disagree with the free space Windows reports, which is the complaint its own exclusion disclosure
+    /// exists to answer. The rule is "not offered as a file to act on", not "not counted".</para>
+    /// </remarks>
+    [Fact]
+    public void BothActionableFileScanners_RefuseTheSystemManagedFiles()
+    {
+        string[] mustRefuse = ["pagefile.sys", "hiberfil.sys", "swapfile.sys"];
+        Type[] scanners = [typeof(LargeFileScanner), typeof(DuplicateFileService)];
+
+        foreach (var scanner in scanners)
+        {
+            var predicate = scanner.GetMethod(
+                "ShouldSkipFile", BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.True(predicate is not null,
+                $"{scanner.Name} has no ShouldSkipFile predicate. If the filter moved, point this guard at "
+                + "the new one — a scanner offering rows to act on must not offer a file Windows holds open.");
+
+            foreach (var name in mustRefuse)
+            {
+                Assert.True((bool)predicate!.Invoke(null, [name])!,
+                    $"{scanner.Name} does not refuse {name}, so it will be listed among the files the user is "
+                    + "invited to act on.");
+            }
+
+            // The floor. A predicate that returned true for everything would satisfy every assertion above
+            // while filtering the whole scan away.
+            Assert.False((bool)predicate!.Invoke(null, ["holiday-video.mp4"])!,
+                $"{scanner.Name} refuses an ordinary file, so the assertions above prove nothing.");
+
+            // Exact name, not substring: the user's own backup of a page file is their file.
+            Assert.False((bool)predicate!.Invoke(null, ["my-pagefile.sys.bak"])!,
+                $"{scanner.Name} matches a name that merely CONTAINS a system file name.");
+        }
+    }
+
+    /// <summary>
     /// The shredder's overwrite writes must not be cancellable: every <c>WriteAsync</c> / <c>FlushAsync</c>
     /// inside <c>ShredFileAsync</c> passes <c>CancellationToken.None</c>.
     /// </summary>

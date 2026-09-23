@@ -8690,6 +8690,11 @@ public partial class ArchitectureTests
     /// <para>Invoked rather than read as source text. The bug was precisely that the declaration looked right,
     /// so a guard matching the declaration would have passed all along; only calling the predicate proves a
     /// call site exists and reaches these names.</para>
+    /// <para>Two halves, because neither alone is enough. Invoking each predicate on a hardcoded set of names
+    /// proves the rule is reachable, but says nothing about a name added to one scanner after this test was
+    /// written; comparing the two <c>SkipFiles</c> fields as sets catches that drift, but a list both scanners
+    /// agree on is still worthless if nothing consults it. The first half proves the rule runs, the second
+    /// proves the two copies have not diverged.</para>
     /// <para><c>DiskAnalyzerService</c> is deliberately absent. It reports how space is USED, and a page file
     /// occupies its bytes whether or not the user may delete it — hiding them there would make the total
     /// disagree with the free space Windows reports, which is the complaint its own exclusion disclosure
@@ -8700,6 +8705,7 @@ public partial class ArchitectureTests
     {
         string[] mustRefuse = ["pagefile.sys", "hiberfil.sys", "swapfile.sys"];
         Type[] scanners = [typeof(LargeFileScanner), typeof(DuplicateFileService)];
+        var declared = new Dictionary<string, string[]>();
 
         foreach (var scanner in scanners)
         {
@@ -8725,7 +8731,35 @@ public partial class ArchitectureTests
             // Exact name, not substring: the user's own backup of a page file is their file.
             Assert.False((bool)predicate!.Invoke(null, ["my-pagefile.sys.bak"])!,
                 $"{scanner.Name} matches a name that merely CONTAINS a system file name.");
+
+            var list = scanner.GetField("SkipFiles", BindingFlags.NonPublic | BindingFlags.Static)
+                ?.GetValue(null) as string[];
+            Assert.True(list is { Length: > 0 }, $"{scanner.Name} has no non-empty SkipFiles list.");
+            declared[scanner.Name] = list!;
         }
+
+        // The parity itself, and the half the invocations above cannot reach: the three names are hardcoded
+        // here, so a FOURTH name added to one scanner and forgotten in the other satisfies every assertion
+        // above. One copy ahead of the other is exactly the shape the original defect had, so the lists are
+        // compared to each other as sets rather than each to a fixed expectation.
+        Assert.Equal(scanners.Length, declared.Count);
+
+        var sets = declared.ToDictionary(
+            d => d.Key,
+            d => new HashSet<string>(d.Value, StringComparer.OrdinalIgnoreCase));
+        var reference = sets.First();
+
+        foreach (var (name, set) in sets.Skip(1))
+        {
+            Assert.True(reference.Value.SetEquals(set),
+                $"{reference.Key} and {name} disagree about which files Windows manages. "
+                + $"{reference.Key}: [{Render(reference.Value)}] vs {name}: [{Render(set)}]. "
+                + "Both hand the user a list of files to act on, so a name that belongs in one belongs "
+                + "in both.");
+        }
+
+        static string Render(HashSet<string> set)
+            => string.Join(", ", set.OrderBy(s => s, StringComparer.Ordinal));
     }
 
     /// <summary>

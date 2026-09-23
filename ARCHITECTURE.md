@@ -691,7 +691,14 @@ Key services:
   Local and its cookies/sessions under Roaming (like Opera's split); each targets
   specific named files under the profile, never the profile root (logins.json, key4.db,
   prefs.js, places.sqlite). Firefox History is intentionally NOT offered — places.sqlite
-  holds bookmarks as well as history.
+  holds bookmarks as well as history. Firefox's salted profile folders are enumerated at
+  scan time over the *union* of both roots and named once, so a profile split across Local
+  and Roaming still carries a single name: the release default (or a lone legacy `.default`)
+  takes the bare `Firefox`, every other profile takes its readable suffix
+  (`Firefox — dev-edition`), falling back to the full folder name when two profiles share a
+  suffix. A tie for the default yields no bare name at all. Uniqueness of `(Browser,
+  Category)` is a contract, not a nicety — `BrowserCleanerViewModel` keys tick carry-forward
+  on that pair, so two rows sharing it would apply one row's decision to the other.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
   per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is

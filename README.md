@@ -1086,6 +1086,11 @@ Reclaim space and clear browsing traces, per browser:
   (personal and work, or one per person), each is scanned and named in its own row
   ("Google Chrome — Profile 1"), so you can see which one you're cleaning. Cleaning one
   profile never touches another, and the same holds between Opera channels
+- **Firefox profiles are named too, not just numbered.** Firefox stores each profile in a
+  folder with a random prefix, so the rows use the readable half — your everyday profile is
+  simply "Firefox", and a second one reads "Firefox — dev-edition". Two profiles therefore
+  never arrive as two identical "Firefox" rows you cannot tell apart, and a tick on one
+  cannot drift onto the other when you rescan
 - **Per-category** with size shown: Cache, History, Cookies, Sessions
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected

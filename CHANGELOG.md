@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.1] - 2026-09-23
+
+**If you keep two Firefox profiles, Browser Cleaner showed you two identical rows.** Both were called
+plainly "Firefox" with the same description, so there was no way to tell which profile you were about to
+clean — and because the tab remembers your ticks by the row's name, a tick you put on one profile was
+applied to the other after a rescan. Firefox profiles are now named individually, the way Chrome and Edge
+profiles already were.
+
+### Fixed
+
+- **Each Firefox profile is its own named row.** Firefox stores profiles in folders with a random prefix
+  (`8f3k2p9q.dev-edition`), so the rows use the readable half: your everyday profile stays simply "Firefox"
+  and a second one reads "Firefox — dev-edition", with the profile named in the description too ("Cookies in
+  dev-edition — clearing these signs you out of websites"). If two profiles happen to share that readable
+  half, both keep their full folder name so they still read apart.
+- **A tick can no longer drift to the wrong profile.** The tab remembers your selection across a rescan by
+  the row's browser and category, so two rows that were both called "Firefox / Cookies" were the same row as
+  far as that memory was concerned: unticking cookies on one profile silently unticked them on the other.
+  Distinct names make every row's identity unique, which is what that memory needs to be correct.
+- **Cleaning one Firefox profile leaves the others alone**, and is now covered by a test that says so — the
+  same guarantee that already held between Chrome profiles and between Opera channels.
+- **A profile is named once, not once per folder.** Firefox splits a single profile across two locations
+  (its cache under Local AppData, its cookies and sessions under Roaming), so the profiles are collected
+  from both before any naming happens. Otherwise the same profile could have appeared under two different
+  names depending on which category a row came from.
+
 ## [1.113.0] - 2026-09-23
 
 **If you use Opera GX, Browser Cleaner had nothing to show you.** It looked for Opera's cache and cookies

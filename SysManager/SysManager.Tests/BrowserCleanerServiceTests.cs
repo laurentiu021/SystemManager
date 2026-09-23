@@ -591,9 +591,159 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         WriteRoamingFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cookies.sqlite", 2048);
 
         var items = await _svc.ScanAsync();
-        var cookieRows = items.Where(i => i.Browser == "Firefox" && i.Category == "Cookies").ToList();
+        var cookieRows = items.Where(i => i.Browser.StartsWith("Firefox") && i.Category == "Cookies").ToList();
 
-        Assert.Equal(2, cookieRows.Count);   // one per profile, like the Chromium per-profile expansion
+        // One per profile, like the Chromium per-profile expansion — and each under its OWN Browser
+        // name, which is what makes the two rows distinguishable (see the naming tests below).
+        Assert.Equal(2, cookieRows.Count);
+        Assert.Equal(1024, cookieRows.Single(i => i.Browser == "Firefox").SizeBytes);
+        Assert.Equal(2048, cookieRows.Single(i => i.Browser == "Firefox — dev-edition").SizeBytes);
+    }
+
+    // ---------- Firefox profile NAMES: the row identity carry-forward depends on (#2402) ----------
+    // Every Firefox row used to be called plainly "Firefox", so two profiles produced pairs of rows
+    // identical in Browser, Category AND Description — nothing on screen told them apart, and
+    // BrowserCleanerViewModel.CarryForwardSelection keys on (Browser, Category), so the duplicate key
+    // applied one profile's tick to the other on every rescan. The Chromium expansion already had the
+    // naming convention to copy, so these pin that Firefox now follows it.
+
+    [Fact]
+    public async Task Scan_FirefoxSecondProfile_IsNamedAfterIt_LikeASecondChromeProfile()
+    {
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.default-release\cache2\entries\e0", 1000);
+        WriteFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cache2\entries\e0", 2000);
+
+        var items = await _svc.ScanAsync();
+        var caches = items.Where(i => i.Browser.StartsWith("Firefox") && i.Category == "Cache").ToList();
+
+        // The release default stays unlabelled, so the single-profile case every existing user sees
+        // reads exactly as before; the other carries the readable half of its salted folder name.
+        Assert.Equal(2, caches.Count);
+        Assert.Equal(1000, caches.Single(i => i.Browser == "Firefox").SizeBytes);
+        Assert.Equal(2000, caches.Single(i => i.Browser == "Firefox — dev-edition").SizeBytes);
+
+        // The description disambiguates too, the way "in Profile 1" already does for Chromium.
+        Assert.DoesNotContain(" in ", caches.Single(i => i.Browser == "Firefox").Description);
+        Assert.Contains(" in dev-edition", caches.Single(i => i.Browser == "Firefox — dev-edition").Description);
+    }
+
+    [Fact]
+    public async Task Scan_EveryRow_HasAUniqueBrowserAndCategory_SoTicksCannotCarryToTheWrongRow()
+    {
+        // The defect this class of naming exists to prevent, asserted over a realistic tree: a
+        // duplicate (Browser, Category) is silently overwritten by SelectionCarry and then applied to
+        // BOTH rows, so a category the user excluded comes back ticked or one they chose comes back off.
+        WriteFile(@"Google\Chrome\User Data\Default\Cache\data_0", 100);
+        WriteFile(@"Google\Chrome\User Data\Profile 1\Cache\data_0", 100);
+        WriteFile(@"Opera Software\Opera Stable\Cache\data_0", 100);
+        WriteFile(@"Opera Software\Opera GX Stable\Cache\data_0", 100);
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.default-release\cache2\entries\e0", 100);
+        WriteFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cache2\entries\e0", 100);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\aaa.default-release\cookies.sqlite", 100);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cookies.sqlite", 100);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\aaa.default-release\sessionstore.jsonlz4", 100);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\sessionstore.jsonlz4", 100);
+
+        var items = await _svc.ScanAsync();
+
+        Assert.True(items.Count >= 10, $"expected the whole tree to surface, got {items.Count} rows");
+        var duplicates = items
+            .GroupBy(i => (i.Browser, i.Category))
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key.Browser} / {g.Key.Category} ×{g.Count()}")
+            .ToList();
+        Assert.Empty(duplicates);
+    }
+
+    [Fact]
+    public async Task Scan_LegacyDefaultProfile_DoesNotAlsoClaimTheBareFirefoxName()
+    {
+        // ".default" is the pre-67 profile name and often survives as a leftover beside the
+        // ".default-release" the browser actually uses. Treating both as "the default" would hand the
+        // bare name to two rows — the collision, reintroduced by the fix meant to remove it.
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.default\cache2\entries\e0", 1000);
+        WriteFile(@"Mozilla\Firefox\Profiles\bbb.default-release\cache2\entries\e0", 2000);
+
+        var items = await _svc.ScanAsync();
+        var caches = items.Where(i => i.Browser.StartsWith("Firefox") && i.Category == "Cache").ToList();
+
+        Assert.Equal(2, caches.Count);
+        Assert.Equal(2000, caches.Single(i => i.Browser == "Firefox").SizeBytes);          // the release one
+        Assert.Equal(1000, caches.Single(i => i.Browser == "Firefox — default").SizeBytes); // the leftover
+    }
+
+    [Fact]
+    public async Task Scan_LegacyDefaultAlone_StillGetsTheBareFirefoxName()
+    {
+        // A machine that only ever had the old layout must not suddenly read "Firefox — default".
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.default\cache2\entries\e0", 1000);
+
+        var items = await _svc.ScanAsync();
+
+        Assert.Equal("Firefox", items.Single(i => i.Category == "Cache").Browser);
+    }
+
+    [Fact]
+    public async Task Scan_TwoProfilesSharingAReadableName_KeepTheirSaltToStayApart()
+    {
+        // Readability is the goal, uniqueness is the requirement: when the readable half cannot tell
+        // two profiles apart, the full folder name does.
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.work\cache2\entries\e0", 1000);
+        WriteFile(@"Mozilla\Firefox\Profiles\bbb.work\cache2\entries\e0", 2000);
+
+        var items = await _svc.ScanAsync();
+        var caches = items.Where(i => i.Browser.StartsWith("Firefox") && i.Category == "Cache").ToList();
+
+        Assert.Equal(2, caches.Count);
+        Assert.Equal(1000, caches.Single(i => i.Browser == "Firefox — aaa.work").SizeBytes);
+        Assert.Equal(2000, caches.Single(i => i.Browser == "Firefox — bbb.work").SizeBytes);
+    }
+
+    [Fact]
+    public async Task Scan_OneProfile_CarriesOneName_AcrossBothRootsItIsSplitOver()
+    {
+        // Firefox splits a profile across two roots: cache2 under Local, cookies under Roaming. If the
+        // name were resolved per root, a profile whose sibling exists in only one of them would be
+        // named differently in each — its own rows would then read as two different profiles.
+        // Here "aaa.work" is in both roots but "bbb.work" only in Local, so the two roots disagree
+        // about whether "work" is ambiguous.
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.work\cache2\entries\e0", 1000);
+        WriteFile(@"Mozilla\Firefox\Profiles\bbb.work\cache2\entries\e0", 2000);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\aaa.work\cookies.sqlite", 512);
+
+        var items = await _svc.ScanAsync();
+
+        var cache = items.Single(i => i.Category == "Cache" && i.Paths.Any(p => p.Contains(@"\aaa.work\")));
+        var cookies = items.Single(i => i.Category == "Cookies");
+        Assert.Equal(cache.Browser, cookies.Browser);
+        Assert.Equal("Firefox — aaa.work", cookies.Browser);
+    }
+
+    [Fact]
+    public async Task Scan_FirefoxProfiles_PutTheDefaultFirst()
+    {
+        // The stable order ExpandChromiumDefs already applies, so the grid does not reshuffle between
+        // scans on whatever order the filesystem happened to return.
+        WriteFile(@"Mozilla\Firefox\Profiles\zzz.default-release\cache2\entries\e0", 1000);
+        WriteFile(@"Mozilla\Firefox\Profiles\aaa.dev-edition\cache2\entries\e0", 2000);
+
+        var items = await _svc.ScanAsync();
+        var names = items.Where(i => i.Category == "Cache").Select(i => i.Browser).ToList();
+
+        Assert.Equal(["Firefox", "Firefox — dev-edition"], names);
+    }
+
+    [Fact]
+    public async Task Clean_OneFirefoxProfile_LeavesTheOtherUntouched()
+    {
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\aaa.default-release\cookies.sqlite", 1024);
+        WriteRoamingFile(@"Mozilla\Firefox\Profiles\bbb.dev-edition\cookies.sqlite", 2048);
+
+        var items = await _svc.ScanAsync();
+        await _svc.CleanAsync([items.Single(i => i.Browser == "Firefox — dev-edition" && i.Category == "Cookies")]);
+
+        Assert.False(File.Exists(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\bbb.dev-edition\cookies.sqlite")));
+        Assert.True(File.Exists(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\aaa.default-release\cookies.sqlite")));
     }
 
     [Fact]

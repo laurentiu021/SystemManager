@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.6] - 2026-09-23
+
+**Disk Analyzer, Duplicate Finder and Large Files could measure a folder other than the one you picked.**
+All three skipped Windows folder shortcuts found *inside* the folder being scanned, but not one at the folder
+itself — so picking a shortcut scanned wherever it pointed while the tab named the folder you chose. All
+three also counted a file shortcut as though it were the file, which reports space that lives somewhere else.
+
+### Fixed
+
+- **The folder you pick is now checked too.** A Windows folder shortcut (junction or symlink) as the scan
+  root is refused rather than followed, in all three scanners. Large Files' results carry a "Show in
+  Explorer" action and Duplicate Finder's carry a delete, so what gets listed is what gets acted on.
+- **A file shortcut is no longer counted as the file it points to.** Windows reports a shortcut's size as
+  its target's, so one could appear among the biggest files on the drive while occupying almost nothing, pair
+  with its own target as a "duplicate", and add its target's bytes to a folder total — twice over, when the
+  target sits in the same folder being measured.
+- **Duplicate Finder no longer offers a shortcut and its target as two copies to choose between.** They are
+  the same file, so deleting the shortcut frees nothing and deleting the target breaks the shortcut.
+
+### Changed
+
+- **All three scanners are slightly faster.** Each asked Windows for a file's details twice — once to list
+  the folder, once per file to read its size. They now read the size from the listing, which is one fewer
+  call per file on a scan that visits every file on a drive.
+
 ## [1.112.5] - 2026-09-22
 
 **Five copies of the same directory walk, and two safety rules that only lived in one of them.** Every part

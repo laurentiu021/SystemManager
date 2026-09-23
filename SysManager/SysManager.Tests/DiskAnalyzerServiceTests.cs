@@ -306,4 +306,56 @@ public class DiskAnalyzerServiceTests : IDisposable
         Assert.Equal(1, last.FoldersScanned);   // the settled count is the point of the report
         Assert.DoesNotContain(progress.Reports, r => r.CurrentFolder == "Done");
     }
+
+    // ---------- the folder the user picked, and links inside it (#2381) ----------
+
+    private static string NewRoot() =>
+        Path.Combine(Path.GetTempPath(), "smdisk_" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public async Task AnalyzeAsync_RootIsALink_ReportsNothing()
+    {
+        // Junctions one level down were already skipped, which reads as complete until the root itself is
+        // one: the breakdown then describes a tree somewhere else while naming the folder that was chosen.
+        // Read-only, so nothing is destroyed — but a size report about the wrong folder is all this tab does.
+        var baseDir = NewRoot();
+        var outside = Path.Combine(baseDir, "outside");
+        Directory.CreateDirectory(Path.Combine(outside, "sub"));
+        await File.WriteAllBytesAsync(Path.Combine(outside, "sub", "data.bin"), new byte[100_000]);
+
+        var rootLink = Path.Combine(baseDir, "rootlink");
+        Symlinks.RequireDirectoryLink(rootLink, outside, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            Assert.Empty(await new DiskAnalyzerService().AnalyzeAsync(rootLink));
+        }
+        finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ALinkToAFile_DoesNotAddItsTargetsBytes()
+    {
+        // A link's Length is its target's, so counting one reported bytes that are not in the folder — and
+        // double-counted them whenever the target was inside the tree being measured, which for a link
+        // sitting beside its target is the common case.
+        var root = NewRoot();
+        var measured = Path.Combine(root, "measured");
+        Directory.CreateDirectory(measured);
+        var target = Path.Combine(measured, "target.bin");
+        await File.WriteAllBytesAsync(target, new byte[50_000]);
+
+        var link = Path.Combine(measured, "link.bin");
+        Symlinks.RequireFileLink(link, target, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            var folder = Assert.Single(await new DiskAnalyzerService().AnalyzeAsync(root));
+
+            // 50,000 bytes once rather than twice, and one file rather than two.
+            Assert.Equal(50_000, folder.SizeBytes);
+            Assert.Equal(1, folder.FileCount);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
 }

@@ -5,6 +5,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -80,6 +81,13 @@ public sealed class DuplicateFileService
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
             return [];
 
+        // Guard the traversal ROOT, not just its children. The user picks this folder, so a junction or
+        // symlink here walks into its target and reports duplicates OUTSIDE the folder they chose — and this
+        // tab's results are acted on. Every walk in the cleanup services closes this; this one did not
+        // (#2381). SafeFileWalk.IsReparsePoint fails closed, which is the same answer as "do not walk it".
+        if (SafeFileWalk.IsReparsePoint(rootPath))
+            return [];
+
         // ── Pass 1: discover files and group by size ──
         Dictionary<long, List<FileInfo>> sizeGroups = [];
         long discovered = 0;
@@ -98,21 +106,29 @@ public sealed class DuplicateFileService
             var dir = stack.Pop();
             if (ShouldSkipDir(dir)) continue;
 
-            string[] files = [];
+            // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes
+            // and length come from the listing the OS already returned, so the reparse check below is free
+            // and the `new FileInfo(f)` that used to follow — a second stat per file — is gone.
+            FileInfo[] files = [];
             string[] dirs = [];
-            try { files = Directory.GetFiles(dir); }
+            var dirInfo = new DirectoryInfo(dir);
+            try { files = dirInfo.GetFiles(); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
             try { dirs = Directory.GetDirectories(dir); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
 
-            foreach (var f in files)
+            foreach (var fi in files)
             {
                 if (ct.IsCancellationRequested) break;
                 try
                 {
-                    var fi = new FileInfo(f);
+                    // A link is not a duplicate of what it points at, it IS what it points at. FileInfo
+                    // reports the TARGET's size and content, so a link and its target hash identically and
+                    // the pair is offered as two copies to choose between — deleting the link frees nothing
+                    // and deleting the target breaks the link (#2381).
+                    if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
                     if (fi.Length < minSizeBytes) continue;
                     if (ShouldSkipFile(fi.Name)) continue;
 

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -43,6 +44,14 @@ public sealed class LargeFileScanner
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
             return [];
 
+        // Guard the traversal ROOT, not just its children. The user picks this folder, so a junction or
+        // symlink here walks straight into its target and lists files OUTSIDE the folder they chose — and
+        // the results carry a "Show in Explorer" action, so what is listed is what they act on. Every walk
+        // in the cleanup services closes this; this one did not (#2381). SafeFileWalk.IsReparsePoint fails
+        // closed on an unreadable path, which is the same answer as "do not walk it".
+        if (SafeFileWalk.IsReparsePoint(rootPath))
+            return [];
+
         // A non-positive Top has no meaning (nothing to keep) and would crash the
         // eviction path: on the first eligible file, heap.Count (0) < top (<=0) is
         // false, so heap.Min on the empty set returns default ((0, null)) and
@@ -77,19 +86,29 @@ public sealed class LargeFileScanner
             var cur = stack.Pop();
             if (ShouldSkip(cur)) continue;
 
-            string[] files = [];
+            // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes
+            // and length are already populated from the listing the OS returned, so the reparse check below
+            // is free and the `new FileInfo(f)` that used to follow — a second stat per file — is gone.
+            FileInfo[] files = [];
             string[] dirs = [];
-            try { files = Directory.GetFiles(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            var curDir = new DirectoryInfo(cur);
+            try { files = curDir.GetFiles(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 
-            foreach (var f in files)
+            foreach (var fi in files)
             {
                 if (ct.IsCancellationRequested) break;
+
+                // A link is not a big file. FileInfo.Length reports its TARGET's size, so a link would be
+                // listed among the biggest files on the drive while occupying almost nothing — and the row
+                // the user acts on would point at the link rather than the thing taking the space (#2381).
+                if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+
                 scanned++;
 
                 try
                 {
-                    var fi = new FileInfo(f);
+                    var f = fi.FullName;
                     bytesScanned += fi.Length;
 
                     if (fi.Length < minSizeBytes) continue;

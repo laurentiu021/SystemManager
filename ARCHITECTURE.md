@@ -422,9 +422,12 @@ Key services:
   exactly why four of the five copies never enclosed their own iteration. `SafeWalkOptions` is a
   record rather than optional parameters so no caller can bind an exclusion path to the search
   pattern by position. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
-  `LargeFileScanner`) still keep their own walk: they report progress per directory, which this walk
-  does not offer yet. That exemption is a named list in `ArchitectureTests`, asserted to stay live,
-  rather than something a reader has to notice.
+  `LargeFileScanner`) still keep their own loop: they prune the traversal by a path predicate, and
+  one needs an access-denied tally, neither of which `SafeWalkOptions` carries. That exemption is a
+  named list in `ArchitectureTests`, and it is **partial and asserted**: each exempted scanner must
+  still test its traversal root through `SafeFileWalk.IsReparsePoint`, because the root is the one
+  the user picks and a link there sends the whole scan somewhere else. The guard fails if an
+  exempted file stops walking a tree (a stale name nobody would remove) or stops guarding its root.
 - `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
   because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
   safe for numbers and fixed-format timestamps but not for the app names, setting descriptions

@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.7] - 2026-09-23
+
+**Shortcut Cleaner called a shortcut broken when it simply could not reach the target.** Unplug a USB stick
+and every shortcut to a file on it was listed as pointing at "a program you have already removed" — ticked
+for deletion, because every row in that list arrives ticked. The same for a network folder that was not
+answering, a BitLocker drive still waiting for its password, and a folder this user has no permission to
+read. Windows answers "no" to all four the same way it answers "that file is gone", and the tab believed it.
+
+### Fixed
+
+- **"Broken" now means the scan proved the target is gone.** A target it could not reach is left alone and
+  counted, rather than listed. The four ways to be alive and read as removed: a drive that is not attached, a
+  UNC path whose server is asleep, a locked BitLocker volume, and a path the current user cannot look at —
+  which is the everyday one, since this tab works without administrator rights.
+- **A network target is never called missing.** An absent share and a sleeping NAS cannot be told apart
+  without waiting out a network timeout for every shortcut, and "Recent Items" is one of the scanned
+  locations — so a PC that has ever opened a file from a share had a list full of these. A share that answers
+  is still recognised as present; only the failure is treated as undecided.
+- **"Your system is clean" is no longer said when the scan could not see everywhere.** With unreachable
+  targets, an empty list now reads "No broken shortcuts confirmed", followed by how many were left alone and
+  why — a drive not plugged in, a folder not answering, or somewhere without permission to read.
+- **One Click Tune-Up no longer counts them either.** Its card reported the total the scan looked at, so a
+  machine with an unplugged drive was told it had broken shortcuts it did not have.
+
 ## [1.112.6] - 2026-09-23
 
 **Disk Analyzer, Duplicate Finder and Large Files could measure a folder other than the one you picked.**

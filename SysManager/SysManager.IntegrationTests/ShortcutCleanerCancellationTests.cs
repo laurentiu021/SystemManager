@@ -71,8 +71,13 @@ public class ShortcutCleanerCancellationTests
     [Fact]
     public async Task ScanAsync_NotCancelled_CompletesNormally()
     {
-        var results = await new ShortcutCleanerService().ScanAsync();
+        var report = await new ShortcutCleanerService().ScanAsync();
 
-        Assert.NotNull(results);   // a broken shortcut may legitimately not exist on this machine
+        // A broken shortcut may legitimately not exist on this machine, so the lists are asserted to be
+        // present and consistent rather than populated. Non-negative on the undecided count matters: it is
+        // incremented in a switch arm, and a scan that finished normally must have a real number there
+        // rather than whatever a skipped branch left behind.
+        Assert.NotNull(report.Broken);
+        Assert.True(report.UnreachableTargets >= 0);
     }
 }

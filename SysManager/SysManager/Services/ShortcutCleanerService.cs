@@ -20,17 +20,19 @@ namespace SysManager.Services;
 public sealed partial class ShortcutCleanerService
 {
     /// <summary>
-    /// Scans all common shortcut locations and returns broken shortcuts.
+    /// Scans all common shortcut locations for shortcuts whose target is CONFIRMED gone, plus a count of
+    /// the ones it could not decide about.
     /// </summary>
-    public Task<IReadOnlyList<BrokenShortcut>> ScanAsync(
+    public Task<ShortcutScanReport> ScanAsync(
         IProgress<string>? progress = null,
         CancellationToken ct = default)
         => Task.Run(() => Scan(progress, ct), ct);
 
-    private static IReadOnlyList<BrokenShortcut> Scan(
+    private static ShortcutScanReport Scan(
         IProgress<string>? progress, CancellationToken ct)
     {
         List<BrokenShortcut> results = [];
+        var unreachable = 0;
         var locations = GetScanLocations();
 
         foreach (var (label, path) in locations)
@@ -53,16 +55,24 @@ public sealed partial class ShortcutCleanerService
                     if (target.StartsWith("::") || target.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    // Check if target exists (file or directory)
-                    if (!File.Exists(target) && !Directory.Exists(target))
+                    // "Broken" must mean the scan ESTABLISHED the target is gone, never that it failed to
+                    // reach it — see ClassifyTarget. An undecided target is counted and left alone, because
+                    // the rows this produces arrive pre-ticked for deletion (#2378).
+                    switch (ClassifyTarget(target))
                     {
-                        results.Add(new BrokenShortcut
-                        {
-                            Name = Path.GetFileNameWithoutExtension(lnk),
-                            ShortcutPath = lnk,
-                            TargetPath = target,
-                            Location = label
-                        });
+                        case TargetVerdict.Missing:
+                            results.Add(new BrokenShortcut
+                            {
+                                Name = Path.GetFileNameWithoutExtension(lnk),
+                                ShortcutPath = lnk,
+                                TargetPath = target,
+                                Location = label
+                            });
+                            break;
+
+                        case TargetVerdict.Unreachable:
+                            unreachable++;
+                            break;
                     }
                 }
                 catch (IOException) { /* skip inaccessible shortcut */ }
@@ -79,7 +89,93 @@ public sealed partial class ShortcutCleanerService
         // sibling scanners end the same way, for the same reason.
         ct.ThrowIfCancellationRequested();
 
-        return results;
+        return new ShortcutScanReport { Broken = results, UnreachableTargets = unreachable };
+    }
+
+    /// <summary>What the scan was able to establish about one shortcut's target.</summary>
+    internal enum TargetVerdict
+    {
+        /// <summary>Confirmed gone: the location was readable and the target was not in it.</summary>
+        Missing,
+
+        /// <summary>Confirmed there.</summary>
+        Present,
+
+        /// <summary>Could not be established. Not the same as gone, and never offered for deletion.</summary>
+        Unreachable,
+    }
+
+    /// <summary>
+    /// Decides whether a shortcut's target is gone, present, or undecidable, with the two filesystem
+    /// questions injected so the decision can be tested without an unplugged drive or an offline server.
+    /// </summary>
+    /// <remarks>
+    /// <c>File.Exists</c> returns false for "it is not there" AND for "I could not find out", and the tab
+    /// presented the second as the first — its own subtitle says "shortcuts that point at programs you have
+    /// already removed" (#2378). Four ways to be alive and read as removed: a target on a drive that is not
+    /// currently attached, a UNC path whose server is asleep, a locked BitLocker volume, and a path the
+    /// current user cannot stat. This tab is usable without elevation, which is exactly when the last one
+    /// happens.
+    /// <para>The discriminator is the EXCEPTION, not the boolean: <c>File.GetAttributes</c> throws
+    /// <see cref="FileNotFoundException"/> / <see cref="DirectoryNotFoundException"/> for a real absence and
+    /// <see cref="UnauthorizedAccessException"/> / <see cref="IOException"/> ("the device is not ready",
+    /// "the network path was not found") when it could not tell. A drive-letter root is additionally checked
+    /// for readiness BEFORE any I/O, because an unmounted volume is the common case and asking the OS about a
+    /// path on it is both slow and ambiguous.</para>
+    /// <para>A UNC target is never reported as missing. An absent share and a sleeping NAS are
+    /// indistinguishable from here without waiting out a network timeout per shortcut, and "Recent Items" is
+    /// one of the scanned locations — so a machine that has ever opened a file from a share has a list full of
+    /// them. Refusing to judge costs a dead network shortcut staying on the desktop; judging wrongly costs a
+    /// live one being deleted.</para>
+    /// </remarks>
+    internal static TargetVerdict ClassifyTarget(
+        string target,
+        Func<string, FileAttributes>? readAttributes = null,
+        Func<string, bool>? volumeIsReady = null)
+    {
+        readAttributes ??= File.GetAttributes;
+        volumeIsReady ??= IsVolumeReady;
+
+        // UNC: decide before touching the network. Present is still worth establishing — a reachable share
+        // answers immediately — but a failure of any kind is undecided rather than gone.
+        var isUnc = target.StartsWith(@"\\", StringComparison.Ordinal);
+
+        if (!isUnc)
+        {
+            var root = SafeRoot(target);
+            if (root.Length > 0 && !volumeIsReady(root)) return TargetVerdict.Unreachable;
+        }
+
+        try
+        {
+            readAttributes(target);
+            return TargetVerdict.Present;
+        }
+        catch (FileNotFoundException) { return isUnc ? TargetVerdict.Unreachable : TargetVerdict.Missing; }
+        catch (DirectoryNotFoundException) { return isUnc ? TargetVerdict.Unreachable : TargetVerdict.Missing; }
+        catch (UnauthorizedAccessException) { return TargetVerdict.Unreachable; }
+        catch (IOException) { return TargetVerdict.Unreachable; }
+        catch (ArgumentException) { return TargetVerdict.Unreachable; }
+        catch (NotSupportedException) { return TargetVerdict.Unreachable; }
+    }
+
+    /// <summary>The path's root, or "" when it has none or cannot be parsed.</summary>
+    private static string SafeRoot(string path)
+    {
+        try { return Path.GetPathRoot(path) ?? ""; }
+        catch (ArgumentException) { return ""; }
+    }
+
+    /// <summary>
+    /// Whether the volume at <paramref name="root"/> is attached and readable. False for an unplugged
+    /// stick, an ejected card, an unmounted VHD, and a BitLocker volume still waiting for its password.
+    /// </summary>
+    private static bool IsVolumeReady(string root)
+    {
+        try { return new DriveInfo(root).IsReady; }
+        catch (ArgumentException) { return false; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>

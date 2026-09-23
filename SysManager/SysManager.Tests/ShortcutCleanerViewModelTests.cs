@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -154,4 +155,139 @@ public class ShortcutCleanerViewModelTests
     // The .lnk walk itself — depth, the "*.lnk" pattern and a missing root — is covered in
     // SafeFileWalkTests, because the scan now shares one walk with every other service that walks a tree
     // rather than keeping a private copy of it.
+
+    // ── "broken" must mean confirmed gone, not unreachable (#2378) ──
+    //
+    // The two filesystem questions are injected, so every case below is deterministic with no unplugged
+    // drive, no offline server and no privileges. That is the point of the seam: the defect was reachable
+    // only through conditions a test cannot create, which is why it survived.
+
+    private static FileAttributes Reachable(string _) => FileAttributes.Normal;
+    private static bool Ready(string _) => true;
+
+    [Fact]
+    public void ClassifyTarget_TargetIsThere_IsPresent()
+    {
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Present,
+            ShortcutCleanerService.ClassifyTarget(@"C:\Program Files\App\app.exe", Reachable, Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_ReadableVolumeAndNoSuchFile_IsMissing()
+    {
+        // The only case that may be deleted: the volume answered, and the file was not on it.
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Missing,
+            ShortcutCleanerService.ClassifyTarget(
+                @"C:\Program Files\Gone\gone.exe",
+                _ => throw new FileNotFoundException(),
+                Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_DriveNotAttached_IsUnreachable_AndAsksTheFilesystemNothing()
+    {
+        // The common case: a shortcut to a file on a USB stick that is not plugged in. Asserting that
+        // readAttributes is never called is half the test — an unmounted volume must be decided from the
+        // root alone, because asking the OS about a path on it is both slow and ambiguous.
+        var probed = false;
+
+        var verdict = ShortcutCleanerService.ClassifyTarget(
+            @"E:\Photos\holiday.jpg",
+            _ => { probed = true; return FileAttributes.Normal; },
+            _ => false);
+
+        Assert.Equal(ShortcutCleanerService.TargetVerdict.Unreachable, verdict);
+        Assert.False(probed, "an unattached volume was probed anyway, which is slow and cannot answer");
+    }
+
+    [Fact]
+    public void ClassifyTarget_AccessDenied_IsUnreachable_NotMissing()
+    {
+        // File.Exists returns false for this too, which is how a live file in a folder the user cannot read
+        // became a "broken shortcut". The tab is usable without elevation, so this is not a corner case.
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Unreachable,
+            ShortcutCleanerService.ClassifyTarget(
+                @"C:\Users\someone-else\Documents\theirs.docx",
+                _ => throw new UnauthorizedAccessException(),
+                Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_DeviceNotReady_IsUnreachable()
+    {
+        // A BitLocker volume waiting for its password, or a card reader with no card: the OS reports an
+        // IOException rather than an absence, and the two must not be conflated.
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Unreachable,
+            ShortcutCleanerService.ClassifyTarget(
+                @"D:\Locked\file.bin",
+                _ => throw new IOException("The device is not ready."),
+                Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_UncTargetNotFound_IsUnreachable_NotMissing()
+    {
+        // The load-bearing one. An absent share and a sleeping NAS are indistinguishable from here without
+        // waiting out a network timeout per shortcut — and "Recent Items" is a scanned location, so a machine
+        // that has ever opened a file from a share has a list full of these. Refusing to judge costs a dead
+        // network shortcut staying put; judging wrongly deletes a live one.
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Unreachable,
+            ShortcutCleanerService.ClassifyTarget(
+                @"\\nas\media\film.mkv",
+                _ => throw new FileNotFoundException(),
+                Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_UncTargetThatAnswers_IsStillPresent()
+    {
+        // The negative half: refusing to call a UNC target MISSING must not stop it being recognised as
+        // there. A reachable share answers immediately, and a scan that reported every network shortcut as
+        // undecided would put a permanent warning on a machine whose NAS is simply switched on.
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Present,
+            ShortcutCleanerService.ClassifyTarget(@"\\nas\media\film.mkv", Reachable, Ready));
+    }
+
+    [Fact]
+    public void ClassifyTarget_AgainstTheRealFilesystem_StillCallsAMissingFileMissing()
+    {
+        // No seams: the defaults have to work, or every case above tests only the injected doubles. A path
+        // under %TEMP% is on an attached volume this user can read, so "not there" is the honest answer.
+        var absent = Path.Combine(Path.GetTempPath(), "smtest_no_such_target_" + Guid.NewGuid().ToString("N"));
+
+        Assert.Equal(
+            ShortcutCleanerService.TargetVerdict.Missing,
+            ShortcutCleanerService.ClassifyTarget(absent));
+    }
+
+    // ── the report has to say when it could not look ──
+
+    [Fact]
+    public void ScanReport_WithNothingUndecided_SaysNothing()
+    {
+        // The negative half: a clean scan must not grow a warning nobody needs.
+        Assert.Null(new ShortcutScanReport().Notice);
+    }
+
+    [Theory]
+    [InlineData(1, "1 shortcut points")]
+    [InlineData(4, "4 shortcuts point")]
+    public void ScanReport_WithUndecidedTargets_NamesTheCountAndThatTheyWereLeftAlone(int count, string expected)
+    {
+        var notice = new ShortcutScanReport { UnreachableTargets = count }.Notice;
+
+        Assert.NotNull(notice);
+        Assert.Contains(expected, notice, StringComparison.Ordinal);
+        Assert.Contains("left alone", notice, StringComparison.Ordinal);
+
+        // The reason, in the user's terms rather than the mechanism's: they need to know a drive being
+        // unplugged is why, or the sentence reads as the app failing.
+        Assert.Contains("not plugged in", notice, StringComparison.Ordinal);
+    }
 }

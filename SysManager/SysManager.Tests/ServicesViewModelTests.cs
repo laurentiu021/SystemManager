@@ -695,9 +695,10 @@ public class ServicesViewModelTests
     [Fact]
     public void EveryMutatingServiceCommand_GoesThroughAConfirm()
     {
-        // A source-level guard, because the runtime tests above cannot cover the elevated branch on a
-        // non-elevated CI runner. Enable was missing its confirm precisely because three siblings had
-        // one and nothing checked that the fourth did — so the count is asserted rather than assumed.
+        // A source-level guard, because the runtime tests above reach only Enable: they force elevation
+        // to get past the gate, but each one drives a single command. Enable was missing its confirm
+        // precisely because three siblings had one and nothing checked that the fourth did — so the
+        // count is asserted rather than assumed.
         var source = File.ReadAllText(Path.Combine(
             FindProjectDir(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
 

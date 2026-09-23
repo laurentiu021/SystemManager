@@ -239,23 +239,10 @@ public class DiskAnalyzerViewModelTests
     {
         // The defect was that nothing in the tab disclosed it — a grep for excluded/skip/system area in
         // the view returned 0. Asserting the ViewModel alone would pass on the unfixed code.
-        var xaml = File.ReadAllText(ViewPath("DiskAnalyzerView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "DiskAnalyzerView.xaml"));
 
         Assert.Contains("ExclusionNote", xaml);
         Assert.Contains("ExclusionDetail", xaml);   // the hover naming the exact folders
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 
     // ---------- the "since last scan" delta wording (#1591) ----------
@@ -390,7 +377,7 @@ public class DiskAnalyzerViewModelTests
         // live-region rule itself is enforced in ArchitectureTests. What only the shipped markup can show is
         // which line each half landed on — so this reads the XAML, in the same shape as the equivalent test
         // on Duplicate Finder.
-        var root = System.Xml.Linq.XDocument.Load(ViewPath("DiskAnalyzerView.xaml")).Root;
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "DiskAnalyzerView.xaml")).Root;
         Assert.NotNull(root);
 
         System.Xml.Linq.XElement BoundTo(string property) =>

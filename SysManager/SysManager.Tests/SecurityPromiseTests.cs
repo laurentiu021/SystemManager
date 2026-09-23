@@ -307,7 +307,7 @@ public class SecurityPromiseTests
     /// </remarks>
     private static IEnumerable<(string Path, string Code)> AppSources()
     {
-        var app = AppProjectDir();
+        var app = TestPaths.AppProject();
         foreach (var path in Directory.EnumerateFiles(app, "*.cs", SearchOption.AllDirectories))
         {
             if (path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
@@ -319,7 +319,7 @@ public class SecurityPromiseTests
 
     private static string CodeOf(params string[] parts)
     {
-        var path = Path.Combine([AppProjectDir(), .. parts]);
+        var path = Path.Combine([TestPaths.AppProject(), .. parts]);
         Assert.True(File.Exists(path), $"{string.Join('/', parts)} not found at {path}");
         return StripComments(File.ReadAllText(path));
     }
@@ -349,7 +349,7 @@ public class SecurityPromiseTests
     [Fact]
     public void TheWingetToken_IsOnlyUsedAfterTheReleaseIsPublished()
     {
-        var workflow = Path.Combine(RepoRoot(), ".github", "workflows", "release.yml");
+        var workflow = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml");
         Assert.True(File.Exists(workflow), $"release.yml not found at {workflow}");
 
         var lines = File.ReadAllLines(workflow);
@@ -384,26 +384,4 @@ public class SecurityPromiseTests
     private static string StripComments(string source)
         => Regex.Replace(Regex.Replace(source, @"/\*.*?\*/", "", RegexOptions.Singleline),
                          @"//.*?$", "", RegexOptions.Multiline);
-
-    // Walks up to the repository root — one level above the app project's solution folder.
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, ".github", "workflows")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        return dir!.FullName;
-    }
-
-    // Walks up to the app project — source is not copied to the test output.
-    private static string AppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else every assertion above would silently test nothing
-        return Path.Combine(dir!.FullName, "SysManager");
-    }
 }

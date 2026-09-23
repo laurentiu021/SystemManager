@@ -179,7 +179,7 @@ public class AuthenticodeTests
     [InlineData("SpeedTestService.cs")]
     public void EveryFailClosedGate_AsksForOnlineRevocation(string serviceFile)
     {
-        var source = File.ReadAllText(ServiceSourcePath(serviceFile));
+        var source = File.ReadAllText(TestPaths.AppFile("Services", serviceFile));
 
         var at = source.IndexOf("Authenticode.ValidateChain", StringComparison.Ordinal);
         Assert.True(at >= 0,
@@ -209,7 +209,7 @@ public class AuthenticodeTests
     [Fact]
     public void TheInformationalPath_DoesNotBuildAManagedChain()
     {
-        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "SignatureVerdict.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "SignatureVerdict.cs"));
         Assert.True(source.Length > 1000, "SignatureVerdict.cs is too small to be the real file");
 
         Assert.Contains("WindowsTrust.Verify(path)", source, StringComparison.Ordinal);
@@ -226,7 +226,7 @@ public class AuthenticodeTests
 
     private static string HelperMethodSource(string signature)
     {
-        var source = File.ReadAllText(Path.Combine(AppProjectDir(), "Helpers", "Authenticode.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Helpers", "Authenticode.cs"));
         var start = source.IndexOf(signature, StringComparison.Ordinal);
         Assert.True(start >= 0, $"'{signature}' not found in Helpers/Authenticode.cs — this test would "
             + "otherwise assert nothing at all");
@@ -246,23 +246,5 @@ public class AuthenticodeTests
 
         Assert.True(method.Length > 200, $"the slice from '{signature}' is {method.Length} chars of code — not a method body");
         return method;
-    }
-
-    private static string ServiceSourcePath(string fileName)
-    {
-        var path = Path.Combine(AppProjectDir(), "Services", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
-    }
-
-    // Walks up to the app project — source is not copied to the test output.
-    private static string AppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else every assertion above would silently test nothing
-        return Path.Combine(dir!.FullName, "SysManager");
     }
 }

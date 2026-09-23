@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.IO;
 using System.Xml.Linq;
 
 namespace SysManager.Tests;
@@ -28,7 +27,7 @@ public class SettingsWatchdogViewBindingTests
     [Fact]
     public void TheViewBindsTheWatchedList()
     {
-        var doc = XDocument.Load(ViewPath());
+        var doc = XDocument.Load(TestPaths.AppFile("Views", "SettingsWatchdogView.xaml"));
 
         var grids = doc.Descendants(Presentation + "DataGrid").ToList();
         Assert.NotEmpty(grids);   // else the assertions below would pass by finding nothing
@@ -60,7 +59,7 @@ public class SettingsWatchdogViewBindingTests
     {
         // Both lists describe the same settings, so a setting must not read as settled in one while the
         // other flags it. The tint is what makes them agree on screen.
-        var doc = XDocument.Load(ViewPath());
+        var doc = XDocument.Load(TestPaths.AppFile("Views", "SettingsWatchdogView.xaml"));
 
         var watchedGrid = doc.Descendants(Presentation + "DataGrid").First(g =>
             (g.Attribute("ItemsSource")?.Value ?? "").Contains("Watched", StringComparison.Ordinal));
@@ -83,18 +82,5 @@ public class SettingsWatchdogViewBindingTests
             .Descendants(Presentation + "DataTrigger")
             .Select(t => t.Attribute("Binding")?.Value ?? "");
         Assert.Contains(triggerBindings, b => b.Contains("HasDrifted", StringComparison.Ordinal));
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", "SettingsWatchdogView.xaml");
-        Assert.True(File.Exists(path), $"SettingsWatchdogView.xaml not found at {path}");
-        return path;
     }
 }

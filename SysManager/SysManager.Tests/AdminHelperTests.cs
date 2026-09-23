@@ -133,7 +133,7 @@ public class AdminHelperTests
     [Fact]
     public void RelaunchAsAdmin_PassesTheHintAsAnArgument_NotAsConcatenatedText()
     {
-        var source = File.ReadAllText(HelperSourcePath());
+        var source = File.ReadAllText(TestPaths.AppFile("Helpers", "AdminHelper.cs"));
         var start = source.IndexOf("public static bool RelaunchAsAdmin", StringComparison.Ordinal);
         Assert.True(start >= 0, "RelaunchAsAdmin not found — update this guard.");
         var body = source[start..source.IndexOf("\n    }", start, StringComparison.Ordinal)];
@@ -148,19 +148,5 @@ public class AdminHelperTests
         // The sentinel must still be passed, or the elevated child is treated as a duplicate and the
         // user is left looking at the non-elevated window.
         Assert.Contains("ArgumentList.Add(RelaunchedElevatedArg)", body, StringComparison.Ordinal);
-    }
-
-    private static string HelperSourcePath()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(
-                directory.FullName, "SysManager", "Helpers", "AdminHelper.cs");
-            if (File.Exists(candidate)) return candidate;
-        }
-
-        throw new FileNotFoundException("Could not locate AdminHelper.cs from the test output.");
     }
 }

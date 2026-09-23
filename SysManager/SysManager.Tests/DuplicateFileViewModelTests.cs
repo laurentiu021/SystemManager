@@ -295,7 +295,7 @@ public class DuplicateFileViewModelTests
         // The defect was a property nothing read. Asserting the model alone would pass on the unfixed
         // code, so this checks the shipped markup renders the badge, offers the override, and states
         // the rule — plus that it still promises nothing is deleted.
-        var xaml = File.ReadAllText(ViewPath("DuplicateFileView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "DuplicateFileView.xaml"));
 
         Assert.Contains("KeepLabel", xaml);                  // the badge
         Assert.Contains("KeepThisCommand", xaml);            // the override
@@ -425,7 +425,7 @@ public class DuplicateFileViewModelTests
         // live-region rule itself is enforced in ArchitectureTests. What only the shipped markup can show is
         // which line each half landed on: the tooltip and the trimming belong to the readout now, because the
         // readout is what carries a file name.
-        var root = System.Xml.Linq.XDocument.Load(ViewPath("DuplicateFileView.xaml")).Root;
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "DuplicateFileView.xaml")).Root;
         Assert.NotNull(root);
 
         System.Xml.Linq.XElement BoundTo(string property) =>
@@ -447,18 +447,5 @@ public class DuplicateFileViewModelTests
             .Where(e => e.Name.LocalName == "TextBlock.Style")
             .SelectMany(e => e.Elements().Where(s => s.Name.LocalName == "Style")));
         Assert.Equal("{StaticResource Caption}", inline.Attribute("BasedOn")?.Value);
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

@@ -385,29 +385,7 @@ public class SidebarSelectionContractTests
         Assert.Contains("Key.Escape", code, StringComparison.Ordinal);
     }
 
-    private static XDocument LoadProjectXaml(string fileName)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "SysManager", fileName);
-            if (File.Exists(candidate)) return XDocument.Load(candidate);
-        }
+    private static XDocument LoadProjectXaml(string fileName) => XDocument.Load(TestPaths.AppFile(fileName));
 
-        throw new FileNotFoundException($"Could not locate SysManager/{fileName} from the test output.");
-    }
-
-    private static string[] LoadProjectSource(string fileName)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "SysManager", fileName);
-            if (File.Exists(candidate)) return File.ReadAllLines(candidate);
-        }
-
-        throw new FileNotFoundException($"Could not locate SysManager/{fileName} from the test output.");
-    }
+    private static string[] LoadProjectSource(string fileName) => File.ReadAllLines(TestPaths.AppFile(fileName));
 }

@@ -201,7 +201,7 @@ public class ServicesViewModelTests
     [Fact]
     public void EveryFilterOption_HasAChipInTheView()
     {
-        var xaml = System.Xml.Linq.XDocument.Load(ViewPath("ServicesView.xaml"));
+        var xaml = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "ServicesView.xaml"));
 
         // The parameter each chip feeds the IsEqual converter IS the filter value it selects.
         var chipValues = xaml.Descendants()
@@ -283,19 +283,6 @@ public class ServicesViewModelTests
 
         vm.SelectedFilter = "Stopped";
         Assert.Single(vm.Services);                // and the filter agrees with the count
-    }
-
-    /// <summary>The app's Views folder — .xaml is not copied to the test output.</summary>
-    private static string ViewPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 
     [Fact]
@@ -700,7 +687,7 @@ public class ServicesViewModelTests
         // precisely because three siblings had one and nothing checked that the fourth did — so the
         // count is asserted rather than assumed.
         var source = File.ReadAllText(Path.Combine(
-            FindProjectDir(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
+            TestPaths.TestProject(), "..", "SysManager", "ViewModels", "ServicesViewModel.cs"));
 
         var confirms = source.Split("DialogService.Instance.Confirm(").Length - 1;
 
@@ -932,17 +919,6 @@ public class ServicesViewModelTests
 
         Assert.All(entries, e => Assert.False(e.IsHighlighted));
         Assert.Equal(0, vm.HighlightedCount);
-    }
-
-    private static string FindProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "SysManager.Tests.csproj"))) return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException("Could not locate the test project directory.");
     }
 
     // ── Elevation gate on Start / Stop / Disable / Enable ────────────────────

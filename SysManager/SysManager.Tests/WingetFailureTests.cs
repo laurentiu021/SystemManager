@@ -116,7 +116,7 @@ public class WingetFailureTests
         // how Bulk Installer ended up not using it at all. The name promises all three tabs, so all
         // three are read: asserting only the AppUpdates alias left the other two tabs free to
         // reintroduce their own wording — the very drift this test is named for.
-        var vmDir = FindViewModelsDirectory();
+        var vmDir = TestPaths.AppDir("ViewModels");
         var offenders = new List<string>();
 
         foreach (var vm in new[] { "AppUpdatesViewModel.cs", "UninstallerViewModel.cs", "BulkInstallerViewModel.cs" })
@@ -153,20 +153,5 @@ public class WingetFailureTests
         // The point of the shared string: the tab needs a prerequisite, nothing broke.
         Assert.DoesNotContain("error", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("failed", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>The app project's ViewModels directory — .cs sources are not copied to the test output.</summary>
-    private static string FindViewModelsDirectory()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "SysManager", "ViewModels");
-            if (Directory.Exists(candidate)) return candidate;
-        }
-
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager ViewModels directory from " + AppContext.BaseDirectory);
     }
 }

@@ -202,7 +202,7 @@ public partial class ArchitectureTests
             ("AdminHelper.ForceElevation(", "AdminHelper.ElevationProbe"),
         ];
 
-        var testDir = FindTestSourceDirectory();
+        var testDir = TestPaths.TestProject();
         var offenders = new List<string>();
         var inspected = 0;
 
@@ -235,33 +235,6 @@ public partial class ArchitectureTests
             + "\"ProcessWideStatics\" collection, so they race the classes that are — a test can observe "
             + "state another test owns, and pass or fail for a foreign reason. Add "
             + "[Collection(\"ProcessWideStatics\")]:\n  " + string.Join("\n  ", offenders));
-    }
-
-    /// <summary>
-    /// Locates the <c>SysManager.Tests</c> source directory.
-    /// </summary>
-    /// <remarks>
-    /// Walks up from the output folder first, which is how it works under <c>dotnet test</c>. That walk fails
-    /// whenever the tests are hosted from somewhere else in the tree, and then every guard that reads test
-    /// source throws instead of running. The sibling fallback covers it: the app project is found by the same
-    /// upward walk looking for a SUBPATH, which succeeds from anywhere under the repository, and the test
-    /// project is its sibling.
-    /// </remarks>
-    private static string FindTestSourceDirectory()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "SysManager.Tests.csproj"))) return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        var sibling = Path.Combine(
-            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
-        if (File.Exists(Path.Combine(sibling, "SysManager.Tests.csproj"))) return sibling;
-
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager.Tests source directory from " + AppContext.BaseDirectory);
     }
 
     /// <summary>
@@ -349,7 +322,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryViewModelCommand_IsReachableFromTheUi()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var markup = Directory
             .GetFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Select(File.ReadAllText)
@@ -425,7 +398,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryExportCommand_IsBoundInItsOwnView()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
         var checked_ = 0;
@@ -501,7 +474,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStatusFooter_NamesItsProgressBar_AndNobodyReInlinesIt()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var control = Path.Combine(viewsDir, "StatusFooter.xaml");
         Assert.True(File.Exists(control),
             $"{control} not found — the shared footer is gone, so this guard would police nothing.");
@@ -595,7 +568,7 @@ public partial class ArchitectureTests
     public void EveryThemeEntryPoint_GoesThroughTheLegibilityCorrection()
     {
         var service = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "ThemeService.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "ThemeService.cs"));
 
         foreach (var entry in new[] { "SetPreset", "SetAccent", "SetCustom" })
         {
@@ -656,7 +629,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTestWaitsBySleeping()
     {
-        var testDir = FindTestSourceDirectory();
+        var testDir = TestPaths.TestProject();
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -736,7 +709,7 @@ public partial class ArchitectureTests
             "StatusMessage_DefaultEmpty",
         ];
 
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var racingViewModels = new List<string>();
 
         foreach (var file in Directory.GetFiles(vmDir, "*ViewModel.cs"))
@@ -754,7 +727,7 @@ public partial class ArchitectureTests
             + "StatusMessage, and 22 were measured. The init-path trace stopped matching, so this guard is "
             + "checking almost nothing — re-derive it before trusting a pass.");
 
-        var testDir = FindTestSourceDirectory();
+        var testDir = TestPaths.TestProject();
         var offenders = new List<string>();
         var checkedTests = 0;
 
@@ -909,7 +882,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryMethodBodyByName_EndsAtItsOwnClosingBrace_NotOneInsideALiteral()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         var bodiesRead = 0;
         var skewedLiterals = 0;
@@ -983,7 +956,7 @@ public partial class ArchitectureTests
     {
         const string theOnePlace = "SourceBraces.cs";
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         var inTheOnePlace = 0;
         var scanned = 0;
@@ -1032,6 +1005,83 @@ public partial class ArchitectureTests
     private static partial Regex BraceCharacterTest();
 
     /// <summary>
+    /// Only one place walks up from the test output to the repository. No test resolves its own paths.
+    /// </summary>
+    /// <remarks>
+    /// Thirty-one copies of that walk lived across twenty-five files in <c>SysManager.Tests</c>, behind
+    /// thirty-two private helpers with seventeen different names, and the copies had drifted: the repository
+    /// root had two definitions, the app project had six markers — four of which verified a NEIGHBOUR of the
+    /// directory they returned rather than the directory itself — and the sibling fallback that repaired
+    /// <c>ArchitectureTests</c> never reached the identical walk in <c>ServicesViewModelTests</c>. They all ask
+    /// <c>TestPaths</c> now. Copy thirty-two would restore the drift in silence, because a walk that lands in
+    /// the wrong directory still yields a confident verdict.
+    /// <para>The needle is <c>AppContext.BaseDirectory</c> itself and not any walk shape, because shape is what
+    /// hid three of those copies from the sweep that found the other twenty-eight: one spelled
+    /// <c>new System.IO.DirectoryInfo</c> fully qualified, one walked strings through
+    /// <c>Path.GetDirectoryName</c> and never named <c>DirectoryInfo</c> at all, and one delegated to a sibling
+    /// helper so it held no walk of its own. All three had to name this one expression. It is matched by regex
+    /// rather than by <c>Contains</c> so that the pattern's own source — escaped — is not a hit on this file.</para>
+    /// <para>Comment tails come off first, because two files explain the walk in prose they must be allowed to
+    /// keep. <c>AppFixture</c> is exempt: it hops a fixed four levels to find the BUILT executable under
+    /// <c>bin</c>, which is a build artifact and not repository source, and it lives in the one test project
+    /// that does not compile <c>TestPaths</c>. That exemption carries no floor of its own — unlike the counts
+    /// below, zero matches there would make this guard stricter rather than vacuous.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryRepositoryPathATestNeeds_IsAskedForInOnePlace()
+    {
+        const string theOnePlace = "TestPaths.cs";
+        const string buildArtifactLookup = "AppFixture.cs";
+
+        var root = TestPaths.RepoRoot();
+        var offenders = new List<string>();
+        var inTheOnePlace = 0;
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var name = Path.GetFileName(file);
+                scanned++;
+
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var code = CommentTail().Replace(lines[i], string.Empty);
+                    if (!TestOutputDirectory().IsMatch(code)) continue;
+
+                    if (name == theOnePlace) inTheOnePlace++;
+                    else if (name != buildArtifactLookup) offenders.Add($"{name}:{i + 1}  {code.Trim()}");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 300,
+            $"only {scanned} test source files were scanned across the three test projects, well below the 353 "
+            + "measured — the enumeration is wrong, so a pass here proves nothing.");
+
+        Assert.True(inTheOnePlace >= 1,
+            $"{theOnePlace} never names the test output directory, though walking up from it is its whole job. "
+            + "Either the walk moved out of it — in which case the offender check below is policing the wrong "
+            + "file — or the needle stopped matching, which would make that check pass on any codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "these tests work out where the repository is themselves. Ask " + theOnePlace + " instead — "
+            + "RepoRoot, SolutionDir, AppProject, TestProject, AppFile, AppDir — because a private copy is "
+            + "free to key on a different marker than the rest, and one that verifies a neighbour of the "
+            + "directory it returns answers confidently for a tree that does not hold the project:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The directory a test runs from — the one thing every ancestor walk has to name.</summary>
+    [GeneratedRegex(@"AppContext\.BaseDirectory", RegexOptions.Compiled)]
+    private static partial Regex TestOutputDirectory();
+
+    /// <summary>
     /// No test may skip itself because the session happens to be elevated.
     /// </summary>
     /// <remarks>
@@ -1062,7 +1112,7 @@ public partial class ArchitectureTests
         Assert.Matches(skip, "if (!vm." + "IsElevated) return;");
         Assert.DoesNotMatch(skip, "var elevated = AdminHelper." + "IsElevated();");
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -1163,7 +1213,7 @@ public partial class ArchitectureTests
         Assert.Single(fixtureBodies);
         Assert.Matches(early, fixtureBodies[0]);
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         var scanned = 0;
         var tests = 0;
@@ -1305,7 +1355,7 @@ public partial class ArchitectureTests
         string[] needles = ["mk" + "link", "Create" + "SymbolicLink"];
         const string theOnePlace = "Symlinks.cs";
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         // Per needle, not a single total: the one place holds two CreateSymbolicLink calls and exactly one
         // mklink, so a combined floor of two would still be met if the mklink needle stopped matching — and
@@ -1379,7 +1429,7 @@ public partial class ArchitectureTests
         // Assembled, never spelled: see the remark above.
         var forbidden = "while (" + "$true)";
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -1441,7 +1491,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheAudioRouteRead_ReportsUnknownRatherThanTheDefault()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
         var service = File.ReadAllText(Path.Combine(appDir, "Services", "AudioMixerService.cs"));
         var view = File.ReadAllText(Path.Combine(appDir, "Views", "AudioMixerView.xaml"));
@@ -1489,7 +1539,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryGoldElevationBanner_PromisesMoreAccess()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var banners = 0;
 
@@ -1539,7 +1589,7 @@ public partial class ArchitectureTests
     [Fact]
     public void BothAdminBanners_ShareOneGeometry()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var seen = new List<(string View, string State, string Geometry)>();
 
         foreach (var file in Directory.GetFiles(viewsDir, "*.xaml"))
@@ -1606,7 +1656,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTextWrapping_IsInertInsideAHorizontalStackPanel()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -1764,7 +1814,7 @@ public partial class ArchitectureTests
     public void EveryViewModelWithAnIsActiveFlag_IsHandledBySetActive()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+            TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
 
         // Only the SetActive body counts. Searching the whole file would let an unrelated mention of a
         // view model's name pass the check — the same cross-type pooling trap the command-reachability
@@ -1820,7 +1870,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ClosingTheWindowToExit_RequestsAnApplicationShutdown()
     {
-        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "MainWindow.xaml.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml.cs"));
 
         var start = source.IndexOf("protected override void OnClosing(", StringComparison.Ordinal);
         Assert.True(start >= 0, "OnClosing not found — this check is not reading what it thinks it is.");
@@ -1862,7 +1912,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryDisposedCancellationSource_IsCancelledFirst()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var offenders = new List<string>();
         var checkedFields = 0;
 
@@ -1950,7 +2000,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTypeThatDisposesAGate_TracksItsOwnDisposal()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var checkedTypes = 0;
 
@@ -1999,7 +2049,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySupportRoute_DeepLinksTheQuestionCategory_NotTheDiscussionsRoot()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         string[] surfaces = ["SUPPORT.md", "README.md", Path.Combine(".github", "ISSUE_TEMPLATE", "config.yml")];
 
         var offenders = new List<string>();
@@ -2049,7 +2099,7 @@ public partial class ArchitectureTests
     public void EveryDiscussionCategoryLink_NamesACategoryThatExists()
     {
         string[] slugs = ["announcements", "general", "ideas", "polls", "q-a", "show-and-tell"];
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
 
         var offenders = new List<string>();
         var links = 0;
@@ -2106,7 +2156,7 @@ public partial class ArchitectureTests
                 "an embedded resource read through GetManifestResourceStream — shipped data, never written",
         };
 
-        var services = Path.Combine(FindAppProjectDir(), "Services");
+        var services = Path.Combine(TestPaths.AppProject(), "Services");
         var catalog = File.ReadAllText(Path.Combine(services, "ProfileService.cs"));
         var carried = JsonStateFile().Matches(catalog).Cast<Match>()
             .Select(m => m.Groups[1].Value)
@@ -2193,7 +2243,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand()
     {
-        var app = FindAppProjectDir();
+        var app = TestPaths.AppProject();
         var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
         var binding = new Regex(@"^\{Binding\s+(?<name>\w+)", RegexOptions.CultureInvariant);
 
@@ -2291,7 +2341,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand()
     {
-        var app = FindAppProjectDir();
+        var app = TestPaths.AppProject();
         var binding = new Regex(@"Command=""\{Binding ((?:Refresh|Rescan|Reload|Scan|Load)[A-Za-z]*Command)",
             RegexOptions.CultureInvariant);
 
@@ -2416,7 +2466,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryFilterBox_BindsANameCtrlFRecognises()
     {
-        var app = FindAppProjectDir();
+        var app = TestPaths.AppProject();
         var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
         var binding = new Regex(@"^\{Binding\s+(?<path>[\w.]+)", RegexOptions.CultureInvariant);
         var filterish = new Regex("filter|search", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -2520,7 +2570,7 @@ public partial class ArchitectureTests
             "invalid", "manual", "performance", "question", "security", "ux", "wontfix",
         ];
 
-        var dir = Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE");
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "ISSUE_TEMPLATE");
         var offenders = new List<string>();
         var templates = 0;
         var matched = 0;
@@ -2603,7 +2653,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySearchableField_IsVisibleInItsView()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "ProcessManagerViewModel.cs"));
         var xaml = File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml"));
 
@@ -2661,7 +2711,7 @@ public partial class ArchitectureTests
     public void EveryImmediatelyDestructiveButton_WearsADestructiveStyle()
     {
         var destructive = DestructiveControls;
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
@@ -2842,7 +2892,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryImmediatelyDestructiveButton_ExplainsWhatItWillDo()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var checkedButtons = 0;
         var checkedControls = 0;
@@ -2987,7 +3037,7 @@ public partial class ArchitectureTests
                 + "outside this guard, which asks about DataGrid and ItemsControl.)",
         };
 
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var files = Directory.GetFiles(viewsDir, "*.xaml");
         Assert.True(files.Length >= 25,
             $"only {files.Length} views enumerated — this guard is reading the wrong folder");
@@ -3055,7 +3105,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoViewHandRollsAnEmptyStateTheSharedControlAlreadyProvides()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var files = Directory.GetFiles(viewsDir, "*.xaml");
 
         var offenders = new List<string>();
@@ -3149,7 +3199,7 @@ public partial class ArchitectureTests
              + "whenever Application.Current is null, which is every unit test"),
         ];
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
 
         foreach (var (file, method, flag, expected, why) in wiring)
@@ -3226,7 +3276,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var viewModelsDir = Path.Combine(appDir, "ViewModels");
 
@@ -3335,7 +3385,7 @@ public partial class ArchitectureTests
             [@"Margin=""28,16,28,28"""] = "a final content card, which carries the gap in place of a status row",
         };
 
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var perSection = new List<string>();
         var offenders = new List<string>();
         var gutterViews = 0;
@@ -3404,8 +3454,8 @@ public partial class ArchitectureTests
             ("ScheduledMaintenanceView.xaml", "{Binding Actions}", "MaintenanceActionText"),
         };
 
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
-        var app = XamlCode(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var app = XamlCode(Path.Combine(TestPaths.AppProject(), "App.xaml"));
         var offenders = new List<string>();
 
         foreach (var (view, itemsSource, converterKey) in pickers)
@@ -3486,7 +3536,7 @@ public partial class ArchitectureTests
             ["CustomText_Click"] = "focuses the adjacent Text hex box, already the next tab stop",
         };
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
         var offenders = new List<string>();
         var clickables = 0;
@@ -3607,7 +3657,7 @@ public partial class ArchitectureTests
         // The scale from App.xaml (RadiusSm/Md/Lg/Xl/Pill) plus the stripe hairline.
         var allowed = new HashSet<string>(StringComparer.Ordinal) { "2", "4", "8", "12", "16", "999" };
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var appXaml = WithoutXamlComments(File.ReadAllText(Path.Combine(appDir, "App.xaml")));
 
         // value -> token key, read from the definitions so the rule follows the scale rather than a copy.
@@ -3729,8 +3779,8 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySidebarTab_HasASmokeRow()
     {
-        var shell = Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs");
-        var smoke = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
+        var shell = Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs");
+        var smoke = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
 
         Assert.True(File.Exists(shell), $"{shell} not found — this guard would compare nothing.");
         Assert.True(File.Exists(smoke), $"{smoke} not found — this guard would compare nothing.");
@@ -3796,11 +3846,11 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySmokeRowHeader_IsTextItsOwnTabRenders()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var shell = WithoutComments(
             File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
         var smokePath = Path.Combine(
-            FindRepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
+            TestPaths.RepoRoot(), "SysManager", "SysManager.UITests", "AllTabsSmokeUiTests.cs");
         Assert.True(File.Exists(smokePath), $"{smokePath} not found — this guard would compare nothing.");
 
         // nav id -> the view type the sidebar opens for it.
@@ -3922,7 +3972,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTypographyStyleUse_ResolvesAColour()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var app = WithoutXamlComments(File.ReadAllText(Path.Combine(appDir, "App.xaml")));
 
         // Which keyed TextBlock styles resolve a colour on their own? Either they set Foreground, or they
@@ -4030,7 +4080,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ThePingChurn_BuildsDisabledTargets_SoItDoesNotOrphanThousandsOfPings()
     {
-        var path = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.IntegrationTests",
+        var path = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.IntegrationTests",
             "PingMonitorStressTests.cs");
         Assert.True(File.Exists(path), $"{path} not found — this guard would read nothing.");
 
@@ -4144,7 +4194,7 @@ public partial class ArchitectureTests
             ("EnvironmentVariablesView.xaml", "Binding HasNoMatches", "No variables match your search"),
         ];
 
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
 
         foreach (var (view, binding, copy) in expected)
@@ -4188,7 +4238,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryFieldTheChkdskPickerFillsIn_IsShownInItsRow()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var source = File.ReadAllText(Path.Combine(appDir, "ViewModels", "SystemHealthViewModel.cs"));
         var xaml = ChkdskRowTemplate(File.ReadAllText(Path.Combine(appDir, "Views", "SystemHealthView.xaml")));
 
@@ -4271,7 +4321,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ThePullRequestTemplate_OffersEveryCommitPrefixTheWorkflowUnderstands()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var lines = File.ReadAllLines(Path.Combine(root, ".github", "PULL_REQUEST_TEMPLATE.md"));
         var autoRelease = File.ReadAllText(Path.Combine(root, ".github", "workflows", "auto-release.yml"));
 
@@ -4332,7 +4382,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ThePullRequestChecklist_AsksForWhatCiEnforces()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var lines = File.ReadAllLines(Path.Combine(root, ".github", "PULL_REQUEST_TEMPLATE.md"));
         var ci = File.ReadAllText(Path.Combine(root, ".github", "workflows", "ci.yml"));
 
@@ -4427,7 +4477,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTestJob_SaysWhichKindOfFailureItHad()
     {
-        var ci = File.ReadAllText(Path.Combine(FindRepoRoot(), ".github", "workflows", "ci.yml"));
+        var ci = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "ci.yml"));
 
         // The three suites, by the report each writes — a rename of a job or step cannot hide one.
         string[] suites = ["unit-results.trx", "ui-results.trx", "integration-results.trx"];
@@ -4470,7 +4520,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryPrivateReportingRoute_NamesAChannelThatExists()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         string[] surfaces = ["SECURITY.md", "CODE_OF_CONDUCT.md", "SUPPORT.md"];
 
         var offenders = new List<string>();
@@ -4515,7 +4565,7 @@ public partial class ArchitectureTests
     public void EverySourceFile_CarriesTheAuthorHeader()
     {
         const string attribution = "Author: laurentiu021 · https://github.com/laurentiu021/SystemManager";
-        var solution = Path.Combine(FindRepoRoot(), "SysManager");
+        var solution = Path.Combine(TestPaths.RepoRoot(), "SysManager");
 
         var offenders = new List<string>();
         var scanned = 0;
@@ -4572,7 +4622,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoPublicDocument_ClaimsAPublisherPinThatIsNotArmed()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var pinIsArmed = SysManager.Services.UpdateService.ExpectedSignerSubject.Length > 0;
 
         string[] surfaces = ["README.md", "SECURITY.md"];
@@ -4667,7 +4717,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryModelProperty_IsEitherWrittenOrShown()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var modelsDir = Path.Combine(appDir, "Models");
 
         // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
@@ -4763,7 +4813,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryModelProperty_IsBoundOrRead()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var modelsDir = Path.Combine(appDir, "Models") + Path.DirectorySeparatorChar;
 
         var xaml = XmlComment().Replace(string.Join('\n', Directory
@@ -4861,7 +4911,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryViewModelProperty_IsShownOrRead()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewModelsDir = Path.Combine(appDir, "ViewModels");
 
         // Comments stripped: a comment that merely NAMES a property would otherwise credit it as bound,
@@ -4971,7 +5021,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoLocalValueOutranksAStyleTriggerThatSetsIt()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var views = Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
@@ -5118,7 +5168,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryComputedModelProperty_IsNotifiedByItsDependency()
     {
-        var modelsDir = Path.Combine(FindAppProjectDir(), "Models");
+        var modelsDir = Path.Combine(TestPaths.AppProject(), "Models");
         var offenders = new List<string>();
         var pairs = 0;
 
@@ -5257,7 +5307,7 @@ public partial class ArchitectureTests
             $"only {labels.Count} tab labels were parsed from MainWindowViewModel — the guard is vacuous");
 
         var options = DropdownOptions(
-            Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE", template), dropdownId);
+            Path.Combine(TestPaths.RepoRoot(), ".github", "ISSUE_TEMPLATE", template), dropdownId);
         Assert.NotEmpty(options);
 
         // Every real tab must be offerable. Extra options are fine: each template ends with its own
@@ -5307,7 +5357,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryReadmeTabCount_MatchesTheSource()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
 
         var tabs = SidebarTabLabels().Count;
@@ -5348,7 +5398,7 @@ public partial class ArchitectureTests
             ("tabs that have one", statusLines, "tabs carry an announced status line"),
         ];
 
-        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
         var wrong = new List<string>();
         var claims = 0;
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -5413,8 +5463,8 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryDocumentedStructuralCount_MatchesTheSource()
     {
-        var appDir = FindAppProjectDir();
-        var repoRoot = FindRepoRoot();
+        var appDir = TestPaths.AppProject();
+        var repoRoot = TestPaths.RepoRoot();
         var nav = WithoutComments(
             File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
 
@@ -5503,7 +5553,7 @@ public partial class ArchitectureTests
     public void EveryReadmeGroupRow_ListsExactlyItsGroupsTabs()
     {
         var nav = WithoutComments(
-            File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")));
+            File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")));
 
         // group label -> its leaf labels, sliced between successive Group( calls.
         var source = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -5520,7 +5570,7 @@ public partial class ArchitectureTests
             $"only {source.Count} nav groups were parsed from MainWindowViewModel — the split is broken, so "
           + "this guard would compare against almost nothing.");
 
-        var table = ReadmeGroupTable().Match(File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md")));
+        var table = ReadmeGroupTable().Match(File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md")));
         Assert.True(table.Success,
             "README.md no longer contains a \"| Group | Tabs |\" table, so the group listing is unchecked. "
           + "Reword the guard with the README, not the README alone.");
@@ -5617,7 +5667,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheScreenshotInventory_MatchesWhatIsOnDisk()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = TestPaths.RepoRoot();
         var shotsDir = Path.Combine(repoRoot, "docs", "screenshots");
 
         var labels = SidebarTabLabels();
@@ -5737,7 +5787,7 @@ public partial class ArchitectureTests
 
         var known = labels.Select(TabSlug).ToHashSet(StringComparer.Ordinal);
 
-        var shotsDir = Path.Combine(FindRepoRoot(), "docs", "screenshots");
+        var shotsDir = Path.Combine(TestPaths.RepoRoot(), "docs", "screenshots");
         var onDisk = Directory.EnumerateFiles(shotsDir, "*.png", SearchOption.TopDirectoryOnly)
             .Select(f => Path.GetFileNameWithoutExtension(f))
             .ToList();
@@ -5758,7 +5808,7 @@ public partial class ArchitectureTests
           + "section of docs/screenshots/README.md, and recapture rather than only renaming — the header "
           + $"inside the image says the old name too:\n  {string.Join("\n  ", orphans.Select(s => s + ".png"))}");
 
-        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
         var gallery = GalleryImage().Matches(readme).ToList();
 
         // Vacuity floor: 43 gallery images today, one per file. A markup change that stopped the pairs
@@ -5802,7 +5852,7 @@ public partial class ArchitectureTests
     /// </summary>
     private static int ViewModelsOverriding(string property)
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var declaration = $"override IRelayCommand? {property}";
         return Directory.EnumerateFiles(vmDir, "*ViewModel.cs", SearchOption.TopDirectoryOnly)
             .Count(f => WithoutComments(File.ReadAllText(f))
@@ -5878,7 +5928,7 @@ public partial class ArchitectureTests
         Assert.True(labels.Count >= 50,
             $"only {labels.Count} tab labels were parsed from MainWindowViewModel — the guard is vacuous");
 
-        var headings = File.ReadAllLines(Path.Combine(FindRepoRoot(), "README.md"))
+        var headings = File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), "README.md"))
             .Where(l => l.StartsWith("### ", StringComparison.Ordinal))
             .Select(l => l[4..].Trim())
             .ToList();
@@ -5921,7 +5971,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryScreenshotGroupSummary_NamesOnlyWhatItShows()
     {
-        var readme = File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md"));
+        var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
         var groups = GalleryGroup().Matches(readme).ToList();
 
         // Vacuity floor: 11 collapsible groups today, one per nav group that has any screenshot. A markup
@@ -5973,7 +6023,7 @@ public partial class ArchitectureTests
     [InlineData("general_issue.yml")]
     public void TheIssueTemplateVersionField_PinsNoExampleRelease(string template)
     {
-        var path = Path.Combine(FindRepoRoot(), ".github", "ISSUE_TEMPLATE", template);
+        var path = Path.Combine(TestPaths.RepoRoot(), ".github", "ISSUE_TEMPLATE", template);
         Assert.True(File.Exists(path), $"{template} not found — the guard would pass vacuously");
 
         var lines = File.ReadAllLines(path);
@@ -6002,7 +6052,7 @@ public partial class ArchitectureTests
     private static HashSet<string> SidebarTabLabels()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
 
         // Both registration helpers take (id, label, …); the label is the second string argument.
         return NavRegistration().Matches(source)
@@ -6055,7 +6105,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryMetricRungSize_IsReachedThroughItsRung()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
 
         // The rungs, read from App.xaml rather than restated: a size changed there must change what this
@@ -6239,7 +6289,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheStartupExpansion_GoesThroughTheNamedConstant()
     {
-        var path = Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs");
+        var path = Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs");
         var source = WithoutComments(File.ReadAllText(path));
 
         Assert.True(source.Contains("InitiallyExpandedGroupId", StringComparison.Ordinal),
@@ -6274,7 +6324,7 @@ public partial class ArchitectureTests
     public void OnlyTheJustifiedTabs_AreBuiltAtStartup()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
 
         // Scoped to the runtime nav table. BuildDesignerGraph below it constructs everything eagerly by
         // design (there is no container in the designer/test path), so including it would flag the
@@ -6380,7 +6430,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheReadmeTableOfContents_HasNoDeadAnchors()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var lines = File.ReadAllLines(Path.Combine(root, "README.md"));
 
         // GitHub's anchor rule: lower-case, drop everything but word characters, spaces and hyphens,
@@ -6549,21 +6599,6 @@ public partial class ArchitectureTests
         return code;
     }
 
-    /// <summary>The repository root — the docs the guards read are not copied to the test output.</summary>
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "SUPPORT.md"))
-                && File.Exists(Path.Combine(dir.FullName, "README.md")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException(
-            "Could not locate the repository root from " + AppContext.BaseDirectory);
-    }
-
     /// <summary>
     /// A service that persists user data must write it atomically, via <c>AtomicFile</c>.
     /// <para><c>File.WriteAllText</c> and friends truncate the destination and then write into it, so
@@ -6580,7 +6615,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryServiceThatPersistsUserData_WritesItAtomically()
     {
-        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -6665,7 +6700,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryFixedShapeDateFormat_NamesItsCulture()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -6757,7 +6792,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryCultureSensitiveNumberFormat_NamesItsCulture()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var wrapped = 0;
 
@@ -6835,12 +6870,12 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryIconGlyph_NamesAnIconFont()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var offenders = new List<string>();
         var scanned = 0;
 
         var files = Directory.GetFiles(viewsDir, "*.xaml")
-            .Append(Path.Combine(FindAppProjectDir(), "MainWindow.xaml"))
+            .Append(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"))
             .Where(File.Exists);
 
         foreach (var file in files)
@@ -6905,7 +6940,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySidebarGroupGlyph_IsDistinctAndNotTheElevationBadge()
     {
-        var app = FindAppProjectDir();
+        var app = TestPaths.AppProject();
         var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
         var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
 
@@ -6974,7 +7009,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EverySidebarGroupSubtitle_IsWrittenCopyThatFitsTwoLines()
     {
-        var app = FindAppProjectDir();
+        var app = TestPaths.AppProject();
         var vm = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
         var shell = File.ReadAllText(Path.Combine(app, "MainWindow.xaml"));
 
@@ -7103,7 +7138,7 @@ public partial class ArchitectureTests
     public void TheReleaseWorkflow_LaunchesTheExeBeforeItPublishesAnything()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
 
         int StepLine(string name) => ReleaseStepLine(lines, name);
 
@@ -7206,7 +7241,7 @@ public partial class ArchitectureTests
     public void TheAnnouncement_OnlyPostsForFeatureReleases()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
 
         int StepLine(string name) => ReleaseStepLine(lines, name);
 
@@ -7250,7 +7285,7 @@ public partial class ArchitectureTests
     public void AWingetFailure_DoesNotSuppressTheReleaseAnnouncement()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
 
         string[] wingetSteps =
         [
@@ -7323,7 +7358,7 @@ public partial class ArchitectureTests
     public void TheReleaseWorkflow_ProvesThePublishedBinaryReportsTheTag()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
 
         int StepLine(string name) => ReleaseStepLine(lines, name);
 
@@ -7408,7 +7443,7 @@ public partial class ArchitectureTests
         Assert.Contains("{Version}", LogService.StartupMessage, StringComparison.Ordinal);
 
         var initCall = File.ReadAllLines(
-                Path.Combine(FindRepoRoot(), "SysManager", "SysManager", "Services", "LogService.cs"))
+                Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager", "Services", "LogService.cs"))
             .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
             .FirstOrDefault(l => l.Contains("Information(StartupMessage", StringComparison.Ordinal));
         Assert.False(initCall is null,
@@ -7433,7 +7468,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoStyle_SuppressesTheKeyboardFocusIndicator()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !Path.GetRelativePath(appDir, f)
@@ -7512,7 +7547,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryRowControl_AnnouncesTheRowItIsOn()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !Path.GetRelativePath(appDir, f)
@@ -7676,7 +7711,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTwoProgressBarsOnAPage_AreAnnouncedTheSame()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory
             .EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
             .Where(f => !Path.GetRelativePath(appDir, f)
@@ -7850,7 +7885,7 @@ public partial class ArchitectureTests
             "ScanProgress", "CurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout",
         ];
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
 
@@ -7983,7 +8018,7 @@ public partial class ArchitectureTests
         // sits above the longest single-line explanation the app has.
         const int mustWrapAbove = 80;
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var files = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly).ToArray();
 
@@ -8149,7 +8184,7 @@ public partial class ArchitectureTests
     public void TheSensorTopologyLog_RunsOncePerSession_NotOncePerPoll()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "TemperatureService.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "TemperatureService.cs"));
 
         const string flag = "_loggedSensorTopology";
         Assert.Contains($"private bool {flag};", source, StringComparison.Ordinal);
@@ -8191,7 +8226,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryMachineRunKey_ReadsAndWritesItsOwnStartupApprovedKey()
     {
-        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "StartupService.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "StartupService.cs"));
 
         // The 32-bit Run key must actually be enumerated. Without this the rest of the guard would pass
         // on a scan that never produces a 32-bit entry at all — which is precisely the pre-fix state.
@@ -8264,7 +8299,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStartupSourceWithNoApprovedKey_IsRefusedInsteadOfFakingSuccess()
     {
-        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "StartupService.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "StartupService.cs"));
 
         // The key must actually be enumerated, or everything below would hold over a scan that never
         // produces a policy entry — the pre-fix state, and a guard passing on the defect.
@@ -8325,7 +8360,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheSessionRestorePoint_IsTheOnlyAutomaticSnapshot()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var sources = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
@@ -8415,7 +8450,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryAutomaticSnapshot_ComesBeforeItsChangeAndIsNeverOverClaimed()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
 
         // file -> the member that owns the mutation, and the mutation that must come AFTER the snapshot.
         var expected = new (string File, string Member, string Mutation)[]
@@ -8502,7 +8537,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoRemainingTimeText_IsAHardcodedDuration()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
@@ -8589,7 +8624,7 @@ public partial class ArchitectureTests
     public void PerformanceMode_RefusesToCaptureABaselineDuringAGameSession()
     {
         var vm = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "PerformanceViewModel.cs"));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "PerformanceViewModel.cs"));
 
         // Comment-stripped: the paragraph above the check names both TakeSnapshotAsync and the session,
         // and a positional assertion that reads prose reports the ordering backwards (batch 106).
@@ -8631,7 +8666,7 @@ public partial class ArchitectureTests
         // would answer "no session" while the real one had a game running, i.e. exactly the state that
         // must never be snapshotted, with the guard above still passing.
         var shell = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")));
         var built = shell.Split("new GamingProfileService(").Length - 1;
         if (built != 1)
             offenders.Add($"MainWindowViewModel constructs GamingProfileService {built} times; the designer "
@@ -8673,7 +8708,7 @@ public partial class ArchitectureTests
                 "the Camera/Mic/Location naming is owned by its own issue, which decides both sides at once"),
         };
 
-        var vm = File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+        var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
         var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
         Assert.True(nav.Length > 2000,
             $"the BuildNavGroups slice is {nav.Length} chars — too short to hold 59 tabs, so this guard "
@@ -8693,7 +8728,7 @@ public partial class ArchitectureTests
             var label = entry.Groups[2].Value;
             var view = entry.Groups[3].Value;
 
-            var path = Path.Combine(FindAppProjectDir(), "Views", view + ".xaml");
+            var path = Path.Combine(TestPaths.AppProject(), "Views", view + ".xaml");
             Assert.True(File.Exists(path), $"{view}.xaml is referenced by {navId} but does not exist");
 
             // Comments stripped so a commented-out old header cannot be read as the live one.
@@ -8771,7 +8806,7 @@ public partial class ArchitectureTests
         const int PilledBudget = 21;   // "Scheduled Maintenance"
         const int PlainBudget = 23;    // "Profile Export / Import"
 
-        var vm = File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs"));
+        var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
         var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
         Assert.True(nav.Length > 2000,
             $"the BuildNavGroups slice is {nav.Length} chars — too short to hold the sidebar, so this "
@@ -8853,7 +8888,7 @@ public partial class ArchitectureTests
     public void GamingProfileMutations_TakeTheLockAndOnlyApplyRefuses()
     {
         var service = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "GamingProfileService.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "GamingProfileService.cs"));
 
         // Comments are stripped from every slice before anything is matched. The first draft of this
         // guard went false-RED on its own explanatory comment: the paragraph above the acquire names
@@ -8921,7 +8956,7 @@ public partial class ArchitectureTests
         }
 
         // ── The README claim must match the code, in both directions ──
-        var readme = Collapse(File.ReadAllText(Path.Combine(FindRepoRoot(), "README.md")));
+        var readme = Collapse(File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md")));
         var lockSectionAt = readme.IndexOf("### Operation Lock", StringComparison.Ordinal);
         Assert.True(lockSectionAt > 0, "README.md has no '### Operation Lock' section — the guard would "
             + "pass vacuously.");
@@ -8962,7 +8997,7 @@ public partial class ArchitectureTests
     public void TheUpdateRetryLoop_RetriesOnlyTheMove()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "UpdateApplier.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "UpdateApplier.cs"));
         var apply = WithoutComments(MemberSlice(source, "internal static bool ApplyCopy("));
 
         Assert.True(apply.Length > 400,
@@ -9017,7 +9052,7 @@ public partial class ArchitectureTests
     [Fact]
     public void OnlySafeFileWalk_WalksATreeItMightDeleteFrom()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var theWalk = Path.Combine(appDir, "Helpers", "SafeFileWalk.cs");
         Assert.True(File.Exists(theWalk),
             $"SafeFileWalk.cs was not found at {theWalk} — this guard is named for a type that must exist.");
@@ -9193,7 +9228,7 @@ public partial class ArchitectureTests
     public void TheShredderOverwrite_CannotBeCancelledMidWrite()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "FileShredderService.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "FileShredderService.cs"));
         var slice = WithoutComments(MemberSlice(source, "public async Task<int> ShredFileAsync"));
 
         Assert.True(slice.Length > 500,
@@ -9243,7 +9278,7 @@ public partial class ArchitectureTests
     public void OnlyTheMutatingCliVerbs_RecordAHeadlessRun()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "CliRunner.cs")));
+            Path.Combine(TestPaths.AppProject(), "Services", "CliRunner.cs")));
 
         const string call = "RecordHeadlessRun(";
 
@@ -9283,7 +9318,7 @@ public partial class ArchitectureTests
     public void EveryPresetDecisionOverTheEntryList_IsLimitedToVerbRows()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "ViewModels", "ContextMenuViewModel.cs")));
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "ContextMenuViewModel.cs")));
 
         // The gate itself must compare Kind. Asserted as the whole comparison, not just the enum name:
         // ContextMenuEntryKind.MenuEntry appears in this file in places that decide nothing, so matching
@@ -9357,7 +9392,7 @@ public partial class ArchitectureTests
     [InlineData("ServicesView.xaml")]
     public void EveryRowMenuCommand_IsAlsoOnARowButton(string viewFile)
     {
-        var xaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", viewFile));
+        var xaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Views", viewFile));
 
         var menuCommands = RowMenuCommand().Matches(xaml)
             .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
@@ -9397,7 +9432,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryNavIdWrittenInTheApp_ResolvesToARealTab()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
 
         var declared = NavEntry()
             .Matches(MemberSlice(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")),
@@ -9456,9 +9491,9 @@ public partial class ArchitectureTests
     [Fact]
     public void NoInverseConverterParameter_IsGivenToTheConverterThatIgnoresIt()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var files = Directory.GetFiles(viewsDir, "*.xaml")
-            .Append(Path.Combine(FindAppProjectDir(), "MainWindow.xaml"))
+            .Append(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"))
             .ToList();
 
         Assert.True(files.Count >= 50,
@@ -9504,7 +9539,7 @@ public partial class ArchitectureTests
     public void EveryJargonNamedTab_CanBeFoundByPlainWords()
     {
         var nav = MemberSlice(
-            File.ReadAllText(Path.Combine(FindAppProjectDir(), "ViewModels", "MainWindowViewModel.cs")),
+            File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs")),
             "private NavGroup[] BuildNavGroups()");
 
         var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
@@ -9560,7 +9595,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoViewModelReachesTheShellThroughTheLiveWindow()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -9609,7 +9644,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheContextMenuToggle_WarnsThatBlockingAnAddOnNeedsAdmin()
     {
-        var view = Path.Combine(FindAppProjectDir(), "Views", "ContextMenuView.xaml");
+        var view = Path.Combine(TestPaths.AppProject(), "Views", "ContextMenuView.xaml");
         var triggers = XDocument.Load(view).Descendants()
             .Where(e => e.Name.LocalName == "DataTrigger")
             .Where(e => ((string?)e.Attribute("Binding") ?? "").Contains("RequiresElevation", StringComparison.Ordinal))
@@ -9745,7 +9780,7 @@ public partial class ArchitectureTests
                 "Services/PrivacyService.cs,Services/SettingsWatchdogService.cs",
         };
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var sources = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
@@ -9840,7 +9875,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheStartupTabCopy_DescribesTheTaskScanItActuallyRuns()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var service = File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs"));
 
         // Slice the scan itself, so a mention anywhere else in this 900-line service cannot stand in for it.
@@ -9876,7 +9911,7 @@ public partial class ArchitectureTests
         var taskView = Collapse(XmlComment().Replace(
             File.ReadAllText(Path.Combine(views, "TaskSchedulerView.xaml")), string.Empty));
 
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var readme = Collapse(File.ReadAllText(Path.Combine(root, "README.md")));
 
         // CHANGELOG is deliberately NOT scanned. It is the historical record, so the entry that documents
@@ -9972,7 +10007,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryScheduledTaskFieldTheQueryFetches_IsBoundInTheView()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
 
         // XAML comments are stripped before matching. A comment in the view that merely NAMES a property
         // would otherwise satisfy the check — the first draft of this guard stayed green with the "Next
@@ -10072,7 +10107,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryMaintenanceConditionTheScheduleCarries_HasACheckBoxInTheView()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var model = File.ReadAllText(Path.Combine(appDir, "Models", "MaintenanceSchedule.cs"));
         var view = XmlComment().Replace(
             File.ReadAllText(Path.Combine(appDir, "Views", "ScheduledMaintenanceView.xaml")), string.Empty);
@@ -10143,7 +10178,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStartupFieldTheScanFillsIn_IsBoundInTheViewOrDeclaredLogicOnly()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var service = DocComment().Replace(
             File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs")), string.Empty);
         var view = WithoutXamlComments(
@@ -10291,7 +10326,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheProcessSignaturePill_IsRendered_AndTheSnapshotFillsItIn()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var view = XmlComment().Replace(
             File.ReadAllText(Path.Combine(appDir, "Views", "ProcessManagerView.xaml")), string.Empty);
         var service = File.ReadAllText(Path.Combine(appDir, "Services", "ProcessManagerService.cs"));
@@ -10366,7 +10401,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryProcessEntryField_IsBoundInTheViewOrDeclaredLogicOnly()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var model = DocComment().Replace(
             File.ReadAllText(Path.Combine(appDir, "Models", "ProcessEntry.cs")), string.Empty);
         var view = WithoutXamlComments(
@@ -10503,7 +10538,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheChangelogVersionHeaders_FormAnUnbrokenDescendingRun()
     {
-        var path = Path.Combine(FindRepoRoot(), "CHANGELOG.md");
+        var path = Path.Combine(TestPaths.RepoRoot(), "CHANGELOG.md");
         Assert.True(File.Exists(path), $"CHANGELOG.md not found at {path} — the guard would pass vacuously");
 
         var versions = new List<(int Major, int Minor, int Patch, string Raw, int Line)>();
@@ -10584,7 +10619,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryBandwidthSource_LeavesTheOffloadToItsConsumer()
     {
-        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var sources = Directory.GetFiles(servicesDir, "*BandwidthSource.cs");
 
         // Vacuity floor: two implementors exist (connection + ETW). If the glob stops matching them, the
@@ -10672,7 +10707,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryUiTextAssertion_QuotesCopyTheAppActuallyShips()
     {
-        var uiTestsDir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager.UITests");
+        var uiTestsDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.UITests");
         Assert.True(Directory.Exists(uiTestsDir),
             $"UI test project not found at {uiTestsDir} — the guard would pass vacuously");
 
@@ -10682,7 +10717,7 @@ public partial class ArchitectureTests
         // it, and the phrase survived in a /// summary on PingViewModel. A doc comment is not copy, so a
         // corpus that includes one answers "does the app say this?" with yes when the answer is no —
         // silently, for every literal, which makes it the more serious of that defect's two causes.
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var rendered = Directory
             .EnumerateFiles(appDir, "*.*", SearchOption.AllDirectories)
             .Where(f => (f.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase)
@@ -10969,7 +11004,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTransientReadout_IsClearedWhenItsOperationEnds()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var vmDir = Path.Combine(appDir, "ViewModels");
         var viewsDir = Path.Combine(appDir, "Views");
 
@@ -11049,7 +11084,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryProgressPercentageAViewModelComputes_IsBoundToAProgressBar()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var vmDir = Path.Combine(appDir, "ViewModels");
         var viewsDir = Path.Combine(appDir, "Views");
 
@@ -11143,7 +11178,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoUnitTestBuildsADeepCleanupViewModel_OnTheRealMachinesScanRoots()
     {
-        var testsDir = FindTestSourceDirectory();
+        var testsDir = TestPaths.TestProject();
         var offenders = new List<string>();
         var services = 0;
         var reachingTheViewModel = 0;
@@ -11393,7 +11428,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryAudioWriteThatReportsSuccess_HasThatAnswerConsulted()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
 
         var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
         var writes = BoolReturningMember().Matches(contract).Select(m => m.Groups["name"].Value).ToList();
@@ -11473,7 +11508,7 @@ public partial class ArchitectureTests
             "ProcessManagerService.cs",     // a list with no claim attached, refreshed on a timer
         ];
 
-        var servicesDir = Path.Combine(FindAppProjectDir(), "Services");
+        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
         var offenders = new List<string>();
         var population = 0;
 
@@ -11555,7 +11590,7 @@ public partial class ArchitectureTests
                 "writes only the coarse phase label; the fast half is ScanReadout (#2143)"),
         ];
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var viewsDir = Path.Combine(appDir, "Views");
         var vmDir = Path.Combine(appDir, "ViewModels");
 
@@ -11797,7 +11832,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryProgressCallbackRacingItsCallersOutcome_ReportsThroughSettlingProgress()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
 
         // The construction reader still tells the two types apart, positively AND negatively. That group is
         // the whole verdict here: a migrated site misread as raw reports eleven false offenders, while a raw
@@ -12048,20 +12083,6 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(?<![\w.])(?<name>(?:[a-z_]\w*\.)?[A-Z]\w*)\s*=(?![=>])", RegexOptions.Compiled)]
     private static partial Regex AssignedName();
 
-    /// <summary>The app project directory — .xaml is not copied to the test output.</summary>
-    private static string FindAppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
-            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
-    }
-
     /// <summary>
     /// A revert baseline may not be captured inside a selection-changed handler with a plain
     /// assignment. That is precisely how "Restore original cores" became a no-op that reported
@@ -12076,7 +12097,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoRevertBaseline_IsRecapturedInASelectionChangedHandler()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var handlersScanned = 0;
 
         foreach (var path in Directory.EnumerateFiles(vmDir, "*ViewModel.cs").OrderBy(p => p, StringComparer.Ordinal))
@@ -12157,7 +12178,7 @@ public partial class ArchitectureTests
         // Comments stripped: the declaration documents this exact ordering right above itself, so a
         // guard that read prose would pass on code that has the binding backwards.
         var code = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "TimerResolutionService.cs")));
+            Path.Combine(TestPaths.AppProject(), "Services", "TimerResolutionService.cs")));
 
         string[] expected = ["coarsest", "finest", "current"];
 
@@ -12240,7 +12261,7 @@ public partial class ArchitectureTests
             ["App.xaml"] = ["Stroke=\"#111111\"", "Stroke=\"#FFFFFF\""],
         };
 
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory.GetFiles(appDir, "*.xaml")
             .Concat(Directory.GetFiles(Path.Combine(appDir, "Views"), "*.xaml"))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
@@ -12318,7 +12339,7 @@ public partial class ArchitectureTests
                 + "grid and UpdateSourceTrigger=PropertyChanged carries each keystroke to the view-model",
         };
 
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
         var columnsChecked = 0;
         var typeable = new List<string>();
 
@@ -12402,7 +12423,7 @@ public partial class ArchitectureTests
                                               + "drag gesture rather than work in progress",
         };
 
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var withFlags = 0;
         var missing = new List<string>();
 
@@ -12457,7 +12478,7 @@ public partial class ArchitectureTests
     public void TheSnapshotCacheLock_HoldsOnlyCachedQueries()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "SystemInfoService.cs")));
+            Path.Combine(TestPaths.AppProject(), "Services", "SystemInfoService.cs")));
         var block = BalancedBlock(source, "lock (_cacheLock)");
 
         // Vacuity floor. An empty or mis-sliced block would satisfy every assertion below without reading
@@ -12498,7 +12519,7 @@ public partial class ArchitectureTests
     public void NoWmiRunsOnTheSnapshotPollPath()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "SystemInfoService.cs")));
+            Path.Combine(TestPaths.AppProject(), "Services", "SystemInfoService.cs")));
 
         // Vacuity floor: the STATIC queries must still be here. An empty or mis-read file would satisfy every
         // absence below while proving nothing.
@@ -12544,7 +12565,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryTempTreeWalkerCall_PassesBothExtractionExclusions()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
 
         // The two files allowed to sweep %TEMP% themselves. This list bounds the STRAY check below only —
         // the walker-argument check further down finds its own files by looking for callers, because a
@@ -12681,7 +12702,7 @@ public partial class ArchitectureTests
         // TextBlock is not focusable, and a Button family style is already covered above.
         string[] keyboardDriven = ["Slider", "CheckBox", "RadioButton", "ToggleButton", "ComboBox"];
 
-        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var appXaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "App.xaml"));
         var offenders = new List<string>();
         var stylesChecked = 0;
 
@@ -12776,7 +12797,7 @@ public partial class ArchitectureTests
     [Fact]
     public void ToggleSwitch_BindsAThumbBrushForEachState()
     {
-        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var appXaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "App.xaml"));
 
         var style = TypedStyleWithKey("ToggleSwitch").Match(appXaml);
         Assert.True(style.Success, "the ToggleSwitch style was not found — this guard would pass vacuously");
@@ -12797,7 +12818,7 @@ public partial class ArchitectureTests
         // if ThemeService published a literal instead — the same colour would be asserted against itself.
         // Reading the derivation out of the source is what closes that: a mutation setting ToggleThumb to
         // Colors.White passed every contrast theory and only this line caught it.
-        var service = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "ThemeService.cs"));
+        var service = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "ThemeService.cs"));
         Assert.Contains("SetBrush(res, \"ToggleThumb\", OnColor(surface4));", service, StringComparison.Ordinal);
     }
 
@@ -12835,7 +12856,7 @@ public partial class ArchitectureTests
         // fill whose contrast depends on which preset is active.
         string[] knownExceptions = [];
 
-        var appXaml = File.ReadAllText(Path.Combine(FindAppProjectDir(), "App.xaml"));
+        var appXaml = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "App.xaml"));
         var offenders = new List<string>();
         var themedFillStyles = 0;
 
@@ -12893,7 +12914,7 @@ public partial class ArchitectureTests
     [InlineData("ToggleThumb")]
     public void EveryPairedForegroundToken_IsBoundBySomeStyle(string token)
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
         var service = File.ReadAllText(Path.Combine(appDir, "Services", "ThemeService.cs"));
 
@@ -12921,7 +12942,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheNeutralFilterChip_StaysNeutral_AndSystemLogsUsesOnlyIt()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var appXaml = File.ReadAllText(Path.Combine(appDir, "App.xaml"));
 
         var neutral = TypedStyleWithKey("FilterChipNeutral").Match(appXaml);
@@ -12973,7 +12994,7 @@ public partial class ArchitectureTests
     public void TheHostedPowerShell_OptsOutOfTelemetryInAStaticConstructor()
     {
         var runner = File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "PowerShellRunner.cs"));
+            Path.Combine(TestPaths.AppProject(), "Services", "PowerShellRunner.cs"));
 
         Assert.Contains("static PowerShellRunner()", runner, StringComparison.Ordinal);
         Assert.Contains("POWERSHELL_TELEMETRY_OPTOUT", runner, StringComparison.Ordinal);
@@ -12995,7 +13016,7 @@ public partial class ArchitectureTests
             + "opt-out depends on when the runtime initialises the type.");
 
         // No second writer anywhere in the app: one could set it back to "0".
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var otherWriters = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !Path.GetRelativePath(appDir, f)
@@ -13025,7 +13046,7 @@ public partial class ArchitectureTests
         // SystemPaths.ResolveSystemTool exists for this and documents it at length. Nine launches were
         // written without it anyway, across services and view models, and were only found by scanning. This
         // is the scan, kept.
-        var sourceDir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
         var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
@@ -13116,7 +13137,7 @@ public partial class ArchitectureTests
         //
         // App.RequestShutdown records the intent first. This guard exists because nothing stopped a new tab
         // copying the old line from its neighbour, which is how it reached 38.
-        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
         var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
@@ -13163,7 +13184,7 @@ public partial class ArchitectureTests
         // The other half. Routing every caller through App.RequestShutdown achieves nothing unless OnClosing
         // actually honours the flag it sets, and a source scan for the callers cannot see that.
         var source = File.ReadAllText(Path.Combine(
-            FindRepoRoot(), "SysManager", "SysManager", "MainWindow.xaml.cs"));
+            TestPaths.RepoRoot(), "SysManager", "SysManager", "MainWindow.xaml.cs"));
 
         var onClosing = source.IndexOf("protected override void OnClosing", StringComparison.Ordinal);
         Assert.True(onClosing > 0, "OnClosing not found — this guard would otherwise pass vacuously");
@@ -13195,7 +13216,7 @@ public partial class ArchitectureTests
         // Structural rather than behavioural because nothing in managed code can observe whether
         // FlushFileBuffers ran. What IS checkable is that the call is there and that it comes first.
         var source = File.ReadAllText(Path.Combine(
-            FindRepoRoot(), "SysManager", "SysManager", "Helpers", "AtomicFile.cs"));
+            TestPaths.RepoRoot(), "SysManager", "SysManager", "Helpers", "AtomicFile.cs"));
 
         // Comments stripped BEFORE matching: the remarks explain FlushFileBuffers and reference Swap in
         // prose, and a guard that reads its own explanation passes on code that flushes nothing.
@@ -13264,7 +13285,7 @@ public partial class ArchitectureTests
         // to flush, so the allowlist is not a way out of the durability requirement.
         string[] stagesItsOwnSwap = ["UpdateApplier.cs", "UpdateService.cs"];
 
-        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
         var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
@@ -13378,7 +13399,7 @@ public partial class ArchitectureTests
             "CryptCATAdminAcquireContext2",
         ];
 
-        var root = Path.Combine(FindRepoRoot(), "SysManager", "SysManager");
+        var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
         var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
@@ -13495,7 +13516,7 @@ public partial class ArchitectureTests
         // SynchronizationContext, so their continuations resume on the pool and no dispatcher is
         // involved. GamingProfileService's bounded gate wait is sound for the reason its own source
         // states: all three of its acquisitions use ConfigureAwait(false).
-        var dir = Path.Combine(FindRepoRoot(), "SysManager", "SysManager", "ViewModels");
+        var dir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager", "ViewModels");
         var files = Directory.GetFiles(dir, "*.cs");
         Assert.NotEmpty(files);
 
@@ -13581,7 +13602,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NothingMarshalsToTheDispatcherSynchronously()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var files = Directory
             .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
@@ -13691,7 +13712,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryDocumentedMember_CarriesASummary()
     {
-        var solution = Path.Combine(FindRepoRoot(), "SysManager");
+        var solution = Path.Combine(TestPaths.RepoRoot(), "SysManager");
         var offenders = new List<string>();
         var documented = 0;
         var summarised = 0;
@@ -13843,7 +13864,7 @@ public partial class ArchitectureTests
                              + "rename. Pinned by CliRunnerTests.Parse_StillAcceptsTheFormerTrimRamSpelling",
         };
 
-        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "CliRunner.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "CliRunner.cs"));
 
         // Only Parse's body. The file also contains the help catalog and the ExecuteAsync switch, and a
         // whole-file scan would read the catalog's own strings as case labels and pass vacuously.
@@ -13938,9 +13959,9 @@ public partial class ArchitectureTests
         // checked is a false claim sitting in the test suite.
         var cannotBePinnedYet = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var testsDir = Path.Combine(
-            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+            Directory.GetParent(TestPaths.AppProject())!.FullName, "SysManager.Tests");
 
         var testSources = Directory.GetFiles(testsDir, "*.cs")
             .ToDictionary(p => Path.GetFileName(p)!, p => WithoutComments(File.ReadAllText(p)),
@@ -14049,7 +14070,7 @@ public partial class ArchitectureTests
     public void TheSharedDeepCleanupScan_IsNeverMutatedOrCleaned()
     {
         var testsDir = Path.Combine(
-            Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+            Directory.GetParent(TestPaths.AppProject())!.FullName, "SysManager.Tests");
         var source = File.ReadAllText(Path.Combine(testsDir, "DeepCleanupServiceTests.cs"));
 
         // The field name is read from the declaration rather than hardcoded, so a rename breaks this
@@ -14121,7 +14142,7 @@ public partial class ArchitectureTests
     [InlineData("SpeedVerdict.cs", "SpeedVerdict")]              // a comment reaches "record" first
     public void TypeDeclaration_ReadsTheDeclaredName(string file, string expected)
     {
-        var path = Path.Combine(FindAppProjectDir(), "Models", file);
+        var path = Path.Combine(TestPaths.AppProject(), "Models", file);
         Assert.True(File.Exists(path),
             $"{file} is gone, so this case no longer covers anything — replace it with a model that has "
             + "the same declaration shape rather than deleting the row.");
@@ -14154,7 +14175,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTestFile_ShadowsAHelperItsOwnProjectAlreadyShares()
     {
-        var root = Directory.GetParent(FindAppProjectDir())!.FullName;
+        var root = Directory.GetParent(TestPaths.AppProject())!.FullName;
         var offenders = new List<string>();
         var helperCount = 0;
 
@@ -14237,7 +14258,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTest_AppendsPropertyChangesToANonConcurrentCollection()
     {
-        var root = Directory.GetParent(FindAppProjectDir())!.FullName;
+        var root = Directory.GetParent(TestPaths.AppProject())!.FullName;
         var offenders = new List<string>();
         var adoption = 0;
         var filesRead = 0;
@@ -14351,7 +14372,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTest_CapturesProgressThroughTheAsynchronousProgressType()
     {
-        var solutionDir = Directory.GetParent(FindAppProjectDir())!.FullName;
+        var solutionDir = Directory.GetParent(TestPaths.AppProject())!.FullName;
 
         // Per project: its folder, the floor on files the scan must see there, the floor on synchronous
         // recorder constructions, and the helper name to point an offender at. Measured when written: 268
@@ -14460,7 +14481,7 @@ public partial class ArchitectureTests
     [Fact]
     public void DeepCleanupsScan_TakesItsRootsFromTheSeam()
     {
-        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
+        var path = Path.Combine(TestPaths.AppProject(), "Services", "DeepCleanupService.cs");
         Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -14513,7 +14534,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryFilteredCleanupBucket_IsFilteredInBothScanAndClean()
     {
-        var path = Path.Combine(FindAppProjectDir(), "Services", "DeepCleanupService.cs");
+        var path = Path.Combine(TestPaths.AppProject(), "Services", "DeepCleanupService.cs");
         Assert.True(File.Exists(path), $"DeepCleanupService.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -14569,7 +14590,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryCallerThatEndsTheShell_HoldsTheShellLock()
     {
-        var vmDir = Path.Combine(FindAppProjectDir(), "ViewModels");
+        var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");
         var callers = new List<string>();
         var unguarded = new List<string>();
 
@@ -14616,7 +14637,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NothingKillsExplorer_OutsideTheSharedHelper()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var helper = Path.Combine(appDir, "Helpers", "ExplorerShell.cs");
         Assert.True(File.Exists(helper),
             $"{helper} not found — the shared shell helper is gone, so this guard would police nothing.");
@@ -14692,7 +14713,7 @@ public partial class ArchitectureTests
 
         foreach (var (fileName, invocations) in expectedInvocations)
         {
-            var vmPath = Path.Combine(FindAppProjectDir(), "ViewModels", fileName);
+            var vmPath = Path.Combine(TestPaths.AppProject(), "ViewModels", fileName);
             Assert.True(File.Exists(vmPath), $"{fileName} was not found at {vmPath}");
             var vm = WithoutComments(File.ReadAllText(vmPath));
 
@@ -14720,7 +14741,7 @@ public partial class ArchitectureTests
         foreach (var (viewName, commands) in expectedBindings)
         {
             var markup = WithoutXamlComments(
-                File.ReadAllText(Path.Combine(FindAppProjectDir(), "Views", viewName)));
+                File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Views", viewName)));
             markupByView[viewName] = markup;
             foreach (var command in commands)
             {
@@ -14765,7 +14786,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheCleanupWalk_AbandonsADirectoryWhoseEnumeratorThrows()
     {
-        var path = Path.Combine(FindAppProjectDir(), "Helpers", "SafeFileWalk.cs");
+        var path = Path.Combine(TestPaths.AppProject(), "Helpers", "SafeFileWalk.cs");
         Assert.True(File.Exists(path), $"SafeFileWalk.cs was not found at {path}");
         var source = WithoutComments(File.ReadAllText(path));
 
@@ -14831,7 +14852,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryPropertyACimQueryFetches_IsReadBackOut()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var offenders = new List<string>();
         var filesChecked = 0;
         var namesChecked = 0;
@@ -14930,7 +14951,7 @@ public partial class ArchitectureTests
     public void EveryReportFormat_GoesThroughTheRedactingDataPath()
     {
         var source = WithoutComments(File.ReadAllText(
-            Path.Combine(FindAppProjectDir(), "Services", "SystemReportService.cs")));
+            Path.Combine(TestPaths.AppProject(), "Services", "SystemReportService.cs")));
 
         // The redaction has to be IN that path, not merely defined somewhere in the file.
         var dataPath = MemberSlice(source, "public async Task<SystemReportData> GenerateDataAsync");
@@ -15000,7 +15021,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoTwoDocuments_LinkADifferentDiscussionUnderTheSameName()
     {
-        var root = FindRepoRoot();
+        var root = TestPaths.RepoRoot();
         var docs = new[] { "README.md", "SUPPORT.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md" }
             .Select(f => Path.Combine(root, f))
             .Where(File.Exists)
@@ -15061,7 +15082,7 @@ public partial class ArchitectureTests
     [Fact]
     public void TheBackupRetentionCopy_MatchesTheConstantItDescribes()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
         var source = File.ReadAllText(Path.Combine(appDir, "Services", "ContextMenuService.cs"));
         var view = XamlCode(Path.Combine(appDir, "Views", "ContextMenuView.xaml"));
 
@@ -15103,7 +15124,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryChartOverlaidWithAnEmptyState_HidesItselfWhenEmpty()
     {
-        var viewsDir = Path.Combine(FindAppProjectDir(), "Views");
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
 
         var offenders = new List<string>();
         var pairs = 0;
@@ -15176,7 +15197,7 @@ public partial class ArchitectureTests
     public void TheReleaseWorkflow_ChecksTheWingetTokenBeforeUsingIt()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(FindRepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
 
         int StepLine(string name) => ReleaseStepLine(lines, name);
 
@@ -15228,7 +15249,7 @@ public partial class ArchitectureTests
     [Fact]
     public void NoPropertyIsAssignedTwiceInARow()
     {
-        var appDir = FindAppProjectDir();
+        var appDir = TestPaths.AppProject();
 
         var offenders = new List<string>();
         var assignments = 0;

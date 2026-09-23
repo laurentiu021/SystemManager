@@ -168,27 +168,10 @@ public class TuneUpServiceTests
         // Asserted at source level deliberately. The runtime value depends on this machine's actual
         // drives, so a behavioural test would be non-deterministic across machines and would pass
         // vacuously on a box whose disks report no SMART counters. The property NAME is the contract.
-        var source = File.ReadAllText(Path.Combine(FindAppProjectDir(), "Services", "TuneUpService.cs"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "TuneUpService.cs"));
 
         Assert.Contains("Verdict = r.Verdict", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Verdict = r.HealthStatus", source, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// The app project directory. The build copies no .cs files into the test output, so the assembly
-    /// location alone cannot answer this.
-    /// </summary>
-    private static string FindAppProjectDir()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "SysManager", "SysManager.csproj");
-            if (File.Exists(candidate)) return Path.Combine(dir.FullName, "SysManager");
-            dir = dir.Parent;
-        }
-        throw new DirectoryNotFoundException(
-            "Could not locate the SysManager app project from " + AppContext.BaseDirectory);
     }
 
     [Theory]

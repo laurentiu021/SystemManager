@@ -30,7 +30,7 @@ public class RowMarkBindingTests
     [InlineData("ServicesView.xaml")]
     public void TheMarkCommandIsBoundToAControl(string viewFile)
     {
-        var xaml = File.ReadAllText(ViewPath(viewFile));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", viewFile));
 
         // The command must be reachable from the row template. `DataContext.` is the qualifier the
         // codebase uses for per-row commands (the row is the DataContext inside a CellTemplate, so an
@@ -60,7 +60,7 @@ public class RowMarkBindingTests
         // everywhere the user can point" rule. Both views now need a row style for the mark tint, so
         // both need this guard — parsed as XML rather than grepped, so the assertion is about the
         // actual element and not a substring that happens to appear somewhere in the file.
-        var doc = XDocument.Load(ViewPath(viewFile));
+        var doc = XDocument.Load(TestPaths.AppFile("Views", viewFile));
         XNamespace p = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var rowStyles = doc.Descendants(p + "DataGrid.RowStyle")
@@ -76,18 +76,5 @@ public class RowMarkBindingTests
                 "style and loses the app-wide row hover.");
             Assert.Contains("DataGridRow", basedOn!, StringComparison.Ordinal);
         });
-    }
-
-    // Walks up from the test binaries to the app project — .xaml is not copied to the output.
-    private static string ViewPath(string fileName)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions above would silently test nothing
-        var path = Path.Combine(dir!.FullName, "SysManager", "Views", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

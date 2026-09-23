@@ -431,7 +431,7 @@ public class ConverterTests
         // ProcessEntry.SafetyLevel and never displayed. Asserting the ViewModel property alone would
         // pass on the unfixed code, so this checks the shipped markup binds it — and that the column
         // uses the process converters rather than the enum ones.
-        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "ProcessManagerView.xaml"));
 
         Assert.Contains("Header=\"Safety\"", xaml);
         Assert.Contains("ProcSafetyText", xaml);
@@ -449,7 +449,7 @@ public class ConverterTests
         // bound by no XAML — the Name column showed the raw exe FileDescription instead. That is jargon
         // at best, and blank for most Windows system processes, because MainModule throws access-denied
         // when unelevated — precisely the processes the database covers best.
-        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "ProcessManagerView.xaml"));
 
         Assert.Contains("Binding PlainDescription", xaml);
 
@@ -463,7 +463,7 @@ public class ConverterTests
     {
         // The search box already matched against Category, so a user could filter by a word the app
         // never showed them. README advertises the categories alongside the descriptions.
-        var xaml = File.ReadAllText(ViewPath("ProcessManagerView.xaml"));
+        var xaml = File.ReadAllText(TestPaths.AppFile("Views", "ProcessManagerView.xaml"));
 
         Assert.Contains("Header=\"Category\"", xaml);
         Assert.Contains("SortMemberPath=\"Category\"", xaml);
@@ -474,26 +474,11 @@ public class ConverterTests
     {
         // A binding to an unregistered StaticResource key is a runtime XAML failure, and the view test
         // above only proves the key is USED.
-        var xaml = File.ReadAllText(ViewPath("App.xaml", inViews: false));
+        var xaml = File.ReadAllText(TestPaths.AppFile("App.xaml"));
 
         Assert.Contains("x:Key=\"ProcSafetyBrush\"", xaml);
         Assert.Contains("x:Key=\"ProcSafetyBg\"", xaml);
         Assert.Contains("x:Key=\"ProcSafetyText\"", xaml);
         Assert.Contains("x:Key=\"ProcSafetyTip\"", xaml);
-    }
-
-    // Walks up from the test binaries to the app project — the .xaml is not copied to the output.
-    private static string ViewPath(string fileName, bool inViews = true)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "SysManager", "Views")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);   // else the assertions below would silently test nothing
-        var path = inViews
-            ? Path.Combine(dir!.FullName, "SysManager", "Views", fileName)
-            : Path.Combine(dir!.FullName, "SysManager", fileName);
-        Assert.True(File.Exists(path), $"{fileName} not found at {path}");
-        return path;
     }
 }

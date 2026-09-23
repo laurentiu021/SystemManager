@@ -184,7 +184,7 @@ public class AcceleratorRoutingTests
         // travel together and a second gate would only add a way for Escape to go quiet. Pinned because
         // the F5 work above introduced a CanExecute check next door, and copying it here would be the
         // easy mistake.
-        var handler = MethodBody(System.IO.File.ReadAllText(ShellSourcePath()), "private void Window_KeyDown");
+        var handler = MethodBody(System.IO.File.ReadAllText(TestPaths.AppFile("MainWindow.xaml.cs")), "private void Window_KeyDown");
 
         Assert.Contains("Key.F5 && !command.CanExecute(null)", handler, StringComparison.Ordinal);
     }
@@ -206,7 +206,7 @@ public class AcceleratorRoutingTests
     [Fact]
     public void TheShell_AsksForAShellAccelerator_BeforeTheOpenTabsOwn()
     {
-        var handler = MethodBody(System.IO.File.ReadAllText(ShellSourcePath()), "private void Window_KeyDown");
+        var handler = MethodBody(System.IO.File.ReadAllText(TestPaths.AppFile("MainWindow.xaml.cs")), "private void Window_KeyDown");
 
         var shellLookup = handler.IndexOf("ShellAcceleratorCommand(e.Key)", StringComparison.Ordinal);
         Assert.True(shellLookup >= 0,
@@ -245,17 +245,5 @@ public class AcceleratorRoutingTests
         Assert.True(close > 0, $"{signature}'s body is unterminated — the source did not parse as expected");
 
         return source[at..(close + 1)];
-    }
-
-    private static string ShellSourcePath()
-    {
-        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "SysManager", "Services")))
-            dir = dir.Parent;
-
-        Assert.NotNull(dir);
-        var path = System.IO.Path.Combine(dir!.FullName, "SysManager", "MainWindow.xaml.cs");
-        Assert.True(System.IO.File.Exists(path), $"MainWindow.xaml.cs not found at {path}");
-        return path;
     }
 }

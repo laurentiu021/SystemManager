@@ -612,6 +612,64 @@ jobs:
             echo "::warning::WINGET_TOKEN expires in $days day(s), on $expiry. Replace it before then, or a release will publish to GitHub and silently not reach winget."
           fi
 
+      # winget-releaser resolves the release BY TAG: its first internal step calls
+      # /releases/tags/<tag> and collects the installer URLs out of that payload's `assets`
+      # array. On v1.112.9 the array came back EMPTY even though the upload step above had
+      # logged a tick for all three files, so the action invoked komac with nothing after
+      # --urls and komac refused: "a value is required for '--urls <URLS>...' but none was
+      # supplied". Reading the release by ID, or /releases/latest, or the release page,
+      # returned all three the entire time — only the by-tag view was wrong, and that is
+      # precisely the one view this action uses.
+      #
+      # The same run had already warned "Release <id> is not yet discoverable by tag <tag>,
+      # retrying...", so the tag lookup was already lagging while the release was being
+      # created and went on serving a record from the moment it still had no assets attached.
+      #
+      # It is not one lagging index that heals monotonically: reading the by-tag record
+      # repeatedly returns 0 assets on most reads and the correct 3 on an occasional one
+      # (1 in 16, measured hours after the release). So a gate that stops at the FIRST
+      # successful read can be satisfied by one lucky reply while the read winget-releaser
+      # itself makes a moment later still lands on a stale copy — a pass that proves
+      # nothing. Hence the streak: three consecutive agreeing reads, with the counter reset
+      # by any miss.
+      #
+      # The three publish attempts below re-sync the fork but never WAIT, because they were
+      # built for a different failure (a stale fork racing a busy upstream). Against this one
+      # all three fired inside 14 seconds against the same payload and failed identically.
+      # So poll the exact endpoint the action reads, for the exact pattern it matches, before
+      # spending them.
+      #
+      # Bounded and non-fatal: if the lookup never settles the attempts still run, so this can
+      # only ever add a wait, never block a release that would otherwise have published. It
+      # would NOT have saved v1.112.9, whose record was still flapping hours later — no
+      # reasonable ceiling covers that. What it does there is make the failure legible, by
+      # naming the cause in the report below instead of sending a reader to three wrong ones.
+      - name: Wait for the release to be visible by tag
+        id: tagvisible
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -o pipefail
+          streak=0
+          for i in $(seq 1 40); do
+            count=$(gh api "repos/$REPO/releases/tags/$TAG" \
+              --jq '[.assets[] | select(.name | test("\\.exe$"))] | length' 2>/dev/null || echo "0")
+            count=${count:-0}
+            if [ "$count" -ge 1 ]; then streak=$((streak + 1)); else streak=0; fi
+            echo "read $i: /releases/tags/$TAG lists $count installer(s) — streak $streak/3"
+            if [ "$streak" -ge 3 ]; then
+              echo "visible=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$i" -lt 40 ]; then sleep 5; fi
+          done
+          echo "visible=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=release not visible by tag::/releases/tags/$TAG did not report its .exe asset on three consecutive reads within 3 minutes, although the release has one. winget-releaser reads that endpoint, so the publish below will probably fail with \"a value is required for '--urls'\". Compare it against /releases/<id>/assets."
+
       - name: Sync the winget-pkgs fork with upstream
         continue-on-error: true
         shell: bash
@@ -734,20 +792,39 @@ jobs:
       - name: Report a failed winget publish
         if: steps.wingetresult.outputs.outcome == 'failure'
         shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.version.outputs.tag }}
+          TAG_VISIBLE: ${{ steps.tagvisible.outputs.visible }}
         run: |
-          echo "::warning title=winget publish failed::${{ steps.version.outputs.tag }} is published on GitHub but did NOT reach winget after 3 attempts. Users upgrading via 'winget upgrade' will not see it until this is resolved."
+          echo "::warning title=winget publish failed::$TAG is published on GitHub but did NOT reach winget after 3 attempts. Users upgrading via 'winget upgrade' will not see it until this is resolved."
           {
             echo "### winget publish failed — all 3 attempts"
             echo
-            echo "\`${{ steps.version.outputs.tag }}\` **is** published on GitHub — binary, checksum, SBOM and attestation are all present."
+            echo "\`$TAG\` **is** published on GitHub — binary, checksum, SBOM and attestation are all present."
             echo "It did **not** reach winget, so \`winget upgrade\` will not offer it yet."
             echo
+            if [ "$TAG_VISIBLE" = "false" ]; then
+              echo "**The wait step above timed out**, so cause 1 is the likely one: this run published a release"
+              echo "whose assets never became visible through \`/releases/tags/$TAG\`."
+              echo
+            fi
             echo "Each attempt re-synced the fork immediately beforehand, so this is unlikely to be the"
             echo "upstream race that caused the v1.61.3 miss. Check, in this order:"
-            echo "1. The \`WINGET_TOKEN\` secret has expired or been revoked — it is a PAT with a finite lifetime."
-            echo "2. A branch for this version already exists on the \`laurentiu021/winget-pkgs\` fork from an earlier"
+            echo "1. **GitHub is serving a stale release record by tag.** winget-releaser resolves the release"
+            echo "   through \`/releases/tags/<tag>\` and builds \`--urls\` from that payload's \`assets\`; if the array"
+            echo "   is empty it calls komac with nothing after the flag and komac refuses with"
+            echo "   \`a value is required for '--urls <URLS>...' but none was supplied\`. That is what happened on"
+            echo "   v1.112.9. The discriminator, because only this one view is wrong:"
+            echo "   \`gh api repos/$REPO/releases/tags/$TAG --jq '.assets|length'\` returns 0 while"
+            echo "   \`gh api repos/$REPO/releases/<id>/assets --jq 'length'\` returns 3. **Read the first one"
+            echo "   several times** — it flaps, returning the correct count on roughly one read in sixteen, so a"
+            echo "   single reply of 3 does not clear this cause. A \`PATCH\` to the release does not heal it, and"
+            echo "   \`gh release download $TAG\` reports \"no assets\" while still exiting 0."
+            echo "2. The \`WINGET_TOKEN\` secret has expired or been revoked — it is a PAT with a finite lifetime."
+            echo "3. A branch for this version already exists on the \`laurentiu021/winget-pkgs\` fork from an earlier"
             echo "   partial run — \`Ref cannot be created\` also means \"already there\". Delete it and re-run."
-            echo "3. Upstream has rejected the manifest shape (a schema version bump on their side)."
+            echo "4. Upstream has rejected the manifest shape (a schema version bump on their side)."
             echo
             echo "Re-run this workflow once fixed. The release itself does not need to be recreated."
           } >> "$GITHUB_STEP_SUMMARY"

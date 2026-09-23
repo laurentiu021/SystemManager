@@ -285,42 +285,125 @@ internal static class UpdateApplier
         }
 
         var staging = targetExe + ".new";
+
+        // STAGED ONCE, outside the retry loop. Only the move can be blocked by the lock the retries exist
+        // to wait out, and these two steps produce identical bytes every time — so repeating them cost two
+        // full copies of an 81 MB executable plus a SHA-256 of it, ten times over, to discover what the
+        // first attempt already knew. On a small SSD, during an update, on a machine the user is waiting
+        // on (#2377).
+        try
+        {
+            File.Copy(sourceExe, staging, overwrite: true);
+
+            // Keep the outgoing build BEFORE the move destroys it. The move is what makes an
+            // interrupted copy safe, but it also means a SUCCESSFUL update into a broken build
+            // leaves nothing to go back to — and this project has shipped two launch-blocking
+            // regressions. Best-effort: failing to retain a copy must never abort an update that
+            // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
+            PreserveCurrentBuild(targetExe, updatesDir);
+
+            // File.Copy reports success once Windows has the bytes in memory. The move that follows
+            // is a metadata change, so a power cut between the two can leave targetExe — the app's
+            // own executable — present and zero-length, which means it will not start at all.
+            // Deliberately NOT AtomicFile.SwapIntoPlace: that replaces via File.Replace, which
+            // copies the outgoing file's attributes onto the replacement, and inheriting the old
+            // build's zone identifier and creation time is not a change worth making here.
+            AtomicFile.FlushOntoDevice(staging);
+        }
+        catch (IOException ex)
+        {
+            LogStagingFailure(ex, targetExe);
+            TryDelete(staging);
+            return false;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Update apply: access denied staging next to {Target}", LogService.SanitizePath(targetExe));
+            TryDelete(staging);
+            return false;
+        }
+
+        // Every failure leaves through the ONE exit below, carrying why. An early return from inside the
+        // loop would need its own cleanup, and a per-attempt TryDelete is what forced the copy above to be
+        // repeated in the first place — so the two belong together, outside.
+        string? reason = null;
+
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                File.Copy(sourceExe, staging, overwrite: true);
-                // Keep the outgoing build BEFORE the move destroys it. The move is what makes an
-                // interrupted copy safe, but it also means a SUCCESSFUL update into a broken build
-                // leaves nothing to go back to — and this project has shipped two launch-blocking
-                // regressions. Best-effort: failing to retain a copy must never abort an update that
-                // is otherwise fine, so PreserveCurrentBuild swallows its own errors.
-                PreserveCurrentBuild(targetExe, updatesDir);
-                // File.Copy reports success once Windows has the bytes in memory. The move that follows
-                // is a metadata change, so a power cut between the two can leave targetExe — the app's
-                // own executable — present and zero-length, which means it will not start at all.
-                // Deliberately NOT AtomicFile.SwapIntoPlace: that replaces via File.Replace, which
-                // copies the outgoing file's attributes onto the replacement, and inheriting the old
-                // build's zone identifier and creation time is not a change worth making here.
-                AtomicFile.FlushOntoDevice(staging);
                 File.Move(staging, targetExe, overwrite: true);
                 return true;
             }
             catch (IOException ex)
             {
+                // A full volume is not a lock and waiting will not clear it. Retrying five seconds of
+                // sleeps and then blaming a lock sent the user looking for a process that does not exist —
+                // and the log is all they have here, because the applier runs before the UI exists.
+                if (IsOutOfSpace(ex))
+                {
+                    LogStagingFailure(ex, targetExe);
+                    reason = "there was not enough free space on the volume";
+                    break;
+                }
+
                 Log.Debug(ex, "Update apply: target busy, attempt {Attempt}/{Max}", attempt, maxAttempts);
-                TryDelete(staging);
                 if (attempt < maxAttempts) Thread.Sleep(delayMs);
             }
             catch (UnauthorizedAccessException ex)
             {
                 Log.Warning(ex, "Update apply: access denied writing {Target}", LogService.SanitizePath(targetExe));
-                TryDelete(staging);
-                return false;
+                reason = "access to it was denied";
+                break;
             }
         }
-        Log.Error("Update apply: gave up after {Max} attempts — {Target} stayed locked", maxAttempts, LogService.SanitizePath(targetExe));
+
+        TryDelete(staging);
+
+        // Names the cause the run actually met. The old message asserted a lock for every failure, which was
+        // the wrong answer for both of the others.
+        Log.Error(
+            "Update apply: {Target} was not replaced — {Reason}",
+            LogService.SanitizePath(targetExe),
+            reason ?? $"it stayed locked through all {maxAttempts} attempts");
         return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="ex"/> is Windows reporting a full volume rather than any other I/O fault.
+    /// </summary>
+    /// <remarks>
+    /// The update needs roughly 250 MB free — the downloaded build, the staging copy and the retained
+    /// rollback build together — so a nearly-full drive is a realistic way for this to fail, and it fails
+    /// with an <see cref="IOException"/> exactly like a sharing violation does. Only one of the two is worth
+    /// waiting five seconds for, and only one of them is what the message used to claim (#2377).
+    /// <para>Both codes, because Windows uses either depending on the call:
+    /// <c>ERROR_DISK_FULL</c> (0x70) and <c>ERROR_HANDLE_DISK_FULL</c> (0x27), as HRESULTs under
+    /// <c>FACILITY_WIN32</c>.</para>
+    /// </remarks>
+    internal static bool IsOutOfSpace(IOException ex) =>
+        ex.HResult is DiskFullHResult or HandleDiskFullHResult;
+
+    private const int DiskFullHResult = unchecked((int)0x8007_0070);
+    private const int HandleDiskFullHResult = unchecked((int)0x8007_0027);
+
+    /// <summary>
+    /// Reports a failure to put the new build in place, naming the cause the exception actually carries
+    /// rather than the one that is usually true.
+    /// </summary>
+    private static void LogStagingFailure(IOException ex, string targetExe)
+    {
+        if (IsOutOfSpace(ex))
+        {
+            Log.Error(
+                ex,
+                "Update apply: not enough free space on the volume holding {Target}. The update needs room "
+                + "for the new build, a staging copy and the retained previous build.",
+                LogService.SanitizePath(targetExe));
+            return;
+        }
+
+        Log.Error(ex, "Update apply: could not stage the new build next to {Target}", LogService.SanitizePath(targetExe));
     }
 
     /// <summary>

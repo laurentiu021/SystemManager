@@ -8537,6 +8537,55 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The self-update retry loop may contain the MOVE and nothing else. The 81 MB copy and the rollback
+    /// snapshot happen once, before it.
+    /// </summary>
+    /// <remarks>
+    /// Only <c>File.Move</c> can be blocked by the lock the retries exist to wait out. With the staging copy
+    /// and <c>PreserveCurrentBuild</c> inside the loop, a target that stayed locked for all ten attempts cost
+    /// roughly 1.6 GB of writes and ten SHA-256 passes over an 81 MB executable to discover what the first
+    /// attempt already knew — on a small SSD, during an update, on a machine the user is waiting on (#2377).
+    /// <para>Source-shape because no test can see it. The observable behaviour is identical either way: the
+    /// same false, the same untouched target, the same absent staging file. What differs is how much work was
+    /// done to get there, and a test that measured that would have to measure time or bytes — both of which
+    /// are the flakiness this suite refuses. So the ordering is pinned where it is mechanical.</para>
+    /// </remarks>
+    [Fact]
+    public void TheUpdateRetryLoop_RetriesOnlyTheMove()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(FindAppProjectDir(), "Services", "UpdateApplier.cs"));
+        var apply = WithoutComments(MemberSlice(source, "internal static bool ApplyCopy("));
+
+        Assert.True(apply.Length > 400,
+            $"the ApplyCopy slice is {apply.Length} chars — not the method. Re-derive this guard rather "
+            + "than letting it pass having read nothing.");
+
+        // The loop body, delimited by braces, so "inside" means inside rather than "somewhere after".
+        var loop = BalancedBlock(apply, "for (var attempt = 1");
+        Assert.True(loop.Contains("File.Move(", StringComparison.Ordinal),
+            "the retry loop no longer contains the move, so it is retrying something else entirely. If the "
+            + "loop was restructured, re-derive this guard.");
+
+        var offenders = new List<string>();
+        if (loop.Contains("File.Copy(", StringComparison.Ordinal))
+            offenders.Add("File.Copy — an 81 MB copy repeated per attempt, producing identical bytes each time");
+        if (loop.Contains("PreserveCurrentBuild(", StringComparison.Ordinal))
+            offenders.Add("PreserveCurrentBuild — a second 81 MB copy plus a SHA-256 of it, per attempt");
+        if (loop.Contains("FlushOntoDevice(", StringComparison.Ordinal))
+            offenders.Add("AtomicFile.FlushOntoDevice — flushing the same staged bytes to the device again");
+
+        Assert.True(offenders.Count == 0,
+            "the update retry loop repeats work that cannot change between attempts. Only the move can be "
+            + "blocked by a lock; everything else belongs before the loop:\n  - "
+            + string.Join("\n  - ", offenders));
+
+        // And the staging file is cleaned up AFTER the loop, not inside it. Deleting it per attempt is what
+        // forced the copy to be repeated, so the two halves have to move together.
+        Assert.DoesNotContain("TryDelete(staging)", loop, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No service may grow its own directory walk or its own reparse-point test. There is one
     /// <c>SafeFileWalk</c>, and it is the only place the rules that make a walk safe are allowed to live.
     /// </summary>

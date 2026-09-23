@@ -8677,6 +8677,92 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Both scanners that hand the user a list of individual FILES must refuse the ones Windows manages
+    /// itself, and refuse them by the same rule.
+    /// </summary>
+    /// <remarks>
+    /// This is the drift it exists to stop, because it already happened: <c>DuplicateFileService</c> carried a
+    /// <c>SkipFiles</c> list and a predicate that consulted it, while <c>LargeFileScanner</c> had the same
+    /// three names sitting in its DIRECTORY substring list, where nothing ever asked about a file — so the
+    /// biggest-files list was topped by a hibernation file and a page file on every drive that has them
+    /// (#2386). The names being present in the source was what made it invisible: a reader saw them listed and
+    /// had no reason to check which predicate consumed the list.
+    /// <para>Invoked rather than read as source text. The bug was precisely that the declaration looked right,
+    /// so a guard matching the declaration would have passed all along; only calling the predicate proves a
+    /// call site exists and reaches these names.</para>
+    /// <para>Two halves, because neither alone is enough. Invoking each predicate on a hardcoded set of names
+    /// proves the rule is reachable, but says nothing about a name added to one scanner after this test was
+    /// written; comparing the two <c>SkipFiles</c> fields as sets catches that drift, but a list both scanners
+    /// agree on is still worthless if nothing consults it. The first half proves the rule runs, the second
+    /// proves the two copies have not diverged.</para>
+    /// <para><c>DiskAnalyzerService</c> is deliberately absent. It reports how space is USED, and a page file
+    /// occupies its bytes whether or not the user may delete it — hiding them there would make the total
+    /// disagree with the free space Windows reports, which is the complaint its own exclusion disclosure
+    /// exists to answer. The rule is "not offered as a file to act on", not "not counted".</para>
+    /// </remarks>
+    [Fact]
+    public void BothActionableFileScanners_RefuseTheSystemManagedFiles()
+    {
+        string[] mustRefuse = ["pagefile.sys", "hiberfil.sys", "swapfile.sys"];
+        Type[] scanners = [typeof(LargeFileScanner), typeof(DuplicateFileService)];
+        var declared = new Dictionary<string, string[]>();
+
+        foreach (var scanner in scanners)
+        {
+            var predicate = scanner.GetMethod(
+                "ShouldSkipFile", BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.True(predicate is not null,
+                $"{scanner.Name} has no ShouldSkipFile predicate. If the filter moved, point this guard at "
+                + "the new one — a scanner offering rows to act on must not offer a file Windows holds open.");
+
+            foreach (var name in mustRefuse)
+            {
+                Assert.True((bool)predicate!.Invoke(null, [name])!,
+                    $"{scanner.Name} does not refuse {name}, so it will be listed among the files the user is "
+                    + "invited to act on.");
+            }
+
+            // The floor. A predicate that returned true for everything would satisfy every assertion above
+            // while filtering the whole scan away.
+            Assert.False((bool)predicate!.Invoke(null, ["holiday-video.mp4"])!,
+                $"{scanner.Name} refuses an ordinary file, so the assertions above prove nothing.");
+
+            // Exact name, not substring: the user's own backup of a page file is their file.
+            Assert.False((bool)predicate!.Invoke(null, ["my-pagefile.sys.bak"])!,
+                $"{scanner.Name} matches a name that merely CONTAINS a system file name.");
+
+            var list = scanner.GetField("SkipFiles", BindingFlags.NonPublic | BindingFlags.Static)
+                ?.GetValue(null) as string[];
+            Assert.True(list is { Length: > 0 }, $"{scanner.Name} has no non-empty SkipFiles list.");
+            declared[scanner.Name] = list!;
+        }
+
+        // The parity itself, and the half the invocations above cannot reach: the three names are hardcoded
+        // here, so a FOURTH name added to one scanner and forgotten in the other satisfies every assertion
+        // above. One copy ahead of the other is exactly the shape the original defect had, so the lists are
+        // compared to each other as sets rather than each to a fixed expectation.
+        Assert.Equal(scanners.Length, declared.Count);
+
+        var sets = declared.ToDictionary(
+            d => d.Key,
+            d => new HashSet<string>(d.Value, StringComparer.OrdinalIgnoreCase));
+        var reference = sets.First();
+
+        foreach (var (name, set) in sets.Skip(1))
+        {
+            Assert.True(reference.Value.SetEquals(set),
+                $"{reference.Key} and {name} disagree about which files Windows manages. "
+                + $"{reference.Key}: [{Render(reference.Value)}] vs {name}: [{Render(set)}]. "
+                + "Both hand the user a list of files to act on, so a name that belongs in one belongs "
+                + "in both.");
+        }
+
+        static string Render(HashSet<string> set)
+            => string.Join(", ", set.OrderBy(s => s, StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// The shredder's overwrite writes must not be cancellable: every <c>WriteAsync</c> / <c>FlushAsync</c>
     /// inside <c>ShredFileAsync</c> passes <c>CancellationToken.None</c>.
     /// </summary>
@@ -13492,6 +13578,88 @@ public partial class ArchitectureTests
     /// <summary>An append onto a collection, in any of the spellings those types use.</summary>
     [GeneratedRegex(@"\.(?:Add|Push|Enqueue)\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex CollectionAppend();
+
+    /// <summary>
+    /// A unit test may not capture progress through <c>Progress&lt;T&gt;</c>, because that type dispatches
+    /// asynchronously and the capture is therefore a race the test cannot see.
+    /// </summary>
+    /// <remarks>
+    /// <c>Progress&lt;T&gt;</c> marshals each callback through the captured
+    /// <see cref="System.Threading.SynchronizationContext"/>, and a test has none — so the callbacks are
+    /// queued on the thread pool and may not have run by the time the awaited call returns. A test that
+    /// reports and then asserts on what it captured passes on a quiet machine and fails on a loaded one,
+    /// which is exactly how it behaved: <c>ScanAsync_SystemPagingFiles_AreNotListedOrCounted</c> was written
+    /// with <c>Progress&lt;T&gt;</c>, passed locally, and failed the first CI run on the assertion that a
+    /// report had arrived at all — while the assertion about the actual fix passed.
+    /// <para><c>SyncProgress&lt;T&gt;</c> has sat in this project since #2183 and is documented in
+    /// TESTING.md; eleven call sites already used it, including one in the very file that reintroduced the
+    /// raw type. So this is a uniformity rule with teeth rather than a new constraint: there is no case in a
+    /// unit test where the asynchronous dispatch is the thing under test.</para>
+    /// <para>Scoped to this project on purpose. <c>SyncProgress</c> is declared here and the integration and
+    /// UI projects do not have it, so a rule spanning them would be demanding a helper that does not exist
+    /// there. The integration project's one remaining <c>Progress&lt;T&gt;</c> is a different defect — it
+    /// asserts <c>NotNull</c> on a list it just constructed, so it cannot fail for any reason — and is
+    /// tracked separately rather than smuggled into this guard's scope.</para>
+    /// <para><b>The floor is on adoption</b>, for the reason the recorder guard above gives: a floor on the
+    /// remaining raw constructions would fall every time someone converts one, so finishing the migration
+    /// would eventually read as a broken regex. The control string is assembled by concatenation so that
+    /// this file's own source never contains the banned sequence — a guard whose pattern matches its own
+    /// text cannot tell a real violation from itself.</para>
+    /// </remarks>
+    [Fact]
+    public void NoUnitTest_CapturesProgressThroughTheAsynchronousProgressType()
+    {
+        var directory = Path.Combine(Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
+        Assert.True(Directory.Exists(directory), $"SysManager.Tests was not found at {directory}.");
+
+        // The pattern still recognises the shape it bans. Built from pieces because a literal here would be
+        // found by the scan below, in this very file.
+        var control = "var p = new " + "Progress<int>(_ => { });";
+        Assert.Matches(AsynchronousProgressConstruction(), control);
+        Assert.DoesNotMatch(AsynchronousProgressConstruction(), control.Replace("new P", "new SyncP"));
+
+        var offenders = new List<string>();
+        var adoption = 0;
+        var filesRead = 0;
+
+        foreach (var path in Directory.GetFiles(directory, "*.cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            filesRead++;
+            var file = Path.GetFileName(path);
+            var lines = WithoutComments(File.ReadAllText(path)).Replace("\r\n", "\n").Split('\n');
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                adoption += SynchronousProgressConstruction().Matches(lines[i]).Count;
+                if (AsynchronousProgressConstruction().IsMatch(lines[i]))
+                    offenders.Add($"{file}:{i + 1}  {lines[i].Trim()}");
+            }
+        }
+
+        Assert.True(filesRead >= 200,
+            $"only {filesRead} unit-test files were read — this guard is looking at the wrong folder.");
+
+        // Twelve when measured, counted with the same regex the guard uses.
+        Assert.True(adoption >= 8,
+            $"only {adoption} call sites construct SyncProgress, down from 12 — if the helper was renamed or "
+            + "replaced, this guard now protects a pattern nothing follows and must be revisited.");
+
+        Assert.True(offenders.Count == 0,
+            "These unit tests capture progress through Progress<T>, which queues its callbacks on the thread "
+            + "pool because a test has no SynchronizationContext — so whatever they assert about the captured "
+            + "reports is a race that passes locally and fails under CI load. Use the shared "
+            + "SyncProgress<T>, which records every report on the calling thread:\n  "
+            + string.Join("\n  ", offenders)
+            + $"\n({adoption} call sites already use SyncProgress)");
+    }
+
+    /// <summary>Construction of the framework's asynchronous <c>Progress&lt;T&gt;</c>, qualified or not.</summary>
+    [GeneratedRegex(@"\bnew\s+(?:System\.)?Progress\s*<", RegexOptions.CultureInvariant)]
+    private static partial Regex AsynchronousProgressConstruction();
+
+    /// <summary>Construction of this project's synchronous recorder.</summary>
+    [GeneratedRegex(@"\bnew\s+SyncProgress\s*<", RegexOptions.CultureInvariant)]
+    private static partial Regex SynchronousProgressConstruction();
 
     /// <summary>
     /// Deep Cleanup's scan must take its roots from <c>ICleanupRoots</c> rather than asking the machine,

@@ -22,8 +22,27 @@ public sealed class LargeFileScanner
     private static readonly string[] SkipSegments =
     {
         @"\$recycle.bin", @"\system volume information", @"\windows\winsxs",
-        @"\windows\system32\config", @"\windows\csc", @"\pagefile.sys",
-        @"\hiberfil.sys", @"\swapfile.sys"
+        @"\windows\system32\config", @"\windows\csc"
+    };
+
+    /// <summary>
+    /// Files Windows manages itself, matched by exact name. Not part of <see cref="SkipSegments"/>: that list
+    /// is asked only about a directory the walk is about to enter, so the three names used to sit in it and
+    /// never be consulted — they were listed among the biggest files on every drive that has them (#2386).
+    /// </summary>
+    /// <remarks>
+    /// These are normally the two largest files on the system drive — a hibernation file is a fraction of
+    /// installed RAM and a page file several gigabytes — so they take the top of the one list this tab exists
+    /// to produce, and neither of the actions offered beside a row ("Show in Explorer", "Copy path") can do
+    /// anything about a file Windows holds open. Disk Analyzer still counts them, which is where that space is
+    /// meant to be accounted for; this tab is the list of files a user might act on.
+    /// <para>Exact name, not a substring as the subtree list uses: <c>my-pagefile.sys.bak</c> is the user's own
+    /// file and contains one of these names. Mirrors <c>DuplicateFileService.ShouldSkipFile</c>, which has
+    /// filtered the same three since it was written.</para>
+    /// </remarks>
+    private static readonly string[] SkipFiles =
+    {
+        "pagefile.sys", "hiberfil.sys", "swapfile.sys"
     };
 
     public Task<IReadOnlyList<LargeFileEntry>> ScanAsync(
@@ -104,6 +123,11 @@ public sealed class LargeFileScanner
                 // the user acts on would point at the link rather than the thing taking the space (#2381).
                 if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
 
+                // Before the counters, not after: a file this tab will never offer is not one it scanned, and
+                // leaving 40 GB of paging files in "bytes scanned" would describe a population the results do
+                // not come from. Matches the sibling scanner, which also increments only past this check.
+                if (ShouldSkipFile(fi.Name)) continue;
+
                 scanned++;
 
                 try
@@ -183,4 +207,7 @@ public sealed class LargeFileScanner
     {
         return SkipSegments.Any(seg => path.Contains(seg, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool ShouldSkipFile(string name)
+        => SkipFiles.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
 }

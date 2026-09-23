@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.9] - 2026-09-23
+
+**Large Files led with two files you are not allowed to touch.** Scan the system drive and the top of the
+list was Windows' own hibernation file and page file — together often 40 GB, and on this machine 27.4 GB and
+13.4 GB. Neither of the two things the tab offers beside a row helps with them: "Show in Explorer" lands on
+a file Windows holds open, and "Copy path" copies a path you can do nothing with. They pushed the files you
+*can* clear off the top of the one list the tab exists to produce.
+
+### Fixed
+
+- **Windows' own paging files are no longer listed.** `pagefile.sys`, `hiberfil.sys` and `swapfile.sys` are
+  skipped, matched on the exact file name — so a backup of your own called `my-pagefile.sys.bak` is still
+  listed, because that one is yours. They are also left out of the "files scanned" and "bytes scanned"
+  counters, which now describe the files the results actually come from rather than adding 40 GB the tab
+  would never offer.
+- **Disk Analyzer still counts them, deliberately.** That tab answers "where has my space gone", and those
+  bytes genuinely occupy the drive; hiding them there would make its total disagree with the free space
+  Windows reports. If you want to know how much the paging files take, that is the tab that tells you —
+  Large Files is the list of files you might act on.
+
 ## [1.112.8] - 2026-09-23
 
 **A self-update that could not complete wrote about 1.6 GB finding that out, then blamed the wrong thing.**

@@ -372,8 +372,10 @@ Key services:
   interface because the work used to sit inline in `CleanupViewModel`, whose constructor fires it and
   forgets it: building the view-model started a recursive walk of both locations, 30 times over in one
   unit-test file, and one test then asserted the walk finished inside fifteen seconds.
-- `LargeFileScanner` — read-only biggest-files discovery; skips WinSxS,
-  pagefile, hiberfil, System Volume Information.
+- `LargeFileScanner` — read-only biggest-files discovery; skips WinSxS and
+  System Volume Information as subtrees, and pagefile/hiberfil/swapfile by exact
+  file name. The two are separate lists because the subtree one is only ever
+  asked about a directory, which is why the three file names sat in it unread.
 - `UpdateService` — GitHub Releases API client with explicit
   `SocketsHttpHandler`, retry, and surfaced error messages.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the

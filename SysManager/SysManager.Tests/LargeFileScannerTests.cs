@@ -232,6 +232,64 @@ public class LargeFileScannerTests : IDisposable
         Assert.False((bool)method.Invoke(null, new object[] { @"D:\Games\Steam" })!);
     }
 
+    // ---------- the paging files the skip list already named (#2386) ----------
+
+    [Fact]
+    public async Task ScanAsync_SystemPagingFiles_AreNotListedOrCounted()
+    {
+        // The three names were in SkipSegments from the start, but ShouldSkip is only ever asked about a
+        // DIRECTORY popped off the stack, so no file path ever reached it and all three were listed. They are
+        // routinely the two biggest files on C: — a hibernation file is a fraction of RAM and a page file
+        // several gigabytes — so on the one scan this tab exists for they take the top of the list, and the
+        // only actions offered are "Show in Explorer" and "Copy path", neither of which helps with a file
+        // Windows holds open. Same size as the real file so the assertion cannot pass by size ordering.
+        CreateFile("pagefile.sys", 3000);
+        CreateFile("hiberfil.sys", 3000);
+        CreateFile("swapfile.sys", 3000);
+        CreateFile("holiday-video.mp4", 3000);
+
+        // SyncProgress captures reports synchronously — no Task.Delay race.
+        var progress = new SyncProgress<LargeFileScanner.LargeFileProgress>();
+
+        var result = await _scanner.ScanAsync(_root, minSizeBytes: 1, top: 10, progress);
+
+        Assert.Equal(["holiday-video.mp4"], result.Select(r => r.Name));
+
+        // The counters too, not just the list. The settling report after the walk is unconditional, so the
+        // last report is always the settled one rather than one the 200 ms throttle happened to let through.
+        // Skipping before the counters is what the sibling service does with its own discovered++, and it
+        // keeps "3000 bytes scanned" describing the files this tab would actually offer.
+        Assert.NotEmpty(progress.Reports);
+        Assert.Equal(1, progress.Reports[^1].FilesScanned);
+        Assert.Equal(3000, progress.Reports[^1].BytesScanned);
+    }
+
+    [Fact]
+    public void ShouldSkipFile_SystemFiles_ReturnsTrue()
+    {
+        var method = typeof(LargeFileScanner)
+            .GetMethod("ShouldSkipFile", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        Assert.True((bool)method.Invoke(null, new object[] { "pagefile.sys" })!);
+        Assert.True((bool)method.Invoke(null, new object[] { "hiberfil.sys" })!);
+        Assert.True((bool)method.Invoke(null, new object[] { "swapfile.sys" })!);
+        Assert.True((bool)method.Invoke(null, new object[] { "PAGEFILE.SYS" })!);
+    }
+
+    [Fact]
+    public void ShouldSkipFile_NormalFiles_ReturnsFalse()
+    {
+        var method = typeof(LargeFileScanner)
+            .GetMethod("ShouldSkipFile", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        Assert.False((bool)method.Invoke(null, new object[] { "document.pdf" })!);
+        Assert.False((bool)method.Invoke(null, new object[] { "photo.jpg" })!);
+
+        // A name that merely CONTAINS one. The directory list is a substring match and this one must not be:
+        // "my-pagefile.sys.bak" is the user's own file and a substring test would swallow it.
+        Assert.False((bool)method.Invoke(null, new object[] { "my-pagefile.sys.bak" })!);
+    }
+
     // ---------- the folder the user picked, and links inside it (#2381) ----------
 
     private static string NewRoot() =>

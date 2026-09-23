@@ -1057,10 +1057,11 @@ public partial class ArchitectureTests
     /// that carry a test attribute.
     /// </summary>
     /// <remarks>
-    /// Deliberately counts no braces, unlike <see cref="MethodBodies"/>. The three test projects hold 84
-    /// string literals containing an unbalanced brace and 128 raw-string lines, so a brace matcher over this
-    /// corpus is not merely fragile, it is wrong: <c>"{ truncated"</c> in <c>ResourceHistoryServiceTests</c>
-    /// already made one scan run a body into the next and report a single line under two method names.
+    /// Deliberately counts no braces, unlike <see cref="MethodBodies"/>. Across the three test projects 293
+    /// string literals hold an unbalanced brace, 89 lines are left net-skewed by their literals, and 128
+    /// lines open or close a raw string, so a brace matcher over this corpus is not merely fragile, it is
+    /// wrong: <c>"{ truncated"</c> in <c>ResourceHistoryServiceTests</c> already made one scan run a body
+    /// into the next and report a single line under two method names.
     /// <para>Indentation is the partition instead. A 4-space attribute line arms the flag, and the next
     /// 4-space declaration line opens a member and consumes it. A nested type's own members are indented
     /// eight spaces and so never open a partition, which is what keeps a private helper like

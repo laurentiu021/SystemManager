@@ -254,8 +254,8 @@ comment where it stood.
 
 `ArchitectureTests.NoTest_ReportsAPassByReturningEarly` fails the build if one comes back, across all
 three test projects. It partitions each file into members by indentation rather than by counting braces:
-the corpus holds 84 string literals with an unbalanced brace, and a brace matcher over it already ran one
-body into the next.
+293 of the corpus's string literals hold an unbalanced brace and 89 lines are left net-skewed by them, and
+a brace matcher over it already ran one body into the next.
 
 ### Dependency-graph validation
 

@@ -13659,7 +13659,7 @@ public partial class ArchitectureTests
     private static partial Regex CollectionAppend();
 
     /// <summary>
-    /// A unit test may not capture progress through <c>Progress&lt;T&gt;</c>, because that type dispatches
+    /// No test may capture progress through <c>Progress&lt;T&gt;</c>, because that type dispatches
     /// asynchronously and the capture is therefore a race the test cannot see.
     /// </summary>
     /// <remarks>
@@ -13672,13 +13672,18 @@ public partial class ArchitectureTests
     /// report had arrived at all — while the assertion about the actual fix passed.
     /// <para><c>SyncProgress&lt;T&gt;</c> has sat in this project since #2183 and is documented in
     /// TESTING.md; eleven call sites already used it, including one in the very file that reintroduced the
-    /// raw type. So this is a uniformity rule with teeth rather than a new constraint: there is no case in a
-    /// unit test where the asynchronous dispatch is the thing under test.</para>
-    /// <para>Scoped to this project on purpose. <c>SyncProgress</c> is declared here and the integration and
-    /// UI projects do not have it, so a rule spanning them would be demanding a helper that does not exist
-    /// there. The integration project's one remaining <c>Progress&lt;T&gt;</c> is a different defect — it
-    /// asserts <c>NotNull</c> on a list it just constructed, so it cannot fail for any reason — and is
-    /// tracked separately rather than smuggled into this guard's scope.</para>
+    /// raw type. So this is a uniformity rule with teeth rather than a new constraint: there is no case in
+    /// either test project where the asynchronous dispatch is the thing under test.</para>
+    /// <para>Both test projects, because both have a synchronous recorder to use — under different names.
+    /// The unit project declares <c>SyncProgress&lt;T&gt;</c> (a <c>List&lt;T&gt;</c> plus an optional
+    /// per-report callback, for a test that has to act mid-operation); the integration project declares
+    /// <c>SynchronousProgress&lt;T&gt;</c> (a <c>ConcurrentQueue&lt;T&gt;</c>, because there the reporting
+    /// thread is not the test's). The pattern accepts either, so unifying the two is a change worth making on
+    /// its own merits rather than a precondition for this rule. This guard covered only the unit project
+    /// while the integration project still held a raw <c>Progress&lt;T&gt;</c> whose assertion could not
+    /// fail — that test is gone, and with it the reason for the narrower scope.</para>
+    /// <para><c>SysManager.UITests</c> stays out: it constructs no progress of either kind, so a rule there
+    /// would be demanding a helper for a case that does not arise. Re-derive that before widening again.</para>
     /// <para><b>The floor is on adoption</b>, for the reason the recorder guard above gives: a floor on the
     /// remaining raw constructions would fall every time someone converts one, so finishing the migration
     /// would eventually read as a broken regex. The control string is assembled by concatenation so that
@@ -13686,59 +13691,92 @@ public partial class ArchitectureTests
     /// text cannot tell a real violation from itself.</para>
     /// </remarks>
     [Fact]
-    public void NoUnitTest_CapturesProgressThroughTheAsynchronousProgressType()
+    public void NoTest_CapturesProgressThroughTheAsynchronousProgressType()
     {
-        var directory = Path.Combine(Directory.GetParent(FindAppProjectDir())!.FullName, "SysManager.Tests");
-        Assert.True(Directory.Exists(directory), $"SysManager.Tests was not found at {directory}.");
+        var solutionDir = Directory.GetParent(FindAppProjectDir())!.FullName;
 
-        // The pattern still recognises the shape it bans. Built from pieces because a literal here would be
-        // found by the scan below, in this very file.
+        // Per project: its folder, the floor on files the scan must see there, the floor on synchronous
+        // recorder constructions, and the helper name to point an offender at. Measured when written: 268
+        // files and 12 constructions in the unit project, 70 and 3 in the integration one.
+        (string Project, int FileFloor, int AdoptionFloor, string Helper)[] suites =
+        [
+            ("SysManager.Tests", 200, 8, "SyncProgress<T>"),
+            ("SysManager.IntegrationTests", 60, 2, "SynchronousProgress<T>")
+        ];
+
+        // Both patterns still recognise the shapes they ban and count, and neither recognises the other's.
+        // The control is assembled from pieces because a literal here would be found by the scan below, in
+        // this very file. Positive AND negative for each: an adoption counter whose regex silently stopped
+        // matching would take its own floor down with it and read as a renamed helper rather than a broken
+        // guard.
         var control = "var p = new " + "Progress<int>(_ => { });";
         Assert.Matches(AsynchronousProgressConstruction(), control);
-        Assert.DoesNotMatch(AsynchronousProgressConstruction(), control.Replace("new P", "new SyncP"));
-
-        var offenders = new List<string>();
-        var adoption = 0;
-        var filesRead = 0;
-
-        foreach (var path in Directory.GetFiles(directory, "*.cs").OrderBy(p => p, StringComparer.Ordinal))
+        Assert.DoesNotMatch(SynchronousRecorderConstruction(), control);
+        foreach (var helper in new[] { "new SyncP", "new SynchronousP" })
         {
-            filesRead++;
-            var file = Path.GetFileName(path);
-            var lines = WithoutComments(File.ReadAllText(path)).Replace("\r\n", "\n").Split('\n');
-
-            for (var i = 0; i < lines.Length; i++)
-            {
-                adoption += SynchronousProgressConstruction().Matches(lines[i]).Count;
-                if (AsynchronousProgressConstruction().IsMatch(lines[i]))
-                    offenders.Add($"{file}:{i + 1}  {lines[i].Trim()}");
-            }
+            var allowed = control.Replace("new P", helper);
+            Assert.DoesNotMatch(AsynchronousProgressConstruction(), allowed);
+            Assert.Matches(SynchronousRecorderConstruction(), allowed);
         }
 
-        Assert.True(filesRead >= 200,
-            $"only {filesRead} unit-test files were read — this guard is looking at the wrong folder.");
+        var offenders = new List<string>();
+        var adopted = 0;
 
-        // Twelve when measured, counted with the same regex the guard uses.
-        Assert.True(adoption >= 8,
-            $"only {adoption} call sites construct SyncProgress, down from 12 — if the helper was renamed or "
-            + "replaced, this guard now protects a pattern nothing follows and must be revisited.");
+        foreach (var (project, fileFloor, adoptionFloor, helper) in suites)
+        {
+            var directory = Path.Combine(solutionDir, project);
+            Assert.True(Directory.Exists(directory), $"{project} was not found at {directory}.");
+
+            var filesRead = 0;
+            var adoption = 0;
+
+            foreach (var path in Directory.GetFiles(directory, "*.cs").OrderBy(p => p, StringComparer.Ordinal))
+            {
+                filesRead++;
+                var file = Path.GetFileName(path);
+                var lines = WithoutComments(File.ReadAllText(path)).Replace("\r\n", "\n").Split('\n');
+
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    adoption += SynchronousRecorderConstruction().Matches(lines[i]).Count;
+                    if (AsynchronousProgressConstruction().IsMatch(lines[i]))
+                        offenders.Add($"{project}/{file}:{i + 1}  {lines[i].Trim()}  → use {helper}");
+                }
+            }
+
+            Assert.True(filesRead >= fileFloor,
+                $"only {filesRead} .cs files were read in {project} — this guard is looking at the wrong "
+                + "folder, so its pass says nothing about that project.");
+
+            // Per project rather than summed: an aggregate floor is met by the unit project alone, so the
+            // integration scan could be finding nothing at all while the guard reported clean.
+            Assert.True(adoption >= adoptionFloor,
+                $"only {adoption} call sites in {project} construct {helper}, below the {adoptionFloor} this "
+                + "guard was written against — if the helper was renamed or replaced, the rule now protects "
+                + "a pattern nothing follows and must be revisited rather than trusted.");
+
+            adopted += adoption;
+        }
 
         Assert.True(offenders.Count == 0,
-            "These unit tests capture progress through Progress<T>, which queues its callbacks on the thread "
+            "These tests capture progress through Progress<T>, which queues its callbacks on the thread "
             + "pool because a test has no SynchronizationContext — so whatever they assert about the captured "
-            + "reports is a race that passes locally and fails under CI load. Use the shared "
-            + "SyncProgress<T>, which records every report on the calling thread:\n  "
+            + "reports is a race that passes locally and fails under CI load. Use the synchronous recorder "
+            + "that project declares, which records every report on the calling thread:\n  "
             + string.Join("\n  ", offenders)
-            + $"\n({adoption} call sites already use SyncProgress)");
+            + $"\n({adopted} call sites across both projects already use one)");
     }
 
     /// <summary>Construction of the framework's asynchronous <c>Progress&lt;T&gt;</c>, qualified or not.</summary>
     [GeneratedRegex(@"\bnew\s+(?:System\.)?Progress\s*<", RegexOptions.CultureInvariant)]
     private static partial Regex AsynchronousProgressConstruction();
 
-    /// <summary>Construction of this project's synchronous recorder.</summary>
-    [GeneratedRegex(@"\bnew\s+SyncProgress\s*<", RegexOptions.CultureInvariant)]
-    private static partial Regex SynchronousProgressConstruction();
+    /// <summary>
+    /// Construction of either test project's synchronous recorder — <c>SyncProgress&lt;T&gt;</c> in the unit
+    /// project, <c>SynchronousProgress&lt;T&gt;</c> in the integration one.
+    /// </summary>
+    [GeneratedRegex(@"\bnew\s+Sync(?:hronous)?Progress\s*<", RegexOptions.CultureInvariant)]
+    private static partial Regex SynchronousRecorderConstruction();
 
     /// <summary>
     /// Deep Cleanup's scan must take its roots from <c>ICleanupRoots</c> rather than asking the machine,

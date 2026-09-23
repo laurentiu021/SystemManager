@@ -411,4 +411,53 @@ public class DuplicateFileServiceTests : IDisposable
         var results = await _service.ScanAsync(_root, minSizeBytes: 1);
         Assert.Empty(results);
     }
+
+    // ---------- the folder the user picked, and links inside it (#2381) ----------
+
+    private static string NewRoot() =>
+        Path.Combine(Path.GetTempPath(), "smdup_" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public async Task ScanAsync_RootIsALink_FindsNothing()
+    {
+        // The root guard. A junction as the chosen folder reported duplicates living somewhere else
+        // entirely, and this tab's results are what the user deletes from.
+        var baseDir = NewRoot();
+        var outside = Path.Combine(baseDir, "outside");
+        Directory.CreateDirectory(outside);
+        await File.WriteAllTextAsync(Path.Combine(outside, "a.txt"), new string('x', 4096));
+        await File.WriteAllTextAsync(Path.Combine(outside, "b.txt"), new string('x', 4096));
+
+        var rootLink = Path.Combine(baseDir, "rootlink");
+        Symlinks.RequireDirectoryLink(rootLink, outside, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            var groups = await new DuplicateFileService().ScanAsync(rootLink, minSizeBytes: 1);
+            Assert.Empty(groups);
+        }
+        finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    [Fact]
+    public async Task ScanAsync_ALinkAndItsTarget_AreNotReportedAsDuplicates()
+    {
+        // A link is not a copy of what it points at, it IS what it points at — same size, same content, so
+        // it hashed identically and the pair was offered as two copies to choose between. Deleting the link
+        // frees nothing; deleting the target breaks the link.
+        var root = NewRoot();
+        Directory.CreateDirectory(root);
+        var target = Path.Combine(root, "target.txt");
+        await File.WriteAllTextAsync(target, new string('x', 8192));
+
+        var link = Path.Combine(root, "link.txt");
+        Symlinks.RequireFileLink(link, target, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            var groups = await new DuplicateFileService().ScanAsync(root, minSizeBytes: 1);
+            Assert.Empty(groups);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
 }

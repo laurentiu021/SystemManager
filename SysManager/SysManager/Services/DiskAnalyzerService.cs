@@ -65,6 +65,14 @@ public sealed class DiskAnalyzerService
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
             return [];
 
+        // Guard the ROOT the user picked, not just the top-level entries inside it. Junctions were already
+        // skipped one level down, which reads as complete until the root itself is one: the breakdown then
+        // describes a tree somewhere else entirely while naming the folder that was chosen. Read-only, so
+        // nothing is destroyed — but a size report about the wrong folder is the only thing this tab does
+        // (#2381). SafeFileWalk.IsReparsePoint fails closed, the same answer as "do not walk it".
+        if (SafeFileWalk.IsReparsePoint(rootPath))
+            return [];
+
         string[] topDirs;
         try { topDirs = Directory.GetDirectories(rootPath); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return []; }
@@ -78,12 +86,20 @@ public sealed class DiskAnalyzerService
         int rootFileCount = 0;
         try
         {
-            foreach (var f in Directory.GetFiles(rootPath))
+            // DirectoryInfo.GetFiles: attributes and length arrive with the listing, so the link check is
+            // free and the second stat per file that `new FileInfo(f)` used to cost is gone.
+            foreach (var fi in new DirectoryInfo(rootPath).GetFiles())
             {
                 if (ct.IsCancellationRequested) break;
+
+                // Skip links for the same reason the directory walk skips junctions: FileInfo.Length reports
+                // the TARGET's size, so counting one adds bytes that live somewhere else — and if the target
+                // is inside the tree being measured, adds them twice (#2381).
+                if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+
                 try
                 {
-                    rootFilesSize += new FileInfo(f).Length;
+                    rootFilesSize += fi.Length;
                     rootFileCount++;
                 }
                 catch (UnauthorizedAccessException) { /* skip inaccessible file */ }
@@ -175,21 +191,29 @@ public sealed class DiskAnalyzerService
         {
             var current = stack.Pop();
 
-            string[] files = [];
+            // DirectoryInfo.GetFiles: see the root-files loop above — one listing instead of a listing plus
+            // a stat per file, and the link check below costs nothing.
+            FileInfo[] files = [];
             string[] dirs = [];
-            try { files = Directory.GetFiles(current); }
+            try { files = new DirectoryInfo(current).GetFiles(); }
             catch (UnauthorizedAccessException) { accessDenied = true; }
             catch (IOException) { /* skip inaccessible folder */ }
             try { dirs = Directory.GetDirectories(current); }
             catch (UnauthorizedAccessException) { accessDenied = true; }
             catch (IOException) { /* skip inaccessible folder */ }
 
-            foreach (var f in files)
+            foreach (var fi in files)
             {
                 if (ct.IsCancellationRequested) break;
+
+                // A link's Length is its target's, so counting one reports bytes that are not in this
+                // folder — and double-counts them when the target is inside the tree being measured. The
+                // directory walk below has always skipped junctions for exactly that reason (#2381).
+                if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+
                 try
                 {
-                    totalSize += new FileInfo(f).Length;
+                    totalSize += fi.Length;
                     fileCount++;
                 }
                 catch (UnauthorizedAccessException) { accessDenied = true; }

@@ -231,4 +231,59 @@ public class LargeFileScannerTests : IDisposable
         Assert.False((bool)method.Invoke(null, new object[] { @"C:\Users\test\Documents" })!);
         Assert.False((bool)method.Invoke(null, new object[] { @"D:\Games\Steam" })!);
     }
+
+    // ---------- the folder the user picked, and links inside it (#2381) ----------
+
+    private static string NewRoot() =>
+        Path.Combine(Path.GetTempPath(), "smlarge_" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public async Task ScanAsync_RootIsALink_FindsNothing()
+    {
+        // The root guard. Junctions one level down were already skipped, which reads as complete until the
+        // root itself is one: the scan then lists the biggest files at the link's TARGET while the tab says
+        // it scanned the folder the user chose — and every result carries a "Show in Explorer" action.
+        var baseDir = NewRoot();
+        var outside = Path.Combine(baseDir, "outside");
+        Directory.CreateDirectory(outside);
+        await File.WriteAllBytesAsync(Path.Combine(outside, "big.bin"), new byte[200_000]);
+
+        var rootLink = Path.Combine(baseDir, "rootlink");
+        Symlinks.RequireDirectoryLink(rootLink, outside, () => Directory.Delete(baseDir, recursive: true));
+
+        try
+        {
+            var results = await new LargeFileScanner().ScanAsync(rootLink, minSizeBytes: 1, top: 10);
+            Assert.Empty(results);
+        }
+        finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
+    }
+
+    [Fact]
+    public async Task ScanAsync_ALinkToABigFile_IsNotListedAsABigFile()
+    {
+        // FileInfo.Length on a link reports its TARGET's size, so a link occupying almost nothing ranked
+        // among the biggest files on the drive — and the row the user acts on pointed at the link rather
+        // than at the thing actually taking the space.
+        var root = NewRoot();
+        var outside = Path.Combine(root, "outside");
+        var walked = Path.Combine(root, "walked");
+        Directory.CreateDirectory(outside);
+        Directory.CreateDirectory(walked);
+        var target = Path.Combine(outside, "target.bin");
+        await File.WriteAllBytesAsync(target, new byte[300_000]);
+        await File.WriteAllBytesAsync(Path.Combine(walked, "real.bin"), new byte[150_000]);
+
+        var link = Path.Combine(walked, "link.bin");
+        Symlinks.RequireFileLink(link, target, () => Directory.Delete(root, recursive: true));
+
+        try
+        {
+            var results = await new LargeFileScanner().ScanAsync(walked, minSizeBytes: 1, top: 10);
+
+            var only = Assert.Single(results);
+            Assert.Equal("real.bin", only.Name);
+        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
+    }
 }

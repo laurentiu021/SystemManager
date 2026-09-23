@@ -8565,8 +8565,10 @@ public partial class ArchitectureTests
         Assert.True(File.Exists(theWalk),
             $"SafeFileWalk.cs was not found at {theWalk} — this guard is named for a type that must exist.");
 
-        // Scanners whose walk reports progress per directory. Not "allowed to be unsafe" — they still skip
-        // reparse-point directories — but not yet routed through the shared walk.
+        // Read-only scanners not yet routed through the shared walk: they prune the traversal by a path
+        // predicate and one of them needs an access-denied tally, neither of which SafeWalkOptions carries.
+        // Not "allowed to be unsafe" — each one is asserted below to guard its traversal root through the
+        // SHARED reparse test, which is the rule they were missing (#2381). What remains exempt is the loop.
         string[] pendingMigration = ["DiskAnalyzerService.cs", "DuplicateFileService.cs", "LargeFileScanner.cs"];
 
         var scanned = 0;
@@ -8600,14 +8602,24 @@ public partial class ArchitectureTests
             $"only {scanned} source files were scanned — the discovery is broken, so this guard would pass "
             + "having inspected almost nothing.");
 
-        // The exemption list must stay live. A name on it that no longer walks a tree is a name nobody will
-        // remove, and the next file to take that name inherits a pass it never earned.
+        // The exemption list must stay live, and it must stay PARTIAL. A name on it that no longer walks a
+        // tree is a name nobody will remove, and the next file to take that name inherits a pass it never
+        // earned — so the walk has to still be there. And the exemption covers the loop only: each scanner
+        // must guard its traversal root through the shared test, because the root is the one the user picks
+        // and a junction there sends the whole scan somewhere else (#2381).
         foreach (var exempt in pendingMigration)
         {
             var exemptPath = Path.Combine(appDir, "Services", exempt);
             Assert.True(File.Exists(exemptPath),
                 $"{exempt} is exempted from this guard but no longer exists — drop it from the list.");
-            Assert.Matches(@"Stack<(?:string|DirectoryInfo)>", WithoutComments(File.ReadAllText(exemptPath)));
+
+            var exemptCode = WithoutComments(File.ReadAllText(exemptPath));
+            Assert.Matches(@"Stack<(?:string|DirectoryInfo)>", exemptCode);
+
+            Assert.True(exemptCode.Contains("SafeFileWalk.IsReparsePoint(", StringComparison.Ordinal),
+                $"{exempt} keeps its own walk AND no longer tests its root through SafeFileWalk.IsReparsePoint. "
+                + "The exemption is for the loop, not for the root guard: a link at the folder the user chose "
+                + "sends the entire scan outside it.");
         }
 
         Assert.True(offenders.Count == 0,

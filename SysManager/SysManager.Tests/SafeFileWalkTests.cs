@@ -26,26 +26,6 @@ public class SafeFileWalkTests
     private static string NewTempRoot() =>
         Path.Combine(Path.GetTempPath(), "smwalk_" + Guid.NewGuid().ToString("N"));
 
-    // Creating a symlink needs Developer Mode or elevation. Assert.Skip, not a bare `return`: a silent
-    // return is indistinguishable from a pass, so nothing would have told anyone whether these three cases
-    // ever ran on any machine. A reported skip shows up in the run summary's `skipped:` count, which is what
-    // makes "it runs in CI" a measured fact rather than an assumption.
-    private const string NoLinks =
-        "creating a symbolic link needs Developer Mode or elevation, and this machine has neither";
-
-    private static bool TryLinkDirectory(string link, string target)
-    {
-        try { Directory.CreateSymbolicLink(link, target); return true; }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
-
-    private static bool TryLinkFile(string link, string target)
-    {
-        try { File.CreateSymbolicLink(link, target); return true; }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-    }
 
     // ---------- reparse points: directories, the root, and files ----------
 
@@ -64,7 +44,7 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(temp, "file.txt"), "ordinary file");
 
         var link = Path.Combine(temp, "link");
-        if (!TryLinkDirectory(link, real)) { Directory.Delete(root, recursive: true); Assert.Skip(NoLinks); }
+        Symlinks.RequireDirectoryLink(link, real, () => Directory.Delete(root, recursive: true));
 
         try
         {
@@ -80,12 +60,7 @@ public class SafeFileWalkTests
             // the link without saying so would let it claim a folder was emptied when it was not.
             Assert.Contains(skipped, s => s.EndsWith("link", StringComparison.OrdinalIgnoreCase));
         }
-        finally
-        {
-            // Remove the link first, without recursing through it, then the tree.
-            try { Directory.Delete(link, recursive: false); } catch (IOException) { /* best effort */ }
-            try { Directory.Delete(root, recursive: true); } catch (IOException) { /* best effort */ }
-        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
     }
 
     [Fact]
@@ -100,18 +75,14 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(outside, "secret.txt"), "must never be enumerated");
 
         var rootLink = Path.Combine(baseDir, "rootlink");
-        if (!TryLinkDirectory(rootLink, outside)) { Directory.Delete(baseDir, recursive: true); Assert.Skip(NoLinks); }
+        Symlinks.RequireDirectoryLink(rootLink, outside, () => Directory.Delete(baseDir, recursive: true));
 
         try
         {
             Assert.Empty(SafeFileWalk.Files(rootLink, CancellationToken.None, Plain));
             Assert.Empty(SafeFileWalk.DirectoriesDeepestFirst(rootLink, CancellationToken.None, Plain));
         }
-        finally
-        {
-            try { Directory.Delete(rootLink, recursive: false); } catch (IOException) { /* best effort */ }
-            try { Directory.Delete(baseDir, recursive: true); } catch (IOException) { /* best effort */ }
-        }
+        finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
     }
 
     [Fact]
@@ -131,7 +102,7 @@ public class SafeFileWalkTests
         File.WriteAllText(Path.Combine(walked, "ordinary.dat"), "a real file");
 
         var link = Path.Combine(walked, "link.dat");
-        if (!TryLinkFile(link, target)) { Directory.Delete(root, recursive: true); Assert.Skip(NoLinks); }
+        Symlinks.RequireFileLink(link, target, () => Directory.Delete(root, recursive: true));
 
         try
         {
@@ -144,11 +115,7 @@ public class SafeFileWalkTests
             Assert.DoesNotContain(found, f => f.EndsWith("link.dat", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(skipped, s => s.EndsWith("link.dat", StringComparison.OrdinalIgnoreCase));
         }
-        finally
-        {
-            try { File.Delete(link); } catch (IOException) { /* best effort */ }
-            try { Directory.Delete(root, recursive: true); } catch (IOException) { /* best effort */ }
-        }
+        finally { Symlinks.RemoveLinkThenTree(link, root); }
     }
 
     [Fact]

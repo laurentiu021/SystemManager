@@ -109,6 +109,65 @@ public class UpdateApplierTests
         }
     }
 
+    // ---------- a failed apply has to name the cause it actually hit (#2377) ----------
+
+    [Theory]
+    [InlineData(unchecked((int)0x8007_0070))]   // ERROR_DISK_FULL
+    [InlineData(unchecked((int)0x8007_0027))]   // ERROR_HANDLE_DISK_FULL
+    public void IsOutOfSpace_RecognisesAFullVolume(int hresult)
+    {
+        // The update needs room for the new build, a staging copy and the retained rollback build — about
+        // 250 MB — so a nearly-full drive is a realistic failure, and it arrives as an IOException exactly
+        // like a sharing violation does. Both codes, because Windows uses either depending on the call.
+        Assert.True(UpdateApplier.IsOutOfSpace(new IOException("no room", hresult)));
+    }
+
+    [Fact]
+    public void IsOutOfSpace_DoesNotMistakeALockForAFullVolume()
+    {
+        // The negative half, and the one that matters: a sharing violation IS worth waiting out, and
+        // treating it as a full disk would abandon an update that five seconds of patience would complete.
+        Assert.False(UpdateApplier.IsOutOfSpace(
+            new IOException("in use", unchecked((int)0x8007_0020))));   // ERROR_SHARING_VIOLATION
+    }
+
+    [Fact]
+    public void ApplyCopy_TargetLockedForTheWholeRun_FailsAndLeavesNoStagingFileBehind()
+    {
+        // An open handle is the deterministic way to block the move: File.Move needs exclusive access, so
+        // any other handle makes it fail. No privileges, no timing.
+        //
+        // The staging sibling is the thing to assert on. It is now created ONCE, before the retry loop, so
+        // the cleanup has to happen after the loop gives up — an earlier draft deleted it inside the loop,
+        // which is what made the copy repeat in the first place.
+        var dir = Directory.CreateTempSubdirectory("ApplierTest_");
+        try
+        {
+            var source = Path.Combine(dir.FullName, "new.exe");
+            var target = Path.Combine(dir.FullName, "current.exe");
+            File.WriteAllText(source, "NEW-BUILD");
+            File.WriteAllText(target, "OLD-BUILD");
+
+            using (var hold = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var ok = UpdateApplier.ApplyCopy(
+                    source, target, maxAttempts: 2, delayMs: 0, updatesDir: Updates(dir));
+
+                Assert.False(ok);
+            }
+
+            Assert.False(File.Exists(target + ".new"), "the staging copy was left beside the target");
+
+            // And the original build is untouched, which is the whole reason the move is the only step
+            // that writes the live path.
+            Assert.Equal("OLD-BUILD", File.ReadAllText(target));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void ApplyCopy_CreatesTargetWhenMissing()
     {

@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.112.8] - 2026-09-23
+
+**A self-update that could not complete wrote about 1.6 GB finding that out, then blamed the wrong thing.**
+When the app replaces itself it waits for the old copy to let go of the file, retrying ten times. Each retry
+re-made the whole 81 MB copy and the 81 MB rollback backup, and re-checksummed it — work that produces
+identical bytes every time. And whatever went wrong, the log said the file "stayed locked", including when
+the real problem was a full drive.
+
+### Fixed
+
+- **The copy happens once.** Only the final rename can be blocked by the app still holding its own file, so
+  only the rename is retried now. A locked file is discovered at the same speed with none of the rewriting —
+  which matters on a small SSD, mid-update, on a PC you are waiting for.
+- **The log names what actually went wrong.** A full drive, a permissions refusal and a locked file are three
+  different problems and only one of them is worth waiting five seconds for. The update needs room for the
+  new build, a staging copy and the rollback backup — roughly 250 MB — so "not enough space" is a realistic
+  outcome, and it now says so instead of sending you to look for a program that is not holding the file.
+- **A full drive is no longer retried.** Waiting cannot clear it, so it stops immediately and says why.
+
 ## [1.112.7] - 2026-09-23
 
 **Shortcut Cleaner called a shortcut broken when it simply could not reach the target.** Unplug a USB stick

@@ -400,18 +400,24 @@ Key services:
   answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
   the certificate can never describe different files.
 - `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
-  the six tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
-  Shortcut Cleaner, Browser Cleaner, App Updates and Profile Export. Every one of them used to
-  re-derive the tick from a default, and in four the fresh rows arrive pre-selected — so a refresh
-  did not forget the choice but REVERSED it, and the next action then deleted, upgraded or exported
-  exactly what had been excluded. `RefreshOnF5` reaches all six (#2300, #2301, #2304). Rows opt in
-  through `ISelectableRow`, so the helper needs a key selector rather than getter/setter delegates.
-  Two rules live here rather than at six call sites: an EMPTY previous list is the first population
-  (a present list with nothing selected is a *decision* and is honoured — testing "is anything
-  selected" instead would re-tick everything, which is the bug), and the optional `carriedADecision`
-  filter exists only for Deep Cleanup, whose default is *measured*: an empty category was unticked
-  by the scan, not the user, so it takes the default again once it has content. The other five
-  default from constants and pass null.
+  the nine tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
+  Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export, App Blocker, Debloater and
+  Uninstaller. The six it started with used to re-derive the tick from a default, and in four the
+  fresh rows arrive pre-selected — so a refresh did not forget the choice but REVERSED it, and the
+  next action then deleted, upgraded or exported exactly what had been excluded. `RefreshOnF5`
+  reaches all six (#2300, #2301, #2304). Rows opt in through `ISelectableRow`, so the helper needs a
+  key selector rather than getter/setter delegates. Three rules live here rather than at nine call
+  sites: an EMPTY previous list is the first population (a present list with nothing selected is a
+  *decision* and is honoured — testing "is anything selected" instead would re-tick everything, which
+  is the bug); the optional `carriedADecision` filter exists only for Deep Cleanup, whose default is
+  *measured*, so an empty category unticked by the scan rather than the user takes the default again
+  once it has content (the other eight default from constants and pass null); and the key's
+  uniqueness is now CHECKED rather than assumed. A key claimed by two rows neither throws nor shows
+  — the grid looks right and a tick turns up on a row nobody touched, which is what two identically
+  named Firefox profiles cost in Browser Cleaner (#2402). `Apply` reports the colliding keys and logs
+  them at Debug without changing what a collision does, and `DuplicateKeys` is public so a service
+  can assert the invariant over its own scan output — the only way to catch a duplicate that comes
+  from the DATA rather than from the choice of key (#2405).
 - `Helpers/SettlingProgress` — the `IProgress<T>` a tab hands to a service it awaits, defined once
   for the eleven sites across nine view models whose callback writes a property their own post-await
   code writes again as its final value. `Progress<T>` captures the `SynchronizationContext` in its

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -253,11 +254,33 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
         Assert.Contains(_scanned, c => c.Name.Contains("Delivery", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// No two categories may share a Name, because that Name is the key Deep Cleanup carries the user's
+    /// ticks on across a rescan.
+    /// </summary>
+    /// <remarks>
+    /// <c>DeepCleanupViewModel</c> calls <c>SelectionCarry.Apply(previous, fresh, c =&gt; c.Name,
+    /// StringComparer.Ordinal, …)</c>, and that key is ASSUMED unique rather than checked: of two rows
+    /// sharing one, the last decision wins and is then applied to both, so a tick turns up on a row the user
+    /// never touched. #2402 is what that cost in Browser Cleaner; here the next action DELETES files (#2405).
+    /// <para>The definitions are a hand-maintained literal list, so the way this breaks is a copied entry
+    /// whose Name was left as it was. Nothing else in this class would notice — a duplicate Name is not a
+    /// crash, every <c>Includes…</c> assertion still finds its category, and both rows look correct on
+    /// screen.</para>
+    /// <para>Asserted over a real scan rather than the private definition list: the scan is the population
+    /// the view model keys on, and every definition yields a category whether or not its paths exist, so the
+    /// temp tree does not shrink what is measured.</para>
+    /// </remarks>
     [Fact]
     public void ScanAsync_CategoriesHaveUniqueNames()
     {
-        var names = _scanned.Select(c => c.Name).ToList();
-        Assert.Equal(names.Count, names.Distinct().Count());
+        // Through the carry helper itself, with the comparer the view model passes — so this measures the
+        // exact relation the carry depends on, and names the colliding category instead of just a count.
+        Assert.Empty(SelectionCarry.DuplicateKeys(_scanned, c => c.Name, StringComparer.Ordinal));
+
+        // The floor this lacked. Uniqueness holds trivially over a scan that surfaced one category or none.
+        Assert.True(_scanned.Count >= 15,
+            $"Only {_scanned.Count} categories scanned, so uniqueness across them proves little.");
     }
 
     [Fact]

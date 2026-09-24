@@ -31,7 +31,7 @@ yourself. Reinstalling OneDrive no longer says "restored" when its setup failed.
   the fast timer when it was already on from the Timer Resolution tab. The step now counts only a request
   Windows accepted, changes nothing when the fast timer is already on, and releases only a request it made
   itself. Present since the step was written in v1.52.38.
-- **Edge & OneDrive: restoring OneDrive reports failure when its setup fails.** The setup's result was
+- **Edge/OneDrive Remover: restoring OneDrive reports failure when its setup fails.** The setup's result was
   thrown away, so a failed reinstall said "OneDrive restored." and put back a File Explorer entry for a
   client that was not there. It now checks the result, as removal already did, and puts the entry back only
   after the setup succeeds. Present since the tab was added in v1.53.0.

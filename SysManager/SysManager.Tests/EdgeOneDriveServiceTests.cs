@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Management.Automation;
 using Microsoft.Win32;
 using NSubstitute;
@@ -28,6 +29,7 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
     private readonly RegistryKey _root;
     private readonly IPowerShellRunner _runner;
     private readonly EdgeOneDriveService _svc;
+    private readonly string _setupDir = Path.Combine(Path.GetTempPath(), "SysManagerTests", "EdgeOneDrive_" + Guid.NewGuid().ToString("N"));
 
     public EdgeOneDriveServiceTests()
     {
@@ -46,12 +48,33 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
     {
         _root.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_rootName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
+        if (Directory.Exists(_setupDir)) Directory.Delete(_setupDir, recursive: true);
     }
 
     private object? ReadEdgePolicy(string name)
     {
         using var key = _root.OpenSubKey(EdgePolicyPath);
         return key?.GetValue(name);
+    }
+
+    private object? ReadOneDrivePin()
+    {
+        using var key = _root.OpenSubKey(OneDriveClsidPath);
+        return key?.GetValue("System.IsPinnedToNameSpaceTree");
+    }
+
+    /// <summary>
+    /// A service whose OneDrive setup is an empty stand-in file answering with <paramref name="exitCode"/>. It only
+    /// has to exist: the runner is substituted, so nothing is launched.
+    /// </summary>
+    private EdgeOneDriveService WithOneDriveSetupExiting(int exitCode)
+    {
+        Directory.CreateDirectory(_setupDir);
+        var setup = Path.Combine(_setupDir, "OneDriveSetup.exe");
+        File.WriteAllBytes(setup, []);
+        _runner.RunProcessAsync(setup, Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+               .Returns(exitCode);
+        return new EdgeOneDriveService(_runner, hkcuRoot: _root, hklmRoot: _root, oneDriveSetupPath: setup);
     }
 
     // ── Task-name injection guard ───────────────────────────────────────────
@@ -195,6 +218,48 @@ public sealed class EdgeOneDriveServiceTests : IDisposable
         var status = await _svc.GetStatusAsync();
 
         Assert.Equal(expectedPinned, status.OneDrivePinned);
+    }
+
+    // ── OneDrive remove/restore report the setup's own result (#2443) ─────────
+
+    [Fact]
+    public async Task RestoreOneDrive_WhenTheSetupFails_ReportsFailed_AndPinsNothing()
+    {
+        // The exit code was discarded: a failed setup reported "OneDrive restored." and pinned a File Explorer
+        // entry for a client that was not installed.
+        var outcome = await WithOneDriveSetupExiting(1).RestoreOneDriveAsync();
+
+        Assert.Equal(EdgeOneDriveOutcome.Failed, outcome);
+        Assert.Null(ReadOneDrivePin());
+    }
+
+    [Fact]
+    public async Task RestoreOneDrive_WhenTheSetupSucceeds_ReportsSuccess_AndPinsTheEntry()
+    {
+        var outcome = await WithOneDriveSetupExiting(0).RestoreOneDriveAsync();
+
+        Assert.Equal(EdgeOneDriveOutcome.Success, outcome);
+        Assert.Equal(1, ReadOneDrivePin());
+    }
+
+    [Fact]
+    public async Task RemoveOneDrive_WhenTheUninstallFails_ReportsFailed()
+    {
+        // The path restore now matches, pinned so the two cannot drift apart again.
+        var outcome = await WithOneDriveSetupExiting(1).RemoveOneDriveAsync();
+
+        Assert.Equal(EdgeOneDriveOutcome.Failed, outcome);
+    }
+
+    [Fact]
+    public async Task RestoreOneDrive_WithNoSetupOnDisk_IsNotApplicable_AndLaunchesNothing()
+    {
+        var svc = new EdgeOneDriveService(_runner, hkcuRoot: _root, hklmRoot: _root,
+            oneDriveSetupPath: Path.Combine(_setupDir, "OneDriveSetup.exe"));   // never created
+
+        Assert.Equal(EdgeOneDriveOutcome.NotApplicable, await svc.RestoreOneDriveAsync());
+        await _runner.DidNotReceive().RunProcessAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     [Fact]

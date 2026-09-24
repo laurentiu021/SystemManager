@@ -49,6 +49,28 @@ public class TimerResolutionStatusTests
         Assert.False(s.IsHighResolution);
     }
 
+    [Theory]
+    [InlineData(156250u, true)]    // exactly the Windows default
+    [InlineData(155800u, true)]    // within the same tolerance IsHighResolution uses
+    [InlineData(10000u, false)]    // 1 ms: another program holding the timer between the two ends (#2442)
+    [InlineData(5000u, false)]     // the finest: high resolution, not the default
+    public void IsAtDefault_TrueOnlyNearTheCoarsestResolution(uint currentHundredNs, bool expected)
+    {
+        var s = new TimerResolutionStatus(5000, 156250, currentHundredNs, false);
+        Assert.Equal(expected, s.IsAtDefault);
+    }
+
+    [Fact]
+    public void AnInBetweenResolution_IsNeitherHighResolutionNorTheDefault()
+    {
+        // The state the status lines used to call "the Windows default". Measured on a real machine before the
+        // measuring process asked for anything, other programs held the timer at 1 ms, so "not high resolution"
+        // did not mean "at the default".
+        var s = new TimerResolutionStatus(5000, 156250, 10000, false);
+        Assert.False(s.IsHighResolution);
+        Assert.False(s.IsAtDefault);
+    }
+
     [Fact]
     public void FormatMs_TrimsTrailingZeros()
     {

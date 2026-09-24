@@ -58,18 +58,25 @@ public sealed partial class EdgeOneDriveService
     private readonly IPowerShellRunner _ps;
     private readonly RegistryKey _hkcuRoot;   // OneDrive nav-pane pin (Software\Classes\CLSID\…)
     private readonly RegistryKey _hklmRoot;   // Edge policies (SOFTWARE\Policies\Microsoft\Edge)
+    private readonly string? _oneDriveSetupPath;
 
     /// <summary>
     /// Creates the service. <paramref name="hkcuRoot"/> defaults to <see cref="Registry.CurrentUser"/>
     /// (OneDrive's per-user nav-pane pin) and <paramref name="hklmRoot"/> to
     /// <see cref="Registry.LocalMachine"/> (Edge's machine policy, needs admin). Tests pass redirected
     /// roots (HKCU subkeys) so the logic runs without elevation or real machine writes.
+    /// The optional <paramref name="oneDriveSetupPath"/> override exists for testing, as
+    /// <see cref="HostsFileService"/>'s does: it replaces the setup locations probed below, so the
+    /// remove/restore outcome can be tested on a machine without OneDrive. The runner is substituted
+    /// there, so the file is never launched.
     /// </summary>
-    public EdgeOneDriveService(IPowerShellRunner ps, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
+    public EdgeOneDriveService(
+        IPowerShellRunner ps, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null, string? oneDriveSetupPath = null)
     {
         _ps = ps;
         _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
         _hklmRoot = hklmRoot ?? Registry.LocalMachine;
+        _oneDriveSetupPath = oneDriveSetupPath;
     }
 
     // OneDrive's File Explorer navigation-pane entry is a shell namespace CLSID; toggling
@@ -156,17 +163,19 @@ public sealed partial class EdgeOneDriveService
 
     /// <summary>
     /// Reinstalls OneDrive for the current user (re-runs the setup that survived under System32/
-    /// SysWOW64) and re-pins the File Explorer entry. Returns
-    /// <see cref="EdgeOneDriveOutcome.NotApplicable"/> if no OneDrive setup can be found.
+    /// SysWOW64) and, once it has succeeded, re-pins the File Explorer entry. Returns
+    /// <see cref="EdgeOneDriveOutcome.NotApplicable"/> if no OneDrive setup can be found, and
+    /// <see cref="EdgeOneDriveOutcome.Failed"/> when the setup exits non-zero, as removal does.
     /// </summary>
     public async Task<EdgeOneDriveOutcome> RestoreOneDriveAsync(CancellationToken ct = default)
     {
         var setup = ResolveOneDriveSetup();
         if (setup is null) return EdgeOneDriveOutcome.NotApplicable;
 
+        int exit;
         try
         {
-            await _ps.RunProcessAsync(setup, string.Empty, ct).ConfigureAwait(false);
+            exit = await _ps.RunProcessAsync(setup, string.Empty, ct).ConfigureAwait(false);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
@@ -174,8 +183,12 @@ public sealed partial class EdgeOneDriveService
             return EdgeOneDriveOutcome.Failed;
         }
 
+        Log.Information("OneDrive: reinstall requested (exit {Exit})", exit);
+        // The exit code decides, as it does for removal (#2443). It used to be discarded, so a failed setup
+        // reported "OneDrive restored." and pinned a File Explorer entry for a client that was not installed.
+        // The tab cannot show the failure afterwards either: "installed" only means the setup file exists.
+        if (exit != 0) return EdgeOneDriveOutcome.Failed;
         SetOneDrivePinned(true);
-        Log.Information("OneDrive: reinstall requested");
         return EdgeOneDriveOutcome.Success;
     }
 
@@ -348,10 +361,13 @@ public sealed partial class EdgeOneDriveService
     /// falling back to the per-user copy under LOCALAPPDATA. Returns null when none exists
     /// (OneDrive not installed). Preferring the System copy also avoids launching a user-writable
     /// binary should the app ever be elevated for the Edge portion (binary-planting guard, matching
-    /// <see cref="SystemPaths"/>).
+    /// <see cref="SystemPaths"/>). A test override replaces the candidates; it is probed the same way.
     /// </summary>
-    private static string? ResolveOneDriveSetup()
+    private string? ResolveOneDriveSetup()
     {
+        if (_oneDriveSetupPath is not null)
+            return File.Exists(_oneDriveSetupPath) ? _oneDriveSetupPath : null;
+
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         string[] candidates =
         [

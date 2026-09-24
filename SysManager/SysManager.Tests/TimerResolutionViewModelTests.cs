@@ -175,4 +175,57 @@ public class TimerResolutionViewModelTests
         Assert.True(vm.EnableCommand.CanExecute(null));
         Assert.False(vm.DisableCommand.CanExecute(null));
     }
+
+    // ── The status line describes the timer that came back (#2442) ──────────
+    //
+    // Windows grants the finest resolution any process asks for, so another program — a game, a browser playing
+    // media — can hold the timer whatever SysManager does. Disable is offered whenever the timer is fast.
+
+    // Another program holds the timer at the given value; SysManager holds nothing.
+    private static TimerResolutionStatus HeldByAnotherProgram(uint currentHundredNs)
+        => new(FinestHundredNs: 5000, CoarsestHundredNs: 156250, CurrentHundredNs: currentHundredNs, EnabledByApp: false);
+
+    [Fact]
+    public async Task Disable_WhileAnotherProgramHoldsTheTimer_SaysSo_NotThatItIsBackAtTheDefault()
+    {
+        var service = Substitute.For<ITimerResolutionService>();
+        service.Query().Returns(HighResStatus());
+        service.Disable().Returns(HeldByAnotherProgram(5000));
+        var vm = NewVm(service);
+
+        await vm.DisableCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("back to the Windows default", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("another program", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("0.5 ms", vm.StatusMessage, StringComparison.Ordinal);
+        // The display and the sentence now agree: the metric still reads the value the sentence names.
+        Assert.Equal("0.5 ms", vm.CurrentDisplay);
+    }
+
+    [Fact]
+    public async Task Disable_WhenAnotherProgramHoldsAnInBetweenValue_NamesThatValue()
+    {
+        // 1 ms is neither the finest nor the default, so "not high resolution" must not be read as "at the default".
+        var service = Substitute.For<ITimerResolutionService>();
+        service.Query().Returns(HighResStatus());
+        service.Disable().Returns(HeldByAnotherProgram(10000));
+        var vm = NewVm(service);
+
+        await vm.DisableCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("back to the Windows default", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("1 ms", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Refresh_AtAnInBetweenResolution_DoesNotCallItTheDefault()
+    {
+        var service = Substitute.For<ITimerResolutionService>();
+        service.Query().Returns(HeldByAnotherProgram(10000));
+
+        var vm = NewVm(service);
+
+        Assert.NotEqual("Timer is at the Windows default.", vm.StatusMessage);
+        Assert.Contains("1 ms", vm.StatusMessage, StringComparison.Ordinal);
+    }
 }

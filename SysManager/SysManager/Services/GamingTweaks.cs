@@ -62,20 +62,35 @@ internal sealed class VisualEffectsTweak(bool originalEnabled) : IGamingTweak
 /// Request the finest multimedia timer resolution while the game runs; release it on revert.
 /// A per-process request Windows also releases automatically when SysManager exits.
 /// </summary>
+/// <remarks>
+/// Windows keeps ONE timer request per process: two requests and a single release leave none, and a second
+/// release then fails with STATUS_TIMER_RESOLUTION_NOT_SET (measured). So the revert releases only a request
+/// this step made (#2444). When the Timer Resolution tab already holds one, the session changes nothing and
+/// Stop must not take the user's setting away. A step rebuilt for crash recovery made none either: the crashed
+/// run's request ended with its process, and releasing now could only drop one made in this run. Unlike the
+/// other machine-wide steps, the original is read here rather than injected, because a request that lives and
+/// dies with this process has nothing to persist.
+/// </remarks>
 internal sealed class TimerResolutionTweak(ITimerResolutionService timer) : IGamingTweak
 {
+    // True only while a request this step made is outstanding.
+    private bool _requested;
+
     public string Label => "Finest timer resolution (~0.5 ms)";
     public bool RequiresAdmin => false;
 
     public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
     {
-        timer.Enable();
-        return Task.FromResult(GamingTweakResult.Applied);
+        if (timer.Query().EnabledByApp) return Task.FromResult(GamingTweakResult.NoChange);
+        // EnabledByApp is set only when Windows accepted the request; a refusal is not counted as applied.
+        _requested = timer.Enable().EnabledByApp;
+        return Task.FromResult(_requested ? GamingTweakResult.Applied : GamingTweakResult.Failed);
     }
 
     public Task RevertAsync(CancellationToken ct)
     {
-        timer.Disable();
+        if (_requested) timer.Disable();
+        _requested = false;
         return Task.CompletedTask;
     }
 }

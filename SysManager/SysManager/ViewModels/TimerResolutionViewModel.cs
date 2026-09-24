@@ -22,6 +22,8 @@ public sealed partial class TimerResolutionViewModel : ViewModelBase
 
     private readonly ITimerResolutionService _service;
 
+    private const string NotAvailable = "Timer resolution information is not available on this system.";
+
     [ObservableProperty] private string _currentDisplay = "—";
     [ObservableProperty] private string _finestDisplay = "—";
     [ObservableProperty] private string _coarsestDisplay = "—";
@@ -40,11 +42,10 @@ public sealed partial class TimerResolutionViewModel : ViewModelBase
     {
         var status = await Task.Run(_service.Query).ConfigureAwait(true);
         Apply(status);
-        StatusMessage = IsSupported
-            ? (IsHighResolution
-                ? "High-resolution timer is active."
-                : "Timer is at the Windows default.")
-            : "Timer resolution information is not available on this system.";
+        StatusMessage = !IsSupported ? NotAvailable
+            : IsHighResolution ? "High-resolution timer is active."
+            : status.IsAtDefault ? "Timer is at the Windows default."
+            : $"Timer is at {status.CurrentDisplay} — another program is keeping it faster than the Windows default.";
     }
 
     [RelayCommand(CanExecute = nameof(CanEnable))]
@@ -62,7 +63,12 @@ public sealed partial class TimerResolutionViewModel : ViewModelBase
     {
         var status = await Task.Run(_service.Disable).ConfigureAwait(true);
         Apply(status);
-        StatusMessage = "Released the timer request — back to the Windows default.";
+        // Worded from the re-queried timer, not assumed (#2442). Windows grants the finest resolution any process
+        // asks for, and Disable is offered whenever the timer is fast, including when SysManager holds no request
+        // at all, so releasing ours returns the timer to the default only when nothing else is holding it.
+        StatusMessage = !IsSupported ? NotAvailable
+            : status.IsAtDefault ? "Released the timer request — back to the Windows default."
+            : $"SysManager is not holding the timer now, but another program is keeping it at {status.CurrentDisplay}.";
     }
 
     private bool CanEnable => IsSupported && !IsHighResolution;

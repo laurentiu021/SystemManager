@@ -69,6 +69,21 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     private readonly string _ledgerPath;
 
     /// <summary>
+    /// Serializes <see cref="RecordMasterToggleWrite"/> against itself. It is a read-increment-write over
+    /// one file holding a single counter, and <see cref="AtomicFile"/> makes the WRITE atomic but not the
+    /// read-then-write pair: two overlapping toggles both read N and both write N+1, so one increment is
+    /// silently lost. That is the direction that costs the user something — Gaming Profile compares the
+    /// count it recorded at apply against the count at revert, so an increment that never landed makes
+    /// revert restore its snapshot over a change the user made themselves.
+    /// <para>Fourth store to need this, after <see cref="UpdateCheckPreferenceService"/>,
+    /// <see cref="ServiceStartupLedgerService"/> and <see cref="VolumePresetService"/>;
+    /// <c>ArchitectureTests.EveryStoreThatReadsThenWritesTheSameFile_SerializesThePair</c> now keeps the
+    /// class closed. An instance lock is the right scope because the container registers this as a
+    /// singleton; the only other construction is the designer/test graph, which never runs beside it.</para>
+    /// </summary>
+    private readonly Lock _ledgerLock = new();
+
+    /// <summary>
     /// Creates the service over a registry root. Defaults to <see cref="Registry.CurrentUser"/>
     /// (the real per-user notification settings); tests pass a redirected root (a disposable
     /// HKCU subkey) so reads/writes never touch the machine's real configuration.
@@ -118,16 +133,23 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// A failure here is logged and swallowed: the toggle itself already succeeded, and refusing the user's
     /// change because bookkeeping failed would be a worse outcome than a revert that restores when it could
     /// have held back.
+    /// <para>The whole read-increment-write is inside <see cref="_ledgerLock"/>, including the
+    /// <see cref="Directory.CreateDirectory(string)"/>, so the counter cannot be read by one caller while
+    /// another is between its own read and its write. Not <c>async</c> and no <c>await</c>, so the lock is
+    /// never held across a yield.</para>
     /// </remarks>
     private void RecordMasterToggleWrite()
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_ledgerPath)!);
-            var next = ReadMasterToggleWriteCountAt(_ledgerPath) + 1;
-            // AtomicFile, like every other store here: a torn write would read back as a malformed
-            // ledger, which degrades to 0 and makes revert restore when it should have held back.
-            AtomicFile.WriteAllText(_ledgerPath, JsonSerializer.Serialize(new Ledger(next)));
+            lock (_ledgerLock)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_ledgerPath)!);
+                var next = ReadMasterToggleWriteCountAt(_ledgerPath) + 1;
+                // AtomicFile, like every other store here: a torn write would read back as a malformed
+                // ledger, which degrades to 0 and makes revert restore when it should have held back.
+                AtomicFile.WriteAllText(_ledgerPath, JsonSerializer.Serialize(new Ledger(next)));
+            }
         }
         catch (IOException ex) { Log.Debug("Toast write-ledger update failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Toast write-ledger update denied: {Error}", ex.Message); }

@@ -30,6 +30,26 @@ public sealed class VolumePresetService
 
     private readonly string _path;
 
+    /// <summary>
+    /// Serializes <see cref="Save"/> against <see cref="Delete"/>. Both are a <see cref="Load"/>
+    /// followed by a <see cref="Persist"/> over one file holding every preset, so each writes back a
+    /// whole-list snapshot. <see cref="AtomicFile"/> makes each WRITE atomic but not the read-then-write
+    /// pair: without this, whichever saves last persists a snapshot taken before the other landed, and
+    /// the other preset is silently gone — from disk, and from the on-screen list, because both methods
+    /// return the merged list for the view-model to rebind.
+    /// <para>Nothing reachable today overlaps them — both callers are synchronous relay commands on the
+    /// Audio Mixer tab behind a modal confirm, with no await between the read and the write, so the UI
+    /// thread serializes them outright. This makes it a property of the service instead, because a bulk
+    /// save, a preset import, or simply making either command async re-opens it, and the failure is a
+    /// preset the user saved that is not there next time — with no error, since <see cref="Persist"/>
+    /// swallows <see cref="IOException"/> by design.</para>
+    /// <para>Third service to need this, after <see cref="UpdateCheckPreferenceService"/> and
+    /// <see cref="ServiceStartupLedgerService"/>;
+    /// <c>ArchitectureTests.EveryStoreThatReadsThenWritesTheSameFile_SerializesThePair</c> now keeps the
+    /// class closed.</para>
+    /// </summary>
+    private readonly Lock _mutateLock = new();
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public VolumePresetService(string? configDir = null)
     {
@@ -53,21 +73,34 @@ public sealed class VolumePresetService
     /// <summary>
     /// Saves (adds or replaces by name, case-insensitive) a preset and persists the full set.
     /// Returns the updated list. A blank name is rejected (returns the unchanged current set).
+    /// <para>Serialized against <see cref="Delete"/> by <see cref="_mutateLock"/>. The blank-name
+    /// rejection is inside it, unlike the equivalent guard in
+    /// <see cref="ServiceStartupLedgerService.Remember"/>, because this one does not just return —
+    /// it returns a <see cref="Load"/>, and the caller rebinds its list from whatever comes back.</para>
     /// </summary>
     public IReadOnlyList<VolumePreset> Save(VolumePreset preset)
     {
-        if (string.IsNullOrWhiteSpace(preset.Name)) return Load();
-        var merged = Upsert(Load(), preset);
-        Persist(merged);
-        return merged;
+        lock (_mutateLock)
+        {
+            if (string.IsNullOrWhiteSpace(preset.Name)) return Load();
+            var merged = Upsert(Load(), preset);
+            Persist(merged);
+            return merged;
+        }
     }
 
-    /// <summary>Deletes the named preset (case-insensitive) and persists. Returns the updated list.</summary>
+    /// <summary>
+    /// Deletes the named preset (case-insensitive) and persists. Returns the updated list.
+    /// Serialized against <see cref="Save"/> by <see cref="_mutateLock"/>.
+    /// </summary>
     public IReadOnlyList<VolumePreset> Delete(string name)
     {
-        var remaining = Load().Where(p => !string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
-        Persist(remaining);
-        return remaining;
+        lock (_mutateLock)
+        {
+            var remaining = Load().Where(p => !string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+            Persist(remaining);
+            return remaining;
+        }
     }
 
     private void Persist(IReadOnlyList<VolumePreset> presets)

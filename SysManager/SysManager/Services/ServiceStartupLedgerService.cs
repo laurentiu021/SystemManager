@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using Serilog;
@@ -13,7 +14,8 @@ namespace SysManager.Services;
 /// What a service's startup type was before SysManager disabled it.
 /// </summary>
 /// <param name="ServiceName">The service's short name (the key Windows uses).</param>
-/// <param name="PreviousStartType">The startup type to restore — "Automatic", "Manual", "Boot", or "System".</param>
+/// <param name="PreviousStartType">The startup type to restore — one of
+/// <see cref="ServiceManagerService.RestorableStartTypes"/>: "Automatic", "Automatic (Delayed Start)" or "Manual".</param>
 /// <param name="DisabledAtUtc">When SysManager disabled it, for diagnostics.</param>
 public sealed record ServiceStartupRecord(
     string ServiceName, string PreviousStartType, DateTimeOffset DisabledAtUtc);
@@ -29,19 +31,22 @@ public sealed record ServiceStartupRecord(
 /// configuration, which is why this needed to be durable rather than per-session.</para>
 /// <para>Same shape as <see cref="VolumePresetService"/> and <see cref="ClosePreferenceService"/>:
 /// injectable directory, pure unit-testable Serialize/Parse, file IO that never throws. Only the
-/// four startup types Windows accepts are stored; anything else is dropped on read, because
-/// restoring a value the OS would reject is worse than falling back to the conservative default.</para>
+/// startup types Enable can restore — <see cref="ServiceManagerService.RestorableStartTypes"/> — are
+/// stored; anything else is dropped on read, because attempting a restore that cannot succeed is
+/// worse than falling back to the conservative default.</para>
 /// </summary>
 public sealed class ServiceStartupLedgerService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     /// <summary>
-    /// Startup types that may be restored. "Disabled" is deliberately absent — restoring a service
-    /// to Disabled is what Enable exists to undo — and an unrecognised value is not trusted.
+    /// Whether a startup type may be recorded: only the ones Enable can put back. "Disabled" is
+    /// deliberately not one — restoring a service to Disabled is what Enable exists to undo — and an
+    /// unrecognised value is not trusted. The list itself is
+    /// <see cref="ServiceManagerService.RestorableStartTypes"/>, so this cannot drift from the mapping.
     /// </summary>
-    private static readonly HashSet<string> RestorableTypes =
-        new(StringComparer.OrdinalIgnoreCase) { "Automatic", "Manual", "Boot", "System" };
+    private static bool IsRestorable([NotNullWhen(true)] string? startType) =>
+        startType is not null && ServiceManagerService.RestorableStartTypes.ContainsKey(startType);
 
     private readonly string _path;
 
@@ -91,7 +96,7 @@ public sealed class ServiceStartupLedgerService
     public void Remember(string serviceName, string? previousStartType, DateTimeOffset disabledAtUtc)
     {
         if (string.IsNullOrWhiteSpace(serviceName)) return;
-        if (previousStartType is null || !RestorableTypes.Contains(previousStartType))
+        if (!IsRestorable(previousStartType))
         {
             Log.Debug("Not recording an unrestorable startup type for {Service}: {Type}",
                 serviceName, previousStartType ?? "(null)");
@@ -168,7 +173,7 @@ public sealed class ServiceStartupLedgerService
             {
                 if (record is null) continue;
                 if (string.IsNullOrWhiteSpace(record.ServiceName)) continue;
-                if (!RestorableTypes.Contains(record.PreviousStartType ?? "")) continue;
+                if (!IsRestorable(record.PreviousStartType)) continue;
                 ledger[record.ServiceName] = record;
             }
             return ledger;

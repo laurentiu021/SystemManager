@@ -83,8 +83,12 @@ public class ServiceManagerServiceTests
     [Theory]
     [InlineData("Automatic", "auto")]
     [InlineData("Manual", "demand")]
-    [InlineData("Boot", "boot")]
-    [InlineData("System", "system")]
+    // services.msc's name for it. ServiceStartMode has no delayed member, so before #2428 a delayed service
+    // was recorded as plain Automatic and restored with start= auto.
+    [InlineData("Automatic (Delayed Start)", "delayed-auto")]
+    // The ledger has always accepted a type case-insensitively; the mapping has to agree, or a record the
+    // ledger keeps still falls through to Manual.
+    [InlineData("automatic", "auto")]
     public void StartTypeToScToken_MapsKnownStartTypes(string startType, string expected)
         => Assert.Equal(expected, ServiceManagerService.StartTypeToScToken(startType));
 
@@ -93,6 +97,10 @@ public class ServiceManagerServiceTests
     [InlineData("")]
     [InlineData(null)]
     [InlineData("Weird")]
+    // Driver start types. This tab lists no drivers, and SetStartupTypeAsync refuses "boot" and "system", so
+    // mapping to them could only ever end in an exception instead of an enabled service.
+    [InlineData("Boot")]
+    [InlineData("System")]
     public void StartTypeToScToken_FallsBackToDemand_ForDisabledOrUnknown(string? startType)
         => Assert.Equal("demand", ServiceManagerService.StartTypeToScToken(startType));
 
@@ -103,8 +111,57 @@ public class ServiceManagerServiceTests
         var changed = entry.RecordPropertyChanges();
         entry.Status = "Running";
         entry.StartType = "Automatic";
+        entry.IsDelayedAutoStart = true;
         Assert.Contains("Status", changed);
         Assert.Contains("StartType", changed);
+        // RefreshStatus rewrites it on a row the grid is showing, alongside StartType.
+        Assert.Contains("IsDelayedAutoStart", changed);
+    }
+
+    // ── The delayed-start flag (#2428) ─────────────────────────────────────────
+
+    [Theory]
+    [InlineData("Automatic", true, "Automatic (Delayed Start)")]
+    [InlineData("Automatic", false, "Automatic")]
+    // Windows keeps the delay setting on other start types and ignores it there, so a flag that somehow
+    // reached a Manual or Disabled row must not relabel it.
+    [InlineData("Manual", true, "Manual")]
+    [InlineData("Disabled", true, "Disabled")]
+    [InlineData("Manual", false, "Manual")]
+    public void StartTypeWithDelay_NamesTheDelayOnlyOnAnAutomaticService(string startType, bool delayed, string expected)
+    {
+        var entry = new ServiceEntry { Name = "svc", StartType = startType, IsDelayedAutoStart = delayed };
+
+        Assert.Equal(expected, ServiceManagerService.StartTypeWithDelay(entry));
+    }
+
+    [Fact]
+    public void StartTypeWithDelay_ProducesTheNameTheRestorePathMaps()
+    {
+        // The snapshot and the mapping have to agree on the spelling, or Disable records a name Enable
+        // cannot restore — which is this bug again, one step further along.
+        var entry = new ServiceEntry { Name = "svc", StartType = "Automatic", IsDelayedAutoStart = true };
+
+        Assert.Equal("delayed-auto",
+            ServiceManagerService.StartTypeToScToken(ServiceManagerService.StartTypeWithDelay(entry)));
+    }
+
+    [Fact]
+    public void ReadDelayedAutoStart_ForAServiceThatDoesNotExist_IsUnknownRatherThanFalse()
+    {
+        // Null, not false: "Windows said it is not delayed" and "Windows could not be asked" are different
+        // answers, even though the scan treats both as not delayed.
+        Assert.Null(ServiceManagerService.ReadDelayedAutoStart("NonExistentService12345"));
+    }
+
+    [Fact]
+    public void ReadDelayedAutoStart_ForRemoteProcedureCall_GetsAnAnswerFromWindows()
+    {
+        // The positive half of the plumbing. RpcSs exists on every Windows install, starts automatically and
+        // is never delayed — everything else waits on it. A wrong entry point, struct size or access right
+        // makes every query fail, which the scan would silently read as "not delayed" on every row, so this
+        // asserts an ANSWER came back, not merely that nothing threw.
+        Assert.False(ServiceManagerService.ReadDelayedAutoStart("RpcSs"));
     }
 
     // ── SetStartupTypeAsync input validation (idx 174 — negative tests) ───────

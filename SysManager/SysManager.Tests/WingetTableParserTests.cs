@@ -75,6 +75,36 @@ public class WingetTableParserTests
     }
 
     [Fact]
+    public void Parse_DropsTheRowWithABlankId_AndKeepsTheRest()
+    {
+        // The guard two features silently depend on, and it had no test of its own.
+        // Uninstaller carries the user's ticks across a rescan keyed on (Id, Name); Name alone
+        // is known to repeat — UninstallerService.EnrichFromRegistry says so by using
+        // TryAdd(app.Name, app) rather than the indexer. That key is only unique because a
+        // blank Id never reaches it, which is decided HERE rather than at the call site, so
+        // relaxing this line would silently degrade the key to ("", Name) and let one row's
+        // tick apply to another. Dropping is also the only honest option downstream:
+        // UninstallerService.UninstallAsync validates with WingetId.IsValid and throws, so a
+        // row with no Id could be listed but never acted on.
+        var lines = new List<string>
+        {
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Mystery App                                                 1.0.0     1.0.1       winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget"
+        };
+
+        var result = WingetTableParser.Parse(lines, HeaderPattern, SummaryPattern);
+
+        // Selectively: the blank-Id row goes, its neighbours stay. Asserting only "not 3"
+        // would also pass if the parser returned nothing at all.
+        Assert.Equal(2, result.Count);
+        Assert.Equal(["Git.Git", "OpenJS.NodeJS"], result.Select(r => r.Id));
+        Assert.DoesNotContain("Mystery App", result.Select(r => r.Name));
+    }
+
+    [Fact]
     public void Parse_ShortLines_SkipsGracefully()
     {
         var lines = new List<string>

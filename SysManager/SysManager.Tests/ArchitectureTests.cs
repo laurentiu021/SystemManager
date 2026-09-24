@@ -15317,4 +15317,139 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"^(?<target>[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*\])?)\s*=(?!=)\s*(?<rhs>[^;]+);$",
                     RegexOptions.Compiled)]
     private static partial Regex SimpleAssignment();
+
+    /// <summary>
+    /// How many tabs carry their ticks through <c>SelectionCarry</c> is spelled out in prose twice — in the
+    /// helper's own summary and in ARCHITECTURE.md — so both are derived from the call sites here.
+    /// </summary>
+    /// <remarks>
+    /// Both said "six" well after the count reached nine, and both also state how many callers leave the
+    /// optional decision filter null, which is a second number nobody re-derived. A stale count in the one
+    /// document a newcomer reads to find where a shared helper is used points them at six tabs and hides
+    /// three — which is how a rule that lives in the helper gets re-implemented at a call site instead. The
+    /// code was correct throughout: nothing in this suite read the prose, so the drift could only be caught
+    /// by reading both files side by side, and it was not.
+    /// </remarks>
+    [Fact]
+    public void TheDocumentedSelectionCarryCallerCount_IsDerivedFromTheCallSites()
+    {
+        var appDir = TestPaths.AppProject();
+        var helper = Path.Combine(appDir, "Helpers", "SelectionCarry.cs");
+        Assert.True(File.Exists(helper), $"SelectionCarry.cs was not found at {helper}.");
+
+        var tabs = 0;
+        var sites = 0;
+        var withFilter = 0;
+
+        foreach (var file in Directory
+                     .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal))
+                     .Where(f => !string.Equals(f, helper, StringComparison.OrdinalIgnoreCase)))
+        {
+            // Doc comments come off first: a <see cref="SelectionCarry.Apply"/> is a mention, not a call site.
+            var code = DocComment().Replace(File.ReadAllText(file), string.Empty);
+            var found = 0;
+
+            for (var at = code.IndexOf("SelectionCarry.Apply", StringComparison.Ordinal); at >= 0;
+                 at = code.IndexOf("SelectionCarry.Apply", at + 1, StringComparison.Ordinal))
+            {
+                // The next parenthesis, not the next character, so an explicit type-argument list is stepped
+                // over rather than making a generic call site vanish from the count.
+                var open = code.IndexOf('(', at);
+                if (open < 0) continue;
+                found++;
+                if (ArgumentsAtDepthOne(code, open) >= 5) withFilter++;
+            }
+
+            if (found == 0) continue;
+            tabs++;
+            sites += found;
+        }
+
+        // Parse floor: the match has to actually find the call sites, or every comparison below is against a
+        // number this guard invented.
+        Assert.True(tabs >= 6,
+            $"only {tabs} files call SelectionCarry.Apply — the match is out of date, so the documented count "
+            + "would be compared against nothing.");
+
+        string[] spelled = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                            "ten", "eleven", "twelve"];
+        Assert.True(sites < spelled.Length, $"{sites} call sites is past the spelled-out numbers here.");
+
+        var offenders = new List<string>();
+
+        // Only Deep Cleanup's default is measured rather than constant, which both documents state as a fact
+        // about every OTHER caller — so the "pass null" count below is only right while this holds.
+        if (withFilter != 1)
+            offenders.Add($"{withFilter} call sites pass the carriedADecision filter, though both documents "
+                + "say it exists only for Deep Cleanup");
+
+        // The helper's own summary, and the parameter doc that counts the callers leaving the filter null.
+        var prose = Collapse(File.ReadAllText(helper));
+        if (!prose.Contains($"{spelled[tabs]} tabs rebuild", StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"SelectionCarry's summary does not say \"{spelled[tabs]} tabs rebuild\" though "
+                + $"{tabs} tabs call Apply");
+        if (!prose.Contains($"other {spelled[tabs - withFilter]} callers", StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"carriedADecision's doc does not say \"other {spelled[tabs - withFilter]} callers\" "
+                + $"though {tabs - withFilter} of the {tabs} leave it null");
+
+        // ARCHITECTURE's entry, sliced to its own bullet so a number under a neighbouring helper cannot vouch
+        // for this one.
+        var architecture = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "ARCHITECTURE.md"));
+        var entryAt = architecture.IndexOf("`Helpers/SelectionCarry`", StringComparison.Ordinal);
+        Assert.True(entryAt > 0, "ARCHITECTURE.md no longer has a `Helpers/SelectionCarry` entry, so the "
+            + "counts below would be compared against nothing.");
+        var after = architecture[entryAt..];
+        var nextEntry = after.IndexOf("\n- `Helpers/", StringComparison.Ordinal);
+        var entry = Collapse(nextEntry > 0 ? after[..nextEntry] : after);
+        Assert.True(entry.Length > 500,
+            $"the SelectionCarry entry sliced to {entry.Length} chars — that is not the entry.");
+
+        if (!entry.Contains($"{spelled[tabs]} tabs", StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"ARCHITECTURE.md's SelectionCarry entry does not say \"{spelled[tabs]} tabs\"");
+        if (!entry.Contains($"{spelled[sites]} call sites", StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"ARCHITECTURE.md's SelectionCarry entry does not say \"{spelled[sites]} call sites\"");
+        if (!entry.Contains($"other {spelled[tabs - withFilter]} default from constants",
+                            StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"ARCHITECTURE.md's SelectionCarry entry does not say \"other "
+                + $"{spelled[tabs - withFilter]} default from constants\"");
+
+        Assert.True(offenders.Count == 0,
+            "the documented SelectionCarry counts no longer match the call sites:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// How many arguments an invocation passes, given the index of its opening parenthesis. Nesting is
+    /// skipped by depth, so a tuple key such as <c>(i.Browser, i.Category)</c> counts as the one argument it
+    /// is rather than two.
+    /// </summary>
+    private static int ArgumentsAtDepthOne(string code, int openParenAt)
+    {
+        var depth = 0;
+        var arguments = 0;
+        var sawContent = false;
+
+        for (var i = openParenAt; i < code.Length; i++)
+        {
+            switch (code[i])
+            {
+                case '(' or '[' or '{':
+                    depth++;
+                    break;
+                case ')' or ']' or '}':
+                    if (--depth == 0) return sawContent ? arguments + 1 : 0;
+                    break;
+                case ',' when depth == 1:
+                    arguments++;
+                    break;
+                default:
+                    if (!char.IsWhiteSpace(code[i])) sawContent = true;
+                    break;
+            }
+        }
+
+        return 0;
+    }
 }

@@ -3,6 +3,9 @@
 // License: MIT
 
 using System.IO;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -248,6 +251,53 @@ public class ProfileServiceTests : IDisposable
             new[] { "appicons", "closebehaviour", "darkmode", "gaming", "speedtest", "standby", "theme",
                     "updatecheck", "volume" },
             keys);
+    }
+
+    /// <summary>
+    /// No two catalog entries may share a Key or a FileName.
+    /// </summary>
+    /// <remarks>
+    /// Two separate things depend on the Key being unique, and neither says so. <c>ApplySections</c> resolves
+    /// an imported section with <c>Array.Find(Catalog, c =&gt; c.Key == section.Key)</c>, so a duplicate Key
+    /// silently skips the second entry's <c>OnImport</c> sanitiser — the thing that strips machine-specific
+    /// state out of a foreign profile. And <c>ProfileViewModel</c> carries the user's ticks across a refresh
+    /// on <c>s.Section.Key</c>, where a duplicate means one section's tick becomes another's (#2405). A
+    /// duplicate FileName is the same defect from the other end: two sections writing one file on import.
+    /// <para>Read off the catalog itself rather than through <c>AvailableSections()</c>, which only surfaces
+    /// a section whose file exists — so a duplicate Key on an entry whose file the test did not plant would
+    /// never appear. The sibling test above catches only the case where the two share a file name.</para>
+    /// </remarks>
+    [Fact]
+    public void TheCatalog_HasNoDuplicateKeyOrFileName()
+    {
+        var field = typeof(ProfileService).GetField("Catalog", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.True(field is not null,
+            "ProfileService has no Catalog field. If the section list moved, point this guard at it — the "
+            + "uniqueness of a section key is load-bearing for import sanitising and for tick carry-over.");
+
+        var entries = field!.GetValue(null) as Array;
+        Assert.True(entries is { Length: > 0 }, "The catalog is empty, so this guard would measure nothing.");
+
+        // Read positionally through ITuple: the tuple carries a private enum, so its type is not nameable
+        // here, and the field order (Key, DisplayName, FileName, …) is what ProfileService itself destructures.
+        var keys = new List<string>(entries!.Length);
+        var fileNames = new List<string>(entries.Length);
+        foreach (var entry in entries)
+        {
+            var tuple = Assert.IsAssignableFrom<ITuple>(entry);
+            keys.Add(Assert.IsType<string>(tuple[0]));
+            fileNames.Add(Assert.IsType<string>(tuple[2]));
+        }
+
+        // Through the same helper the carry itself uses, and the same comparer ProfileViewModel passes.
+        Assert.Empty(SelectionCarry.DuplicateKeys(keys, k => k, StringComparer.Ordinal));
+
+        // Case-insensitive for the file names: the config folder is NTFS, so two entries differing only in
+        // case are one file, and an import would write both sections over each other.
+        Assert.Empty(SelectionCarry.DuplicateKeys(fileNames, f => f, StringComparer.OrdinalIgnoreCase));
+
+        // The floor. Nine sections ship today; a guard that passed over a catalog of one would prove nothing.
+        Assert.True(keys.Count >= 9, $"Only {keys.Count} catalog entries read, so uniqueness proves little.");
     }
 
     /// <summary>

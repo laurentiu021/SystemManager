@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.4] - 2026-09-24
+
+**The About tab now marks the version you are running in its list of releases.** A "Current" badge was
+always meant to sit on that entry, and the README has described it since v1.85.0, but it had never once
+appeared: the check behind it compared two versions that could not match. It does now.
+
+### Fixed
+
+- **The "Current" badge in the About tab's release list now appears on the release you are running.** It
+  had been missing since the tab was added in v0.5.0. Each entry's version is read from its release tag,
+  which has three parts (1.113.4, say), while the running app's version comes from the build and always
+  carries a fourth part of zero (1.113.4.0). The comparison counted that missing fourth part as different
+  from zero, so no entry ever matched. Versions are now compared as the release they name, however many
+  parts they are written with. The check that decides whether an update is newer uses the same
+  comparison, so the two can never disagree about a pair of versions, and it gives the same answer as
+  before for every version SysManager has published.
+- **The text on the About tab's version badge is readable on every colour theme.** It was fixed white,
+  which falls short of the 4.5:1 contrast small text needs on ten of the twelve built-in themes — 2.15:1 on
+  Warm Ember, and just under the line at 4.47:1 on the default, Midnight Indigo. It now uses the colour the
+  primary buttons already use, chosen per theme for contrast: dark on most themes, including the default,
+  and white on Soft Blossom and Lavender. The newly visible "Current" badge uses it as well. The change
+  that moved the rest of the app to that colour (#2012) only looked at the shared styles, which is how two
+  badges placed directly on the About page kept their white text; the automated check now looks at every
+  page too.
+
 ## [1.113.3] - 2026-09-24
 
 **If SysManager could not reach GitHub when it started, it then told you it had "checked recently" for

@@ -138,7 +138,35 @@ public sealed class UpdateService : IUpdateService
     /// <summary>
     /// True when the latest release is strictly newer than the running app.
     /// </summary>
-    public static bool IsNewer(Version latest, Version current) => latest > current;
+    /// <remarks>
+    /// Compares canonical forms, the same ones <see cref="IsSameRelease"/> uses, so the two can never
+    /// disagree about a pair. <see cref="Version"/>'s own ordering counts an unspecified component as -1,
+    /// which on its own ranks "1.113.3.0" above "1.113.3" although both name one release.
+    /// </remarks>
+    public static bool IsNewer(Version latest, Version current) => Canonical(latest) > Canonical(current);
+
+    /// <summary>
+    /// True when both versions name the same release, however many components each one was written with.
+    /// </summary>
+    /// <remarks>
+    /// Needed because <see cref="Version.Equals(Version)"/> compares all four components as stored, with an
+    /// unspecified one as -1. A version parsed from a release tag has three components, so its
+    /// <see cref="Version.Revision"/> is -1; <see cref="CurrentVersion"/> comes from <c>AssemblyVersion</c>,
+    /// which always carries a fourth component of 0. Plain equality therefore never matched the running
+    /// build to its own release, and the About tab's "Current" badge never appeared (#2418).
+    /// </remarks>
+    public static bool IsSameRelease(Version a, Version b) => Canonical(a) == Canonical(b);
+
+    /// <summary>
+    /// All four components, with an unspecified one read as the zero it means: "1.2" is "1.2.0.0".
+    /// </summary>
+    /// <remarks>
+    /// The single rule both comparisons above share. Normalising only <c>Build</c> the way
+    /// <see cref="ParseVersion"/> does would not be enough here, because the mismatch this closes is in
+    /// <c>Revision</c>, which ParseVersion deliberately leaves alone.
+    /// </remarks>
+    private static Version Canonical(Version v) =>
+        new(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
 
     /// <summary>
     /// Downloads the release asset with progress reporting. Returns the

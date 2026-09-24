@@ -169,6 +169,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         int completed = 0;
         int removed = 0;
         int failed = 0;
+        int stillOpen = 0;
         int restartRequired = 0;
         bool cancellationRequested = false;
         UninstallEtaText = string.Empty;
@@ -192,13 +193,22 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
                 try
                 {
-                    var code = (string.IsNullOrWhiteSpace(app.Source)
-                        && !string.IsNullOrWhiteSpace(app.UninstallString))
+                    var local = string.IsNullOrWhiteSpace(app.Source)
+                        && !string.IsNullOrWhiteSpace(app.UninstallString);
+                    var code = local
                         ? await _service.UninstallLocalAsync(app, _cts.Token)
                         : await _service.UninstallAsync(app.Id, _cts.Token);
 
                     currentCompleted = true;
-                    if (IsSuccessfulUninstallExitCode(code))
+                    if (IsSuccessfulUninstallExitCode(code) && local && _service.IsStillRegistered(app))
+                    {
+                        // The exit code belongs to the process SysManager launched, which can return before
+                        // anything is removed: NSIS uninstallers hand over to a copy of themselves and exit at
+                        // once (#2448). Windows still lists the app, so it is not counted or taken off the list.
+                        app.Status = StillOpenStatus;
+                        stillOpen++;
+                    }
+                    else if (IsSuccessfulUninstallExitCode(code))
                     {
                         var needsRestart = RequiresRestartAfterUninstall(code);
                         app.Status = needsRestart ? "Removed - restart required" : "Removed";
@@ -269,41 +279,45 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 1 => " Restart required for 1 app.",
                 _ => $" Restart required for {restartRequired} apps."
             };
+            var stillOpenMessage = DescribeStillOpen(stillOpen);
             if (cancellationRequested)
             {
-                StatusMessage = $"Uninstall cancelled after {completed}/{toRemove.Count} completed. Removed {removed}; failed {failed}.{restartMessage}";
+                StatusMessage = $"Uninstall cancelled after {completed}/{toRemove.Count} completed. Removed {removed}; failed {failed}.{restartMessage}{stillOpenMessage}";
 
                 Log.Information(
-                    "Uninstall batch cancelled: {Completed}/{Total} completed, {Removed} removed, {Failed} failed, {RestartRequired} need restart",
+                    "Uninstall batch cancelled: {Completed}/{Total} completed, {Removed} removed, {Failed} failed, {StillOpen} still listed, {RestartRequired} need restart",
                     completed,
                     toRemove.Count,
                     removed,
                     failed,
+                    stillOpen,
                     restartRequired);
             }
             else if (failed > 0)
             {
                 Progress = 100;
-                StatusMessage = $"Uninstall finished with errors. Removed {removed}; failed {failed}.{restartMessage}";
+                StatusMessage = $"Uninstall finished with errors. Removed {removed}; failed {failed}.{restartMessage}{stillOpenMessage}";
 
                 Log.Warning(
-                    "Uninstall batch finished with errors: {Removed} removed, {Failed} failed, {RestartRequired} need restart, {Total} total",
+                    "Uninstall batch finished with errors: {Removed} removed, {Failed} failed, {StillOpen} still listed, {RestartRequired} need restart, {Total} total",
                     removed,
                     failed,
+                    stillOpen,
                     restartRequired,
                     toRemove.Count);
             }
             else
             {
                 Progress = 100;
-                StatusMessage = $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}";
+                StatusMessage = $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}{stillOpenMessage}";
                 ToastService.Instance.Show(
-                    "Uninstall complete",
-                    $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}");
+                    stillOpen > 0 ? "Uninstaller still open" : "Uninstall complete",
+                    $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}{stillOpenMessage}");
                 Log.Information(
-                    "Uninstall batch completed: {Removed}/{Total}, {RestartRequired} need restart",
+                    "Uninstall batch completed: {Removed}/{Total}, {StillOpen} still listed, {RestartRequired} need restart",
                     removed,
                     toRemove.Count,
+                    stillOpen,
                     restartRequired);
             }
 
@@ -382,6 +396,20 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         AppCount = FilteredApps.Count;
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";
     }
+
+    /// <summary>
+    /// The row status for an app whose uninstaller returned success while Windows still lists it (#2448).
+    /// </summary>
+    internal const string StillOpenStatus =
+        "Still installed — its uninstaller may still be open in its own window. Finish it, then Scan again.";
+
+    /// <summary>The summary's note for apps still listed after their uninstaller returned; empty when there are none.</summary>
+    internal static string DescribeStillOpen(int stillOpen) => stillOpen switch
+    {
+        0 => string.Empty,
+        1 => " 1 app is still installed — its uninstaller may still be open in its own window; Scan again once it finishes.",
+        _ => $" {stillOpen} apps are still installed — their uninstallers may still be open in their own windows; Scan again once they finish.",
+    };
 
     // Windows Installer uses 1641 and 3010 for successful removal that requires a restart.
     private static bool IsSuccessfulUninstallExitCode(int exitCode) =>

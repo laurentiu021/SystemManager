@@ -782,6 +782,8 @@ public class ServicesViewModelTests
         using var dialog = new DialogAnswer(confirm: true);
 
         await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+        Assert.Equal("Automatic", ledger.PreviousStartTypeFor(FakeServiceName));
+
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
         await runner.Received(1).RunProcessAsync(

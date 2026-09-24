@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.Frozen;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using Microsoft.Win32.SafeHandles;
@@ -163,39 +164,64 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>Stop a service. Requires admin.</summary>
+    /// <remarks>
+    /// A service that is already stopped, or already stopping, is left alone: what was asked for is true, or
+    /// about to be. A service that accepts no stop request is refused out loud (#2431). It used to be skipped
+    /// in the same silent way, and the call returned as if it had stopped — so the Services tab said
+    /// "✓ stopped" over a service still running (DNS Client, on Windows 11), and the Gaming Profile counted a
+    /// Windows Search it had not stopped as paused.
+    /// </remarks>
     public static async Task StopServiceAsync(string serviceName)
     {
         using var sc = new ServiceController(serviceName);
-        if (sc.CanStop && sc.Status != ServiceControllerStatus.Stopped)
+        if (sc.Status is ServiceControllerStatus.Stopped or ServiceControllerStatus.StopPending)
+            return;
+        if (!sc.CanStop)
+            throw new InvalidOperationException(
+                $"'{serviceName}' does not accept a stop request, so Windows cannot stop it.");
+
+        try
         {
-            try
-            {
-                sc.Stop();
-                await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
-            }
-            catch (System.ServiceProcess.TimeoutException)
-            {
-                throw new InvalidOperationException(
-                    $"Service '{serviceName}' did not stop within 30 seconds. It may still be stopping — check Services again in a moment.");
-            }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                // The service state can change between the CanStop check and Stop(),
-                // or the caller may lack rights — sc.Stop() then throws Win32Exception.
-                throw new InvalidOperationException(
-                    $"Could not stop service '{serviceName}': {ex.Message}", ex);
-            }
+            sc.Stop();
+            await Task.Run(() => sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+        }
+        catch (System.ServiceProcess.TimeoutException)
+        {
+            throw new InvalidOperationException(
+                $"Service '{serviceName}' did not stop within 30 seconds. It may still be stopping — check Services again in a moment.");
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            // The service state can change between the CanStop check and Stop(),
+            // or the caller may lack rights — sc.Stop() then throws Win32Exception.
+            throw new InvalidOperationException(
+                $"Could not stop service '{serviceName}': {ex.Message}", ex);
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="serviceName"/> may go on the sc.exe command line (SEC-006): letters, digits,
+    /// spaces, hyphens, underscores, dots and dollar signs only.
+    /// </summary>
+    /// <remarks>
+    /// Narrower than Windows, which forbids only <c>/</c> and <c>\</c> in a service name, so a legal name — a
+    /// vendor's "(R)", say — can fail it. That is deliberate: the name is interpolated into a command line,
+    /// and this is the check standing in front of it. What changed is who hears about a refusal (#2430). The
+    /// Services commands now ask this first and say so in words, where the <see cref="ArgumentException"/>
+    /// from <see cref="SetStartupTypeAsync"/> used to reach the crash dialog.
+    /// </remarks>
+    internal static bool IsSafeForScExe([NotNullWhen(true)] string? serviceName) =>
+        !string.IsNullOrWhiteSpace(serviceName) && ServiceNamePattern().IsMatch(serviceName);
+
+    /// <summary>Whether Windows reports <paramref name="entry"/> as Disabled — the one state Enable undoes.</summary>
+    internal static bool IsDisabled(ServiceEntry entry) =>
+        string.Equals(entry.StartType, nameof(ServiceStartMode.Disabled), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Change the startup type of a service via sc.exe. Requires admin.</summary>
     public static async Task SetStartupTypeAsync(string serviceName, string startType, IPowerShellRunner ps, CancellationToken ct = default)
     {
-        // SEC-006: Strict allowlist for service names — alphanumeric, spaces,
-        // hyphens, underscores, dots, and dollar signs only (covers all valid
-        // Windows service names including instance names like MSSQL$INSTANCE).
-        if (string.IsNullOrWhiteSpace(serviceName) ||
-            !ServiceNamePattern().IsMatch(serviceName))
+        // SEC-006: the name is interpolated into the sc.exe command line below. See IsSafeForScExe.
+        if (!IsSafeForScExe(serviceName))
             throw new ArgumentException("Invalid service name.", nameof(serviceName));
 
         var allowedTypes = new[] { "auto", "delayed-auto", "demand", "disabled" };
@@ -255,6 +281,14 @@ public sealed partial class ServiceManagerService
     /// </summary>
     internal static string StartTypeToScToken(string? startType) =>
         startType is not null && RestorableStartTypes.TryGetValue(startType, out var token) ? token : "demand";
+
+    /// <summary>
+    /// Whether <paramref name="startType"/> is one Enable can put back — a <see cref="RestorableStartTypes"/>
+    /// name. "Disabled" is deliberately not one: restoring a service to Disabled is what Enable exists to
+    /// undo. The ledger stores only these, and so does the in-memory snapshot Disable takes.
+    /// </summary>
+    internal static bool IsRestorable([NotNullWhen(true)] string? startType) =>
+        startType is not null && RestorableStartTypes.ContainsKey(startType);
 
     /// <summary>
     /// The startup type as services.msc names it: <see cref="ServiceEntry.StartType"/>, except that an

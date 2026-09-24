@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -76,6 +77,19 @@ public class ServiceManagerServiceTests
         var entry = new ServiceEntry { Name = "NonExistentService12345" };
         ServiceManagerService.RefreshStatus(entry);
         Assert.Equal("Unknown", entry.Status);
+    }
+
+    [Fact]
+    public async Task StopServiceAsync_ForAServiceWindowsWillNotStop_SaysSoInsteadOfReturning()
+    {
+        // #2431. A running service that accepts no stop request used to be skipped and the call returned as
+        // if it had stopped, so the tab said "✓ stopped" over a service still running. RpcSs is running on
+        // every Windows install and never accepts a stop, so the refusal is reached without elevation and
+        // without anything being stopped: the check comes before any stop request is sent.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ServiceManagerService.StopServiceAsync("RpcSs"));
+
+        Assert.Contains("does not accept a stop request", ex.Message, StringComparison.Ordinal);
     }
 
     // ── StartTypeToScToken (regression: enable restores the previous start type) ──
@@ -196,6 +210,69 @@ public class ServiceManagerServiceTests
         var ps = new PowerShellRunner();
         await Assert.ThrowsAsync<ArgumentException>(
             () => ServiceManagerService.SetStartupTypeAsync("Winmgmt", startType, ps));
+    }
+
+    // ── What the Services commands ask before a startup change (#2430, #2432) ──
+
+    [Theory]
+    [InlineData("Winmgmt")]
+    [InlineData("Windows Search")]
+    [InlineData("MSSQL$SQLEXPRESS")]      // instance names carry a dollar sign
+    [InlineData("cbdhsvc_243f95")]        // a per-user service instance
+    [InlineData("a.b-c_d")]
+    public void IsSafeForScExe_AcceptsTheNamesTheCommandLineCheckAllows(string name)
+        => Assert.True(ServiceManagerService.IsSafeForScExe(name));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("bad;name")]
+    [InlineData("name&calc")]
+    [InlineData("name\"quote")]
+    [InlineData("name\nnewline")]
+    // Legal in Windows — only / and \ are not — and still refused: the check is deliberately narrower than
+    // Windows, because the name goes on a command line. Refusing one must end in words, not the crash dialog.
+    [InlineData("Vendor(R) Updater")]
+    public void IsSafeForScExe_RefusesEverythingSetStartupTypeAsyncWouldReject(string? name)
+    {
+        Assert.False(ServiceManagerService.IsSafeForScExe(name));
+    }
+
+    [Theory]
+    [InlineData("Winmgmt", true)]
+    [InlineData("MSSQL$SQLEXPRESS", true)]
+    [InlineData("Vendor(R) Updater", false)]
+    [InlineData("bad;name", false)]
+    public async Task SetStartupTypeAsync_RefusesExactlyWhatIsSafeForScExeRefuses(string name, bool safe)
+    {
+        // One check, asked in two places: the commands ask it before prompting and SetStartupTypeAsync enforces
+        // it. If they ever disagreed, a name the commands let through would crash again, or one they refused
+        // would have been fine. A substitute rather than the real runner, so an accepted name reaches nothing.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(0);
+
+        var thrown = await Record.ExceptionAsync(
+            () => ServiceManagerService.SetStartupTypeAsync(name, "demand", runner));
+
+        Assert.Equal(safe, ServiceManagerService.IsSafeForScExe(name));
+        Assert.Equal(!safe, thrown is ArgumentException);
+        await runner.Received(safe ? 1 : 0).RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    // Case-insensitive, as RehydratePreviousStartTypes always compared. Nothing produces "disabled" today, and
+    // a rule that depended on the casing would be one more thing to keep true.
+    [Theory]
+    [InlineData("Disabled", true)]
+    [InlineData("disabled", true)]
+    [InlineData("Manual", false)]
+    [InlineData("Automatic", false)]
+    [InlineData("", false)]
+    public void IsDisabled_ReadsTheStartType(string startType, bool expected)
+    {
+        Assert.Equal(expected, ServiceManagerService.IsDisabled(new ServiceEntry { Name = "svc", StartType = startType }));
     }
     // ── Description resolution (#1582) ─────────────────────────────────────────
 

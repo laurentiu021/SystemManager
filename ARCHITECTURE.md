@@ -574,6 +574,10 @@ Key services:
   no delayed member, and the `DelayedAutostart` registry value is not a
   substitute, because a per-user service instance has none of its own. That
   flag is what lets Disable and Enable round-trip "Automatic (Delayed Start)".
+  `StopServiceAsync` refuses a service that accepts no stop request instead of
+  returning as if it had stopped, and `IsSafeForScExe` is the one name check
+  that both the Services commands (before they prompt) and `SetStartupTypeAsync`
+  (before it builds the sc.exe command line) apply.
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File

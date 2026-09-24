@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Text.Json;
 using Serilog;
@@ -38,15 +37,6 @@ public sealed record ServiceStartupRecord(
 public sealed class ServiceStartupLedgerService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-
-    /// <summary>
-    /// Whether a startup type may be recorded: only the ones Enable can put back. "Disabled" is
-    /// deliberately not one — restoring a service to Disabled is what Enable exists to undo — and an
-    /// unrecognised value is not trusted. The list itself is
-    /// <see cref="ServiceManagerService.RestorableStartTypes"/>, so this cannot drift from the mapping.
-    /// </summary>
-    private static bool IsRestorable([NotNullWhen(true)] string? startType) =>
-        startType is not null && ServiceManagerService.RestorableStartTypes.ContainsKey(startType);
 
     private readonly string _path;
 
@@ -96,7 +86,7 @@ public sealed class ServiceStartupLedgerService
     public void Remember(string serviceName, string? previousStartType, DateTimeOffset disabledAtUtc)
     {
         if (string.IsNullOrWhiteSpace(serviceName)) return;
-        if (!IsRestorable(previousStartType))
+        if (!ServiceManagerService.IsRestorable(previousStartType))
         {
             Log.Debug("Not recording an unrestorable startup type for {Service}: {Type}",
                 serviceName, previousStartType ?? "(null)");
@@ -173,7 +163,7 @@ public sealed class ServiceStartupLedgerService
             {
                 if (record is null) continue;
                 if (string.IsNullOrWhiteSpace(record.ServiceName)) continue;
-                if (!IsRestorable(record.PreviousStartType)) continue;
+                if (!ServiceManagerService.IsRestorable(record.PreviousStartType)) continue;
                 ledger[record.ServiceName] = record;
             }
             return ledger;

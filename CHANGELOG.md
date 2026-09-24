@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.7] - 2026-09-24
+
+**The Services tab no longer reports a change it did not make, or makes one you did not ask for.** Stop now
+says when Windows will not stop a service, Enable leaves a service that is already enabled exactly as it is,
+and a service whose name SysManager will not pass on gets a plain explanation instead of an error window.
+
+### Fixed
+
+- **Stop says so when Windows will not stop a service.** Some services accept no stop request while they
+  run — on Windows 11, DNS Client is one, and services.msc greys out its Stop button. SysManager skipped
+  them without a word and then reported "✓ … stopped." while the service kept running. It now says Windows
+  cannot stop it. The Gaming Profile's "Pause search indexing" step stops Windows Search the same way, and
+  when that happens it is now counted among the optimizations that could not be applied, not the ones that
+  were. Present since the Services tab was added in v0.13.0.
+- **Enable only acts on a disabled service.** On any other service it went on to "set to Manual", so
+  clicking Enable on an Automatic service that SysManager had no record of stopped it starting at boot. And
+  because Enable, unlike Stop and Disable, has no refusal for the services Windows needs to boot and sign
+  in, the same offer appeared on those. Enable now says the service is already enabled and changes nothing.
+  Present since v0.13.0.
+- **Disabling a service that is already disabled changes nothing.** It used to remember "Disabled" as the
+  type to put back, so the next Enable promised to set the service "back to Disabled" and then set it to
+  Manual. Present since Enable began restoring the previous startup type, in v1.20.34.
+- **A service with a name like "Vendor(R) Updater" gets an explanation, not an error window.** Windows
+  allows almost any character in a service name. SysManager passes only letters, digits, spaces and
+  `-` `_` `.` `$` to the command it uses to change a startup type, so Disable and Enable on any other name
+  ended in the "SysManager error" window. They now say why they cannot change it, and point to Windows' own
+  Services window, before asking anything. Present since that check was added in v0.28.10.
+
 ## [1.113.6] - 2026-09-24
 
 **Enabling a service now brings back "Automatic (Delayed Start)" when that is how it was set.** The

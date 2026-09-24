@@ -1296,6 +1296,9 @@ offers, "rate us" prompts:
 - **Enable puts back what was there** — the startup type a service had before SysManager disabled
   it, remembered across restarts, "Automatic (Delayed Start)" included. For a service disabled some
   other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so
+- **Never claims a change it did not make** — Enable acts only on a disabled service and Disable only
+  on one that is not, and each says so and leaves the service alone otherwise. Stop says when Windows
+  will not stop a service rather than reporting that it did
 - **Right-click a row** — or press the Menu key or Shift+F10 — for Start, Stop, Disable, Enable and
   Mark, the same five actions as the row's buttons and through the same commands, so every
   confirmation still applies. services.msc has worked this way for twenty years; four buttons per

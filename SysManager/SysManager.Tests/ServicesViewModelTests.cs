@@ -698,6 +698,17 @@ public class ServicesViewModelTests
         return runner;
     }
 
+    /// <summary>
+    /// What RefreshStatus reads back from a real service after <c>start= disabled</c>. The fake service it runs
+    /// against exists nowhere, so the row keeps its old type unless the test sets it — and Enable, which acts
+    /// only on a Disabled service (#2432), would then rightly do nothing.
+    /// </summary>
+    private static void AsDisabledByWindows(ServiceEntry entry)
+    {
+        entry.StartType = "Disabled";
+        entry.IsDelayedAutoStart = false;
+    }
+
     [Fact]
     public async Task EnableService_WithADelayedStartRecorded_AsksScExeForDelayedAuto()
     {
@@ -753,6 +764,7 @@ public class ServicesViewModelTests
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
         Assert.Equal("Automatic (Delayed Start)", ledger.PreviousStartTypeFor(FakeServiceName));
 
+        AsDisabledByWindows(scanned[0]);
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
         await runner.Received(1).RunProcessAsync(
@@ -784,6 +796,7 @@ public class ServicesViewModelTests
         await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
         Assert.Equal("Automatic", ledger.PreviousStartTypeFor(FakeServiceName));
 
+        AsDisabledByWindows(scanned[0]);
         await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
 
         await runner.Received(1).RunProcessAsync(
@@ -792,6 +805,157 @@ public class ServicesViewModelTests
         await runner.DidNotReceive().RunProcessAsync(
             "sc.exe", Arg.Is<string>(a => a.EndsWith("start= delayed-auto", StringComparison.Ordinal)),
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    // ── Commands that must look at the service before acting (#2430, #2431, #2432) ─────────────────
+    //
+    // Same safety net as the section above: a substituted runner that launches nothing, and names no machine
+    // has — except the Stop test, which uses RpcSs precisely BECAUSE Windows refuses to stop it.
+
+    [Fact]
+    public async Task EnableService_OnAServiceThatIsNotDisabled_ChangesNothingAndSaysSo()
+    {
+        // #2432. Enable used to ignore the current startup type: on an Automatic service SysManager had no
+        // record of, it offered "will be set to Manual" and then ran start= demand, so a button called Enable
+        // stopped a service from starting at boot.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = FakeServiceName, DisplayName = "Running Test", Status = "Running",
+                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Caution,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);   // would go ahead if it were ever asked
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Contains("already enabled", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal("Automatic", scanned[0].StartType);
+    }
+
+    [Fact]
+    public async Task EnableService_OnACriticalServiceThatIsNotDisabled_ChangesNothing()
+    {
+        // The same path reached boot- and logon-critical services: Enable is the one startup-type command
+        // with no Critical refusal, so without the state check it offered to make them Manual too.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = FakeServiceName, DisplayName = "Critical Test", Status = "Running",
+                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Critical,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task DisableService_OnAnAlreadyDisabledService_ChangesNothing_AndEnableStillTellsTheTruth()
+    {
+        // #2432. Disabling a service that was already Disabled snapshotted "Disabled" into PreviousStartType.
+        // With no ledger record — a service disabled some other way — the next Enable then promised "set back
+        // to Disabled" and set it to Manual through the "demand" fallback.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = FakeServiceName, DisplayName = "Disabled Test", Status = "Stopped",
+                StartType = "Disabled", SafetyLevel = Models.SafetyLevel.Safe,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Contains("already disabled", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Null(scanned[0].PreviousStartType);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        // Nothing is known about how it was set, so Enable must say Manual — and sc.exe must be asked for it.
+        Assert.Contains(dialog.Messages, m => m.Contains("set to Manual", StringComparison.Ordinal));
+        Assert.DoesNotContain(dialog.Messages, m => m.Contains("set back to Disabled", StringComparison.Ordinal));
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= demand",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Theory]
+    [InlineData("Disable", "Manual")]
+    [InlineData("Enable", "Disabled")]
+    public async Task AStartupChange_ForANameTheScExeCheckRejects_IsRefusedInWords(string verb, string startType)
+    {
+        // #2430. SetStartupTypeAsync refuses a name outside [\w -.$] with an ArgumentException that neither
+        // command caught, so it reached the crash dialog. Windows allows far more in a service name — only /
+        // and \ are invalid — so a vendor's "(R)" is legal. The refusal now comes before the prompt.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = "SysManagerTest(R) Updater", DisplayName = "Vendor Updater", Status = "Stopped",
+                StartType = startType, SafetyLevel = Models.SafetyLevel.Safe,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, temp.NewLedger(), runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var thrown = await Record.ExceptionAsync(() => ExecuteAsync(vm, verb, scanned[0]));
+
+        Assert.Null(thrown);
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        Assert.Contains("services.msc", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StopService_WhenWindowsWillNotStopIt_ReportsTheRefusal_NotAStop()
+    {
+        // #2431. StopServiceAsync skipped a service that accepts no stop request and returned as if it had
+        // stopped it, so the line read "✓ … stopped." over a service still running. RpcSs never accepts a
+        // stop; its Critical rating is replaced here only to get past the Critical refusal, which would
+        // otherwise answer first. Nothing can be stopped either way: Windows refuses, and the service
+        // checks before asking.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = "RpcSs", DisplayName = "Remote Procedure Call (RPC)", Status = "Running",
+                StartType = "Automatic", SafetyLevel = Models.SafetyLevel.Safe,
+            },
+        };
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.StopServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.DoesNotContain("✓", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("does not accept a stop request", vm.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1067,12 +1231,16 @@ public class ServicesViewModelTests
         public void Dispose() => DialogService.Instance = _previous;
     }
 
-    private static ServiceEntry SafeEntry() => new()
+    /// <summary>
+    /// A Safe row each command can act on. Enable acts only on a Disabled service (#2432), so for Enable the row
+    /// is Disabled — otherwise it would stop at "already enabled" and never reach the gate being tested.
+    /// </summary>
+    private static ServiceEntry SafeEntry(string verb) => new()
     {
         Name = "XboxGipSvc",
         DisplayName = "Xbox Accessory Management",
         Status = "Stopped",
-        StartType = "Manual",
+        StartType = verb == "Enable" ? "Disabled" : "Manual",
         SafetyLevel = Models.SafetyLevel.Safe,
     };
 
@@ -1087,7 +1255,7 @@ public class ServicesViewModelTests
         var vm = await CreateWithDataAsync();
         using var dialog = new DialogScope(answer: true); // would say yes if it were asked
 
-        await ExecuteAsync(vm, verb, SafeEntry());
+        await ExecuteAsync(vm, verb, SafeEntry(verb));
 
         Assert.Contains("admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
         dialog.Dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
@@ -1104,7 +1272,7 @@ public class ServicesViewModelTests
         var vm = await CreateWithDataAsync();
         using var dialog = new DialogScope(answer: false); // decline, so nothing runs on this machine
 
-        await ExecuteAsync(vm, verb, SafeEntry());
+        await ExecuteAsync(vm, verb, SafeEntry(verb));
 
         dialog.Dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
         Assert.DoesNotContain("requires admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);

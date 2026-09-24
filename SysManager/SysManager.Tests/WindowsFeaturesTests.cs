@@ -291,4 +291,71 @@ public class WindowsFeaturesTests
         Assert.Contains("Failed to enable", vm.StatusMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("restore point", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ── A refused scan is a failure, not "Found 0 features" (#2451) ────────
+    //
+    // Get-WindowsOptionalFeature -Online refuses an unelevated caller: it prints nothing and exits 1 (measured).
+    // The exit code was discarded, so the empty output parsed to an empty list and the tab reported a finished
+    // scan. A normal launch is unelevated.
+
+    private static IPowerShellRunner RunnerThatExits(int exitCode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(exitCode));
+        return runner;
+    }
+
+    [Fact]
+    public async Task ListFeatures_WhenTheQueryFails_Throws_InsteadOfReturningAnEmptyList()
+    {
+        var service = new WindowsFeaturesService(RunnerThatExits(1));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ListFeaturesAsync());
+    }
+
+    [Fact]
+    public async Task Scan_Unelevated_WhenWindowsRefusesTheQuery_SaysItNeedsAdministrator_NotFoundZero()
+    {
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(RunnerThatExits(1)), NoRestorePoint())
+        {
+            IsElevated = false,
+        };
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(WindowsFeaturesViewModel.ListNeedsAdminMessage, vm.StatusMessage);
+        Assert.DoesNotContain("Found 0", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Scan_Elevated_WhenTheQueryStillFails_ReportsTheFailure()
+    {
+        var vm = ElevatedVm(RunnerThatExits(5), NoRestorePoint());
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Error: Windows could not list the optional features", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Scan_WhenTheQuerySucceeds_ReportsWhatItFound()
+    {
+        // The success half, so a scan that always "fails" cannot pass the pair above.
+        var runner = RunnerThatExits(0);
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(call =>
+              {
+                  runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("TelnetClient|Disabled"));
+                  runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("NetFx3|Enabled"));
+                  return Task.FromResult(0);
+              });
+        var vm = ElevatedVm(runner, NoRestorePoint());
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal("Found 2 features (1 enabled).", vm.StatusMessage);
+    }
 }

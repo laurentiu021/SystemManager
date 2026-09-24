@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
@@ -92,6 +93,24 @@ public class SettingsWatchdogViewModelTests
             svc.Received(1).SaveBaseline(Arg.Any<DateTime>());
         }
         finally { DialogService.Instance = prev; }
+    }
+
+    [Fact]
+    public void SaveBaseline_WhenTheWriteFails_SaysItWasNotSaved()
+    {
+        // The service now lets a failed write through instead of swallowing it (#2452).
+        var svc = Substitute.For<ISettingsWatchdogService>();
+        svc.Catalog.Returns([]);
+        svc.LoadBaseline().Returns((BaselineSnapshot?)null);
+        svc.DetectDrift().Returns([]);
+        svc.SaveBaseline(Arg.Any<DateTime>()).Returns(_ => throw new IOException("There is not enough space on the disk."));
+        var vm = new SettingsWatchdogViewModel(svc);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.SaveBaselineCommand.Execute(null);
+
+        Assert.DoesNotContain("Baseline saved", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.StartsWith("The baseline could not be saved", vm.StatusMessage, StringComparison.Ordinal);
     }
 
     // ── RestoreSelected confirm gate ───────────────────────────────────────

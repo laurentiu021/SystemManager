@@ -182,6 +182,19 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveBaseline_WhenTheFileCannotBeWritten_Throws_InsteadOfSwallowingIt()
+    {
+        // A folder where the baseline file belongs makes the atomic write fail, as a locked or unwritable file
+        // does. The failure used to be caught and logged at Debug level, so the tab said "Baseline saved" (#2452).
+        Directory.CreateDirectory(BaselineFile);
+
+        var ex = Record.Exception(() => NewService().SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0)));
+
+        Assert.True(ex is IOException or UnauthorizedAccessException,
+            $"expected a write failure, got {ex?.GetType().Name ?? "no exception"}");
+    }
+
+    [Fact]
     public void HasBaseline_ReflectsTheGivenConfigDir()
     {
         var svc = NewService();

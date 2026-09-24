@@ -94,7 +94,9 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            // Unelevated, the query always fails, and a normal launch is unelevated — so that case gets the
+            // reason and the way out rather than an exit code (#2451).
+            StatusMessage = IsElevated ? $"Error: {ex.Message}" : ListNeedsAdminMessage;
         }
         finally
         {
@@ -102,6 +104,10 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             IsProgressIndeterminate = false;
         }
     }
+
+    /// <summary>What the tab says when an unelevated scan is refused.</summary>
+    internal const string ListNeedsAdminMessage =
+        "Windows only lists its optional features to an administrator. Use \"Run as administrator\" above to see them.";
 
     [RelayCommand(CanExecute = nameof(CanToggle))]
     private async Task ToggleFeatureAsync(WindowsFeature? feature)

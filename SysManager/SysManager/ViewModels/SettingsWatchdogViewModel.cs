@@ -105,7 +105,17 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
                 "Save Baseline — Confirm"))
             return;
 
-        _service.SaveBaseline(DateTime.Now);
+        try
+        {
+            _service.SaveBaseline(DateTime.Now);
+        }
+        // A failed write used to be swallowed inside the service, and this line said "Baseline saved" regardless (#2452).
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            Refresh();
+            StatusMessage = $"The baseline could not be saved: {ex.Message}";
+            return;
+        }
         ActivityLogService.Instance.Log("Settings Watchdog", "Saved settings baseline");
         Refresh();
         StatusMessage = "Baseline saved. The watchdog will flag future changes.";

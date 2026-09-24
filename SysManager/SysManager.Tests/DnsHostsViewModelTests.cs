@@ -92,6 +92,24 @@ public class DnsHostsViewModelTests
         Assert.Equal(countBefore - 1, vm.HostEntries.Count);
         Assert.DoesNotContain(entry, vm.HostEntries);
     }
+
+    [StaFact]
+    public void AddAndRemove_SayTheHostsFileChangesOnlyOnSave()
+    {
+        // Only Save writes the hosts file. "Added …" and "Removed …" alone read as done, so a user who removed
+        // a blocking entry and left the tab still had it in the file (#2455).
+        var vm = NewVm();
+        vm.NewIp = "0.0.0.0";
+        vm.NewHostname = "ads.example.com";
+
+        vm.AddEntryCommand.Execute(null);
+        Assert.Contains("press Save", vm.HostsStatus, StringComparison.Ordinal);
+
+        var entry = new HostsEntry { IpAddress = "10.0.0.1", Hostname = "test.local" };
+        vm.HostEntries.Add(entry);
+        vm.RemoveEntryCommand.Execute(entry);
+        Assert.Contains("press Save", vm.HostsStatus, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>

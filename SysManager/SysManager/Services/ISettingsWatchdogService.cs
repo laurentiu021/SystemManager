@@ -23,6 +23,8 @@ public interface ISettingsWatchdogService
     /// Captures the current values as the new baseline and returns the snapshot just taken, so the
     /// caller does not have to read it back.
     /// </summary>
+    /// <exception cref="System.IO.IOException">The baseline file could not be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">The baseline folder or file is not writable.</exception>
     IReadOnlyDictionary<string, int?> SaveBaseline(DateTime takenAt);
 
     /// <summary>

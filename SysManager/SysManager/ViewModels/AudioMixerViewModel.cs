@@ -354,18 +354,30 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             s.IsActive ? AudioSessionState.Active : AudioSessionState.Inactive, s.IsSystemSounds, 0f)).ToList();
 
         var plan = VolumePresetService.BuildApplyPlan(SelectedPreset, live);
-        int applied = 0;
+        int applied = 0, refused = 0;
         foreach (var (sessionId, volume, muted) in plan)
         {
             var row = Sessions.FirstOrDefault(s => s.SessionId == sessionId);
             if (row is null) continue;
-            row.Volume = volume;   // propagates to the service via the row's changed-handler
-            row.IsMuted = muted;
-            applied++;
+            // Counted from what Windows accepted, not from the attempt (#2447).
+            if (row.ApplyPreset(volume, muted)) applied++;
+            else refused++;
         }
-        StatusMessage = applied > 0
-            ? $"Applied \"{SelectedPreset.Name}\" to {applied} app{(applied == 1 ? "" : "s")}."
-            : $"No running apps matched \"{SelectedPreset.Name}\".";
+        StatusMessage = DescribePresetApply(SelectedPreset.Name, applied, refused);
+    }
+
+    /// <summary>The status line after applying a preset, counting only the apps Windows let SysManager change.</summary>
+    internal static string DescribePresetApply(string presetName, int applied, int refused)
+    {
+        static string Apps(int n) => $"{n} app{(n == 1 ? "" : "s")}";
+        if (refused == 0)
+            return applied > 0
+                ? $"Applied \"{presetName}\" to {Apps(applied)}."
+                : $"No running apps matched \"{presetName}\".";
+        var why = refused == 1 ? "it may have just stopped playing" : "they may have just stopped playing";
+        return applied > 0
+            ? $"Applied \"{presetName}\" to {Apps(applied)}; {Apps(refused)} could not be changed — {why}."
+            : $"Could not apply \"{presetName}\": Windows refused the change for {Apps(refused)} — {why}.";
     }
 
     /// <summary>Delete the selected preset (with confirmation — the file is rewritten immediately).</summary>

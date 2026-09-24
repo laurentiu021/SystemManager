@@ -846,10 +846,13 @@ Key services:
   reimplements a tweak. A machine-wide `GamingSnapshot` is captured before the first change
   and persisted to its OWN `gaming-profiles.json` (never the Performance tab's snapshot);
   revert undoes each applied step in reverse order, and a leftover on-disk session is
-  offered for restore on next launch (crash recovery). The apply/revert engine (order,
-  admin-skip, failure-isolation, reverse-revert) is an internal static method exercised by
-  unit tests with fake steps — no real system call. `CpuAffinityService` gained a small
-  `Get`/`TrySetPriority` capability (behind `ICpuAffinityService`) for the game's priority.
+  offered for restore on next launch (crash recovery). Every revert path — Stop, the
+  automatic revert when the game exits, and recovery — returns a `GamingRevertResult` naming
+  the steps whose undo failed, so the tab never announces a restore it did not get. The
+  apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is an internal
+  static method exercised by unit tests with fake steps — no real system call.
+  `CpuAffinityService` gained a small `Get`/`TrySetPriority` capability (behind
+  `ICpuAffinityService`) for the game's priority.
 - `DefenderService` — Microsoft Defender via the Defender PowerShell module
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are

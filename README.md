@@ -335,7 +335,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   you set stays in force in Windows, but SysManager will not claim to know it after a restart
 - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
-  across restarts, and are stored locally in `%LocalAppData%\SysManager`
+  across restarts, and are stored locally in `%LocalAppData%\SysManager`. The summary counts
+  only the apps Windows actually changed, and says how many it refused — an app that has
+  just stopped playing, for example
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
   to this tab, alongside shortcuts to Process Manager and Quick Cleanup
 
@@ -1202,6 +1204,8 @@ offers, "rate us" prompts:
   timer was already on from the Timer Resolution tab, game mode leaves it on when it ends
 - **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
   system-wide changes are offered for restore on next launch
+- **Honest about the restore** — every setting is put back even if one of them fails, and the
+  tab names any setting it could not restore, instead of saying everything is back
 - **Honest about admin** — freeing standby memory and pausing indexing need
   administrator; without it they're clearly skipped, not silently failed
 - 🔬 Preview — fully reversible today; closing background apps and saved per-game

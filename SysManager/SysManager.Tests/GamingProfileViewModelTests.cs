@@ -42,6 +42,8 @@ public class GamingProfileViewModelTests
         svc.LoadLastConfig().Returns(lastConfig ?? new GamingProfile());
         svc.IsActive.Returns(active);
         svc.HasPendingRecovery.Returns(false);
+        svc.RevertAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
+        svc.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
         return svc;
     }
 
@@ -168,10 +170,80 @@ public class GamingProfileViewModelTests
 
         // The bound game exited: the service reverted and now reports inactive, then raises.
         service.IsActive.Returns(false);
-        service.SessionAutoReverted += Raise.Event<EventHandler>(service, EventArgs.Empty);
+        service.SessionAutoReverted += Raise.Event<EventHandler<GamingRevertResult>>(service, GamingRevertResult.Complete);
 
         Assert.False(vm.IsSessionActive);
     }
+
+    // ── A revert that could not restore everything says so (#2445) ─────────
+    //
+    // Each of the three paths used to write a fixed "restored" sentence whatever the revert achieved.
+
+    private static readonly GamingRevertResult PowerPlanNotRestored = new(["Ultimate Performance power plan"]);
+
+    [Fact]
+    public async Task Stop_WhenASettingCouldNotBeRestored_NamesIt_NotThatEverythingWasRestored()
+    {
+        var service = ServiceWith(GamingProfile.Default, active: true);
+        service.RevertAsync(Arg.Any<CancellationToken>()).Returns(PowerPlanNotRestored);
+        var vm = NewVm(service);
+        vm.IsSessionActive = true;
+
+        await WithConfirm(true, () => vm.StopCommand.ExecuteAsync(null));
+
+        Assert.DoesNotContain("original settings restored", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GameExit_WhenASettingCouldNotBeRestored_NamesIt()
+    {
+        var service = ServiceWith(GamingProfile.Default, active: true);
+        var vm = NewVm(service);
+        vm.IsSessionActive = true;
+        service.IsActive.Returns(false);
+
+        service.SessionAutoReverted += Raise.Event<EventHandler<GamingRevertResult>>(service, PowerPlanNotRestored);
+
+        Assert.DoesNotContain("original settings were restored", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Recovery_WhenASettingCouldNotBeRestored_NamesIt()
+    {
+        var service = ServiceWith(GamingProfile.Default);
+        service.HasPendingRecovery.Returns(true);
+        service.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(PowerPlanNotRestored);
+        GamingProfileViewModel? vm = null;
+
+        // The recovery prompt runs during initialisation, so the dialog answer must cover construction.
+        await WithConfirm(true, async () =>
+        {
+            vm = new GamingProfileViewModel(service, CpuWith());
+            await vm.InitializationComplete;
+        });
+
+        await service.Received(1).RecoverPendingAsync(Arg.Any<CancellationToken>());
+        Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm!.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeRevert_NamesEverySettingThatWasNotRestored()
+    {
+        var text = GamingProfileViewModel.DescribeRevert(
+            new GamingRevertResult(["Ultimate Performance power plan", "Pause search indexing"]),
+            "every setting restored", "Game mode stopped");
+
+        Assert.StartsWith("Game mode stopped, but 2 settings were (", text, StringComparison.Ordinal);
+        Assert.Contains("Ultimate Performance power plan, Pause search indexing", text, StringComparison.Ordinal);
+        Assert.Contains("check them yourself", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeRevert_WhenEverySettingWasRestored_UsesTheSuccessLine()
+        => Assert.Equal("every setting restored",
+            GamingProfileViewModel.DescribeRevert(GamingRevertResult.Complete, "every setting restored", "unused"));
 
     // ── DescribeResult: honest, plain-language summary (pure) ──────────────
 

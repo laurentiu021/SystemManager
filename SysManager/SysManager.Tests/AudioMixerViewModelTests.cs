@@ -581,6 +581,79 @@ public class AudioMixerViewModelTests
         Assert.Equal(before, vm.StatusMessage);
     }
 
+    // ── Applying a preset counts what Windows accepted (#2447) ─────────────
+    //
+    // The preset set Volume/IsMuted on each matching row and counted the row. A refused write raised the row's
+    // failure sentence, which the preset's own "Applied … to N apps" replaced at once — counting the refused app.
+
+    private static readonly VolumePresetEntry[] ChromeAndSpotifyAtTwentyPercent =
+    [
+        new("chrome.exe", "Chrome", 0.2f, false),
+        new("spotify.exe", "Spotify", 0.2f, false),
+    ];
+
+    private static IAudioMixerService ChromeAndSpotifyPlaying()
+        => ServiceWith(
+            SessionWithExe("s1", 10, "Chrome", 0.5f, @"C:\Program Files\Test\chrome.exe"),
+            SessionWithExe("s2", 20, "Spotify", 0.5f, @"C:\Program Files\Test\spotify.exe"));
+
+    private static void SelectPreset(AudioMixerViewModel vm, IReadOnlyList<VolumePresetEntry> entries)
+    {
+        vm.Presets.ReplaceWith([new VolumePreset("Movie night", entries)]);
+        vm.SelectedPreset = vm.Presets[0];
+    }
+
+    [Fact]
+    public void ApplyPreset_WhenWindowsRefusesOneApp_CountsOnlyTheOther_AndSaysSo()
+    {
+        var service = ChromeAndSpotifyPlaying();
+        service.SetVolume("s1", Arg.Any<float>()).Returns(true);
+        service.SetVolume("s2", Arg.Any<float>()).Returns(false);
+        using var vm = NewVm(service);
+        SelectPreset(vm, ChromeAndSpotifyAtTwentyPercent);
+
+        vm.ApplyPresetCommand.Execute(null);
+
+        Assert.Equal(
+            "Applied \"Movie night\" to 1 app; 1 app could not be changed — it may have just stopped playing.",
+            vm.StatusMessage);
+        // The refused row keeps showing the level the app is still playing at.
+        Assert.Equal(0.5f, vm.Sessions.Single(r => r.SessionId == "s2").Volume);
+        Assert.Equal(0.2f, vm.Sessions.Single(r => r.SessionId == "s1").Volume);
+    }
+
+    [Fact]
+    public void ApplyPreset_WhenWindowsRefusesEveryApp_ReportsThat_NotSuccess()
+    {
+        var service = ChromeAndSpotifyPlaying();
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(false);
+        using var vm = NewVm(service);
+        SelectPreset(vm, ChromeAndSpotifyAtTwentyPercent);
+
+        vm.ApplyPresetCommand.Execute(null);
+
+        Assert.StartsWith("Could not apply \"Movie night\"", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("2 apps", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyPreset_WhenWindowsAcceptsEveryApp_CountsThemAll()
+    {
+        // The success half of the pair, so reporting a refusal unconditionally cannot pass both.
+        var service = ChromeAndSpotifyPlaying();
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(true);
+        using var vm = NewVm(service);
+        SelectPreset(vm, ChromeAndSpotifyAtTwentyPercent);
+
+        vm.ApplyPresetCommand.Execute(null);
+
+        Assert.Equal("Applied \"Movie night\" to 2 apps.", vm.StatusMessage);
+        service.Received(1).SetVolume("s1", 0.2f);
+        service.Received(1).SetVolume("s2", 0.2f);
+        // Mute already matches the preset, so it is not written again.
+        service.DidNotReceive().SetMute(Arg.Any<string>(), Arg.Any<bool>());
+    }
+
     [Fact]
     public void MergeInto_ExternalUpdate_DoesNotEchoBackToService()
     {

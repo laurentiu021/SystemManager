@@ -212,6 +212,35 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     private void ToggleMute() => IsMuted = !IsMuted;
 
     /// <summary>
+    /// Applies a saved preset's level and mute and reports whether Windows accepted both.
+    /// </summary>
+    /// <remarks>
+    /// The preset used to set <see cref="Volume"/> and <see cref="IsMuted"/> and count the row, so a refused write
+    /// was still counted as applied, and the change handler's failure sentence was overwritten a moment later by
+    /// the preset's own summary (#2447). Here each write goes to the service directly and the result comes back to
+    /// the caller. Only a value Windows accepted is shown on the row, so a refused one stays where the app still is.
+    /// The level is always written — deciding it is "already there" would mean comparing floats for equality, and
+    /// writing an unchanged level is harmless — while a mute that already matches is not written again.
+    /// </remarks>
+    public bool ApplyPreset(float volume, bool muted)
+    {
+        var volumeApplied = _service.SetVolume(SessionId, volume);
+        var muteApplied = IsMuted == muted || _service.SetMute(SessionId, muted);
+
+        _suppressPropagation = true;
+        try
+        {
+            if (volumeApplied) Volume = volume;
+            if (muteApplied) IsMuted = muted;
+        }
+        finally
+        {
+            _suppressPropagation = false;
+        }
+        return volumeApplied && muteApplied;
+    }
+
+    /// <summary>
     /// User picked an output device for this app → route it via the service. Skipped when the
     /// change came from a refresh (guard) or when in-app routing isn't supported. The picker keeps the
     /// choice on failure — reverting it would fight the user's own click — but the status now SAYS the

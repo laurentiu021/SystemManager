@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.11] - 2026-09-24
+
+**Gaming Profile and Volume Control no longer say a change went through when part of it did not.** Ending
+game mode names any setting that could not be put back, instead of announcing that everything was
+restored, and applying a volume preset counts only the apps Windows actually changed.
+
+### Fixed
+
+- **Gaming Profile: ending game mode says which settings could not be restored.** Each setting is put back
+  on its own, so one failure never stops the others — but that failure only reached the log. Stop, the
+  automatic restore when the game exits, and the restore of a session left over from a crash all said the
+  original settings were back regardless. The power plan is one setting that can fail this way: if
+  Windows refuses the switch back, the PC stays on Ultimate Performance while the tab said "original
+  settings restored." The tab now names each setting that was not restored. Present since the tab was
+  added in v1.52.38.
+- **Volume Control: applying a preset counts only the apps it changed.** Every app the preset matched was
+  counted as changed, even when Windows refused the new level — which can happen for up to a second after
+  a refresh of the app list goes wrong, or when an app has just stopped playing. The message saying an
+  app could not be changed was replaced a moment later by "Applied … to N apps", and the refused app's
+  slider moved while its sound did not. The summary now counts only the apps that changed and says how
+  many were refused, and a refused slider stays where the app is. Counting refused apps dates from the
+  presets' introduction in v1.55.0; hiding the per-app message dates from v1.65.16, which added it.
+
 ## [1.113.10] - 2026-09-24
 
 **Timer Resolution, Gaming Profile and OneDrive now report what actually happened.** Turning the fast timer

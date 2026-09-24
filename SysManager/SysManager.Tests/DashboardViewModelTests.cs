@@ -360,6 +360,48 @@ public class DashboardViewModelTests
         }
     }
 
+    [Fact]
+    public async Task QuickUpdateApps_WhenWingetFails_EndsAsFailed_NotDone()
+    {
+        // #2437. `winget upgrade --all` exits non-zero whenever one package fails, and the action used to return
+        // normally with the failure text as its detail — so the card read "✓ Done" above "Installer failed".
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(1));
+        var vm = NewVm(winget);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+            Assert.Equal("Failed", vm.QuickActionStatus);
+            Assert.Equal(WingetResult.From(1).FriendlyMessage, vm.QuickActionDetail);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    [Fact]
+    public void QuickWindowsUpdate_OpensTheWindowsUpdateTab_AndClaimsNoCheck()
+    {
+        // #2437. The action showed a progress bar, waited half a second, logged "Check initiated from Dashboard"
+        // and ended in "✓ Done" — no check was ever made. It now opens the tab where the real check runs, and
+        // shows no result card for a check it did not do.
+        var navigation = Substitute.For<INavigationService>();
+        var vm = NewVm(navigation: navigation);
+
+        vm.QuickWindowsUpdateCommand.Execute(null);
+
+        navigation.Received(1).GoTo("nav-windows-update", Arg.Any<string?>());
+        Assert.False(vm.IsQuickActionRunning);
+        Assert.Equal("", vm.QuickActionStatus);
+    }
+
     // ---------- Tune-Up result card navigation ----------
     // Each finding on the card links to the tab that can act on it ("3 broken shortcuts" is only useful
     // if it can take you to the cleaner). Navigation resolves through the live MainWindow DataContext,

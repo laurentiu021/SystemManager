@@ -381,11 +381,21 @@ public sealed partial class PerformanceService : IDisposable
     }
 
     /// <summary>
-    /// Create Ultimate Performance plan if it doesn't exist, return its GUID.
+    /// Create Ultimate Performance plan if it doesn't exist, return its GUID — or "" when Windows yields none.
     /// </summary>
+    /// <remarks>
+    /// Written for English Windows until #2438: the existing copy was found only by its English name, and the new
+    /// copy's GUID was read after the English "GUID:" label — the same label <see cref="ParseActivePlan"/> had
+    /// already stopped trusting because powercfg translates it. On other display languages the lookup missed,
+    /// each click duplicated the plan again, no GUID was parsed, and the caller was handed "". The new copy's GUID
+    /// is now read as the canonical token, the same in every language, and the built-in scheme is used as it is
+    /// whenever Windows lists it. What is still English-only is recognising an EARLIER copy by name: where the
+    /// built-in scheme is hidden and the display language is not English, a click can still add a copy — but that
+    /// copy is now switched on rather than skipped.
+    /// </remarks>
     public async Task<string> EnsureUltimatePerformancePlanAsync(CancellationToken ct = default)
     {
-        var existingGuid = await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false);
+        var existingGuid = await FindUltimatePlanGuidAsync(ct).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingGuid)) return existingGuid;
 
         // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
@@ -397,21 +407,39 @@ public sealed partial class PerformanceService : IDisposable
         try { await _ps.RunProcessAsync("powercfg.exe", $"-duplicatescheme {UltimatePerfScheme}", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        // Parse GUID from output: "Power Scheme GUID: <guid>  (Ultimate Performance)"
-        foreach (var line in lines)
-        {
-            var idx = line.IndexOf("GUID:", StringComparison.OrdinalIgnoreCase);
-            if (idx < 0) continue;
-            var after = line[(idx + 5)..].Trim();
-            var sp = after.IndexOf(' ');
-            return sp > 0 ? after[..sp].Trim() : after.Trim();
-        }
+        // "Power Scheme GUID: <new guid>  (Ultimate Performance)" in English; the label and the name are translated
+        // elsewhere, the GUID never is.
+        var created = ParseFirstPlanGuid([.. lines]);
+        if (created is not null) return created;
 
-        return await FindPlanGuidByNameAsync("Ultimate Performance", ct).ConfigureAwait(false) ?? "";
+        return await FindUltimatePlanGuidAsync(ct).ConfigureAwait(false) ?? "";
     }
 
-    /// <summary>Find a plan GUID by name substring.</summary>
-    public async Task<string?> FindPlanGuidByNameAsync(string nameSubstring, CancellationToken ct = default)
+    /// <summary>
+    /// The Ultimate Performance plan already on this PC: the built-in scheme itself when <c>powercfg /list</c> shows
+    /// it (its GUID is the same in every language), otherwise an earlier copy found by its English name.
+    /// </summary>
+    private async Task<string?> FindUltimatePlanGuidAsync(CancellationToken ct)
+    {
+        var listed = await ListPlansAsync(ct).ConfigureAwait(false);
+        return listed.Any(l => l.Contains(UltimatePerfScheme, StringComparison.OrdinalIgnoreCase))
+            ? UltimatePerfScheme
+            : ParsePlanGuidByName(listed, "Ultimate Performance");
+    }
+
+    /// <summary>The first canonical GUID in powercfg output, whatever language its labels are in.</summary>
+    internal static string? ParseFirstPlanGuid(IList<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            var m = PowerPlanGuidRegex().Match(line);
+            if (m.Success) return m.Value;
+        }
+        return null;
+    }
+
+    /// <summary>The lines of <c>powercfg /list</c>.</summary>
+    private async Task<IList<string>> ListPlansAsync(CancellationToken ct)
     {
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         // ConcurrentQueue: LineReceived fires from BOTH the stdout and stderr reader threads,
@@ -422,7 +450,7 @@ public sealed partial class PerformanceService : IDisposable
         try { await _ps.RunProcessAsync("powercfg.exe", "/list", ct, PowerShellRunner.OemEncoding).ConfigureAwait(false); }
         finally { _ps.LineReceived -= OnLine; _psGate.Release(); }
 
-        return ParsePlanGuidByName([.. lines], nameSubstring);
+        return [.. lines];
     }
 
     internal static string? ParsePlanGuidByName(IList<string> lines, string nameSubstring)
@@ -837,7 +865,12 @@ public sealed partial class PerformanceService : IDisposable
         await _psGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await _ps.RunProcessAsync("powercfg.exe", arg, ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            // The exit code decides, as it does for SetActivePlanAsync. It used to be discarded, so a PC without
+            // hibernation support — many virtual machines, some firmware — was told the change succeeded (#2438).
+            var exitCode = await _ps.RunProcessAsync("powercfg.exe", arg, ct, PowerShellRunner.OemEncoding).ConfigureAwait(false);
+            if (exitCode != 0)
+                throw new InvalidOperationException(
+                    $"powercfg could not turn hibernation {(enabled ? "on" : "off")} (exit code {exitCode}).");
         }
         finally { _psGate.Release(); }
     }

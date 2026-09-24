@@ -876,25 +876,25 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // even when winget failed.
             var result = await _winget.UpgradeAllAsync(CancellationToken.None);
             QuickActionProgress = 100;
-            QuickActionDetail = result.Succeeded ? "All apps updated" : result.FriendlyMessage;
             ActivityLogService.Instance.Log("App Updates",
                 result.Succeeded ? "Upgrade all completed" : $"Upgrade all: {result.FriendlyMessage}");
+            // RunQuickActionAsync reports "✓ Done" for any action that returns, so a failed run must not return:
+            // `winget upgrade --all` exits non-zero when any one package fails, and the card used to read "✓ Done"
+            // above the failure text (#2437). Its failure branch shows the message as the detail.
+            if (!result.Succeeded)
+                throw new InvalidOperationException(result.FriendlyMessage);
+            QuickActionDetail = "All apps updated";
         });
     }
 
+    /// <summary>Opens the Windows Update tab, where the check really runs.</summary>
+    /// <remarks>
+    /// This was a quick action in name only (#2437): it showed a progress bar, waited half a second, logged
+    /// "Check initiated from Dashboard" and ended in "✓ Done" — a check that never happened, recorded in the
+    /// activity log as though it had. It now does what it can do honestly, and says so on the button.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
-    private async Task QuickWindowsUpdateAsync()
-    {
-        await RunQuickActionAsync("Windows Update", "Windows Update", "nav-windows-update", async () =>
-        {
-            QuickActionDetail = "Checking for Windows updates...";
-            QuickActionProgress = 50;
-            await Task.Delay(500);
-            QuickActionProgress = 100;
-            QuickActionDetail = "Navigate to Windows Update tab for full control";
-            ActivityLogService.Instance.Log("Windows Update", "Check initiated from Dashboard");
-        });
-    }
+    private void QuickWindowsUpdate() => SelectTab("nav-windows-update");
 
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
     private async Task QuickSpeedTestAsync()

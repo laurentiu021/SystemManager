@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.9] - 2026-09-24
+
+**Four more places stop reporting success for something that did not happen.** The Dashboard's app update
+and its Windows Update button, the Performance tab's Ultimate Performance plan and hibernation switch, and
+System Fixes' Windows Update reset each said "done" without checking — now each reports what actually
+happened.
+
+### Fixed
+
+- **Dashboard: a failed "Update All Apps" ends as Failed, not "✓ Done".** winget exits with an error when any
+  one app fails to update — one that is still running, an installer that errors — and the card showed
+  "✓ Done" above winget's own failure message. It now shows Failed with that message. Present since the
+  quick actions were added in v1.17.0.
+- **Dashboard: the Windows Update button no longer pretends to check.** "Check Windows Updates" showed a
+  progress bar for half a second, ended in "✓ Done" and wrote "Check initiated from Dashboard" to Recent
+  Activity, but it never contacted Windows Update. It is now "Open Windows Update" and takes you to the
+  Windows Update tab, where the check really runs. Present since v1.17.0.
+- **Performance: Ultimate Performance is switched on in every display language, and says so when it cannot
+  be.** The plan was read from powercfg's English wording, which Windows translates. On Windows in other
+  languages the switch was skipped and the tab still said "Power plan set to Ultimate Performance". The
+  plan is now read by its identifier, which is the same in every language, and a PC where Windows does not
+  provide it is told so. When Windows lists the built-in plan itself, it is used directly instead of being
+  copied again. The active-plan reading was fixed the same way earlier; this path had been missed. Present
+  since v0.12.0.
+- **Performance: the hibernation switch reports failure when Windows refuses.** On a PC that does not
+  support hibernation — many virtual machines, some firmware — turning it on failed, and the tab still said
+  "✓ Hibernation enabled." It now reports that the change failed, and it also checks the result rather than
+  trusting the request. Present since v0.13.0.
+- **System Fixes: Reset Windows Update fails when a cache folder cannot be cleared.** The reset works by
+  renaming two folders that Windows Update keeps its downloads and signatures in. When one was still in
+  use, the rename failed without a word, and the fix still said it was done and asked for a reboot that
+  would change nothing. It now reports the failure with the reason, and restarts the update services
+  either way. Present since the System Fixes tab was added in v1.26.0.
+
 ## [1.113.8] - 2026-09-24
 
 **SysManager no longer says it made a restore point when Windows declined to make one.** Windows allows

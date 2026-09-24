@@ -484,12 +484,12 @@
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickWindowsUpdateCommand}"
-                                AutomationProperties.Name="Check Windows Updates"
+                                AutomationProperties.Name="Open Windows Update"
                                 Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Check Windows Updates" VerticalAlignment="Center" FontSize="12"/>
+                                <TextBlock Text="Open Windows Update" VerticalAlignment="Center" FontSize="12"/>
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickSpeedTestCommand}"

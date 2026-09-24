@@ -136,6 +136,71 @@ public class PerformanceServiceTests
         Assert.Null(guid);
     }
 
+    // ── EnsureUltimatePerformancePlanAsync on translated Windows (#2438) ──
+    //
+    // powercfg translates both the "Power Scheme GUID:" label and the plan names; only the GUID is the same in
+    // every language, which is why ParseActivePlan already anchors on it. The labels below are illustrative
+    // translations chosen to NOT contain the English "GUID:" — the property under test is that nothing
+    // depends on the label, not the exact wording of any one language.
+
+    private const string NewPlanGuid = "3ff9831b-6f80-4830-8178-736cd4229e7b";
+
+    /// <summary>A runner that answers each powercfg call with the lines a translated Windows would print.</summary>
+    private static IPowerShellRunner PowercfgAnswering(string[] listLines, string[] duplicateLines)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        void Answer(string arguments, string[] lines) =>
+            runner.RunProcessAsync("powercfg.exe", arguments, Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+                  .Returns(_ =>
+                  {
+                      foreach (var line in lines)
+                          runner.LineReceived += Raise.Event<Action<SysManager.Models.PowerShellLine>>(
+                              SysManager.Models.PowerShellLine.Output(line));
+                      return 0;
+                  });
+        Answer("/list", listLines);
+        Answer($"-duplicatescheme {PerformanceService.UltimatePerfScheme}", duplicateLines);
+        return runner;
+    }
+
+    [Fact]
+    public async Task EnsureUltimatePerformancePlan_OnTranslatedWindows_ReturnsTheNewPlansGuid()
+    {
+        var runner = PowercfgAnswering(
+            ["Identificador del esquema: 381b4222-f694-41f0-9685-ff5bb260df2e  (Equilibrado) *"],
+            [$"Identificador del esquema: {NewPlanGuid}  (Máximo rendimiento)"]);
+
+        var guid = await NewService(runner).EnsureUltimatePerformancePlanAsync();
+
+        Assert.Equal(NewPlanGuid, guid);
+    }
+
+    [Fact]
+    public async Task EnsureUltimatePerformancePlan_WhenWindowsListsTheBuiltInScheme_UsesItWithoutCopying()
+    {
+        // The built-in scheme's GUID is the same in every language, so when /list shows it there is nothing to
+        // duplicate — and a translated name can no longer make each click add another copy of the plan.
+        var runner = PowercfgAnswering(
+            [$"Identificador del esquema: {PerformanceService.UltimatePerfScheme}  (Máximo rendimiento)"],
+            [$"Identificador del esquema: {NewPlanGuid}  (Máximo rendimiento)"]);
+
+        var guid = await NewService(runner).EnsureUltimatePerformancePlanAsync();
+
+        Assert.Equal(PerformanceService.UltimatePerfScheme, guid);
+        await runner.DidNotReceive().RunProcessAsync(
+            "powercfg.exe", Arg.Is<string>(a => a.StartsWith("-duplicatescheme", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task EnsureUltimatePerformancePlan_WhenWindowsYieldsNoPlan_ReturnsEmpty()
+    {
+        // The honest "no" the command now reports: powercfg printed no GUID at all.
+        var runner = PowercfgAnswering([], ["Unable to perform operation. An unexpected error (0x65b) has occurred."]);
+
+        Assert.Equal("", await NewService(runner).EnsureUltimatePerformancePlanAsync());
+    }
+
     [Fact]
     public void ParsePlanGuidByName_CaseInsensitive()
     {

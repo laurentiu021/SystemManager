@@ -61,20 +61,35 @@ public sealed class SystemFixService : IDisposable
     /// and a reboot afterwards for best results.
     /// </summary>
     public Task<SystemFixResult> ResetWindowsUpdateAsync(CancellationToken ct = default)
-    {
-        const string script = """
-            $ErrorActionPreference = 'Stop'
-            $services = 'wuauserv','cryptSvc','bits','msiserver'
-            foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
+        => RunFixAsync("Reset Windows Update", ResetWindowsUpdateScript, needsReboot: true, ct);
+
+    /// <summary>The script <see cref="ResetWindowsUpdateAsync"/> runs.</summary>
+    /// <remarks>
+    /// The two renames ARE the reset, so a rename that fails fails the fix (#2439). They used to carry
+    /// <c>-ErrorAction SilentlyContinue</c>, overriding the <c>Stop</c> preference set on the first line. A folder
+    /// still held open by a service that restarted on demand then stayed where it was, and the script went on to
+    /// print its success sentence, so the tab said the reset was done and asked for a reboot that would change
+    /// nothing. The services restart in a <c>finally</c>, so a failed rename does not also leave Windows Update
+    /// stopped. Stopping keeps <c>SilentlyContinue</c>: a service that is not running has nothing to stop.
+    /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with the cmdlets
+    /// that would change the machine shadowed by functions.</para>
+    /// </remarks>
+    internal const string ResetWindowsUpdateScript = """
+        $ErrorActionPreference = 'Stop'
+        $services = 'wuauserv','cryptSvc','bits','msiserver'
+        foreach ($s in $services) { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue }
+        try {
             $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
             $cr = Join-Path $env:SystemRoot 'System32\catroot2'
-            if (Test-Path $sd) { Rename-Item $sd "$sd.old.$((Get-Date).ToString('yyyyMMddHHmmss'))" -ErrorAction SilentlyContinue }
-            if (Test-Path $cr) { Rename-Item $cr "$cr.old.$((Get-Date).ToString('yyyyMMddHHmmss'))" -ErrorAction SilentlyContinue }
+            $stamp = (Get-Date).ToString('yyyyMMddHHmmss')
+            if (Test-Path $sd) { Rename-Item $sd "$sd.old.$stamp" }
+            if (Test-Path $cr) { Rename-Item $cr "$cr.old.$stamp" }
+        }
+        finally {
             foreach ($s in $services) { Start-Service -Name $s -ErrorAction SilentlyContinue }
-            'Windows Update components reset. A reboot is recommended.'
-            """;
-        return RunFixAsync("Reset Windows Update", script, needsReboot: true, ct);
-    }
+        }
+        'Windows Update components reset. A reboot is recommended.'
+        """;
 
     // Network-stack reset (Winsock / TCP-IP / DNS flush) intentionally lives ONLY on the
     // Network Repair tab — it is not duplicated here. See NetworkRepairService.

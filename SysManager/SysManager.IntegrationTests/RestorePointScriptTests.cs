@@ -2,9 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Diagnostics;
-using System.IO;
-using System.Text;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -20,7 +17,8 @@ namespace SysManager.IntegrationTests;
 /// as a WARNING, <c>-ErrorAction Stop</c> ignores warnings, and so the script printed its success sentinel for a
 /// restore point that was never made.
 /// <para>The succeeding stubs are the positive controls: without them, a script that never printed its sentinel at all
-/// would pass every refusal case.</para>
+/// would pass every refusal case. Every script starts with <see cref="WindowsPowerShellScript.StubsInEffect"/>, because
+/// CI's runner is elevated: a stub that failed to shadow the real <c>Restore-Computer</c> there would restore it.</para>
 /// </remarks>
 public class RestorePointScriptTests
 {
@@ -38,11 +36,16 @@ public class RestorePointScriptTests
         "function Checkpoint-Computer { [CmdletBinding()] param($Description, $RestorePointType) " +
         "throw 'System Restore is turned off for this drive.' } ; ";
 
+    private static readonly string CreateGuard =
+        WindowsPowerShellScript.StubsInEffect("Enable-ComputerRestore", "Checkpoint-Computer");
+
+    private static readonly string RestoreGuard = WindowsPowerShellScript.StubsInEffect("Restore-Computer");
+
     [Fact]
     public async Task CreateScript_WhenWindowsDeclinesForTheDay_DoesNotConfirm()
     {
-        var output = await RunWindowsPowerShellAsync(
-            EnableStub + CheckpointRefusesForTheDay + RestorePointService.BuildCreateScript("Probe"));
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            EnableStub + CheckpointRefusesForTheDay + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
 
         Assert.DoesNotContain(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
@@ -50,8 +53,8 @@ public class RestorePointScriptTests
     [Fact]
     public async Task CreateScript_WhenCheckpointFails_DoesNotConfirm()
     {
-        var output = await RunWindowsPowerShellAsync(
-            EnableStub + CheckpointFails + RestorePointService.BuildCreateScript("Probe"));
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            EnableStub + CheckpointFails + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
 
         Assert.DoesNotContain(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
@@ -59,8 +62,8 @@ public class RestorePointScriptTests
     [Fact]
     public async Task CreateScript_WhenWindowsMakesThePoint_Confirms()
     {
-        var output = await RunWindowsPowerShellAsync(
-            EnableStub + CheckpointSucceeds + RestorePointService.BuildCreateScript("Probe"));
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            EnableStub + CheckpointSucceeds + CreateGuard + RestorePointService.BuildCreateScript("Probe"));
 
         Assert.Contains(RestorePointService.CreateOkSentinel, output, StringComparison.Ordinal);
     }
@@ -68,9 +71,9 @@ public class RestorePointScriptTests
     [Fact]
     public async Task RestoreScript_WhenRestoreComputerFails_DoesNotConfirm()
     {
-        var output = await RunWindowsPowerShellAsync(
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
             "function Restore-Computer { [CmdletBinding()] param($RestorePoint, [switch]$Confirm) " +
-            "throw 'The restore point was not found.' } ; " + RestorePointService.BuildRestoreScript(42));
+            "throw 'The restore point was not found.' } ; " + RestoreGuard + RestorePointService.BuildRestoreScript(42));
 
         Assert.DoesNotContain(RestorePointService.RestoreStartedSentinel, output, StringComparison.Ordinal);
     }
@@ -78,51 +81,21 @@ public class RestorePointScriptTests
     [Fact]
     public async Task RestoreScript_WhenWindowsAcceptsTheRestore_Confirms()
     {
-        var output = await RunWindowsPowerShellAsync(
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
             "function Restore-Computer { [CmdletBinding()] param($RestorePoint, [switch]$Confirm) } ; " +
-            RestorePointService.BuildRestoreScript(42));
+            RestoreGuard + RestorePointService.BuildRestoreScript(42));
 
         Assert.Contains(RestorePointService.RestoreStartedSentinel, output, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Runs <paramref name="script"/> in Windows PowerShell 5.1 and returns everything it wrote to standard output.
-    /// Bounded: a PowerShell that never exits is killed and fails the test rather than hanging the suite.
-    /// </summary>
-    private static async Task<string> RunWindowsPowerShellAsync(string script)
+    [Fact]
+    public async Task TheStubGuard_RefusesToRunWhenAShadowIsMissing()
     {
-        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-        if (!File.Exists(powershell))
-            Assert.Skip("Windows PowerShell 5.1 is not present on this host.");
+        // Positive control for the guard itself: with no stub defined, the real cmdlet is what Get-Command finds,
+        // and the script must stop before reaching the command. A guard that never threw would protect nothing.
+        var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(RestoreGuard + "'REACHED'");
 
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo(powershell,
-                $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            },
-        };
-        process.Start();
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail("Windows PowerShell did not finish the script within 60 seconds.");
-        }
-
-        await stderr;
-        return await stdout;
+        Assert.NotEqual(0, exitCode);
+        Assert.DoesNotContain("REACHED", output, StringComparison.Ordinal);
     }
 }

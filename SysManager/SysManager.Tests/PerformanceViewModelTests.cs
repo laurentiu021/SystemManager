@@ -22,7 +22,10 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class PerformanceViewModelTests
 {
-    private static PerformanceViewModel NewVm(bool completeInitialization = false)
+    /// <summary>A view model whose process calls — powercfg among them — go to a substituted runner.</summary>
+    /// <param name="completeInitialization">Let the constructor's process calls finish, so initialization settles.</param>
+    /// <param name="configure">Applied after the defaults, so a test can make one specific call answer differently.</param>
+    private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null)
     {
         var ps = Substitute.For<IPowerShellRunner>();
         var processCall = ps.RunProcessAsync(
@@ -33,6 +36,7 @@ public class PerformanceViewModelTests
         if (completeInitialization)
         {
             processCall.Returns(0);
+            configure?.Invoke(ps);
         }
         else
         {
@@ -384,6 +388,45 @@ public class PerformanceViewModelTests
         {
             DialogService.Instance = prevDialog;
         }
+    }
+
+    // ── Success is reported only for what happened (#2438) ──
+    //
+    // Both commands run against a substituted runner, so no plan is switched and hibernation is not touched.
+
+    [Fact]
+    public async Task ApplyPowerPlan_WhenNoUltimatePlanComesBack_SaysSo_NotThatItIsSet()
+    {
+        // EnsureUltimatePerformancePlanAsync returns "" when Windows yields no plan — every powercfg call here
+        // answers with nothing. The command skipped the switch for an empty GUID and still said "Power plan set".
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.SelectedPlan = "ultimate";   // after the await: initialization assigns SelectedPlan itself
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("Power plan set", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ToggleHibernation_WhenPowercfgFails_SaysSo_NotThatItChanged()
+    {
+        // SetHibernationAsync discarded powercfg's exit code, so a machine without hibernation support was told
+        // "✓ Hibernation enabled." Both directions answer 1 here, so the test holds whichever state the host is in.
+        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        var vm = NewVm(completeInitialization: true, ps =>
+            ps.RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/hibernate", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(1));
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ToggleHibernationCommand.ExecuteAsync(null);
+
+        Assert.DoesNotContain("✓", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("failed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     // ── Disposal and the recovery snapshot ──

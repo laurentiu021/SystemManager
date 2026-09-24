@@ -593,7 +593,8 @@ System → System Fixes, where the tab name matches what they do.
 - **Windows' own scheduled tasks are deliberately left out**, so the list stays short enough to read
   and nothing here is something you should not touch. [Task Scheduler](#task-scheduler) is the tab that
   shows every task, Windows' included — a third-party task appears on both, and it is the same task in
-  both places
+  both places. Each task shows its real state, so one that is disabled reads "Disabled (scheduled)" and
+  stays that way after a refresh
 - **Also reads the "policy" startup list that Task Manager does not show at all** — a favourite hiding
   place for bundled software, since you can switch off everything visible, restart, and it still starts.
   Windows gives an app no way to disable these, so each one is labelled "Set by a system policy —

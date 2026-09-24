@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.14] - 2026-09-24
+
+**Startup Manager shows whether each scheduled task is actually enabled.** Every scheduled task used to
+be listed as enabled, so a disabled one looked enabled, and disabling one from the tab seemed not to stick.
+
+### Fixed
+
+- **Startup Manager: scheduled tasks show their real state.** The tab listed every third-party scheduled
+  task as "Enabled (scheduled)" without reading the task's own setting. A task disabled in Task Scheduler,
+  or by another tool, looked enabled. Disabling one here did work, but the next refresh showed it enabled
+  again. The state now comes from the task's definition, so a disabled task reads "Disabled (scheduled)".
+  Present since scheduled tasks were added to the tab in v0.12.2.
+
 ## [1.113.13] - 2026-09-24
 
 **Five more places now say what actually happened.** Windows Features no longer reports "Found 0 features"

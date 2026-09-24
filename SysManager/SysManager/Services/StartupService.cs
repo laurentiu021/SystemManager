@@ -337,6 +337,10 @@ public sealed class StartupService
                     if (results.Any(e => string.Equals(e.Name, taskName, StringComparison.OrdinalIgnoreCase)))
                         continue;
 
+                    // Read from the task's own definition: every task used to be listed as enabled, so a disabled
+                    // one looked enabled and a Disable made here appeared to be undone by the next refresh
+                    // (#2453). A definition that cannot be read keeps that old assumption.
+                    var enabled = ReadTaskEnabled(TasksFolder, uri) ?? true;
                     results.Add(new StartupEntry
                     {
                         Name = taskName,
@@ -346,9 +350,9 @@ public sealed class StartupService
                         RegistryKey = "",
                         ValueName = taskName,
                         TaskPath = uri,
-                        IsEnabled = true,
+                        IsEnabled = enabled,
                         Publisher = author,
-                        StatusText = "Enabled (scheduled)"
+                        StatusText = enabled ? "Enabled (scheduled)" : "Disabled (scheduled)"
                     });
                 }
                 catch (System.Security.SecurityException ex)
@@ -372,6 +376,50 @@ public sealed class StartupService
         catch (UnauthorizedAccessException ex)
         {
             Log.Debug("Task Scheduler registry access denied: {Error}", ex.Message);
+        }
+    }
+
+    // Where Task Scheduler keeps each task's definition, in a tree that mirrors the task paths. The TaskCache key the
+    // scan enumerates carries no enabled flag, so the state is read from here. Both need administrator rights.
+    private static string TasksFolder => System.IO.Path.Combine(Environment.SystemDirectory, "Tasks");
+
+    /// <summary>
+    /// Whether the task at <paramref name="uri"/> (e.g. <c>\Vendor\Updater</c>) is enabled, read from its definition
+    /// under <paramref name="tasksRoot"/>. Task Scheduler writes <c>&lt;Enabled&gt;false&lt;/Enabled&gt;</c> into the
+    /// task's <c>Settings</c> when it is disabled and leaves it out otherwise. Triggers have an <c>Enabled</c> of their
+    /// own, which says nothing about the task, so only the one under <c>Settings</c> is read. Returns null when the
+    /// definition cannot be read, or when the path would lead outside <paramref name="tasksRoot"/>.
+    /// </summary>
+    internal static bool? ReadTaskEnabled(string tasksRoot, string uri)
+    {
+        var relative = uri.TrimStart('\\');
+        if (relative.Length == 0) return null;
+
+        try
+        {
+            // The URI comes from the registry; a ".." in it must not reach a file outside the tasks folder.
+            var root = System.IO.Path.GetFullPath(tasksRoot).TrimEnd(System.IO.Path.DirectorySeparatorChar)
+                + System.IO.Path.DirectorySeparatorChar;
+            var path = System.IO.Path.GetFullPath(System.IO.Path.Combine(root, relative));
+            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return null;
+
+            // No DTD, no resolver: a task definition is plain XML, and this one is read with administrator rights.
+            var settings = new System.Xml.XmlReaderSettings
+            {
+                DtdProcessing = System.Xml.DtdProcessing.Prohibit,
+                XmlResolver = null,
+            };
+            using var reader = System.Xml.XmlReader.Create(path, settings);
+            var enabled = System.Xml.Linq.XDocument.Load(reader).Root?
+                .Elements().FirstOrDefault(e => e.Name.LocalName == "Settings")?
+                .Elements().FirstOrDefault(e => e.Name.LocalName == "Enabled");
+            return enabled is null || !string.Equals(enabled.Value.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
+                                       or System.Xml.XmlException or ArgumentException)
+        {
+            Log.Debug("Scheduled task definition unreadable {Task}: {Error}", uri, ex.Message);
+            return null;
         }
     }
 

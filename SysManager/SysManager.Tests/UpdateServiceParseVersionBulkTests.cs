@@ -80,6 +80,103 @@ public class UpdateServiceParseVersionBulkTests
         Assert.Null(UpdateService.ParseVersion(tag));
     }
 
+    public static IEnumerable<object[]> TwoComponentTags()
+    {
+        // The bare shape, both casings, surrounding whitespace, and every suffix the parser strips —
+        // the strip happens BEFORE the parse, so a suffixed tag reduces to exactly the same two
+        // components and must be normalised the same way.
+        var tags = new[] { "v1.2", "1.2", "V1.2", " v1.2 ", "v1.2-beta", "1.2-rc.2", "v1.2+build" };
+        foreach (var t in tags) yield return new object[] { t };
+    }
+
+    /// <summary>
+    /// A two-component tag must come back with a <c>Build</c> of 0, not the -1
+    /// <see cref="Version.TryParse"/> leaves behind.
+    /// </summary>
+    /// <remarks>
+    /// <c>Version.TryParse("1.2")</c> SUCCEEDS — it is not garbage, it is under-specified — and the
+    /// two-component shape is the only under-specified one that gets in, because a single component
+    /// ("v1", already in <see cref="Garbage"/>) is rejected outright. Normalising at the parse
+    /// boundary is what keeps every consumer safe; this test is the one that notices if the
+    /// normalisation is ever "simplified" away.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(TwoComponentTags))]
+    public void ParseVersion_NormalisesATwoComponentTag(string tag)
+    {
+        var v = UpdateService.ParseVersion(tag);
+        Assert.NotNull(v);
+        Assert.Equal(1, v!.Major);
+        Assert.Equal(2, v.Minor);
+        Assert.Equal(0, v.Build);
+    }
+
+    /// <summary>
+    /// The value a release carries has to survive the label About builds from it.
+    /// </summary>
+    /// <remarks>
+    /// This formats rather than inspecting <c>Build</c>, because the formatting is the actual defect:
+    /// <c>Version.ToString(3)</c> throws <see cref="ArgumentException"/> below three components, and
+    /// both places that format a PARSED release version — the latest-version label and every row of
+    /// the release-history list — sit in commands that catch only <c>HttpRequestException</c> and
+    /// <c>TaskCanceledException</c>. The exception would escape to the dispatcher.
+    /// <para>The four-component row is here to record that <c>ToString(3)</c> truncates rather than
+    /// throwing above three, so only the short shape ever needed fixing.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData("v1.2", "v1.2.0")]
+    [InlineData("1.2", "v1.2.0")]
+    [InlineData("v1.2-beta", "v1.2.0")]
+    [InlineData("v1.2.3", "v1.2.3")]
+    [InlineData("v1.2.3.4", "v1.2.3")]
+    [InlineData("v0.5.0-rc.2", "v0.5.0")]
+    public void ParseVersion_ResultSurvivesTheLabelAboutBuildsFromIt(string tag, string expectedLabel)
+    {
+        var v = UpdateService.ParseVersion(tag);
+        Assert.NotNull(v);
+        Assert.Equal(expectedLabel, $"v{v!.ToString(3)}");
+    }
+
+    /// <summary>
+    /// Normalising the component count must not COST one: a four-component tag keeps its revision.
+    /// </summary>
+    /// <remarks>
+    /// The obvious one-line normalisation — <c>new Version(v.Major, v.Minor, Math.Max(v.Build, 0))</c>
+    /// — silently drops <c>Revision</c>, which would make "v1.2.3.4" compare EQUAL to "v1.2.3" and
+    /// hide a real update rather than merely mis-format one. That is why the fix normalises only when
+    /// <c>Build</c> is negative instead of rebuilding unconditionally.
+    /// </remarks>
+    [Theory]
+    [InlineData("v1.2.3.4")]
+    [InlineData("1.2.3.4")]
+    [InlineData("v1.2.3.4-beta")]
+    public void ParseVersion_KeepsAFourthComponent(string tag)
+    {
+        var v = UpdateService.ParseVersion(tag);
+        Assert.NotNull(v);
+        Assert.Equal(4, v!.Revision);
+        Assert.True(UpdateService.IsNewer(v, new Version(1, 2, 3)));
+    }
+
+    /// <summary>
+    /// "1.2" means "1.2.0", and after normalisation it compares as such.
+    /// </summary>
+    /// <remarks>
+    /// Formatting is not the only thing that broke: an un-normalised two-component version sorts
+    /// BELOW the same patch-zero release (<c>Build</c> of -1 against 0), so a "1.2" tag would have
+    /// been judged OLDER than the 1.2.0 the user is already running — and <see cref="UpdateService.IsNewer"/>
+    /// is what decides whether an update is offered at all.
+    /// </remarks>
+    [Fact]
+    public void ParseVersion_TwoComponentTagComparesAsThePatchZeroItMeans()
+    {
+        var parsed = UpdateService.ParseVersion("v1.2");
+        Assert.Equal(new Version(1, 2, 0), parsed);
+        Assert.False(UpdateService.IsNewer(parsed!, new Version(1, 2, 0)));
+        Assert.False(UpdateService.IsNewer(new Version(1, 2, 0), parsed!));
+        Assert.True(UpdateService.IsNewer(parsed!, new Version(1, 1, 9)));
+    }
+
     public static IEnumerable<object[]> NewerPairs()
     {
         for (var a = 0; a <= 5; a++)

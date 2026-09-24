@@ -338,7 +338,9 @@ public sealed partial class AboutViewModel : ViewModelBase
                 PublishedAt = r.PublishedAt == DateTimeOffset.MinValue ? "" : r.PublishedAt.LocalDateTime.ToString("dd MMM yyyy", CultureInfo.InvariantCulture),
                 Body = r.Body,
                 Url = r.HtmlUrl,
-                IsCurrent = r.Version == UpdateService.CurrentVersion
+                // Not ==: the row's version is parsed from a three-component tag and CurrentVersion carries
+                // AssemblyVersion's fourth, so Version equality never matched the two (#2418).
+                IsCurrent = UpdateService.IsSameRelease(r.Version, UpdateService.CurrentVersion)
             }).ToList();
 
             ReleaseHistory = notes;

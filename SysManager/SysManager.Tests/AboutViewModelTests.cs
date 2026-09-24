@@ -880,3 +880,81 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         return close < 0 ? source[open..] : source[open..(close + 1)];
     }
 }
+
+/// <summary>
+/// Which release-history row the About tab marks as the running build.
+/// <para>#2418: the row was marked with <c>r.Version == UpdateService.CurrentVersion</c>, and that comparison
+/// could never be true. A row's version is parsed from its tag, which has three components, so its
+/// <see cref="Version.Revision"/> is unspecified (-1); <see cref="UpdateService.CurrentVersion"/> comes from
+/// <c>AssemblyVersion</c>, which always carries a fourth component of 0. <see cref="Version"/>'s equality
+/// compares all four as stored, so the two never matched and the "Current" badge bound to
+/// <see cref="ReleaseNote.IsCurrent"/> never appeared, from the About tab's first release onwards.</para>
+/// <para>The tests above could not see it because they only ever build a <see cref="ReleaseNote"/> by hand
+/// with <c>IsCurrent</c> already set: that covers the property, never the comparison that computes it.
+/// These go through <c>LoadHistoryAsync</c> itself.</para>
+/// </summary>
+public sealed class AboutViewModelReleaseHistoryTests : IDisposable
+{
+    private readonly string _dir;
+
+    public AboutViewModelReleaseHistoryTests()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "SysManagerAboutHistoryTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// A release as the real service hands it back: the version is PARSED from the tag, the way
+    /// <c>UpdateService.Map</c> builds it, so the row carries the component count a real row carries rather
+    /// than whatever a hand-built <see cref="Version"/> happens to have.
+    /// </summary>
+    private static UpdateService.ReleaseInfo Release(string tag) => new(
+        UpdateService.ParseVersion(tag) ?? throw new ArgumentException($"'{tag}' does not parse", nameof(tag)),
+        tag, $"SysManager {tag}", "notes", DateTimeOffset.UnixEpoch,
+        $"https://github.com/laurentiu021/SystemManager/releases/tag/{tag}",
+        AssetUrl: null, AssetSize: null);
+
+    // autoCheck: false — the history load is driven explicitly below, so the startup check must not run a
+    // second one behind the test's back.
+    private AboutViewModel NewVm(IUpdateService updates) =>
+        new(updates,
+            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            autoCheck: false,
+            preferences: new UpdateCheckPreferenceService(_dir),
+            updatesDir: _dir);
+
+    [Fact]
+    public async Task TheRowNamingTheRunningRelease_IsTheOneMarkedCurrent()
+    {
+        var running = UpdateService.CurrentVersion;
+        var runningTag = $"v{running.ToString(3)}";
+        var newerTag = $"v{running.Major + 1}.0.0";
+        const string olderTag = "v0.1.0";
+
+        // The premise, checked rather than assumed: the two sides really do differ in component count, which
+        // is the whole defect. Without these, a build whose AssemblyVersion lost its fourth component would
+        // keep this test green while it stopped testing what it is named for.
+        Assert.True(running.Revision >= 0,
+            $"CurrentVersion {running} has no fourth component, so this no longer exercises #2418");
+        Assert.Equal(-1, UpdateService.ParseVersion(runningTag)!.Revision);
+
+        var updates = Substitute.For<IUpdateService>();
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>(
+                   [Release(newerTag), Release(runningTag), Release(olderTag)]));
+
+        using var vm = NewVm(updates);
+        await vm.LoadHistoryCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, vm.ReleaseHistory.Count);
+        var current = Assert.Single(vm.ReleaseHistory, r => r.IsCurrent);
+        Assert.Equal(runningTag, current.Version);
+    }
+}

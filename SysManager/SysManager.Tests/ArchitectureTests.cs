@@ -12953,12 +12953,26 @@ public partial class ArchitectureTests
     /// and with it the hole that made it unnecessary in the first place: this only ever looked for a
     /// literal White in a foreground or a glyph stroke, and the thumb is a Border BACKGROUND, so the
     /// defect would have survived here even with no exception listed.</para>
+    /// <para>It also only ever read the style DEFINITIONS, so a white label placed inside a themed fill at
+    /// the point of USE was invisible to it. Both remaining instances were that shape, in AboutView: the
+    /// version badge at the top of the tab and the "Current" badge in the release history, each a
+    /// TextBlock with <c>Foreground="White"</c> inside a Border styled <c>BadgeAccent</c>. The version badge
+    /// had been shipping at 2.15:1 on warm-ember; the "Current" badge had never rendered at all (#2418), so
+    /// the fix that finally made it appear would have introduced the same failure. The second pass below
+    /// reads every XAML file for an element that IS a themed fill — styled with one of the styles found
+    /// here, or given the brush directly — and checks it and everything inside it.</para>
     /// </remarks>
     [Fact]
     public void NoThemedFill_CarriesAHardcodedWhiteForeground()
     {
         // The fills whose colour is decided by the theme rather than fixed in the XAML.
         string[] themedFills = ["Accent", "Danger"];
+
+        // Key -> fill, for every keyed style found to fill with a theme brush. The use-site pass needs to know
+        // which styles those are, and a style inherits its base's fill, so a style BasedOn one of them counts
+        // too. One forward pass is enough: a StaticResource must be defined before it is referenced, so a base
+        // is always met before anything derived from it.
+        var themedFillKeys = new Dictionary<string, string>(StringComparer.Ordinal);
 
         // EMPTY. The thumb sits on Surface4 when off and on Accent when on, and the note here used to
         // say that no single colour clears 3:1 against both — true, and the reason the answer is a brush
@@ -12979,9 +12993,16 @@ public partial class ArchitectureTests
             var fill = themedFills.FirstOrDefault(
                 f => body.Contains($"Property=\"Background\" Value=\"{{DynamicResource {f}}}\"",
                                    StringComparison.Ordinal));
+            if (fill is null
+                && StyleBasedOn().Match(body) is { Success: true } basedOn
+                && themedFillKeys.TryGetValue(basedOn.Groups["key"].Value, out var inherited))
+            {
+                fill = inherited;
+            }
             if (fill is null) continue;
 
             themedFillStyles++;
+            if (key != "(implicit)") themedFillKeys[key] = fill;
             if (knownExceptions.Contains(key, StringComparer.Ordinal)) continue;
 
             // Foreground on the control, Stroke on a glyph drawn inside it (the checkbox tick), or
@@ -13005,10 +13026,68 @@ public partial class ArchitectureTests
             $"only {themedFillStyles} styles were found filling with {string.Join("/", themedFills)} — the "
             + "pattern no longer matches, so this guard proves nothing.");
 
+        // A known answer for the key set the second pass depends on: the badge style both About instances used.
+        Assert.True(themedFillKeys.ContainsKey("BadgeAccent"),
+            "BadgeAccent was not recognised as a themed fill, so the use-site pass below would not look inside it. "
+            + $"Recognised: {string.Join(", ", themedFillKeys.Keys.Order(StringComparer.Ordinal))}");
+
+        // The use sites. Parsed as XML rather than matched as text, so a comment cannot be mistaken for markup
+        // and "inside the fill" is a fact of the tree rather than a guess about how close two lines are.
+        var appDir = TestPaths.AppProject();
+        var resourceRef = new Regex(@"^\{(?:StaticResource|DynamicResource)\s+(?<key>\w+)\}$", RegexOptions.CultureInvariant);
+        var directFill = new Regex(@"^\{DynamicResource\s+(?<fill>Accent|Danger)\}$", RegexOptions.CultureInvariant);
+        string[] whiteLiterals = ["White", "#FFF", "#FFFFFF", "#FFFFFFFF"];
+        var useSites = 0;
+
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            // Relative, so a failure never prints the absolute path of the machine it ran on.
+            var relative = Path.GetRelativePath(appDir, file);
+            XDocument document;
+            try { document = XDocument.Load(file, LoadOptions.SetLineInfo); }
+            catch (System.Xml.XmlException ex)
+            {
+                offenders.Add($"{relative} could not be parsed (line {ex.LineNumber}, position {ex.LinePosition}), "
+                              + "so none of its use sites were checked");
+                continue;
+            }
+
+            foreach (var element in document.Descendants())
+            {
+                var styleKey = resourceRef.Match((string?)element.Attribute("Style") ?? string.Empty);
+                var direct = directFill.Match((string?)element.Attribute("Background") ?? string.Empty);
+                var fill = styleKey.Success && themedFillKeys.TryGetValue(styleKey.Groups["key"].Value, out var viaStyle)
+                    ? $"{viaStyle} (style {styleKey.Groups["key"].Value})"
+                    : direct.Success ? $"{direct.Groups["fill"].Value} (set directly)" : null;
+                if (fill is null) continue;
+
+                useSites++;
+                foreach (var painted in element.DescendantsAndSelf())
+                    foreach (var attribute in painted.Attributes())
+                    {
+                        var name = attribute.Name.LocalName;
+                        if (name is not ("Foreground" or "Fill" or "Stroke") && !name.EndsWith(".Foreground", StringComparison.Ordinal))
+                            continue;
+                        if (whiteLiterals.Contains(attribute.Value.Trim(), StringComparer.OrdinalIgnoreCase))
+                            offenders.Add($"{relative} line {((System.Xml.IXmlLineInfo)painted).LineNumber}: a "
+                                          + $"{painted.Name.LocalName} sets {name}=\"{attribute.Value}\" on the {fill} fill");
+                    }
+            }
+        }
+
+        // Vacuity floor for the second pass: 94 elements were themed fills when this was written, 54 of them
+        // PrimaryButton. Far fewer means the resource pattern stopped matching and the pass is reading nothing.
+        Assert.True(useSites >= 80,
+            $"only {useSites} themed-fill use sites were found across the XAML — the pattern no longer matches, "
+            + "so the use-site pass proves nothing.");
+
         Assert.True(offenders.Count == 0,
-            "these styles fill with a theme brush but hardcode a white foreground, so the label's contrast "
-            + "depends on which preset is active — it measured 2.15:1 on warm-ember. Bind the paired token "
-            + $"instead (TextOnAccent, TextOnDanger):\n  " + string.Join("\n  ", offenders));
+            "these fill with a theme brush but hardcode white on it, so the contrast depends on which preset is "
+            + "active — it measured 2.15:1 on warm-ember. Bind the paired token instead (TextOnAccent, "
+            + $"TextOnDanger):\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

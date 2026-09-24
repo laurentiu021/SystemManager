@@ -177,6 +177,110 @@ public class UpdateServiceParseVersionBulkTests
         Assert.True(UpdateService.IsNewer(parsed!, new Version(1, 1, 9)));
     }
 
+    /// <summary>
+    /// A difference that is only "unspecified" against "zero" does not make a version newer.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Version"/>'s own ordering treats an unspecified component as -1, so on its own it ranks
+    /// "1.113.3.0" above "1.113.3": the same release, written once the way its tag writes it and once the way
+    /// <c>AssemblyVersion</c> does. The one caller passes the tag first, which is why no update was ever
+    /// offered wrongly; but the check that two versions are the SAME release (#2418) has to agree with this
+    /// one about what "the same" means, or a history row could be both current and newer at once.
+    /// </remarks>
+    [Theory]
+    [InlineData("1.113.3.0", "1.113.3")]
+    [InlineData("1.113.3", "1.113.3.0")]
+    [InlineData("1.2.0.0", "1.2")]
+    [InlineData("1.2", "1.2.0.0")]
+    public void IsNewer_TreatsAnUnspecifiedComponentAsZero(string latest, string current)
+    {
+        Assert.False(UpdateService.IsNewer(Version.Parse(latest), Version.Parse(current)));
+    }
+
+    /// <summary>
+    /// ...while a real difference still counts whatever the component count, so treating "unspecified" as
+    /// zero cannot be over-applied into ignoring the fourth component.
+    /// </summary>
+    [Theory]
+    [InlineData("1.113.3.1", "1.113.3")]
+    [InlineData("1.113.4", "1.113.3.0")]
+    [InlineData("1.114", "1.113.9.9")]
+    public void IsNewer_StillSeesARealDifferenceAcrossComponentCounts(string latest, string current)
+    {
+        Assert.True(UpdateService.IsNewer(Version.Parse(latest), Version.Parse(current)));
+    }
+
+    /// <summary>
+    /// The same release is the same release however many components it was written with.
+    /// </summary>
+    /// <remarks>
+    /// The first row is #2418 exactly: a tag parses to "1.113.3" with an unspecified <c>Revision</c>, the
+    /// running build's <c>AssemblyVersion</c> is "1.113.3.0", and <see cref="Version"/>'s equality said
+    /// they differ, so no history row was ever marked as the running release.
+    /// </remarks>
+    [Theory]
+    [InlineData("1.113.3", "1.113.3.0")]
+    [InlineData("1.113.3.0", "1.113.3")]
+    [InlineData("1.113.3", "1.113.3")]
+    [InlineData("1.113.3.0", "1.113.3.0")]
+    [InlineData("1.2", "1.2.0.0")]
+    [InlineData("1.2", "1.2.0")]
+    public void IsSameRelease_IgnoresTheComponentCount(string a, string b)
+    {
+        Assert.True(UpdateService.IsSameRelease(Version.Parse(a), Version.Parse(b)));
+    }
+
+    /// <summary>
+    /// ...but not a real difference, in any component, so reading "unspecified" as zero is not over-applied.
+    /// </summary>
+    [Theory]
+    [InlineData("1.113.4", "1.113.3.0")]
+    [InlineData("1.113.3.4", "1.113.3.0")]
+    [InlineData("1.113.3.4", "1.113.3")]
+    [InlineData("1.114", "1.113.0.0")]
+    [InlineData("2.0.0", "1.0.0")]
+    public void IsSameRelease_StillSeesARealDifference(string a, string b)
+    {
+        Assert.False(UpdateService.IsSameRelease(Version.Parse(a), Version.Parse(b)));
+        Assert.False(UpdateService.IsSameRelease(Version.Parse(b), Version.Parse(a)));
+    }
+
+    /// <summary>
+    /// For every pair, exactly one of "same", "newer" and "older" holds.
+    /// </summary>
+    /// <remarks>
+    /// This is the property the two helpers exist to keep between them. Before they shared one canonical
+    /// form, "1.113.3.0" against "1.113.3" was newer by <see cref="UpdateService.IsNewer"/> and yet named the
+    /// same release, and the reverse pair was neither newer, older, nor equal. The versions are chosen to mix
+    /// two, three and four components on both sides of every comparison.
+    /// </remarks>
+    [Fact]
+    public void SameNewerAndOlder_AreExhaustiveAndExclusive()
+    {
+        string[] written = ["1.2", "1.2.0", "1.2.0.0", "1.2.1", "1.2.0.1", "1.3", "1.113.3", "1.113.3.0",
+                            "1.113.3.1", "1.113.4", "2.0.0.0"];
+        var versions = written.Select(Version.Parse).ToArray();
+        List<string> violations = [];
+        var compared = 0;
+
+        foreach (var a in versions)
+            foreach (var b in versions)
+            {
+                compared++;
+                var holds = new[]
+                {
+                    UpdateService.IsSameRelease(a, b),
+                    UpdateService.IsNewer(a, b),
+                    UpdateService.IsNewer(b, a),
+                }.Count(x => x);
+                if (holds != 1) violations.Add($"{a} vs {b}: {holds} of same/newer/older hold");
+            }
+
+        // Every ordered pair, including each version against itself, was actually compared.
+        Assert.Equal(121, compared);
+        Assert.Empty(violations);
+    }
+
     public static IEnumerable<object[]> NewerPairs()
     {
         for (var a = 0; a <= 5; a++)

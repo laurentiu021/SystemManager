@@ -686,7 +686,11 @@ Key services:
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
-  static method.
+  static method. Create and restore report success only through a sentinel their
+  script prints last, never the absence of an exception, and create stops on
+  warnings too: Windows PowerShell 5.1 reports the one-a-day limit as a warning,
+  which `-ErrorAction Stop` does not catch. The integration suite runs both
+  scripts in real Windows PowerShell with the cmdlets shadowed by functions.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
   Every tab that changes system settings calls `EnsureAsync` before its first mutation; the first
   call wins and the rest are no-ops, so a session takes at most one point no matter how many tabs

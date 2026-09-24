@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.8] - 2026-09-24
+
+**SysManager no longer says it made a restore point when Windows declined to make one.** Windows allows
+one restore point a day, and a second request within 24 hours was reported as "Restore point created" —
+on the Restore Points tab and on every tab that takes one automatically before its first change — while
+no new point existed.
+
+### Fixed
+
+- **A restore point is reported only when Windows really made it.** Windows allows one restore point every
+  24 hours. When asked again within that time — after Windows Update or a driver install has made one, a
+  second click, or SysManager's own automatic point from earlier the same day — Windows PowerShell
+  answers with a warning rather than an error. SysManager only stopped on errors, so it carried on and
+  reported "Restore point created". Every tab that relies on the automatic point did the same: Defender,
+  Edge & OneDrive, Privacy, Windows Features, Tweaks Hub, Gaming Profile, Debloater and Performance. It now
+  stops on that warning too, so those tabs say nothing about a restore point, and the Restore Points tab
+  shows its existing message: Windows allows only one every 24 hours. Present since the Restore Points tab
+  was added in v1.23.0.
+- **Restoring to a point is reported only when Windows accepted the request.** A restore that failed —
+  the point was gone, or System Restore was off — was reported as "Restore initiated — the system will
+  restart." with no restart coming. It now says the restore could not be started.
+
 ## [1.113.7] - 2026-09-24
 
 **The Services tab no longer reports a change it did not make, or makes one you did not ask for.** Stop now

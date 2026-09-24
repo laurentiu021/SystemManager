@@ -386,7 +386,9 @@ Edit Windows environment variables without the cramped built-in dialog:
 - List every Windows System Restore point — sequence number, date, description,
   and type — newest first
 - **Create** a restore point with an optional custom description (enables System
-  Restore on the system drive first if it's off)
+  Restore on the system drive first if it's off). Windows makes at most one a day;
+  when it declines, SysManager says so rather than reporting a point that was
+  never made — here and on every tab that takes one automatically
 - **Restore** the PC to a selected point, with a clear confirmation that warns
   Windows will restart and that programs/drivers added since that point are removed
 - Admin elevation banner — viewing the list works unprivileged; creating and

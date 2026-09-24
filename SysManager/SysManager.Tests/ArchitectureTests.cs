@@ -6681,6 +6681,113 @@ public partial class ArchitectureTests
     private static partial Regex HashSidecarTarget();
 
     /// <summary>
+    /// A method that both reads a store's file and writes it back must hold a gate across the pair.
+    /// </summary>
+    /// <remarks>
+    /// The guard above makes each individual WRITE atomic. It does not make the read-then-write PAIR
+    /// atomic, and every store here keeps all of its records in one file, so a mutator is a
+    /// whole-snapshot rewrite: load the list, change one entry, write the list back. Two of those
+    /// overlapping means whichever writes last persists a snapshot it took before the other landed, and
+    /// the other change is gone — silently, because every <c>Persist</c> in this codebase swallows
+    /// <c>IOException</c> at Debug level by design. That is not theoretical: it shipped as the v1.65.9
+    /// speed-test "flake", which was a genuine lost write.
+    /// <para><b>Both serialization mechanisms count</b>, because a synchronous mutator and an
+    /// <c>async</c> one cannot use the same one. Synchronous methods take <c>lock (_field)</c>;
+    /// <c>async</c> methods cannot hold a <c>lock</c> across an <c>await</c>, so they await a
+    /// <c>SemaphoreSlim</c> in try/finally. Asserting only on <c>lock (</c> reported six of the eight
+    /// correctly-gated methods as offenders.</para>
+    /// <para><b>A helper that does both halves owns its own gate</b>, so a caller's halves are resolved
+    /// only through helpers that do just one. Without that, <c>ResourceHistoryService.Start</c> was
+    /// flagged for calling <c>PruneAsync</c> — which reads, writes, and takes <c>_fileLock</c> itself.
+    /// The helper is still judged on its own inline read and write, so it cannot hide behind the rule
+    /// that exempts its callers.</para>
+    /// <para>Known limit, stated rather than papered over: the gate is matched by presence in the body,
+    /// not by proving it covers both halves. A <c>lock</c> taken for an unrelated reason would exempt a
+    /// method. All 16 members in scope were read individually when this landed, so the corpus starts
+    /// honest; the floor below is what notices if the detection later stops looking.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStoreThatReadsThenWritesTheSameFile_SerializesThePair()
+    {
+        var servicesDir = Path.Combine(TestPaths.AppProject(), "Services");
+        var offenders = new List<string>();
+        var scanned = 0;
+
+        foreach (var file in Directory.GetFiles(servicesDir, "*.cs"))
+        {
+            var name = Path.GetFileName(file);
+            // Comment-stripped, so prose naming a read or a lock can neither create a candidate nor
+            // excuse one. String literals are kept: no service embeds these call shapes in one.
+            var source = WithoutComments(File.ReadAllText(file));
+            var members = MethodSpans(source).ToList();
+
+            var readers = members.Where(m => FileRead().IsMatch(source[m.Open..m.End]))
+                .Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+            var writers = members.Where(m => AnyFileWrite().IsMatch(source[m.Open..m.End]))
+                .Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
+
+            // A both-halves helper owns the pair, so it owns the gate; resolving a caller's halves
+            // through it would blame whoever merely calls it.
+            var pureReaders = readers.Except(writers).ToHashSet(StringComparer.Ordinal);
+            var pureWriters = writers.Except(readers).ToHashSet(StringComparer.Ordinal);
+
+            var gates = GateField().Matches(source).Cast<Match>()
+                .Select(m => m.Groups["field"].Value).ToList();
+
+            foreach (var (member, open, end) in members)
+            {
+                var body = source[open..end];
+                var calls = CallTarget().Matches(body).Cast<Match>()
+                    .Select(m => m.Groups["callee"].Value)
+                    .Where(c => !string.Equals(c, member, StringComparison.Ordinal))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                var reads = FileRead().IsMatch(body) || calls.Overlaps(pureReaders);
+                var writes = AnyFileWrite().IsMatch(body) || calls.Overlaps(pureWriters);
+                if (!reads || !writes) continue;
+
+                scanned++;
+
+                if (body.Contains("lock (", StringComparison.Ordinal)) continue;
+                if (gates.Any(g => body.Contains(g + ".Wait", StringComparison.Ordinal))) continue;
+
+                offenders.Add($"{name}.{member}");
+            }
+        }
+
+        // Vacuity floor: without it, a signature or call-shape regex that stopped matching would report
+        // zero offenders and pass while inspecting nothing. 16 is a MEASURED population — every
+        // read-then-write pair in Services when this landed, across ten services — not a target. It
+        // rises whenever a store gains a mutator, so only a real drop is interesting. When the count
+        // legitimately falls, re-measure and record which member went where; do not simply lower it,
+        // because an unexplained drop is exactly what a broken regex looks like.
+        Assert.True(scanned >= 16,
+            $"Only {scanned} read-then-write pairs were seen across Services — the detection is "
+            + "broken, not the code. Fix this guard rather than trusting it.");
+
+        Assert.True(offenders.Count == 0,
+            "These methods read a store's file and write it back without holding a gate across the "
+            + "pair, so two overlapping calls each persist a snapshot taken before the other landed and "
+            + "one of the two changes is silently lost. Take a Lock for a synchronous method, or await "
+            + "a SemaphoreSlim in try/finally for an async one:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    [GeneratedRegex(@"\bFile\.Read(?:AllText|AllBytes|AllLines)(?:Async)?\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex FileRead();
+
+    // Optional "Atomic" so a raw write counts too: the guard above bans those from Services, but this
+    // one must not go blind if one ever reappears — a raw write pairs with a read just the same.
+    [GeneratedRegex(@"\b(?:Atomic)?File\.Write\w*\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex AnyFileWrite();
+
+    [GeneratedRegex(@"(?:SemaphoreSlim|Lock)\s+(?<field>_\w+)", RegexOptions.CultureInvariant)]
+    private static partial Regex GateField();
+
+    [GeneratedRegex(@"\b(?<callee>\w+)\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex CallTarget();
+
+    /// <summary>
     /// Every date formatted with a fixed SHAPE must name the culture that shape belongs to.
     /// <para>A custom pattern with no <c>IFormatProvider</c> formats through
     /// <c>CultureInfo.CurrentCulture</c>, which Windows sets from the user's regional settings — so

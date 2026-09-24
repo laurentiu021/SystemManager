@@ -626,4 +626,84 @@ public class HostsFileServiceTests
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { } }
     }
+
+    // ---------- the read-then-write pair over one file ----------
+
+    /// <summary>
+    /// How many times the race below is run. Two saves only collide on the interleavings where both
+    /// pass the "is there a backup yet" test before either has created one, so a single attempt could
+    /// step straight over the bug. Once the pair is serialized EVERY attempt passes by construction,
+    /// so the repetition cannot make this flaky.
+    /// </summary>
+    private const int RaceAttempts = 64;
+
+    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
+    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
+
+    [Fact]
+    public async Task TwoSavesAtOnce_NeitherFails_AndTheBackupIsStillThePristineOriginal()
+    {
+        // SaveHosts reads the hosts file (to recover the user's hand-written comments) and rewrites the
+        // whole thing, and it decides on the way whether this is the first save and so owes a pristine
+        // backup. AtomicFile makes each swap atomic, but not the read-then-write pair and not that
+        // decision: unsynchronized, both callers see no backup and both run
+        // File.Copy(overwrite: false), so the loser throws an IOException that nothing in SaveHosts
+        // handles. Its whole save is abandoned — for the hosts file that means the blocked sites the
+        // user just confirmed silently never take effect.
+        //
+        // Latent rather than reachable today, which is why this ships as a guard rather than a user-
+        // facing fix: the tab's [RelayCommand] async command refuses to re-enter while it is running, so
+        // two saves cannot overlap from the UI. Save-against-restore CAN overlap (two separate commands,
+        // and the modal confirm only covers the prompt, not the Task.Run write), and restore requires an
+        // existing backup, so that pairing misses this branch. The gate closes both.
+        for (var attempt = 0; attempt < RaceAttempts; attempt++)
+        {
+            const string original = "# ORIGINAL pristine hosts\n127.0.0.1 originalhost\n";
+            var (svc, hosts, dir) = NewServiceWithTempHosts(original);
+            try
+            {
+                using var ready = new CountdownEvent(2);
+                using var go = new ManualResetEventSlim(false);
+                // One instance, as in the container: the lock is per-instance, so two services would be
+                // a different race and would not prove this one.
+                var writers = new[]
+                {
+                    Task.Run(() =>
+                    {
+                        ready.Signal();
+                        go.Wait();
+                        svc.SaveHosts([new HostsEntry { IpAddress = "1.1.1.1", Hostname = "first", IsEnabled = true }]);
+                    }),
+                    Task.Run(() =>
+                    {
+                        ready.Signal();
+                        go.Wait();
+                        svc.SaveHosts([new HostsEntry { IpAddress = "2.2.2.2", Hostname = "second", IsEnabled = true }]);
+                    }),
+                };
+
+                Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
+                go.Set();
+                // THIS is the assertion that goes red without the gate: WaitAsync rethrows any writer
+                // fault, so the losing File.Copy's IOException fails the test here instead of being
+                // swallowed. The bound makes a hang a failure rather than a hung run.
+                await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+
+                // Green either way today, and kept deliberately: it pins the branch's PURPOSE against the
+                // tempting wrong fix for the throw above, which is to flip the copy to overwrite: true.
+                // That would make both saves succeed and leave the backup holding SysManager's own
+                // output, so "Restore original" would restore the very thing it exists to undo.
+                // Named attempt, no path in the message: a failure here is printed in public CI output
+                // and the temp directories carry the account name.
+                var backup = File.ReadAllText(hosts + ".bak");
+                Assert.True(backup == original,
+                    $"attempt {attempt}: the backup is no longer the pristine pre-SysManager file, so "
+                        + "\"Restore original\" would restore SysManager's own output");
+            }
+            finally
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { }
+            }
+        }
+    }
 }

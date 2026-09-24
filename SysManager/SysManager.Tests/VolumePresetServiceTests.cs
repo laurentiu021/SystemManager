@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using System.Linq;
 using SysManager.Models;
 using SysManager.Services;
@@ -9,12 +10,28 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="VolumePresetService"/>'s pure logic — JSON round-trip, name-keyed upsert,
-/// exe-name extraction, and the apply-plan that maps a preset onto live sessions by executable
-/// name. No file IO is exercised here (the persistence path is thin file read/write).
+/// Tests for <see cref="VolumePresetService"/> — JSON round-trip, name-keyed upsert, exe-name
+/// extraction, and the apply-plan that maps a preset onto live sessions by executable name.
+/// <para>Mostly pure logic. The exception is the pair of race tests at the bottom, which need the
+/// real file to prove that two overlapping mutators cannot lose a preset between them; those inject
+/// a temp directory, so the developer's own presets in %LOCALAPPDATA% are never read or written.</para>
 /// </summary>
-public class VolumePresetServiceTests
+public class VolumePresetServiceTests : IDisposable
 {
+    private readonly string _dir;
+
+    public VolumePresetServiceTests()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "SysManagerPresetTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); }
+        catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+    }
+
     private static VolumePreset Preset(string name, params (string exe, float vol, bool mute)[] apps)
         => new(name, apps.Select(a => new VolumePresetEntry(a.exe, a.exe, a.vol, a.mute)).ToList());
 
@@ -140,5 +157,101 @@ public class VolumePresetServiceTests
         var preset = Preset("X", ("nothere.exe", 0.5f, false));
         var plan = VolumePresetService.BuildApplyPlan(preset, [Session("s1", @"x\other.exe")]);
         Assert.Empty(plan);
+    }
+
+    // ── the two mutators racing each other ─────────────────────────────────
+
+    /// <summary>
+    /// How many times each race below is run. One attempt is a directory plus two small atomic
+    /// writes, so the whole cost is a fraction of a second. The count exists because the
+    /// unsynchronized code only loses a preset on the interleaving where the second writer's save
+    /// lands after reading a snapshot that predates the first — about half of them — so a single
+    /// attempt could pass straight over the bug. Once the read-modify-write pairs are serialized,
+    /// EVERY attempt passes by construction (both orders end with both presets), so the repetition
+    /// cannot make these flaky.
+    /// </summary>
+    private const int RaceAttempts = 64;
+
+    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
+    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Runs <paramref name="first"/> and <paramref name="second"/> against one service instance from
+    /// a shared start line, then hands the persisted list to <paramref name="assert"/>. Bounded at
+    /// both ends: a writer that never reaches the line, or never returns, fails the run instead of
+    /// hanging it.
+    /// </summary>
+    private async Task RaceTwoMutators(
+        Action<VolumePresetService> first,
+        Action<VolumePresetService> second,
+        Action<int, IReadOnlyList<VolumePreset>> assert)
+    {
+        for (var attempt = 0; attempt < RaceAttempts; attempt++)
+        {
+            var dir = Path.Combine(_dir, $"race-{attempt}");
+            Directory.CreateDirectory(dir);
+            var service = new VolumePresetService(dir);
+
+            using var ready = new CountdownEvent(2);
+            using var go = new ManualResetEventSlim(false);
+            var writers = new[]
+            {
+                Task.Run(() => { ready.Signal(); go.Wait(); first(service); }),
+                Task.Run(() => { ready.Signal(); go.Wait(); second(service); }),
+            };
+
+            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
+            go.Set();
+            // WaitAsync throws TimeoutException on the bound and rethrows any writer fault, so
+            // neither a hang nor an exception inside a writer is swallowed.
+            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+
+            assert(attempt, new VolumePresetService(dir).Load());
+        }
+    }
+
+    [Fact]
+    public async Task TwoPresetsSavedAtOnce_BothSurvive()
+    {
+        // Save is a Load followed by a Persist over one file holding EVERY preset, so it writes back
+        // a whole-list snapshot. AtomicFile makes each write atomic but not the pair: unsynchronized,
+        // the second writer can persist a list it built before the first landed, and the first preset
+        // is gone. Silently — Persist swallows IOException by design, so nothing reports it, and the
+        // user finds out when a preset they saved is missing.
+        await RaceTwoMutators(
+            s => s.Save(Preset("Gaming", ("game.exe", 0.9f, false))),
+            s => s.Save(Preset("Focus", ("chrome.exe", 0.2f, true))),
+            (attempt, presets) =>
+            {
+                // No path in the message: a failure here is printed in public CI output.
+                Assert.True(presets.Any(p => p.Name == "Gaming"),
+                    $"attempt {attempt}: the Gaming preset was dropped — a writer persisted a list "
+                        + "it had built before the other landed");
+                Assert.True(presets.Any(p => p.Name == "Focus"),
+                    $"attempt {attempt}: the Focus preset was dropped — a writer persisted a list "
+                        + "it had built before the other landed");
+                // The entries, not just the names: a lost write that happened to leave both names
+                // present would still restore the wrong levels.
+                Assert.Equal(0.9f, presets.First(p => p.Name == "Gaming").Entries[0].Volume);
+                Assert.Equal(0.2f, presets.First(p => p.Name == "Focus").Entries[0].Volume);
+            });
+    }
+
+    [Fact]
+    public async Task DeletingOnePresetWhileAnotherIsSaved_DoesNotResurrectTheDeletedOne()
+    {
+        // The other pairing, so Delete's half of the lock is exercised too. Unsynchronized, Save can
+        // write back a list that still contains the deleted preset — and a preset the user deleted
+        // coming back is the worse direction of the same bug, because Apply would then set volumes
+        // from levels they had already thrown away.
+        await RaceTwoMutators(
+            s => { s.Save(Preset("Gaming", ("game.exe", 0.9f, false))); s.Delete("Gaming"); },
+            s => s.Save(Preset("Focus", ("chrome.exe", 0.2f, true))),
+            (attempt, presets) =>
+            {
+                Assert.DoesNotContain("Gaming", presets.Select(p => p.Name));
+                Assert.True(presets.Any(p => p.Name == "Focus"),
+                    $"attempt {attempt}: the Focus preset was dropped by the overlapping Delete");
+            });
     }
 }

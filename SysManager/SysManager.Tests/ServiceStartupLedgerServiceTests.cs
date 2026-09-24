@@ -277,4 +277,102 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         Assert.Equal("demand",
             ServiceManagerService.StartTypeToScToken(NewService().PreviousStartTypeFor("never-seen")));
     }
+
+    // ---------- the two mutators racing each other ----------
+
+    /// <summary>
+    /// How many times each race below is run. One attempt is a directory plus two small atomic
+    /// writes, so the whole cost is a fraction of a second. The count exists because the
+    /// unsynchronized code only loses a record on the interleaving where the second writer's save
+    /// lands after reading a snapshot that predates the first — about half of them — so a single
+    /// attempt could pass straight over the bug. Once the read-modify-write pairs are serialized,
+    /// EVERY attempt passes by construction (both orders end with both records), so the repetition
+    /// cannot make these flaky.
+    /// </summary>
+    private const int RaceAttempts = 64;
+
+    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
+    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Runs <paramref name="first"/> and <paramref name="second"/> against one service instance from
+    /// a shared start line, then hands the persisted ledger to <paramref name="assert"/>. Bounded at
+    /// both ends: a writer that never reaches the line, or never returns, fails the run instead of
+    /// hanging it.
+    /// </summary>
+    private async Task RaceTwoMutators(
+        Action<ServiceStartupLedgerService> first,
+        Action<ServiceStartupLedgerService> second,
+        Action<int, IReadOnlyDictionary<string, ServiceStartupRecord>> assert)
+    {
+        for (var attempt = 0; attempt < RaceAttempts; attempt++)
+        {
+            var dir = Path.Combine(_dir, $"race-{attempt}");
+            Directory.CreateDirectory(dir);
+            var service = new ServiceStartupLedgerService(dir);
+
+            using var ready = new CountdownEvent(2);
+            using var go = new ManualResetEventSlim(false);
+            var writers = new[]
+            {
+                Task.Run(() => { ready.Signal(); go.Wait(); first(service); }),
+                Task.Run(() => { ready.Signal(); go.Wait(); second(service); }),
+            };
+
+            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
+            go.Set();
+            // WaitAsync throws TimeoutException on the bound and rethrows any writer fault, so
+            // neither a hang nor an exception inside a writer is swallowed.
+            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+
+            assert(attempt, new ServiceStartupLedgerService(dir).Load());
+        }
+    }
+
+    [Fact]
+    public async Task TwoServicesDisabledAtOnce_BothKeepTheirRecord()
+    {
+        // Remember is a Load followed by a Persist over one file holding EVERY service, so it writes
+        // back a whole-dictionary snapshot. AtomicFile makes each write atomic but not the pair:
+        // unsynchronized, the second writer can persist a dictionary it built before the first
+        // landed, and the first service's record is gone. What that costs is the bug this class
+        // exists to prevent — Enable restores an Automatic service as Manual through
+        // StartTypeToScToken's "demand" default, and reports success.
+        await RaceTwoMutators(
+            s => s.Remember("alpha", "Automatic", At),
+            s => s.Remember("beta", "Boot", At),
+            (attempt, ledger) =>
+            {
+                // No path in the message: a failure here is printed in public CI output.
+                Assert.True(ledger.ContainsKey("alpha"),
+                    $"attempt {attempt}: alpha's record was dropped — a writer persisted a snapshot "
+                        + "it had taken before the other landed");
+                Assert.True(ledger.ContainsKey("beta"),
+                    $"attempt {attempt}: beta's record was dropped — a writer persisted a snapshot "
+                        + "it had taken before the other landed");
+                // The values, not just the keys: a lost write that happened to leave both keys
+                // present would still restore the wrong startup type.
+                Assert.Equal("Automatic", ledger["alpha"].PreviousStartType);
+                Assert.Equal("Boot", ledger["beta"].PreviousStartType);
+            });
+    }
+
+    [Fact]
+    public async Task EnablingOneServiceWhileAnotherIsDisabled_DoesNotResurrectTheEnabledOne()
+    {
+        // The other pairing, so Forget's half of the lock is exercised too: Enable removes alpha's
+        // record while Disable adds beta's. Unsynchronized, Remember can write back a snapshot that
+        // still contains alpha — and a stale record is worse than none, because Enable would then
+        // set a startup type the user had already restored.
+        await RaceTwoMutators(
+            s => { s.Remember("alpha", "Automatic", At); s.Forget("alpha"); },
+            s => s.Remember("beta", "Boot", At),
+            (attempt, ledger) =>
+            {
+                Assert.False(ledger.ContainsKey("alpha"),
+                    $"attempt {attempt}: alpha's record came back after Forget removed it");
+                Assert.True(ledger.ContainsKey("beta"),
+                    $"attempt {attempt}: beta's record was dropped by the overlapping Forget");
+            });
+    }
 }

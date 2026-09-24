@@ -45,6 +45,22 @@ public sealed class ServiceStartupLedgerService
 
     private readonly string _path;
 
+    /// <summary>
+    /// Serializes <see cref="Remember"/> against <see cref="Forget"/>. Both are a <see cref="Load"/>
+    /// followed by a <see cref="Persist"/> over one file holding every service's record, so each
+    /// writes back a whole-dictionary snapshot. <see cref="AtomicFile"/> makes each WRITE atomic but
+    /// not the read-then-write pair: without this, whichever saves last persists a snapshot taken
+    /// before the other landed, and the other service's record is silently gone.
+    /// <para>Nothing reachable today overlaps them — both callers are per-row commands on the
+    /// Services tab that resume on the dispatcher thread, so the UI thread serializes them by
+    /// accident rather than by design. This makes it a property of the service instead, because what
+    /// a dropped record costs is exactly what this class exists to prevent: Enable falls back to
+    /// Manual through <c>StartTypeToScToken</c>'s default while reporting success. A bulk
+    /// "disable selected services" action iterating with <c>Task.WhenAll</c> is an obvious addition
+    /// to that tab, and it must not be the thing that discovers this.</para>
+    /// </summary>
+    private readonly Lock _mutateLock = new();
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public ServiceStartupLedgerService(string? configDir = null)
     {
@@ -69,6 +85,8 @@ public sealed class ServiceStartupLedgerService
     /// Records that <paramref name="serviceName"/> was <paramref name="previousStartType"/> before
     /// being disabled. A type Windows would not accept is not recorded, so Enable falls back to the
     /// conservative default instead of attempting an invalid restore.
+    /// <para>Serialized against <see cref="Forget"/> by <see cref="_mutateLock"/>. The validation
+    /// above it is not: rejecting a bad argument reads nothing shared.</para>
     /// </summary>
     public void Remember(string serviceName, string? previousStartType, DateTimeOffset disabledAtUtc)
     {
@@ -80,21 +98,30 @@ public sealed class ServiceStartupLedgerService
             return;
         }
 
-        var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase)
+        lock (_mutateLock)
         {
-            [serviceName] = new(serviceName, previousStartType, disabledAtUtc)
-        };
-        Persist(ledger);
+            var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase)
+            {
+                [serviceName] = new(serviceName, previousStartType, disabledAtUtc)
+            };
+            Persist(ledger);
+        }
     }
 
-    /// <summary>Removes a service's record — called after a successful Enable restores it.</summary>
+    /// <summary>
+    /// Removes a service's record — called after a successful Enable restores it. Serialized against
+    /// <see cref="Remember"/> by <see cref="_mutateLock"/>.
+    /// </summary>
     public void Forget(string serviceName)
     {
         if (string.IsNullOrWhiteSpace(serviceName)) return;
 
-        var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase);
-        if (!ledger.Remove(serviceName)) return;
-        Persist(ledger);
+        lock (_mutateLock)
+        {
+            var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase);
+            if (!ledger.Remove(serviceName)) return;
+            Persist(ledger);
+        }
     }
 
     /// <summary>The startup type to restore for a service, or null when nothing is recorded.</summary>

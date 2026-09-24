@@ -19,7 +19,7 @@ namespace SysManager.Services;
 /// Works entirely against the public REST endpoint — no auth needed as
 /// long as we stay under the anonymous rate limit (60 req/hour/IP).
 /// </summary>
-public sealed class UpdateService
+public sealed class UpdateService : IUpdateService
 {
     public const string Owner = "laurentiu021";
     public const string Repo = "SystemManager";

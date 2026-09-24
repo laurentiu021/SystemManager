@@ -23,7 +23,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => LoadHistoryCommand;
 
-    private readonly UpdateService _updates;
+    private readonly IUpdateService _updates;
     private readonly SystemReportService _reportService;
     private readonly DiagnosticsBundleService _bundle;
     private readonly UpdateCheckPreferenceService _preferences;
@@ -132,7 +132,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                updatesDir: configDir)
     { }
 
-    public AboutViewModel(UpdateService updates, SystemReportService reportService, string? configDir = null)
+    public AboutViewModel(IUpdateService updates, SystemReportService reportService, string? configDir = null)
         : this(updates, reportService, autoCheck: true,
                preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
                updatesDir: configDir)
@@ -150,7 +150,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// (or come to depend on) whatever is in the developer's real profile.</para>
     /// </summary>
     internal AboutViewModel(
-        UpdateService updates,
+        IUpdateService updates,
         SystemReportService reportService,
         bool autoCheck,
         UpdateCheckPreferenceService? preferences = null,

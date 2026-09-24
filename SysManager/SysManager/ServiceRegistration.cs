@@ -27,7 +27,7 @@ public static class ServiceRegistration
         // Dashboard and AppUpdates both run winget concurrently.
         services.AddTransient<IWingetService, WingetService>();
         services.AddSingleton<TrayIconService>();
-        services.AddSingleton<UpdateService>();
+        services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();
         services.AddSingleton<TemperatureService>();

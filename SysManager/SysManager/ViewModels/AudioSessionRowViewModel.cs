@@ -219,11 +219,12 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// was still counted as applied, and the change handler's failure sentence was overwritten a moment later by
     /// the preset's own summary (#2447). Here each write goes to the service directly and the result comes back to
     /// the caller. Only a value Windows accepted is shown on the row, so a refused one stays where the app still is.
-    /// A value that already matches is not written again and counts as applied.
+    /// The level is always written — deciding it is "already there" would mean comparing floats for equality, and
+    /// writing an unchanged level is harmless — while a mute that already matches is not written again.
     /// </remarks>
     public bool ApplyPreset(float volume, bool muted)
     {
-        var volumeApplied = Volume == volume || _service.SetVolume(SessionId, volume);
+        var volumeApplied = _service.SetVolume(SessionId, volume);
         var muteApplied = IsMuted == muted || _service.SetMute(SessionId, muted);
 
         _suppressPropagation = true;

@@ -892,13 +892,26 @@ public class PowerShellRunnerTests
             + "definitely running, which is the CI failure shape rather than this test's own.");
     }
 
+    /// <summary>
+    /// A real System32 process that exits 0 hands that exit code back through
+    /// <see cref="PowerShellRunner.RunProcessAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// The non-shell twin of <see cref="RunProcessWithShellAsync_CmdExitZero_ReturnsZero"/>, and deliberately
+    /// the same workload. This used to run <c>where.exe cmd.exe</c>, which searches the working directory and
+    /// every PATH entry: on the hosted runner that took 0.76 s to 16 s, 3.1 s on average across 52 runs,
+    /// against the 10 s token below, and it failed twice when the token fired first. <c>cmd.exe</c> through
+    /// this same method took 0.09 s on average in those same runs, so the workload was the flake, not the
+    /// runner (#2421). The token stays as a hang guard only.
+    /// </remarks>
     [Fact]
-    public async Task RunProcessAsync_Where_ReturnsZero()
+    public async Task RunProcessAsync_CmdExitZero_ReturnsZero()
     {
         var runner = new PowerShellRunner();
-        // 'where.exe' always exists on Windows and returns 0 when it finds something.
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var code = await runner.RunProcessAsync("where.exe", "cmd.exe", cts.Token);
+
+        var code = await runner.RunProcessAsync("cmd.exe", "/c exit 0", cts.Token);
+
         Assert.Equal(0, code);
     }
 

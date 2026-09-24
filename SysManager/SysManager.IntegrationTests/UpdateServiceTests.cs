@@ -180,16 +180,29 @@ public class UpdateServiceTests
         Assert.Equal(expected, UpdateService.IsNewer(Version.Parse(latest), Version.Parse(current)));
     }
 
+    /// <summary>
+    /// Every component a consumer may format or compare has to be non-negative.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert only <c>Major</c> and <c>Minor</c> and feed itself nothing but
+    /// three-component tags, so it could not see the one shape that produces a negative:
+    /// <c>Version.TryParse("1.2")</c> succeeds with <c>Build == -1</c>. <c>Build</c> is now asserted
+    /// and the two-component rows are supplied, because a negative <c>Build</c> is what makes
+    /// <c>Version.ToString(3)</c> throw in About.
+    /// </remarks>
     [Theory]
     [InlineData("v0.5.0")]
     [InlineData("0.5.0")]
     [InlineData("v0.5.0-alpha")]
     [InlineData("v0.5.0+build1")]
+    [InlineData("v1.2")]
+    [InlineData("1.2")]
     public void ParseVersion_AlwaysYieldsNonNegative(string tag)
     {
         var v = UpdateService.ParseVersion(tag);
         Assert.NotNull(v);
         Assert.True(v!.Major >= 0);
         Assert.True(v.Minor >= 0);
+        Assert.True(v.Build >= 0, $"Build was {v.Build} for tag '{tag}' — ToString(3) throws on that");
     }
 }

@@ -595,10 +595,30 @@ public sealed class UpdateService : IUpdateService
     }
 
     /// <summary>
-    /// Extracts a <see cref="Version"/> from a GitHub release tag.
-    /// Exposed publicly so tests can exercise it without going through
-    /// the network layer.
+    /// Extracts a <see cref="Version"/> from a GitHub release tag. Always returns at least three
+    /// components. Exposed publicly so tests can exercise it without going through the network layer.
     /// </summary>
+    /// <remarks>
+    /// The three-component guarantee is the point of the normalisation below.
+    /// <c>Version.TryParse("1.2")</c> SUCCEEDS — a two-component tag is not garbage, it is
+    /// under-specified — and leaves <see cref="Version.Build"/> at -1. Two places format a PARSED
+    /// release version with <c>ToString(3)</c>: <c>AboutViewModel</c>'s latest-version label and every
+    /// row of its release-history list. <c>ToString(3)</c> throws <see cref="ArgumentException"/> below
+    /// three components, and both commands catch only <see cref="HttpRequestException"/> and
+    /// <see cref="TaskCanceledException"/> — so the exception would escape to the dispatcher over a tag
+    /// no client can fix.
+    /// <para>Normalising at this boundary rather than at those two call sites is what closes the class:
+    /// this is the only place a <see cref="Version"/> enters from release metadata, so every present and
+    /// future consumer receives a formattable value. <see cref="Version"/> has no mutator, hence a new
+    /// instance.</para>
+    /// <para>It also corrects the COMPARISON, not just the formatting: an un-normalised two-component
+    /// version sorts below the same patch-zero release (-1 against 0), so a "1.2" tag would have been
+    /// judged older than the 1.2.0 already running, and <see cref="IsNewer"/> decides whether an update
+    /// is offered at all. "1.2" means "1.2.0", which is what it now compares as.</para>
+    /// <para>Latent today — semantic-release emits three components and every published tag has three —
+    /// so this is a guard rather than a user-facing fix. One hand-made tag is all it would take, and the
+    /// crash would land on the About tab of every client at once.</para>
+    /// </remarks>
     public static Version? ParseVersion(string tag)
     {
         // Accept "v0.4.0", "0.4.0", "v0.4.0-beta" — strip at most one leading v/V.
@@ -609,7 +629,14 @@ public sealed class UpdateService : IUpdateService
         if (s.Length == 0 || char.IsLetter(s[0])) return null;
         var cut = s.AsSpan().IndexOfAny(VersionSuffixSeparators);
         if (cut > 0) s = s[..cut];
-        return Version.TryParse(s, out var v) ? v : null;
+        if (!Version.TryParse(s, out var v)) return null;
+
+        // Two components is the only under-specified shape that gets in: one component ("v1") is
+        // rejected by TryParse outright. Normalise ONLY that case — rebuilding unconditionally as
+        // new Version(Major, Minor, Max(Build, 0)) would discard Revision, which would make a
+        // "v1.2.3.4" tag compare equal to "v1.2.3" and HIDE a real update instead of mis-formatting
+        // one. See the remarks for why the fix belongs here and not at the two ToString(3) sites.
+        return v.Build >= 0 ? v : new Version(v.Major, v.Minor, 0);
     }
 
     private sealed class GhRelease

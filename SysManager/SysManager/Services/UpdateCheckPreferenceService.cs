@@ -51,6 +51,17 @@ public sealed class UpdateCheckPreferenceService
 
     private readonly string _path;
 
+    /// <summary>
+    /// Serializes <see cref="RecordCheck"/> against <see cref="SetCheckOnStartup"/>. Both are a
+    /// <see cref="Load"/> followed by a <see cref="Save"/> over one file, and both run on the one
+    /// instance <see cref="ViewModels.AboutViewModel"/> holds: the startup check records itself from
+    /// a continuation once the GitHub calls return, while the user's tick arrives on the UI thread.
+    /// <see cref="AtomicFile"/> makes each WRITE atomic but not the read-then-write pair, so without
+    /// this whichever saves last persists a snapshot taken before the other landed — and when that
+    /// is the recorder, the "off" the user just chose silently comes back on.
+    /// </summary>
+    private readonly Lock _mutateLock = new();
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public UpdateCheckPreferenceService(string? configDir = null)
     {
@@ -92,18 +103,30 @@ public sealed class UpdateCheckPreferenceService
         catch (UnauthorizedAccessException ex) { Log.Debug("Update-check preference save denied: {Error}", ex.Message); }
     }
 
-    /// <summary>Records that a check just ran, keeping the user's on/off choice.</summary>
+    /// <summary>
+    /// Records that a check just ran, keeping the user's on/off choice. Serialized against
+    /// <see cref="SetCheckOnStartup"/> by <see cref="_mutateLock"/>.
+    /// </summary>
     public void RecordCheck(DateTimeOffset whenUtc)
     {
-        var current = Load();
-        Save(current with { LastCheckUtc = whenUtc });
+        lock (_mutateLock)
+        {
+            var current = Load();
+            Save(current with { LastCheckUtc = whenUtc });
+        }
     }
 
-    /// <summary>Turns the startup check on or off, keeping the last-checked timestamp.</summary>
+    /// <summary>
+    /// Turns the startup check on or off, keeping the last-checked timestamp. Serialized against
+    /// <see cref="RecordCheck"/> by <see cref="_mutateLock"/>.
+    /// </summary>
     public void SetCheckOnStartup(bool enabled)
     {
-        var current = Load();
-        Save(current with { CheckOnStartup = enabled });
+        lock (_mutateLock)
+        {
+            var current = Load();
+            Save(current with { CheckOnStartup = enabled });
+        }
     }
 
     // ── Pure helpers (unit-testable, no file IO) ───────────────────────────

@@ -205,4 +205,56 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         Assert.False(NewService().Load().CheckOnStartup);
         Assert.True(new UpdateCheckPreferenceService(other).Load().CheckOnStartup);
     }
+
+    // ── The two mutators racing each other ──────────────────────────────────
+
+    /// <summary>
+    /// How many times the race below is run. Each attempt is one directory plus two small atomic
+    /// writes, so the whole test costs a fraction of a second. The count exists because the
+    /// unsynchronized code only loses the update on the interleaving where <c>RecordCheck</c>'s
+    /// save lands last — about half of them — so a single attempt could pass over the bug. Once the
+    /// read-modify-write pairs are serialized, EVERY attempt passes by construction (both orders
+    /// end with the user's choice), so the repetition cannot make this flaky.
+    /// </summary>
+    private const int RaceAttempts = 64;
+
+    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
+    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
+
+    [Fact]
+    public async Task RecordingACheckWhileTheUserTurnsItOff_KeepsTheChoiceOff()
+    {
+        // The live race, on the one instance About holds: the startup check calls RecordCheck from
+        // a continuation once the GitHub calls return, while the user's tick calls
+        // SetCheckOnStartup on the UI thread. Both are a Load followed by a Save over the same
+        // file. AtomicFile makes each WRITE atomic but not the read-then-write pair, so whichever
+        // saves last persists a snapshot taken before the other landed — and when that is
+        // RecordCheck, the "off" the user just chose silently comes back on.
+        for (var attempt = 0; attempt < RaceAttempts; attempt++)
+        {
+            var dir = Path.Combine(_dir, $"race-{attempt}");
+            Directory.CreateDirectory(dir);
+            var service = new UpdateCheckPreferenceService(dir);
+
+            using var ready = new CountdownEvent(2);
+            using var go = new ManualResetEventSlim(false);
+            var writers = new[]
+            {
+                Task.Run(() => { ready.Signal(); go.Wait(); service.RecordCheck(Now); }),
+                Task.Run(() => { ready.Signal(); go.Wait(); service.SetCheckOnStartup(false); }),
+            };
+
+            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
+            go.Set();
+            // Bounded: a writer that never returns must fail the run, not hang it. WaitAsync throws
+            // TimeoutException on the bound and rethrows any writer fault, so neither is swallowed.
+            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+
+            // No path in the message: a failure here is printed in public CI output.
+            Assert.False(
+                new UpdateCheckPreferenceService(dir).Load().CheckOnStartup,
+                $"attempt {attempt}: the startup check came back on — a mutator saved a snapshot "
+                    + "it had taken before the user's choice landed");
+        }
+    }
 }

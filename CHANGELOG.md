@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.2] - 2026-09-24
+
+**If you switched off "Check for updates when SysManager starts" while that very check was still
+running, your choice could silently come back on.** The switch saved your answer, then the check that
+was already in progress finished a moment later and saved what it had read before you touched it —
+putting the setting back to on. Turning it off now stays off.
+
+### Fixed
+
+- **The startup update check can no longer undo the switch you just flicked.** Two things write the
+  same small settings file: the switch on the About tab, and the startup check recording when it last
+  ran. Each one read the file, changed one field and wrote the whole thing back — so whichever finished
+  last overwrote the other's change. The two are now serialized, which means every ordering ends with
+  the answer you gave: the check either sees your "off" and keeps it, or it records its timestamp first
+  and your "off" lands on top. This was the only setting in the app where the two writers could
+  overlap, and it mattered more than most, because that switch is the one control over the app's only
+  outbound network call.
+
 ## [1.113.1] - 2026-09-23
 
 **If you keep two Firefox profiles, Browser Cleaner showed you two identical rows.** Both were called

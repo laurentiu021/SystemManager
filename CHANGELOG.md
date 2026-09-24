@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.3] - 2026-09-24
+
+**If SysManager could not reach GitHub when it started, it then told you it had "checked recently" for
+the rest of the day.** The startup check runs at most once every 24 hours, and a check that failed was
+starting that clock anyway — so a single launch with the network down left you with no version
+information and a message saying there was no point looking again. Only a check that actually got an
+answer starts the clock now.
+
+### Fixed
+
+- **A failed startup update check no longer uses up the day's one check.** The timestamp was recorded as
+  soon as the two calls came back, without asking whether they had come back with anything — so an
+  offline launch spent the entire 24-hour allowance on nothing, and the next launch said "Checked
+  recently. Use Check for updates to look again." That is the one message that is wrong in that
+  situation: it says looking again is unnecessary when in truth nothing had been looked at, and the
+  version on screen was blank. The recording is now conditional on the check having succeeded, so the
+  next launch simply tries again. Failing to load the release-notes list deliberately does not block it —
+  the version answer is what the 24-hour limit exists to protect, and the notes come back with Refresh
+  without waiting out a day.
+
 ## [1.113.2] - 2026-09-24
 
 **If you switched off "Check for updates when SysManager starts" while that very check was still

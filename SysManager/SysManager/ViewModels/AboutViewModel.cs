@@ -214,6 +214,14 @@ public sealed partial class AboutViewModel : ViewModelBase
         _preferences.SetCheckOnStartup(value);
     }
 
+    /// <summary>
+    /// The outer net for the fire-and-forget startup check. It looks redundant — everything it
+    /// catches, the two calls inside catch for themselves — but it is not: <c>GetRecentAsync</c> has
+    /// no catch-all, so a failure it does not name (an <see cref="InvalidOperationException"/> from
+    /// the shared <c>HttpClient</c>, say) reaches here. Without this, that becomes an unobserved task
+    /// exception on a task nobody awaits. The duplicate pair that used to sit inside
+    /// <see cref="CheckAtStartupAsync"/> was genuinely unreachable and was removed.
+    /// </summary>
     private async Task InitAsync()
     {
         try { await CheckAtStartupAsync(); }
@@ -244,17 +252,25 @@ public sealed partial class AboutViewModel : ViewModelBase
             return;
         }
 
-        try
+        await Task.Yield();     // let the UI settle
+        await CheckForUpdatesAsync();
+        await LoadHistoryAsync();
+
+        // Only a check that actually got an answer starts the 24h clock. Recording unconditionally
+        // meant one offline launch throttled the next day's launches too: the user saw "Checked
+        // recently. Use Check for updates to look again." with no version and no way to tell that
+        // nothing had been checked at all. CheckForUpdatesAsync clears this flag at the start of
+        // every attempt and sets it on each of its three failure paths, so it — not an exception —
+        // is what a failure looks like here.
+        //
+        // A history load that failed on its own deliberately does NOT block the record. The clock
+        // exists to rate-limit the latest-version question, which was answered; HistoryUnavailable
+        // already tells the user the notes are missing, and Refresh reloads them without waiting
+        // out a day.
+        if (!UpdateCheckFailed)
         {
-            await Task.Yield();     // let the UI settle
-            await CheckForUpdatesAsync();
-            await LoadHistoryAsync();
-            // Record only after the calls actually went out, so a failed check does not start the
-            // 24h clock and leave the user with stale information for a day.
             _preferences.RecordCheck(DateTimeOffset.UtcNow);
         }
-        catch (HttpRequestException ex) { Log.Debug("About startup check skipped (network): {Error}", ex.Message); }
-        catch (TaskCanceledException ex) { Log.Debug("About startup check timed out: {Error}", ex.Message); }
     }
 
     [RelayCommand]

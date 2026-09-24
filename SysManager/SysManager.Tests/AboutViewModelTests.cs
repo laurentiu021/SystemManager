@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Net.Http;
 using NSubstitute;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -476,6 +477,24 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     }
 
     /// <summary>
+    /// A substitute that fails the way the real service fails. <c>GetLatestAsync</c> has a catch-all
+    /// and converts every error into <c>null</c> plus a <c>LastError</c> string, so "the check
+    /// failed" is a null return and NOT a thrown exception — returning null here is the faithful
+    /// double, and configuring it explicitly rather than leaving the member unconfigured keeps the
+    /// test from depending on what NSubstitute picks for an auto-value.
+    /// </summary>
+    private static IUpdateService NewFailingUpdates()
+    {
+        var updates = Substitute.For<IUpdateService>();
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(null));
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([]));
+        updates.LastError.Returns("Network: No such host is known.");
+        return updates;
+    }
+
+    /// <summary>
     /// autoCheck stays TRUE on purpose: the preference — not that flag — has to be what stops the
     /// call. Passing false would test nothing.
     /// </summary>
@@ -573,6 +592,80 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         await vm.InitializationComplete;
 
         Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task AFailedCheck_DoesNotStartTheThrottle()
+    {
+        // #2408: the recorder ran unconditionally, so one launch with no network spent the user's
+        // whole 24h allowance on a check that answered nothing. The next launch then reported
+        // "Checked recently" — the worst of both, since there was no version to show either.
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        var updates = NewFailingUpdates();
+
+        using var vm = NewVm(prefs, updates);
+        await vm.InitializationComplete;
+
+        // The call really was made — otherwise this would pass for the wrong reason, by way of the
+        // gate that the tests above cover.
+        await updates.Received(1).GetLatestAsync(Arg.Any<CancellationToken>());
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.Contains("Couldn't reach GitHub", vm.UpdateStatus, StringComparison.Ordinal);
+
+        // The timestamp, and then the decision it feeds: the next launch tries again.
+        var stored = new UpdateCheckPreferenceService(_dir).Load();
+        Assert.Null(stored.LastCheckUtc);
+        Assert.True(UpdateCheckPreferenceService.ShouldCheckAtStartup(stored, DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public async Task ACheckThatGotAnAnswer_StartsTheThrottle()
+    {
+        // The other half of the same conditional. Without this, "never record" would satisfy the
+        // test above and silently restore the two-calls-per-launch behaviour the gate exists to stop.
+        var prefs = new UpdateCheckPreferenceService(_dir);
+
+        using var vm = NewVm(prefs, NewUpdates());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.UpdateCheckFailed);
+        var stored = new UpdateCheckPreferenceService(_dir).Load();
+        Assert.NotNull(stored.LastCheckUtc);
+        Assert.False(UpdateCheckPreferenceService.ShouldCheckAtStartup(stored, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// A history load that failed on its own does not block the record — decided deliberately, not by
+    /// accident. The clock rate-limits the latest-version question, and that one was answered;
+    /// blocking here would re-check the version on every launch for as long as the history call
+    /// happened to be failing. <c>HistoryUnavailable</c> tells the user the notes are missing and
+    /// Refresh reloads them, neither of which needs a 24h wait.
+    /// <para>Both parameters matter beyond this decision: <c>LoadHistoryAsync</c>'s two catch blocks
+    /// were unreachable from the real service — <c>GetRecentAsync</c> swallows both failures and
+    /// returns an empty list — so until <see cref="IUpdateService"/> existed (#2409) only
+    /// <c>ArchitectureTests.EveryEmptyStateFlag_IsSetWhereItsDataArrives</c> could pin them, by source
+    /// shape. These two cases are the first to drive them for real.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(false)]     // HttpRequestException — GitHub could not be reached
+    [InlineData(true)]      // TaskCanceledException — the request timed out
+    public async Task WhenOnlyTheHistoryFails_TheThrottleStillStarts(bool timedOut)
+    {
+        Exception failure = timedOut
+            ? new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.")
+            : new HttpRequestException("No such host is known.");
+
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        var updates = NewUpdates();
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(failure));
+
+        using var vm = NewVm(prefs, updates);
+        await vm.InitializationComplete;
+
+        Assert.False(vm.UpdateCheckFailed);     // the version answer arrived
+        Assert.True(vm.HistoryUnavailable);     // the notes did not
+        Assert.NotNull(new UpdateCheckPreferenceService(_dir).Load().LastCheckUtc);
     }
 }
 

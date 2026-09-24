@@ -35,15 +35,20 @@ public class AboutViewModelTests
         return dir;
     }
 
-    /// <summary>Default-service AboutViewModel, redirected away from the real profile.</summary>
-    private static AboutViewModel NewVm() => new(ConfigDir);
-
     /// <summary>
     /// Builds an AboutViewModel WITHOUT the startup update-check, so default-state
     /// assertions don't race the constructor's async network fetch (which populates
     /// UpdateStatus / LatestNotes / LatestVersionLabel / LatestPublishedLabel /
     /// UpdateAvailable).
     /// </summary>
+    /// <remarks>
+    /// Every test in this class that only reads state or runs a command goes through here. Twenty-two
+    /// constructions used the convenience constructor instead, which always passes <c>autoCheck: true</c>
+    /// with a real <see cref="UpdateService"/>, so each one sent the startup check to api.github.com from the
+    /// blocking unit suite (#2412). The one test that must build through that constructor seeds its own
+    /// directory so the check it starts stops at the switch — see
+    /// <see cref="ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile"/>.
+    /// </remarks>
     private static AboutViewModel NewVmNoAutoCheck() =>
         new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
@@ -51,7 +56,7 @@ public class AboutViewModelTests
     [Fact]
     public void Constructs_WithDefaultService()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.NotNull(vm);
     }
 
@@ -71,24 +76,31 @@ public class AboutViewModelTests
     [Fact]
     public void CurrentVersion_NonEmpty()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.False(string.IsNullOrWhiteSpace(vm.CurrentVersion));
     }
 
     [Fact]
     public void CurrentVersion_ParsesAsVersion()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.True(Version.TryParse(vm.CurrentVersion, out _));
     }
 
+    /// <summary>
+    /// The history is empty until something loads it.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert only that the collection was non-null, with a comment explaining that the live
+    /// startup fetch might already have filled it — so the name made a claim the body could not check. With
+    /// no startup check running, the claim is provable and the test states it (#2412).
+    /// </remarks>
     [Fact]
     public void ReleaseHistory_StartsEmpty()
     {
-        var vm = NewVm();
-        Assert.NotNull(vm.ReleaseHistory);
-        // May or may not have populated yet depending on async startup —
-        // just make sure the collection is there.
+        var vm = NewVmNoAutoCheck();
+        Assert.Empty(vm.ReleaseHistory);
+        Assert.False(vm.HistoryUnavailable);   // empty because nothing has been asked yet, not because it failed
     }
 
     [Fact]
@@ -108,28 +120,28 @@ public class AboutViewModelTests
     [Fact]
     public void IsDownloading_DefaultsFalse()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.False(vm.IsDownloading);
     }
 
     [Fact]
     public void DownloadPercent_DefaultsZero()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.Equal(0, vm.DownloadPercent);
     }
 
     [Fact]
     public void DownloadedPath_DefaultsNull()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.Null(vm.DownloadedPath);
     }
 
     [Fact]
     public void AutoDownloadFailed_DefaultsFalse()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.False(vm.AutoDownloadFailed);
     }
 
@@ -144,7 +156,7 @@ public class AboutViewModelTests
     [InlineData("OpenDownloadFolderCommand")]
     public void CommandExists(string propertyName)
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         var prop = vm.GetType().GetProperty(propertyName);
         Assert.NotNull(prop);
         Assert.NotNull(prop!.GetValue(vm));
@@ -153,7 +165,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenRepoCommand_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         // Shell execute is wrapped in try/catch; even if no browser is
         // associated, it must not throw.
         var ex = Record.Exception(() => vm.OpenRepoCommand.Execute(null));
@@ -163,7 +175,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenLicenseCommand_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         var ex = Record.Exception(() => vm.OpenLicenseCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -171,7 +183,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenManualDownloadCommand_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         var ex = Record.Exception(() => vm.OpenManualDownloadCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -179,7 +191,7 @@ public class AboutViewModelTests
     [Fact]
     public void OpenDownloadFolderCommand_NoPath_DoesNotThrow()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         var ex = Record.Exception(() => vm.OpenDownloadFolderCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -187,7 +199,8 @@ public class AboutViewModelTests
     [Fact]
     public async Task InstallUpdateCommand_WithoutDownload_SetsErrorStatus()
     {
-        var vm = new AboutViewModel(ConfigDir) { DownloadedPath = null };
+        var vm = NewVmNoAutoCheck();
+        vm.DownloadedPath = null;
         await vm.InstallUpdateCommand.ExecuteAsync(null);
         Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
     }
@@ -195,11 +208,22 @@ public class AboutViewModelTests
     [Fact]
     public async Task InstallUpdateCommand_WithFakePath_SetsNoFileStatus()
     {
-        var vm = new AboutViewModel(ConfigDir) { DownloadedPath = @"C:\nonexistent\fake.exe" };
+        var vm = NewVmNoAutoCheck();
+        vm.DownloadedPath = @"C:\nonexistent\fake.exe";
         await vm.InstallUpdateCommand.ExecuteAsync(null);
         Assert.Contains("No downloaded", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Installing with a downloaded file but no release to check it against refuses, and says why.
+    /// </summary>
+    /// <remarks>
+    /// "No release info" holds only while the view-model has never received a release. This used to build
+    /// through the convenience constructor, whose startup check can deliver one: a run where that check
+    /// answered before the command ran would have seen a different status, so the assertion was a race
+    /// against api.github.com as well as a call to it (#2412). With no startup check nothing can deliver a
+    /// release, so the premise is fixed rather than probable.
+    /// </remarks>
     [Fact]
     public async Task InstallUpdateCommand_WithPathButNoRelease_SetsNoReleaseStatus()
     {
@@ -207,7 +231,8 @@ public class AboutViewModelTests
         var tmp = Path.GetTempFileName();
         try
         {
-            var vm = new AboutViewModel(ConfigDir) { DownloadedPath = tmp };
+            var vm = NewVmNoAutoCheck();
+            vm.DownloadedPath = tmp;
             await vm.InstallUpdateCommand.ExecuteAsync(null);
             Assert.Contains("No release info", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
         }
@@ -217,20 +242,82 @@ public class AboutViewModelTests
         }
     }
 
-    [Fact]
-    public async Task LoadHistoryCommand_NeverThrows()
+    /// <summary>
+    /// A view-model whose update client is <paramref name="updates"/>, with the startup check off, so the
+    /// only call the substitute sees is the one a test makes and nothing can reach api.github.com.
+    /// </summary>
+    private static AboutViewModel NewVmWith(IUpdateService updates) =>
+        new(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
+
+    /// <summary>
+    /// "Check for updates" never throws, and when GitHub cannot be reached the card says so.
+    /// </summary>
+    /// <remarks>
+    /// This used to run the command against the real client and assert only that nothing was thrown, which
+    /// is all a test can assert when the outcome depends on the network (#2412). Behind the seam each failure
+    /// the command handles is driven for real: the documented null-plus-<c>LastError</c>, and the two
+    /// exceptions it catches. The real service never raises those two — its own catch-all turns every error
+    /// into null — so until now no test reached either branch.
+    /// </remarks>
+    [Theory]
+    [InlineData("null", "Couldn't reach GitHub")]
+    [InlineData("network", "Network error")]
+    [InlineData("timeout", "Request timed out")]
+    public async Task CheckForUpdatesCommand_WhenGitHubCannotBeReached_SaysSoInsteadOfThrowing(string failure, string status)
     {
-        var vm = NewVm();
-        var ex = await Record.ExceptionAsync(() => ((Task?)vm.LoadHistoryCommand.ExecuteAsync(null) ?? Task.CompletedTask));
+        var updates = Substitute.For<IUpdateService>();
+        updates.LastError.Returns("Network: No such host is known.");
+        updates.GetLatestAsync(Arg.Any<CancellationToken>()).Returns(failure switch
+        {
+            "null" => Task.FromResult<UpdateService.ReleaseInfo?>(null),
+            "network" => Task.FromException<UpdateService.ReleaseInfo?>(new HttpRequestException("No such host is known.")),
+            _ => Task.FromException<UpdateService.ReleaseInfo?>(
+                new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.")),
+        });
+
+        var vm = NewVmWith(updates);
+        var ex = await Record.ExceptionAsync(() => vm.CheckForUpdatesCommand.ExecuteAsync(null));
+
         Assert.Null(ex);
+        await updates.Received(1).GetLatestAsync(Arg.Any<CancellationToken>());
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.False(vm.UpdateAvailable);
+        Assert.False(vm.IsCheckingForUpdates);   // the finally ran, so the button works again
+        Assert.Contains(status, vm.UpdateStatus, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task CheckForUpdatesCommand_NeverThrows()
+    /// <summary>
+    /// Refresh never throws, and when GitHub cannot be reached the release list says so instead of going blank.
+    /// </summary>
+    /// <remarks>
+    /// Same change as the check above (#2412). The empty row is the real service's own failure shape —
+    /// <c>GetRecentAsync</c> swallows its errors and returns nothing — and the two exception rows are the
+    /// catches <c>LoadHistoryAsync</c> keeps for a client that does not.
+    /// </remarks>
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("network")]
+    [InlineData("timeout")]
+    public async Task LoadHistoryCommand_WhenGitHubCannotBeReached_SaysSoInsteadOfThrowing(string failure)
     {
-        var vm = NewVm();
-        var ex = await Record.ExceptionAsync(() => ((Task?)vm.CheckForUpdatesCommand.ExecuteAsync(null) ?? Task.CompletedTask));
+        var updates = Substitute.For<IUpdateService>();
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(failure switch
+        {
+            "empty" => Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([]),
+            "network" => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(
+                new HttpRequestException("No such host is known.")),
+            _ => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(
+                new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.")),
+        });
+
+        var vm = NewVmWith(updates);
+        var ex = await Record.ExceptionAsync(() => vm.LoadHistoryCommand.ExecuteAsync(null));
+
         Assert.Null(ex);
+        await updates.Received(1).GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        Assert.True(vm.HistoryUnavailable);
+        Assert.Empty(vm.ReleaseHistory);
     }
 
     [Fact]
@@ -273,7 +360,7 @@ public class AboutViewModelTests
     [Fact]
     public void DownloadStatus_DefaultsEmpty()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.Equal(string.Empty, vm.DownloadStatus);
     }
 
@@ -285,14 +372,15 @@ public class AboutViewModelTests
     [InlineData(100)]
     public void DownloadPercent_AcceptsFullRange(int pct)
     {
-        var vm = new AboutViewModel(ConfigDir) { DownloadPercent = pct };
+        var vm = NewVmNoAutoCheck();
+        vm.DownloadPercent = pct;
         Assert.Equal(pct, vm.DownloadPercent);
     }
 
     [Fact]
     public void BuildDate_IsString()
     {
-        var vm = NewVm();
+        var vm = NewVmNoAutoCheck();
         Assert.NotNull(vm.BuildDate);
     }
 
@@ -333,7 +421,7 @@ public class AboutViewModelTests
     // Tracked separately; until then the guarantee is enforced by code review: this method
     // must not write anywhere the user did not pick.
     [Fact]
-    public void ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile()
+    public async Task ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile()
     {
         // The end-to-end guarantee, stated against the actual user path rather than a proxy. Building
         // an AboutViewModel and toggling the startup-check checkbox — which every test in this file
@@ -349,17 +437,28 @@ public class AboutViewModelTests
         var existedBefore = File.Exists(realPath);
         var contentBefore = existedBefore ? File.ReadAllText(realPath) : null;
 
-        var vm = NewVm();
-        vm.CheckForUpdatesOnStartup = false;
+        // This one test must build through the convenience constructor, because that constructor is what
+        // #1785 was about — and it always passes autoCheck: true with a real UpdateService. Its own
+        // directory, seeded with the startup check switched OFF, is what stops the check it starts from
+        // reaching api.github.com (#2412). The switch is read before any throttle arithmetic, so this
+        // depends on no clock; and the startup path is awaited before the toggles, so it cannot read a
+        // value the test has just changed.
+        var dir = CreateScratchDir();
+        new UpdateCheckPreferenceService(dir).SetCheckOnStartup(false);
+
+        var vm = new AboutViewModel(dir);
+        await vm.InitializationComplete;
+
+        // Each toggle must land in the redirected file. Checking the stored VALUE rather than that a file
+        // exists keeps this honest now that the directory is seeded: existence proves nothing any more.
         vm.CheckForUpdatesOnStartup = true;
+        Assert.True(new UpdateCheckPreferenceService(dir).Load().CheckOnStartup,
+            "the preference was not written to the override directory — configDir is accepted but unused");
+        vm.CheckForUpdatesOnStartup = false;
+        Assert.False(new UpdateCheckPreferenceService(dir).Load().CheckOnStartup);
 
         Assert.Equal(existedBefore, File.Exists(realPath));
         if (existedBefore) Assert.Equal(contentBefore, File.ReadAllText(realPath));
-
-        // …and it went to the redirected directory instead, so the seam is genuinely wired through
-        // rather than merely accepted and ignored.
-        Assert.True(File.Exists(Path.Combine(ConfigDir, "update-check.json")),
-            "the preference was not written to the override directory — configDir is accepted but unused");
     }
 
     // ── BuildBugReportUrl (pure — the "Report a problem" pre-fill) ──
@@ -540,12 +639,16 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     }
 
     [Fact]
-    public void TheCheckboxReflectsTheStoredPreference()
+    public async Task TheCheckboxReflectsTheStoredPreference()
     {
         var prefs = new UpdateCheckPreferenceService(_dir);
         prefs.SetCheckOnStartup(false);
 
         using var vm = NewVm(prefs, NewUpdates());
+        // Awaited like every other test here, so nothing is still running when Dispose deletes the temp
+        // directory. Benign without it today — the stored "off" returns before disk or network — but a test
+        // that is the odd one out is the one a later edit breaks (#2412).
+        await vm.InitializationComplete;
 
         Assert.False(vm.CheckForUpdatesOnStartup);
     }

@@ -34,7 +34,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="SysManager" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                 <Border Style="{StaticResource BadgeAccent}" Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="White" FontWeight="SemiBold" Style="{StaticResource Subtle}"/>
+                                    <TextBlock Text="{Binding CurrentVersion, StringFormat=v{0}}" Foreground="{DynamicResource TextOnAccent}" FontWeight="SemiBold" Style="{StaticResource Subtle}"/>
                                 </Border>
                             </StackPanel>
                             <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
@@ -291,7 +291,7 @@
                                                 <Border Margin="10,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"
                                                         Style="{StaticResource BadgeAccent}">
-                                                    <TextBlock Text="Current" Foreground="White" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="Current" Foreground="{DynamicResource TextOnAccent}" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
                                                 </Border>
                                                 <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                                 <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>

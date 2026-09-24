@@ -137,7 +137,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
 
         foreach (var entry in _allServices)
         {
-            if (!string.Equals(entry.StartType, "Disabled", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!ServiceManagerService.IsDisabled(entry)) continue;
             if (ledger.TryGetValue(entry.Name, out var record))
                 entry.PreviousStartType = record.PreviousStartType;
         }
@@ -239,6 +239,17 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             return;
         }
 
+        // Nothing to do — and taking the snapshot below from a Disabled service would make the next Enable
+        // promise to set it "back to Disabled" while setting it to Manual (#2432). Like the Critical refusal and
+        // the name check, this cannot change with elevation, so it is answered before that gate.
+        if (ServiceManagerService.IsDisabled(entry))
+        {
+            StatusMessage = $"{entry.DisplayName} is already disabled.";
+            return;
+        }
+
+        if (!ServiceManagerService.IsSafeForScExe(entry.Name)) { StatusMessage = CannotChangeStartupType(entry); return; }
+
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
         // The dependents get their own sentence, worded for what disabling actually does. Disabling does
@@ -262,7 +273,8 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         try
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
-            entry.PreviousStartType = previous;
+            // The ledger's rule for the in-memory copy too: only a type Enable can put back is worth keeping.
+            entry.PreviousStartType = ServiceManagerService.IsRestorable(previous) ? previous : null;
             // Persist it too. The in-memory value is lost by the next scan, which rebuilds every
             // ServiceEntry — so without this, Enable after a refresh or restart silently restored
             // an Automatic service as Manual while reporting success.
@@ -274,10 +286,33 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         catch (InvalidOperationException ex) { StatusMessage = $"Disable service failed: {ex.Message}"; }
     }
 
+    /// <summary>
+    /// What Disable and Enable say for a service whose name SysManager will not put on the sc.exe command line
+    /// (<see cref="ServiceManagerService.IsSafeForScExe"/>). Windows allows the name; SysManager declines it,
+    /// so the sentence says where the change can still be made instead.
+    /// </summary>
+    private static string CannotChangeStartupType(ServiceEntry entry) =>
+        $"⚠ SysManager can't change how \"{entry.DisplayName}\" starts: its service name has characters "
+        + "SysManager won't pass to the Windows command it uses. You can change it in Windows' own Services "
+        + "window (services.msc).";
+
     [RelayCommand]
     private async Task EnableServiceAsync(ServiceEntry? entry)
     {
         if (entry is null) return;
+
+        // Enable undoes Disabled, and nothing else (#2432). On any other service it used to fall through to the
+        // "set to Manual" branch below, so a button called Enable could stop an Automatic service starting at
+        // boot — Critical ones included, because Enable has no Critical refusal. Answered before the
+        // elevation gate for the same reason as Disable's checks: elevation would not change the answer.
+        if (!ServiceManagerService.IsDisabled(entry))
+        {
+            StatusMessage = $"{entry.DisplayName} is already enabled ({ServiceManagerService.StartTypeWithDelay(entry)}).";
+            return;
+        }
+
+        if (!ServiceManagerService.IsSafeForScExe(entry.Name)) { StatusMessage = CannotChangeStartupType(entry); return; }
+
         if (!AdminHelper.IsElevated()) { StatusMessage = "⚠ Changing startup type requires admin."; return; }
 
         // Restore the startup type the service had before SysManager disabled it. Prefer the

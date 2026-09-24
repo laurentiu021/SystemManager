@@ -278,6 +278,10 @@ the view-model swallows the failure. A rule nothing can break is a rule nothing 
   as context when the guard fails rather than being the reason.
 - A connection reused from the pool raises neither event, so only the first test to reach a given host is
   named. Fixing that one exposes the next.
+- **It proves it is running, every run.** A guard that reports nothing looks exactly like one that is not
+  loaded, so `NetworkUseGuardTests` takes the guard by constructor injection — which fails if the fixture was
+  never built — resolves `localhost`, and asserts the lookup was heard and charged to it. That one test, named
+  exactly in `NetworkUseGuard.LivenessProbe`, is the only network use the verdict leaves out.
 
 To fix a failure, put the call behind the service's interface and hand the view-model a substitute
 (`IUpdateService` is the model), or build it with the startup work switched off. A test that really needs the

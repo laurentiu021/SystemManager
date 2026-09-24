@@ -30,17 +30,34 @@ namespace SysManager.Tests;
 /// coverage, whatever the runner needs — runs outside any test and is not what this rule is about; it is listed
 /// as context when the guard fails, never as the reason. A thread that suppresses the flow of the execution
 /// context escapes attribution too, which is the price of never failing the run over infrastructure.</para>
+/// <para>A guard that reports nothing looks exactly like a guard that is not running, so it proves itself on every
+/// run: <see cref="LivenessProbe"/> takes the guard by injection — which fails if the fixture was never built — and
+/// resolves <c>localhost</c> through the OS resolver, then asserts the lookup was heard and charged to it. That one
+/// test, named exactly, is the only network use the verdict leaves out.</para>
 /// </remarks>
 public sealed class NetworkUseGuard : IDisposable
 {
+    /// <summary>
+    /// The guard's own liveness test, which performs a lookup on purpose and is the one exemption from the verdict.
+    /// Exact class and method, so no other test can shelter behind it.
+    /// </summary>
+    internal const string LivenessProbe =
+        "SysManager.Tests.NetworkUseGuardTests.TheGuardHearsALookupAndChargesItToTheTestThatMadeIt";
+
     private readonly Listener _listener = new();
+
+    /// <summary>Everything recorded so far as network use by <paramref name="test"/> (class and method).</summary>
+    internal IReadOnlyList<string> ReachedBy(string test) =>
+        _listener.Reached.Where(r => r.StartsWith(test + ": ", StringComparison.Ordinal)).ToList();
 
     public void Dispose()
     {
         // Stop listening first, so nothing is still being recorded while the verdict is written.
         _listener.Dispose();
 
-        var reached = _listener.Reached.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var reached = _listener.Reached
+            .Where(r => !r.StartsWith(LivenessProbe + ": ", StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         if (reached.Count == 0) return;
 
         var requests = _listener.Requests.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

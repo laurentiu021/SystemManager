@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.5] - 2026-09-24
+
+**The Bandwidth Monitor now calls each program by one name, whichever mode it is in.** Turning on
+precise rates used to rename every row — `chrome.exe` became `chrome` — and in the default mode the
+Windows kernel's own row read `System.exe` with a blank icon instead of `System` with the Windows one.
+
+### Fixed
+
+- **Each program keeps the same name in both Bandwidth Monitor modes.** The default, no-administrator
+  mode added ".exe" to every program's name, while precise mode — like Process Manager — shows the name
+  without it, so switching modes relabelled the whole list and the CSV export changed with it. Both modes
+  now use the name without the extension. The same change fixes the kernel's own row: "System.exe" is not
+  a real file, so it matched neither the icon search nor the list of Windows processes and showed the
+  generic icon; as "System" it gets the Windows icon in both modes. Present since the tab was added in
+  v1.54.0.
+- **A program precise mode cannot name yet shows as "PID 1234", then its real name.** The kernel trace
+  sometimes reports a network event before it knows which program sent it, and gives a stand-in name,
+  `Process(1234)`, for it. Precise mode kept the first name it saw for each program, so that stand-in could
+  stay on the row for the rest of the session. It now waits for the real name, and shows the same
+  "PID 1234" the default mode uses until one arrives.
+
 ## [1.113.4] - 2026-09-24
 
 **The About tab now marks the version you are running in its list of releases.** A "Current" badge was

@@ -136,6 +136,24 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
     }
 
     /// <summary>
+    /// True for the name TraceEvent returns when it cannot map <paramref name="pid"/> to an image —
+    /// <c>Process(1234)</c> — which the row must not keep as its name.
+    /// </summary>
+    /// <remarks>
+    /// Its documentation: "the image file name (without the path or extension), or if that is not present, then
+    /// the string 'Process(XXXX)'". Matched against THIS pid, so a real image that happened to be called
+    /// "Process(7)" is still taken at face value. Only consulted while the PID has no name yet, and parsed from
+    /// the span rather than compared with an interpolated string, so the ETW callback allocates nothing for it.
+    /// </remarks>
+    internal static bool IsTraceEventPlaceholder(string name, int pid) =>
+        name.Length > "Process()".Length
+        && name.StartsWith("Process(", StringComparison.Ordinal)
+        && name[^1] == ')'
+        && int.TryParse(name.AsSpan(8, name.Length - 9), System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out var id)
+        && id == pid;
+
+    /// <summary>
     /// Accumulate one event's bytes against a PID. <c>internal</c> rather than private so the eviction
     /// contract can be tested without a kernel ETW session (which needs administrator): the tests drive
     /// this and <see cref="SampleAsync"/> directly with a fake clock. Same seam idea as
@@ -153,7 +171,9 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
         var c = _counters.GetOrAdd(pid, _ => new PidCounters { LastActivityTicks = NowTicks() });
         if (down > 0) System.Threading.Interlocked.Add(ref c.DownBytes, down);
         if (up > 0) System.Threading.Interlocked.Add(ref c.UpBytes, up);
-        if (c.Name.Length == 0 && !string.IsNullOrEmpty(name)) c.Name = name;
+        // First real name wins. TraceEvent's own "Process(1234)" is not one: it is what it returns before it can
+        // map the PID, so keeping it would pin that placeholder to the row for the whole session (#2426).
+        if (c.Name.Length == 0 && !string.IsNullOrEmpty(name) && !IsTraceEventPlaceholder(name, pid)) c.Name = name;
         // Stamped on every event, so eviction measures real inactivity rather than age.
         System.Threading.Volatile.Write(ref c.LastActivityTicks, NowTicks());
     }

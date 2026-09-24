@@ -24,6 +24,7 @@ public sealed partial class UninstallerService
     {
     }
 
+    /// <summary>The constructor tests use, with every machine-dependent input replaceable.</summary>
     /// <param name="runner">The process seam every uninstaller is launched through.</param>
     /// <param name="isElevated">Replaces the elevation probe, so the standard-integrity rule is testable.</param>
     /// <param name="machineRoot">

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.12] - 2026-09-24
+
+**The Uninstaller no longer says an app is removed while its uninstaller is still open.** Some uninstallers
+hand over to a second window and return at once, so SysManager used to report "Removed" before anything
+had been removed — and even if you then cancelled. It now checks that Windows no longer lists the app.
+
+### Fixed
+
+- **Uninstaller: an app is "Removed" only once Windows stops listing it.** For apps uninstalled through
+  their own uninstaller (those without a winget package), SysManager waited for the uninstaller it
+  started and trusted its result. Uninstallers built with NSIS, a common installer maker, copy themselves
+  to a temporary folder, start the copy and return straight away. The row said "Removed", the app left
+  the list and the batch counted it, while the uninstall wizard was still open — or, for a silent
+  uninstall, still running. Cancelling the wizard left the app installed and reported as removed. Now,
+  when Windows still lists the app after its uninstaller returns, the row says the uninstaller may still
+  be open, the app stays on the list, and the summary says how many are still installed. Present since
+  local app support was added in v0.44.0.
+
 ## [1.113.11] - 2026-09-24
 
 **Gaming Profile and Volume Control no longer say a change went through when part of it did not.** Ending

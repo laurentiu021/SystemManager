@@ -91,7 +91,7 @@ public class UpdateServiceParseVersionBulkTests
 
     /// <summary>
     /// A two-component tag must come back with a <c>Build</c> of 0, not the -1
-    /// <see cref="Version.TryParse"/> leaves behind.
+    /// <c>Version.TryParse</c> leaves behind.
     /// </summary>
     /// <remarks>
     /// <c>Version.TryParse("1.2")</c> SUCCEEDS — it is not garbage, it is under-specified — and the

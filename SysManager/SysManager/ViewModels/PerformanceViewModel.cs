@@ -279,8 +279,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             {
                 case "ultimate":
                     var guid = await _service.EnsureUltimatePerformancePlanAsync();
-                    if (!string.IsNullOrEmpty(guid))
-                        await _service.SetActivePlanAsync(guid);
+                    // No plan came back, so there is nothing to switch to. This used to skip the switch and fall
+                    // through to "Power plan set to Ultimate Performance." (#2438). The Gaming Profile's use of the
+                    // same method has always counted an empty GUID as a failure.
+                    if (string.IsNullOrEmpty(guid))
+                    {
+                        StatusMessage = "Power plan change failed: Windows did not provide the Ultimate Performance plan on this PC.";
+                        return;
+                    }
+                    await _service.SetActivePlanAsync(guid);
                     break;
                 case "high":
                     await _service.SetActivePlanAsync(PerformanceService.HighPerfGuid);
@@ -683,6 +690,13 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         {
             await _service.SetHibernationAsync(enabling);
             IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
+            // The re-read decides what is reported, not the request: a success from powercfg that left
+            // hiberfil.sys where it was is still a toggle that did not happen (#2438).
+            if (IsHibernationEnabled != enabling)
+            {
+                StatusMessage = $"Hibernation toggle failed: Windows reported success, but hibernation is still {(IsHibernationEnabled ? "on" : "off")}.";
+                return;
+            }
             StatusMessage = $"✓ Hibernation {(enabling ? "enabled" : "disabled")}.";
             Log.Information("Hibernation {Action}", enabling ? "enabled" : "disabled");
         }

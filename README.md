@@ -429,7 +429,9 @@ need administrator rights:
   the store of known-good copies that SFC draws from, downloading replacements through
   Windows Update. Run this first when SFC reports files it could not fix
 - **Reset Windows Update** — stop the update services, clear the
-  SoftwareDistribution and catroot2 caches, and restart the services
+  SoftwareDistribution and catroot2 caches, and restart the services. If a cache
+  folder is still in use and cannot be cleared, the fix says so instead of asking
+  for a pointless reboot — and restarts the services either way
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
 - **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
   stores the credential securely and SysManager never handles your password
@@ -1257,7 +1259,8 @@ offers, "rate us" prompts:
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent
-- **Power Plan**: Balanced / High Performance / Ultimate Performance
+- **Power Plan**: Balanced / High Performance / Ultimate Performance — Ultimate is switched on in any
+  Windows display language, and reported as failed rather than set when Windows does not provide it
 - **Visual Effects**: reduce animations via P/Invoke (instant, no logout)
 - **Game Mode**: enable/disable via registry
 - **Xbox Game Bar**: disable overlay and Game DVR via registry
@@ -1278,7 +1281,8 @@ offers, "rate us" prompts:
 - **RAM working set trim**: free physical RAM by trimming all process working
   sets — same as RAMMap's "Empty Working Set" (useful before launching a game)
 - **Hibernation toggle**: enable/disable hibernation to free disk space
-  (deletes hiberfil.sys when disabled)
+  (deletes hiberfil.sys when disabled). On a PC that does not support hibernation it
+  says the change failed instead of reporting it done
 
 ### Services
 - Lists all Windows services with current status and startup type
@@ -1341,6 +1345,10 @@ offers, "rate us" prompts:
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
   Non-destructive, no admin required.
+- **Quick Actions** — Run Quick Cleanup, Update All Apps and Run Speed Test run in place
+  with a progress bar, and the result says whether it worked: an app update that fails
+  ends as "Failed" with winget's reason, not "Done". Open Windows Update takes you to the
+  tab where the update check runs
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the

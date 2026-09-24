@@ -1293,6 +1293,9 @@ offers, "rate us" prompts:
   is "my printer will stop working" rather than "this may affect system functionality".
   The names are on the safety pill's tooltip too, which needs no admin rights to read
 - Start, stop, disable, or enable services with confirmation dialogs
+- **Enable puts back what was there** — the startup type a service had before SysManager disabled
+  it, remembered across restarts, "Automatic (Delayed Start)" included. For a service disabled some
+  other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so
 - **Right-click a row** — or press the Menu key or Shift+F10 — for Start, Stop, Disable, Enable and
   Mark, the same five actions as the row's buttons and through the same commands, so every
   confirmation still applies. services.msc has worked this way for twenty years; four buttons per

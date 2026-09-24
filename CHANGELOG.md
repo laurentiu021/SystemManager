@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.6] - 2026-09-24
+
+**Enabling a service now brings back "Automatic (Delayed Start)" when that is how it was set.** The
+Services tab took every delayed-start service for plain Automatic, so disabling one and then enabling it
+again asked Windows to start it together with the others at boot instead of shortly after them.
+
+### Fixed
+
+- **Enable restores a delayed start.** Windows can hold an automatic service back until shortly after the
+  others, to keep it out of the busy moment right after startup. services.msc shows these as "Automatic
+  (Delayed Start)"; on the Windows 11 machine this was checked on they were 17 of the 108 automatic
+  services, Windows Search among them. The Services tab read each startup type in a form that has no word
+  for the delay, so it recorded such a service as plain Automatic when disabling it, and Enable then asked
+  for plain Automatic. It now reads the delay too, remembers it when you disable a service and asks for it
+  back when you enable it, and the Enable confirmation and the status line after it both name it. The
+  Startup column still shows these services as "Automatic". Present since Enable began restoring the
+  previous startup type, in v1.20.34.
+- **The file that remembers what Enable should restore now keeps only types Enable can apply.** It
+  accepted two startup types that only hardware drivers use, which this tab never lists and which made
+  Enable fail with an error, and it ignored capitals in a type's name where the restore did not, so a
+  hand-edited "automatic" came back as Manual. Both now follow one list.
+
 ## [1.113.5] - 2026-09-24
 
 **The Bandwidth Monitor now calls each program by one name, whichever mode it is in.** Turning on

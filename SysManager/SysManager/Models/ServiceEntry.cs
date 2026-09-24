@@ -20,10 +20,21 @@ public sealed partial class ServiceEntry : ObservableObject
     [ObservableProperty] private bool _isHighlighted;
 
     /// <summary>
+    /// True when <see cref="StartType"/> is Automatic and Windows delays the start until shortly after the
+    /// other automatic services — what services.msc calls "Automatic (Delayed Start)".
+    /// </summary>
+    /// <remarks>
+    /// A separate flag because <see cref="StartType"/> is the <c>ServiceStartMode</c> name, and that enum has
+    /// no delayed member: a delayed service reads as plain Automatic there. Always false for any other start
+    /// type, where Windows ignores the delay setting.
+    /// </remarks>
+    [ObservableProperty] private bool _isDelayedAutoStart;
+
+    /// <summary>
     /// The startup type in effect immediately before SysManager last disabled this
-    /// service, captured so "Enable" can restore the exact previous type (Automatic /
-    /// Manual / Boot / System) instead of always falling back to Manual. Null when
-    /// SysManager has not disabled it this session.
+    /// service, captured so "Enable" can restore the exact previous type (Automatic,
+    /// Automatic (Delayed Start) or Manual) instead of always falling back to Manual.
+    /// Null when SysManager has not disabled it this session.
     /// </summary>
     public string? PreviousStartType { get; set; }
 

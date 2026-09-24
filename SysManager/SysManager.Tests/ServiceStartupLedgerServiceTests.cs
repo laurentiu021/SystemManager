@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -110,8 +111,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     [Theory]
     [InlineData("Automatic")]
     [InlineData("Manual")]
-    [InlineData("Boot")]
-    [InlineData("System")]
+    [InlineData("Automatic (Delayed Start)")]   // #2428: the delay has to survive a Disable and Enable
     public void Remember_ARestorableType_IsRecorded(string type)
     {
         NewService().Remember("svc", type, At);
@@ -122,7 +122,11 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     [Theory]
     [InlineData("Disabled")]     // restoring to Disabled is what Enable exists to undo
     [InlineData("Unknown")]
-    [InlineData("Delayed")]      // plausible-looking but not a ServiceStartMode name
+    [InlineData("Delayed")]      // plausible-looking, but not the name services.msc uses
+    // Driver start types. The Services tab lists no drivers and SetStartupTypeAsync refuses "boot" and
+    // "system", so a record of either could only end in an exception when Enable tried to apply it.
+    [InlineData("Boot")]
+    [InlineData("System")]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(null)]
@@ -218,6 +222,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
           { "ServiceName": "good", "PreviousStartType": "Automatic", "DisabledAtUtc": "2026-08-04T12:00:00+00:00" },
           { "ServiceName": "", "PreviousStartType": "Automatic", "DisabledAtUtc": "2026-08-04T12:00:00+00:00" },
           { "ServiceName": "badtype", "PreviousStartType": "Whatever", "DisabledAtUtc": "2026-08-04T12:00:00+00:00" },
+          { "ServiceName": "drivertype", "PreviousStartType": "Boot", "DisabledAtUtc": "2026-08-04T12:00:00+00:00" },
           { "ServiceName": "alsogood", "PreviousStartType": "Manual", "DisabledAtUtc": "2026-08-04T12:00:00+00:00" }
         ]
         """;
@@ -257,17 +262,65 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     [Theory]
     [InlineData("Automatic", "auto")]
     [InlineData("Manual", "demand")]
-    [InlineData("Boot", "boot")]
-    [InlineData("System", "system")]
-    public void EveryRestorableType_MapsToARealScToken(string type, string expectedToken)
+    [InlineData("Automatic (Delayed Start)", "delayed-auto")]
+    public async Task EveryRestorableType_ReachesScExeAsTheTokenThatRestoresIt(string type, string expectedToken)
     {
-        // The ledger is only useful if what it stores round-trips into a token sc.exe accepts. If a
-        // type were storable but mapped to the "demand" fallback, Enable would still be wrong while
-        // the ledger looked correct — so the two are asserted together, not in isolation.
+        // The ledger is only useful if what it stores becomes the sc.exe command that restores it. If a type
+        // were storable but mapped to the "demand" fallback, Enable would still be wrong while the ledger
+        // looked correct — so the chain is asserted end to end, not one link at a time.
+        //
+        // End to end means as far as SetStartupTypeAsync, the allowlist in front of sc.exe. Stopping at the
+        // token let this pass for Boot and System, which mapped to "boot" and "system" — tokens that
+        // allowlist refuses — so a recorded Boot could only ever end in an ArgumentException. The runner
+        // is a substitute: nothing is launched and no service changes.
         NewService().Remember("svc", type, At);
         var restored = NewService().PreviousStartTypeFor("svc");
+        var runner = RunnerReturning(0);
 
-        Assert.Equal(expectedToken, ServiceManagerService.StartTypeToScToken(restored));
+        await ServiceManagerService.SetStartupTypeAsync(
+            "svc", ServiceManagerService.StartTypeToScToken(restored), runner);
+
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"svc\" start= {expectedToken}",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task EveryEntryOfTheRestorableList_PassesTheAllowlistInFrontOfScExe()
+    {
+        // The theory above pins what each known type restores to. This walks the list itself, so a type added
+        // to it later cannot be storable without also being accepted by SetStartupTypeAsync — the drift that
+        // left Boot and System recordable but never restorable.
+        var restorable = ServiceManagerService.RestorableStartTypes;
+        Assert.True(restorable.Count >= 3,
+            $"only {restorable.Count} restorable startup types — Automatic, its delayed form and Manual were there "
+            + "when this was written, so the list has lost one.");
+
+        foreach (var (type, token) in restorable)
+        {
+            var runner = RunnerReturning(0);
+
+            // No catch: an ArgumentException here IS the failure, and it names the refused token.
+            await ServiceManagerService.SetStartupTypeAsync("svc", token, runner);
+
+            await runner.Received(1).RunProcessAsync(
+                "sc.exe", $"config \"svc\" start= {token}",
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+            Assert.Equal(token, ServiceManagerService.StartTypeToScToken(type));
+        }
+
+        // Positive control: the allowlist really does refuse a token outside it, so the loop above passing is
+        // evidence rather than an allowlist that accepts anything.
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => ServiceManagerService.SetStartupTypeAsync("svc", "boot", RunnerReturning(0)));
+    }
+
+    private static IPowerShellRunner RunnerReturning(int exitCode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(exitCode);
+        return runner;
     }
 
     [Fact]
@@ -340,7 +393,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         // StartTypeToScToken's "demand" default, and reports success.
         await RaceTwoMutators(
             s => s.Remember("alpha", "Automatic", At),
-            s => s.Remember("beta", "Boot", At),
+            s => s.Remember("beta", "Manual", At),
             (attempt, ledger) =>
             {
                 // No path in the message: a failure here is printed in public CI output.
@@ -353,7 +406,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
                 // The values, not just the keys: a lost write that happened to leave both keys
                 // present would still restore the wrong startup type.
                 Assert.Equal("Automatic", ledger["alpha"].PreviousStartType);
-                Assert.Equal("Boot", ledger["beta"].PreviousStartType);
+                Assert.Equal("Manual", ledger["beta"].PreviousStartType);
             });
     }
 
@@ -366,7 +419,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         // set a startup type the user had already restored.
         await RaceTwoMutators(
             s => { s.Remember("alpha", "Automatic", At); s.Forget("alpha"); },
-            s => s.Remember("beta", "Boot", At),
+            s => s.Remember("beta", "Manual", At),
             (attempt, ledger) =>
             {
                 Assert.False(ledger.ContainsKey("alpha"),

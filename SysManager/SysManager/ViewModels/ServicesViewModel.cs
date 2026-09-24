@@ -255,8 +255,9 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             "Disable Service — Confirm")) return;
 
         // Snapshot the current startup type BEFORE disabling so Enable can restore the
-        // exact previous type (e.g. Automatic) instead of always falling back to Manual.
-        var previous = entry.StartType;
+        // exact previous type (e.g. Automatic) instead of always falling back to Manual —
+        // delay included: StartType alone reads a delayed-start service as plain Automatic.
+        var previous = ServiceManagerService.StartTypeWithDelay(entry);
 
         try
         {
@@ -313,8 +314,9 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             entry.PreviousStartType = null;
             _ledger.Forget(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
-            StatusMessage = $"✓ {entry.DisplayName} set to {entry.StartType}.";
-            Log.Information("Service enabled: {ServiceName} -> {StartType}", entry.Name, entry.StartType);
+            var now = ServiceManagerService.StartTypeWithDelay(entry);
+            StatusMessage = $"✓ {entry.DisplayName} set to {now}.";
+            Log.Information("Service enabled: {ServiceName} -> {StartType}", entry.Name, now);
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Enable service failed: {ex.Message}"; }
     }

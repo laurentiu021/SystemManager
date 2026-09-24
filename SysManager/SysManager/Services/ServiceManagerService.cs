@@ -5,6 +5,8 @@
 using System.Collections.Frozen;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
+using Microsoft.Win32.SafeHandles;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -67,6 +69,7 @@ public sealed partial class ServiceManagerService
                         : ("", "");
 
                     var (safety, safetyDesc) = SafetyDatabase.GetServiceSafety(sc.ServiceName);
+                    var startMode = sc.StartType;
 
                     result.Add(new ServiceEntry
                     {
@@ -74,7 +77,8 @@ public sealed partial class ServiceManagerService
                         DisplayName = sc.DisplayName,
                         Description = GetServiceDescription(sc),
                         Status = sc.Status.ToString(),
-                        StartType = sc.StartType.ToString(),
+                        StartType = startMode.ToString(),
+                        IsDelayedAutoStart = IsDelayedAutomatic(startMode, sc.ServiceName),
                         Recommendation = rec,
                         RecommendationReason = reason,
                         SafetyLevel = safety,
@@ -210,21 +214,60 @@ public sealed partial class ServiceManagerService
     }
 
     /// <summary>
-    /// Maps a <see cref="ServiceController.StartType"/> string (the
-    /// <see cref="ServiceStartMode"/> name, e.g. "Automatic", "Manual", "Disabled")
-    /// to the corresponding sc.exe <c>start=</c> token, so a disabled service can be
-    /// re-enabled to its exact previous startup type instead of always to Manual.
+    /// services.msc's name for an Automatic service whose start Windows delays until shortly after the other
+    /// automatic services. <see cref="ServiceStartMode"/> has no member for it, so this is the name Disable
+    /// snapshots for such a service and the name the ledger stores (#2428).
+    /// </summary>
+    internal const string AutomaticDelayedStart = "Automatic (Delayed Start)";
+
+    /// <summary>
+    /// Every startup type Enable can put back, with the sc.exe <c>start=</c> token that does it. The one list
+    /// the restore path reads: <see cref="ServiceStartupLedgerService"/> stores only these names and
+    /// <see cref="StartTypeToScToken"/> maps only these, so a type cannot be storable without being restorable.
+    /// </summary>
+    /// <remarks>
+    /// The ledger and the mapping each kept their own list, and both had drifted from the allowlist in
+    /// <see cref="SetStartupTypeAsync"/>. The ledger accepted Boot and System, and the mapping turned them
+    /// into "boot" and "system", which that allowlist refuses — so a recorded Boot could only end in an
+    /// <see cref="ArgumentException"/>. Neither occurs on this tab: they are driver start types, and
+    /// <see cref="ServiceController.GetServices()"/> returns no drivers. The delayed start was missing the
+    /// other way round: the allowlist accepts "delayed-auto", but nothing produced it.
+    /// <para>The allowlist stays a separate literal, because it guards what reaches the sc.exe command line
+    /// and must also admit "disabled"; <c>EveryEntryOfTheRestorableList_PassesTheAllowlistInFrontOfScExe</c>
+    /// walks this list through it.</para>
+    /// <para>Case-insensitive, as the ledger always was — its file is plain JSON a user can edit — so the
+    /// mapping can no longer turn a record the ledger kept, such as "automatic", into Manual.</para>
+    /// </remarks>
+    internal static readonly FrozenDictionary<string, string> RestorableStartTypes =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(ServiceStartMode.Automatic)] = "auto",
+            [AutomaticDelayedStart] = "delayed-auto",
+            [nameof(ServiceStartMode.Manual)] = "demand",
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Maps a startup type as the ledger stores it — a <see cref="RestorableStartTypes"/> name — to the
+    /// sc.exe <c>start=</c> token that restores it, so a disabled service can be re-enabled to its exact
+    /// previous startup type instead of always to Manual.
     /// Falls back to "demand" (Manual) for "Disabled" or any unrecognized value, since
     /// re-enabling to Disabled would be a no-op.
     /// </summary>
-    internal static string StartTypeToScToken(string? startType) => startType switch
-    {
-        "Automatic" => "auto",
-        "Manual" => "demand",
-        "Boot" => "boot",
-        "System" => "system",
-        _ => "demand",
-    };
+    internal static string StartTypeToScToken(string? startType) =>
+        startType is not null && RestorableStartTypes.TryGetValue(startType, out var token) ? token : "demand";
+
+    /// <summary>
+    /// The startup type as services.msc names it: <see cref="ServiceEntry.StartType"/>, except that an
+    /// Automatic service whose start Windows delays reads <see cref="AutomaticDelayedStart"/>.
+    /// </summary>
+    /// <remarks>
+    /// What Disable snapshots, so Enable puts the delay back too, and what Enable reports afterwards — its
+    /// prompt names the delayed type, so the line that confirms the result must not quietly drop it.
+    /// </remarks>
+    internal static string StartTypeWithDelay(ServiceEntry entry) =>
+        entry.IsDelayedAutoStart && entry.StartType == nameof(ServiceStartMode.Automatic)
+            ? AutomaticDelayedStart
+            : entry.StartType;
 
     /// <summary>Refresh the status of a single service entry.</summary>
     public static void RefreshStatus(ServiceEntry entry)
@@ -233,7 +276,9 @@ public sealed partial class ServiceManagerService
         {
             using var sc = new ServiceController(entry.Name);
             entry.Status = sc.Status.ToString();
-            entry.StartType = sc.StartType.ToString();
+            var startMode = sc.StartType;
+            entry.StartType = startMode.ToString();
+            entry.IsDelayedAutoStart = IsDelayedAutomatic(startMode, entry.Name);
         }
         catch (InvalidOperationException) { entry.Status = "Unknown"; }
         // The status/start-type getters call into the SCM and can throw
@@ -241,6 +286,61 @@ public sealed partial class ServiceManagerService
         // stop/disable). Mirror GetAllServices/RefreshAsync which already catch it,
         // so refreshing one entry after a mutation can't crash the command.
         catch (System.ComponentModel.Win32Exception) { entry.Status = "Unknown"; }
+    }
+
+    /// <summary>
+    /// True only for an Automatic service whose start Windows delays. Windows keeps the delay setting for
+    /// other start types too and ignores it there — the service control manager reported it on 6 of 201
+    /// Manual services on the machine this was written on — so for them it is not asked about at all.
+    /// </summary>
+    private static bool IsDelayedAutomatic(ServiceStartMode mode, string serviceName) =>
+        mode == ServiceStartMode.Automatic && ReadDelayedAutoStart(serviceName) is true;
+
+    /// <summary>
+    /// Whether Windows delays <paramref name="serviceName"/>'s automatic start, as the service control
+    /// manager reports it, or null when it could not be asked.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ServiceController"/> cannot say: <see cref="ServiceStartMode"/> has no delayed member, so a
+    /// delayed service reads as plain Automatic (#2428). The flag is asked of the service control manager
+    /// through <c>QueryServiceConfig2</c>, which is what services.msc shows, rather than read from the
+    /// service's <c>DelayedAutostart</c> registry value, because the registry is not where every service
+    /// keeps it. A per-user service instance has no value of its own and takes its template's: on the
+    /// machine this was written on, the registry read disagreed with Windows for 1 of 322 services, the
+    /// per-user clipboard service.
+    /// <para>Needs no elevation. <c>SERVICE_QUERY_CONFIG</c> is the access
+    /// <see cref="ServiceController.StartType"/> itself opens a service with, so every service the scan lists
+    /// already grants it. The flag is reported whatever the start type; <see cref="IsDelayedAutomatic"/> is
+    /// what decides it only counts for an Automatic one.</para>
+    /// <para>Measured over the 108 Automatic services of a 322-service scan: 9 ms in all, about 5% of the
+    /// scan. Opening the manager on each call is a third of that, too little to be worth threading one
+    /// handle through every caller.</para>
+    /// </remarks>
+    internal static bool? ReadDelayedAutoStart(string serviceName)
+    {
+        using var manager = NativeMethods.OpenSCManager(null, null, NativeMethods.SC_MANAGER_CONNECT);
+        if (manager.IsInvalid) return Unavailable(serviceName);
+
+        using var service = NativeMethods.OpenService(manager, serviceName, NativeMethods.SERVICE_QUERY_CONFIG);
+        if (service.IsInvalid) return Unavailable(serviceName);
+
+        return NativeMethods.QueryServiceConfig2(
+                   service, NativeMethods.SERVICE_CONFIG_DELAYED_AUTO_START_INFO, out var info,
+                   (uint)Marshal.SizeOf<NativeMethods.SERVICE_DELAYED_AUTO_START_INFO>(), out _)
+            ? info.fDelayedAutostart != 0
+            : Unavailable(serviceName);
+    }
+
+    /// <summary>
+    /// Logs why the delayed-start flag could not be read, and reports it as unknown. A service removed
+    /// between the scan and this read is the expected cause; the Win32 error is kept so that any other one
+    /// shows up in the log instead of silently reading as "not delayed".
+    /// </summary>
+    private static bool? Unavailable(string serviceName)
+    {
+        Log.Debug("Delayed-start flag unavailable for {Service}: Win32 error {Error}",
+            serviceName, Marshal.GetLastPInvokeError());
+        return null;
     }
 
     private static string GetServiceDescription(ServiceController sc)
@@ -327,6 +427,49 @@ public sealed partial class ServiceManagerService
             [Out] char[] pszOutBuf,
             int cchOutBuf,
             IntPtr ppvReserved);
+
+        // ── Service configuration: the delayed-start flag (#2428) ──
+
+        internal const uint SC_MANAGER_CONNECT = 0x0001;
+        internal const uint SERVICE_QUERY_CONFIG = 0x0001;
+        internal const uint SERVICE_CONFIG_DELAYED_AUTO_START_INFO = 3;
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct SERVICE_DELAYED_AUTO_START_INFO
+        {
+            /// <summary>A Win32 BOOL: non-zero when the automatic start is delayed.</summary>
+            public int fDelayedAutostart;
+        }
+
+        /// <summary>A service control manager or service handle, released with CloseServiceHandle.</summary>
+        internal sealed class SafeServiceHandle : SafeHandleZeroOrMinusOneIsInvalid
+        {
+            public SafeServiceHandle() : base(ownsHandle: true) { }
+
+            protected override bool ReleaseHandle() => CloseServiceHandle(handle);
+        }
+
+        // OpenSCManager and OpenService have A/W pairs → pin the W entry points.
+        [LibraryImport("advapi32.dll", EntryPoint = "OpenSCManagerW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+        internal static partial SafeServiceHandle OpenSCManager(string? lpMachineName, string? lpDatabaseName, uint dwDesiredAccess);
+
+        [LibraryImport("advapi32.dll", EntryPoint = "OpenServiceW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+        internal static partial SafeServiceHandle OpenService(SafeServiceHandle hSCManager, string lpServiceName, uint dwDesiredAccess);
+
+        // QueryServiceConfig2 has an A/W pair too. This info level carries no text, so either export would
+        // fill the same four bytes; the W one matches the two above.
+        [LibraryImport("advapi32.dll", EntryPoint = "QueryServiceConfig2W", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool QueryServiceConfig2(
+            SafeServiceHandle hService,
+            uint dwInfoLevel,
+            out SERVICE_DELAYED_AUTO_START_INFO lpBuffer,
+            uint cbBufSize,
+            out uint pcbBytesNeeded);
+
+        [LibraryImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool CloseServiceHandle(IntPtr hSCObject);
     }
 
     // \A…\z (absolute anchors): ^…$ would accept a trailing newline in the service

@@ -492,10 +492,11 @@ public class ServicesViewModelTests
     /// Runs the private <c>RehydratePreviousStartTypes</c> against a seeded <c>_allServices</c>,
     /// which is what <c>RefreshAsync</c> does after every scan.
     /// </summary>
+    /// <param name="ps">A substitute for a test that lets a command reach sc.exe; the real runner otherwise.</param>
     private static async Task<ServicesViewModel> CreateWithLedgerAsync(
-        List<ServiceEntry> services, ServiceStartupLedgerService ledger)
+        List<ServiceEntry> services, ServiceStartupLedgerService ledger, IPowerShellRunner? ps = null)
     {
-        var vm = new ServicesViewModel(new Services.PowerShellRunner(), ledger);
+        var vm = new ServicesViewModel(ps ?? new Services.PowerShellRunner(), ledger);
         await vm.InitializationComplete;
 
         typeof(ServicesViewModel)
@@ -677,6 +678,118 @@ public class ServicesViewModelTests
         DialogService.Instance.Received(1).Confirm(
             Arg.Is<string>(m => m.Contains("set back to Automatic")),
             Arg.Any<string>());
+    }
+
+    // ── Delayed start survives Disable and Enable (#2428) ──────────────────────────────────────────
+    //
+    // ServiceController.StartType has no delayed member, so a delayed-start service used to be snapshotted
+    // as plain Automatic and restored with `start= auto`. These tests CONFIRM, unlike the ones above: the
+    // runner is a substitute that launches nothing, and the service name exists on no machine, so the
+    // RefreshStatus that follows a change finds nothing to read and nothing real is touched.
+
+    /// <summary>A name no Windows install has, so the post-change RefreshStatus reads nothing real.</summary>
+    private const string FakeServiceName = "SysManagerTestDelayedStartSvc";
+
+    private static IPowerShellRunner RunnerReturning(int exitCode)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(exitCode);
+        return runner;
+    }
+
+    [Fact]
+    public async Task EnableService_WithADelayedStartRecorded_AsksScExeForDelayedAuto()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        ledger.Remember(FakeServiceName, "Automatic (Delayed Start)", DateTimeOffset.UnixEpoch);
+
+        var scanned = new List<ServiceEntry>
+        {
+            new() { Name = FakeServiceName, DisplayName = "Delayed Test", Status = "Stopped", StartType = "Disabled" },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        // The prompt promised the delay back, and the command sc.exe receives keeps that promise.
+        Assert.Contains(dialog.Messages, m => m.Contains("set back to Automatic (Delayed Start)", StringComparison.Ordinal));
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= delayed-auto",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Is<string>(a => a.EndsWith("start= auto", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task DisableThenEnable_ADelayedStartService_PutsTheDelayBack()
+    {
+        // The issue's own reproduction, end to end through the view model: a service the scan read as
+        // delayed is disabled, then enabled, and sc.exe is asked for delayed-auto rather than auto.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = FakeServiceName, DisplayName = "Delayed Test", Status = "Running",
+                StartType = "Automatic", IsDelayedAutoStart = true, SafetyLevel = Models.SafetyLevel.Safe,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= disabled",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Equal("Automatic (Delayed Start)", ledger.PreviousStartTypeFor(FakeServiceName));
+
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= delayed-auto",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Null(ledger.PreviousStartTypeFor(FakeServiceName));   // restored, so nothing left to restore
+    }
+
+    [Fact]
+    public async Task Disable_APlainAutomaticService_StillRemembersPlainAutomatic()
+    {
+        // The negative half: recognising the delay must not start labelling every Automatic service delayed,
+        // or Enable would slow the boot of services that were never meant to wait.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        var scanned = new List<ServiceEntry>
+        {
+            new()
+            {
+                Name = FakeServiceName, DisplayName = "Plain Test", Status = "Running",
+                StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = Models.SafetyLevel.Safe,
+            },
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+        await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        await runner.Received(1).RunProcessAsync(
+            "sc.exe", $"config \"{FakeServiceName}\" start= auto",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Is<string>(a => a.EndsWith("start= delayed-auto", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
     [Fact]

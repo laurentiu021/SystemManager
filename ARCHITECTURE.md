@@ -568,7 +568,12 @@ Key services:
   service's dependents (`ServiceController.DependentServices`, disposing the
   handles it returns) so the stop and disable prompts can name what else
   breaks. The opposite direction, `ServicesDependedOn`, is deliberately not
-  read: six times the cost for the question the user is not asking.
+  read: six times the cost for the question the user is not asking. For each
+  Automatic service it also asks the service control manager, through
+  `QueryServiceConfig2`, whether the start is delayed: `ServiceStartMode` has
+  no delayed member, and the `DelayedAutostart` registry value is not a
+  substitute, because a per-user service instance has none of its own. That
+  flag is what lets Disable and Enable round-trip "Automatic (Delayed Start)".
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
@@ -800,8 +805,9 @@ Key services:
   `ServiceEntry`, and every scan rebuilds those objects — so Disable → Refresh → Enable brought an
   Automatic service back as Manual (`StartTypeToScToken` maps an unknown value to `demand`) while
   reporting success. Same shape as the three above: injectable config directory, pure unit-tested
-  `Serialize`/`Parse`, file IO that never throws. Only the four types Windows accepts
-  (`Automatic`/`Manual`/`Boot`/`System`) are stored, and rehydration applies only to services
+  `Serialize`/`Parse`, file IO that never throws. Only the types Enable can restore are stored —
+  `ServiceManagerService.RestorableStartTypes`, the one list the mapping to sc.exe tokens reads too:
+  `Automatic`, `Automatic (Delayed Start)` and `Manual` — and rehydration applies only to services
   Windows currently reports as `Disabled`, so a stale entry can never override the machine.
 - `CrashMarkerService` — records that the process died from an unhandled exception, as JSON under
   `%LocalAppData%\SysManager\last-crash.json`, so the next launch can say so. `App.OnDomain` writes

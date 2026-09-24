@@ -3176,9 +3176,11 @@ public partial class ArchitectureTests
     /// are exactly the ones a later edit forgets. <c>AboutViewModel.LoadHistoryAsync</c> has two catch
     /// blocks and both must set it; either one missed leaves the section promising notes "pulled live from
     /// GitHub" and rendering nothing.
-    /// <para>Source-shape rather than behavioural, deliberately, for the two that cannot be reached from a
-    /// unit test: <c>AboutViewModel</c> takes the concrete <c>UpdateService</c> so the catch blocks need a
-    /// network failure, and <c>LoadHealthScoreAsync</c> is private with only the init path calling it. Their
+    /// <para>Source-shape rather than behavioural, deliberately. <c>LoadHealthScoreAsync</c> is private with
+    /// only the init path calling it. <c>AboutViewModel.LoadHistoryAsync</c>'s two catches became reachable
+    /// once the view-model took <c>IUpdateService</c> (#2409) — a substitute can throw where the real
+    /// service never does, since <c>GetRecentAsync</c> catches its own failures and returns an empty list —
+    /// but no test drives them yet (#2408 owns that), so the wiring stays pinned here meanwhile. Their
     /// behaviour is covered where it can be — <c>DashboardHealthFlagTests</c> in the integration project —
     /// but that project is compile-only in CI (#2101), so the wiring itself is pinned here, in the blocking
     /// suite, where deleting it fails a merge.</para>
@@ -15419,6 +15421,81 @@ public partial class ArchitectureTests
             "the documented SelectionCarry counts no longer match the call sites:\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
+    /// and the list beside the number names each one — so both are derived here from the registrations
+    /// themselves, which is the only place a seam actually becomes injectable.
+    /// </summary>
+    /// <remarks>
+    /// The number read "Sixteen" the moment <c>IUpdateService</c> became the seventeenth, and nothing failed:
+    /// the count and the list are prose, and no test read either. That paragraph is what a newcomer reads to
+    /// answer "which services can I substitute in a test", so a list missing one sends them to the concrete
+    /// class — which is how a view-model takes <c>UpdateService</c> again and its tests go back to calling
+    /// api.github.com for real. Deriving both from <c>ServiceRegistration.cs</c> makes adding a seam without
+    /// documenting it a red build rather than a drift nobody is looking for.
+    /// </remarks>
+    [Fact]
+    public void TheDocumentedSeamCount_IsDerivedFromTheRegistrations()
+    {
+        var registration = Path.Combine(TestPaths.AppProject(), "ServiceRegistration.cs");
+        Assert.True(File.Exists(registration), $"ServiceRegistration.cs was not found at {registration}.");
+
+        // Comments come off first, so a registration left commented out cannot inflate the count the prose
+        // is then measured against.
+        var code = CSharpComment().Replace(File.ReadAllText(registration), string.Empty);
+        var seams = InterfaceRegistration().Matches(code)
+            .Select(m => m.Groups["iface"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        // Parse floor: the match has to actually find the registrations, or every comparison below is
+        // against a number this guard invented.
+        Assert.True(seams.Length >= 15,
+            $"only {seams.Length} interface registrations parsed from ServiceRegistration.cs — the match is "
+            + "out of date, so the documented count would be compared against nothing.");
+
+        string[] spelled = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+                            "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+                            "seventeen", "eighteen", "nineteen", "twenty"];
+        Assert.True(seams.Length < spelled.Length, $"{seams.Length} seams is past the spelled-out numbers here.");
+
+        // Sliced to the one paragraph that makes the claim, so a name mentioned under a neighbouring heading
+        // cannot vouch for the list. The break is matched as a regex because the file is CRLF in the working
+        // tree and LF in the index, and a literal "\n\n" would find neither — leaving the slice running to the
+        // end of the document, where every seam name appears somewhere and the check passes vacuously.
+        var architecture = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "ARCHITECTURE.md"));
+        var at = architecture.IndexOf("an interface seam.", StringComparison.Ordinal);
+        Assert.True(at > 0, "ARCHITECTURE.md no longer introduces the interface seams, so the count and the "
+            + "list below would be compared against nothing.");
+        var after = architecture[at..];
+        var breakAt = ParagraphBreak().Match(after);
+        var paragraph = Collapse(breakAt.Success ? after[..breakAt.Index] : after);
+        Assert.True(paragraph.Length is > 300 and < 1500,
+            $"the seam paragraph sliced to {paragraph.Length} chars — that is not the paragraph.");
+
+        var offenders = new List<string>();
+
+        if (!paragraph.Contains($"{spelled[seams.Length]} are registered", StringComparison.OrdinalIgnoreCase))
+            offenders.Add($"ARCHITECTURE.md does not say \"{spelled[seams.Length]} are registered\" though "
+                + $"ServiceRegistration.cs registers {seams.Length} interfaces");
+
+        foreach (var seam in seams.Where(s => !paragraph.Contains($"`{s}`", StringComparison.Ordinal)))
+            offenders.Add($"ARCHITECTURE.md's seam list does not name `{seam}`");
+
+        Assert.True(offenders.Count == 0,
+            "the documented interface seams no longer match ServiceRegistration.cs:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A DI registration whose service type is an interface — the seam a test can substitute.</summary>
+    [GeneratedRegex(@"\.Add(?:Singleton|Transient|Scoped)<(?<iface>I[A-Z][A-Za-z0-9_]*)\b", RegexOptions.Compiled)]
+    private static partial Regex InterfaceRegistration();
+
+    /// <summary>A blank line, matched line-ending-agnostically so a CRLF checkout slices the same as LF.</summary>
+    [GeneratedRegex(@"\r?\n[ \t]*\r?\n", RegexOptions.Compiled)]
+    private static partial Regex ParagraphBreak();
 
     /// <summary>
     /// How many arguments an invocation passes, given the index of its opening parenthesis. Nesting is

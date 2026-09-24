@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -53,10 +54,16 @@ public class AboutViewModelTests
         Assert.NotNull(vm);
     }
 
+    /// <summary>
+    /// This overload leaves the startup check ON, so it takes a substitute rather than the real
+    /// service: with the concrete class it made live calls to api.github.com from the blocking unit
+    /// suite, which is what the <see cref="IUpdateService"/> seam exists to stop (#2409). The
+    /// concrete type is still exercised through <see cref="NewVmNoAutoCheck"/>, which cannot call out.
+    /// </summary>
     [Fact]
     public void Constructs_WithInjectedService()
     {
-        var vm = new AboutViewModel(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), ConfigDir);
+        var vm = new AboutViewModel(Substitute.For<IUpdateService>(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), ConfigDir);
         Assert.NotNull(vm);
     }
 
@@ -422,10 +429,13 @@ public class AboutViewModelTests
 /// <para><see cref="UpdateCheckPreferenceServiceTests"/> covers the decision in isolation; these
 /// cover the wiring, which is where the defect was — the check was hardcoded on with no setting and
 /// no memory of the previous run, so every launch made two calls to api.github.com.</para>
-/// <para><see cref="UpdateService"/> is sealed with no interface, so the request itself cannot be
-/// counted. What IS observable is that the gated path never populates the update state and explains
-/// why, which is what these assert. Each test injects a temp directory, so the developer's own
-/// preference file is never read or written.</para>
+/// <para>The view-model takes <see cref="IUpdateService"/>, so every test here runs against a
+/// substitute and the request itself IS counted: the gated tests assert the calls were never made,
+/// not merely that the resulting state stayed empty. Before that seam existed (#2409) the two
+/// open-gate tests below had no choice but to let the blocking unit suite call api.github.com for
+/// real, and what they asserted depended on whether that round trip returned before the test ended —
+/// which is exactly how #2407's race came to fail on main and pass on its own PR run. Each test also
+/// injects a temp directory, so the developer's own preference file is never read or written.</para>
 /// </summary>
 public sealed class AboutViewModelUpdateGateTests : IDisposable
 {
@@ -444,12 +454,33 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>A release the substitute can hand back, so the check takes its success path.</summary>
+    private static UpdateService.ReleaseInfo Release() => new(
+        new Version(1, 0, 0), "v1.0.0", "SysManager v1.0.0", "notes",
+        DateTimeOffset.UnixEpoch, "https://github.com/laurentiu021/SystemManager/releases/tag/v1.0.0",
+        AssetUrl: null, AssetSize: null);
+
+    /// <summary>
+    /// A substitute that answers instantly and counts what it was asked. Returning a real release
+    /// rather than leaving the calls unconfigured keeps the check on its SUCCESS path, so the
+    /// recorder runs — which is the ordering the persistence test below depends on.
+    /// </summary>
+    private static IUpdateService NewUpdates()
+    {
+        var updates = Substitute.For<IUpdateService>();
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release()));
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([Release()]));
+        return updates;
+    }
+
     /// <summary>
     /// autoCheck stays TRUE on purpose: the preference — not that flag — has to be what stops the
     /// call. Passing false would test nothing.
     /// </summary>
-    private AboutViewModel NewVm(UpdateCheckPreferenceService preferences) =>
-        new(new UpdateService(),
+    private AboutViewModel NewVm(UpdateCheckPreferenceService preferences, IUpdateService updates) =>
+        new(updates,
             new SystemReportService(new SystemInfoService(), new DiskHealthService()),
             autoCheck: true,
             preferences);
@@ -459,11 +490,15 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     {
         var prefs = new UpdateCheckPreferenceService(_dir);
         prefs.SetCheckOnStartup(false);
+        var updates = NewUpdates();
 
-        using var vm = NewVm(prefs);
+        using var vm = NewVm(prefs, updates);
         await vm.InitializationComplete;
 
         Assert.False(vm.CheckForUpdatesOnStartup);
+        // The call was never made — asserted directly, not inferred from the empty label.
+        await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
+        await updates.DidNotReceive().GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         Assert.Empty(vm.LatestVersionLabel);        // nothing came back, because nothing was asked
         Assert.False(vm.UpdateCheckFailed);         // and it is not presented as an error
         Assert.Contains("off", vm.UpdateStatus, StringComparison.OrdinalIgnoreCase);
@@ -474,11 +509,13 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     {
         var prefs = new UpdateCheckPreferenceService(_dir);
         prefs.RecordCheck(DateTimeOffset.UtcNow);
+        var updates = NewUpdates();
 
-        using var vm = NewVm(prefs);
+        using var vm = NewVm(prefs, updates);
         await vm.InitializationComplete;
 
         Assert.True(vm.CheckForUpdatesOnStartup);   // throttled is not the same as disabled
+        await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
         Assert.False(vm.UpdateCheckFailed);
         Assert.Contains("recently", vm.UpdateStatus, StringComparison.OrdinalIgnoreCase);
     }
@@ -489,24 +526,29 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         var prefs = new UpdateCheckPreferenceService(_dir);
         prefs.SetCheckOnStartup(false);
 
-        using var vm = NewVm(prefs);
+        using var vm = NewVm(prefs, NewUpdates());
 
         Assert.False(vm.CheckForUpdatesOnStartup);
     }
 
     [Fact]
-    public void TogglingTheCheckbox_PersistsTheChoice()
+    public async Task TogglingTheCheckbox_PersistsTheChoice()
     {
         var prefs = new UpdateCheckPreferenceService(_dir);
-        using var vm = NewVm(prefs);
+        using var vm = NewVm(prefs, NewUpdates());
 
+        // Drain the startup check FIRST, so the recorder has already written and the user's toggle is
+        // the last writer. That ordering used to depend on whether a live GitHub call came back inside
+        // the test's lifetime; against a substitute it is decided here. #2407 serialized the pair, and
+        // this asserts the half of its table that matters to the user: Record, then Set.
+        await vm.InitializationComplete;
         vm.CheckForUpdatesOnStartup = false;
 
         Assert.False(new UpdateCheckPreferenceService(_dir).Load().CheckOnStartup);
     }
 
     [Fact]
-    public void LoadingThePreference_DoesNotRewriteTheFile()
+    public async Task LoadingThePreference_DoesNotRewriteTheFile()
     {
         // The constructor assigns the bound property, which would otherwise fire the save handler
         // and rewrite the file on every launch — including for a user who never touched the setting.
@@ -514,9 +556,23 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         var path = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
         Assert.False(File.Exists(path));
 
-        using var vm = NewVm(prefs);
+        // Hold the check open so the assert cannot race the recorder. What must not write is the
+        // CONSTRUCTOR; RecordCheck writing afterwards is correct, and the second assert says so.
+        // Previously the window was whatever a real GitHub round trip happened to take.
+        var held = new TaskCompletionSource<UpdateService.ReleaseInfo?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var updates = NewUpdates();
+        updates.GetLatestAsync(Arg.Any<CancellationToken>()).Returns(held.Task);
+
+        using var vm = NewVm(prefs, updates);
 
         Assert.False(File.Exists(path));
+
+        // Let the held call finish and drain the check, so nothing is still writing into the temp
+        // directory after Dispose deletes it.
+        held.SetResult(Release());
+        await vm.InitializationComplete;
+
+        Assert.True(File.Exists(path));
     }
 }
 

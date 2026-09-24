@@ -248,12 +248,12 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Sixteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Seventeen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
-`ITweaksHubService`, `IWindowsThemeService`, `IAudioMixerService`, `INavigationService`
+`ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IAudioMixerService`, `INavigationService`
 (NavigationService), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
@@ -376,8 +376,12 @@ Key services:
   System Volume Information as subtrees, and pagefile/hiberfil/swapfile by exact
   file name. The two are separate lists because the subtree one is only ever
   asked about a directory, which is why the three file names sat in it unread.
-- `UpdateService` — GitHub Releases API client with explicit
-  `SocketsHttpHandler`, retry, and surfaced error messages.
+- `UpdateService` (`IUpdateService`) — GitHub Releases API client with explicit
+  `SocketsHttpHandler`, retry, and surfaced error messages. The seam carries every
+  instance member so a consumer never has to hold both it and the concrete class;
+  the version/repo statics stay static, since they read assembly metadata and the
+  local filesystem and so need no double. Without it a test that lets the About
+  tab's startup check run had to call `api.github.com` for real.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
   old one and restart, before any DI/UI is built (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs across seven kinds of

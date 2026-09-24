@@ -257,6 +257,36 @@ three test projects. It partitions each file into members by indentation rather 
 293 of the corpus's string literals hold an unbalanced brace and 89 lines are left net-skewed by them, and
 a brace matcher over it already ran one body into the next.
 
+### The unit suite never reaches the network
+
+"No network I/O" in the table above is enforced, not just stated. `NetworkUseGuard` is an assembly fixture in
+`SysManager.Tests` that listens, in-process, to the runtime's own networking events for the whole run, and
+fails it — as a test-assembly cleanup failure, `Errors: 1` in the summary — if any test resolved a host name
+or opened a socket. The message names each test and what it reached.
+
+It was written because 22 About tests sent the startup update check to api.github.com on every run (#2412).
+None of them could fail over it: a call that succeeds and a call that fails both leave the test green, because
+the view-model swallows the failure. A rule nothing can break is a rule nothing checks.
+
+- **A DNS lookup or a socket connect is the evidence; an HTTP request is not.** `HttpClient` announces a
+  request even when its handler is a stub, and `AppIconServiceTests` drives two such requests on purpose. They
+  appear in the failure message as context only.
+- **Attribution follows the async flow**, so a request that a constructor starts in the background is charged
+  to the test that built the object even if it lands after that test has returned. That is also why the
+  verdict waits for the end of the run.
+- **Only network use inside a test counts.** The test host's own plumbing runs outside any test, and is listed
+  as context when the guard fails rather than being the reason.
+- A connection reused from the pool raises neither event, so only the first test to reach a given host is
+  named. Fixing that one exposes the next.
+- **It proves it is running, every run.** A guard that reports nothing looks exactly like one that is not
+  loaded, so `NetworkUseGuardTests` takes the guard by constructor injection — which fails if the fixture was
+  never built — resolves `localhost`, and asserts the lookup was heard and charged to it. That one test, named
+  exactly in `NetworkUseGuard.LivenessProbe`, is the only network use the verdict leaves out.
+
+To fix a failure, put the call behind the service's interface and hand the view-model a substitute
+(`IUpdateService` is the model), or build it with the startup work switched off. A test that really needs the
+network belongs in `SysManager.IntegrationTests`.
+
 ### Dependency-graph validation
 
 `ServiceRegistrationGraphTests` builds the real container from `ServiceRegistration.ConfigureServices`

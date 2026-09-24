@@ -225,4 +225,62 @@ public class EtwBandwidthSourceTests
         Assert.False(src.Start());
         Assert.False(src.IsAvailable);
     }
+
+    /// <summary>
+    /// A PID TraceEvent could not name shows the app's own wording, then its real name as soon as one arrives.
+    /// </summary>
+    /// <remarks>
+    /// TraceEvent never hands over an empty name: when it cannot map a PID it returns its own placeholder,
+    /// "Process(1234)". The source kept the FIRST name it saw and fell back to "PID 1234" only for an empty one,
+    /// so the fallback could never happen and a placeholder that arrived before the real name stayed on the row
+    /// for the rest of the session — while connection mode called the same PID "PID 1234" (#2426).
+    /// </remarks>
+    [Fact]
+    public async Task APlaceholderName_ShowsAsPid_UntilTheRealNameArrives()
+    {
+        var clock = new TestClock();
+        using var src = new EtwBandwidthSource(clock);
+
+        src.Add(1234, down: 1_000, up: 0, "Process(1234)");
+        Assert.Equal("PID 1234", Assert.Single((await src.SampleAsync()).Processes).ProcessName);
+
+        src.Add(1234, down: 1_000, up: 0, "chrome");
+        Assert.Equal("chrome", Assert.Single((await src.SampleAsync()).Processes).ProcessName);
+    }
+
+    /// <summary>
+    /// Only TraceEvent's exact placeholder for THIS pid counts as "no name".
+    /// </summary>
+    /// <remarks>
+    /// A different pid's number, a malformed shape or another casing is taken at face value, so a real image
+    /// whose name merely looks similar is never hidden behind "PID n".
+    /// </remarks>
+    [Theory]
+    [InlineData("Process(1234)", 1234, true)]
+    [InlineData("Process(1234)", 99, false)]
+    [InlineData("Process()", 1234, false)]
+    [InlineData("Process(12a4)", 1234, false)]
+    [InlineData("Process(1234", 1234, false)]
+    [InlineData("process(1234)", 1234, false)]
+    [InlineData("Process(-1234)", -1234, false)]
+    [InlineData("chrome", 1234, false)]
+    public void IsTraceEventPlaceholder_MatchesOnlyThePlaceholderForThatPid(string name, int pid, bool expected)
+    {
+        Assert.Equal(expected, EtwBandwidthSource.IsTraceEventPlaceholder(name, pid));
+    }
+
+    /// <summary>
+    /// ...and a placeholder never replaces a name that is already known.
+    /// </summary>
+    [Fact]
+    public async Task APlaceholderName_NeverReplacesARealOne()
+    {
+        var clock = new TestClock();
+        using var src = new EtwBandwidthSource(clock);
+
+        src.Add(1234, down: 1_000, up: 0, "chrome");
+        src.Add(1234, down: 1_000, up: 0, "Process(1234)");
+
+        Assert.Equal("chrome", Assert.Single((await src.SampleAsync()).Processes).ProcessName);
+    }
 }

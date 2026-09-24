@@ -182,6 +182,34 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
     // freed immediately. Present to satisfy IBandwidthMonitorService : IDisposable.
     public void Dispose() { }
 
+    /// <summary>
+    /// PID→name resolution against a cache the CALLER owns, so repeated PIDs (a browser holding
+    /// twenty sockets) cost one <c>Process.GetProcessById</c>. Names only; no MainModule/path read.
+    /// </summary>
+    /// <remarks>
+    /// The cache used to be a private STATIC Dictionary that <c>QueryTable</c> cleared on entry. Two
+    /// problems, both fixed by making it a parameter. It was shared process-wide across every source
+    /// instance while a plain Dictionary is not thread-safe — harmless while the poll ran on the UI
+    /// thread, but the sample now runs on a worker, and a mode switch constructing a new source could
+    /// mutate it concurrently. And the clear-on-entry meant the UDP pass wiped the names the TCP pass
+    /// had just resolved, so a PID with both kinds of socket was looked up twice per poll for nothing.
+    /// One cache per sample: correct lifetime, no sharing, no clearing.
+    /// <para>The name is <c>Process.ProcessName</c> as is — no extension — because that is what precise mode
+    /// shows for the same process (TraceEvent's image name without extension) and what Process Manager shows.
+    /// Appending ".exe" made toggling precise rates relabel every row, and turned the kernel's own row into
+    /// "System.exe", a file that does not exist, so it lost the Windows icon as well (#2426).</para>
+    /// </remarks>
+    internal static string ResolveName(int pid, Dictionary<int, string> nameCache)
+    {
+        if (nameCache.TryGetValue(pid, out var cached)) return cached;
+        string name;
+        try { using var p = System.Diagnostics.Process.GetProcessById(pid); name = p.ProcessName; }
+        catch (ArgumentException) { name = $"PID {pid}"; }   // process exited between table read and lookup
+        catch (InvalidOperationException) { name = $"PID {pid}"; }
+        nameCache[pid] = name;
+        return name;
+    }
+
     // ── Native TCP/UDP table enumeration (iphlpapi) ─────────────────────────
     // Classic [DllImport] with a NativeMethods class: GetExtendedTcpTable returns a
     // variable-length table into a caller-sized buffer (the same idiom CpuAffinityService
@@ -206,30 +234,6 @@ public class ConnectionBandwidthSource : IBandwidthMonitorService
         {
             foreach (var (pid, remotePort) in QueryTable(isTcp: false))
                 rows.Add(new ConnectionBandwidthSource.ConnectionRow(pid, ResolveName(pid, nameCache), remotePort, IsTcp: false));
-        }
-
-        /// <summary>
-        /// PID→name resolution against a cache the CALLER owns, so repeated PIDs (a browser holding
-        /// twenty sockets) cost one <c>Process.GetProcessById</c>. Names only; no MainModule/path read.
-        /// </summary>
-        /// <remarks>
-        /// The cache used to be a private STATIC Dictionary that <c>QueryTable</c> cleared on entry. Two
-        /// problems, both fixed by making it a parameter. It was shared process-wide across every source
-        /// instance while a plain Dictionary is not thread-safe — harmless while the poll ran on the UI
-        /// thread, but the sample now runs on a worker, and a mode switch constructing a new source could
-        /// mutate it concurrently. And the clear-on-entry meant the UDP pass wiped the names the TCP pass
-        /// had just resolved, so a PID with both kinds of socket was looked up twice per poll for nothing.
-        /// One cache per sample: correct lifetime, no sharing, no clearing.
-        /// </remarks>
-        private static string ResolveName(int pid, Dictionary<int, string> nameCache)
-        {
-            if (nameCache.TryGetValue(pid, out var cached)) return cached;
-            string name;
-            try { using var p = System.Diagnostics.Process.GetProcessById(pid); name = p.ProcessName + ".exe"; }
-            catch (ArgumentException) { name = $"PID {pid}"; }   // process exited between table read and lookup
-            catch (InvalidOperationException) { name = $"PID {pid}"; }
-            nameCache[pid] = name;
-            return name;
         }
 
         private static IEnumerable<(int Pid, int RemotePort)> QueryTable(bool isTcp)

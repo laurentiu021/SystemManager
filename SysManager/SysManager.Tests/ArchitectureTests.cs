@@ -3180,7 +3180,9 @@ public partial class ArchitectureTests
     /// only the init path calling it. <c>AboutViewModel.LoadHistoryAsync</c>'s two catches became reachable
     /// once the view-model took <c>IUpdateService</c> (#2409) — a substitute can throw where the real
     /// service never does, since <c>GetRecentAsync</c> catches its own failures and returns an empty list —
-    /// but no test drives them yet (#2408 owns that), so the wiring stays pinned here meanwhile. Their
+    /// and <c>AboutViewModelUpdateGateTests.WhenOnlyTheHistoryFails_TheThrottleStillStarts</c> now drives
+    /// both of them (#2408). This pin stays regardless: a behavioural test proves the flag is set on the
+    /// paths it exercises, whereas this proves a THIRD path cannot be added without one. Their
     /// behaviour is covered where it can be — <c>DashboardHealthFlagTests</c> in the integration project —
     /// but that project is compile-only in CI (#2101), so the wiring itself is pinned here, in the blocking
     /// suite, where deleting it fails a merge.</para>

@@ -12351,6 +12351,12 @@ public partial class ArchitectureTests
     /// literal <c>White</c>. Different file, different fill, different literal. This is the general rule, and
     /// it is cheap because the view layer is nearly clean already — seven literals in total before the toast
     /// was fixed, four of which are legitimate.</para>
+    /// <para>It used to recognise only six-to-eight-digit hex, so a NAMED colour passed it: both badges on the
+    /// About page carried <c>Foreground="White"</c> on the themed <c>BadgeAccent</c> fill, one of them shipping at
+    /// 2.15:1 on warm-ember, and this guard never saw either (#2418, #2424). Short hex (<c>#FFF</c>) passed the same
+    /// way, and so did every <c>&lt;Setter&gt;</c> that names its <c>TargetName</c> before its <c>Property</c> —
+    /// 44 of them in App.xaml, never examined. Comments are blanked before matching, now that a named colour can
+    /// match: a comment quoting <c>Foreground="White"</c> to explain why not to use it must not fail the build.</para>
     /// </remarks>
     [Fact]
     public void NoViewPaintsItselfWithALiteralColour()
@@ -12384,20 +12390,32 @@ public partial class ArchitectureTests
             $"only {files.Count} view files were enumerated — this guard is reading the wrong folder.");
 
         var offenders = new List<string>();
+        var admitted = 0;
         foreach (var file in files)
         {
             var name = Path.GetFileName(file);
             if (swatches.ContainsKey(name)) continue;
 
-            var text = File.ReadAllText(file);
+            var text = BlankXmlComments(File.ReadAllText(file));
             var allowed = themeIndependent.TryGetValue(name, out var values) ? values : [];
             foreach (var m in LiteralColourAttribute().Matches(text).Cast<Match>())
             {
-                if (allowed.Contains(m.Value, StringComparer.Ordinal)) continue;
+                if (allowed.Contains(m.Value, StringComparer.Ordinal))
+                {
+                    admitted++;
+                    continue;
+                }
                 var line = text[..m.Index].Count(c => c == '\n') + 1;
                 offenders.Add($"{name}:{line} {m.Value}");
             }
         }
+
+        // Known answer: the FocusRing's two strokes are literal by design, so the matcher has to find exactly those
+        // two and the exception list has to admit them. Anything else means the pattern stopped matching real
+        // markup, and the "no offenders" below would be true of a matcher that matches nothing.
+        Assert.True(admitted == 2,
+            $"the matcher admitted {admitted} allowed literals, not the FocusRing's two strokes — it no longer "
+            + "matches real markup, so the check below proves nothing.");
 
         Assert.True(offenders.Count == 0,
             "these views set a colour the theme cannot change, so whichever preset they were eyeballed against "
@@ -12408,8 +12426,8 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A colour-bearing attribute given a literal hex value, set directly OR through a
-    /// <c>&lt;Setter&gt;</c>.
+    /// A colour-bearing attribute given a literal colour — hex of any length WPF accepts, or a named colour other
+    /// than <c>Transparent</c> — set directly OR through a <c>&lt;Setter&gt;</c>.
     /// </summary>
     /// <remarks>
     /// The <c>Setter</c> alternative is not defensive completeness — it is where the largest instance of
@@ -12419,9 +12437,21 @@ public partial class ArchitectureTests
     /// that one file while this guard reported the whole view layer clean, and the badge kept a
     /// dark-calibrated tint on all six light presets — the one part of the theme system that never
     /// recomputed per preset.
+    /// <para>The direct form is anchored on whitespace or a dot before the name, so an attached
+    /// <c>TextElement.Foreground</c> counts while <c>LastChildFill="True"</c> — a bool whose name ends in
+    /// <c>Fill</c> — does not. The setter form allows anything before <c>Property</c> inside the tag, which is where
+    /// <c>TargetName</c> goes. <c>Transparent</c> is excluded because it paints nothing a theme could adjust.</para>
     /// </remarks>
-    [GeneratedRegex(@"(?:(?:Foreground|Background|Fill|Stroke|BorderBrush)=""#[0-9A-Fa-f]{6,8}""|<Setter\s+Property=""(?:Foreground|Background|Fill|Stroke|BorderBrush)""\s+Value=""#[0-9A-Fa-f]{6,8}"")")]
+    [GeneratedRegex(@"(?:(?<=[\s.])(?:Foreground|Background|Fill|Stroke|BorderBrush)=""|<Setter\b[^>]*?\sProperty=""(?:Foreground|Background|Fill|Stroke|BorderBrush)""\s+Value="")(?:#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3,4})|(?!Transparent"")[A-Za-z]+)""")]
     private static partial Regex LiteralColourAttribute();
+
+    /// <summary>
+    /// The markup with every comment replaced by spaces and its line breaks kept, so a match's index still maps to
+    /// the line it is on. Deleting comments instead, as <see cref="WithoutXamlComments"/> does, would shift every
+    /// line number reported after the first one.
+    /// </summary>
+    private static string BlankXmlComments(string xaml) =>
+        XmlComment().Replace(xaml, m => new string([.. m.Value.Select(c => c is '\r' or '\n' ? c : ' ')]));
 
     /// <summary>
     /// A text column in a report grid must not accept typing.

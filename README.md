@@ -1120,7 +1120,9 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
   startup boost (via the documented Group-Policy keys) and disables its automatic-update
   scheduled tasks, so Edge stops running on its own. You can still open it normally
 - **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
-  clear the Edge policies and re-enable its update tasks — so nothing here is one-way
+  clear the Edge policies and re-enable its update tasks — so nothing here is one-way.
+  The OneDrive entry comes back only once its setup has succeeded; a failed reinstall
+  is reported as failed, just as a failed removal is
 - **Honest about the default browser** — Windows hash-protects the default-browser
   choice, so no app can switch it for you; the tab opens Windows' default-apps settings
   and guides you instead of pretending to change it
@@ -1196,7 +1198,8 @@ offers, "rate us" prompts:
   SysManager also tries a System Restore point first (best-effort, needs administrator)
 - **Your own changes win** — if you switch notifications back on yourself while a profile is
   running (from Privacy & Security → Notifications, which is the same switch), the restore leaves
-  your choice alone instead of silencing them again when the game exits
+  your choice alone instead of silencing them again when the game exits. Likewise, if the fast
+  timer was already on from the Timer Resolution tab, game mode leaves it on when it ends
 - **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
   system-wide changes are offered for restore on next launch
 - **Honest about admin** — freeing standby memory and pausing indexing need
@@ -1213,6 +1216,10 @@ offers, "rate us" prompts:
   minimized), so the number shown is the real one
 - **One-click enable / restore** — fully reversible; the request is released
   when you restore it or simply close the app. No admin required
+- **Honest about other programs** — Windows runs the timer at the fastest rate any
+  program asks for, so a game, a browser playing video or a chat app can keep it
+  fast after SysManager lets go. The tab says so and shows the value, instead of
+  claiming the timer is back to the Windows default
 - **Power-cost warning** — a finer timer wakes the CPU more often, increasing
   power draw and battery drain on laptops
 

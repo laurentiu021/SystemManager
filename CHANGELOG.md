@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.10] - 2026-09-24
+
+**Timer Resolution, Gaming Profile and OneDrive now report what actually happened.** Turning the fast timer
+off no longer claims the timer is back to normal while another program is still holding it. Game mode no
+longer counts a timer request Windows refused, and no longer switches off a fast timer you had turned on
+yourself. Reinstalling OneDrive no longer says "restored" when its setup failed.
+
+### Fixed
+
+- **Timer Resolution: turning it off says what the timer actually did.** Windows runs the timer at the
+  fastest rate any program asks for, so after SysManager lets go, a game, a browser playing video or a chat
+  app can still keep it fast. The tab said "back to the Windows default" regardless, while its own reading
+  showed otherwise. It now says when another program is keeping the timer fast, and names the value. The
+  status line shown when the tab opens had the same flaw for a timer held somewhere in between — 1 ms, for
+  example — which it called "the Windows default". Present since the tab was added in v1.35.0.
+- **Gaming Profile: the timer step no longer claims a success it did not have, or undoes your own
+  setting.** The "Finest timer resolution" step counted as applied whether or not Windows accepted the
+  request. And because Windows keeps a single timer request per program, stopping game mode switched off
+  the fast timer when it was already on from the Timer Resolution tab. The step now counts only a request
+  Windows accepted, changes nothing when the fast timer is already on, and releases only a request it made
+  itself. Present since the step was written in v1.52.38.
+- **Edge/OneDrive Remover: restoring OneDrive reports failure when its setup fails.** The setup's result was
+  thrown away, so a failed reinstall said "OneDrive restored." and put back a File Explorer entry for a
+  client that was not there. It now checks the result, as removal already did, and puts the entry back only
+  after the setup succeeds. Present since the tab was added in v1.53.0.
+
 ## [1.113.9] - 2026-09-24
 
 **Four more places stop reporting success for something that did not happen.** The Dashboard's app update

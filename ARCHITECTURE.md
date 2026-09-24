@@ -728,7 +728,9 @@ Key services:
   never uninstalled — only its background/startup-boost Group-Policy keys and its two
   auto-update scheduled tasks (a fixed, injection-safe allowlist) are toggled, which
   needs admin. Each action has a matching restore. All scripts are hard-coded constants
-  (no user input); the pin/policy logic is unit-tested against a redirected registry.
+  (no user input); the pin/policy logic is unit-tested against a redirected registry, and
+  an optional setup-path override lets the remove/restore outcomes, which the setup's exit
+  code decides, be tested on a machine without OneDrive.
 - `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
   store (camera/microphone/location access history). Injectable registry root;
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.
@@ -739,7 +741,10 @@ Key services:
 - `TimerResolutionService` — thin wrapper over ntdll `NtQueryTimerResolution` /
   `NtSetTimerResolution`. The request is a per-process contribution Windows reverts
   on exit, so it's fully reversible and needs no admin; the 100ns→ms conversion and
-  high-resolution detection are pure, unit-tested static methods on the model.
+  the high-resolution and at-default detection are pure, unit-tested members of the model.
+  Windows keeps one request per process (a second request does not stack; one release
+  drops it), so the Timer Resolution tab and Gaming Profile share it: the Gaming Profile
+  step releases only a request it made itself.
 - `FileLockService` — Restart Manager (`rstrtmgr.dll`) wrapper that lists the processes
   using a file/folder and can terminate one. The one place we use classic `[DllImport]`
   (not `[LibraryImport]`): `RM_PROCESS_INFO` has inline `ByValTStr` buffers and

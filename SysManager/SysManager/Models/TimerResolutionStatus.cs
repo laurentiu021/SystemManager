@@ -37,6 +37,14 @@ public sealed record TimerResolutionStatus(
     /// </summary>
     public bool IsHighResolution => CurrentHundredNs <= FinestHundredNs + 500;
 
+    /// <summary>
+    /// True when the timer is back at (near) the Windows default, the coarsest resolution, with the same
+    /// tolerance as <see cref="IsHighResolution"/>. This is not <c>!IsHighResolution</c>: Windows grants the
+    /// finest resolution any process asks for, so another program can hold the timer at a value in between,
+    /// such as 1 ms, which is neither (#2442).
+    /// </summary>
+    public bool IsAtDefault => CurrentHundredNs + 500 >= CoarsestHundredNs;
+
     /// <summary>Formats a millisecond value compactly, e.g. "0.5 ms" / "15.625 ms".</summary>
     public static string FormatMs(double ms) => $"{ms:0.###} ms";
 }

@@ -154,12 +154,30 @@ public sealed partial class ProfileViewModel : ViewModelBase
 
             var applied = _service.ApplySections(profile.Sections);
             RefreshSections();
-            StatusMessage = $"Imported {applied} section{(applied == 1 ? "" : "s")}. Restart SysManager to apply everything.";
-            ToastService.Instance.Show("Profile imported", "Restart SysManager to apply all changes.");
+            StatusMessage = DescribeImport(applied, profile.Sections.Count);
+            // Only an import that changed something is announced (#2454).
+            if (applied > 0)
+                ToastService.Instance.Show("Profile imported", "Restart SysManager to apply all changes.");
         }
         catch (IOException ex) { StatusMessage = $"Import failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Import failed (access denied): {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// The status after an import. <see cref="ProfileService.ApplySections"/> skips a section it does not
+    /// know, one whose content fails the import check, and one it cannot write, and only logs each skip. The
+    /// confirm dialog listed all of them, so the status says how many did not land (#2454).
+    /// </summary>
+    internal static string DescribeImport(int applied, int total)
+    {
+        static string Sections(int n) => $"{n} section{(n == 1 ? "" : "s")}";
+        if (applied == 0)
+            return $"Nothing was imported: none of the profile's {Sections(total)} could be applied. The log has the reason.";
+        if (applied < total)
+            return $"Imported {applied} of {Sections(total)} — {total - applied} could not be applied, and the log has "
+                + "the reason. Restart SysManager to apply the imported settings.";
+        return $"Imported {Sections(applied)}. Restart SysManager to apply everything.";
     }
 
     [RelayCommand]

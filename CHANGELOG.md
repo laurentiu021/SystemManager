@@ -10,6 +10,38 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.13] - 2026-09-24
+
+**Five more places now say what actually happened.** Windows Features no longer reports "Found 0 features"
+when Windows refused to list them. Settings Watchdog no longer says a baseline was saved when it was not.
+Profile import says how many sections it could not apply. The hosts editor says a change waits for
+Save, and Browser Cleaner no longer says it cleaned when nothing was removed.
+
+### Fixed
+
+- **Windows Features: Scan explains that listing needs administrator rights.** Windows shows the list of
+  optional features only to an administrator. From a normal launch the query failed silently, and the tab
+  reported "Found 0 features (0 enabled)" under a "scan complete" toast. A refused scan now says Windows
+  shows the list only to an administrator and points to Run as administrator. An elevated scan that fails
+  is reported as a failure. The banner now says listing needs administrator rights too. Present since the
+  tab was added in v0.46.0.
+- **Settings Watchdog: "Baseline saved" only when it was.** A baseline that could not be written — a full
+  disk, a folder that cannot be written — was caught and dropped, and the tab still said it was saved and
+  recorded the save in Recent Activity. The tab now says the baseline could not be saved, and why. Present
+  since the tab was added in v1.48.0.
+- **Profile Export / Import: an import says what it could not apply.** Sections the import skips — one
+  from a newer SysManager, one that fails the import check, one that cannot be written — were only logged,
+  and the tab reported the applied count under a "Profile imported" toast even when nothing was applied.
+  It now says "Imported 2 of 3 sections — 1 could not be applied", and reports an import that applied
+  nothing as nothing imported, without the toast. Present since the tab was added in v1.28.0.
+- **DNS & Hosts: add and remove say the change waits for Save.** "Added …" and "Removed …" read as done,
+  but only Save writes the hosts file. Leaving the tab after removing a blocking entry kept the entry in the
+  file. Both messages now say to press Save. Present since the hosts editor was added in v1.6.0.
+- **Browser Cleaner: no "Browser data cleaned" when nothing was removed.** An open browser can hold every
+  file, and the toast — often the only result left once the rescan replaces the status — still said the
+  data was cleaned. It now says nothing was removed and suggests closing the browser and cleaning again.
+  Present since the tab was added in v1.31.0.
+
 ## [1.113.12] - 2026-09-24
 
 **The Uninstaller no longer says an app is removed while its uninstaller is still open.** Some uninstallers

@@ -647,7 +647,9 @@ System → System Fixes, where the tab name matches what they do.
   a restore point really does cover this kind of change. Mentioned only when Windows actually made
   one, and never on a toggle that failed
 - Search/filter across all features
-- Requires administrator privileges for modifications
+- Requires administrator privileges — to list the features as well as to change them, because
+  Windows shows the list only to an administrator. Without it, Scan says so rather than
+  reporting an empty list
 
 ### Duplicate Finder
 - Three-pass scan: group by size, partial-hash pre-filter, then full SHA-256
@@ -833,7 +835,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   with its value right now in plain language and the reason it is watched, visible
   from the moment you open the tab rather than only after something has changed
 - **Save a baseline** of your current preferences with one click; the watchdog
-  remembers exactly what each watched setting was
+  remembers exactly what each watched setting was. If the baseline cannot be written — a
+  full disk, for example — the tab says it was not saved, and why
 - **Check now** re-reads the live values and lists any drift in plain language —
   e.g. *"Diagnostic data: was 'Off (Security)', now 'Full'"* — with the category
   and a before/after comparison
@@ -1012,7 +1015,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   static overrides.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
-  or remove them. Backs up hosts file before modifications.
+  or remove them; the changes are written to the hosts file when you press Save,
+  and the tab says so. Backs up hosts file before modifications.
 - Requires administrator privileges for both DNS and hosts operations
 - Admin elevation banner with one-click restart
 
@@ -1110,7 +1114,8 @@ Reclaim space and clear browsing traces, per browser:
   own named files — never saved logins, keys or bookmarks
 - **Confirmation with an impact summary** before anything is deleted
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
-  symlinks/junctions are never followed
+  symlinks/junctions are never followed. When a browser held every file, the result says
+  nothing was removed and suggests closing the browser, rather than "Browser data cleaned"
 
 ### Edge/OneDrive Remover
 Get Microsoft Edge and OneDrive out of your way — reversibly:
@@ -1458,7 +1463,8 @@ offers, "rate us" prompts:
   app-icon fetching preference, and speed-test history**
 - **Selective export** (tick which sections to include) and **selective import**
   (confirm what a profile contains before anything is overwritten). Your ticks survive a
-  refresh, so a section you excluded cannot quietly reappear in the export
+  refresh, so a section you excluded cannot quietly reappear in the export. An import says
+  how many of the profile's sections could not be applied, rather than only how many were
 - **Version-aware** — refuses profiles created by a newer, incompatible build
 - **What it deliberately leaves out** — anything that describes *this* PC rather than
   your choices: the undo baselines behind Performance Mode and Environment Variables,

@@ -60,6 +60,8 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     }
 
     /// <summary>Captures the current values as the saved baseline. Returns the snapshot taken.</summary>
+    /// <exception cref="IOException">The baseline file could not be written.</exception>
+    /// <exception cref="UnauthorizedAccessException">The baseline folder or file is not writable.</exception>
     public IReadOnlyDictionary<string, int?> SaveBaseline(DateTime takenAt)
     {
         var current = ReadCurrent();
@@ -212,15 +214,13 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     }
 
     // Instance, because the baseline path is now per-instance (the configDir seam).
+    // A failed write propagates. It used to be caught here and logged at Debug, and the tab then announced
+    // "Baseline saved" over a baseline that was not on disk (#2452). The only caller is a user's Save click,
+    // which can report the reason.
     private void Persist(BaselineSnapshot snapshot)
     {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_baselinePath)!);
-            AtomicFile.WriteAllText(_baselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
-        }
-        catch (IOException ex) { Log.Debug("Settings baseline save failed: {Error}", ex.Message); }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Settings baseline save denied: {Error}", ex.Message); }
+        Directory.CreateDirectory(Path.GetDirectoryName(_baselinePath)!);
+        AtomicFile.WriteAllText(_baselinePath, JsonSerializer.Serialize(snapshot, JsonDefaults.Indented));
     }
 
     // ── Catalog ─────────────────────────────────────────────────────────────

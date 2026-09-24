@@ -464,7 +464,8 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             HostEntries.Add(entry);
             NewIp = "";
             NewHostname = "";
-            HostsStatus = $"Added {entry.Hostname} ({entry.IpAddress}).";
+            // The list only: Save is what writes the hosts file, and "Added …" alone read as done (#2455).
+            HostsStatus = $"Added {entry.Hostname} ({entry.IpAddress}) to the list — press Save to write it to the hosts file.";
         }
         catch (ArgumentException ex)
         {
@@ -477,7 +478,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     {
         if (entry is null) return;
         HostEntries.Remove(entry);
-        HostsStatus = $"Removed {entry.Hostname}.";
+        HostsStatus = $"Removed {entry.Hostname} from the list — press Save to remove it from the hosts file.";
     }
 
     [RelayCommand]

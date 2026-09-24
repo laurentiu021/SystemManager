@@ -551,7 +551,9 @@ Key services:
   so failing to read one costs a phrase in a tooltip, while the verdict decides a colour. Every
   phrasing here has a form that works with no name, which is what lets the name be optional.
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
-  via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell.
+  via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell. All three
+  need administrator rights, listing included, and every one of them checks the exit code:
+  an unelevated list request fails rather than returning an empty list.
 - `UninstallerService` — winget-based uninstall + registry UninstallString
   fallback for local apps not in winget. Uninstall execution is standard-session
   only; validated local commands use the shell runner so their own manifests own

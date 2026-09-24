@@ -10,7 +10,8 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Wraps PowerShell commands to list, enable, and disable Windows optional features.
-/// Requires administrator privileges for enable/disable operations.
+/// All three need administrator privileges: <c>Get-WindowsOptionalFeature -Online</c> refuses an
+/// unelevated caller just as the enable and disable commands do.
 /// </summary>
 public sealed partial class WindowsFeaturesService
 {
@@ -22,6 +23,10 @@ public sealed partial class WindowsFeaturesService
     /// Lists all Windows optional features with their current state.
     /// Uses Get-WindowsOptionalFeature -Online.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The query failed — unelevated, it always does. Its exit code used to be discarded, so a refused query
+    /// came back as an empty list and the tab reported "Found 0 features" (#2451).
+    /// </exception>
     public async Task<List<WindowsFeature>> ListFeaturesAsync(CancellationToken ct = default)
     {
         List<string> captured = [];
@@ -30,16 +35,20 @@ public sealed partial class WindowsFeaturesService
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
         }
 
+        int exitCode;
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("powershell.exe",
+            exitCode = await _runner.RunProcessAsync("powershell.exe",
                 "-NoProfile -Command \"Get-WindowsOptionalFeature -Online | " +
                 "Select-Object FeatureName, State | " +
                 "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
+        if (exitCode != 0)
+            throw new InvalidOperationException(
+                $"Windows could not list the optional features (exit code {exitCode}).");
         return ParseFeatureList(captured);
     }
 

@@ -165,7 +165,8 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
         {
             var deleted = await _service.CleanAsync(selected, _cts.Token).ConfigureAwait(true);
             StatusMessage = $"Removed {deleted} file(s). Re-scanning…";
-            ToastService.Instance.Show("Browser data cleaned", $"{deleted} files removed.");
+            var (toastTitle, toastDetail) = CleanToast(deleted);
+            ToastService.Instance.Show(toastTitle, toastDetail);
             // Counts only. Naming the categories would record which browser/profile data the user
             // chose to erase, and activity.json is plain text under %LocalAppData%.
             ActivityLogService.Instance.Log("Browser Cleaner",
@@ -181,6 +182,14 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
             IsProgressIndeterminate = false;
         }
     }
+
+    /// <summary>
+    /// The toast after a clean. The rescan replaces the "Removed N file(s)" status at once, so the toast is often
+    /// all that is left of the result — and with nothing removed it must not say the data was cleaned (#2456).
+    /// </summary>
+    internal static (string Title, string Detail) CleanToast(int deleted) => deleted > 0
+        ? ("Browser data cleaned", $"{deleted} files removed.")
+        : ("Nothing was removed", "A browser that is still open keeps its files locked. Close it and clean again.");
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();

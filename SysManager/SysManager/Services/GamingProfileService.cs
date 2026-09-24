@@ -83,7 +83,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     /// </summary>
     internal void SeedAppliedStepForTest(IGamingTweak step) => _appliedSteps.Add(step);
 
-    public event EventHandler? SessionAutoReverted;
+    public event EventHandler<GamingRevertResult>? SessionAutoReverted;
 
     // ── The engine (pure, unit-testable with fake IGamingTweak steps) ──────────
 
@@ -141,18 +141,22 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     /// <summary>
     /// Revert the given applied steps in REVERSE order. Each revert is isolated so one failure
     /// doesn't strand the others. Idempotent at the step level (each step's RevertAsync is a
-    /// safe no-op when it has nothing to undo).
+    /// safe no-op when it has nothing to undo). A step that throws is named in the result: the
+    /// isolation used to end at the log line, so every caller announced a full restore (#2445).
     /// </summary>
-    internal static async Task RunRevertAsync(IReadOnlyList<IGamingTweak> applied, CancellationToken ct)
+    internal static async Task<GamingRevertResult> RunRevertAsync(IReadOnlyList<IGamingTweak> applied, CancellationToken ct)
     {
+        List<string> notRestored = [];
         for (int i = applied.Count - 1; i >= 0; i--)
         {
             try { await applied[i].RevertAsync(ct).ConfigureAwait(false); }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Gaming Profile step '{Label}' threw during revert", applied[i].Label);
+                notRestored.Add(applied[i].Label);
             }
         }
+        return notRestored.Count == 0 ? GamingRevertResult.Complete : new GamingRevertResult(notRestored);
     }
 
     // ── Apply / Revert (real steps + persistence + auto-revert) ────────────────
@@ -228,7 +232,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         return new GamingApplyResult(outcomes, restorePointCreated);
     }
 
-    public async Task RevertAsync(CancellationToken ct = default)
+    public async Task<GamingRevertResult> RevertAsync(CancellationToken ct = default)
     {
         // Opportunistic, and it NEVER refuses. Revert runs from the game's Process.Exited callback,
         // so a refusal would leave the machine on Ultimate Performance with visual effects off and
@@ -252,6 +256,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             UnbindAutoRevertLocked();
             BoundGamePid = null;
 
+            var result = GamingRevertResult.Complete;
             if (_appliedSteps.Count > 0)
             {
                 var applied = _appliedSteps.ToList();
@@ -261,14 +266,16 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                 // context here would post the gate-releasing continuation back to the UI thread —
                 // which Dispose()'s blocking _gate.Wait() (also on the UI thread at shutdown) would
                 // deadlock against. Keeping the continuation off the UI thread breaks that cycle.
-                await RunRevertAsync(applied, ct).ConfigureAwait(false);
-                Log.Information("Gaming Profile reverted {Count} step(s)", applied.Count);
+                result = await RunRevertAsync(applied, ct).ConfigureAwait(false);
+                Log.Information("Gaming Profile reverted {Count} step(s), {Failed} could not be restored",
+                    applied.Count, result.NotRestored.Count);
             }
 
             // Clear the persisted active-session marker (whether or not steps were live).
             var store = LoadStore();
             if (store.ActiveSession is not null)
                 SaveStore(store with { ActiveSession = null });
+            return result;
         }
         finally { _gate.Release(); }
     }
@@ -278,7 +285,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     public void SaveLastConfig(GamingProfile profile)
         => SaveStore(LoadStore() with { LastConfig = profile });
 
-    public async Task RecoverPendingAsync(CancellationToken ct = default)
+    public async Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default)
     {
         // Opportunistic and non-refusing, exactly as in RevertAsync: this is a revert of a session
         // that outlived a crash, so declining it would leave the previous run's tweaks live with the
@@ -305,15 +312,17 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         try
         {
             var store = LoadStore();
-            if (store.ActiveSession is not { } session) return;
+            if (store.ActiveSession is not { } session) return GamingRevertResult.Complete;
 
             // Rebuild ONLY the machine-wide tweaks from the persisted snapshot (per-game
             // affinity/priority are not persisted — a since-recycled PID must never be touched)
             // and revert them through the SAME engine path as an in-session revert.
             var steps = BuildMachineWideSteps(session.Profile, session.Snapshot);
-            await RunRevertAsync(steps, ct).ConfigureAwait(false);
+            var result = await RunRevertAsync(steps, ct).ConfigureAwait(false);
             SaveStore(store with { ActiveSession = null });
-            Log.Information("Gaming Profile recovered a leftover session from a previous run");
+            Log.Information("Gaming Profile recovered a leftover session from a previous run, {Failed} step(s) not restored",
+                result.NotRestored.Count);
+            return result;
         }
         finally { _gate.Release(); }
     }
@@ -472,8 +481,8 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // RevertAsync serializes on _gate, so this pool-thread revert can't race a UI-thread Stop.
             // If Stop already reverted, _appliedSteps is empty and this is a harmless no-op.
             bool wasActive = IsActive;
-            await RevertAsync().ConfigureAwait(true);
-            if (wasActive) SessionAutoReverted?.Invoke(this, EventArgs.Empty);
+            var result = await RevertAsync().ConfigureAwait(true);
+            if (wasActive) SessionAutoReverted?.Invoke(this, result);
         }
         catch (Exception ex)
         {

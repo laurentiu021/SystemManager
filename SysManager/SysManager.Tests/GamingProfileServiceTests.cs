@@ -177,6 +177,36 @@ public class GamingProfileServiceTests
         Assert.Equal(["revert:c", "revert:a"], log);
     }
 
+    [Fact]
+    public async Task RunRevert_NamesTheStepThatCouldNotBeRestored()
+    {
+        // The isolation above used to end at a log line, so Stop, the game-exit revert and crash recovery all
+        // announced a full restore over a step that had thrown (#2445).
+        var log = new List<string>();
+        var applied = new List<IGamingTweak>
+        {
+            new FakeTweak("a", log),
+            new ThrowingRevertTweak("bad"),
+            new FakeTweak("c", log),
+        };
+
+        var result = await GamingProfileService.RunRevertAsync(applied, default);
+
+        Assert.False(result.FullyRestored);
+        Assert.Equal(["bad"], result.NotRestored);
+    }
+
+    [Fact]
+    public async Task RunRevert_WhenEveryStepReverts_IsFullyRestored()
+    {
+        var log = new List<string>();
+
+        var result = await GamingProfileService.RunRevertAsync([new FakeTweak("a", log), new FakeTweak("b", log)], default);
+
+        Assert.True(result.FullyRestored);
+        Assert.Empty(result.NotRestored);
+    }
+
     private sealed class ThrowingRevertTweak(string label) : IGamingTweak
     {
         public string Label => label;

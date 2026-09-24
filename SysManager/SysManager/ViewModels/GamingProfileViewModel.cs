@@ -83,8 +83,10 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 "Gaming Profile — Restore");
             if (revert)
             {
-                await _service.RecoverPendingAsync();
-                StatusMessage = "Reverted the leftover changes from the previous session.";
+                var result = await _service.RecoverPendingAsync();
+                StatusMessage = DescribeRevert(result,
+                    "Reverted the leftover changes from the previous session.",
+                    "Reverted the leftover changes from the previous session");
             }
         }
     }
@@ -205,9 +207,11 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            await _service.RevertAsync();
+            var result = await _service.RevertAsync();
             IsSessionActive = _service.IsActive;
-            StatusMessage = "Game mode stopped — original settings restored.";
+            StatusMessage = DescribeRevert(result,
+                "Game mode stopped — original settings restored.",
+                "Game mode stopped");
             ActivityLogService.Instance.Log("Gaming Profile", "Stopped game mode");
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
@@ -219,15 +223,32 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         StopCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnSessionAutoReverted(object? sender, EventArgs e)
+    private void OnSessionAutoReverted(object? sender, GamingRevertResult result)
     {
         // The bound game exited and the service auto-reverted. Reflect it in the UI (marshalled
         // to the UI thread — the event fires from a Process.Exited callback on a pool thread).
         UiThread.Post(() =>
         {
             IsSessionActive = _service.IsActive;
-            StatusMessage = "The game exited — game mode ended and original settings were restored.";
+            StatusMessage = DescribeRevert(result,
+                "The game exited — game mode ended and original settings were restored.",
+                "The game exited and game mode ended");
         });
+    }
+
+    /// <summary>
+    /// The status line after a revert: <paramref name="fullyRestored"/> when every step came back, otherwise
+    /// <paramref name="partialLead"/> followed by the settings that did not, so a failed undo is never announced
+    /// as a restore (#2445).
+    /// </summary>
+    internal static string DescribeRevert(GamingRevertResult result, string fullyRestored, string partialLead)
+    {
+        if (result.FullyRestored) return fullyRestored;
+        var one = result.NotRestored.Count == 1;
+        var what = one
+            ? $"\"{result.NotRestored[0]}\" was"
+            : $"{result.NotRestored.Count} settings were ({string.Join(", ", result.NotRestored)})";
+        return $"{partialLead}, but {what} not restored — check {(one ? "it" : "them")} yourself. The log has the reason.";
     }
 
     /// <summary>Builds an honest, plain-language summary of an apply batch (pure, testable).</summary>

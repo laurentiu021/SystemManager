@@ -39,8 +39,10 @@ public interface IGamingProfileService
     /// <summary>
     /// Revert the active session: undo every applied step in REVERSE order and clear the
     /// persisted active-session record. Idempotent — safe to call with no active session.
+    /// Every step is attempted even when one fails, and the result names the ones that could
+    /// not be restored, so a caller never announces a full restore it did not get.
     /// </summary>
-    Task RevertAsync(CancellationToken ct = default);
+    Task<GamingRevertResult> RevertAsync(CancellationToken ct = default);
 
     /// <summary>Load the last-used configuration (restored into the UI on launch).</summary>
     GamingProfile LoadLastConfig();
@@ -54,11 +56,17 @@ public interface IGamingProfileService
     /// </summary>
     bool HasPendingRecovery { get; }
 
-    /// <summary>Revert a leftover session found on disk from a previous run (crash recovery).</summary>
-    Task RecoverPendingAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Revert a leftover session found on disk from a previous run (crash recovery). Reports
+    /// what could not be restored, as <see cref="RevertAsync"/> does.
+    /// </summary>
+    Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default);
 
-    /// <summary>Raised (on the captured context) when the bound game exits and the session auto-reverts.</summary>
-    event EventHandler? SessionAutoReverted;
+    /// <summary>
+    /// Raised (on the captured context) when the bound game exits and the session auto-reverts,
+    /// carrying what that revert could not restore.
+    /// </summary>
+    event EventHandler<GamingRevertResult>? SessionAutoReverted;
 }
 
 /// <summary>A running process chosen as the game target for affinity/priority + auto-revert.</summary>
@@ -113,4 +121,19 @@ public sealed record GamingApplyResult(
 
     /// <summary>Count of steps that were attempted and failed.</summary>
     public int FailedCount => Steps.Count(s => s.Status == GamingStepStatus.Failed);
+}
+
+/// <summary>
+/// Result of a revert — a Stop, the automatic revert when the game exits, or the crash-recovery
+/// sweep. Each step's undo is isolated so one failure never strands the others; this is how the
+/// caller learns about the failure, rather than announcing that everything was restored (#2445).
+/// </summary>
+/// <param name="NotRestored">Labels of the steps whose undo failed; empty when every step was restored.</param>
+public sealed record GamingRevertResult(IReadOnlyList<string> NotRestored)
+{
+    /// <summary>Everything was restored — also the result when there was nothing to revert.</summary>
+    public static GamingRevertResult Complete { get; } = new([]);
+
+    /// <summary>True when every step was restored.</summary>
+    public bool FullyRestored => NotRestored.Count == 0;
 }

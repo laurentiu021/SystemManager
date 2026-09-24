@@ -9007,8 +9007,8 @@ public partial class ArchitectureTests
         // snapshot rather than the call, and reported the ordering backwards. A source-text guard must
         // read code, never prose — including its own.
         var apply = WithoutComments(MemberSlice(service, "public async Task<GamingApplyResult> ApplyAsync"));
-        var revert = WithoutComments(MemberSlice(service, "public async Task RevertAsync"));
-        var recover = WithoutComments(MemberSlice(service, "public async Task RecoverPendingAsync"));
+        var revert = WithoutComments(MemberSlice(service, "public async Task<GamingRevertResult> RevertAsync"));
+        var recover = WithoutComments(MemberSlice(service, "public async Task<GamingRevertResult> RecoverPendingAsync"));
         foreach (var (name, slice) in new[] { ("ApplyAsync", apply), ("RevertAsync", revert), ("RecoverPendingAsync", recover) })
             Assert.True(slice.Length > 200,
                 $"the {name} slice is {slice.Length} chars — too short to be the method, so the assertions "

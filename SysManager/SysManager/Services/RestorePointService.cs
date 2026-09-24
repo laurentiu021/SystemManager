@@ -26,7 +26,11 @@ public sealed class RestorePointService
 {
     private readonly IPowerShellRunner _ps;
 
-    private const string CreateOkSentinel = "__SM_RP_CREATED__";
+    /// <summary>Printed by <see cref="BuildCreateScript"/> only after Windows confirmed a new restore point.</summary>
+    internal const string CreateOkSentinel = "__SM_RP_CREATED__";
+
+    /// <summary>Printed by <see cref="BuildRestoreScript"/> only after Windows accepted the restore request.</summary>
+    internal const string RestoreStartedSentinel = "__SM_RP_RESTORE_STARTED__";
 
     public RestorePointService(IPowerShellRunner ps) => _ps = ps;
 
@@ -98,24 +102,14 @@ public sealed class RestorePointService
     };
 
     /// <summary>
-    /// Creates a restore point. Requires admin. Returns true only on confirmed success;
-    /// Windows rate-limits creation to one per 24h and reports that as a non-terminating
-    /// error, so a success sentinel is required rather than the absence of an exception.
+    /// Creates a restore point. Requires admin. Returns true only when the script confirms Windows made one.
     /// </summary>
     public async Task<bool> CreateAsync(string description, CancellationToken ct = default)
     {
-        var safeDesc = (string.IsNullOrWhiteSpace(description) ? "SysManager Restore Point" : description)
-            .Replace("'", "''");
-        var script =
-            "try { " +
-            "Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction SilentlyContinue; " +
-            $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop; " +
-            $"'{CreateOkSentinel}' " +
-            "} catch { Write-Error $_; exit 1 }";
         try
         {
-            var results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
-            var ok = results.Any(o => string.Equals(o?.BaseObject?.ToString(), CreateOkSentinel, StringComparison.Ordinal));
+            var results = await _ps.RunAsync(BuildCreateScript(description), cancellationToken: ct).ConfigureAwait(false);
+            var ok = Confirms(results, CreateOkSentinel);
             if (!ok)
                 Log.Warning("RestorePoint: Checkpoint-Computer did not confirm success (it may be rate-limited to one per 24h).");
             return ok;
@@ -128,20 +122,45 @@ public sealed class RestorePointService
     }
 
     /// <summary>
+    /// The script <see cref="CreateAsync"/> runs: success is the sentinel it prints last, never the absence of
+    /// an exception.
+    /// </summary>
+    /// <remarks>
+    /// Windows allows one restore point per 24 hours, and Windows PowerShell 5.1 — the engine an elevated run
+    /// uses — reports the refusal as a WARNING (its resource is <c>CannotCreateRestorePointWarning</c>), not as
+    /// an error. <c>-ErrorAction Stop</c> does not govern warnings, so without <c>-WarningAction Stop</c> the
+    /// script went on to print the sentinel and every caller reported "Restore point created" for a point
+    /// Windows had declined to make (#2436). An earlier comment here called the refusal a non-terminating
+    /// error, which is what the design was built around.
+    /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with the
+    /// restore-point cmdlets shadowed by functions, which is the only way to test the semantics it depends
+    /// on. The single user-supplied value, the description, is single-quote-escaped.</para>
+    /// </remarks>
+    internal static string BuildCreateScript(string? description)
+    {
+        var safeDesc = (string.IsNullOrWhiteSpace(description) ? "SysManager Restore Point" : description)
+            .Replace("'", "''");
+        return "try { " +
+               "Enable-ComputerRestore -Drive $env:SystemDrive -ErrorAction SilentlyContinue; " +
+               $"Checkpoint-Computer -Description '{safeDesc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction Stop; " +
+               $"'{CreateOkSentinel}' " +
+               "} catch { Write-Error $_; exit 1 }";
+    }
+
+    /// <summary>
     /// Restores the system to the given restore point. Requires admin and TRIGGERS A REBOOT.
-    /// The caller MUST confirm with the user first. Returns false if the request could not
-    /// be issued (the machine reboots on success, so a true return is rarely observed).
+    /// The caller MUST confirm with the user first. Returns true only when the script confirms Windows accepted
+    /// the request (the machine then restarts, so a true return is rarely observed).
     /// </summary>
     public async Task<bool> RestoreAsync(int sequenceNumber, CancellationToken ct = default)
     {
-        // SequenceNumber is an int we validate ourselves, so embedding it is injection-safe.
-        var script =
-            $"try {{ Restore-Computer -RestorePoint {sequenceNumber} -Confirm:$false -ErrorAction Stop }} " +
-            "catch { Write-Error $_; exit 1 }";
         try
         {
-            await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
-            return true;
+            var results = await _ps.RunAsync(BuildRestoreScript(sequenceNumber), cancellationToken: ct).ConfigureAwait(false);
+            var started = Confirms(results, RestoreStartedSentinel);
+            if (!started)
+                Log.Warning("RestorePoint: Restore-Computer did not confirm the restore to #{Seq}.", sequenceNumber);
+            return started;
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
@@ -149,4 +168,23 @@ public sealed class RestorePointService
             return false;
         }
     }
+
+    /// <summary>
+    /// The script <see cref="RestoreAsync"/> runs, confirmed the same way as <see cref="BuildCreateScript"/>.
+    /// </summary>
+    /// <remarks>
+    /// It used to report success whenever <c>RunAsync</c> did not throw. The <c>catch</c> ends in
+    /// <c>Write-Error $_; exit 1</c>, and <c>Write-Error</c> is non-terminating; <c>RunAsync</c> returns normally
+    /// when only the error stream has records. So a failed <c>Restore-Computer</c> read as "Restore initiated
+    /// — the system will restart." with no restart coming (#2436). No <c>-WarningAction Stop</c> here: a warning
+    /// from a restore Windows has already accepted must not turn into a report that it failed while the
+    /// machine restarts. The sequence number is an int, so embedding it is injection-safe.
+    /// </remarks>
+    internal static string BuildRestoreScript(int sequenceNumber) =>
+        $"try {{ Restore-Computer -RestorePoint {sequenceNumber} -Confirm:$false -ErrorAction Stop; '{RestoreStartedSentinel}' }} " +
+        "catch { Write-Error $_; exit 1 }";
+
+    /// <summary>Whether a script's output carries its success sentinel — the one signal both scripts trust.</summary>
+    private static bool Confirms(IEnumerable<PSObject?> results, string sentinel) =>
+        results.Any(o => string.Equals(o?.BaseObject?.ToString(), sentinel, StringComparison.Ordinal));
 }

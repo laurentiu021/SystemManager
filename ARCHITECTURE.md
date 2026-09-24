@@ -555,7 +555,11 @@ Key services:
 - `UninstallerService` — winget-based uninstall + registry UninstallString
   fallback for local apps not in winget. Uninstall execution is standard-session
   only; validated local commands use the shell runner so their own manifests own
-  any UAC request instead of inheriting SysManager elevation.
+  any UAC request instead of inheriting SysManager elevation. After a local uninstaller
+  returns, `IsStillRegistered` checks that Windows no longer lists the app before the tab
+  calls it removed: the exit code belongs to the launched process, and an NSIS uninstaller
+  hands over to a copy of itself and exits at once. The uninstall roots it reads are
+  injectable, so the check is tested against a redirected registry.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
   working set trim, hibernation toggle. Its timestamped restore snapshot is

@@ -16,16 +16,31 @@ public sealed partial class UninstallerService
 {
     private readonly IPowerShellRunner _runner;
     private readonly Func<bool> _isElevated;
+    private readonly Microsoft.Win32.RegistryKey _machineRoot;
+    private readonly Microsoft.Win32.RegistryKey _userRoot;
 
     public UninstallerService(IPowerShellRunner runner)
         : this(runner, Helpers.AdminHelper.IsElevated)
     {
     }
 
-    internal UninstallerService(IPowerShellRunner runner, Func<bool> isElevated)
+    /// <summary>The constructor tests use, with every machine-dependent input replaceable.</summary>
+    /// <param name="runner">The process seam every uninstaller is launched through.</param>
+    /// <param name="isElevated">Replaces the elevation probe, so the standard-integrity rule is testable.</param>
+    /// <param name="machineRoot">
+    /// Stands in for HKLM when <see cref="IsStillRegistered"/> looks for an uninstall entry; defaults to the real
+    /// hive. Tests pass a redirected HKCU subkey, as <see cref="EdgeOneDriveService"/>'s tests do, so the check
+    /// runs against a real registry without touching the machine's uninstall list.
+    /// </param>
+    /// <param name="userRoot">Stands in for HKCU in the same check; defaults to the real hive.</param>
+    internal UninstallerService(
+        IPowerShellRunner runner, Func<bool> isElevated,
+        Microsoft.Win32.RegistryKey? machineRoot = null, Microsoft.Win32.RegistryKey? userRoot = null)
     {
         _runner = runner;
         _isElevated = isElevated;
+        _machineRoot = machineRoot ?? Microsoft.Win32.Registry.LocalMachine;
+        _userRoot = userRoot ?? Microsoft.Win32.Registry.CurrentUser;
     }
 
     public event Action<PowerShellLine>? LineReceived
@@ -301,6 +316,54 @@ public sealed partial class UninstallerService
 
         Log.Information("Uninstalling local app '{Name}' via: {Exe} {Args}", app.Name, exe, args);
         return await _runner.RunProcessWithShellAsync(exe, args, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// True while Windows still lists <paramref name="app"/> as installed: an uninstall entry with its display
+    /// name and the same uninstall command it was listed with.
+    /// </summary>
+    /// <remarks>
+    /// An uninstaller's exit code is only what the process SysManager launched returned, and that can be long
+    /// before anything is removed (#2448). NSIS uninstallers, for one, copy themselves to the temp folder,
+    /// start the copy and exit at once unless given <c>_?=</c>. The launched process returns 0 while the
+    /// wizard is still open, or while a silent removal is still running. Requiring the same command, not
+    /// just the name, keeps a second installed version of the app from reading as this one.
+    /// <para>An unreadable key counts as not registered. The exit code was the only evidence before this
+    /// check existed, so when the registry cannot be read the result falls back to it rather than to a new
+    /// guess.</para>
+    /// </remarks>
+    public bool IsStillRegistered(InstalledApp app)
+    {
+        (Microsoft.Win32.RegistryKey Root, string Path)[] uninstallKeys =
+        [
+            (_machineRoot, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (_machineRoot, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (_userRoot, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        ];
+        foreach (var (root, path) in uninstallKeys)
+        {
+            try
+            {
+                using var key = root.OpenSubKey(path);
+                if (key is null) continue;
+                foreach (var subName in key.GetSubKeyNames())
+                {
+                    using var sub = key.OpenSubKey(subName);
+                    if (sub is null
+                        || !string.Equals(sub.GetValue("DisplayName") as string, app.Name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (SameCommand(sub.GetValue("UninstallString") as string, app.UninstallString)
+                        || SameCommand(sub.GetValue("QuietUninstallString") as string, app.QuietUninstallString))
+                        return true;
+                }
+            }
+            catch (System.Security.SecurityException ex) { Log.Debug("Uninstall entry check skipped {Path}: {Error}", path, ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Uninstall entry check skipped {Path}: {Error}", path, ex.Message); }
+        }
+        return false;
+
+        static bool SameCommand(string? registered, string? listed) =>
+            !string.IsNullOrWhiteSpace(listed) && string.Equals(registered, listed, StringComparison.OrdinalIgnoreCase);
     }
 
     private void EnsureStandardIntegrity()

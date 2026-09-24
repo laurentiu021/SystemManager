@@ -53,15 +53,22 @@ jobs:
       # Directory.Build.props adds a PackageReference of its own (Microsoft.SourceLink.GitHub). Hashing
       # only .csproj therefore misses every version change.
       #
-      # The failure is quiet rather than wrong: an unchanged key is an exact hit, actions/cache skips the
-      # save, and restore downloads the new version anyway. But it is never cached, so it is re-downloaded
+      # The failure is quiet rather than wrong: an unchanged key is an exact hit, the save below is
+      # skipped, and restore downloads the new version anyway. But it is never cached, so it is re-downloaded
       # on every run until some unrelated .csproj edit rotates the key. Dependabot's grouped version bumps
       # are precisely this shape, so it accumulates.
       #
       # global.json is intentionally absent: it pins the SDK, not the package set, and actions/setup-dotnet
       # already governs that in the step above.
-      - name: Cache NuGet packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      #
+      # Restored on every run, saved only on a push to main (#2434). A cache saved from a pull-request run is
+      # scoped to refs/pull/N/merge, so nothing but a re-run of that same pull request can read it; the next
+      # pull request restores main's newest entry through restore-keys. Yet every fix/feat pull request missed
+      # the key — its version bump changes a .csproj — and uploaded ~705 MB from this required job: 598 s of a
+      # 19-minute run on 2026-09-24, against the 25-minute ceiling above.
+      - name: Restore the NuGet package cache
+        id: nuget-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
@@ -74,6 +81,16 @@ jobs:
           dotnet restore SysManager/SysManager.Tests/SysManager.Tests.csproj
           dotnet restore SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj
           dotnet restore SysManager/SysManager.UITests/SysManager.UITests.csproj
+
+      # Right after the restore rather than at the end of the job: the package set is complete here, and a
+      # test failure later in the run is no reason for main to lose its cache. `push` only ever means main —
+      # the workflow triggers on no other branch.
+      - name: Save the NuGet package cache
+        if: github.event_name == 'push' && steps.nuget-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ steps.nuget-cache.outputs.cache-primary-key }}
 
       # Format-check every C# project the workflow builds, not just the main one —
       # the same .editorconfig governs the test projects, so otherwise their style

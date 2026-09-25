@@ -20,7 +20,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly SystemInfoService _sys;
-    private readonly TuneUpService _tuneUp;
+    private readonly ITuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;
     private readonly TemperatureService _temps;
     private readonly IWingetService _winget;
@@ -139,6 +139,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// crash, loads static info, drives, activity and the health score, then starts the vitals, temperature
     /// and alert loops. Elevation is read once here because it cannot change without relaunching the app.
     /// </summary>
+    /// <param name="tuneUp">
+    /// The Quick Tune-Up and Quick Cleanup both run through it. Tests pass a substitute, because the real one
+    /// deletes the temp files of whatever machine runs them and empties its Recycle Bin.
+    /// </param>
     /// <param name="crashMarkers">
     /// Required, not optional. It used to default to <c>new CrashMarkerService()</c>, which resolved
     /// the real profile — and because <see cref="CrashMarkerService.TakePending"/> CONSUMES the marker
@@ -163,7 +167,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// directions: a test supplies a service over a redirected registry hive to assert it fires, and omits
     /// it to assert nothing else moved.
     /// </param>
-    public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
+    public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
@@ -859,6 +863,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
         await RunQuickActionAsync("Quick Cleanup", "Cleanup", "nav-cleanup", async () =>
         {
+            // The Disk lock the Cleanup tab's temp clean and the Quick Tune-Up take around this same sweep. Without
+            // it, two sweeps of one folder race, and each reports only the part it happened to delete (#2473).
+            using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Quick Cleanup");
+            if (opLock is null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.");
+            }
+
             QuickActionDetail = "Cleaning temp files...";
             QuickActionProgress = 50;
 
@@ -867,7 +880,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // tree, so it can't be redirected into unrelated user data. This replaces an
             // earlier inline cleaner that only scanned the user TEMP top level and swallowed
             // every error.
-            var (freed, _, _) = await TuneUpService.CleanTempFilesAsync(CancellationToken.None);
+            var (freed, _, _) = await _tuneUp.CleanTempFilesAsync(CancellationToken.None);
 
             QuickActionProgress = 100;
             var freedMB = freed / 1024.0 / 1024.0;

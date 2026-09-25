@@ -188,6 +188,12 @@ public partial class ArchitectureTests
     /// the elevation probe for the whole process, so a class that forgets the attribute would answer
     /// "not elevated" to a test in the parallel group that is asserting the elevated branch.
     /// </para>
+    /// <para>
+    /// The markers only see a static named in the test's own source. A test can also reach the operation
+    /// lock through production code, by running a command on a view model that takes it, and
+    /// <c>DiskAnalyzerViewModelTests</c> did exactly that outside the collection. So the view models that
+    /// take the lock are read from their own sources, and running a command on one counts as touching it.
+    /// </para>
     /// </remarks>
     [Fact]
     public void ProcessWideStaticUsers_AreInTheSerializedCollection()
@@ -201,6 +207,22 @@ public partial class ArchitectureTests
             ("OperationLockService.Instance", "OperationLockService.Instance"),
             ("AdminHelper.ForceElevation(", "AdminHelper.ElevationProbe"),
         ];
+
+        // A test can also reach the operation lock without naming it, by running a command on a view model
+        // that takes it. DiskAnalyzerViewModelTests did: its AnalyzeCommand took the Disk lock in parallel with
+        // the classes asserting on that lock. Which commands take the lock is not visible from a test, and a
+        // command that does not take it today may take it tomorrow. The rule is therefore conservative: a class
+        // that constructs one of these view models and executes any command joins the collection.
+        var lockTakers = new List<string>();
+        foreach (var vmFile in Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "ViewModels"), "*ViewModel.cs"))
+        {
+            if (WithoutComments(File.ReadAllText(vmFile)).Contains("OperationLockService.Instance.TryAcquire(", StringComparison.Ordinal))
+                lockTakers.Add(Path.GetFileNameWithoutExtension(vmFile));
+        }
+
+        Assert.True(lockTakers.Count >= 10,
+            $"only {lockTakers.Count} view models were found taking the operation lock, and 14 were measured. "
+            + "The marker stopped matching, so the indirect half of this guard would check nothing.");
 
         var testDir = TestPaths.TestProject();
         var offenders = new List<string>();
@@ -216,8 +238,15 @@ public partial class ArchitectureTests
 
             var touched = watched.Where(w => source.Contains(w.Marker, StringComparison.Ordinal))
                                  .Select(w => w.What)
-                                 .Distinct()
                                  .ToList();
+            if (ExecutesACommand().IsMatch(source))
+            {
+                touched.AddRange(lockTakers
+                    .Where(vm => source.Contains($"new {vm}(", StringComparison.Ordinal))
+                    .Select(vm => $"OperationLockService.Instance (through {vm}'s commands)"));
+            }
+
+            touched = touched.Distinct().ToList();
             if (touched.Count == 0) continue;
 
             inspected++;
@@ -13457,6 +13486,10 @@ public partial class ArchitectureTests
     /// <summary>A `//` comment tail, so the scan never reads its own prose as code.</summary>
     [GeneratedRegex(@"//.*$")]
     private static partial Regex CommentTail();
+
+    /// <summary>A command being run, synchronously or not: <c>…Command.Execute(</c> or <c>…Command.ExecuteAsync(</c>.</summary>
+    [GeneratedRegex(@"Command\.Execute(?:Async)?\(")]
+    private static partial Regex ExecutesACommand();
 
     /// <summary>A ResolveSystemTool call, removed so a fixed site is not reported as a bare literal.</summary>
     [GeneratedRegex(@"(SysManager\.Helpers\.)?SystemPaths\.ResolveSystemTool\(\s*""[^""]*""\s*\)")]

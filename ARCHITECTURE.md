@@ -248,8 +248,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Nineteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
+`ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
@@ -348,7 +349,9 @@ Key services:
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by
   `SystemHealthViewModel`.
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
-  Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive.
+  Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive. Behind `ITuneUpService` for
+  the Dashboard, whose tests run both quick actions against a substitute. The temp sweep itself is also a
+  static method, shared with the Cleanup tab and the CLI.
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
   wear into a single 0–100 score with color-coded verdict and recommendations.
 - `TrayIconService` — system tray icon with background monitoring (60s),

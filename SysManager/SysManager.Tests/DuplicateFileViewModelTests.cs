@@ -12,6 +12,9 @@ namespace SysManager.Tests;
 /// Tests for <see cref="DuplicateFileViewModel"/>. Verifies initial state,
 /// preset folders, and FormatSize logic.
 /// </summary>
+// Serialized: the view model's scan takes the process-wide Disk lock, and these tests run its commands. See
+// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection for why any command counts.
+[Collection("ProcessWideStatics")]
 public class DuplicateFileViewModelTests
 {
     // The VM resolves its preset folders asynchronously off the UI thread (known-folder +

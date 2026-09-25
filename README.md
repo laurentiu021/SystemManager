@@ -1384,7 +1384,8 @@ offers, "rate us" prompts:
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and
-  does not start while another speed test, a traceroute or a network repair is running
+  does not start while another speed test, a traceroute or a network repair is running. In the same
+  way, Run Quick Cleanup does not start while another cleanup or disk scan is running
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the

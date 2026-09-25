@@ -1200,9 +1200,10 @@ offers, "rate us" prompts:
   applications Windows reports without a package id — most of the older ones — are matched by
   name too, so they are not treated as one entry
 - Local app support — uninstalls apps not in winget via registry UninstallString
-- **"Removed" means removed** — an app is taken off the list only once Windows stops listing it.
-  Some uninstallers hand over to a second window and return straight away; those apps stay on
-  the list, marked as still installed, until you finish the uninstaller and scan again
+- **"Removed" means removed** — an app is taken off the list only once Windows stops listing it,
+  whether SysManager runs its uninstaller directly or through winget. Some uninstallers hand over
+  to a second copy of themselves and return straight away; those apps stay on the list, marked as
+  still installed, until the uninstaller finishes and you scan again
 - Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
 
 ### Gaming Profile 🔬

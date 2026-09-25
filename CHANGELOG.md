@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.1] - 2026-09-25
+
+**The Uninstaller no longer calls an app removed through winget before its uninstaller finishes.** The
+check v1.113.12 added now covers the apps winget manages too.
+
+### Fixed
+
+- **Uninstaller: the "still installed" check covers apps winget manages.** v1.113.12 stopped reporting
+  "Removed" while Windows still lists an app, because some uninstallers hand over to a copy of themselves
+  and exit at once. That check ran only when SysManager launched the uninstaller itself. For an app winget
+  manages, winget runs the same uninstaller, waits only for the process it started, and never looks at the
+  uninstall list again, so the row still read "Removed" and left the list. The check now runs on both
+  paths. The message now says the uninstaller may still be running, because through winget it runs without
+  a window. The winget path has decided on the exit code alone since the tab was added in v0.11.0;
+  v1.113.12 fixed only the direct path.
+
 ## [1.114.0] - 2026-09-25
 
 **The Dashboard can check Windows Update.** Check Windows Updates asks Windows Update what is waiting, says

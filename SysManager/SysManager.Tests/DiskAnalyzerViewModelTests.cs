@@ -13,6 +13,9 @@ namespace SysManager.Tests;
 /// Tests for <see cref="DiskAnalyzerViewModel"/>. Verifies initial state,
 /// presets, and command availability.
 /// </summary>
+// Serialized: running AnalyzeCommand takes the process-wide Disk lock, which the classes in the collection
+// hold and assert on. Run in parallel with them, a scan here made their Disk lock look taken.
+[Collection("ProcessWideStatics")]
 public class DiskAnalyzerViewModelTests
 {
     // The VM resolves its preset paths asynchronously off the UI thread (DriveInfo probing

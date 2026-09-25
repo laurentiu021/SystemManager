@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.3] - 2026-09-25
+
+**The Dashboard's Quick Cleanup no longer runs at the same time as another cleanup.** While a disk
+operation is already under way it does not start, and it says which operation is running.
+
+### Fixed
+
+- **Dashboard: Quick Cleanup takes the same disk lock as the other cleaners.** It deletes temp files with
+  the same sweep as the Cleanup tab's temp clean and the Dashboard's own Quick Tune-Up. It was the only
+  one of the three that ran without the lock, so it could start while either of them, Deep Cleanup or a
+  disk scan was running. Two sweeps of the same folders then raced: each reported only the part it
+  happened to delete, so neither "Freed …" figure was the real total. It now refuses to start while
+  another disk operation is running, and the card names that operation. Present since the quick action
+  was added in v1.17.0.
+
 ## [1.114.2] - 2026-09-25
 
 **A speed test from the Dashboard now shows up in the Speed Test history.** It used to go into Recent

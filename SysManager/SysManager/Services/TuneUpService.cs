@@ -20,7 +20,7 @@ namespace SysManager.Services;
 ///
 /// No admin required. No registry edits. No service changes.
 /// </summary>
-public sealed class TuneUpService
+public sealed class TuneUpService : ITuneUpService
 {
     private readonly ShortcutCleanerService _shortcuts;
     private readonly DiskHealthService _diskHealth;
@@ -166,6 +166,10 @@ public sealed class TuneUpService
     /// </summary>
     public static Task<(long BytesFreed, int FilesDeleted, int Errors)> CleanTempFilesAsync(CancellationToken ct = default)
         => Task.Run(() => CleanTempFiles(ct), ct);
+
+    /// <summary>The same sweep, reached through the seam, so that Quick Cleanup can be tested without running it.</summary>
+    Task<(long BytesFreed, int FilesDeleted, int Errors)> ITuneUpService.CleanTempFilesAsync(CancellationToken ct)
+        => CleanTempFilesAsync(ct);
 
     private static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(CancellationToken ct)
     {

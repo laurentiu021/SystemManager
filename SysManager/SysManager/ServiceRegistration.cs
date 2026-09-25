@@ -33,7 +33,7 @@ public static class ServiceRegistration
         services.AddSingleton<TemperatureService>();
         services.AddSingleton<SystemReportService>();
         services.AddSingleton<BatteryService>();
-        services.AddSingleton<TuneUpService>();
+        services.AddSingleton<ITuneUpService, TuneUpService>();
         services.AddSingleton<HealthScoreService>();
         services.AddSingleton<AppAlertService>();
         services.AddSingleton<IAppBlockerService, AppBlockerService>();

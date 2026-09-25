@@ -12,6 +12,9 @@ namespace SysManager.Tests;
 /// <c>configDir</c> seam these tests READ the user's real speedtest-history.json — and their results
 /// depended on whatever that file happened to contain.
 /// </summary>
+// Serialized: the view model's speed tests take the process-wide Network lock, and these tests run its commands. See
+// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection for why any command counts.
+[Collection("ProcessWideStatics")]
 public sealed class SpeedTestViewModelTests : IDisposable
 {
     private readonly string _dir;

@@ -6,6 +6,9 @@ using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
+// Serialized: the view model's trace takes the process-wide Network lock, and these tests run its commands. See
+// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection for why any command counts.
+[Collection("ProcessWideStatics")]
 public class TracerouteViewModelTests
 {
     [Fact]

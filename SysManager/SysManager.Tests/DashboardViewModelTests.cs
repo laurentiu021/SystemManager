@@ -24,12 +24,15 @@ public class DashboardViewModelTests
                                             IAppBlockerService? appBlocker = null,
                                             IWindowsUpdateService? windowsUpdate = null,
                                             ISpeedTestService? speedTest = null,
-                                            SpeedTestHistoryService? speedHistory = null)
+                                            SpeedTestHistoryService? speedHistory = null,
+                                            ITuneUpService? tuneUp = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
         return new DashboardViewModel(sys,
-            new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
+            // A substitute by default: the real one deletes this machine's temp files, and the Tune-Up also
+            // empties its Recycle Bin, from any test that gets past a confirmation.
+            tuneUp ?? Substitute.For<ITuneUpService>(),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
             winget ?? new WingetService(new PowerShellRunner()),
@@ -318,6 +321,66 @@ public class DashboardViewModelTests
         {
             DialogService.Instance = prevDialog;
         }
+    }
+
+    // ── Quick Cleanup and the Disk lock (#2473) ──
+
+    [Fact]
+    public async Task QuickCleanup_WhileAnotherDiskOperationRuns_DoesNotClean()
+    {
+        // The Cleanup tab's temp clean and the Quick Tune-Up take the Disk lock around this same sweep. Quick
+        // Cleanup did not, so it could run alongside either, and each then reported only part of what was freed.
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        using (var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Quick Tune-Up"))
+        {
+            Assert.NotNull(held);
+            await vm.QuickCleanupCommand.ExecuteAsync(null);
+        }
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Equal("Cannot start — Quick Tune-Up is already running.", vm.QuickActionDetail);
+        await tuneUp.DidNotReceiveWithAnyArgs().CleanTempFilesAsync(default);
+    }
+
+    [Fact]
+    public async Task QuickCleanup_HoldsTheDiskLockWhileItCleans_AndReleasesItAfter()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        string? heldBy = null;
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk);
+            return Task.FromResult((BytesFreed: 300L * 1024 * 1024, FilesDeleted: 12, Errors: 0));
+        });
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal("Quick Cleanup", heldBy);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+        Assert.Equal("Freed 300 MB", vm.QuickActionDetail);
+    }
+
+    [Fact]
+    public async Task QuickCleanup_ThatFails_StillReleasesTheDiskLock()
+    {
+        // A lock left behind would refuse every later cleanup, on every tab, until the app restarted.
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<(long, int, int)>(new IOException("the temp folder went away")));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
     }
 
     [Fact]

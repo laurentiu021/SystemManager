@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.16] - 2026-09-25
+
+**App Updates no longer says everything is up to date when it could not check.** A winget query that failed
+read as one that found nothing, on App Updates, the Dashboard, the Uninstaller and the Bulk Installer search.
+
+### Fixed
+
+- **App Updates, Uninstaller, Bulk Installer: a failed winget query is reported as a failure.** None of the
+  queries read winget's exit code, so a query that failed printed no table and parsed as an empty one. App
+  Updates said "All detected packages are up to date", the Dashboard said "All apps up to date", the
+  Uninstaller said "Found 0 installed applications", and a failed Bulk Installer search said "No packages
+  found" and suggested checking the spelling. A failed query now says it could not complete, and why: App
+  Updates shows "Couldn't check for updates" with the reason. winget's own "nothing matched" result is
+  still read as an empty list. Present in App Updates since v0.3.0, in the Uninstaller since its tab was
+  added in v0.11.0, and in the Bulk Installer search since v1.7.5.
+
 ## [1.113.15] - 2026-09-25
 
 **winget's results now say what actually happened.** Most of the codes winget reports were described with

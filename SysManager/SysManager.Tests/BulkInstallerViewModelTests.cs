@@ -194,6 +194,26 @@ public class BulkInstallerViewModelTests
         Assert.Equal(WingetFailure.WingetUnavailable, vm.StatusMessage);
     }
 
+    /// <summary>
+    /// A search that FAILED says why, instead of "No packages found — check the spelling" (#2461).
+    /// </summary>
+    [Fact]
+    public async Task SearchWinget_WhenTheSearchFails_SaysWhy_NotThatNothingMatched()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("search", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(unchecked((int)0x8A15004B))); // FAILED_TO_OPEN_ALL_SOURCES
+        var vm = VmWithSubstitutedRunner(runner);
+
+        vm.SearchQuery = "firefox";
+        await vm.SearchWingetCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SearchFoundNothing);
+        Assert.StartsWith("Search failed — ", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("package sources", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
     // ── an app that is already installed is not a failed install (#2462) ──
 
     /// <summary>

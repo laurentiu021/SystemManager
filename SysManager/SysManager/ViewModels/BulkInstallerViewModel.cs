@@ -382,6 +382,13 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             Log.Warning(ex, "winget unavailable while searching for {Query}", SearchQuery);
             StatusMessage = WingetFailure.WingetUnavailable;
         }
+        // The search itself failed, which is not the same as finding nothing: the empty state would tell the
+        // user to check their spelling (#2461). The service's message already says why.
+        catch (InvalidOperationException ex)
+        {
+            Log.Warning(ex, "Winget search failed for query {Query}", SearchQuery);
+            StatusMessage = $"Search failed — {ex.Message}";
+        }
         catch (Exception ex)
         {
             Log.Warning(ex, "Winget search failed for query {Query}", SearchQuery);

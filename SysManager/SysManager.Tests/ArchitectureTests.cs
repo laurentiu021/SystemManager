@@ -13486,6 +13486,57 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"(System\.Windows\.)?Application\.Current\s*\??\.\s*Shutdown\s*\(")]
     private static partial Regex DirectShutdown();
 
+    /// <summary>
+    /// winget's result codes are written as numbers in exactly one place, next to winget's names for them.
+    /// </summary>
+    /// <remarks>
+    /// Two maps keyed by bare numbers had drifted until seven of nine sentences sat on a neighbouring code
+    /// (#2462) — a hash mismatch read as "No applicable update found". A number beside its name can be checked
+    /// against winget-cli's header, and <c>WingetResultTests</c> pins each constant to its number. A bare number
+    /// anywhere else can only be trusted.
+    /// </remarks>
+    [Fact]
+    public void WingetCodes_AreWrittenAsNumbersOnlyInWingetExitCodes()
+    {
+        var appDir = TestPaths.AppProject();
+        var home = Path.Combine(appDir, "Models", "WingetResult.cs");
+        Assert.True(File.Exists(home), "Models/WingetResult.cs was not found — the guard is named for it.");
+
+        var scanned = 0;
+        var atHome = 0;
+        var offenders = new List<string>();
+        foreach (var file in Directory.GetFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            var hits = WingetCodeLiteral().Matches(WithoutComments(File.ReadAllText(file))).Count;
+            scanned++;
+            if (string.Equals(file, home, StringComparison.OrdinalIgnoreCase)) atHome = hits;
+            else if (hits > 0) offenders.Add($"{Path.GetFileName(file)} ({hits})");
+        }
+
+        Assert.True(scanned > 100,
+            $"only {scanned} source files were scanned — the discovery is broken, so this guard would pass "
+            + "having inspected almost nothing.");
+
+        // A known answer: the constants themselves. Fewer means the pattern stopped matching the shape they are
+        // written in, and the absence of offenders below would mean nothing.
+        Assert.True(atHome >= 20,
+            $"only {atHome} winget codes were found in WingetResult.cs, where every one is defined — re-derive "
+            + "the pattern before trusting this guard.");
+        Assert.Matches(WingetCodeLiteral(), "unchecked((int)0x8A150011)");
+        Assert.Matches(WingetCodeLiteral(), "0x8a15002b");
+        Assert.DoesNotMatch(WingetCodeLiteral(), "unchecked((int)0x80070005)");
+
+        Assert.True(offenders.Count == 0,
+            "winget result codes are written as numbers outside WingetExitCodes. Use the named constant, so each "
+            + "number stays checkable against winget's own name for it:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A number in winget's result range, <c>0x8A15xxxx</c>, in either case.</summary>
+    [GeneratedRegex(@"0x8A15[0-9A-F]{4}\b", RegexOptions.IgnoreCase)]
+    private static partial Regex WingetCodeLiteral();
+
     [Fact]
     public void AtomicFile_FlushesBeforeEverySwap_AndTheProductionPathRetriesARefusedOne()
     {

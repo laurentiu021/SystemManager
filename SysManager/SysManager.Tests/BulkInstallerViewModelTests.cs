@@ -194,6 +194,37 @@ public class BulkInstallerViewModelTests
         Assert.Equal(WingetFailure.WingetUnavailable, vm.StatusMessage);
     }
 
+    // ── an app that is already installed is not a failed install (#2462) ──
+
+    /// <summary>
+    /// winget turns an install of an installed app into an upgrade, which ends UPDATE_NOT_APPLICABLE when
+    /// nothing newer applies. The row read "Failed — No suitable installer was found for this app".
+    /// </summary>
+    [Fact]
+    public async Task InstallSelected_WhenTheAppIsAlreadyInstalled_CountsItAsSuch_NotAsAFailure()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(unchecked((int)0x8A15002B))); // UPDATE_NOT_APPLICABLE
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        var app = vm.Apps[0];
+        app.IsSelected = true;
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(BulkInstallerViewModel.AlreadyInstalledStatus, app.Status);
+        Assert.Equal("Done. Installed: 0, Already installed: 1, Failed: 0.", vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData(2, 0, 1, "Installed: 2, Failed: 1")]
+    [InlineData(1, 2, 0, "Installed: 1, Already installed: 2, Failed: 0")]
+    public void DescribeInstallRun_MentionsAlreadyInstalledAppsOnlyWhenThereAreAny(
+        int installed, int alreadyInstalled, int failed, string expected)
+        => Assert.Equal(expected, BulkInstallerViewModel.DescribeInstallRun(installed, alreadyInstalled, failed));
+
     // ── no-results state for the curated list ──
 
     /// <summary>

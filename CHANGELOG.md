@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.113.15] - 2026-09-25
+
+**winget's results now say what actually happened.** Most of the codes winget reports were described with
+another code's sentence, so a download that did not match read as "No applicable update found", and the
+Bulk Installer counted an app that was already installed as a failure.
+
+### Fixed
+
+- **App Updates, Dashboard, Bulk Installer: winget's result codes get the right sentences.** Seven of the
+  nine codes App Updates translated carried a neighbouring code's sentence. A download that did not match
+  what winget expected read as "No applicable update found", a command that needed administrator as
+  "Cancelled", and an update the user cancelled as "App is running". The Bulk Installer called the same
+  hash mismatch "cancelled". Each sentence is now on the code winget uses for it, and the numbers are
+  written in one place, beside winget's own names, with a test pinning each one to the value winget
+  defines. Present in App Updates since v1.46.0, and in the Bulk Installer since v1.57.3.
+- **Bulk Installer: an app that is already installed is not a failed install.** winget turns an install of
+  an installed app into an upgrade, which ends with "no applicable update" when nothing newer applies. The
+  row read "Failed — No suitable installer was found for this app". It now reads "Already installed", and
+  the summary counts it on its own. Counted as a failure since the tab was added in v1.2.0.
+- **Bulk Installer, Uninstaller: winget's own failure codes are explained, and shown in hex.** A failed
+  installer or uninstaller ends with winget's own result code, and the installer's code is only printed.
+  Those codes had no sentence, so the fallback printed them as signed decimals such as "-1978335184". The
+  common ones now have a sentence, and any other winget code is shown in hex. The Uninstaller has shown
+  the decimal since v0.12.2.
+
 ## [1.113.14] - 2026-09-24
 
 **Startup Manager shows whether each scheduled task is actually enabled.** Every scheduled task used to

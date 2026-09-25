@@ -241,6 +241,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
 
         var installed = 0;
+        var alreadyInstalled = 0;
         var failed = 0;
         InstallEtaText = string.Empty;
         _installEta.Reset();
@@ -264,6 +265,13 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                     {
                         app.Status = "Installed";
                         installed++;
+                    }
+                    else if (WingetFailure.IsAlreadyInstalled(exitCode))
+                    {
+                        // Not a failure: winget found the app installed and nothing newer to put over it. It used
+                        // to read "Failed — No suitable installer was found for this app" (#2462).
+                        app.Status = AlreadyInstalledStatus;
+                        alreadyInstalled++;
                     }
                     else
                     {
@@ -299,8 +307,9 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
             Progress = 100;
             InstallEtaText = string.Empty;
-            StatusMessage = $"Done. Installed: {installed}, Failed: {failed}.";
-            ToastService.Instance.Show("Bulk Install complete", $"Installed: {installed}, Failed: {failed}");
+            var summary = DescribeInstallRun(installed, alreadyInstalled, failed);
+            StatusMessage = $"Done. {summary}.";
+            ToastService.Instance.Show("Bulk Install complete", summary);
         }
         catch (OperationCanceledException)
         {
@@ -312,6 +321,18 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             InstallEtaText = string.Empty;
         }
     }
+
+    /// <summary>The row status for an app that was already installed, with nothing newer to put over it.</summary>
+    internal const string AlreadyInstalledStatus = "Already installed";
+
+    /// <summary>
+    /// The end-of-run count. Apps that were already installed get their own figure, and only when there are
+    /// any: they are not failures, and folding them into "Installed" would claim installs that did not happen.
+    /// </summary>
+    internal static string DescribeInstallRun(int installed, int alreadyInstalled, int failed) =>
+        alreadyInstalled == 0
+            ? $"Installed: {installed}, Failed: {failed}"
+            : $"Installed: {installed}, Already installed: {alreadyInstalled}, Failed: {failed}";
 
     [RelayCommand]
     private void Cancel() => _cts?.Cancel();

@@ -9154,11 +9154,18 @@ public partial class ArchitectureTests
     /// tree walk, and a tree walk is what has to honour the boundary.</para>
     /// <para><c>SafeFileWalk</c> itself is exempt, by being the implementation. The exemption is by path, so
     /// a second file cannot claim it by adding the name to a comment.</para>
-    /// <para>Three scanners are exempt too, and listed rather than left to be discovered: they need a
-    /// per-DIRECTORY hook this walk does not offer — a throttled progress report naming the folder being
-    /// scanned. Migrating them means giving <c>SafeFileWalk</c> that hook, which is its own change and is
-    /// tracked separately. The list is deliberately explicit: adding a name to it is a decision someone has
+    /// <para>Three scanners are exempt too, and listed rather than left to be discovered: Disk Analyzer,
+    /// Duplicate Finder and Large Files. None of them deletes anything — their results offer Show, Copy and
+    /// "Keep this one", and each view says so. They also need traversal rules this walk deliberately does not
+    /// carry: a system-folder exclusion matched by path segment, so it holds on every drive, and an
+    /// access-denied tally for Disk Analyzer's totals. Growing the walk that every delete path depends on, to
+    /// serve scanners that delete nothing, is the wrong trade, so the exemption is a decision rather than a
+    /// backlog item (#2381). The list is deliberately explicit: adding a name to it is a decision someone has
     /// to write down, which is exactly what the copied walkers never had to do.</para>
+    /// <para>The exemption holds only while its reason does, so both halves are asserted. Each scanner must
+    /// still test its root through the shared <c>IsReparsePoint</c>, and neither it nor the view model behind
+    /// its tab may call anything that deletes. The day one of them gains a delete, it loses the exemption and
+    /// has to move onto the shared walk.</para>
     /// </remarks>
     [Fact]
     public void OnlySafeFileWalk_WalksATreeItMightDeleteFrom()
@@ -9168,11 +9175,17 @@ public partial class ArchitectureTests
         Assert.True(File.Exists(theWalk),
             $"SafeFileWalk.cs was not found at {theWalk} — this guard is named for a type that must exist.");
 
-        // Read-only scanners not yet routed through the shared walk: they prune the traversal by a path
-        // predicate and one of them needs an access-denied tally, neither of which SafeWalkOptions carries.
-        // Not "allowed to be unsafe" — each one is asserted below to guard its traversal root through the
-        // SHARED reparse test, which is the rule they were missing (#2381). What remains exempt is the loop.
-        string[] pendingMigration = ["DiskAnalyzerService.cs", "DuplicateFileService.cs", "LargeFileScanner.cs"];
+        // Read-only scanners that keep their own walk by decision (#2381), each with the view model behind its
+        // tab. They prune the traversal by a path predicate and one of them needs an access-denied tally,
+        // neither of which SafeWalkOptions carries. Not "allowed to be unsafe": each one is asserted below to
+        // guard its traversal root through the SHARED reparse test, and to delete nothing. What is exempt is
+        // the loop.
+        (string Service, string ViewModel)[] readOnlyScanners =
+        [
+            ("DiskAnalyzerService.cs", "DiskAnalyzerViewModel.cs"),
+            ("DuplicateFileService.cs", "DuplicateFileViewModel.cs"),
+            ("LargeFileScanner.cs", "LargeFilesViewModel.cs"),
+        ];
 
         var scanned = 0;
         var offenders = new List<string>();
@@ -9181,7 +9194,7 @@ public partial class ArchitectureTests
                      .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                                              StringComparison.Ordinal)
                                  && !string.Equals(f, theWalk, StringComparison.OrdinalIgnoreCase)
-                                 && !pendingMigration.Contains(Path.GetFileName(f))))
+                                 && !readOnlyScanners.Any(s => s.Service == Path.GetFileName(f))))
         {
             var code = WithoutComments(File.ReadAllText(file));
             scanned++;
@@ -9210,25 +9223,74 @@ public partial class ArchitectureTests
         // earned — so the walk has to still be there. And the exemption covers the loop only: each scanner
         // must guard its traversal root through the shared test, because the root is the one the user picks
         // and a junction there sends the whole scan somewhere else (#2381).
-        foreach (var exempt in pendingMigration)
+        foreach (var (service, viewModel) in readOnlyScanners)
         {
-            var exemptPath = Path.Combine(appDir, "Services", exempt);
+            var exemptPath = Path.Combine(appDir, "Services", service);
             Assert.True(File.Exists(exemptPath),
-                $"{exempt} is exempted from this guard but no longer exists — drop it from the list.");
+                $"{service} is exempted from this guard but no longer exists — drop it from the list.");
 
             var exemptCode = WithoutComments(File.ReadAllText(exemptPath));
             Assert.Matches(@"Stack<(?:string|DirectoryInfo)>", exemptCode);
 
             Assert.True(exemptCode.Contains("SafeFileWalk.IsReparsePoint(", StringComparison.Ordinal),
-                $"{exempt} keeps its own walk AND no longer tests its root through SafeFileWalk.IsReparsePoint. "
+                $"{service} keeps its own walk AND no longer tests its root through SafeFileWalk.IsReparsePoint. "
                 + "The exemption is for the loop, not for the root guard: a link at the folder the user chose "
                 + "sends the entire scan outside it.");
+
+            // And the reason for the exemption: nothing on the tab deletes what the walk found. The view model
+            // is checked as well, because that is where a "Delete selected" command would be added.
+            var viewModelPath = Path.Combine(appDir, "ViewModels", viewModel);
+            Assert.True(File.Exists(viewModelPath),
+                $"{viewModel}, paired with {service}, no longer exists — pair the scanner with the view model "
+                + "behind its tab, or this half of the check reads nothing.");
+
+            foreach (var (name, code) in new[]
+                     {
+                         (service, exemptCode),
+                         (viewModel, WithoutComments(File.ReadAllText(viewModelPath))),
+                     })
+            {
+                var delete = DeletingCall().Match(code);
+                Assert.False(delete.Success,
+                    $"{name} calls {delete.Value.TrimEnd('(', ' ')}, so its tab now deletes what a private walk "
+                    + "found. The exemption exists because these scanners are read-only: move the walk onto "
+                    + "SafeFileWalk, which carries the rules a delete path needs, and drop the name from this list.");
+            }
+        }
+
+        // A positive control on the delete pattern. A pattern that matches nothing finds no deletes and passes,
+        // so a broken one would certify all three scanners read-only without having looked. These are the
+        // shapes the destructive services use, and each of the services below must still register as deleting.
+        // Blind spot, stated: a delete routed through a helper whose name does not say so would pass. What this
+        // catches is the shape a delete command starts as.
+        Assert.Matches(DeletingCall(), "File.Delete(path);");
+        Assert.Matches(DeletingCall(), "new FileInfo(path).Delete();");
+        Assert.Matches(DeletingCall(), "FileSystem.DeleteFile(path, UIOption.OnlyErrorDialogs);");
+        Assert.Matches(DeletingCall(), "await _shredder.ShredFileAsync(path, ct);");
+        Assert.Matches(DeletingCall(), "var rc = SHFileOperation(ref op);");
+        Assert.DoesNotMatch(DeletingCall(), "group?.SetKeeper(entry);");
+        Assert.DoesNotMatch(DeletingCall(), "\"Nothing here deletes anything.\"");
+        string[] destructiveServices = ["FileShredderService.cs", "ShortcutCleanerService.cs", "BrowserCleanerService.cs"];
+        foreach (var destructive in destructiveServices)
+        {
+            var code = WithoutComments(File.ReadAllText(Path.Combine(appDir, "Services", destructive)));
+            Assert.True(DeletingCall().IsMatch(code),
+                $"{destructive} no longer registers as deleting anything. The pattern has drifted from the shapes "
+                + "the app uses, so the read-only check above proves nothing until it is re-derived.");
         }
 
         Assert.True(offenders.Count == 0,
             "a second tree walk is growing, and that is how a safety rule goes missing from one copy:\n  - "
             + string.Join("\n  - ", offenders));
     }
+
+    /// <summary>
+    /// A call to anything whose name says it deletes — <c>File.Delete</c>, <c>FileInfo.Delete</c>,
+    /// <c>FileSystem.DeleteFile</c>, a <c>Shred…</c> or <c>Recycle…</c> helper — or to the shell's
+    /// <c>SHFileOperation</c>. Case-sensitive, so prose in a string ("deletes anything") is not a call.
+    /// </summary>
+    [GeneratedRegex(@"\b(?:\w*(?:Delete|Shred|Recycle|Wipe|Erase)\w*|SHFileOperation)\s*\(")]
+    private static partial Regex DeletingCall();
 
     /// <summary>
     /// Both scanners that hand the user a list of individual FILES must refuse the ones Windows manages

@@ -1376,10 +1376,12 @@ offers, "rate us" prompts:
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
   Non-destructive, no admin required.
-- **Quick Actions** — Run Quick Cleanup, Update All Apps and Run Speed Test run in place
-  with a progress bar, and the result says whether it worked: an app update that fails
-  ends as "Failed" with winget's reason, not "Done". Open Windows Update takes you to the
-  tab where the update check runs
+- **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
+  Test run in place with a progress bar, and the result says whether it worked: an app update
+  that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
+  Windows Update what is waiting and says how many updates it found, or that Windows is up to
+  date. It installs nothing: the link under the result opens the Windows Update tab, where you
+  choose what to install
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the

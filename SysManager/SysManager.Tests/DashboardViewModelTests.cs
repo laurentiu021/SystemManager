@@ -21,7 +21,8 @@ public class DashboardViewModelTests
 {
     private static DashboardViewModel NewVm(IWingetService? winget = null,
                                             INavigationService? navigation = null,
-                                            IAppBlockerService? appBlocker = null)
+                                            IAppBlockerService? appBlocker = null,
+                                            IWindowsUpdateService? windowsUpdate = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -40,6 +41,9 @@ public class DashboardViewModelTests
             // a live window. An unbound real NavigationService would also be inert, but then "did it
             // navigate?" would be unanswerable rather than merely unasked.
             navigation ?? Substitute.For<INavigationService>(),
+            // A substitute by default: the real agent would search Microsoft's servers from any test that runs
+            // the Windows Update check.
+            windowsUpdate ?? Substitute.For<IWindowsUpdateService>(),
             // Null by default, which omits the stranded-block alert entirely — so the 58 tests written
             // before it existed keep asserting against the same five alerts they always did.
             appBlocker);
@@ -386,21 +390,115 @@ public class DashboardViewModelTests
         }
     }
 
-    [Fact]
-    public void QuickWindowsUpdate_OpensTheWindowsUpdateTab_AndClaimsNoCheck()
-    {
-        // #2437. The action showed a progress bar, waited half a second, logged "Check initiated from Dashboard"
-        // and ended in "✓ Done" — no check was ever made. It now opens the tab where the real check runs, and
-        // shows no result card for a check it did not do.
-        var navigation = Substitute.For<INavigationService>();
-        var vm = NewVm(navigation: navigation);
+    // ---------- Check Windows Updates: a real scan, then the way to the tab ----------
+    //
+    // #2437 found the action ended in "✓ Done" after half a second without contacting Windows Update, and made
+    // it a plain link to the tab. It now runs the tab's own scan through the same seam, says what it found, and
+    // offers the tab for choosing and installing.
 
-        vm.QuickWindowsUpdateCommand.Execute(null);
+    // A winget that answers at once. With the real one, every construction starts an actual `winget upgrade` for
+    // the app-updates alert, and these tests are about the other button.
+    private static IWingetService QuietWinget()
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(new List<AppPackage>()));
+        return winget;
+    }
+
+    private static IWindowsUpdateService AgentThatFinds(int count)
+    {
+        var agent = Substitute.For<IWindowsUpdateService>();
+        IReadOnlyList<UpdateEntry> found = Enumerable.Range(0, count)
+            .Select(i => new UpdateEntry { Title = $"Update {i}", UpdateId = $"id-{i}" })
+            .ToList();
+        agent.ScanAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(found));
+        return agent;
+    }
+
+    [Fact]
+    public async Task QuickWindowsUpdate_ChecksAndSaysWhatItFound()
+    {
+        var agent = AgentThatFinds(3);
+        var vm = NewVm(QuietWinget(), windowsUpdate: agent);
+
+        await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
+
+        await agent.Received(1).ScanAsync(Arg.Any<CancellationToken>());
+        Assert.Equal("Check Windows Updates", vm.QuickActionName);
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+        Assert.Equal("3 updates available", vm.QuickActionDetail);
+    }
+
+    [Fact]
+    public async Task QuickWindowsUpdate_WhenNothingIsWaiting_SaysWindowsIsUpToDate()
+    {
+        var vm = NewVm(QuietWinget(), windowsUpdate: AgentThatFinds(0));
+
+        await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+        Assert.Equal("Windows is up to date", vm.QuickActionDetail);
+    }
+
+    [Fact]
+    public async Task QuickWindowsUpdate_InstallsNothing()
+    {
+        // The scan also lists optional drivers and feature upgrades. Choosing among those is the tab's job, so the
+        // Dashboard only counts them.
+        var agent = AgentThatFinds(2);
+        var vm = NewVm(QuietWinget(), windowsUpdate: agent);
+
+        await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
+
+        await agent.DidNotReceiveWithAnyArgs().InstallAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task QuickWindowsUpdate_ThenOffersTheTab_AndGoesThereWhenAsked()
+    {
+        var navigation = Substitute.For<INavigationService>();
+        var vm = NewVm(QuietWinget(), navigation: navigation, windowsUpdate: AgentThatFinds(1));
+
+        await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
+
+        // It does not navigate on its own: the result is on the card, and the link is the user's choice.
+        navigation.DidNotReceiveWithAnyArgs().GoTo(default!, default);
+        Assert.True(vm.IsQuickActionDone);
+        Assert.Equal("→ Go to Windows Update for more details", vm.QuickActionNavigateLabel);
+
+        vm.NavigateToQuickActionTabCommand.Execute(null);
 
         navigation.Received(1).GoTo("nav-windows-update", Arg.Any<string?>());
-        Assert.False(vm.IsQuickActionRunning);
-        Assert.Equal("", vm.QuickActionStatus);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task QuickWindowsUpdate_WhenTheAgentFails_EndsAsFailed_NotUpToDate(bool refused)
+    {
+        var agent = Substitute.For<IWindowsUpdateService>();
+        agent.ScanAsync(Arg.Any<CancellationToken>()).Returns<Task<IReadOnlyList<UpdateEntry>>>(_ =>
+        {
+            if (refused) throw new UnauthorizedAccessException();
+            throw new System.Runtime.InteropServices.COMException("search failed", unchecked((int)0x8024402C));
+        });
+        var vm = NewVm(QuietWinget(), windowsUpdate: agent);
+
+        await vm.QuickWindowsUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Equal(refused
+                ? "Access denied — run SysManager as administrator."
+                : "Windows Update Agent error: 0x8024402C",
+            vm.QuickActionDetail);
+    }
+
+    [Theory]
+    [InlineData(0, "Windows is up to date")]
+    [InlineData(1, "1 update available")]
+    [InlineData(12, "12 updates available")]
+    public void DescribeWindowsUpdateCheck_ReadsAsASentence(int available, string expected)
+        => Assert.Equal(expected, DashboardViewModel.DescribeWindowsUpdateCheck(available));
 
     // ---------- Tune-Up result card navigation ----------
     // Each finding on the card links to the tab that can act on it ("3 broken shortcuts" is only useful

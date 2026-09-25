@@ -716,11 +716,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var designerNavigation = new NavigationService();
         designerNavigation.Bind(this);
 
+        // One Windows Update agent for the Dashboard's check and the Windows Update tab, as under DI.
+        var windowsUpdate = new WindowsUpdateService();
+
         return new Dictionary<Type, object>
         {
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation),
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
-            [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, new WindowsUpdateService(), new WindowsUpdatePolicyService()),
+            [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
             [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService()),
             [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService()),

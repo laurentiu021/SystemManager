@@ -31,6 +31,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly MemoryTestService _memTest;
     private readonly INavigationService _navigation;
 
+    // The same Windows Update Agent seam the Windows Update tab scans through, for the quick action that
+    // checks from here. It scans only; installing stays on the tab, where the updates can be chosen.
+    private readonly IWindowsUpdateService _windowsUpdate;
+
     // Null when no caller supplied one, which omits the stranded-block alert entirely. See the
     // constructor's appBlocker parameter for why it is optional.
     private readonly IAppBlockerService? _appBlocker;
@@ -138,6 +142,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// worth a defaulting path into user data; the DI container and the designer graph both have one
     /// to hand (#1772).
     /// </param>
+    /// <param name="windowsUpdate">
+    /// Required, for the quick action that checks Windows Update. A default would be the real agent, and any
+    /// test that ran the action would then search Microsoft's servers for real.
+    /// </param>
     /// <param name="appBlocker">
     /// Reads the IFEO blocked list for the stranded-machine alert. Optional so the six existing
     /// construction sites keep compiling unchanged — the same shape <see cref="AboutViewModel"/> uses for
@@ -148,9 +156,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
-        IAppBlockerService? appBlocker = null)
+        IWindowsUpdateService windowsUpdate, IAppBlockerService? appBlocker = null)
     {
         _navigation = navigation;
+        _windowsUpdate = windowsUpdate;
         _appBlocker = appBlocker;
         _sys = sys;
         _tuneUp = tuneUp;
@@ -887,14 +896,51 @@ public sealed partial class DashboardViewModel : ViewModelBase
         });
     }
 
-    /// <summary>Opens the Windows Update tab, where the check really runs.</summary>
+    /// <summary>
+    /// Checks Windows Update from here and says what it found. The card's link then opens the Windows Update
+    /// tab, where updates are chosen and installed.
+    /// </summary>
     /// <remarks>
-    /// This was a quick action in name only (#2437): it showed a progress bar, waited half a second, logged
-    /// "Check initiated from Dashboard" and ended in "✓ Done" — a check that never happened, recorded in the
-    /// activity log as though it had. It now does what it can do honestly, and says so on the button.
+    /// This was a check in name only (#2437) — a progress bar, half a second's wait and "✓ Done" — and then only
+    /// a link to the tab. It now runs the tab's own scan, through the same seam, and installs nothing: the scan
+    /// also lists optional drivers and feature upgrades, and choosing among those is what the tab is for. A
+    /// failed search ends as "Failed" with the reason, never as up to date. Nothing is written to Recent
+    /// Activity, because a check changes nothing, and the Windows Update tab's own scan does not log either.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
-    private void QuickWindowsUpdate() => SelectTab("nav-windows-update");
+    private async Task QuickWindowsUpdateAsync()
+    {
+        await RunQuickActionAsync("Check Windows Updates", "Windows Update", "nav-windows-update", async () =>
+        {
+            QuickActionDetail = "Asking Windows Update what is available…";
+            QuickActionProgress = 30;
+
+            IReadOnlyList<UpdateEntry> found;
+            try
+            {
+                found = await _windowsUpdate.ScanAsync(CancellationToken.None);
+            }
+            // The card shows the message as its detail, and a COM message is an HRESULT in jargon. These are the
+            // Windows Update tab's own words for the same two failures.
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                throw new InvalidOperationException($"Windows Update Agent error: 0x{ex.HResult:X8}", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new InvalidOperationException("Access denied — run SysManager as administrator.", ex);
+            }
+
+            QuickActionProgress = 100;
+            QuickActionDetail = DescribeWindowsUpdateCheck(found.Count);
+        });
+    }
+
+    /// <summary>What the Windows Update check found, in the card's words. Pure, so it is testable without WPF.</summary>
+    internal static string DescribeWindowsUpdateCheck(int available) =>
+        available == 0
+            ? "Windows is up to date"
+            : $"{available} update{(available == 1 ? "" : "s")} available";
 
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
     private async Task QuickSpeedTestAsync()

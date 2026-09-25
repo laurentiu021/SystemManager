@@ -33,7 +33,8 @@ public class DashboardHealthFlagTests
             // before the user was ever told about it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-crash")),
             new MemoryTestService(),
-            new NavigationService());
+            new NavigationService(),
+            new WindowsUpdateService());
     }
 
     /// <summary>

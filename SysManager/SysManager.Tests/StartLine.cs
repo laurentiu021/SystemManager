@@ -14,12 +14,11 @@ namespace SysManager.Tests;
 ///   <item>signalled a <see cref="CountdownEvent"/>;</item>
 ///   <item>then parked on a gate until the test thread had seen every signal.</item>
 /// </list>
-/// The parked writer held a pool thread, and so did the test thread waiting for the signals. On a loaded
-/// runner the pool had no thread to spare: the writers queued behind threads that other races were holding.
-/// In one run, a single attempt out of 64 waited out the whole 30-second bound. Two unrelated races then
-/// failed with "the racing writers never reached the start line", while the code under test was fine.
-/// Even on green runs the same tests took up to 30 seconds, although their own remarks put the work at a
-/// fraction of a second.
+/// The parked writer held a pool thread, and so did the test thread waiting for the signals. When the pool had
+/// no thread to spare, the writers could not start at all. In one CI run, three races and a DNS lookup were all
+/// waiting on the pool, and no test finished for 16 seconds. One race attempt waited out its whole 30-second
+/// bound, and two unrelated races failed with "the racing writers never reached the start line", while the
+/// code under test was fine.
 /// <para>A writer here runs on a thread created for it, through
 /// <see cref="TaskCreationOptions.LongRunning"/>. Reaching the line waits only for that thread to start, and
 /// parking at the line takes nothing from the pool.</para>

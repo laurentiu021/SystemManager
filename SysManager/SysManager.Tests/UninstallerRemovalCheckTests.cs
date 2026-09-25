@@ -127,4 +127,54 @@ public sealed class UninstallerRemovalCheckTests : IDisposable
         Assert.Empty(vm.AllApps);
         Assert.Equal("Completed 1/1 uninstalls.", vm.StatusMessage);
     }
+
+    // ── The same check when winget runs the uninstaller (#2469) ──────────
+    //
+    // winget waits on the process it started and never reads the uninstall list again, so an NSIS handover
+    // looks exactly as it does on the direct path. The scan fills a winget row's uninstall command in from the
+    // registry, which is what IsStillRegistered compares against.
+
+    /// <summary>Selects a winget-managed test app and uninstalls it through a winget that returns 0 at once.</summary>
+    private async Task<UninstallerViewModel> UninstallTestAppThroughWingetAsync()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(0);
+        var vm = new UninstallerViewModel(Service(runner)) { IsElevated = false };
+        vm.AllApps.Add(new InstalledApp { Name = "Test App", Id = "Test.App", Source = "winget", UninstallString = Uninstaller });
+        vm.FilterText = "Test";
+        vm.FilterText = "";
+        vm.FilteredApps.Single().IsSelected = true;
+
+        using (new DialogAnswer(confirm: true))
+            await vm.UninstallSelectedCommand.ExecuteAsync(null);
+
+        // The winget path, not the direct one: the test would prove nothing about #2469 otherwise.
+        await runner.Received(1).RunProcessAsync("winget",
+            Arg.Is<string>(args => args.StartsWith("uninstall --id \"Test.App\"", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        await runner.DidNotReceiveWithAnyArgs().RunProcessWithShellAsync(default!, default!, default);
+        return vm;
+    }
+
+    [Fact]
+    public async Task UninstallThroughWinget_WhenWindowsStillListsTheApp_DoesNotCallItRemoved()
+    {
+        Register("Test App", uninstall: Uninstaller);
+
+        var vm = await UninstallTestAppThroughWingetAsync();
+
+        var row = Assert.Single(vm.AllApps);
+        Assert.Equal(UninstallerViewModel.StillOpenStatus, row.Status);
+        Assert.Contains("1 app is still installed", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UninstallThroughWinget_WhenWindowsNoLongerListsTheApp_ReportsItRemoved()
+    {
+        var vm = await UninstallTestAppThroughWingetAsync();
+
+        Assert.Empty(vm.AllApps);
+        Assert.Equal("Completed 1/1 uninstalls.", vm.StatusMessage);
+    }
 }

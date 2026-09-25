@@ -196,11 +196,13 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                         : await _service.UninstallAsync(app.Id, _cts.Token);
 
                     currentCompleted = true;
-                    if (IsSuccessfulUninstallExitCode(code) && local && _service.IsStillRegistered(app))
+                    if (IsSuccessfulUninstallExitCode(code) && _service.IsStillRegistered(app))
                     {
-                        // The exit code belongs to the process SysManager launched, which can return before
+                        // The exit code belongs to the process that was launched, which can return before
                         // anything is removed: NSIS uninstallers hand over to a copy of themselves and exit at
-                        // once (#2448). Windows still lists the app, so it is not counted or taken off the list.
+                        // once (#2448). Through winget too — it waits on the process it started and never looks
+                        // at the uninstall list again (#2469). Windows still lists the app, so it is not counted
+                        // or taken off the list.
                         app.Status = StillOpenStatus;
                         stillOpen++;
                     }
@@ -307,7 +309,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 Progress = 100;
                 StatusMessage = $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}{stillOpenMessage}";
                 ToastService.Instance.Show(
-                    stillOpen > 0 ? "Uninstaller still open" : "Uninstall complete",
+                    stillOpen > 0 ? "Uninstaller still running" : "Uninstall complete",
                     $"Completed {removed}/{toRemove.Count} uninstalls.{restartMessage}{stillOpenMessage}");
                 Log.Information(
                     "Uninstall batch completed: {Removed}/{Total}, {StillOpen} still listed, {RestartRequired} need restart",
@@ -395,15 +397,19 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     /// <summary>
     /// The row status for an app whose uninstaller returned success while Windows still lists it (#2448).
     /// </summary>
+    /// <remarks>
+    /// "Running", not "open in its own window": through winget the uninstaller runs silently, so the copy that is
+    /// still working has no window at all (#2469).
+    /// </remarks>
     internal const string StillOpenStatus =
-        "Still installed — its uninstaller may still be open in its own window. Finish it, then Scan again.";
+        "Still installed — its uninstaller may still be running, perhaps in its own window. Let it finish, then Scan again.";
 
     /// <summary>The summary's note for apps still listed after their uninstaller returned; empty when there are none.</summary>
     internal static string DescribeStillOpen(int stillOpen) => stillOpen switch
     {
         0 => string.Empty,
-        1 => " 1 app is still installed — its uninstaller may still be open in its own window; Scan again once it finishes.",
-        _ => $" {stillOpen} apps are still installed — their uninstallers may still be open in their own windows; Scan again once they finish.",
+        1 => " 1 app is still installed — its uninstaller may still be running; Scan again once it finishes.",
+        _ => $" {stillOpen} apps are still installed — their uninstallers may still be running; Scan again once they finish.",
     };
 
     // Windows Installer uses 1641 and 3010 for successful removal that requires a restart.

@@ -35,6 +35,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // checks from here. It scans only; installing stays on the tab, where the updates can be chosen.
     private readonly IWindowsUpdateService _windowsUpdate;
 
+    // The quick speed test runs the Speed Test tab's engine and records into the tab's own history, so the
+    // result is where speed results live rather than in Recent Activity, which lists changes to the PC.
+    private readonly ISpeedTestService _speedTest;
+    private readonly SpeedTestHistoryService _speedHistory;
+
     // Null when no caller supplied one, which omits the stranded-block alert entirely. See the
     // constructor's appBlocker parameter for why it is optional.
     private readonly IAppBlockerService? _appBlocker;
@@ -146,6 +151,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Required, for the quick action that checks Windows Update. A default would be the real agent, and any
     /// test that ran the action would then search Microsoft's servers for real.
     /// </param>
+    /// <param name="speedTest">Required for the same reason: the real engine downloads from Cloudflare.</param>
+    /// <param name="speedHistory">
+    /// The Speed Test tab's history, shared, so a quick test from here shows up there. Tests pass one over a
+    /// temporary folder, never the user's own file.
+    /// </param>
     /// <param name="appBlocker">
     /// Reads the IFEO blocked list for the stranded-machine alert. Optional so the six existing
     /// construction sites keep compiling unchanged — the same shape <see cref="AboutViewModel"/> uses for
@@ -156,10 +166,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     public DashboardViewModel(SystemInfoService sys, TuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
-        IWindowsUpdateService windowsUpdate, IAppBlockerService? appBlocker = null)
+        IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
+        IAppBlockerService? appBlocker = null)
     {
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
+        _speedTest = speedTest;
+        _speedHistory = speedHistory;
         _appBlocker = appBlocker;
         _sys = sys;
         _tuneUp = tuneUp;
@@ -942,27 +955,50 @@ public sealed partial class DashboardViewModel : ViewModelBase
             ? "Windows is up to date"
             : $"{available} update{(available == 1 ? "" : "s")} available";
 
+    /// <summary>
+    /// Runs the Speed Test tab's HTTP test from here and records the result in that tab's history.
+    /// </summary>
+    /// <remarks>
+    /// The result used to go into Recent Activity, which lists what SysManager changed on the PC, while the Speed
+    /// Test tab, where results are kept and compared, never saw it. It now goes into the tab's own history, and
+    /// Recent Activity is left alone, as it is for a test run on the tab. It also takes the network lock the tab
+    /// takes: two tests at once would each measure about half the line, and both readings would now land in the
+    /// history the tab compares against.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
     private async Task QuickSpeedTestAsync()
     {
         await RunQuickActionAsync("Speed Test", "Speed Test", "nav-speed-test", async () =>
         {
+            using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "HTTP Speed Test");
+            if (opLock is null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.");
+            }
+
             QuickActionDetail = "Running HTTP speed test (Cloudflare)...";
             QuickActionProgress = 20;
-            var service = new SpeedTestService();
             var progress = new SettlingProgress<(int Percent, string Message)>(p =>
             {
                 QuickActionProgress = 20 + (int)(p.Percent * 0.8);
                 QuickActionDetail = p.Message;
             });
             var result = await progress.SettleAfterAsync(
-                reporter => service.RunHttpAsync(reporter, CancellationToken.None));
+                reporter => _speedTest.RunHttpAsync(reporter, CancellationToken.None));
 
             QuickActionProgress = 100;
-            QuickActionDetail = $"↓ {result.DownloadMbps:F0} Mbps · ↑ {result.UploadMbps:F0} Mbps · Ping {result.PingMs:F0}ms";
-            ActivityLogService.Instance.Log("Speed Test", QuickActionDetail);
+            QuickActionDetail = DescribeSpeedTest(result, saved: await _speedHistory.SaveAsync(result));
         });
     }
+
+    /// <summary>
+    /// The quick test's result line. A result that could not be written says so, as the Speed Test tab does,
+    /// because a reading the user expects to find in the history and cannot is worse than a warning.
+    /// </summary>
+    internal static string DescribeSpeedTest(SpeedTestResult result, bool saved) =>
+        $"↓ {result.DownloadMbps:F0} Mbps · ↑ {result.UploadMbps:F0} Mbps · Ping {result.PingMs:F0}ms"
+        + (saved ? "" : " — not saved to the Speed Test history");
 
     [RelayCommand]
     private void NavigateToQuickActionTab()

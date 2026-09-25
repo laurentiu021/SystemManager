@@ -34,7 +34,9 @@ public class DashboardHealthFlagTests
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-crash")),
             new MemoryTestService(),
             new NavigationService(),
-            new WindowsUpdateService());
+            new WindowsUpdateService(),
+            new SpeedTestService(),
+            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-speed")));
     }
 
     /// <summary>

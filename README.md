@@ -987,7 +987,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Amsterdam, Paris, New York
 - **Separate persistent history per engine**, the last 20 results each — date, download,
   upload, ping and server — clearable on its own, because comparing an HTTP run against an
-  Ookla run is not a comparison
+  Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
+  even while this tab is open
 - Progress bar with a time-remaining estimate and a Cancel button; the Ookla CLI is
   downloaded on first run
 - Only one engine runs at a time, so the two cards can never show conflicting progress
@@ -1369,7 +1370,9 @@ offers, "rate us" prompts:
 - **Recent Activity** — what SysManager actually changed on this PC, with timestamps:
   cleanups, deletes, uninstalls, privacy and DNS changes, restore points, shredded
   files. Counts and sizes only — never file names, since the log is plain text on
-  your own disk. Opening a tab isn't an action, so it isn't listed.
+  your own disk. Opening a tab isn't an action, so it isn't listed, and neither is a speed
+  test, which goes into the Speed Test history instead. It does note when SysManager closed
+  unexpectedly the previous time.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
@@ -1380,7 +1383,8 @@ offers, "rate us" prompts:
   that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
-  choose what to install
+  choose what to install. Run Speed Test records its result in the Speed Test tab's history, and
+  does not start while another speed test, a traceroute or a network repair is running
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the

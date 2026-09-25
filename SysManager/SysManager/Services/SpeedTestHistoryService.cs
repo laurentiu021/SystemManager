@@ -132,6 +132,25 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// </summary>
     public async Task<bool> SaveAsync(SpeedTestResult result, CancellationToken ct = default)
     {
+        if (!await WriteAsync(result, ct).ConfigureAwait(false)) return false;
+
+        // After the gate is released, so a subscriber may read the history straight back.
+        Saved?.Invoke(result);
+        return true;
+    }
+
+    /// <summary>
+    /// Raised after a result reaches disk, whoever saved it, on the thread that saved it.
+    /// </summary>
+    /// <remarks>
+    /// Two places run a speed test: the Speed Test tab and the Dashboard's quick action. They share this one
+    /// history, so a result the Dashboard records has to reach a Speed Test tab that has already loaded its
+    /// list, or the tab would show it only after a restart. Not raised for a write that failed.
+    /// </remarks>
+    public event Action<SpeedTestResult>? Saved;
+
+    private async Task<bool> WriteAsync(SpeedTestResult result, CancellationToken ct)
+    {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {

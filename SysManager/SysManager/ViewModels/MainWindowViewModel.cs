@@ -718,10 +718,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
         // One Windows Update agent for the Dashboard's check and the Windows Update tab, as under DI.
         var windowsUpdate = new WindowsUpdateService();
+        // One speed-test history, as under DI: the Dashboard's quick test records into the list the Speed Test
+        // tab shows, which only works if both hold the same instance.
+        var speedHistory = new SpeedTestHistoryService();
 
         return new Dictionary<Type, object>
         {
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate),
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
@@ -738,7 +741,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(NetworkSharedState)] = networkShared,
             [typeof(PingViewModel)] = new PingViewModel(networkShared),
             [typeof(TracerouteViewModel)] = new TracerouteViewModel(networkShared),
-            [typeof(SpeedTestViewModel)] = new SpeedTestViewModel(networkShared, new SpeedTestHistoryService()),
+            [typeof(SpeedTestViewModel)] = new SpeedTestViewModel(networkShared, speedHistory),
             [typeof(NetworkRepairViewModel)] = new NetworkRepairViewModel(networkShared),
             [typeof(DriversViewModel)] = new DriversViewModel(runner),
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),

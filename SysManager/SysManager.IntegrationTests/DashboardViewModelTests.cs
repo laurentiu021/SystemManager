@@ -26,7 +26,9 @@ public class DashboardViewModelTests
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
             new MemoryTestService(),
             new NavigationService(),
-            new WindowsUpdateService());
+            new WindowsUpdateService(),
+            new SpeedTestService(),
+            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-speed")));
     }
 
     [Fact]

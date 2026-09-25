@@ -231,9 +231,6 @@ public sealed class NotificationBlockerServiceTests : IDisposable
     /// </summary>
     private const int RaceAttempts = 64;
 
-    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
-    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
-
     [Fact]
     public async Task TwoMasterToggleWritesAtOnce_BothIncrementsAreCounted()
     {
@@ -250,19 +247,7 @@ public sealed class NotificationBlockerServiceTests : IDisposable
             // be a different race and would not prove this one.
             var svc = new NotificationBlockerService(_root, dir);
 
-            using var ready = new CountdownEvent(2);
-            using var go = new ManualResetEventSlim(false);
-            var writers = new[]
-            {
-                Task.Run(() => { ready.Signal(); go.Wait(); svc.SetGlobalToastEnabled(false); }),
-                Task.Run(() => { ready.Signal(); go.Wait(); svc.SetGlobalToastEnabled(true); }),
-            };
-
-            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
-            go.Set();
-            // WaitAsync throws TimeoutException on the bound and rethrows any writer fault, so
-            // neither a hang nor an exception inside a writer is swallowed.
-            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+            await StartLine.RaceAsync(() => svc.SetGlobalToastEnabled(false), () => svc.SetGlobalToastEnabled(true));
 
             // Named attempt, no path in the message: a failure here is printed in public CI output,
             // and the temp directories carry the account name.

@@ -1408,6 +1408,77 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every race test releases its writers from <c>StartLine</c>, never from a start line of its own.
+    /// </summary>
+    /// <remarks>
+    /// Six races drew the line themselves, all in the same way:
+    /// <list type="bullet">
+    ///   <item>each writer started on the thread pool;</item>
+    ///   <item>it counted itself in on a countdown;</item>
+    ///   <item>it then parked on a gate.</item>
+    /// </list>
+    /// A parked writer holds a pool thread, so on a loaded runner the next race's writers had nothing to start
+    /// on. One attempt waited out its whole 30-second bound, and two races failed in the same run although
+    /// nothing was wrong in the code under test. <c>StartLine</c> runs each writer on a thread of its own, and
+    /// a local copy would bring the pool back.
+    /// <para>The needle is the countdown that every start line counts its writers on. It is assembled rather
+    /// than spelled, and comment tails are stripped before matching, so prose about the pattern cannot trip the
+    /// guard.</para>
+    /// <para>The positive control is real source: <c>StartLine.cs</c> must still contain the needle. A needle
+    /// that stopped matching therefore cannot read as a clean codebase.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryRaceStartLine_IsDrawnInOnePlace()
+    {
+        // Assembled, never spelled: see the remark above.
+        var needle = "Countdown" + "Event";
+        const string theOnePlace = "StartLine.cs";
+
+        var root = TestPaths.RepoRoot();
+        var offenders = new List<string>();
+        var inTheOnePlace = 0;
+        var scanned = 0;
+
+        foreach (var project in new[] { "SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests" })
+        {
+            var dir = Path.Combine(root, "SysManager", project);
+            Assert.True(Directory.Exists(dir), $"{dir} not found — this guard would pass vacuously");
+
+            foreach (var file in Directory.GetFiles(dir, "*.cs"))
+            {
+                var name = Path.GetFileName(file);
+                if (name == "ArchitectureTests.cs") continue;   // this file, prose and all
+
+                scanned++;
+                var lines = File.ReadAllLines(file);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    if (!CommentTail().Replace(lines[i], string.Empty).Contains(needle, StringComparison.Ordinal))
+                        continue;
+                    if (name == theOnePlace) inTheOnePlace++;
+                    else offenders.Add($"{name}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(scanned >= 100,
+            $"only {scanned} test source files were scanned across the three test projects, which is far "
+            + "below the ~140 that exist — the enumeration is wrong, so a pass here proves nothing.");
+
+        Assert.True(inTheOnePlace >= 1,
+            $"{theOnePlace} no longer counts its writers in on a '{needle}'. Either the helper changed how it "
+            + "draws the line, and this needle must follow it, or the needle stopped matching, which would make "
+            + "the check below pass on any codebase.");
+
+        Assert.True(offenders.Count == 0,
+            "these tests draw a race's start line themselves. Release the writers with "
+            + "StartLine.RaceAsync instead. A local copy starts its writers on the thread pool and parks them "
+            + "there, so on a busy runner they cannot reach the line and the race fails with nothing wrong in "
+            + "the code it tests:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// No test hands the PowerShell runner a script that can run forever.
     /// </summary>
     /// <remarks>

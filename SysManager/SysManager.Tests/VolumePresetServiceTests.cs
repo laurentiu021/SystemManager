@@ -172,9 +172,6 @@ public class VolumePresetServiceTests : IDisposable
     /// </summary>
     private const int RaceAttempts = 64;
 
-    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
-    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
-
     /// <summary>
     /// Runs <paramref name="first"/> and <paramref name="second"/> against one service instance from
     /// a shared start line, then hands the persisted list to <paramref name="assert"/>. Bounded at
@@ -192,19 +189,7 @@ public class VolumePresetServiceTests : IDisposable
             Directory.CreateDirectory(dir);
             var service = new VolumePresetService(dir);
 
-            using var ready = new CountdownEvent(2);
-            using var go = new ManualResetEventSlim(false);
-            var writers = new[]
-            {
-                Task.Run(() => { ready.Signal(); go.Wait(); first(service); }),
-                Task.Run(() => { ready.Signal(); go.Wait(); second(service); }),
-            };
-
-            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
-            go.Set();
-            // WaitAsync throws TimeoutException on the bound and rethrows any writer fault, so
-            // neither a hang nor an exception inside a writer is swallowed.
-            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+            await StartLine.RaceAsync(() => first(service), () => second(service));
 
             assert(attempt, new VolumePresetService(dir).Load());
         }

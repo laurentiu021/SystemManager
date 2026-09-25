@@ -218,9 +218,6 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
     /// </summary>
     private const int RaceAttempts = 64;
 
-    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
-    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
-
     [Fact]
     public async Task RecordingACheckWhileTheUserTurnsItOff_KeepsTheChoiceOff()
     {
@@ -236,19 +233,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
             Directory.CreateDirectory(dir);
             var service = new UpdateCheckPreferenceService(dir);
 
-            using var ready = new CountdownEvent(2);
-            using var go = new ManualResetEventSlim(false);
-            var writers = new[]
-            {
-                Task.Run(() => { ready.Signal(); go.Wait(); service.RecordCheck(Now); }),
-                Task.Run(() => { ready.Signal(); go.Wait(); service.SetCheckOnStartup(false); }),
-            };
-
-            Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
-            go.Set();
-            // Bounded: a writer that never returns must fail the run, not hang it. WaitAsync throws
-            // TimeoutException on the bound and rethrows any writer fault, so neither is swallowed.
-            await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+            await StartLine.RaceAsync(() => service.RecordCheck(Now), () => service.SetCheckOnStartup(false));
 
             // No path in the message: a failure here is printed in public CI output.
             Assert.False(

@@ -39,7 +39,6 @@ public class UninstallerViewModelTests
         var vm = NewVm();
         Assert.NotNull(vm.AllApps);
         Assert.NotNull(vm.FilteredApps);
-        Assert.NotNull(vm.Console);
     }
 
     [Fact]

@@ -26,12 +26,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase
 
     private readonly UninstallerService _service;
     private readonly EtaCalculator _uninstallEta = new();
-    private readonly Action<PowerShellLine> _lineHandler;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<InstalledApp> AllApps { get; } = new();
     public BulkObservableCollection<InstalledApp> FilteredApps { get; } = new();
-    public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private int _appCount;
@@ -44,8 +42,6 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     public UninstallerViewModel(UninstallerService service)
     {
         _service = service;
-        _lineHandler = line => Console.Append(line);
-        _service.LineReceived += _lineHandler;
         // Scan and UninstallSelected both recreate the shared _cts; without this gate a
         // second command could dispose the CTS the first is still awaiting
         // (ObjectDisposedException). Re-evaluate both commands' CanExecute when IsBusy flips.
@@ -349,7 +345,6 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     {
         if (disposing)
         {
-            _service.LineReceived -= _lineHandler;
             PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();

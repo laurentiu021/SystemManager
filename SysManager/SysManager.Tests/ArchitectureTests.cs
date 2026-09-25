@@ -11321,6 +11321,61 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A view model that collects console output has a view that shows it.
+    /// </summary>
+    /// <remarks>
+    /// #2464. <c>UninstallerViewModel</c> appended every winget line to a <c>Console</c> that
+    /// <c>UninstallerView.xaml</c> never had, from the tab's first version, and the README promised "live console
+    /// output from winget" on top. Nothing failed, because nothing asked whether the collection reached a
+    /// screen. Five view models own a console today, and each view binds it through the shared
+    /// <c>ConsoleView</c>. This keeps a sixth from filling one that nobody can see.
+    /// </remarks>
+    [Fact]
+    public void EveryViewModelConsole_IsShownByItsView()
+    {
+        var appDir = TestPaths.AppProject();
+        var viewModels = 0;
+        var offenders = new List<string>();
+
+        foreach (var file in Directory.GetFiles(Path.Combine(appDir, "ViewModels"), "*ViewModel.cs")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            if (!ConsoleProperty().IsMatch(WithoutComments(File.ReadAllText(file)))) continue;
+            viewModels++;
+
+            var vmName = Path.GetFileNameWithoutExtension(file);
+            var view = Path.Combine(appDir, "Views", vmName.Replace("ViewModel", "View", StringComparison.Ordinal) + ".xaml");
+            if (!File.Exists(view))
+            {
+                offenders.Add($"{vmName} owns a Console but has no matching view file");
+                continue;
+            }
+
+            if (!ConsoleViewBinding().IsMatch(WithoutXamlComments(File.ReadAllText(view))))
+                offenders.Add($"{vmName} fills a Console that {Path.GetFileName(view)} never shows. Bind it through "
+                    + "<v:ConsoleView DataContext=\"{Binding Console}\"/>, or remove the console.");
+        }
+
+        // A known population: AppUpdates, Cleanup, SystemFixes, SystemHealth and WindowsUpdate.
+        Assert.True(viewModels >= 5,
+            $"only {viewModels} view models were found owning a Console, and five do. ConsoleProperty() has "
+          + "stopped matching, so this guard is checking nothing.");
+        Assert.Matches(ConsoleViewBinding(), "<v:ConsoleView DataContext=\"{Binding Console}\" Height=\"200\"/>");
+        Assert.DoesNotMatch(ConsoleViewBinding(), "<v:ConsoleView DataContext=\"{Binding Output}\"/>");
+
+        Assert.True(offenders.Count == 0,
+            "a view model collects console output that no view shows:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A view model's public <c>ConsoleViewModel Console</c> property.</summary>
+    [GeneratedRegex(@"public\s+ConsoleViewModel\s+Console\b")]
+    private static partial Regex ConsoleProperty();
+
+    /// <summary>A <c>ConsoleView</c> whose DataContext is bound to <c>Console</c>.</summary>
+    [GeneratedRegex(@"<v:ConsoleView\b[^>]*DataContext=""\{Binding\s+Console\}""")]
+    private static partial Regex ConsoleViewBinding();
+
+    /// <summary>
     /// No unit test builds a <c>DeepCleanupViewModel</c> on the real machine's scan roots.
     /// </summary>
     /// <remarks>

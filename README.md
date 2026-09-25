@@ -1041,7 +1041,6 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Category filter and text search across the catalog, plus a button that ticks
   every app in the chosen category at once
 - Per-package install status tracking with ETA
-- Live console output showing winget progress
 - GroupedView with visual category headers
 
 ### New App Alerts
@@ -1205,7 +1204,6 @@ offers, "rate us" prompts:
   Some uninstallers hand over to a second window and return straight away; those apps stay on
   the list, marked as still installed, until you finish the uninstaller and scan again
 - Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
-- Live console output from winget
 
 ### Gaming Profile 🔬
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,

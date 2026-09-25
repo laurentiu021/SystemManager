@@ -79,7 +79,7 @@ public static class ServiceRegistration
         services.AddSingleton<BrowserCleanerService>();
         services.AddSingleton<PrivacyMonitorService>();
         services.AddSingleton<BootAnalyzerService>();
-        services.AddSingleton<WindowsUpdateService>();
+        services.AddSingleton<IWindowsUpdateService, WindowsUpdateService>();
         services.AddSingleton<ITimerResolutionService, TimerResolutionService>();
         services.AddSingleton<IFileLockService, FileLockService>();
         services.AddSingleton<DisplayProfileService>();

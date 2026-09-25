@@ -25,7 +25,8 @@ public class DashboardViewModelTests
             // profile would delete a genuine crash report before the user saw it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
             new MemoryTestService(),
-            new NavigationService());
+            new NavigationService(),
+            new WindowsUpdateService());
     }
 
     [Fact]

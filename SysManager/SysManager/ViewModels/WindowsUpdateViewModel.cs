@@ -66,7 +66,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         """;
 
     private readonly IPowerShellRunner _runner;
-    private readonly WindowsUpdateService _wu;
+    private readonly IWindowsUpdateService _wu;
     private readonly WindowsUpdatePolicyService _policy;
     private CancellationTokenSource? _cts;
 
@@ -95,7 +95,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
     public WindowsUpdateViewModel(
         IPowerShellRunner runner,
-        WindowsUpdateService wu,
+        IWindowsUpdateService wu,
         WindowsUpdatePolicyService policy)
         : this(runner, wu, policy, AdminHelper.IsElevated)
     {
@@ -119,7 +119,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
 
     internal WindowsUpdateViewModel(
         IPowerShellRunner runner,
-        WindowsUpdateService wu,
+        IWindowsUpdateService wu,
         WindowsUpdatePolicyService policy,
         Func<bool> isElevated)
     {

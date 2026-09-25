@@ -17,7 +17,7 @@ namespace SysManager.Services;
 /// All operations are blocking COM calls — callers must dispatch them via
 /// Task.Run so they don't block the UI thread.
 /// </summary>
-public sealed class WindowsUpdateService
+public sealed class WindowsUpdateService : IWindowsUpdateService
 {
     /// <summary>Raised on the calling thread for each progress/log line.</summary>
     public event Action<string>? Log;

@@ -248,12 +248,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Seventeen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Eighteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
-`ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IAudioMixerService`, `INavigationService`
+`ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
+shared by the Windows Update tab and the Dashboard's check), `IAudioMixerService`, `INavigationService`
 (NavigationService), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
@@ -315,7 +316,8 @@ Key services:
   lifetime to reason about for almost no gain.
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
-  (scan, select, install) with progress reporting; backs `WindowsUpdateViewModel`.
+  (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
+  `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans.
 - `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
   deferral policy keys (defer feature updates, bounded pause, restore default).
   Injectable registry root for tests; deliberately offers no permanent

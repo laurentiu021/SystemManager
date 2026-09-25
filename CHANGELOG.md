@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.0] - 2026-09-25
+
+**The Dashboard can check Windows Update.** Check Windows Updates asks Windows Update what is waiting, says
+how many updates it found, and offers the Windows Update tab for choosing and installing them.
+
+### Changed
+
+- **Dashboard: "Open Windows Update" is "Check Windows Updates" again, and now it really checks.** The quick
+  action runs the same scan as the Windows Update tab and shows the result on the card: "3 updates
+  available", or "Windows is up to date". It installs nothing. The scan also lists optional drivers and
+  feature upgrades, so the link under the result opens the Windows Update tab, where you choose what to
+  install. A search that Windows Update refuses or fails ends as "Failed" with the reason, never as up to
+  date. The button has only opened the tab since v1.113.9; before that, it reported a check it never made.
+
 ## [1.113.16] - 2026-09-25
 
 **App Updates no longer says everything is up to date when it could not check.** A winget query that failed

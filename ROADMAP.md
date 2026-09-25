@@ -20,9 +20,10 @@ Worth stating first, because these are the questions people ask and the answers 
   scheduled tasks, purging the standby list. A Store version would be a different, much
   smaller app wearing the same name.
 - **No paid tier, no upsell, no bundled offers.** MIT, free, all features.
-- **No registry "cleaning" that deletes on a guess.** A registry tool that removes entries
-  it does not understand is how utilities earned their reputation. If something lands here
-  it will be inspection-first and reversible; the request is tracked in
+- **No registry cleaner, optimiser or defragmenter.** A registry tool that removes entries
+  it does not understand is how utilities earned their reputation. Compacting the hives
+  means rewriting them offline, where an interruption can leave Windows unable to start,
+  and neither changes anything a user can notice. The reasoning is in
   [#1726](https://github.com/laurentiu021/SystemManager/issues/1726).
 
 ## Trust and distribution

@@ -227,6 +227,59 @@ public class AppUpdatesViewModelTests
         Assert.Equal(AppUpdatesViewModel.WingetUnavailableMessage, vm.StatusMessage);
     }
 
+    // ---------- a failed check is not "up to date" (#2461) ----------
+
+    [Fact]
+    public async Task Scan_WhenTheCheckFails_SaysSo_InsteadOfUpToDate()
+    {
+        // The service throws when winget's query failed. Before that, it returned an empty list, and the empty
+        // state read "No updates available — All detected packages are up to date."
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<AppPackage>>>(_ => throw new InvalidOperationException("the reason winget gave"));
+        var vm = new AppUpdatesViewModel(winget);
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(AppUpdatesViewModel.CheckFailedTitle, vm.EmptyTitle);
+        Assert.Equal("the reason winget gave", vm.EmptyMessage);
+        Assert.Equal(AppUpdatesViewModel.CheckFailedTitle + ".", vm.StatusMessage);
+        Assert.DoesNotContain("up to date", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Scan_ThatSucceedsAfterAFailure_ClearsTheFailure()
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<AppPackage>>>(
+                _ => throw new InvalidOperationException("the reason winget gave"),
+                _ => Task.FromResult(new List<AppPackage>()));
+        var vm = new AppUpdatesViewModel(winget);
+
+        await vm.ScanCommand.ExecuteAsync(null);
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.ScanFailure);
+        Assert.Equal("No updates available", vm.EmptyTitle);
+    }
+
+    [Fact]
+    public async Task Scan_WhenWingetMissing_TheEmptyStateSaysWhy()
+    {
+        // Not "Not scanned yet" straight after the user pressed Scan: the check could not run, and the reason
+        // is the one sentence every winget tab uses for it.
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<AppPackage>>>(_ => throw new System.ComponentModel.Win32Exception(2));
+        var vm = new AppUpdatesViewModel(winget);
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(AppUpdatesViewModel.CheckFailedTitle, vm.EmptyTitle);
+        Assert.Equal(AppUpdatesViewModel.WingetUnavailableMessage, vm.EmptyMessage);
+    }
+
     [Fact]
     public async Task Upgrade_WhenWingetMissing_ShowsFriendlyMessage_AndStops()
     {

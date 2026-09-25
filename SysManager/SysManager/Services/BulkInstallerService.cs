@@ -44,6 +44,7 @@ public sealed class BulkInstallerService
     /// binary-planting LPE vector a bare <c>FileName="winget"</c> would open. Mirrors
     /// <see cref="UninstallerService.ListInstalledAsync"/>'s thread-safe capture pattern.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>
     public async Task<IReadOnlyList<string>> ListInstalledAsync(CancellationToken ct = default)
     {
         var captured = new System.Collections.Concurrent.ConcurrentQueue<string>();
@@ -52,13 +53,15 @@ public sealed class BulkInstallerService
             if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
         }
 
+        int exitCode;
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("winget", "list --disable-interactivity", ct).ConfigureAwait(false);
+            exitCode = await _runner.RunProcessAsync("winget", "list --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
+        WingetFailure.ThrowIfQueryFailed(exitCode);
         return captured.ToList();
     }
 
@@ -68,6 +71,10 @@ public sealed class BulkInstallerService
     /// argument injection, and the launch is routed through the runner seam for the same
     /// WorkingDirectory pinning as <see cref="ListInstalledAsync"/>.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The search failed, as opposed to matching nothing. A search that matches nothing exits with winget's
+    /// NO_APPLICATIONS_FOUND and returns normally.
+    /// </exception>
     public async Task<IReadOnlyList<string>> SearchAsync(string query, CancellationToken ct = default)
     {
         var safe = SanitizeQuery(query);
@@ -79,14 +86,18 @@ public sealed class BulkInstallerService
             if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
         }
 
+        int exitCode;
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("winget",
+            exitCode = await _runner.RunProcessAsync("winget",
                 $"search \"{safe}\" --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
+        // A failed search prints no table, and the tab used to say "No packages found — check the spelling"
+        // for it (#2461).
+        WingetFailure.ThrowIfQueryFailed(exitCode);
         return captured.ToList();
     }
 

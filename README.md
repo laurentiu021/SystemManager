@@ -532,6 +532,9 @@ need administrator rights:
 - **Unticking a package survives a rescan** — including when the rescan finds a newer
   version on offer, since "don't upgrade this one" doesn't stop being true because the
   version changed
+- **A check that fails says so.** If winget cannot finish the query — none of its sources
+  reachable, for example — the tab says it couldn't check for updates, and why, instead of
+  reporting everything up to date
 - **Each result says what winget reported.** A download that did not match what winget
   expected is named as that, not as "no update"; an update you cancelled reads "Cancelled",
   and one that needs administrator says so
@@ -1030,7 +1033,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Office & Productivity, Creativity, Networking & VPN, Runtimes & Frameworks
 - Select multiple apps and install all via winget in one batch operation
 - **Custom winget search** — search the entire winget repository and add
-  any package to your install queue
+  any package to your install queue. A search that fails says why, rather than
+  "No packages found"
 - **Already installed is not a failure** — an app that is already on the PC, with nothing
   newer to install, is marked "Already installed" and counted on its own, not as a failed
   install
@@ -1189,7 +1193,8 @@ offers, "rate us" prompts:
   why, instead of showing a number that isn't a measurement.
 
 ### Uninstaller
-- Lists all installed applications via winget with size from registry
+- Lists all installed applications via winget with size from registry. If winget cannot
+  list them, the tab says so instead of reporting 0 applications
 - Filter by name or package ID
 - Sort by name, size, or publisher via clickable column headers
 - Select/deselect all, batch uninstall with confirmation dialog. Ticks survive a rescan, and

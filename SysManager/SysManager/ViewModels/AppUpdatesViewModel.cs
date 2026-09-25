@@ -33,6 +33,9 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     /// </summary>
     internal const string WingetUnavailableMessage = WingetFailure.WingetUnavailable;
 
+    /// <summary>The empty state's title, and the status line, after a scan that could not finish.</summary>
+    internal const string CheckFailedTitle = "Couldn't check for updates";
+
     public BulkObservableCollection<AppPackage> Packages { get; } = new();
     public ConsoleViewModel Console { get; } = new();
 
@@ -48,10 +51,17 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
     private bool _hasScanned;
 
-    public string EmptyTitle => HasScanned ? "No updates available" : "Not scanned yet";
-    public string EmptyMessage => HasScanned
-        ? "All detected packages are up to date."
-        : "Run a check to scan for winget upgrades.";
+    // Why the last scan failed, or null. Takes the empty state over, because a failed check is neither "not
+    // scanned yet" nor "up to date" — and "up to date" is what a failed winget query used to read as (#2461).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private string? _scanFailure;
+
+    public string EmptyTitle => ScanFailure is not null ? CheckFailedTitle
+        : HasScanned ? "No updates available" : "Not scanned yet";
+    public string EmptyMessage => ScanFailure
+        ?? (HasScanned ? "All detected packages are up to date." : "Run a check to scan for winget upgrades.");
 
     public AppUpdatesViewModel(IWingetService winget)
     {
@@ -119,6 +129,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Querying winget...";
+        ScanFailure = null;
 
         // Snapshot the user's ticks BEFORE the list is cleared below — after that there is nothing left to
         // read them from.
@@ -137,12 +148,21 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             StatusMessage = $"{Packages.Count} upgradable package(s) found";
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
+        // The query failed rather than finding nothing. The reason is already a sentence (#2461).
+        catch (InvalidOperationException ex)
+        {
+            ScanFailure = ex.Message;
+            StatusMessage = CheckFailedTitle + ".";
+        }
         // winget.exe missing (App Installer not present / execution alias off) throws
         // Win32Exception "cannot find the file specified" from Process.Start. Without this
         // it escapes the AsyncRelayCommand to the global dispatcher handler and pops a raw
         // OS-error dialog on the tab's first action. Mirror UninstallerViewModel's handling.
-        catch (System.ComponentModel.Win32Exception) { StatusMessage = WingetUnavailableMessage; }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            ScanFailure = WingetUnavailableMessage;
+            StatusMessage = WingetUnavailableMessage;
+        }
         finally { _winget.LineReceived -= _lineHandler; IsBusy = false; IsProgressIndeterminate = false; }
     }
 

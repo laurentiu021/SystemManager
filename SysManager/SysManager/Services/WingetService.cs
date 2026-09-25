@@ -26,6 +26,7 @@ public sealed partial class WingetService : IWingetService
     /// <summary>
     /// Runs 'winget upgrade' and parses the table output into <see cref="AppPackage"/>.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>
     public async Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default)
     {
         // LineReceived fires from both the stdout and stderr reader threads
@@ -38,14 +39,17 @@ public sealed partial class WingetService : IWingetService
             if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
         }
 
+        int exitCode;
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("winget",
+            exitCode = await _runner.RunProcessAsync("winget",
                 "upgrade --include-unknown --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
+        // A failed query prints no table, and parsing nothing used to read as "no upgrades" (#2461).
+        WingetFailure.ThrowIfQueryFailed(exitCode);
         return ParseUpgradeTable(captured.ToList());
     }
 

@@ -18,6 +18,9 @@ public interface IWingetService
     event Action<PowerShellLine>? LineReceived;
 
     /// <summary>Runs 'winget upgrade' and returns the upgradable packages.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// The query failed, as opposed to finding nothing. The message says why, in plain language.
+    /// </exception>
     Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default);
 
     /// <summary>Upgrades a single package by its winget id.</summary>

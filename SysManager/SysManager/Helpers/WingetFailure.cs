@@ -109,4 +109,31 @@ public static class WingetFailure
 
         return $"Failed — {reason}";
     }
+
+    /// <summary>
+    /// Throws when a winget QUERY — the upgrade list, <c>list</c> or <c>search</c> — failed, so its caller
+    /// cannot read the table the query never printed as an empty one.
+    /// </summary>
+    /// <remarks>
+    /// All three run with source failures downgraded to warnings, so one unreachable source still exits 0 with
+    /// the other sources' results. A non-zero exit therefore means the query itself failed, with one exception:
+    /// <see cref="WingetExitCodes.NoApplicationsFound"/> is how winget reports that nothing matched, and a search
+    /// for a name that exists nowhere ends there (measured). Before this, every caller parsed the missing table
+    /// as "nothing found", so a failed check read "All detected packages are up to date" (#2461).
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">The query failed. The message says why, in plain language.</exception>
+    public static void ThrowIfQueryFailed(int exitCode)
+    {
+        if (exitCode == 0 || exitCode == WingetExitCodes.NoApplicationsFound) return;
+        throw new InvalidOperationException(DescribeQueryFailure(exitCode));
+    }
+
+    /// <summary>Explains why a winget query failed. The sentence <see cref="ThrowIfQueryFailed"/> throws.</summary>
+    public static string DescribeQueryFailure(int exitCode) => exitCode switch
+    {
+        WingetExitCodes.FailedToOpenAllSources or WingetExitCodes.SourceOpenFailed =>
+            "winget could not reach its package sources. Check the internet connection and try again.",
+        WingetExitCodes.NoSourcesDefined => "winget has no package sources set up, so there is nothing to check against.",
+        _ => $"winget could not complete the request (code {WingetExitCodes.Hex(exitCode)}).",
+    };
 }

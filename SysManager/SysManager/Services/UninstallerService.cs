@@ -52,6 +52,7 @@ public sealed partial class UninstallerService
     /// <summary>
     /// Runs 'winget list' and parses the table into <see cref="InstalledApp"/>.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The query failed, as opposed to finding nothing.</exception>
     public async Task<List<InstalledApp>> ListInstalledAsync(CancellationToken ct = default)
     {
         // LineReceived fires from both the stdout and stderr reader threads
@@ -63,14 +64,18 @@ public sealed partial class UninstallerService
             if (l.Kind == OutputKind.Output) captured.Enqueue(l.Text);
         }
 
+        int exitCode;
         _runner.LineReceived += Collect;
         try
         {
-            await _runner.RunProcessAsync("winget",
+            exitCode = await _runner.RunProcessAsync("winget",
                 "list --accept-source-agreements --disable-interactivity", ct).ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
+        // A failed query prints no table, and parsing nothing used to read as "Found 0 installed
+        // applications" (#2461).
+        WingetFailure.ThrowIfQueryFailed(exitCode);
         return ParseListTable(captured.ToList());
     }
 

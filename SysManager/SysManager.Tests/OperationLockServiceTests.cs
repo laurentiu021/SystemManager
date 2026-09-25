@@ -94,26 +94,19 @@ public class OperationLockServiceTests
     public async Task TryAcquire_IsThreadSafe()
     {
         int successCount = 0;
-        var ready = new CountdownEvent(10);
-        var go = new ManualResetEventSlim(false);
-        var allTried = new CountdownEvent(10);
+        using var allTried = new Barrier(10);
 
-        var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
+        await StartLine.RaceAsync(Enumerable.Range(0, 10).Select(_ => (Action)(() =>
         {
-            ready.Signal();
-            go.Wait();
-            var handle = Sut.TryAcquire(OperationCategory.SystemModification, "Race");
+            // Released when the writer ends, even if the barrier below fails: the lock is process-wide, and a
+            // handle left held would fail the next test that asks for it.
+            using var handle = Sut.TryAcquire(OperationCategory.SystemModification, "Race");
             if (handle != null)
                 Interlocked.Increment(ref successCount);
-            // Wait until all threads have attempted acquisition before releasing
-            allTried.Signal();
-            allTried.Wait();
-            handle?.Dispose();
-        })).ToArray();
-
-        ready.Wait();
-        go.Set();
-        await Task.WhenAll(tasks);
+            // Wait until all threads have attempted acquisition before releasing. Bounded, so a writer that
+            // faulted before reaching the barrier fails the race instead of leaving the other nine waiting.
+            Assert.True(allTried.SignalAndWait(StartLine.Bound), "not every writer tried to acquire the lock");
+        })).ToArray());
 
         // Exactly one thread should have acquired the lock
         Assert.Equal(1, successCount);

@@ -637,9 +637,6 @@ public class HostsFileServiceTests
     /// </summary>
     private const int RaceAttempts = 64;
 
-    /// <summary>Generous enough never to trip on a loaded CI runner; short enough to fail rather than hang.</summary>
-    private static readonly TimeSpan RaceTimeout = TimeSpan.FromSeconds(30);
-
     [Fact]
     public async Task TwoSavesAtOnce_NeitherFails_AndTheBackupIsStillThePristineOriginal()
     {
@@ -662,32 +659,14 @@ public class HostsFileServiceTests
             var (svc, hosts, dir) = NewServiceWithTempHosts(original);
             try
             {
-                using var ready = new CountdownEvent(2);
-                using var go = new ManualResetEventSlim(false);
                 // One instance, as in the container: the lock is per-instance, so two services would be
                 // a different race and would not prove this one.
-                var writers = new[]
-                {
-                    Task.Run(() =>
-                    {
-                        ready.Signal();
-                        go.Wait();
-                        svc.SaveHosts([new HostsEntry { IpAddress = "1.1.1.1", Hostname = "first", IsEnabled = true }]);
-                    }),
-                    Task.Run(() =>
-                    {
-                        ready.Signal();
-                        go.Wait();
-                        svc.SaveHosts([new HostsEntry { IpAddress = "2.2.2.2", Hostname = "second", IsEnabled = true }]);
-                    }),
-                };
-
-                Assert.True(ready.Wait(RaceTimeout), "the racing writers never reached the start line");
-                go.Set();
-                // THIS is the assertion that goes red without the gate: WaitAsync rethrows any writer
+                // THIS is the assertion that goes red without the gate: the race rethrows any writer
                 // fault, so the losing File.Copy's IOException fails the test here instead of being
                 // swallowed. The bound makes a hang a failure rather than a hung run.
-                await Task.WhenAll(writers).WaitAsync(RaceTimeout);
+                await StartLine.RaceAsync(
+                    () => svc.SaveHosts([new HostsEntry { IpAddress = "1.1.1.1", Hostname = "first", IsEnabled = true }]),
+                    () => svc.SaveHosts([new HostsEntry { IpAddress = "2.2.2.2", Hostname = "second", IsEnabled = true }]));
 
                 // Green either way today, and kept deliberately: it pins the branch's PURPOSE against the
                 // tempting wrong fix for the throw above, which is to flip the copy to overwrite: true.

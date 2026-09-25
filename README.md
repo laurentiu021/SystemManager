@@ -532,6 +532,9 @@ need administrator rights:
 - **Unticking a package survives a rescan** — including when the rescan finds a newer
   version on offer, since "don't upgrade this one" doesn't stop being true because the
   version changed
+- **Each result says what winget reported.** A download that did not match what winget
+  expected is named as that, not as "no update"; an update you cancelled reads "Cancelled",
+  and one that needs administrator says so
 
 ### Quick Cleanup
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
@@ -1028,6 +1031,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Select multiple apps and install all via winget in one batch operation
 - **Custom winget search** — search the entire winget repository and add
   any package to your install queue
+- **Already installed is not a failure** — an app that is already on the PC, with nothing
+  newer to install, is marked "Already installed" and counted on its own, not as a failed
+  install
 - Category filter and text search across the catalog, plus a button that ticks
   every app in the chosen category at once
 - Per-package install status tracking with ETA

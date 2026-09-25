@@ -1009,6 +1009,12 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   (in `ObservableCollectionExtensions.cs`).
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects.
+- `WingetFailure` — the one translation of winget outcomes into plain language:
+  why an install or uninstall failed, whether an install found the app already
+  there, and the missing-App-Installer sentence. winget's own result codes are
+  named constants on `WingetExitCodes` (in `Models`), each pinned by a test to
+  the number winget-cli's header gives it, and a fitness function keeps those
+  numbers out of every other file.
 - `FormatHelper` — byte-size formatting, duration humanization, and other
   display helpers.
 - `GatewayHelper` — default gateway IP lookup for network tabs.

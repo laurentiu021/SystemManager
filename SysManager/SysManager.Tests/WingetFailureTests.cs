@@ -39,11 +39,51 @@ public class WingetFailureTests
     public void DescribeInstallFailure_TranslatesWingetsOwnCancelledResult()
     {
         // winget reports its own results as large unsigned values, which surfaced as a huge negative
-        // number in the row before this.
-        var text = WingetFailure.DescribeInstallFailure(unchecked((int)0x8A150011));
+        // number in the row before this. INSTALL_CANCELLED_BY_USER is winget's cancellation; this test used
+        // to pin 0x8A150011 as "cancelled", which is INSTALLER_HASH_MISMATCH (#2462).
+        var text = WingetFailure.DescribeInstallFailure(unchecked((int)0x8A15010C)); // INSTALL_CANCELLED_BY_USER
 
         Assert.Contains("cancelled", text, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void DescribeInstallFailure_CallsAHashMismatchWhatItIs()
+    {
+        // winget refused to run an installer that does not match its manifest. "Cancelled" suggested the user
+        // had done it, and said nothing about the download.
+        var text = WingetFailure.DescribeInstallFailure(unchecked((int)0x8A150011)); // INSTALLER_HASH_MISMATCH
+
+        Assert.Contains("did not match", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("cancelled", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(unchecked((int)0x8A150006))] // SHELLEXEC_INSTALL_FAILED: how winget ends when an installer fails
+    [InlineData(unchecked((int)0x8A150049))] // MSI_INSTALL_FAILED
+    public void DescribeInstallFailure_ExplainsTheCodesWingetEndsAFailedInstallerOn(int exitCode)
+        => Assert.Equal("Failed — The app's own installer reported an error.", WingetFailure.DescribeInstallFailure(exitCode));
+
+    [Fact]
+    public void DescribeInstallFailure_AnUnmappedWingetCodeIsShownInHex()
+    {
+        // The fallback printed winget's codes as signed decimals — "The installer returned code -1978335079."
+        var text = WingetFailure.DescribeInstallFailure(unchecked((int)0x8A150099));
+
+        Assert.Contains("0x8A150099", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-1978", text, StringComparison.Ordinal);
+    }
+
+    // ---------- an app that was already installed is not a failure ----------
+
+    [Theory]
+    [InlineData(unchecked((int)0x8A15002B), true)]  // UPDATE_NOT_APPLICABLE: an install turned into an upgrade, nothing newer
+    [InlineData(unchecked((int)0x8A150061), true)]  // PACKAGE_ALREADY_INSTALLED
+    [InlineData(unchecked((int)0x8A15010D), true)]  // INSTALL_ALREADY_INSTALLED
+    [InlineData(0, false)]
+    [InlineData(unchecked((int)0x8A150011), false)] // INSTALLER_HASH_MISMATCH
+    [InlineData(1638, false)]                       // MSI: ANOTHER version is installed, which is a real conflict
+    public void IsAlreadyInstalled_RecognisesOnlyTheAlreadyInstalledResults(int exitCode, bool expected)
+        => Assert.Equal(expected, WingetFailure.IsAlreadyInstalled(exitCode));
 
     [Fact]
     public void DescribeInstallFailure_AnUnknownCodeStillReportsTheNumber()
@@ -60,7 +100,8 @@ public class WingetFailureTests
     public void DescribeInstallFailure_AlwaysReadsAsASentence()
     {
         // Every branch, including the fallback, must produce something a non-technical reader parses.
-        foreach (var code in new[] { 5, 1602, 1603, 1618, 1619, 1620, 1638, 4242, 0 })
+        foreach (var code in new[] { 5, 1602, 1603, 1618, 1619, 1620, 1638, 4242, 0,
+                     unchecked((int)0x8A150011), unchecked((int)0x8A150099) })
         {
             var text = WingetFailure.DescribeInstallFailure(code);
             Assert.StartsWith("Failed —", text);
@@ -92,6 +133,25 @@ public class WingetFailureTests
         // The mapping moved into this helper; the behaviour must be unchanged.
         Assert.Contains(expected, WingetFailure.DescribeUninstallFailure(exitCode),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DescribeUninstallFailure_ExplainsWingetsOwnUninstallFailure()
+    {
+        // Through winget, a failed uninstaller ends as EXEC_UNINSTALL_COMMAND_FAILED and its own code is only
+        // printed. That code had no entry, so the row read "returned exit code -1978335184." (#2462).
+        var text = WingetFailure.DescribeUninstallFailure(unchecked((int)0x8A150030)); // EXEC_UNINSTALL_COMMAND_FAILED
+
+        Assert.Equal("Failed — The app's uninstaller reported an error.", text);
+    }
+
+    [Fact]
+    public void DescribeUninstallFailure_AnUnmappedWingetCodeIsShownInHex()
+    {
+        var text = WingetFailure.DescribeUninstallFailure(unchecked((int)0x8A150099));
+
+        Assert.Contains("0x8A150099", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("-1978", text, StringComparison.Ordinal);
     }
 
     [Fact]

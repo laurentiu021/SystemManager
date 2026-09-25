@@ -23,7 +23,7 @@ namespace SysManager.Services;
 ///    %LOCALAPPDATA%\SysManager\tools, then runs it with --format=json.
 /// Progress reporting is in percent (0-100) plus a free-form status message.
 /// </summary>
-public sealed class SpeedTestService
+public sealed class SpeedTestService : ISpeedTestService
 {
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(2) };
 

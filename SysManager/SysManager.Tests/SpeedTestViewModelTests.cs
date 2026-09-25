@@ -128,4 +128,116 @@ public sealed class SpeedTestViewModelTests : IDisposable
         var ex = await Record.ExceptionAsync(() => vm.ClearOoklaHistoryCommand.ExecuteAsync(null));
         Assert.Null(ex);
     }
+
+    // ---------- results saved elsewhere reach the list on screen ----------
+
+    private static Models.SpeedTestResult At(string engine, int minute)
+        => new(engine, 100 + minute, 20, 10, "server", new DateTime(2026, 9, 25, 10, minute, 0));
+
+    [Fact]
+    public async Task AResultSavedElsewhere_JoinsTheListOnce_EvenWhenThisTabAddsItToo()
+    {
+        // A run made on this tab arrives twice: once through the history's Saved event, once through the tab's own
+        // insert. The order between the two is not fixed, so the second must be a no-op.
+        var history = NewHistory();
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+        var result = At("HTTP", 1);
+
+        Assert.True(await history.SaveAsync(result));
+        vm.AddToHistory(result);
+
+        Assert.Equal(result, Assert.Single(vm.HttpHistory));
+        Assert.Empty(vm.OoklaHistory);
+    }
+
+    [Fact]
+    public async Task AnOoklaResultSavedElsewhere_GoesToTheOoklaList_NewestFirst()
+    {
+        var history = NewHistory();
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+
+        await history.SaveAsync(At("Ookla", 1));
+        await history.SaveAsync(At("Ookla", 2));
+
+        Assert.Equal(new[] { At("Ookla", 2), At("Ookla", 1) }, vm.OoklaHistory);
+        Assert.Empty(vm.HttpHistory);
+    }
+
+    [Fact]
+    public async Task TheListKeepsNoMoreThanTheHistoryFileDoes()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        await vm.InitializationComplete;
+
+        for (var minute = 0; minute <= Services.SpeedTestHistoryService.MaxPerEngine; minute++)
+            vm.AddToHistory(At("HTTP", minute));
+
+        Assert.Equal(Services.SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
+        Assert.Equal(At("HTTP", Services.SpeedTestHistoryService.MaxPerEngine), vm.HttpHistory[0]);
+    }
+
+    [Fact]
+    public async Task ADisposedTab_NoLongerListens()
+    {
+        var history = NewHistory();
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+
+        vm.Dispose();
+        await history.SaveAsync(At("HTTP", 1));
+
+        Assert.Empty(vm.HttpHistory);
+    }
+
+    // ---------- the first load and the Saved event, in the order that loses a row ----------
+
+    [Fact]
+    public async Task ALoad_KeepsAResultTheSavedEventHasAlreadyShown()
+    {
+        // The tab listens before its first load reads the file, so a result saved in between is on screen and
+        // missing from what was read. Here it is on screen and in no file at all.
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        await vm.InitializationComplete;
+        var shown = At("HTTP", 1);
+        vm.AddToHistory(shown);
+
+        await vm.LoadHistoryAsync();
+
+        Assert.Equal(shown, Assert.Single(vm.HttpHistory));
+    }
+
+    [Fact]
+    public async Task ALoad_ShowsAResultOnScreenAndOnDiskOnce()
+    {
+        // The copy read back from the file is a different object from the one on screen. They must still compare
+        // equal after the JSON round trip, or every such result would be listed twice.
+        var history = NewHistory();
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+        Assert.True(await history.SaveAsync(At("HTTP", 1)));
+
+        await vm.LoadHistoryAsync();
+
+        Assert.Equal(At("HTTP", 1), Assert.Single(vm.HttpHistory));
+    }
+
+    [Fact]
+    public async Task ALoad_KeepsNoMoreThanTheHistoryFileDoes_WithAResultOnlyOnScreen()
+    {
+        var history = NewHistory();
+        for (var minute = 0; minute < Services.SpeedTestHistoryService.MaxPerEngine; minute++)
+            Assert.True(await history.SaveAsync(At("HTTP", minute)));
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+        var newest = At("HTTP", Services.SpeedTestHistoryService.MaxPerEngine);
+        vm.AddToHistory(newest);
+
+        await vm.LoadHistoryAsync();
+
+        Assert.Equal(Services.SpeedTestHistoryService.MaxPerEngine, vm.HttpHistory.Count);
+        Assert.Equal(newest, vm.HttpHistory[0]);
+        Assert.DoesNotContain(At("HTTP", 0), vm.HttpHistory);
+    }
 }

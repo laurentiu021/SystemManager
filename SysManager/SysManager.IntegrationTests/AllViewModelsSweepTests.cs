@@ -32,7 +32,12 @@ public class AllViewModelsSweepTests
     private static CrashMarkerService TempCrashMarkers()
         => new(Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-crash"));
 
-    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService()));
+    // A temporary folder for the same reason: the Dashboard records its quick speed test into this history, and
+    // the default is the user's own file.
+    private static SpeedTestHistoryService TempSpeedHistory()
+        => new(Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-speed"));
+
+    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory()));
     [Fact] public void AppUpdates_Constructs() => Assert.NotNull(new AppUpdatesViewModel(new WingetService(new PowerShellRunner())));
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()));
     [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService()));
@@ -46,7 +51,7 @@ public class AllViewModelsSweepTests
 
     [Fact]
     public void Dashboard_HasNonEmptySummaryOrEmpty()
-        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService()));
+        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory()));
 
     [Fact]
     public void AppUpdates_HasCollections()

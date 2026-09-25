@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.2] - 2026-09-25
+
+**A speed test from the Dashboard now shows up in the Speed Test history.** It used to go into Recent
+Activity instead, which lists what SysManager changed on the PC.
+
+### Fixed
+
+- **Dashboard: Run Speed Test records its result in the Speed Test tab's history.** The quick test wrote
+  its result into Recent Activity, which is meant to list what SysManager changed on the PC, and the Speed
+  Test tab, where results are kept and compared with the previous run, never saw it. It now goes into the
+  tab's HTTP history, and appears there straight away even if the tab is already open. If the result
+  cannot be saved, the card says so, as the tab does. Recent Activity no longer lists speed tests. Present
+  since the quick action was added in v1.17.0.
+- **Dashboard: Run Speed Test no longer runs alongside another network test.** It now takes the same lock
+  as the Speed Test tab, so it does not start while another speed test, a traceroute or a network repair
+  is running. Two tests at once each measure about half the line, and both readings would have gone into
+  the history the next result is compared with. Present since v1.17.0.
+
 ## [1.114.1] - 2026-09-25
 
 **The Uninstaller no longer calls an app removed through winget before its uninstaller finishes.** The

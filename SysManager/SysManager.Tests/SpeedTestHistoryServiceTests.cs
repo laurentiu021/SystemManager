@@ -281,4 +281,39 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
             Directory.Delete(otherDir, recursive: true);
         }
     }
+
+    // ---------- Saved: one history, two writers (the Speed Test tab and the Dashboard's quick test) ----------
+
+    [Fact]
+    public async Task SaveAsync_RaisesSaved_OnceTheResultIsOnDisk()
+    {
+        using var svc = NewService();
+        var result = Result(server: "raised-after-write");
+        SpeedTestResult? raised = null;
+        var onDiskWhenRaised = false;
+        svc.Saved += r =>
+        {
+            raised = r;
+            onDiskWhenRaised = File.Exists(HistoryFile) && File.ReadAllText(HistoryFile).Contains("raised-after-write");
+        };
+
+        Assert.True(await svc.SaveAsync(result));
+
+        Assert.Equal(result, raised);
+        Assert.True(onDiskWhenRaised, "Saved was raised before the result reached the file.");
+    }
+
+    [Fact]
+    public async Task SaveAsync_ThatCannotWrite_DoesNotRaiseSaved()
+    {
+        // A folder where the file goes, so the write fails. A subscriber must not be told about a result the
+        // history does not hold.
+        Directory.CreateDirectory(HistoryFile);
+        using var svc = NewService();
+        var raised = false;
+        svc.Saved += _ => raised = true;
+
+        Assert.False(await svc.SaveAsync(Result()));
+        Assert.False(raised);
+    }
 }

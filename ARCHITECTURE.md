@@ -248,13 +248,14 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Eighteen are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Nineteen are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
-shared by the Windows Update tab and the Dashboard's check), `IAudioMixerService`, `INavigationService`
+shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
+Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
 (NavigationService), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
@@ -293,7 +294,7 @@ Key services:
   interval-change test used to sleep 1.2 real seconds and count samples, which reported the host's
   spare CPU and went red on a loaded machine. It now asserts the exact delay the pump asks for.
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
-  auto-downloaded on first use.
+  auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
   and stream output line-by-line. Always launches spawned processes from
   `System32` so `Access is denied` never bites on `chkdsk` etc. Normal sessions
@@ -617,7 +618,9 @@ Key services:
 - `ProcessDescriptionService` — enriches process entries with friendly
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
-  historical charting and trend analysis.
+  historical charting and trend analysis. One instance, shared by the Speed Test tab and the
+  Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a
+  Speed Test tab that has already loaded its list.
 - `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
   capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
   changed since last time. Same never-throw-on-IO contract and `configDir` test seam as

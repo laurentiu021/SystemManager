@@ -22,7 +22,9 @@ public class DashboardViewModelTests
     private static DashboardViewModel NewVm(IWingetService? winget = null,
                                             INavigationService? navigation = null,
                                             IAppBlockerService? appBlocker = null,
-                                            IWindowsUpdateService? windowsUpdate = null)
+                                            IWindowsUpdateService? windowsUpdate = null,
+                                            ISpeedTestService? speedTest = null,
+                                            SpeedTestHistoryService? speedHistory = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -44,6 +46,10 @@ public class DashboardViewModelTests
             // A substitute by default: the real agent would search Microsoft's servers from any test that runs
             // the Windows Update check.
             windowsUpdate ?? Substitute.For<IWindowsUpdateService>(),
+            // The real engine downloads from Cloudflare, and the real history is the user's own file. A folder
+            // per construction, which nothing writes to unless a test runs the quick speed test.
+            speedTest ?? Substitute.For<ISpeedTestService>(),
+            speedHistory ?? new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
             // Null by default, which omits the stranded-block alert entirely — so the 58 tests written
             // before it existed keep asserting against the same five alerts they always did.
             appBlocker);
@@ -499,6 +505,95 @@ public class DashboardViewModelTests
     [InlineData(12, "12 updates available")]
     public void DescribeWindowsUpdateCheck_ReadsAsASentence(int available, string expected)
         => Assert.Equal(expected, DashboardViewModel.DescribeWindowsUpdateCheck(available));
+
+    // ---------- the quick speed test records where speed results live ----------
+    //
+    // It used to write its result into Recent Activity, which lists what SysManager changed on the PC, while the
+    // Speed Test tab, where results are kept and compared, never saw it.
+
+    private static readonly SpeedTestResult QuickResult =
+        new("HTTP", 312.4, 41.7, 12.3, "speed.cloudflare.com", new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Local));
+
+    private static ISpeedTestService EngineThatMeasures(SpeedTestResult result)
+    {
+        var engine = Substitute.For<ISpeedTestService>();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(Task.FromResult(result));
+        return engine;
+    }
+
+    [Fact]
+    public async Task QuickSpeedTest_RecordsTheResultInTheSpeedTestHistory_NotInRecentActivity()
+    {
+        using var activity = new ActivityLogScope();
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var history = new SpeedTestHistoryService(dir);
+            var vm = NewVm(QuietWinget(), speedTest: EngineThatMeasures(QuickResult), speedHistory: history);
+
+            await vm.QuickSpeedTestCommand.ExecuteAsync(null);
+
+            Assert.Equal("✓ Done", vm.QuickActionStatus);
+            Assert.Equal(DashboardViewModel.DescribeSpeedTest(QuickResult, saved: true), vm.QuickActionDetail);
+            Assert.Equal(QuickResult, Assert.Single(await history.LoadAsync()));
+            Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(ActivityLogService.MaxEntries),
+                entry => entry.Action == "Speed Test");
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task QuickSpeedTest_ReachesASpeedTestTabThatIsAlreadyOpen()
+    {
+        // The two share one history. A tab that loaded its list before the quick test would otherwise show the
+        // result only after a restart.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var history = new SpeedTestHistoryService(dir);
+            var tab = new SpeedTestViewModel(new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
+                new TracerouteMonitorService(), new SpeedTestService(), new NetworkRepairService(new PowerShellRunner())), history);
+            await tab.InitializationComplete;
+            var vm = NewVm(QuietWinget(), speedTest: EngineThatMeasures(QuickResult), speedHistory: history);
+
+            await vm.QuickSpeedTestCommand.ExecuteAsync(null);
+
+            Assert.Equal(QuickResult, Assert.Single(tab.HttpHistory));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task QuickSpeedTest_WhileAnotherNetworkTestRuns_DoesNotMeasure()
+    {
+        // Two tests at once each measure about half the line, and the quick test's reading now goes into the
+        // history the Speed Test tab compares against. It takes the same lock the tab does.
+        var engine = EngineThatMeasures(QuickResult);
+        var vm = NewVm(QuietWinget(), speedTest: engine);
+
+        using (var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Traceroute"))
+        {
+            Assert.NotNull(held);
+            await vm.QuickSpeedTestCommand.ExecuteAsync(null);
+        }
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Equal("Cannot start — Traceroute is already running.", vm.QuickActionDetail);
+        await engine.DidNotReceiveWithAnyArgs().RunHttpAsync(default, default);
+    }
+
+    [Theory]
+    [InlineData(true, "↓ 312 Mbps · ↑ 42 Mbps · Ping 12ms")]
+    [InlineData(false, "↓ 312 Mbps · ↑ 42 Mbps · Ping 12ms — not saved to the Speed Test history")]
+    public void DescribeSpeedTest_SaysWhenTheResultCouldNotBeSaved(bool saved, string expected)
+        => Assert.Equal(expected, DashboardViewModel.DescribeSpeedTest(QuickResult, saved));
 
     // ---------- Tune-Up result card navigation ----------
     // Each finding on the card links to the tab that can act on it ("3 broken shortcuts" is only useful

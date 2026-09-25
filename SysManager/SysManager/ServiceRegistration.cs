@@ -52,6 +52,9 @@ public static class ServiceRegistration
         services.AddSingleton<ProcessManagerService>();
         services.AddSingleton<SpeedTestHistoryService>();
         services.AddSingleton<SpeedTestService>();
+        // The same instance behind the seam: the network tabs take it concrete through NetworkSharedState,
+        // and the Dashboard's quick test takes the interface.
+        services.AddSingleton<ISpeedTestService>(sp => sp.GetRequiredService<SpeedTestService>());
         services.AddSingleton<StartupService>();
         services.AddSingleton<TracerouteMonitorService>();
         services.AddSingleton<TracerouteService>();

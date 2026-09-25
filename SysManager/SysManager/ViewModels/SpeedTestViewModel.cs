@@ -62,24 +62,62 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         Shared = shared;
         _history = history;
+        _history.Saved += OnHistorySaved;
         InitializeAsync(LoadHistoryAsync);
     }
 
-    private async Task LoadHistoryAsync()
+    // A result saved anywhere, the Dashboard's quick test included, belongs in the list on screen. The event comes
+    // from whichever thread saved it, so the list is only touched on the UI thread.
+    private void OnHistorySaved(SpeedTestResult result) => UiThread.Post(() => AddToHistory(result));
+
+    /// <summary>
+    /// Puts a result at the top of its engine's history, once, trimmed to what the file keeps.
+    /// </summary>
+    /// <remarks>
+    /// Called for this tab's own runs and for the <see cref="SpeedTestHistoryService.Saved"/> event alike, so a run
+    /// made here arrives twice, and nothing here relies on which comes first. The second is a no-op: a record
+    /// compares by value, and two runs never share a completion time to the tick. A run whose save failed arrives
+    /// only once, with no event, and stays on screen for the session, as it always did.
+    /// </remarks>
+    internal void AddToHistory(SpeedTestResult result)
+    {
+        var history = string.Equals(result.Engine, "Ookla", StringComparison.OrdinalIgnoreCase) ? OoklaHistory : HttpHistory;
+        if (history.Contains(result)) return;
+
+        history.Insert(0, result);
+        if (history.Count > SpeedTestHistoryService.MaxPerEngine)
+            history.RemoveAt(history.Count - 1);
+    }
+
+    /// <summary>
+    /// Fills both lists from the history file, newest first, keeping any result already on screen.
+    /// </summary>
+    /// <remarks>
+    /// The <see cref="SpeedTestHistoryService.Saved"/> subscription starts before this load, so that nothing saved
+    /// while the file is read is missed. The price is that a result can reach the screen through the event and
+    /// be absent from the file as it was read a moment earlier, and replacing the lists outright would take it
+    /// away again until the next launch. A result in both is kept once, because a record compares by value, and
+    /// each list is capped at what the file keeps. Internal so a test can load over a list the event has
+    /// already added to.
+    /// </remarks>
+    internal async Task LoadHistoryAsync()
     {
         try
         {
-            var all = await _history.LoadAsync();
-            HttpHistory.ReplaceWith(all.Where(r => string.Equals(r.Engine, "HTTP", StringComparison.OrdinalIgnoreCase))
-                                       .OrderByDescending(r => r.CompletedAt));
-            OoklaHistory.ReplaceWith(all.Where(r => string.Equals(r.Engine, "Ookla", StringComparison.OrdinalIgnoreCase))
-                                        .OrderByDescending(r => r.CompletedAt));
+            var all = (await _history.LoadAsync()).Union(HttpHistory).Union(OoklaHistory).ToList();
+            HttpHistory.ReplaceWith(NewestFirst(all, "HTTP"));
+            OoklaHistory.ReplaceWith(NewestFirst(all, "Ookla"));
         }
         catch (InvalidOperationException ex)
         {
             Log.Warning(ex, "Failed to load speed test history");
         }
     }
+
+    private static IEnumerable<SpeedTestResult> NewestFirst(IEnumerable<SpeedTestResult> all, string engine) =>
+        all.Where(r => string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase))
+           .OrderByDescending(r => r.CompletedAt)
+           .Take(SpeedTestHistoryService.MaxPerEngine);
 
     [RelayCommand]
     private async Task RunHttpSpeedAsync()
@@ -120,9 +158,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // about. SaveAsync does not throw; it reports.
             if (!await _history.SaveAsync(HttpResult))
                 HttpStatus = "HTTP done — result could not be saved to history";
-            HttpHistory.Insert(0, HttpResult);
-            if (HttpHistory.Count > SpeedTestHistoryService.MaxPerEngine)
-                HttpHistory.RemoveAt(HttpHistory.Count - 1);
+            AddToHistory(HttpResult);
         }
         catch (OperationCanceledException) { HttpStatus = "Cancelled"; }
         catch (System.Net.Http.HttpRequestException ex)
@@ -170,9 +206,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // Persist result to history, reporting a failed write — same contract as the HTTP path above.
             if (!await _history.SaveAsync(OoklaResult))
                 OoklaStatus = "Ookla done — result could not be saved to history";
-            OoklaHistory.Insert(0, OoklaResult);
-            if (OoklaHistory.Count > SpeedTestHistoryService.MaxPerEngine)
-                OoklaHistory.RemoveAt(OoklaHistory.Count - 1);
+            AddToHistory(OoklaResult);
         }
         catch (OperationCanceledException) { OoklaStatus = "Cancelled"; }
         catch (System.ComponentModel.Win32Exception ex)
@@ -241,6 +275,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         if (disposing)
         {
+            _history.Saved -= OnHistorySaved;
             _speedCts?.Cancel();
             _speedCts?.Dispose();
         }

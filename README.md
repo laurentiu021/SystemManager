@@ -1419,7 +1419,9 @@ offers, "rate us" prompts:
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
-  Non-destructive, no admin required.
+  A check that could not run is named on the card ("Not checked this time:
+  the disks") rather than counted as fine, so "All good" means every check
+  ran and found nothing. Non-destructive, no admin required.
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
@@ -1436,6 +1438,9 @@ offers, "rate us" prompts:
   recommendation says how many GB are left and points at Deep Cleanup.
   Color-coded ring (green / amber / red) with up to 3 actionable
   recommendations. Auto-computes on load and refreshes with "Scan system".
+  A battery counts only when its wear was actually read. Windows gives
+  that only to administrators, so without elevation the battery is left
+  out rather than scored as new.
 - **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
   Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
 - **A tray menu that is worth opening** — because minimize-to-tray is the default, the tray

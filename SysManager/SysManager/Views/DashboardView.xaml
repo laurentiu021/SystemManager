@@ -190,10 +190,18 @@
                         </DockPanel>
                     </StackPanel>
 
-                    <!-- Nothing to report -->
+                    <!-- Nothing to report. Only when every check ran: a check that could not run left its
+                         field at the value meaning "nothing wrong", and this line then vouched for all of
+                         them (#2501). -->
                     <TextBlock Style="{StaticResource Subtle}" Margin="0,12,0,0" TextWrapping="Wrap"
                                Text="Nothing else needs attention — no broken shortcuts, memory and disks look fine, and this PC has restarted recently."
-                               Visibility="{Binding TuneUpResult.WarningCount, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                               Visibility="{Binding TuneUpResult.AllChecksPassed, Converter={StaticResource FlexVis}}"/>
+
+                    <!-- What could not be checked, in the same place and style, so it is read where the
+                         reassurance would otherwise have been. -->
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Text="{Binding TuneUpResult.NotCheckedDisplay}"
+                               Visibility="{Binding TuneUpResult.HasUncheckedItems, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
             </Border>
 

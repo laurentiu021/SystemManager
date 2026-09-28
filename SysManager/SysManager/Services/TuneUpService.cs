@@ -64,78 +64,17 @@ public sealed class TuneUpService : ITuneUpService
 
         // Step 3: Broken shortcuts scan
         progress?.Report((2, "Scanning shortcuts…"));
-        int brokenCount = 0;
-        try
-        {
-            // .Broken.Count, not every shortcut the scan looked at: the report also carries the ones whose
-            // target it could not reach, and those are explicitly NOT broken (#2378). Counting them here
-            // would put "3 broken shortcuts" on the Tune-Up card for a machine with an unplugged drive.
-            var report = await _shortcuts.ScanAsync(ct: ct).ConfigureAwait(false);
-            brokenCount = report.Broken.Count;
-        }
-        catch (IOException ex)
-        {
-            Log.Warning("TuneUp shortcut scan failed: {Error}", ex.Message);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Log.Warning("TuneUp shortcut scan failed: {Error}", ex.Message);
-        }
+        var brokenCount = await CountBrokenShortcutsAsync(() => _shortcuts.ScanAsync(ct: ct)).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
 
         // Step 4: Disk SMART
         progress?.Report((3, "Checking disk health…"));
-        List<DiskHealthSummary> diskSummaries = [];
-        try
-        {
-            var reports = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
-            foreach (var r in reports)
-            {
-                diskSummaries.Add(new DiskHealthSummary
-                {
-                    Name = r.FriendlyName,
-                    // Verdict, NOT HealthStatus. HealthStatus is the raw WMI enum word that MapHealth
-                    // produces ("Healthy" / "Warning" / "Unhealthy"); Verdict is the plain-English
-                    // sentence ApplyVerdict writes, which is what every other surface shows and what
-                    // ColorHex on the next line is derived from. Taking the enum here put an amber
-                    // "1 recommendation" headline next to a disk row reading plainly "Healthy" — the
-                    // card contradicting itself, on the one tab a non-technical user opens to find out
-                    // whether their PC is fine (#1785).
-                    Verdict = r.Verdict,
-                    ColorHex = r.VerdictColorHex
-                });
-            }
-        }
-        catch (System.Management.ManagementException ex)
-        {
-            Log.Warning("TuneUp disk health check failed: {Error}", ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            Log.Warning("TuneUp disk health check failed: {Error}", ex.Message);
-        }
+        var diskSummaries = await ReadDisksAsync(() => _diskHealth.CollectAsync(ct)).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
 
         // Step 5: Uptime + RAM
         progress?.Report((4, "Checking system vitals…"));
-        TimeSpan uptime = TimeSpan.Zero;
-        double ramUsedPct = 0, ramUsedGB = 0, ramTotalGB = 0;
-        try
-        {
-            var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
-            uptime = snapshot.Os.Uptime;
-            ramUsedPct = snapshot.Memory.UsedPercent;
-            ramUsedGB = snapshot.Memory.UsedGB;
-            ramTotalGB = snapshot.Memory.TotalGB;
-        }
-        catch (System.Management.ManagementException ex)
-        {
-            Log.Warning("TuneUp system info failed: {Error}", ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            Log.Warning("TuneUp system info failed: {Error}", ex.Message);
-        }
+        var snapshot = await CaptureVitalsAsync(() => _sysInfo.CaptureAsync(ct)).ConfigureAwait(false);
 
         progress?.Report((5, "Done"));
 
@@ -146,13 +85,110 @@ public sealed class TuneUpService : ITuneUpService
             TempErrors = tempErrors,
             RecycleBinEmptied = binEmptied,
             RecycleBinSkipped = binSkipped,
-            BrokenShortcutsFound = brokenCount,
-            DiskResults = diskSummaries,
-            Uptime = uptime,
-            RamUsedPercent = ramUsedPct,
-            RamUsedGB = ramUsedGB,
-            RamTotalGB = ramTotalGB
+            BrokenShortcutsFound = brokenCount ?? 0,
+            DiskResults = diskSummaries ?? [],
+            Uptime = snapshot?.Os.Uptime ?? TimeSpan.Zero,
+            RamUsedPercent = snapshot?.Memory.UsedPercent ?? 0,
+            RamUsedGB = snapshot?.Memory.UsedGB ?? 0,
+            RamTotalGB = snapshot?.Memory.TotalGB ?? 0,
+            NotChecked = NotChecked(brokenCount, diskSummaries, snapshot),
         };
+    }
+
+    // ── The three checks ───────────────────────────────────────────────
+    //
+    // Each returns null when it could not run, which the result lists in NotChecked. They used to leave their
+    // field at the value that means "nothing wrong", so a failed check read as a passed one (#2501). Internal and
+    // handed the call to make, so the failure paths are testable without the temp clean and the Recycle Bin that
+    // RunAsync does first.
+
+    /// <summary>Step 3: how many shortcuts point at files that no longer exist, or null when the scan failed.</summary>
+    internal static async Task<int?> CountBrokenShortcutsAsync(Func<Task<ShortcutScanReport>> scan)
+    {
+        try
+        {
+            // .Broken.Count, not every shortcut the scan looked at: the report also carries the ones whose
+            // target it could not reach, and those are explicitly NOT broken (#2378). Counting them here
+            // would put "3 broken shortcuts" on the Tune-Up card for a machine with an unplugged drive.
+            var report = await scan().ConfigureAwait(false);
+            return report.Broken.Count;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning("TuneUp shortcut scan failed: {Error}", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Step 4: one row per disk, or null when no disk could be read.
+    /// </summary>
+    /// <remarks>
+    /// An empty list counts as not checked. <c>DiskHealthService</c> swallows its own WMI failures and returns what
+    /// it has, which is nothing when the Storage namespace cannot be reached, and a PC with no disk at all is not a
+    /// case this card has to describe.
+    /// </remarks>
+    internal static async Task<List<DiskHealthSummary>?> ReadDisksAsync(Func<Task<IReadOnlyList<DiskHealthReport>>> collect)
+    {
+        try
+        {
+            var reports = await collect().ConfigureAwait(false);
+            if (reports.Count == 0) return null;
+
+            return [.. reports.Select(r => new DiskHealthSummary
+            {
+                Name = r.FriendlyName,
+                // Verdict, NOT HealthStatus. HealthStatus is the raw WMI enum word that MapHealth
+                // produces ("Healthy" / "Warning" / "Unhealthy"); Verdict is the plain-English
+                // sentence ApplyVerdict writes, which is what every other surface shows and what
+                // ColorHex on the next line is derived from. Taking the enum here put an amber
+                // "1 recommendation" headline next to a disk row reading plainly "Healthy" — the
+                // card contradicting itself, on the one tab a non-technical user opens to find out
+                // whether their PC is fine (#1785).
+                Verdict = r.Verdict,
+                ColorHex = r.VerdictColorHex
+            })];
+        }
+        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException
+                                       or System.Runtime.InteropServices.COMException)
+        {
+            Log.Warning("TuneUp disk health check failed: {Error}", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>Step 5: uptime and memory, or null when they could not be read.</summary>
+    /// <remarks>
+    /// <c>COMException</c> as well as the two it caught before: WMI enumeration raises it on repository and RPC
+    /// failures, as <c>HealthScoreService</c> already allows for, and uncaught it failed the whole Tune-Up after the
+    /// clean-up had run.
+    /// </remarks>
+    internal static async Task<SystemSnapshot?> CaptureVitalsAsync(Func<Task<SystemSnapshot>> capture)
+    {
+        try
+        {
+            return await capture().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is System.Management.ManagementException or InvalidOperationException
+                                       or System.Runtime.InteropServices.COMException)
+        {
+            Log.Warning("TuneUp system info failed: {Error}", ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>What the result lists as not checked, in the order the card reads.</summary>
+    internal static List<string> NotChecked(int? brokenShortcuts, List<DiskHealthSummary>? disks, SystemSnapshot? snapshot)
+    {
+        List<string> notChecked = [];
+        if (brokenShortcuts is null) notChecked.Add("shortcuts");
+        if (disks is null) notChecked.Add("the disks");
+        if (snapshot is null)
+        {
+            notChecked.Add("memory");
+            notChecked.Add("uptime");
+        }
+        return notChecked;
     }
 
     // ── Temp file cleanup ──────────────────────────────────────────────

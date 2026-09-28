@@ -366,6 +366,66 @@ public class HealthScoreServiceTests
             HealthScoreService.UnavailableComponents(null, null, ReadableSystemDrive(), SystemDrive));
     }
 
+    // ---------- a battery whose health could not be read (#2501) ----------
+    //
+    // Without administrator rights root\WMI does not give the two capacities, so HealthPercent is -1. That battery
+    // scored 100 and counted for 15% of the overall figure, and nothing said it had not been read.
+
+    private static BatteryInfo UnreadLaptopBattery() => new() { HasBattery = true };   // no capacities
+
+    private static BatteryInfo WornLaptopBattery() => new()
+    {
+        HasBattery = true,
+        DesignCapacityMWh = 50000,
+        FullChargeCapacityMWh = 15000,   // 30% health, which scores 30
+    };
+
+    [Fact]
+    public void ABatteryWhoseHealthWasNotRead_IsLeftOutOfTheScore_NotCountedAsPerfect()
+    {
+        Assert.Equal(-1, UnreadLaptopBattery().HealthPercent);   // the premise: nothing was read
+
+        var overall = HealthScoreService.OverallScore(50, 50, 50, 50, UnreadLaptopBattery());
+
+        Assert.Equal(HealthScoreService.Combine(50, 50, 50, 50, 0, hasBattery: false), overall);
+        Assert.NotEqual(HealthScoreService.Combine(50, 50, 50, 50, 100, hasBattery: true), overall);
+    }
+
+    [Fact]
+    public void AMeasuredBattery_StillCounts()
+    {
+        var overall = HealthScoreService.OverallScore(100, 100, 100, 100, WornLaptopBattery());
+
+        Assert.Equal(HealthScoreService.Combine(100, 100, 100, 100, 30, hasBattery: true), overall);
+        Assert.True(overall < 100);
+    }
+
+    [Fact]
+    public void BatteryWasMeasured_OnlyForABatteryWithItsHealthRead()
+    {
+        Assert.True(HealthScoreService.BatteryWasMeasured(WornLaptopBattery()));
+        Assert.False(HealthScoreService.BatteryWasMeasured(UnreadLaptopBattery()));
+        Assert.False(HealthScoreService.BatteryWasMeasured(new BatteryInfo { HasBattery = false }));
+        Assert.False(HealthScoreService.BatteryWasMeasured(null));
+    }
+
+    [Fact]
+    public void UnavailableComponents_NamesABatteryWhoseHealthWasNotRead()
+    {
+        Assert.Contains(HealthScoreService.BatteryComponent, HealthScoreService.UnavailableComponents(
+            null, null, ReadableSystemDrive(), SystemDrive, UnreadLaptopBattery()));
+    }
+
+    [Fact]
+    public void UnavailableComponents_DoesNotNameADesktopsBattery_OrOneThatWasRead()
+    {
+        // A PC with no battery has nothing to read, and a measured one was read.
+        Assert.DoesNotContain(HealthScoreService.BatteryComponent, HealthScoreService.UnavailableComponents(
+            null, null, ReadableSystemDrive(), SystemDrive, new BatteryInfo { HasBattery = false }));
+        Assert.DoesNotContain(HealthScoreService.BatteryComponent, HealthScoreService.UnavailableComponents(
+            null, null, ReadableSystemDrive(), SystemDrive, WornLaptopBattery()));
+    }
+
     // ---------- free space: the component the score used to be missing ----------
 
     /// <summary>The verdict for a 200 GB system drive, across the range.</summary>

@@ -359,9 +359,13 @@ Key services:
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
   Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive. Behind `ITuneUpService` for
   the Dashboard, whose tests run both quick actions against a substitute. The temp sweep itself is also a
-  static method, shared with the Cleanup tab and the CLI.
+  static method, shared with the Cleanup tab and the CLI. The shortcut, disk and vitals checks are internal
+  static methods handed the call to make. Each returns null when it could not run, which the result lists in
+  `TuneUpResult.NotChecked`, so a failed check is never counted as a passed one.
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
-  wear into a single 0–100 score with color-coded verdict and recommendations.
+  wear into a single 0–100 score with color-coded verdict and recommendations. `OverallScore` weights the
+  battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
+  desktop's, and named in `UnavailableComponents`.
 - `TrayIconService` — system tray icon with background monitoring (60s),
   tooltip updates, context menu, and Windows toast notifications. The menu's status header
   is refreshed from the 60s poll on `Opened` rather than rebuilt per tick, so a menu nobody

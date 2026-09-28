@@ -546,8 +546,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// </remarks>
     private Task ScanUnrecoverableBlocksAsync(DashboardAlert alert)
     {
-        var stranded = _appBlocker!.GetBlockedApps().Where(a => a.IsUnrecoverable).ToList();
-        var (title, severity) = ClassifyStrandedBlocks(stranded.Count, stranded.FirstOrDefault()?.ExecutableName);
+        var stranded = _appBlocker!.GetBlockedApps()?.Where(a => a.IsUnrecoverable).ToList();
+        var (title, severity) = ClassifyStrandedBlocks(stranded?.Count, stranded?.FirstOrDefault()?.ExecutableName);
 
         UiThread.Post(() =>
         {
@@ -566,10 +566,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// answer on demand.
     /// <para>Red, not yellow. Every other alert on this page reports something degraded; this one reports a
     /// machine that can no longer grant administrator rights.</para>
+    /// <para>A <paramref name="count"/> of null is a block list that could not be read. It used to arrive as an
+    /// empty list and read "No blocked apps need attention", in green (#2503).</para>
     /// </remarks>
-    internal static (string Title, AlertSeverity Severity) ClassifyStrandedBlocks(int count, string? firstName) =>
+    internal static (string Title, AlertSeverity Severity) ClassifyStrandedBlocks(int? count, string? firstName) =>
         count switch
         {
+            null => ("Blocked apps could not be checked", AlertSeverity.Yellow),
             0 => ("No blocked apps need attention", AlertSeverity.Green),
             1 => ($"{firstName} is blocked and cannot be unblocked normally", AlertSeverity.Red),
             _ => ($"{count} blocked apps cannot be unblocked normally", AlertSeverity.Red),

@@ -1102,6 +1102,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Fully reversible — unblock restores normal execution
 - Shows list of currently blocked apps with select/deselect and batch unblock. Your ticks
   survive a refresh, so the Unblock button cannot quietly stop doing anything
+- If Windows does not let SysManager read which programs are blocked, the tab says so
+  instead of reporting that nothing is, and a failed Refresh keeps the list on screen
 - Requires admin privileges for registry modifications, in **both** directions —
   blocking and unblocking write the same protected setting, and each says so
   before asking you to confirm anything

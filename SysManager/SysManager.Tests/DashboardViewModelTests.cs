@@ -897,6 +897,31 @@ public class DashboardViewModelTests
     }
 
     [Fact]
+    public void ClassifyStrandedBlocks_ListNotRead_IsYellowAndSaysSo()
+    {
+        // A block list that could not be read arrived as an empty one and read "No blocked apps need
+        // attention", in green (#2503).
+        var (title, severity) = DashboardViewModel.ClassifyStrandedBlocks(null, null);
+
+        Assert.Equal("Blocked apps could not be checked", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+        Assert.Equal("nav-app-blocker", DashboardViewModel.NavTargetFor(severity, "nav-app-blocker"));
+    }
+
+    [Fact]
+    public async Task ABlockListThatCannotBeRead_IsYellowAndLinksToAppBlocker()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.GetBlockedApps().Returns((IReadOnlyList<BlockedApp>?)null);
+        using var vm = NewVm(QuietWinget(), appBlocker: blocker);
+        await LoadedWithAlertsAsync(vm);
+
+        var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyStrandedBlocks(null, null).Title);
+        Assert.Equal(AlertSeverity.Yellow, alert.Severity);
+        Assert.Equal("nav-app-blocker", alert.NavTargetId);
+    }
+
+    [Fact]
     public void NoBlockerSupplied_AddsNoSixthAlert()
     {
         // The optional parameter's other half: a caller that supplies nothing gets the five alerts it

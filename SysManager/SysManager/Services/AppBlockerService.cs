@@ -329,9 +329,13 @@ public sealed partial class AppBlockerService : IAppBlockerService
     }
 
     /// <summary>
-    /// Checks if an executable is currently blocked by SysManager.
+    /// Checks if an executable is currently blocked by SysManager, or null when the registry could not be read.
     /// </summary>
-    public bool IsBlocked(string exeName)
+    /// <remarks>
+    /// A failed read used to be false, "not blocked", which is a claim about the machine rather than about the
+    /// read (#2503).
+    /// </remarks>
+    public bool? IsBlocked(string exeName)
     {
         if (string.IsNullOrWhiteSpace(exeName)) return false;
 
@@ -349,15 +353,26 @@ public sealed partial class AppBlockerService : IAppBlockerService
             var debugger = appKey.GetValue("Debugger") as string;
             return debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase);
         }
-        catch (IOException) { return false; }
-        catch (UnauthorizedAccessException) { return false; }
-        catch (SecurityException) { return false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            Log.Warning("Could not read whether {Exe} is blocked: {Error}", exeName, ex.Message);
+            return null;
+        }
     }
 
     /// <summary>
-    /// Gets all currently blocked applications (blocked by SysManager).
+    /// Gets all currently blocked applications (blocked by SysManager), or null when the Image File Execution
+    /// Options key could not be read.
     /// </summary>
-    public IReadOnlyList<BlockedApp> GetBlockedApps()
+    /// <remarks>
+    /// A failed read used to be an empty list, so the tab said "No applications are currently blocked." and the
+    /// warning for a blocked <c>consent.exe</c> could not appear (#2503). An absent key is still an empty list:
+    /// nothing has ever been blocked.
+    /// <para>One entry that cannot be opened is still skipped rather than failing the read. SysManager writes its
+    /// blocks with the key's inherited permissions, so an entry locked against reading belongs to another
+    /// program, and says nothing about SysManager's own blocks.</para>
+    /// </remarks>
+    public IReadOnlyList<BlockedApp>? GetBlockedApps()
     {
         List<BlockedApp> blocked = [];
 
@@ -390,9 +405,11 @@ public sealed partial class AppBlockerService : IAppBlockerService
                 catch (SecurityException) { /* skip */ }
             }
         }
-        catch (IOException) { /* registry not accessible */ }
-        catch (UnauthorizedAccessException) { /* registry not accessible */ }
-        catch (SecurityException) { /* registry not accessible */ }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+        {
+            Log.Warning("Could not read the block list: {Error}", ex.Message);
+            return null;
+        }
 
         return blocked;
     }

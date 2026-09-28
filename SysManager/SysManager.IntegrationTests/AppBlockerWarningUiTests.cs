@@ -41,7 +41,7 @@ public class AppBlockerWarningUiTests
         public bool BlockApp(string exeName) => throw new NotSupportedException();
         public AppBlockerService.BlockResult TryBlockApp(string exeName) => throw new NotSupportedException();
         public bool UnblockApp(string exeName) => throw new NotSupportedException();
-        public bool IsBlocked(string exeName) => throw new NotSupportedException();
+        public bool? IsBlocked(string exeName) => throw new NotSupportedException();
     }
 
     private static AppBlockerViewModel VmWith(bool elevated, params (string Name, bool Unrecoverable)[] rows)

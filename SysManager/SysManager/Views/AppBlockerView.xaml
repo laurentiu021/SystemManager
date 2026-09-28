@@ -124,10 +124,10 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <!-- Empty state -->
+        <!-- Empty state, or that the block list could not be read (#2503) -->
         <v:EmptyState Grid.Row="5" Glyph="&#xE730;"
-                      Title="No blocked applications"
-                      Message="Block an app above to stop it from launching."
+                      Title="{Binding EmptyTitle}"
+                      Message="{Binding EmptyMessage}"
                       Visibility="{Binding BlockedApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
 
         <!-- Footer -->

@@ -28,9 +28,12 @@ public interface IAppBlockerService
     /// <summary>Unblocks an executable, allowing it to run again. Returns true on success.</summary>
     bool UnblockApp(string exeName);
 
-    /// <summary>Checks whether an executable is currently blocked by SysManager.</summary>
-    bool IsBlocked(string exeName);
+    /// <summary>
+    /// Checks whether an executable is currently blocked by SysManager, or null when the block list could not
+    /// be read.
+    /// </summary>
+    bool? IsBlocked(string exeName);
 
-    /// <summary>Gets all applications currently blocked by SysManager.</summary>
-    IReadOnlyList<BlockedApp> GetBlockedApps();
+    /// <summary>Gets all applications currently blocked by SysManager, or null when the block list could not be read.</summary>
+    IReadOnlyList<BlockedApp>? GetBlockedApps();
 }

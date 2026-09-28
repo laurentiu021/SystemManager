@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.6] - 2026-09-28
+
+**A saved Standby List Cleaner auto-purge now starts working as soon as SysManager opens.** After a restart it
+used to do nothing until you opened the Standby List Cleaner tab.
+
+### Fixed
+
+- **Standby List Cleaner: auto-purge watches from startup.** The auto-purge switch and its threshold are
+  remembered between sessions, so arming it once is meant to be enough. The poll that watches free memory
+  and purges belongs to the tab, though, and SysManager builds a tab only when it is first opened, so after a
+  restart a saved auto-purge did nothing until someone visited that tab. The tab is now built at startup, as
+  the Dark Mode Scheduler already is for the same reason. It still polls only while auto-purge is on and
+  SysManager runs as administrator. Present since v1.56.12, when auto-purge started being remembered.
+
 ## [1.114.5] - 2026-09-28
 
 **A profile export now contains your settings as they are when you export.** It used to write them as they

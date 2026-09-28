@@ -249,6 +249,14 @@ public partial class MainWindow : Window
                 // The single-instance mutex stayed held too, so the next launch handed itself over to
                 // an invisible instance and quit; and because the answer above is REMEMBERED, that
                 // repeated on every launch until the user found it in Task Manager.
+                //
+                // Exiting cancels whatever SysManager is still doing, so ask first when something is
+                // (#2499). Declining keeps the window open, exactly as Cancel on the prompt above does.
+                if (!Helpers.QuitGuard.ConfirmStoppingActiveWork("Close SysManager", "Close anyway?"))
+                {
+                    e.Cancel = true;
+                    return;
+                }
                 App.RequestShutdown();
                 base.OnClosing(e);
                 return;

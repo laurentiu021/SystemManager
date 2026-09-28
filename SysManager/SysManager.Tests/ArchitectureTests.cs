@@ -13786,6 +13786,73 @@ public partial class ArchitectureTests
             + "exit still reaches the close-or-minimise prompt");
     }
 
+    /// <summary>
+    /// Every way SysManager closes itself asks first while something is still running (#2499).
+    /// </summary>
+    /// <remarks>
+    /// Closing disposes the tabs, the tabs cancel their work, and a cancelled repair or install is ended part-way.
+    /// So each exit has to go past <c>QuitGuard</c>. Either it goes through <c>AdminHelper.RelaunchAsAdmin</c>, which
+    /// asks before it starts the elevated copy, or it asks itself. Checked per method: an exit added anywhere in the
+    /// app fails here until it asks.
+    /// <para>About's install and go-back close through an injected action rather than a direct call, so they are
+    /// not in this scan. <c>AboutUpdateExitTests</c> pins both by behaviour.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryExit_AsksFirstWhileSomethingRuns()
+    {
+        var root = TestPaths.AppProject();
+        var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                        // App itself defines RequestShutdown; its callers are what this is about.
+                        && !f.EndsWith("App.xaml.cs", StringComparison.Ordinal))
+            .ToArray();
+
+        List<string> offenders = [];
+        var exits = 0;
+
+        foreach (var file in files)
+        {
+            // Comments stripped first, so a remark that quotes the call can neither count as an exit nor vouch for one.
+            var code = string.Join('\n', File.ReadAllLines(file)
+                .Select(line => CommentTail().Replace(line, string.Empty)));
+            var spans = MethodSpans(code).ToList();
+
+            foreach (Match call in Regex.Matches(code, @"App\.RequestShutdown\(\)"))
+            {
+                exits++;
+                var (name, open, end) = spans.LastOrDefault(s => s.Open < call.Index && call.Index < s.End);
+                var body = name is null ? "" : code[open..end];
+
+                if (body.Contains("AdminHelper.RelaunchAsAdmin()", StringComparison.Ordinal)
+                    || body.Contains("QuitGuard.", StringComparison.Ordinal))
+                    continue;
+
+                offenders.Add($"{Path.GetFileName(file)}: {name ?? "(outside any method)"}");
+            }
+        }
+
+        // 35 when this was written: 33 administrator relaunches, the tray's Exit and closing the window.
+        Assert.True(exits >= 30,
+            $"only {exits} App.RequestShutdown() calls were found, so this scan is no longer seeing the app's exits");
+
+        // The relaunch has to ask BEFORE it starts the elevated copy, because that copy then waits for this
+        // instance to close. A question asked after it would leave the two waiting on each other.
+        var admin = string.Join('\n', File.ReadAllLines(Path.Combine(root, "Helpers", "AdminHelper.cs"))
+            .Select(line => CommentTail().Replace(line, string.Empty)));
+        var relaunch = MethodSpans(admin).Single(s => s.Name == "RelaunchAsAdmin");
+        var relaunchBody = admin[relaunch.Open..relaunch.End];
+        var ask = relaunchBody.IndexOf("QuitGuard.ConfirmStoppingActiveWork(", StringComparison.Ordinal);
+        var start = relaunchBody.IndexOf("Process.Start(", StringComparison.Ordinal);
+        Assert.True(ask >= 0 && start > ask,
+            "AdminHelper.RelaunchAsAdmin must ask QuitGuard before it starts the elevated copy");
+
+        Assert.True(offenders.Count == 0,
+            "these close SysManager without asking first while something is still running, so a repair or an "
+            + "install is cut off part-way. Ask QuitGuard.ConfirmStoppingActiveWork before calling "
+            + "App.RequestShutdown():\n  " + string.Join("\n  ", offenders));
+    }
+
     /// <summary>A direct Application.Shutdown call, in any of its qualified forms.</summary>
     [GeneratedRegex(@"(System\.Windows\.)?Application\.Current\s*\??\.\s*Shutdown\s*\(")]
     private static partial Regex DirectShutdown();

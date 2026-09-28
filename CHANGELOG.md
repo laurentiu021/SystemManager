@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.8] - 2026-09-28
+
+**System Logs now reports the number of events it actually loaded.** It used to under-count them, and said
+"Loaded 0 events" when fewer than 50 matched.
+
+### Fixed
+
+- **System Logs: the "Loaded N events" line counts every event.** The tab adds events to the list in batches
+  of 50, and it decided whether it could add a batch straight away by comparing the current synchronization
+  context with the one it captured when it was built. WPF creates a new context for every piece of work it
+  runs, so after the first wait that comparison failed even on the UI thread, and every batch was queued. The
+  status line was written before the last batch had been added, so it left out up to 49 events and said
+  "Loaded 0 events" when fewer than 50 matched, while the rows then appeared. A load that stopped after fewer
+  than 50 events could also cover the loaded rows with the "could not be opened" message. Batches are now
+  added through the app's shared UI-thread helper, which asks the dispatcher instead, and a new check keeps
+  such comparisons out of the code. The count has fallen short since the tab was added; batching the load in
+  v0.48.32 made the shortfall up to 49 events.
+
 ## [1.114.7] - 2026-09-28
 
 **A cleanup run from the command line or Scheduled Maintenance now stays in Recent Activity while SysManager

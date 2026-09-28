@@ -1487,6 +1487,9 @@ offers, "rate us" prompts:
   (confirm what a profile contains before anything is overwritten). Your ticks survive a
   refresh, so a section you excluded cannot quietly reappear in the export. An import says
   how many of the profile's sections could not be applied, rather than only how many were
+- **Exports what is saved now** — each ticked section is read from disk at the moment you
+  export, and the list is re-read whenever you come back to the tab, so a theme, preset or
+  speed test you changed since the tab first opened goes into the file
 - **Version-aware** — refuses profiles created by a newer, incompatible build
 - **What it deliberately leaves out** — anything that describes *this* PC rather than
   your choices: the undo baselines behind Performance Mode and Environment Variables,

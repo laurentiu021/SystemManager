@@ -105,7 +105,7 @@ public sealed partial class EventLogService
     /// <para>Terminating is not merely the simpler choice. <c>EvtNext</c> does not advance its cursor on a
     /// stale result set or a lost Event Log service, so a retry re-throws the identical error; a retry budget
     /// would postpone the same exit and add a number nobody can tune. It also matches
-    /// <c>MemoryTestService.CheckErrorLogsAsync</c>, whose catch already terminates its scan.</para>
+    /// <c>MemoryTestService.CheckErrorLogsAsync</c>, where a reader fault ends the scan too.</para>
     /// </remarks>
     internal async IAsyncEnumerable<FriendlyEventEntry> Enumerate(
         EventLogQueryOptions opt,

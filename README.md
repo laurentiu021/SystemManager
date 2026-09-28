@@ -373,7 +373,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - OS / CPU / RAM / storage overview
 - SMART data per disk: temperature, wear %, power-on hours, read/write errors
 - Colour-coded verdict per drive
-- Memory diagnostic that scans the last 30 days of WHEA events for RAM errors
+- Memory diagnostic that scans the last 30 days of WHEA events for RAM errors. If the event log
+  cannot be read, it says the check could not be done rather than reporting no errors
 - Schedule the Windows Memory Diagnostic at next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select. C: is ticked
   to start with, and whatever you tick after that survives a refresh — so a rescan cannot
@@ -1372,6 +1373,10 @@ offers, "rate us" prompts:
   updates to App Updates, critical events to System Logs, low disk space to Deep Cleanup, high memory to
   Process Manager. Findings with nothing wrong show no link, and neither do the two pieces of advice no
   tab here can carry out — restarting, and replacing a worn battery
+- **System Alerts** — disk health, app updates, memory errors in the last 30 days, critical events in the
+  last 7 days, a pending reboot, and any app block that cannot be undone normally. They are checked when
+  SysManager starts, again when you press "Scan system", and after Update All Apps. A check that could not
+  run says so in amber rather than reading as good news
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots.

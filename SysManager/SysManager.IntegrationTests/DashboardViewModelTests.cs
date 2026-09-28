@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -11,6 +12,22 @@ namespace SysManager.IntegrationTests;
 [Collection("Network")]
 public class DashboardViewModelTests
 {
+    // A winget that answers at once. Scan system waits for the System Alerts before it says everything was scanned
+    // (#2479), and with the real one each Refresh test here would wait for an actual `winget upgrade` listing,
+    // which none of them is about. The alerts themselves are covered in the unit project.
+    private sealed class QuietWinget : IWingetService
+    {
+        public event Action<PowerShellLine>? LineReceived { add { } remove { } }
+
+        public Task<List<AppPackage>> ListUpgradableAsync(CancellationToken ct = default) => Task.FromResult(new List<AppPackage>());
+
+        public Task<WingetResult> UpgradeAsync(string packageId, CancellationToken ct = default) =>
+            throw new NotSupportedException("No test here upgrades anything.");
+
+        public Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default) =>
+            throw new NotSupportedException("No test here upgrades anything.");
+    }
+
     private static DashboardViewModel NewVm()
     {
         var sys = new SystemInfoService();
@@ -20,7 +37,7 @@ public class DashboardViewModelTests
             new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
-            new WingetService(new PowerShellRunner()),
+            new QuietWinget(),
             // Redirected on purpose: reading a crash marker CONSUMES it, so pointing this at the real
             // profile would delete a genuine crash report before the user saw it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),

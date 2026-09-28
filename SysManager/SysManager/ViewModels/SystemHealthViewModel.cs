@@ -232,8 +232,14 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             }
             StatusMessage = "Memory scan done.";
         }
-        catch (System.Diagnostics.Eventing.Reader.EventLogException ex) { StatusMessage = $"CheckMemoryErrors failed: {ex.Message}"; }
-        catch (UnauthorizedAccessException ex) { StatusMessage = $"CheckMemoryErrors failed: {ex.Message}"; }
+        // The verdict says the check could not run, in the warning colour. It used to be left as it was, and the
+        // service returned zero errors for a log it could not read, so this read "No memory errors" in green (#2479).
+        catch (Exception ex) when (ex is System.Diagnostics.Eventing.Reader.EventLogException or UnauthorizedAccessException)
+        {
+            MemoryHealthVerdict = "Memory errors could not be checked: the System event log could not be read.";
+            MemoryHealthColorHex = StatusColors.Warning;
+            StatusMessage = $"CheckMemoryErrors failed: {ex.Message}";
+        }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

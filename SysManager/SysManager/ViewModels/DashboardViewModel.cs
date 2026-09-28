@@ -197,7 +197,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         LoadActivity();
         StartPollingLoop();   // starts BOTH the vitals and temperature loops
         await LoadHealthScoreAsync();
-        StartAlertScans();
+        _ = StartAlertScans();
         await LoadTemperaturesAsync();
     }
 
@@ -469,28 +469,54 @@ public sealed partial class DashboardViewModel : ViewModelBase
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  SYSTEM ALERTS (real scans at boot, parallel)
+    //  SYSTEM ALERTS (real scans at boot and on Scan system, parallel)
     // ══════════════════════════════════════════════════════════════════════
 
-    private void StartAlertScans()
+    /// <summary>
+    /// The most recent round of alert checks. It completes when every alert in the round has its result.
+    /// </summary>
+    /// <remarks>
+    /// Nothing waits for the round started at launch, because the alerts fill in as their checks finish. Scan
+    /// system waits for its round before it says everything was scanned, and a test awaits this to observe a
+    /// round deterministically, as <see cref="ViewModelBase.InitializationComplete"/> exposes the load.
+    /// </remarks>
+    internal Task AlertScans { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// Replaces the alerts with a fresh set and starts all of their checks at once.
+    /// </summary>
+    /// <remarks>
+    /// Runs at launch, on Scan system, and after Update All Apps. It used to run at launch only, so the card kept
+    /// saying whatever was true when SysManager started: "3 app updates available" stayed under the quick action's
+    /// "All apps updated", and Scan system said "All systems scanned" without checking any alert again (#2479).
+    /// <para>A new set rather than the old alerts reset. A check still running from an earlier round keeps writing
+    /// to the alert it was handed, and that alert has left the list, so a slow old result cannot land over a newer
+    /// one.</para>
+    /// </remarks>
+    private Task StartAlertScans()
     {
+        Alerts.Clear();
+
         var smartAlert = new DashboardAlert { Title = "Checking disk health...", State = AlertLoadingState.Loading };
         var appUpdateAlert = new DashboardAlert { Title = "Checking app updates...", State = AlertLoadingState.Loading };
         var memoryAlert = new DashboardAlert { Title = "Checking memory health...", State = AlertLoadingState.Loading };
         var eventLogAlert = new DashboardAlert { Title = "Checking Event Log...", State = AlertLoadingState.Loading };
-        var featuresAlert = new DashboardAlert { Title = "Checking Windows features...", State = AlertLoadingState.Loading };
+        var rebootAlert = new DashboardAlert { Title = "Checking for a pending reboot...", State = AlertLoadingState.Loading };
 
         Alerts.Add(smartAlert);
         Alerts.Add(appUpdateAlert);
         Alerts.Add(memoryAlert);
         Alerts.Add(eventLogAlert);
-        Alerts.Add(featuresAlert);
+        Alerts.Add(rebootAlert);
 
-        _ = RunAlertScanAsync(smartAlert, ScanSmartHealthAsync);
-        _ = RunAlertScanAsync(appUpdateAlert, ScanAppUpdatesAsync);
-        _ = RunAlertScanAsync(memoryAlert, ScanMemoryHealthAsync);
-        _ = RunAlertScanAsync(eventLogAlert, ScanEventLogAsync);
-        _ = RunAlertScanAsync(featuresAlert, ScanWindowsFeaturesAsync);
+        var scans = new List<Task>
+        {
+            RunAlertScanAsync(smartAlert, ScanSmartHealthAsync),
+            RunAlertScanAsync(appUpdateAlert, ScanAppUpdatesAsync),
+            RunAlertScanAsync(memoryAlert, ScanMemoryHealthAsync),
+            RunAlertScanAsync(eventLogAlert, ScanEventLogAsync),
+            RunAlertScanAsync(rebootAlert, ScanPendingRebootAsync),
+        };
 
         // Sixth alert, added last and only when the shell supplied the service, because it answers a
         // question the other five do not: has this machine been left in a state it cannot get out of?
@@ -501,8 +527,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             var blockAlert = new DashboardAlert { Title = "Checking blocked applications...", State = AlertLoadingState.Loading };
             Alerts.Add(blockAlert);
-            _ = RunAlertScanAsync(blockAlert, ScanUnrecoverableBlocksAsync);
+            scans.Add(RunAlertScanAsync(blockAlert, ScanUnrecoverableBlocksAsync));
         }
+
+        return AlertScans = Task.WhenAll(scans);
     }
 
     /// <summary>
@@ -521,7 +549,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         var stranded = _appBlocker!.GetBlockedApps().Where(a => a.IsUnrecoverable).ToList();
         var (title, severity) = ClassifyStrandedBlocks(stranded.Count, stranded.FirstOrDefault()?.ExecutableName);
 
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        UiThread.Post(() =>
         {
             alert.Title = title;
             alert.Severity = severity;
@@ -533,10 +561,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     /// <summary>Pure decision for the stranded-block alert. Testable without WPF.</summary>
     /// <remarks>
-    /// Separated from the scan for the same reason as the other <c>Classify…</c> methods here: the scan's
-    /// only other statement is a <c>Dispatcher.BeginInvoke</c>, and with no <c>Application.Current</c> — a
-    /// test host, or the CLI — that call short-circuits and writes nothing. A test driving the scan would
-    /// therefore assert against an untouched alert and pass while saying nothing about the wording.
+    /// Separated from the scan like the other <c>Classify…</c> methods here, so every wording can be asserted
+    /// directly. Most of these checks read the Event Log or the registry, where a test cannot produce each
+    /// answer on demand.
     /// <para>Red, not yellow. Every other alert on this page reports something degraded; this one reports a
     /// machine that can no longer grant administrator rights.</para>
     /// </remarks>
@@ -559,7 +586,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// promising a restore point that was never created.</para>
     /// <para>The mutation must run on the UI thread — <paramref name="alert"/> is a bound
     /// ObservableObject, so raising PropertyChanged off the thread-pool thread can throw or fail to
-    /// update. Marshal onto the dispatcher exactly like the scanner bodies do.</para>
+    /// update. <c>BeginInvoke</c> here, not the <c>UiThread.Post</c> the scanners write their results
+    /// through: with no dispatcher, Post runs the action inline, and this re-check of <c>State</c> would
+    /// then race <see cref="RunAlertScanAsync"/>'s <c>finally</c> on another thread. Without a dispatcher
+    /// there is nobody to show the hint to, so dropping it is the right answer.</para>
     /// </summary>
     private static async Task AcknowledgeSlowScanAsync(DashboardAlert alert, CancellationToken ct)
     {
@@ -620,7 +650,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         var (title, severity) = ClassifySmartHealth(
             result.DiskScore, result.IsUnavailable(HealthScoreService.DiskComponent));
 
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        UiThread.Post(() =>
         {
             alert.Title = title;
             alert.Severity = severity;
@@ -651,38 +681,43 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private async Task ScanAppUpdatesAsync(DashboardAlert alert)
     {
+        int? count = null;
         try
         {
             // Reuse the shared, column-parsed upgrade list instead of a fragile
             // "count non-blank lines minus the header/separator" heuristic — the
             // latter mis-counted whenever winget's header/footer layout shifted.
             var upgradable = await _winget.ListUpgradableAsync(CancellationToken.None);
-            var count = upgradable.Count;
-
-            var (title, severity) = ClassifyAppUpdates(count);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = title;
-                alert.Severity = severity;
-                alert.NavTargetId = NavTargetFor(severity, "nav-app-updates");
-            });
+            count = upgradable.Count;
         }
-        catch (Exception ex)
+        // The two failures App Updates names: the query failed, or winget is not installed.
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             Log.Debug("Alert scan failed: {Error}", ex.Message);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = "App update check unavailable";
-                alert.Severity = AlertSeverity.Green;
-            });
         }
+
+        var (title, severity) = ClassifyAppUpdates(count);
+        UiThread.Post(() =>
+        {
+            alert.Title = title;
+            alert.Severity = severity;
+            alert.NavTargetId = NavTargetFor(severity, "nav-app-updates");
+        });
     }
 
     /// <summary>Pure decision for the App Updates alert. Testable without WPF.</summary>
-    internal static (string Title, AlertSeverity Severity) ClassifyAppUpdates(int count) =>
-        count == 0
-            ? ("All apps up to date", AlertSeverity.Green)
-            : ($"{count} app update{(count == 1 ? "" : "s")} available", AlertSeverity.Yellow);
+    /// <remarks>
+    /// Null means the check itself failed. That is yellow, like every other result nobody could read, and it
+    /// used to be green: the failure branch wrote "App update check unavailable" in the colour of "all good"
+    /// (#2479).
+    /// </remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifyAppUpdates(int? count) =>
+        count switch
+        {
+            null => ("App updates could not be checked", AlertSeverity.Yellow),
+            0 => ("All apps up to date", AlertSeverity.Green),
+            _ => ($"{count} app update{(count == 1 ? "" : "s")} available", AlertSeverity.Yellow),
+        };
 
     private async Task ScanMemoryHealthAsync(DashboardAlert alert)
     {
@@ -707,10 +742,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
 
         var (title, severity) = ClassifyMemoryHealth(summary);
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        UiThread.Post(() =>
         {
             alert.Title = title;
             alert.Severity = severity;
+            // System Health, where the memory check and the memory test live. #1496 took "— see System Health"
+            // out of this alert's wording so a Fix this link could say it instead, and no link was ever set
+            // here, so "test your RAM" offered no way to get there.
+            alert.NavTargetId = NavTargetFor(severity, "nav-system-health");
         });
     }
 
@@ -739,6 +778,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private Task ScanEventLogAsync(DashboardAlert alert)
     {
+        int? criticalCount = null;
         try
         {
             var since = DateTime.Now.AddDays(-7);
@@ -746,78 +786,82 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 "System", System.Diagnostics.Eventing.Reader.PathType.LogName,
                 $"*[System[Level=1 and TimeCreated[@SystemTime>='{since.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}']]]");
 
-            int criticalCount = 0;
+            var counted = 0;
             using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
             // Each EventRecord wraps an unmanaged EVT_HANDLE and must be disposed —
             // discarding them (as before) leaked a native handle per critical event.
             System.Diagnostics.Eventing.Reader.EventRecord? rec;
             while ((rec = reader.ReadEvent()) is not null)
             {
-                using (rec) criticalCount++;
+                using (rec) counted++;
             }
-
-            var (title, severity) = ClassifyEventLog(criticalCount);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = title;
-                alert.Severity = severity;
-                // Logs, not System Health. This line was written twice with different tabs and the
-                // second won, so the button read as "take me to the events" and opened a page that does
-                // not list them. The title names the Event Log, so that is where it has to go (#2359).
-                alert.NavTargetId = NavTargetFor(severity, "nav-logs");
-            });
+            criticalCount = counted;
         }
-        catch (Exception ex)
+        // The two failures the memory check names for the same log: it could not be read, or reading was refused.
+        catch (Exception ex) when (ex is System.Diagnostics.Eventing.Reader.EventLogException or UnauthorizedAccessException)
         {
             Log.Debug("Alert scan failed: {Error}", ex.Message);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = "Event Log check unavailable";
-                alert.Severity = AlertSeverity.Green;
-            });
         }
+
+        var (title, severity) = ClassifyEventLog(criticalCount);
+        UiThread.Post(() =>
+        {
+            alert.Title = title;
+            alert.Severity = severity;
+            // Logs, not System Health. This line was written twice with different tabs and the
+            // second won, so the button read as "take me to the events" and opened a page that does
+            // not list them. The title names the Event Log, so that is where it has to go (#2359).
+            alert.NavTargetId = NavTargetFor(severity, "nav-logs");
+        });
         return Task.CompletedTask;
     }
 
     /// <summary>Pure decision for the Event Log alert. Testable without WPF.</summary>
-    internal static (string Title, AlertSeverity Severity) ClassifyEventLog(int criticalCount) =>
-        criticalCount == 0
-            ? ("No critical events (last 7 days)", AlertSeverity.Green)
-            : ($"{criticalCount} critical event{(criticalCount == 1 ? "" : "s")} in Event Log (last 7d)", AlertSeverity.Red);
+    /// <remarks>Null means the log could not be read, which is yellow rather than the green it used to be (#2479).</remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifyEventLog(int? criticalCount) =>
+        criticalCount switch
+        {
+            null => ("Event Log could not be checked", AlertSeverity.Yellow),
+            0 => ("No critical events (last 7 days)", AlertSeverity.Green),
+            _ => ($"{criticalCount} critical event{(criticalCount == 1 ? "" : "s")} in Event Log (last 7d)", AlertSeverity.Red),
+        };
 
-    private Task ScanWindowsFeaturesAsync(DashboardAlert alert)
+    private Task ScanPendingRebootAsync(DashboardAlert alert)
     {
+        bool? pending = null;
         try
         {
             using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
-            var pending = key is not null;
-
-            var (title, severity) = ClassifyPendingReboot(pending);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = title;
-                alert.Severity = severity;
-                alert.NavTargetId = NavTargetFor(severity, "nav-windows-update");
-            });
+            pending = key is not null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
         {
             Log.Debug("Alert scan failed: {Error}", ex.Message);
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                alert.Title = "Feature check unavailable";
-                alert.Severity = AlertSeverity.Green;
-            });
         }
+
+        var (title, severity) = ClassifyPendingReboot(pending);
+        UiThread.Post(() =>
+        {
+            alert.Title = title;
+            alert.Severity = severity;
+            alert.NavTargetId = NavTargetFor(severity, "nav-windows-update");
+        });
         return Task.CompletedTask;
     }
 
     /// <summary>Pure decision for the pending-reboot alert. Testable without WPF.</summary>
-    internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(bool pending) =>
-        pending
-            ? ("Pending reboot required (Windows Update)", AlertSeverity.Yellow)
-            : ("No pending reboots", AlertSeverity.Green);
+    /// <remarks>
+    /// Null means the key could not be read. That is yellow, not the green "Feature check unavailable" it used to
+    /// be, which also named a check this alert does not make (#2479).
+    /// </remarks>
+    internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(bool? pending) =>
+        pending switch
+        {
+            null => ("Pending reboot could not be checked", AlertSeverity.Yellow),
+            true => ("Pending reboot required (Windows Update)", AlertSeverity.Yellow),
+            false => ("No pending reboots", AlertSeverity.Green),
+        };
 
     // ══════════════════════════════════════════════════════════════════════
     //  RECENT ACTIVITY
@@ -913,6 +957,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickActionProgress = 100;
             ActivityLogService.Instance.Log("App Updates",
                 result.Succeeded ? "Upgrade all completed" : $"Upgrade all: {result.FriendlyMessage}");
+            // Checked again whether or not every package upgraded, because either way the number the app update
+            // alert showed is out of date, and it used to stay beside "All apps updated" (#2479).
+            _ = StartAlertScans();
             // RunQuickActionAsync reports "✓ Done" for any action that returns, so a failed run must not return:
             // `winget upgrade --all` exits non-zero when any one package fails, and the card used to read "✓ Done"
             // above the failure text (#2437). Its failure branch shows the message as the detail.
@@ -1042,9 +1089,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// would teach the user that the button means nothing. The rule is one function rather than five
     /// copies of a ternary so it can be asserted once, and each scan names its own destination next to
     /// the classification that produced the severity (#1496).
-    /// <para>Not folded into the Classify* helpers, which return <c>(Title, Severity)</c> and are called
-    /// from 28 assertions: widening those tuples to carry a nav id would rewrite every one of them to
-    /// express a mapping that has nothing to do with what they classify.</para>
+    /// <para>Not folded into the Classify* helpers, which return <c>(Title, Severity)</c> and are what the
+    /// tests assert against: widening those tuples to carry a nav id would rewrite every one of those
+    /// assertions to express a mapping that has nothing to do with what they classify.</para>
     /// </remarks>
     internal static string NavTargetFor(AlertSeverity severity, string navId)
         => severity == AlertSeverity.Green ? "" : navId;
@@ -1129,8 +1176,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
             await LoadStaticInfoAsync();
             LoadDrives();
             await LoadHealthScoreAsync();
+            // After the health score, as at launch, because the disk alert reads the score just computed.
+            var alerts = StartAlertScans();
             await LoadTemperaturesAsync();
             LoadActivity();
+            // Waited for before the toast below says every system was scanned. The alerts are part of that.
+            await alerts;
             StatusMessage = $"Last scan: {DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}";
             ToastService.Instance.Show("Dashboard refreshed", "All systems scanned");
         }

@@ -1540,6 +1540,43 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No code sets a Dashboard alert to green directly. Green comes only from a <c>Classify…</c> method's
+    /// measured good-news branch, which the unit tests pin.
+    /// </summary>
+    /// <remarks>
+    /// Three scans had a failure branch that set <c>alert.Severity</c> to green beside "… check unavailable",
+    /// so a check that could not run read as "all good" (#2479). The Event Log and pending-reboot checks read
+    /// the real log and registry, where no test can make them fail on demand, so this is what keeps that
+    /// assignment from coming back. Comments are stripped, so a remark that quotes it is not counted.
+    /// <para>Two controls keep it from passing on nothing: the pattern must match the defect as it was
+    /// written, and with its colour swapped it must still find the one direct assignment the app keeps,
+    /// <c>RunAlertScanAsync</c>'s yellow "Check failed" fallback.</para>
+    /// </remarks>
+    [Fact]
+    public void NoDashboardAlertIsSetToGreenDirectly()
+    {
+        Assert.Matches(DirectSeverity(), "                alert.Severity = AlertSeverity.Green;");
+
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} app source files enumerated — this guard is reading the wrong folder.");
+
+        var assignments = files
+            .SelectMany(f => DirectSeverity().Matches(WithoutComments(File.ReadAllText(f)))
+                .Select(m => (File: Path.GetFileName(f), Colour: m.Groups["colour"].Value)))
+            .ToList();
+
+        Assert.Contains(("DashboardViewModel.cs", "Yellow"), assignments);
+        Assert.DoesNotContain(assignments, a => a.Colour == "Green");
+    }
+
+    [GeneratedRegex(@"\.Severity\s*=\s*AlertSeverity\.(?<colour>Green|Yellow|Red)\b", RegexOptions.Compiled)]
+    private static partial Regex DirectSeverity();
+
+    /// <summary>
     /// No test hands the PowerShell runner a script that can run forever.
     /// </summary>
     /// <remarks>

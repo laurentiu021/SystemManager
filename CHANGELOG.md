@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.7] - 2026-09-28
+
+**A cleanup run from the command line or Scheduled Maintenance now stays in Recent Activity while SysManager
+is open.** The open app used to erase it the next time it recorded something itself.
+
+### Fixed
+
+- **Dashboard: Recent Activity keeps the runs another SysManager process records.** A command-line or
+  scheduled cleanup is a separate process and writes its entry to the same history file. The open app had
+  read that file once, at startup, and wrote its own list back each time it recorded an action, so the next
+  action erased the scheduled run's entry for good. Until then the Dashboard did not show the entry either,
+  because it listed the app's own copy. The history is now read from the file each time it is shown, and each
+  new entry is added to what the file holds at that moment, under a lock that the other process honours too,
+  so neither process can erase the other's entries. Present since command-line and scheduled runs started
+  recording themselves in v1.101.1.
+
 ## [1.114.6] - 2026-09-28
 
 **A saved Standby List Cleaner auto-purge now starts working as soon as SysManager opens.** After a restart it

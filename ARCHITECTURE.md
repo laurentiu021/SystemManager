@@ -921,7 +921,11 @@ Key services:
   Dashboard's recent-activity card. Records the six destructive operations (deep
   cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) as
   counts and sizes only, never file names. Takes a `configDir` seam so tests never
-  write to the user's real history.
+  write to the user's real history. The file is shared with command-line and scheduled
+  runs, which are separate processes, so `GetRecent` reads it rather than a list held since
+  startup, and `Log` reads, adds and writes as one step under an exclusive handle on
+  `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects.
+  Without that, the open app's next write erased a scheduled run's entry.
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,

@@ -6414,7 +6414,8 @@ public partial class ArchitectureTests
     /// first open, and three tabs were documented as legitimate exceptions: Dashboard (the initially
     /// selected tab), DarkMode (owns the always-on theme schedule) and About (its update check feeds the
     /// shell banner). DarkMode and About are resolved directly in the constructor, not through the nav
-    /// table, so only Dashboard appears here.</para>
+    /// table, so only Dashboard appears here. What the constructor resolves, Standby included (#2481), is
+    /// pinned by <see cref="TheShellConstructor_ResolvesExactlyTheJustifiedViewModels"/>.</para>
     /// <para>The four network tabs nevertheless stayed on the eager path, and the justification comment
     /// was widened to say "network tabs" instead of the tabs being made lazy — so
     /// <c>SpeedTestViewModel</c>'s constructor read its history file from disk at every launch whether or
@@ -6483,6 +6484,50 @@ public partial class ArchitectureTests
 
     [GeneratedRegex(@"Tab<\w+>\(\s*""[\w-]+""\s*,\s*""[^""]+""", RegexOptions.Compiled)]
     private static partial Regex LazyNavRegistration();
+
+    /// <summary>
+    /// The shell's constructor resolves exactly the view models that must exist at startup, each for a stated
+    /// reason.
+    /// </summary>
+    /// <remarks>
+    /// The nav-table guard above cannot see these: they are resolved directly in the constructor, not through
+    /// the nav table. This list decides whether a set-and-forget feature runs at all after a restart. The
+    /// Standby List Cleaner's auto-purge was missing from it, so a saved auto-purge did nothing until someone
+    /// opened the tab (#2481).
+    /// <para>Pinned both ways, because both directions are defects. Dropping one silently turns a feature off
+    /// until its tab is opened, and adding one brings back the startup herd the lazy tabs exist to prevent.
+    /// Comments are stripped first, so prose about eager resolution cannot stand in for a call.</para>
+    /// </remarks>
+    [Fact]
+    public void TheShellConstructor_ResolvesExactlyTheJustifiedViewModels()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var start = source.IndexOf("public MainWindowViewModel()", StringComparison.Ordinal);
+        var end = start < 0 ? -1 : source.IndexOf("InitNavigation();", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start,
+            $"Could not locate the shell constructor (start={start}, end={end}) — fix this guard, do not trust "
+            + "its result.");
+
+        var resolved = EagerResolve().Matches(WithoutComments(source[start..end]))
+            .Select(m => m.Groups["type"].Value)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        string[] justified =
+        [
+            "AboutViewModel",          // its constructor's update check feeds the shell's update banner
+            "DarkModeViewModel",       // owns the always-on theme schedule poll; nothing else runs it
+            "DashboardViewModel",      // the initially selected tab, built immediately regardless
+            "NetworkSharedState",      // shared by the four network tabs; starts nothing on construction
+            "StandbyMemoryViewModel",  // owns the auto-purge poll, set-and-forget like the schedule (#2481)
+        ];
+
+        Assert.Equal(justified, resolved);
+    }
+
+    [GeneratedRegex(@"\bEager<(?<type>\w+)>\(\)", RegexOptions.Compiled)]
+    private static partial Regex EagerResolve();
 
     /// <summary>
     /// The options of one dropdown in an issue-form template, read line-wise. A full YAML parse is

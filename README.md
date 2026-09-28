@@ -1290,7 +1290,8 @@ offers, "rate us" prompts:
 - Reading stats needs no admin; purging requires administrator (it enables the
   same privilege RAMMap and ISLC use) and reports cleanly if not elevated
 - The auto-purge switch and its threshold are remembered between sessions, so
-  arming it once is enough
+  arming it once is enough: after a restart it starts watching as soon as
+  SysManager opens (as administrator), without the tab being opened first
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent

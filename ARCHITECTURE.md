@@ -231,7 +231,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. Holds TWO cancellation sources: one for the task-list scan (driven by the Cancel button) and one for the per-selection run-info query, which each new selection supersedes so arrow-keying the grid cannot queue a PowerShell round-trip per row. Enable/disable is deliberately NOT cancellable — its script writes then reads back, so a cancel between the two would leave the task toggled while the grid showed the old state.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back.
-- `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin.
+- `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. Built at startup, so a saved auto-purge watches from launch without the tab being opened.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's own config as a portable JSON profile with selective sections and version checking. The sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
@@ -1097,13 +1097,17 @@ is first opened (`NavItem.Content`). This avoids constructing all 55 lazily-regi
 VMs at startup — most kick off a background scan/timer in their constructor, so eager
 construction ran that work up front for tabs the user might never open.
 
-**Exactly three** stay eager, each because its constructor drives always-on, app-wide
+**Exactly four** stay eager, each because its constructor drives always-on, app-wide
 behavior independent of its tab: `Dashboard` (the initially-selected tab), `DarkModeViewModel`
-(owns the theme-schedule poll), and `AboutViewModel` (its startup update-check feeds the
-app-shell version label and update banner). That list is not maintained by hand here —
-`ArchitectureTests.OnlyTheJustifiedTabs_AreBuiltAtStartup` fails the build on a fourth, and
-carries the same three names with the same reasons. The Network tabs were the last exception
-to go: they share one `NetworkSharedState`, which turned out not to require eager construction.
+(owns the theme-schedule poll), `AboutViewModel` (its startup update-check feeds the
+app-shell version label and update banner), and `StandbyMemoryViewModel` (owns the auto-purge
+poll, which is set-and-forget like the theme schedule; it polls only while armed and elevated).
+Standby's tab is still registered lazily, and opening it resolves the same singleton. That list
+is not maintained by hand here — `ArchitectureTests.OnlyTheJustifiedTabs_AreBuiltAtStartup`
+guards the nav table, and `TheShellConstructor_ResolvesExactlyTheJustifiedViewModels` pins
+what the shell constructor resolves, both with the same reasons. The Network tabs were the last
+exception to go: they share one `NetworkSharedState`, which turned out not to require eager
+construction.
 
 In tests/designer (no DI container) every VM is built eagerly via a manual dependency graph.
 

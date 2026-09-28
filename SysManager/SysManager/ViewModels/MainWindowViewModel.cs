@@ -30,6 +30,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     //  • Dashboard — it is the initially-selected tab, so it is built immediately anyway.
     //  • DarkMode  — owns the always-on dark/light theme SCHEDULE poll; nothing else runs it, so
     //                if it were lazy a user's schedule would silently stop until they opened the tab.
+    //  • Standby   — owns the auto-purge poll, which is set-and-forget exactly like the schedule above.
+    //                Lazy, a saved auto-purge did nothing after a restart until the tab was opened (#2481).
+    //                It polls only while armed and elevated, so building it costs one memory reading.
     //  • About     — its constructor runs the startup update-check that drives the app-shell
     //                update banner (MainWindow binds About.UpdateAvailable / .CurrentVersion). If it
     //                were lazy, the banner and version label would stay blank until the tab was opened.
@@ -143,6 +146,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // DarkMode is resolved eagerly so its always-on theme schedule poll starts with the app,
         // independent of whether the user ever opens that tab.
         _ = Eager<DarkModeViewModel>();
+        // Standby likewise, so a saved auto-purge starts watching with the app. Its tab stays lazy in the nav
+        // table, and opening it resolves this same singleton.
+        _ = Eager<StandbyMemoryViewModel>();
         // About is resolved eagerly so its constructor's startup update-check runs immediately —
         // the app-shell update banner and version label bind to it (see the About property above).
         About = Eager<AboutViewModel>();

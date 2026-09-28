@@ -706,6 +706,9 @@ System → System Fixes, where the tab name matches what they do.
   reports, and names the exact folders on hover
 - Folders Windows wouldn't let it fully read are marked, so a partial figure never looks
   like a complete one
+- A folder it cannot measure at all — one that no longer exists, a link to somewhere else, or
+  one Windows will not let it list — is reported as exactly that, not as an empty folder, and is
+  not remembered as your last scan of it
 - **Remembers your last scan of each folder** and shows what changed — "3.2 GB larger than your
   last scan on 12 Jul" — so a one-off number becomes an answer to "why did my disk fill up?". It is
   always phrased as *since your last scan*, never as live monitoring, because you choose when to

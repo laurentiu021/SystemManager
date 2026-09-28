@@ -181,6 +181,106 @@ public class DiskAnalyzerViewModelTests
         Assert.Contains(nameof(vm.EmptyMessage), raised);
     }
 
+    // ── A folder that could not be measured (#2504) ──
+    //
+    // It used to arrive as an empty scan: "No subfolders found.", "Analysis complete." and a completion toast, and the
+    // empty result was saved as the folder's latest scan, so the next real one read as "larger than your last scan".
+
+    private static (DiskAnalyzerViewModel Vm, DiskScanHistoryService History) NewVmWithHistory()
+    {
+        var history = new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
+            "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N")));
+        var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return (vm, history);
+    }
+
+    [Fact]
+    public async Task AFolderThatNoLongerExists_SaysSo_AndRecordsNoScan()
+    {
+        var (vm, history) = NewVmWithHistory();
+        var missing = Path.Combine(Path.GetTempPath(), "SysManagerTests", "gone_" + Guid.NewGuid().ToString("N"));
+        vm.SelectedPath = missing;
+
+        await vm.AnalyzeCommand.ExecuteAsync(null);
+
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, vm.LastFailure);
+        Assert.Equal("This folder could not be measured", vm.EmptyTitle);
+        Assert.StartsWith("It no longer exists.", vm.EmptyMessage);
+        Assert.Equal("This folder could not be measured.", vm.ScanSummary);
+        Assert.DoesNotContain("complete", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(vm.HasScanned);
+        Assert.Null(await history.FindAsync(missing));
+    }
+
+    [Fact]
+    public async Task AFailedScan_LeavesTheFoldersLastRealScanInPlace()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "sub"));
+        File.WriteAllBytes(Path.Combine(dir, "sub", "data.bin"), new byte[40_000]);
+        var moved = dir + "_moved";
+        try
+        {
+            var (vm, history) = NewVmWithHistory();
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            var recorded = await history.FindAsync(dir);
+            Assert.NotNull(recorded);   // the premise: the real scan was recorded
+
+            Directory.Move(dir, moved);   // now it "no longer exists"
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, vm.LastFailure);
+            var after = await history.FindAsync(dir);
+            Assert.NotNull(after);
+            Assert.Equal(recorded.TotalSize, after.TotalSize);
+            Assert.Equal(recorded.CapturedAt, after.CapturedAt);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (Directory.Exists(moved)) Directory.Delete(moved, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AScanThatWorksAfterAFailedOne_ClearsTheFailure()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var (vm, _) = NewVmWithHistory();
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, vm.LastFailure);   // the premise
+
+            Directory.CreateDirectory(dir);
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.None, vm.LastFailure);
+            Assert.Equal("Nothing to show", vm.EmptyTitle);
+            Assert.Equal("No subfolders found.", vm.ScanSummary);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DescribeFailure_SaysSomethingDifferentForEachReason()
+    {
+        var notFound = DiskAnalyzerViewModel.DescribeFailure(DiskAnalyzerService.AnalysisFailure.NotFound);
+        var isLink = DiskAnalyzerViewModel.DescribeFailure(DiskAnalyzerService.AnalysisFailure.IsLink);
+        var unreadable = DiskAnalyzerViewModel.DescribeFailure(DiskAnalyzerService.AnalysisFailure.Unreadable);
+
+        Assert.Contains("no longer exists", notFound, StringComparison.Ordinal);
+        Assert.Contains("link", isLink, StringComparison.Ordinal);
+        Assert.Contains("did not let SysManager list", unreadable, StringComparison.Ordinal);
+        Assert.Equal("", DiskAnalyzerViewModel.DescribeFailure(DiskAnalyzerService.AnalysisFailure.None));
+    }
+
     // ── Exclusion disclosure (the total is partial by design) ────────────────────────────────
     //
     // Four Windows subtrees are skipped because they are slow or unreadable, and junctions are never

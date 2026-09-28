@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.24] - 2026-09-28
+
+**Disk Analyzer now says when it could not measure a folder, instead of reporting a finished scan of nothing.** Such
+a result is no longer saved as your last scan either, so the next real one is compared with a real scan.
+
+### Fixed
+
+- **Disk Analyzer: a folder it could not measure is not an empty scan.** For a folder that no longer exists, a link
+  to another location, or one Windows would not let it list, the tab said "No subfolders found.", "Analysis
+  complete." and showed a completion notification.
+  - It now says the folder could not be measured, and why, in plain words.
+  - Nothing is recorded. The empty result used to be saved as the folder's latest scan, so the next real scan read
+    as "larger than your last scan" by the whole folder.
+  Present since the tab was added in v0.8.0. The empty result has been saved as a scan since v1.73.0.
+
 ## [1.114.23] - 2026-09-28
 
 **Startup Manager now says when it could not list other programs' scheduled tasks.** Windows shows them only to

@@ -184,7 +184,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   async init at all.
 - `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it. `DescribeScan` says when other programs' scheduled tasks are missing from the list, and why.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
-- `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan.
+- `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan. A folder that could not be measured sets `LastFailure`, says why, and is not remembered as a scan.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
   tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
   refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
@@ -543,7 +543,9 @@ Key services:
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
-  reporting and system-path skipping.
+  reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
+  or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),
+  so a failure is never an empty scan.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location. `KillProcess(pid, startTime)` ends that process alone, never its tree, and
   returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had

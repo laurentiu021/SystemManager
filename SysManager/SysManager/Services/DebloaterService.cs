@@ -104,25 +104,43 @@ public sealed partial class DebloaterService
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The script <see cref="ListAsync"/> runs: the non-framework, non-resource packages for the current user.
+    /// </summary>
+    /// <remarks>
+    /// A read that listed nothing and reported an error is a failure, and is thrown so that the runner raises it.
+    /// <c>Get-AppxPackage</c> reports its failures as non-terminating errors, so it used to write the error and
+    /// return nothing, which parsed as a PC with no Store apps. A read that listed some packages and failed on
+    /// others keeps what it listed. <c>-ErrorAction Stop</c> would have lost the whole tab to one damaged package.
+    /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with
+    /// <c>Get-AppxPackage</c> shadowed by a function.</para>
+    /// </remarks>
+    internal const string ListScript = """
+        $packages = @(Get-AppxPackage -ErrorVariable listErrors -ErrorAction SilentlyContinue)
+        if ($packages.Count -eq 0 -and $listErrors.Count -gt 0) { throw $listErrors[0] }
+        $packages | Where-Object { -not $_.IsFramework -and -not $_.IsResourcePackage } |
+            Select-Object Name, PackageFullName, PackageFamilyName, Publisher, Version
+        """;
+
+    /// <summary>
     /// Lists installed Store apps for the current user, newest catalog matches first.
     /// Protected packages are included but flagged <see cref="StoreApp.IsProtected"/>.
-    /// Returns an empty list if the query fails (logged at Debug).
+    /// Returns null when the query failed, and an empty list only when Windows answered with none.
     /// </summary>
-    public async Task<IReadOnlyList<StoreApp>> ListAsync(CancellationToken ct = default)
+    /// <remarks>
+    /// A failure used to come back as an empty list, so the tab said "No Store apps found." about a PC whose
+    /// apps it had not read (#2487). <see cref="ListScript"/> says how a failed read is told from an empty one.
+    /// </remarks>
+    public async Task<IReadOnlyList<StoreApp>?> ListAsync(CancellationToken ct = default)
     {
-        // Non-framework, non-resource packages for the current user.
-        const string script =
-            "Get-AppxPackage | Where-Object { -not $_.IsFramework -and -not $_.IsResourcePackage } | " +
-            "Select-Object Name, PackageFullName, PackageFamilyName, Publisher, Version";
         try
         {
-            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            Collection<PSObject> results = await _ps.RunAsync(ListScript, cancellationToken: ct).ConfigureAwait(false);
             return ParsePackages(results);
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
             Log.Debug("Debloater: list failed: {Error}", ex.Message);
-            return [];
+            return null;
         }
     }
 

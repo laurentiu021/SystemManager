@@ -346,4 +346,42 @@ public class ScheduledMaintenanceViewModelTests
         Assert.True(vm.IsScheduled);
         Assert.StartsWith("3 scheduled runs did not happen", vm.MissedRunsWarning, StringComparison.Ordinal);
     }
+
+    // ── a read that fails is not "nothing scheduled" (#2487) ──────────────
+    // The service returned "not registered" for a failed read, so the card said "No maintenance is scheduled yet."
+    // and Save offered to create a schedule it might be about to replace.
+
+    private static ScheduledMaintenanceViewModel VmWhoseStatusReadFails()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns<Collection<PSObject>>(_ => throw new RuntimeException("The Task Scheduler service did not answer."));
+        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    [Fact]
+    public void AFailedStatusRead_SaysSo_InsteadOfNothingScheduled()
+    {
+        var vm = VmWhoseStatusReadFails();
+
+        Assert.True(vm.StatusUnknown);
+        Assert.False(vm.IsScheduled);
+        Assert.Equal("The maintenance schedule could not be read.", vm.CurrentSummary);
+        Assert.Contains("replaces any schedule it has already set", vm.OneScheduleNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveSchedule_AfterAFailedRead_SaysItMayReplaceOne()
+    {
+        var vm = VmWhoseStatusReadFails();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.SaveScheduleCommand.ExecuteAsync(null);
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Contains("could not read whether a schedule is already registered", shown, StringComparison.Ordinal);
+        Assert.DoesNotContain("This creates a Windows scheduled task", shown, StringComparison.Ordinal);
+    }
 }

@@ -78,8 +78,16 @@ public sealed class MaintenanceSchedulerService
             ["OnlyIfIdle"] = schedule.OnlyWhenIdle,
         };
 
-    /// <summary>Reads the current state of the maintenance task (Exists=false if not registered).</summary>
-    public async Task<MaintenanceStatus> GetStatusAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Reads the current state of the maintenance task: Exists=false when Windows says there is no task, and
+    /// null when the read itself failed.
+    /// </summary>
+    /// <remarks>
+    /// A failed read used to return "not registered", so the tab said "No maintenance is scheduled yet." and a
+    /// Save asked to create a schedule it might be about to replace (#2487). <see cref="StatusScript"/> says
+    /// how the two are told apart.
+    /// </remarks>
+    public async Task<MaintenanceStatus?> GetStatusAsync(CancellationToken ct = default)
     {
         try
         {
@@ -99,7 +107,7 @@ public sealed class MaintenanceSchedulerService
         catch (RuntimeException ex)
         {
             Log.Debug("Maintenance status read failed: {Error}", ex.Message);
-            return MaintenanceStatus.NotRegistered;
+            return null;
         }
     }
 
@@ -110,8 +118,9 @@ public sealed class MaintenanceSchedulerService
         {
             var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = TaskName };
             await _ps.RunAsync(RemoveScript, parameters, ct).ConfigureAwait(false);
+            // Removed only when Windows then answers that there is no task. A read-back that fails proves nothing.
             var status = await GetStatusAsync(ct).ConfigureAwait(false);
-            return !status.Exists;
+            return status is { Exists: false };
         }
         catch (RuntimeException ex)
         {
@@ -165,9 +174,22 @@ public sealed class MaintenanceSchedulerService
             Select-Object @{ n='State'; e={ [string]$_.State } }
         """;
 
-    private const string StatusScript = """
+    /// <summary>The script <see cref="GetStatusAsync"/> runs: one row for the task, or none when there is none.</summary>
+    /// <remarks>
+    /// "There is no task" is only what Windows says it is: <c>Get-ScheduledTask</c> reports <c>ObjectNotFound</c>,
+    /// and the script returns nothing. Any other error is thrown, so the runner raises it and the read counts
+    /// as failed. The read used <c>-ErrorAction SilentlyContinue</c>, which made every failure look like an
+    /// absent task (#2487).
+    /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with
+    /// <c>Get-ScheduledTask</c> shadowed by a function.</para>
+    /// </remarks>
+    internal const string StatusScript = """
         param([string]$Folder, [string]$Name)
-        $task = Get-ScheduledTask -TaskName $Name -TaskPath $Folder -ErrorAction SilentlyContinue
+        try { $task = Get-ScheduledTask -TaskName $Name -TaskPath $Folder -ErrorAction Stop }
+        catch {
+            if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { return }
+            throw
+        }
         if ($null -eq $task) { return }
         $info = Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Folder -ErrorAction SilentlyContinue
         [PSCustomObject]@{

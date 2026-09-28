@@ -43,6 +43,18 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private bool _hideSystemTasks;
 
+    // Distinguishes "Windows answered with none" from "the read failed". The empty state used to say "No
+    // scheduled tasks found" either way, because the service returned an empty list for a failed read (#2487).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listFailed;
+
+    public string EmptyTitle => ListFailed ? "Scheduled tasks could not be read" : "No scheduled tasks found";
+
+    public string EmptyMessage => ListFailed
+        ? "Windows did not answer when SysManager asked for the scheduled tasks. Press Refresh to try again."
+        : "Run a scan to list Windows scheduled tasks you can manage.";
+
     public TaskSchedulerViewModel(TaskSchedulerService service)
     {
         _service = service;
@@ -85,7 +97,18 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         try
         {
-            _all = (await _service.ListTasksAsync(_cts.Token).ConfigureAwait(true)).ToList();
+            var tasks = await _service.ListTasksAsync(_cts.Token).ConfigureAwait(true);
+            ListFailed = tasks is null;
+            if (tasks is null)
+            {
+                // A failed read changes nothing on screen: what was listed stays listed, and the empty state and
+                // the status line say the read failed rather than that there are no tasks (#2487).
+                StatusMessage = _all.Count == 0
+                    ? "Could not read the scheduled tasks. Press Refresh to try again."
+                    : "Could not read the scheduled tasks, so the list below is from the last scan.";
+                return;
+            }
+            _all = tasks.ToList();
             ApplyFilter();
             StatusMessage = _all.Count == 0
                 ? "No scheduled tasks found."

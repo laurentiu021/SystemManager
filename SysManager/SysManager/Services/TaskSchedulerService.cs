@@ -64,8 +64,15 @@ public sealed class TaskSchedulerService
             Select-Object TaskName, TaskPath, @{ n='State'; e={ [string]$_.State } }, Author, Description
         """;
 
-    /// <summary>List all scheduled tasks (run info loaded lazily on selection).</summary>
-    public async Task<IReadOnlyList<ScheduledTaskInfo>> ListTasksAsync(CancellationToken ct = default)
+    /// <summary>
+    /// List all scheduled tasks (run info loaded lazily on selection). Returns null when the read failed, and an
+    /// empty list only when Windows answered with none.
+    /// </summary>
+    /// <remarks>
+    /// A failed read used to come back as an empty list, so the tab said "No scheduled tasks found." about a PC
+    /// whose tasks it had not read (#2487).
+    /// </remarks>
+    public async Task<IReadOnlyList<ScheduledTaskInfo>?> ListTasksAsync(CancellationToken ct = default)
     {
         try
         {
@@ -88,7 +95,7 @@ public sealed class TaskSchedulerService
         catch (System.Management.Automation.RuntimeException ex)
         {
             Log.Debug("List scheduled tasks failed: {Error}", ex.Message);
-            return [];
+            return null;
         }
     }
 

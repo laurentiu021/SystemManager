@@ -109,4 +109,16 @@ public class TaskSchedulerServiceTests
     [Fact]
     public void ClassifyTask_NullPath_IsThirdParty()
         => Assert.Equal(TaskCategory.ThirdParty, TaskSchedulerService.ClassifyTask(null!, null));
+
+    [Fact]
+    public async Task ListTasksAsync_WhenTheReadFails_ReturnsNull_NotAnEmptyList()
+    {
+        // #2487. A failed read used to come back as an empty list, and the tab said "No scheduled tasks found."
+        // about a PC whose tasks it had not read.
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns<Collection<PSObject>>(_ => throw new RuntimeException("The Task Scheduler service did not answer."));
+
+        Assert.Null(await new TaskSchedulerService(ps).ListTasksAsync());
+    }
 }

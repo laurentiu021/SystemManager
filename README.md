@@ -498,6 +498,8 @@ need administrator rights:
 - **Stoppable** — the task scan can take a while on a machine with a full task tree, so there is a
   Cancel button while it runs, and whatever was already listed stays on screen. Refresh is disabled
   during a scan instead of stacking a second one on top
+- **A read that fails says so.** If Windows does not answer, the tab says the tasks could not be
+  read rather than that there are none, and a refresh that fails keeps the list you already had
 - Changes need administrator and are verified by reading the task's state back
 - Overlaps [Startup Manager](#startup-manager) on purpose: that tab lists the third-party tasks among
   these next to the programs that launch at boot, because that is all the shorter answer to "why is my
@@ -910,6 +912,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   runs SysManager in the background (via its CLI) to clean temporary files or purge
   standby memory, daily or weekly at a time you pick
 - See the **last run, next run, and last result** of the task at a glance
+- **"Not scheduled" means Windows said so.** If the schedule cannot be read, the page says that
+  instead of "No maintenance is scheduled yet", and Save warns that it replaces any schedule
+  SysManager has already set
 - **Runs on battery too.** Windows will not start a scheduled task on battery unless it is
   told to, so on an unplugged laptop the schedule would silently never fire — it now starts
   regardless, and keeps going if you unplug mid-run. Untick it if you would rather it waited
@@ -1110,6 +1115,8 @@ them:
 - **Impact summary + confirmation** before anything is uninstalled
 - **Your ticks survive a rescan**, including when an app updates itself in between — apps are
   matched by the identity that stays the same across versions
+- **A scan that fails says so**, rather than reporting that there are no Store apps, and a refresh
+  that fails keeps the list you already had. One app Windows cannot read does not hide the others
 - **Reversible** — removal is per-user, so any app can be reinstalled from the Store
 - **A Windows restore point is attempted before the first removal**, shared with the other tabs
   that change system settings. Described honestly rather than reassuringly: System Restore does

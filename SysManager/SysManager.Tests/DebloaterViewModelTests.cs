@@ -283,4 +283,50 @@ public class DebloaterViewModelTests
         // The removal itself still reported normally.
         Assert.Contains("Removed 1 app", vm.StatusMessage, StringComparison.Ordinal);
     }
+
+    // ---------- a read that fails is not "no apps" (#2487) ----------
+
+    // A runner whose list answers with one app while `fail` is false, and throws the RuntimeException the runner
+    // raises for a failed script once it is set.
+    private static IPowerShellRunner ListRunner(Func<bool> fail)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>>(), Arg.Any<CancellationToken>())
+            .Returns(_ => fail()
+                ? Task.FromException<Collection<PSObject>>(new RuntimeException("The AppX deployment service did not answer."))
+                : Task.FromResult(new Collection<PSObject>
+                {
+                    DebloaterServiceTests.MakePkg("Contoso.AppA", "Contoso.AppA_1.0.0.0_x64__8wekyb3d8bbwe",
+                                                  "Contoso.AppA_8wekyb3d8bbwe"),
+                }));
+        return runner;
+    }
+
+    [Fact]
+    public void AFailedFirstRead_SaysSo_InsteadOfNoStoreAppsFound()
+    {
+        // The service returned an empty list for a failed read, so the tab said "No Store apps found." about a PC
+        // whose apps it had not read.
+        var vm = NewVm(NoRestorePoint(), ListRunner(() => true));
+
+        Assert.Empty(vm.Apps);
+        Assert.True(vm.ListFailed);
+        Assert.Equal("Installed apps could not be read", vm.EmptyTitle);
+        Assert.DoesNotContain("No Store apps", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFailedRefresh_KeepsWhatWasListed()
+    {
+        var fail = false;
+        var vm = NewVm(NoRestorePoint(), ListRunner(() => fail));
+        Assert.Single(vm.Apps);
+
+        fail = true;
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.Apps);
+        Assert.True(vm.ListFailed);
+        Assert.Contains("from the last scan", vm.StatusMessage, StringComparison.Ordinal);
+    }
 }

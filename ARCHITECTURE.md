@@ -741,7 +741,9 @@ Key services:
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and
-  denylist check are pure, unit-tested static methods.
+  denylist check are pure, unit-tested static methods. `ListAsync` returns null for a read that
+  failed and an empty list only for an empty answer: `ListScript` throws when `Get-AppxPackage`
+  listed nothing and reported an error, and keeps what it listed when only some packages failed.
 - `BrowserCleanerService` — scans + cleans per-browser data (Chromium family +
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Chrome, Edge, Brave and Vivaldi share
   one per-profile expansion; Opera is the family exception (no `\Default\` segment, two roots)
@@ -904,6 +906,7 @@ Key services:
   / `Get-ScheduledTaskInfo` / `Enable`/`Disable-ScheduledTask`) through `IPowerShellRunner`.
   Disabling is reversible and never unregisters; toggles are verified by read-back. The
   `ClassifyTask` safety heuristic (telemetry/system/third-party) is a pure, unit-tested method.
+  `ListTasksAsync` returns null for a read that failed, so the tab never reports one as no tasks.
 - `WindowsThemeService` — reads/writes the per-user Windows light/dark theme (HKCU
   `AppsUseLightTheme`/`SystemUsesLightTheme`, no admin) and broadcasts
   `WM_SETTINGCHANGE("ImmersiveColorSet")` for immediate effect. Persists the schedule JSON;
@@ -996,7 +999,9 @@ Key services:
   only record of what the app changed. `OnlyTheMutatingCliVerbs_RecordAHeadlessRun` pins both
   halves.
 - `MaintenanceSchedulerService` — registers/reads/removes a single SysManager-owned Windows
-  scheduled task (`\SysManager\Scheduled Maintenance`) that launches the app's own exe with a
+  scheduled task (`\SysManager\Scheduled Maintenance`). `GetStatusAsync` returns null for a read that
+  failed: `StatusScript` treats only `Get-ScheduledTask`'s `ObjectNotFound` as "not registered" and
+  throws on any other error. The task launches the app's own exe with a
   whitelisted CLI verb on a daily/weekly trigger, via the `ScheduledTasks` module through the
   `IPowerShellRunner` seam. Registered in the current-user context (no admin); only ever
   touches its own task — never enumerates or modifies others. The command is built from a

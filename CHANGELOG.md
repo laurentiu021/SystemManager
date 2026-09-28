@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.13] - 2026-09-28
+
+**Three tabs no longer report "none" when Windows did not answer.** Preinstalled Apps, Task Scheduler and
+Scheduled Maintenance now say the read failed, and a refresh that fails keeps what was already on screen.
+
+### Fixed
+
+- **Preinstalled Apps: a scan that fails says so.** A failed read came back as an empty list, so the tab said "No
+  Store apps found." about a PC whose apps it had not read. It now says the installed apps could not be read, and a
+  refresh that fails keeps the list from the last scan. One app Windows cannot read no longer counts as a failure:
+  the others are still listed. Present since the tab was added in v1.24.0.
+- **Task Scheduler: a read that fails says so.** It said "No scheduled tasks found." for a read that had failed. It
+  now says the tasks could not be read, and a refresh that fails keeps the list. Present since the tab was added in
+  v1.40.0.
+- **Scheduled Maintenance: "not scheduled" now means Windows said so.** Any failed read of the task counted as no
+  task, so the page said "No maintenance is scheduled yet." and Save asked to create a schedule it might be about
+  to replace. Only Windows' own "the task does not exist" now counts. For any other failure the page says the
+  schedule could not be read, and Save warns that it replaces any schedule SysManager has already set. Removing a
+  schedule is reported as done only when Windows then confirms the task is gone. Present since the tab was added in
+  v1.50.0.
+
 ## [1.114.12] - 2026-09-28
 
 **Four more system changes now wait for a running repair instead of cutting into it.** A restore could restart

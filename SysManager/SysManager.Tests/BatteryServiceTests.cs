@@ -172,4 +172,35 @@ public class BatteryServiceTests
         var info = await service.GetBatteryInfoAsync();
         Assert.NotNull(info);
     }
+
+    // ── A query that failed is not "no battery" (#2503) ──
+    //
+    // A failed Win32_Battery query fell through to "No battery detected", so a laptop whose WMI did not answer was
+    // told it runs on AC power only.
+
+    [Theory]
+    [InlineData("wmi")]
+    [InlineData("denied")]
+    [InlineData("com")]
+    public void AFailedBatteryQuery_IsNull_NotNoBattery(string failure)
+    {
+        Func<BatteryInfo> read = failure switch
+        {
+            "wmi" => () => throw new System.Management.ManagementException("Invalid class"),
+            "denied" => () => throw new UnauthorizedAccessException("Access is denied."),
+            _ => () => throw new System.Runtime.InteropServices.COMException("The RPC server is unavailable."),
+        };
+
+        Assert.Null(BatteryService.GetBatteryInfo(read));
+    }
+
+    [Fact]
+    public void AQueryThatListsNoBattery_IsNoBattery_NotAFailure()
+    {
+        var info = BatteryService.GetBatteryInfo(() => new BatteryInfo());
+
+        Assert.NotNull(info);
+        Assert.False(info.HasBattery);
+        Assert.Equal("No battery detected", info.Status);
+    }
 }

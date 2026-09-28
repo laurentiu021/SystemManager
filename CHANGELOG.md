@@ -10,6 +10,17 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.19] - 2026-09-28
+
+**Battery Health now says when Windows could not read the battery.** It used to tell a laptop it had no battery
+whenever the battery query failed.
+
+### Fixed
+
+- **Battery Health: a failed read is not "no battery".** When the Windows battery query failed, the tab said "No
+  battery detected — this device runs on AC power only." It now says the battery could not be read. A failed
+  Refresh keeps the last reading on screen and says the figures are from then. Present since v0.10.0.
+
 ## [1.114.18] - 2026-09-28
 
 **File Lock Detector now checks folders, and says when a path does not exist or a check could not be completed.**

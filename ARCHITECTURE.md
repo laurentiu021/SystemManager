@@ -192,7 +192,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME,
   not by the description database's `safety` field — that field is provenance, and treating it as
   criticality is what made the app refuse to end Notepad while claiming a BSOD.
-- `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI.
+- `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI. A failed read sets `ReadFailed` and says so rather than "no battery"; a failed refresh keeps the last reading.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
@@ -628,8 +628,11 @@ Key services:
   per-user registry switches Windows Settings writes (per-app `Enabled` under
   `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable
   registry root for tests; per-user, reversible, no window hooking.
-- `BatteryService` — battery health, charge cycles, wear level, and
-  power report generation via WMI and `powercfg /batteryreport`.
+- `BatteryService` — battery charge, health, wear level and cycle count via WMI
+  (`Win32_Battery`, then the `root\WMI` capacity classes). `GetBatteryInfo` returns null
+  when the `Win32_Battery` query fails, so a failed read is never reported as no battery.
+  The capacity classes answer only an elevated process, and without them health is left
+  unmeasured rather than claimed.
 - `DialogService` — centralized confirmation/message dialogs (replaces
   direct MessageBox calls for testability).
 - `IconExtractorService` — extracts application icons from executables

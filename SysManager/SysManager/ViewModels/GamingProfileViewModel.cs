@@ -163,7 +163,8 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
             : $"Optimizations apply to {game.Name} and revert automatically when it exits.";
 
         if (!DialogService.Instance.Confirm(
-                $"Start game mode?\n\n{targetLine}\n\nEvery change is reversible from here (Stop) or automatically on game exit.",
+                $"Start game mode?\n\n{targetLine}\n\nEvery change is reversible from here (Stop) or automatically on game exit." +
+                _service.RestorePointNotice,
                 "Gaming Profile — Start"))
             return;
 

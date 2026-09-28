@@ -76,6 +76,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     public int? BoundGamePid { get; private set; }
     public bool HasPendingRecovery => !IsActive && LoadStore().ActiveSession is not null;
 
+    /// <inheritdoc />
+    public string RestorePointNotice => _restorePoint.ConfirmationNotice;
+
     /// <summary>
     /// Test seam: seed a live applied step so a test can exercise RevertAsync's gate-held path
     /// (and the Dispose-during-revert deadlock regression) without a real Apply. Not for

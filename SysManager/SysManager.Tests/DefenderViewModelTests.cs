@@ -234,6 +234,33 @@ public class DefenderViewModelTests
         await restorePoint.Received(2).EnsureAsync("SysManager Defender Tweaks", Arg.Any<System.Threading.CancellationToken>());
     }
 
+    [Theory]
+    [InlineData("TogglePua")]
+    [InlineData("ToggleCfa")]
+    [InlineData("RemoveExclusion")]
+    public async Task EveryChange_SaysWhatTheRestorePointDoesToSystemProtection(string change)
+    {
+        // #2483. Every change goes through the funnel that takes the session restore point, which turns System
+        // Protection back on when it is off, and no confirmation said so. Adding an exclusion asks through the
+        // same Confirm, after a folder picker a test cannot answer.
+        var restorePoint = NoRestorePoint();
+        restorePoint.ConfirmationNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), restorePoint);
+        await vm.InitializationComplete;
+        vm.SelectedExclusion = @"C:\Games";
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var command = change switch
+        {
+            "TogglePua" => vm.TogglePuaCommand,
+            "ToggleCfa" => vm.ToggleCfaCommand,
+            _ => vm.RemoveExclusionCommand,
+        };
+        await command.ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), System.StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TogglePua_WhenAPointWasCreated_SaysSo()
     {

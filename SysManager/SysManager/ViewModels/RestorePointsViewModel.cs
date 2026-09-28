@@ -125,10 +125,7 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
         // in the UI. Enabling it is the right behaviour (a restore point is useless otherwise); doing it
         // without saying so is not.
         if (!DialogService.Instance.Confirm(
-                $"Create a restore point named \"{description}\"?\n\n" +
-                "If System Protection is currently off for the Windows drive, SysManager will turn it " +
-                "back on — Windows cannot create a restore point otherwise. Protection then reserves " +
-                "some disk space for restore points until you turn it off again in System Properties.",
+                $"Create a restore point named \"{description}\"?\n\n" + RestorePointService.ProtectionNotice,
                 "Create Restore Point"))
         {
             return;

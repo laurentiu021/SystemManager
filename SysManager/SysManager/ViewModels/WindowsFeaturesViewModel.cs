@@ -123,7 +123,8 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         var action = feature.IsEnabled ? "disable" : "enable";
         if (!DialogService.Instance.Confirm(
             $"Are you sure you want to {action} '{feature.DisplayName}'?\n\n" +
-            "This may require a system reboot to take effect.",
+            "This may require a system reboot to take effect." +
+            _restorePoint.ConfirmationNotice,
             $"Confirm {action} feature"))
             return;
 

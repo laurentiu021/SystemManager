@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.11] - 2026-09-28
+
+**Seven tabs now say before their first change that SysManager may turn System Protection back on.** Their
+automatic restore point does that when protection is off, and only the Restore Points tab and Performance Mode
+said so.
+
+### Fixed
+
+- **The automatic restore point no longer turns System Protection back on without saying so.** Before the first
+  change of a session, Windows Features, Tweaks Hub, Gaming Profile, Privacy & Telemetry, Preinstalled Apps,
+  Edge/OneDrive Remover and Defender Tweaks try to create a System Restore point. Windows cannot make one while
+  System Protection is off, so SysManager turns it back on for the Windows drive first. For someone who switched
+  protection off to save space on a small drive, that is a lasting change, and none of these confirmations
+  mentioned it. Each now says so, in the same words as the Restore Points tab and Performance Mode. It says it
+  when SysManager is running as administrator and the session's one attempt is still to come, because at any
+  other time nothing is changed. Present on Tweaks Hub since v1.51.0, on Gaming Profile since v1.52.38, and on
+  the other five since v1.68.0.
+
+### Changed
+
+- **Tweaks Hub's Apply no longer mentions a restore point it will not try.** It said "SysManager will try to
+  create a System Restore point first (when running as administrator)" every time, and now says it only when
+  the attempt is still to come. Undo makes the same attempt, and now says so too.
+- **Preinstalled Apps' removal confirmation** no longer ends with "Continue?" after its opening question.
+
 ## [1.114.10] - 2026-09-28
 
 **The Dashboard's System Alerts are checked again when you press Scan system, and a check that could not run

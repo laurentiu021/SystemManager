@@ -727,6 +727,11 @@ Key services:
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `TweaksHubService`, `GamingProfileService`, `EdgeOneDriveViewModel`,
   `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`.
+  `ConfirmationNotice` is what each of their confirmations appends: the attempt turns System
+  Protection back on when it is off, and `RestorePointService.ProtectionNotice` is the one sentence
+  that says so, shared with the Restore Points tab and Performance Mode. It is empty once the
+  session's attempt has been made and when not elevated, because nothing can change then.
+  `TweaksHubService` and `GamingProfileService` pass it on as `RestorePointNotice`.
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and

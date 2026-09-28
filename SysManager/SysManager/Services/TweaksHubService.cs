@@ -33,6 +33,9 @@ public sealed class TweaksHubService : ITweaksHubService
     public IReadOnlyList<TweakItem> LoadTweaks()
         => _privacy.LoadToggles().Select(TweakItem.From).ToList();
 
+    /// <inheritdoc />
+    public string RestorePointNotice => _restorePoint.ConfirmationNotice;
+
     /// <summary>
     /// Applies (enable=true) or reverts (enable=false) the given tweaks. Attempts a restore
     /// point before the first change in the session (best-effort — a failure to snapshot does

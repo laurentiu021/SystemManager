@@ -201,6 +201,23 @@ public class DebloaterViewModelTests
     }
 
     [Fact]
+    public async Task RemoveSelected_SaysWhatTheRestorePointDoesToSystemProtection()
+    {
+        // #2483. The removal takes the shared restore point first, which turns System Protection back on when it
+        // is off, and this confirmation never said so.
+        var restorePoint = NoRestorePoint();
+        restorePoint.ConfirmationNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var vm = NewVm(restorePoint);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RemoveSelected_WhenTheUserDeclines_TakesNoRestorePoint()
     {
         // Declining is not a system change, so it must not spend the one point Windows allows per day.

@@ -188,6 +188,23 @@ public class PrivacyViewModelTests
     }
 
     [Fact]
+    public async Task ApplyChanges_SaysWhatTheRestorePointDoesToSystemProtection()
+    {
+        // #2483. The first change of a session takes the shared restore point, which turns System Protection
+        // back on when it is off, and this confirmation never said so.
+        var restorePoint = NoRestorePoint();
+        restorePoint.ConfirmationNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var vm = NewVm(restorePoint);
+        vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ApplyChanges_WhenUserDeclinesConfirm_DoesNotApply_AndKeepsPending()
     {
         var prevDialog = DialogService.Instance;

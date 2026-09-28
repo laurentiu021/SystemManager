@@ -231,8 +231,8 @@ public class DefenderServiceTests
     }
 
     // ── Exclusions Windows withholds from a standard user (#2476) ───────────
-    // Windows puts this sentence, in the display language, where each list should be. Listed as an excluded
-    // folder, it was a claim about the machine that nobody had read.
+    // Windows puts this sentence (as an English system words it) where each list should be. Listed as an
+    // excluded folder, it would be a claim about the machine that nobody had read.
     private const string Withheld = "N/A: Must be an administrator to view exclusions";
 
     [Fact]

@@ -77,11 +77,11 @@ public sealed class DefenderService
     /// Empties the exclusion lists and marks them unreadable when the session is not elevated.
     /// </summary>
     /// <remarks>
-    /// Windows shows the exclusion lists only to an administrator. For a standard user it puts the sentence
-    /// "N/A: Must be an administrator to view exclusions", in the display language, where each list should
-    /// be. That sentence would otherwise be listed as an excluded folder. The decision rests on the session's
-    /// elevation, not on matching the sentence, so it holds in any language; the PowerShell child that ran
-    /// the read has the same token as the app.
+    /// Windows shows the exclusion lists only to an administrator. For a standard user it puts a sentence where
+    /// each list should be — "N/A: Must be an administrator to view exclusions" on an English system — and that
+    /// sentence would otherwise be listed as an excluded folder. The decision rests on the session's elevation,
+    /// not on matching the sentence, so it does not depend on the sentence's wording or language; the
+    /// PowerShell child that ran the read has the same token as the app.
     /// </remarks>
     internal static DefenderStatus HideWithheldExclusions(DefenderStatus status, bool elevated) =>
         elevated

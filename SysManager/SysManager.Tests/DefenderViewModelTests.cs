@@ -284,9 +284,9 @@ public class DefenderViewModelTests
 
     // ---------- exclusions Windows withholds from a standard user (#2476) ----------
     // For a standard user, Windows puts "N/A: Must be an administrator to view exclusions" where each exclusion list
-    // should be. The card listed that sentence as an excluded folder, and with it hidden it said "No exclusion
-    // folders", which is a claim about the machine that nobody had read. The service decides on the session's
-    // elevation when it reads the status, so elevation is pinned for the whole test.
+    // should be. Shown as it arrives, that sentence would be listed as an excluded folder, and hidden without a
+    // word the card would say "No exclusion folders", a claim about the machine that nobody had read. The service
+    // decides on the session's elevation when it reads the status, so elevation is pinned for the whole test.
 
     private static IPowerShellRunner RunnerReportingExclusions(params string[] paths)
     {

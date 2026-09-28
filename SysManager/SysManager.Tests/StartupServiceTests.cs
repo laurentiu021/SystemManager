@@ -14,11 +14,50 @@ namespace SysManager.Tests;
 /// </summary>
 public class StartupServiceTests
 {
+    /// <summary>
+    /// The scan reports the task cache as listed exactly when this machine lets the test open it (#2503).
+    /// </summary>
+    /// <remarks>
+    /// Windows grants the cache to SYSTEM and Administrators only, so the answer differs between an elevated run and a
+    /// standard one. The test asks Windows itself rather than assuming either, which keeps it true on both.
+    /// </remarks>
+    [Fact]
+    public async Task ScanAsync_ReportsWhetherTheTaskCacheCouldBeRead()
+    {
+        bool readable;
+        try
+        {
+            using var cache = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(StartupService.TaskCachePath);
+            readable = true;
+        }
+        catch (System.Security.SecurityException)
+        {
+            readable = false;
+        }
+
+        var scan = await new StartupService().ScanAsync();
+
+        Assert.Equal(readable, scan.ScheduledTasksListed);
+    }
+
+    /// <summary>
+    /// The scheduled-task read's answer reaches the scan's result, whichever way it goes.
+    /// </summary>
+    /// <remarks>
+    /// The test above cannot show this on an elevated run, where the cache is always readable, and CI runs elevated.
+    /// </remarks>
+    [Fact]
+    public void Scan_CarriesTheScheduledTaskAnswerThrough()
+    {
+        Assert.False(StartupService.Scan(_ => false).ScheduledTasksListed);
+        Assert.True(StartupService.Scan(_ => true).ScheduledTasksListed);
+    }
+
     [Fact]
     public async Task ScanAsync_ReturnsNonNullList()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         Assert.NotNull(result);
     }
 
@@ -26,7 +65,7 @@ public class StartupServiceTests
     public async Task ScanAsync_EntriesHaveNonEmptyNames()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
             Assert.False(string.IsNullOrWhiteSpace(entry.Name),
@@ -38,7 +77,7 @@ public class StartupServiceTests
     public async Task ScanAsync_EntriesHaveNonEmptyCommand()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
             Assert.False(string.IsNullOrWhiteSpace(entry.Command),
@@ -50,7 +89,7 @@ public class StartupServiceTests
     public async Task ScanAsync_EntriesHaveValidSource()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
             Assert.True(Enum.IsDefined(typeof(StartupSource), entry.Source),
@@ -62,7 +101,7 @@ public class StartupServiceTests
     public async Task ScanAsync_EntriesHaveLocation()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
             Assert.False(string.IsNullOrWhiteSpace(entry.Location),
@@ -74,7 +113,7 @@ public class StartupServiceTests
     public async Task ScanAsync_NoDuplicateNamesWithinSameSource()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         // Entries from different sources (registry vs folder vs scheduler)
         // may legitimately share a name. Within the same source, entries
         // from Run and RunOnce may also share a name (e.g. "desktop").
@@ -91,7 +130,7 @@ public class StartupServiceTests
     public async Task ScanAsync_StatusTextIsSet()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         foreach (var entry in result)
         {
             Assert.False(string.IsNullOrWhiteSpace(entry.StatusText),
@@ -103,7 +142,7 @@ public class StartupServiceTests
     public async Task ScanAsync_IsEnabledIsBoolean()
     {
         var svc = new StartupService();
-        var result = await svc.ScanAsync();
+        var result = (await svc.ScanAsync()).Entries;
         // Just verify no exceptions — IsEnabled is always bool by type,
         // but we want to ensure ApplyApprovedState doesn't corrupt it.
         foreach (var entry in result)

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.23] - 2026-09-28
+
+**Startup Manager now says when it could not list other programs' scheduled tasks.** Windows shows them only to
+administrators, so without elevation the list was missing every one of them, and nothing said so.
+
+### Fixed
+
+- **Startup Manager: scheduled tasks it could not list are no longer missing without a word.** Windows lets only
+  administrators read its list of scheduled tasks. So a standard user's start-up list had none of the tasks
+  other programs add, under a header saying they were listed.
+  - The status line now says they are not included, and why.
+  - The header and the administrator banner say that listing them needs administrator rights, and Task
+    Scheduler's pointer to Startup Manager says the same.
+  - A read error in that list is reported the same way, instead of failing the whole scan.
+  Present since scheduled tasks were added to the tab in v0.12.2.
+
 ## [1.114.22] - 2026-09-28
 
 **Camera/Mic/Location now names any device whose history could not be read.** It used to leave that device out

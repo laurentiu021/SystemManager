@@ -611,7 +611,8 @@ System → System Fixes, where the tab name matches what they do.
 - Lists the programs that run at Windows boot: the Run and RunOnce registry keys for both your
   account and the whole machine, **including the separate location 64-bit Windows uses for programs
   installed by a 32-bit installer**, plus both Startup folders and scheduled tasks belonging to
-  programs you installed
+  programs you installed. Windows lets only administrators read which scheduled tasks exist, so
+  without "Run as administrator" those tasks are left out, and the tab says so
 - **Windows' own scheduled tasks are deliberately left out**, so the list stays short enough to read
   and nothing here is something you should not touch. [Task Scheduler](#task-scheduler) is the tab that
   shows every task, Windows' included — a third-party task appears on both, and it is the same task in

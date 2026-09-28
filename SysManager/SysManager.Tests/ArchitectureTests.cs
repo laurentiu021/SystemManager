@@ -10297,7 +10297,7 @@ public partial class ArchitectureTests
         var service = File.ReadAllText(Path.Combine(appDir, "Services", "StartupService.cs"));
 
         // Slice the scan itself, so a mention anywhere else in this 900-line service cannot stand in for it.
-        var scanAt = service.IndexOf("private static void ReadScheduledTasks", StringComparison.Ordinal);
+        var scanAt = service.IndexOf("internal static bool ReadScheduledTasks", StringComparison.Ordinal);
         Assert.True(scanAt > 0, "ReadScheduledTasks was not found in StartupService.cs — fix this guard "
             + "rather than trusting its pass.");
         var rest = service[scanAt..];
@@ -10712,7 +10712,7 @@ public partial class ArchitectureTests
         // And that the pipeline actually runs the post-pass. Every VerifySignatures test calls it directly,
         // so deleting the call from Scan() would leave all of them green while the column rendered nothing
         // on a real machine — the same shape of gap as an unbound property, one level up.
-        var scan = SliceMethod(service, "private static IReadOnlyList<StartupEntry> Scan()");
+        var scan = SliceMethod(service, "internal static StartupScan Scan(Func<List<StartupEntry>, bool> readScheduledTasks)");
         foreach (var pass in new[] { "EnrichWithDescriptions(results)", "ApplyApprovedState(results)", "VerifySignatures(results)" })
         {
             Assert.Contains(pass, scan, StringComparison.Ordinal);

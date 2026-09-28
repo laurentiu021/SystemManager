@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Microsoft.Win32;
 using SysManager.Services;
 
@@ -66,7 +68,7 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         WriteApp("webcam", "##", start, null, nonPackaged: true);
         WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, start + 10);
 
-        var entries = _svc.Read();   // must not throw
+        var entries = _svc.Read().Entries;   // must not throw
         // The valid app still surfaces — a degenerate sibling does not abort the scan.
         Assert.Contains(entries, e => e.AppName == "Microsoft.WindowsCamera");
     }
@@ -92,7 +94,7 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
 
     [Fact]
     public void Read_NoConsentStore_ReturnsEmpty()
-        => Assert.Empty(_svc.Read());
+        => Assert.Empty(_svc.Read().Entries);
 
     [Fact]
     public async Task ReadAsync_ReturnsSameEntriesAsRead()
@@ -102,8 +104,8 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
         WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, start + 10);
 
-        var sync = _svc.Read();
-        var async = await _svc.ReadAsync();
+        var sync = _svc.Read().Entries;
+        var async = (await _svc.ReadAsync()).Entries;
 
         Assert.Equal(sync.Count, async.Count);
         Assert.Contains(async, e => e.AppName == "Microsoft.WindowsCamera");
@@ -116,7 +118,7 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         var stop = new DateTime(2024, 5, 1, 9, 5, 0, DateTimeKind.Utc).ToFileTimeUtc();
         WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, stop);
 
-        var entries = _svc.Read();
+        var entries = _svc.Read().Entries;
         var e = Assert.Single(entries);
         Assert.Equal("Camera", e.Capability);
         Assert.Equal("Microsoft.WindowsCamera", e.AppName);
@@ -130,7 +132,7 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
         WriteApp("microphone", "SomeChatApp_abc", start, null);
 
-        var e = Assert.Single(_svc.Read());
+        var e = Assert.Single(_svc.Read().Entries);
         Assert.Equal("Microphone", e.Capability);
         Assert.True(e.InUse);
         Assert.Equal("In use now", e.LastUsedDisplay);
@@ -142,7 +144,7 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         var start = new DateTime(2024, 5, 2, 3, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
         WriteApp("webcam", "C:#Program Files#Zoom#zoom.exe", start, start + 100, nonPackaged: true);
 
-        var entries = _svc.Read();
+        var entries = _svc.Read().Entries;
         Assert.Contains(entries, e => e.AppName == "zoom.exe" && e.Capability == "Camera");
     }
 
@@ -153,8 +155,59 @@ public sealed class PrivacyMonitorServiceTests : IDisposable
         WriteApp("location", "OldApp_x", old, old + 50);                 // finished long ago
         WriteApp("microphone", "LiveApp_y", old + 999_999_999, null);    // in use now
 
-        var entries = _svc.Read();
+        var entries = _svc.Read().Entries;
         Assert.True(entries.Count >= 2);
         Assert.True(entries[0].InUse);   // in-use sorts to the top
+    }
+
+    // ---------- a capability that could not be read (#2503) ----------
+    //
+    // An unreadable capability key was skipped without a trace. With all three unreadable the tab said nothing had
+    // been recorded, and with only the camera unreadable it listed the others as if the camera had been checked.
+    // The key is made unreadable for real, with a deny entry for this user that is removed again afterwards.
+
+    [Fact]
+    public void ACapabilityThatCannotBeRead_IsNamed_AndTheOthersAreStillRead()
+    {
+        var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
+        WriteApp("webcam", "Microsoft.WindowsCamera_8wekyb3d8bbwe", start, start + 10);
+        WriteApp("microphone", "SomeChatApp_abc", start, start + 10);
+
+        using var webcam = _root.OpenSubKey($@"{ConsentBase}\webcam", RegistryKeyPermissionCheck.ReadWriteSubTree,
+            RegistryRights.ReadKey | RegistryRights.ChangePermissions)!;
+        using var identity = WindowsIdentity.GetCurrent();
+        var deny = new RegistryAccessRule(identity.User!,
+            RegistryRights.QueryValues | RegistryRights.EnumerateSubKeys, AccessControlType.Deny);
+        var security = webcam.GetAccessControl(AccessControlSections.Access);
+        security.AddAccessRule(deny);
+        webcam.SetAccessControl(security);
+        try
+        {
+            var report = _svc.Read();
+
+            Assert.Equal(["Camera"], report.Unreadable);
+            Assert.Contains(report.Entries, e => e.Capability == "Microphone");
+            Assert.DoesNotContain(report.Entries, e => e.Capability == "Camera");
+        }
+        finally
+        {
+            security.RemoveAccessRuleSpecific(deny);
+            webcam.SetAccessControl(security);
+        }
+
+        Assert.Empty(_svc.Read().Unreadable);   // readable again, so the cleanup can delete the key
+    }
+
+    [Fact]
+    public void ACapabilityWithNoKey_IsNotUnreadable()
+    {
+        // Windows creates the key the first time an app asks for that device, so no key is no history.
+        var start = new DateTime(2024, 5, 1, 9, 0, 0, DateTimeKind.Utc).ToFileTimeUtc();
+        WriteApp("microphone", "SomeChatApp_abc", start, start + 10);
+
+        var report = _svc.Read();
+
+        Assert.Empty(report.Unreadable);
+        Assert.Single(report.Entries);
     }
 }

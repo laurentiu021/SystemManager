@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.22] - 2026-09-28
+
+**Camera/Mic/Location now names any device whose history could not be read.** It used to leave that device out
+without a word, or say that nothing had been recorded at all.
+
+### Fixed
+
+- **Camera/Mic/Location: a history that could not be read is named, not skipped.** When Windows did not let
+  SysManager read a device's access history, that device was left out without a trace.
+  - With all three unreadable, the tab said "No camera, microphone, or location access has been recorded yet."
+    It now says the history could not be read, and a Refresh that reads nothing keeps the previous list.
+  - With one unreadable, the tab listed the others as if every device had been checked. It now adds, for
+    example, "Could not read the camera history.", and the empty state names only what was read.
+  Present since the tab was added in v1.32.0.
+
 ## [1.114.21] - 2026-09-28
 
 **App Blocker, and the Dashboard alert for a block that cannot be undone, now say when the block list could not

@@ -854,6 +854,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Reads the Windows access history (CapabilityAccessManager consent store) — covers
   both Store apps and desktop programs
 - Devices **in use right now** are flagged and sorted to the top
+- If Windows does not let SysManager read a device's history, the tab names that device
+  instead of listing the others as if it had been checked, and a Refresh that reads
+  nothing at all keeps the previous list on screen
 - Read-only: an **Open privacy settings** button hands off to Windows to grant or
   revoke a permission — SysManager never changes capability permissions itself
 - **Export CSV** saves the history to a file you choose the location for, so evidence about

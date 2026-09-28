@@ -1400,6 +1400,9 @@ offers, "rate us" prompts:
   care about when checking whether something needs updating. The count shows both
   totals, so nothing looks like it vanished
 - Data parsed from `Get-CimInstance Win32_PnPSignedDriver`
+- A scan that fails says so instead of reporting 0 drivers, and keeps the previous list.
+  If Windows reports an error part-way through, the drivers it did list are shown with a
+  note that some may be missing
 
 ### Dashboard
 - One-line OS / CPU / RAM / disk summary

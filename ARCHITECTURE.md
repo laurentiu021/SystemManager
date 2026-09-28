@@ -201,7 +201,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
-- `DriversViewModel` — driver inventory via Win32_PnPSignedDriver.
+- `DriversViewModel` — driver inventory via Win32_PnPSignedDriver. `ReadScan` reads the exit code together with the output: a failed scan keeps the last list and says so (`ListFailed`), and an error part-way keeps what was listed, marked incomplete.
 - `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which
   asks the dispatcher whether it is on the UI thread; comparing `SynchronizationContext` instances, as it once
   did, fails there after the first await, and `ArchitectureTests.NothingComparesSynchronizationContextInstances`

@@ -101,8 +101,8 @@ public class FunctionalUiTests
     }
 
     /// <summary>
-    /// The driver scan reaches a terminal state: a "&lt;N&gt; drivers found" summary, or one of the
-    /// fallbacks the view model sets when the enumeration cannot be parsed or is refused.
+    /// The driver scan reaches a terminal state: a "&lt;N&gt; drivers found" summary, or the message the
+    /// view model sets when the scan failed or its output could not be read.
     /// </summary>
     /// <remarks>
     /// The 25 s bound this used to carry was too tight for what the scan actually does: it spawns
@@ -126,7 +126,7 @@ public class FunctionalUiTests
         // would match the status line of any other tab and pass without the scan having finished.
         var done = FlaUI.Core.Tools.Retry.WhileNull(
             () => _fx.WaitForText("drivers found", 1)
-                  ?? _fx.WaitForText("Parse error", 1),
+                  ?? _fx.WaitForText("Could not read the installed drivers", 1),
             TimeSpan.FromSeconds(90)).Result;
 
         // Distinguish "slower than the budget" from "never finished" — the progress text is only on

@@ -854,17 +854,17 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// <remarks>
     /// Null means the key could not be read. That is yellow, not the green "Feature check unavailable" it used to
     /// be, which also named a check this alert does not make (#2479).
-    /// <para>The unknown case is the discard rather than a third named arm: a switch that names all three values
-    /// ends on a pattern that is always true, which CodeQL reports, and a discard that fell to the green arm is the
-    /// very defect this method exists to prevent. Only a definite answer reaches green.</para>
+    /// <para>A null check and a plain <c>bool</c>, not a switch. CodeQL's constant-condition rule reads a <c>false</c>
+    /// pattern that follows <c>true</c> as always matching, even on a <c>bool?</c> where null is still possible, and it
+    /// reported the switch in both orders it has been written in. Whatever the shape, the unknown case must not reach
+    /// green: only a definite <c>false</c> does.</para>
     /// </remarks>
     internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(bool? pending) =>
-        pending switch
-        {
-            true => ("Pending reboot required (Windows Update)", AlertSeverity.Yellow),
-            false => ("No pending reboots", AlertSeverity.Green),
-            _ => ("Pending reboot could not be checked", AlertSeverity.Yellow),
-        };
+        pending is not { } required
+            ? ("Pending reboot could not be checked", AlertSeverity.Yellow)
+            : required
+                ? ("Pending reboot required (Windows Update)", AlertSeverity.Yellow)
+                : ("No pending reboots", AlertSeverity.Green);
 
     // ══════════════════════════════════════════════════════════════════════
     //  RECENT ACTIVITY

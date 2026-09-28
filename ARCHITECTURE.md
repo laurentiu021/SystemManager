@@ -168,7 +168,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
   temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system
-  alerts (auto-scan at boot), quick actions with inline progress, health score,
+  alerts (checked at launch, on Scan system and after Update All Apps; a check that
+  could not run is amber, never green), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
@@ -331,7 +332,8 @@ Key services:
   Injectable registry root for tests; deliberately offers no permanent
   disable-updates option, only a bounded pause.
 - `DiskHealthService` — pulls SMART data through WMI.
-- `MemoryTestService` — scans WHEA / MemoryDiagnostics events.
+- `MemoryTestService` — scans WHEA / MemoryDiagnostics events. A log it cannot read is thrown,
+  never returned as zero errors, so the Dashboard and System Health can say the check did not run.
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach
   human-readable explanations. Exposes `LastOutcome` (`Ok` / `AccessDenied` /
   `LogNotFound` / `Unavailable`) alongside the streamed entries, because a refused

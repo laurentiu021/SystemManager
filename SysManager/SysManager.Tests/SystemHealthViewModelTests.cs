@@ -14,7 +14,7 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class SystemHealthViewModelTests
 {
-    private static SystemHealthViewModel NewVm() => new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
+    private static SystemHealthViewModel NewVm(MemoryTestService? memTest = null) => new(new SystemInfoService(), new DiskHealthService(), memTest ?? new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
 
     // ---------- construction ----------
 
@@ -102,6 +102,24 @@ public class SystemHealthViewModelTests
         Assert.Null(vm.Os);
         Assert.Null(vm.Cpu);
         Assert.Null(vm.Memory);
+    }
+
+    // ---------- the memory check that could not read the log (#2479) ----------
+
+    [Fact]
+    public async Task CheckMemoryErrors_WhenTheLogCannotBeRead_SaysItCouldNotCheck()
+    {
+        // The service returned zero errors for a log it could not read, so the verdict read "No memory errors
+        // reported in the last 30 days." in green. It now throws, and the verdict says the check could not run,
+        // in the warning colour, instead of keeping whatever it said before.
+        var vm = NewVm(new MemoryTestService(MemoryTestServiceTests.NoSuchLog));
+
+        await vm.CheckMemoryErrorsCommand.ExecuteAsync(null);
+
+        Assert.Contains("could not be checked", vm.MemoryHealthVerdict, StringComparison.Ordinal);
+        Assert.DoesNotContain("No memory errors", vm.MemoryHealthVerdict, StringComparison.Ordinal);
+        Assert.Equal(StatusColors.Warning, vm.MemoryHealthColorHex);
+        Assert.False(vm.IsBusy);
     }
 
     // ---------- commands ----------

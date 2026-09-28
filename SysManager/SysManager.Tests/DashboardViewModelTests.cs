@@ -11,9 +11,16 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Pure unit tests for <see cref="DashboardViewModel"/>.
-/// RefreshAsync hits real WMI so it lives in IntegrationTests.
+/// Unit tests for <see cref="DashboardViewModel"/>.
 /// </summary>
+/// <remarks>
+/// Tests that assert what WMI returned live in IntegrationTests. The System Alerts tests at the end do wait for
+/// the load, which queries WMI, and one of them runs Scan system, but they assert only on what a substitute and a
+/// missing event log produce. They are here for two reasons. This is the suite that blocks a merge, and it has no
+/// <c>Application</c>, so an alert's result, which is written through <c>UiThread.Post</c>, lands inline where the
+/// test can read it. The integration host creates its <c>Application</c> on a thread that runs a work queue rather
+/// than a dispatcher, and a result posted there would never land.
+/// </remarks>
 // Serialized: the confirm-gate tests swap the static DialogService.Instance,
 // which is process-wide shared state.
 [Collection("ProcessWideStatics")]
@@ -25,7 +32,8 @@ public class DashboardViewModelTests
                                             IWindowsUpdateService? windowsUpdate = null,
                                             ISpeedTestService? speedTest = null,
                                             SpeedTestHistoryService? speedHistory = null,
-                                            ITuneUpService? tuneUp = null)
+                                            ITuneUpService? tuneUp = null,
+                                            MemoryTestService? memTest = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -41,7 +49,7 @@ public class DashboardViewModelTests
             // defaulted to) these tests would delete a genuine crash report before the user was ever
             // told about it (#1772).
             new CrashMarkerService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-crash")),
-            new MemoryTestService(),
+            memTest ?? new MemoryTestService(),
             // A substitute by default, so a test that navigates asserts against it instead of reaching for
             // a live window. An unbound real NavigationService would also be inert, but then "did it
             // navigate?" would be unanswerable rather than merely unasked.
@@ -295,6 +303,35 @@ public class DashboardViewModelTests
         var (title, severity) = DashboardViewModel.ClassifyPendingReboot(false);
         Assert.Equal("No pending reboots", title);
         Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    // ---------- a check that could not run is yellow, never green (#2479) ----------
+    // Each of these three had a failure branch that wrote "… check unavailable" in green, the colour of "all good",
+    // while the disk and memory checks already said they could not run, in yellow.
+
+    [Fact]
+    public void ClassifyAppUpdates_CheckFailed_IsYellowAndSaysSo()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyAppUpdates(null);
+        Assert.Equal("App updates could not be checked", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyEventLog_CheckFailed_IsYellowAndSaysSo()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyEventLog(null);
+        Assert.Equal("Event Log could not be checked", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
+    }
+
+    [Fact]
+    public void ClassifyPendingReboot_CheckFailed_IsYellowAndSaysSo()
+    {
+        // It also used to read "Feature check unavailable", naming a check this alert does not make.
+        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(null);
+        Assert.Equal("Pending reboot could not be checked", title);
+        Assert.Equal(AlertSeverity.Yellow, severity);
     }
 
     // ── Confirmation-gate tests (destructive quick actions must route through Confirm) ──
@@ -867,5 +904,94 @@ public class DashboardViewModelTests
         var vm = NewVm();
 
         Assert.DoesNotContain(vm.Alerts, a => a.Title.Contains("blocked", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ---------- the alerts are checked again, and a check that fails says so (#2479) ----------
+    //
+    // The alerts were checked once, at launch. Scan system reloaded everything else and said "All systems
+    // scanned", and after Update All Apps the card still read "3 app updates available" under "All apps updated".
+
+    // Every wait below is bounded, so a machine whose WMI stalls fails these tests instead of hanging the run.
+    // Generous, because the load they wait for queries WMI and reads the Event Log.
+    private static readonly TimeSpan Bound = TimeSpan.FromMinutes(2);
+
+    private static async Task LoadedWithAlertsAsync(DashboardViewModel vm)
+    {
+        await vm.InitializationComplete.WaitAsync(Bound);
+        await vm.AlertScans.WaitAsync(Bound);
+    }
+
+    // A winget whose upgrade list the test controls, so a check made after the change can be told from one made
+    // before it. The upgrade itself succeeds.
+    private static IWingetService WingetListing(Func<int> upgrades)
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(
+            Enumerable.Range(1, upgrades()).Select(i => new AppPackage { Name = $"App {i}" }).ToList()));
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        return winget;
+    }
+
+    [Fact]
+    public async Task ScanSystem_ChecksEveryAlertAgain()
+    {
+        var upgrades = 3;
+        using var vm = NewVm(WingetListing(() => upgrades));
+        await LoadedWithAlertsAsync(vm);
+        Assert.Contains(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(3).Title);
+        var alertCount = vm.Alerts.Count;
+
+        upgrades = 0;
+        await vm.RefreshCommand.ExecuteAsync(null).WaitAsync(Bound);
+
+        Assert.Contains(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(0).Title);
+        Assert.DoesNotContain(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(3).Title);
+        // A fresh set in place of the old one rather than a second set after it, and every check in it had
+        // finished by the time Scan system said everything was scanned.
+        Assert.Equal(alertCount, vm.Alerts.Count);
+        Assert.All(vm.Alerts, a => Assert.Equal(AlertLoadingState.Complete, a.State));
+    }
+
+    [Fact]
+    public async Task UpdateAllApps_ChecksTheAlertsAgain()
+    {
+        var upgrades = 3;
+        using var vm = NewVm(WingetListing(() => upgrades));
+        await LoadedWithAlertsAsync(vm);
+        using var confirm = new DialogAnswer(confirm: true);
+
+        upgrades = 0;
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null).WaitAsync(Bound);
+        await vm.AlertScans.WaitAsync(Bound);
+
+        Assert.Equal("All apps updated", vm.QuickActionDetail);
+        Assert.Contains(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(0).Title);
+    }
+
+    [Fact]
+    public async Task AnAppUpdateCheckThatFails_IsYellowAndLinksToAppUpdates()
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.ListUpgradableAsync(Arg.Any<CancellationToken>())
+              .Returns(Task.FromException<List<AppPackage>>(new InvalidOperationException("The query failed.")));
+        using var vm = NewVm(winget);
+        await LoadedWithAlertsAsync(vm);
+
+        var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(null).Title);
+        Assert.Equal(AlertSeverity.Yellow, alert.Severity);
+        Assert.Equal("nav-app-updates", alert.NavTargetId);
+    }
+
+    [Fact]
+    public async Task AMemoryCheckThatCannotReadTheLog_SaysSoAndLinksToSystemHealth()
+    {
+        // Two defects in one alert. The service returned zero errors for a log it could not read, so this read
+        // "No memory errors (30 days)" in green, and the alert had no Fix this link whatever it found.
+        using var vm = NewVm(QuietWinget(), memTest: new MemoryTestService(MemoryTestServiceTests.NoSuchLog));
+        await LoadedWithAlertsAsync(vm);
+
+        var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyMemoryHealth(null).Title);
+        Assert.Equal(AlertSeverity.Yellow, alert.Severity);
+        Assert.Equal("nav-system-health", alert.NavTargetId);
     }
 }

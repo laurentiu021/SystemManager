@@ -20,10 +20,26 @@ public sealed class MemoryTestService
         int MemoryDiagnosticResults,
         DateTime? LastError);
 
+    // "System" everywhere but a test, which names a log that does not exist. That is the one way to make the
+    // real reader fail on demand, and the failure path is the one that was wrong (#2479).
+    private readonly string _logName;
+
+    public MemoryTestService() : this("System") { }
+
+    internal MemoryTestService(string logName) => _logName = logName;
+
     /// <summary>
     /// Look at the System event log for memory-related hardware errors.
     /// Returns counts for the last 30 days.
     /// </summary>
+    /// <exception cref="System.Diagnostics.Eventing.Reader.EventLogException">The log could not be read.</exception>
+    /// <exception cref="UnauthorizedAccessException">Windows refused to let the log be read.</exception>
+    /// <remarks>
+    /// A log that could not be read is thrown, never returned as a summary. Both callers catch these two
+    /// exceptions to say the check could not run, and this method used to catch them first and return zero
+    /// errors, so the Dashboard and System Health both reported "No memory errors" in green for a log nobody had
+    /// read, and their could-not-check branches never ran (#2479).
+    /// </remarks>
     public async Task<MemoryErrorSummary> CheckErrorLogsAsync(CancellationToken ct = default)
     {
         return await Task.Run(() =>
@@ -31,54 +47,49 @@ public sealed class MemoryTestService
             int wheaCount = 0, diagCount = 0;
             DateTime? lastError = null;
 
-            try
+            using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
+                new System.Diagnostics.Eventing.Reader.EventLogQuery(_logName,
+                    System.Diagnostics.Eventing.Reader.PathType.LogName,
+                    "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]")
+                { ReverseDirection = true });
+
+            var cutoff = DateTime.Now.AddDays(-30);
+            // Check cancellation BEFORE reading so a record read at the moment of
+            // cancellation isn't left to the GC; the read result is always wrapped
+            // in using(rec) below.
+            while (!ct.IsCancellationRequested && reader.ReadEvent() is { } rec)
             {
-                using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(
-                    new System.Diagnostics.Eventing.Reader.EventLogQuery("System",
-                        System.Diagnostics.Eventing.Reader.PathType.LogName,
-                        "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger' or @Name='Microsoft-Windows-MemoryDiagnostics-Results']]]")
-                    { ReverseDirection = true });
-
-                var cutoff = DateTime.Now.AddDays(-30);
-                // Check cancellation BEFORE reading so a record read at the moment of
-                // cancellation isn't left to the GC; the read result is always wrapped
-                // in using(rec) below.
-                while (!ct.IsCancellationRequested && reader.ReadEvent() is { } rec)
+                using (rec)
                 {
-                    using (rec)
-                    {
-                        if (rec.TimeCreated.HasValue && rec.TimeCreated.Value < cutoff) break;
+                    if (rec.TimeCreated.HasValue && rec.TimeCreated.Value < cutoff) break;
 
-                        var provider = rec.ProviderName ?? "";
-                        bool counted = false;
-                        if (provider.Contains("WHEA"))
+                    var provider = rec.ProviderName ?? "";
+                    bool counted = false;
+                    if (provider.Contains("WHEA"))
+                    {
+                        // Memory-related WHEA events are ID 17 / 18 / 19 / 20 typically
+                        if (rec.Id == 17 || rec.Id == 18 || rec.Id == 19 || rec.Id == 20)
                         {
-                            // Memory-related WHEA events are ID 17 / 18 / 19 / 20 typically
-                            if (rec.Id == 17 || rec.Id == 18 || rec.Id == 19 || rec.Id == 20)
-                            {
-                                wheaCount++;
-                                counted = true;
-                            }
+                            wheaCount++;
+                            counted = true;
                         }
-                        else if (provider.Contains("MemoryDiagnostics"))
-                        {
-                            // 1201 = errors detected. 1101 = test passed (no errors), which
-                            // must NOT count as a memory error (previously any ID counted,
-                            // turning a clean test into a false warning).
-                            if (rec.Id == 1201)
-                            {
-                                diagCount++;
-                                counted = true;
-                            }
-                        }
-                        // Only advance lastError for records that actually count as errors.
-                        if (counted && rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
-                            lastError = rec.TimeCreated.Value;
                     }
+                    else if (provider.Contains("MemoryDiagnostics"))
+                    {
+                        // 1201 = errors detected. 1101 = test passed (no errors), which
+                        // must NOT count as a memory error (previously any ID counted,
+                        // turning a clean test into a false warning).
+                        if (rec.Id == 1201)
+                        {
+                            diagCount++;
+                            counted = true;
+                        }
+                    }
+                    // Only advance lastError for records that actually count as errors.
+                    if (counted && rec.TimeCreated.HasValue && (lastError is null || rec.TimeCreated.Value > lastError))
+                        lastError = rec.TimeCreated.Value;
                 }
             }
-            catch (System.Diagnostics.Eventing.Reader.EventLogException) { /* EventLog API can throw on restricted hosts */ }
-            catch (UnauthorizedAccessException) { /* EventLog access denied */ }
 
             return new MemoryErrorSummary(wheaCount, diagCount, lastError);
         }, ct).ConfigureAwait(false);

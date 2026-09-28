@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.10] - 2026-09-28
+
+**The Dashboard's System Alerts are checked again when you press Scan system, and a check that could not run
+now says so.** They used to show what was true when SysManager started, and a failed check could read as good
+news.
+
+### Fixed
+
+- **Dashboard: Scan system checks the System Alerts again.** It reloaded everything else and said "All systems
+  scanned", while the alerts kept whatever they found when SysManager started, so "3 app updates available"
+  stayed on the card after the updates were installed. Scan system now checks every alert again, and says the
+  scan is done only once they are back. Update All Apps checks them again too, so its "All apps updated" no
+  longer sits above an alert that says otherwise. Present since the alerts were added in v1.17.0.
+- **Dashboard: an alert that could not be checked is amber, never green.** When the app update, Event Log or
+  pending-reboot check failed, the alert read "… check unavailable" in green, the colour of "all good". It now
+  says the check could not be done, in the same amber as the disk and memory checks that could not run, with a
+  Fix this link to the tab where it can be checked again. Present since v1.17.0.
+- **Memory errors: a log that could not be read is no longer reported as no errors.** The scan behind the
+  Dashboard's memory alert and System Health's Check memory errors returned zero errors when the System event
+  log could not be read, so both said "No memory errors" in green without having looked. Both now say the
+  memory errors could not be checked. Present since v0.3.0 on System Health, and on the Dashboard since
+  v1.75.20.
+- **Dashboard: the memory alert links to System Health.** v1.105.0 gave every alert a Fix this link to the tab
+  that can act on it, and the memory alert never got its link, so "test your RAM" offered no way to get there.
+
+### Changed
+
+- **The pending-reboot alert says what it checks.** While it checks, it reads "Checking for a pending
+  reboot..." instead of "Checking Windows features...", which it never checked.
+
 ## [1.114.9] - 2026-09-28
 
 **The Bulk Installer now asks before it installs anything.** Installing can upgrade an app you already have,

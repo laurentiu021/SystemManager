@@ -21,6 +21,7 @@ public sealed class ActivityLogService
     internal const int MaxEntries = 60;
 
     private readonly string _filePath;
+    private readonly int _lockAttempts;
     private readonly Lock _lock = new();
     private List<ActivityEntry> _entries = [];
 
@@ -50,50 +51,125 @@ public sealed class ActivityLogService
     /// known-folder API and ignores the <c>LOCALAPPDATA</c> environment variable, so a test calling
     /// <see cref="Log"/> would have written into the user's own activity history. That is why this
     /// seam exists — see the ratchet in ArchitectureTests and issue #1741.</para>
+    /// <para><paramref name="lockWait"/> is how long a write waits for another process's; a test that races
+    /// writers passes a bound long enough that a stalled runner cannot turn contention into a lost entry.</para>
     /// </summary>
-    internal ActivityLogService(string? configDir)
+    internal ActivityLogService(string? configDir, TimeSpan? lockWait = null)
     {
         var dir = configDir ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _filePath = Path.Join(dir, "activity.json");
+        _lockAttempts = Math.Max(1, (int)((lockWait?.TotalMilliseconds ?? DefaultLockWaitMs) / LockRetryDelayMs));
         Load();
     }
 
+    /// <summary>The newest entries, read from the file, which another process may have written since.</summary>
+    /// <remarks>
+    /// A command-line or scheduled run is a separate process and records itself in the same file (#1509). The
+    /// Dashboard used to show this instance's own list, so such a run never appeared while SysManager stayed
+    /// open (#2478). The read needs no cross-process lock: every write replaces the file whole
+    /// (<see cref="AtomicFile"/>), so a reader sees the old list or the new one, never half of each.
+    /// </remarks>
     public IReadOnlyList<ActivityEntry> GetRecent(int count = 5)
     {
         lock (_lock)
+        {
+            if (ReadStore() is { } stored) _entries = stored;
             return _entries.Take(count).ToArray();
+        }
     }
 
+    /// <summary>
+    /// Records an action. Reads the file, adds the entry and writes it back as one step that no other process
+    /// can interleave with.
+    /// </summary>
+    /// <remarks>
+    /// This used to add the entry to the list read at startup and write that list back. When SysManager was
+    /// open, which for a tray app is most of the time, the next action it logged overwrote whatever a
+    /// command-line or scheduled run had written meanwhile, and that run left no trace anywhere (#2478).
+    /// <para>Reading first is not enough on its own: two processes that read before either writes still lose
+    /// one entry. <see cref="LockStore"/> closes that. If the file cannot be read, the entry goes onto this
+    /// instance's list rather than nowhere.</para>
+    /// </remarks>
     public void Log(string action, string detail)
     {
         var entry = new ActivityEntry(action, detail, DateTime.Now);
-        List<ActivityEntry> snapshot;
         lock (_lock)
         {
-            _entries.Insert(0, entry);
-            if (_entries.Count > MaxEntries)
-                _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
-            // Take the snapshot to persist while still holding the lock — serializing
-            // _entries directly (outside the lock) could race a concurrent Log() that is
-            // mutating the list, throwing "collection was modified" or writing torn JSON.
-            snapshot = [.. _entries];
+            using var storeLock = LockStore();
+            var entries = ReadStore() ?? _entries;
+            entries.Insert(0, entry);
+            if (entries.Count > MaxEntries)
+                entries.RemoveRange(MaxEntries, entries.Count - MaxEntries);
+            _entries = entries;
+            // Written while both locks are held: inside the process, a concurrent Log() cannot mutate the list
+            // mid-serialisation; across processes, nobody can write between this read and this write.
+            Save(entries);
         }
-        Save(snapshot);
     }
 
-    private void Load()
+    /// <summary>
+    /// How long, in milliseconds, <see cref="LockStore"/> keeps trying before it writes without the lock. The lock
+    /// is held only for one small read and write, so another SysManager process gives it up within milliseconds.
+    /// </summary>
+    /// <remarks>
+    /// Constants, not <c>static readonly TimeSpan</c>s: the constructor reads them, and the <see cref="Instance"/>
+    /// singleton is built by a static initializer declared above them. A static field declared later is still
+    /// zero at that point, so the production instance would have been given a single attempt.
+    /// </remarks>
+    internal const int DefaultLockWaitMs = 2000;
+
+    /// <summary>The pause between two tries, in milliseconds.</summary>
+    internal const int LockRetryDelayMs = 25;
+
+    /// <summary>
+    /// Takes the cross-process lock on the store: an exclusive handle on <c>activity.json.lock</c> beside it.
+    /// </summary>
+    /// <remarks>
+    /// A file rather than a named mutex, because the GUI and a scheduled run can differ in elevation: a mutex an
+    /// administrator session creates is closed to a standard one by its default security, while a file in the
+    /// user's own AppData folder inherits permissions both can use. Windows releases the handle when a process
+    /// ends, so a crash cannot leave the lock held. Returns null, and the write goes ahead unlocked, if the
+    /// lock cannot be had within <see cref="DefaultLockWaitMs"/>: losing a history line is better than losing the
+    /// action.
+    /// </remarks>
+    private FileStream? LockStore()
+    {
+        var lockPath = _filePath + ".lock";
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (attempt < _lockAttempts)
+            {
+                Thread.Sleep(LockRetryDelayMs);   // another process is writing; it will be a few milliseconds
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Serilog.Log.Debug("ActivityLog: writing without the store lock: {Error}", ex.Message);
+                return null;
+            }
+        }
+    }
+
+    private void Load() => _entries = ReadStore() ?? [];
+
+    /// <summary>The entries in the file: empty if there is no file yet, null if it could not be read.</summary>
+    private List<ActivityEntry>? ReadStore()
     {
         try
         {
-            if (!File.Exists(_filePath)) return;
+            if (!File.Exists(_filePath)) return [];
             var json = File.ReadAllText(_filePath);
-            _entries = JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [];
+            return JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [];
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog load failed: {Error}", ex.Message);
-            _entries = [];
+            return null;
         }
     }
 

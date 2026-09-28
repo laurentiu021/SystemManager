@@ -139,6 +139,65 @@ public sealed class ActivityLogServiceTests : IDisposable
         finally { Directory.Delete(otherDir, recursive: true); }
     }
 
+    // ── another process writes the same file (#2478) ────────────────────────
+    // A command-line or scheduled run is a separate process with its own instance over the same activity.json.
+    // Two instances over one directory are exactly that, without the process boundary.
+
+    [Fact]
+    public void Log_KeepsAnEntryAnotherProcessWroteAfterThisOneLoaded()
+    {
+        var gui = NewLog();        // SysManager, open since before the run
+        var headless = NewLog();   // the scheduled cleanup, a second process
+
+        headless.Log("Scheduled cleanup", "Freed 300 MB");
+        gui.Log("Quick Cleanup", "Freed 12 MB");
+
+        Assert.Equal(["Quick Cleanup", "Scheduled cleanup"],
+            new ActivityLogService(_dir).GetRecent(10).Select(e => e.Action));
+    }
+
+    [Fact]
+    public void GetRecent_ShowsAnEntryAnotherProcessWroteAfterThisOneLoaded()
+    {
+        var gui = NewLog();
+        NewLog().Log("Scheduled cleanup", "Freed 300 MB");
+
+        Assert.Equal("Scheduled cleanup", Assert.Single(gui.GetRecent(10)).Action);
+    }
+
+    [Fact]
+    public async Task TwoProcessesLoggingAtOnce_LoseNothing()
+    {
+        // Reading before writing is not enough on its own: two writers that both read before either writes still
+        // lose an entry. Each instance has its own in-process lock, so only the store lock stands between these
+        // two. The long wait keeps a stalled runner from turning contention into an unlocked write.
+        var a = new ActivityLogService(_dir, lockWait: StartLine.Bound);
+        var b = new ActivityLogService(_dir, lockWait: StartLine.Bound);
+        const int each = 25;
+
+        await StartLine.RaceAsync(
+            () => { for (var i = 0; i < each; i++) a.Log("A", $"{i}"); },
+            () => { for (var i = 0; i < each; i++) b.Log("B", $"{i}"); });
+
+        var all = new ActivityLogService(_dir).GetRecent(int.MaxValue);
+        Assert.Equal(2 * each, all.Count);
+        Assert.Equal(each, all.Count(e => e.Action == "A"));
+    }
+
+    [Fact]
+    public void TheLockTimings_AreConstants()
+    {
+        // The Instance singleton is built by a static initializer declared ABOVE these, and its constructor reads
+        // them. As static readonly fields they would still be zero at that moment, and the production instance
+        // would get one attempt at the lock instead of a two-second wait. A test instance, built after type
+        // initialisation, could not show that, so the shape is what is pinned.
+        foreach (var name in new[] { nameof(ActivityLogService.DefaultLockWaitMs), nameof(ActivityLogService.LockRetryDelayMs) })
+        {
+            var field = typeof(ActivityLogService).GetField(name, BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.True(field is { IsLiteral: true }, $"{name} must stay a const: {field?.FieldType.Name ?? "missing"}");
+        }
+    }
+
     // ── the six destructive commands must log ───────────────────────────────
 
     /// <summary>

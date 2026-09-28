@@ -55,6 +55,17 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     [ObservableProperty] private bool _onlyWhenIdle;
 
     [ObservableProperty] private bool _isScheduled;
+
+    /// <summary>True when the last read of the schedule failed, so whether one exists is not known.</summary>
+    /// <remarks>
+    /// Not the same as nothing being scheduled. A failed read used to come back as "not registered", so the card
+    /// said "No maintenance is scheduled yet." and Save offered to create a schedule it might be about to replace
+    /// (#2487).
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OneScheduleNote))]
+    private bool _statusUnknown;
+
     [ObservableProperty] private string _currentSummary = "";
     [ObservableProperty] private string _lastRun = "";
     [ObservableProperty] private string _nextRun = "";
@@ -135,7 +146,9 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// </remarks>
     public string OneScheduleNote => IsScheduled
         ? "SysManager keeps one schedule at a time, so saving this replaces the one above."
-        : "SysManager keeps one schedule at a time. You can change it or remove it whenever you like.";
+        : StatusUnknown
+            ? "SysManager keeps one schedule at a time, so saving this replaces any schedule it has already set."
+            : "SysManager keeps one schedule at a time. You can change it or remove it whenever you like.";
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
@@ -153,8 +166,15 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     private async Task LoadStatusAsync()
     {
         var status = await _service.GetStatusAsync();
-        IsScheduled = status.Exists;
-        if (status.Exists)
+        StatusUnknown = status is null;
+        IsScheduled = status is { Exists: true };
+        if (status is null)
+        {
+            CurrentSummary = "The maintenance schedule could not be read.";
+            LastRun = NextRun = LastResult = MissedRunsWarning = "";
+            StatusMessage = "Windows did not answer when SysManager asked for the schedule. Press Refresh to try again.";
+        }
+        else if (status.Exists)
         {
             CurrentSummary = $"Maintenance is scheduled (state: {status.State}).";
             LastRun = status.LastRun is { } lr ? lr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
@@ -186,6 +206,16 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// </remarks>
     private string ConfirmSavePrompt(MaintenanceSchedule schedule)
     {
+        // A third question for the case the read failed: there may be a schedule it could not see, and saving
+        // replaces it, so this neither claims to create one nor names one it cannot describe (#2487).
+        if (StatusUnknown)
+        {
+            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n"
+                 + "SysManager could not read whether a schedule is already registered. It keeps one schedule at a "
+                 + "time, so saving this replaces any schedule it has already set. Nothing else on your PC is "
+                 + "changed, and you can remove the schedule at any time.";
+        }
+
         if (!IsScheduled)
         {
             return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n"

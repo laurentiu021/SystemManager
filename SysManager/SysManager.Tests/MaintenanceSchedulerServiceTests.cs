@@ -110,6 +110,7 @@ public class MaintenanceSchedulerServiceTests
     {
         var (svc, _) = NewService();
         var status = await svc.GetStatusAsync();
+        Assert.NotNull(status);
         Assert.False(status.Exists);
     }
 
@@ -118,6 +119,7 @@ public class MaintenanceSchedulerServiceTests
     {
         var (svc, _) = NewService(StatusRow("Ready", 0));
         var status = await svc.GetStatusAsync();
+        Assert.NotNull(status);
         Assert.True(status.Exists);
         Assert.Equal("Ready", status.State);
         Assert.Equal(new DateTime(2026, 6, 29, 3, 0, 0), status.LastRun);
@@ -133,6 +135,7 @@ public class MaintenanceSchedulerServiceTests
 
         var status = await svc.GetStatusAsync();
 
+        Assert.NotNull(status);
         Assert.Equal("Last run failed (file not found)", status.LastResultDescription);
     }
 
@@ -158,6 +161,7 @@ public class MaintenanceSchedulerServiceTests
 
             var status = await svc.GetStatusAsync();
 
+            Assert.NotNull(status);
             Assert.Equal(4, status.MissedRuns);
             Assert.StartsWith("4 scheduled runs did not happen", status.MissedRunsWarning, StringComparison.Ordinal);
         }
@@ -170,18 +174,44 @@ public class MaintenanceSchedulerServiceTests
 
         var status = await svc.GetStatusAsync();
 
+        Assert.NotNull(status);
         Assert.True(status.Exists);
         Assert.Null(status.MissedRuns);
         Assert.Null(status.MissedRunsWarning);
     }
 
     [Fact]
-    public async Task GetStatusAsync_PowerShellThrows_ReturnsExistsFalse()
+    public async Task GetStatusAsync_PowerShellThrows_ReportsTheReadFailed_NotThatNothingIsScheduled()
     {
+        // Inverted deliberately (#2487). This used to assert Exists == false, which pinned the defect: a failed read
+        // told the tab that nothing was scheduled, and Save then offered to create a schedule it might replace.
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns<Collection<PSObject>>(_ => throw new RuntimeException("boom"));
         var svc = new MaintenanceSchedulerService(ps);
-        Assert.False((await svc.GetStatusAsync()).Exists);
+        Assert.Null(await svc.GetStatusAsync());
+    }
+
+    // ── RemoveAsync: removed only when Windows then says there is no task ──
+
+    [Fact]
+    public async Task RemoveAsync_WhenWindowsThenSaysThereIsNoTask_ReportsItRemoved()
+    {
+        var (svc, _) = NewService();   // both scripts answer with nothing: the task is gone
+        Assert.True(await svc.RemoveAsync());
+    }
+
+    [Fact]
+    public async Task RemoveAsync_WhenTheReadBackFails_DoesNotClaimTheTaskIsGone()
+    {
+        // #2487. The read-back used to count a failed read as "no task", so a removal it could not confirm was
+        // reported as done.
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(ci => ((string)ci[0]!).Contains("Unregister-ScheduledTask", StringComparison.Ordinal)
+              ? Task.FromResult(new Collection<PSObject>())
+              : Task.FromException<Collection<PSObject>>(new RuntimeException("The Task Scheduler service did not answer.")));
+
+        Assert.False(await new MaintenanceSchedulerService(ps).RemoveAsync());
     }
 }

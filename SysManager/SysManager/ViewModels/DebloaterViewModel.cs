@@ -45,10 +45,20 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
     private bool _hasScanned;
 
-    public string EmptyTitle => HasScanned ? "No Store apps found" : "No apps loaded";
-    public string EmptyMessage => HasScanned
-        ? "There are no removable Store apps on this system."
-        : "Press Refresh to scan installed Store apps.";
+    // Distinguishes "Windows answered with none" from "the read failed", so a failure is never reported as a PC
+    // with no Store apps. It used to be: the service returned an empty list for a failed read (#2487).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listFailed;
+
+    public string EmptyTitle => ListFailed ? "Installed apps could not be read"
+        : HasScanned ? "No Store apps found" : "No apps loaded";
+
+    public string EmptyMessage => ListFailed
+        ? "Windows did not answer when SysManager asked for the installed apps. Press Refresh to try again."
+        : HasScanned
+            ? "There are no removable Store apps on this system."
+            : "Press Refresh to scan installed Store apps.";
 
     public DebloaterViewModel(DebloaterService service, ISessionRestorePoint restorePoint)
     {
@@ -106,6 +116,17 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         try
         {
             var apps = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
+            if (apps is null)
+            {
+                // A failed read changes nothing on screen: what was listed stays listed, and the empty state and
+                // the status line say the read failed rather than that there are no apps.
+                ListFailed = true;
+                StatusMessage = Apps.Count == 0
+                    ? "Could not read the installed apps. Press Refresh to try again."
+                    : "Could not read the installed apps, so the list below is from the last scan.";
+                return;
+            }
+            ListFailed = false;
             // Keep the user's ticks across the rescan. These arrive UNSELECTED, so a rescan cleared the
             // selection rather than reversing it — the Remove button simply stopped doing anything until
             // every app was ticked again. Less dangerous than the tabs whose rows arrive pre-selected, but

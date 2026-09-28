@@ -111,11 +111,13 @@ public sealed record MaintenanceStatus(
     // How many scheduled runs Windows recorded as missed.
     int? MissedRuns = null)
 {
-    /// <summary>No task is registered — the same shape every failure path returns.</summary>
+    /// <summary>No task is registered: Windows answered that the task does not exist.</summary>
     /// <remarks>
-    /// A named value rather than five nulls at three call sites. Adding a field to this record previously
+    /// A named value rather than five nulls at each call site. Adding a field to this record previously
     /// meant editing each of them, and a missed one is a compile error only because every field happens to
     /// be nullable.
+    /// <para>Not what a failed read returns. It used to be, so a read that failed told the user nothing was
+    /// scheduled (#2487); <c>MaintenanceSchedulerService.GetStatusAsync</c> now returns null for that.</para>
     /// </remarks>
     public static MaintenanceStatus NotRegistered { get; } = new(false, null, null, null, null);
 

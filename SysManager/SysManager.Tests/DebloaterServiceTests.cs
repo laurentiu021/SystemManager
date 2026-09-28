@@ -19,7 +19,7 @@ namespace SysManager.Tests;
 /// </summary>
 public class DebloaterServiceTests
 {
-    private static PSObject MakePkg(string? name, string? full, string? family, string? publisher = "CN=Microsoft", string? version = "1.0.0.0")
+    internal static PSObject MakePkg(string? name, string? full, string? family, string? publisher = "CN=Microsoft", string? version = "1.0.0.0")
     {
         var o = new PSObject();
         o.Properties.Add(new PSNoteProperty("Name", name));
@@ -231,5 +231,17 @@ public class DebloaterServiceTests
         await runner.Received(1).RunAsync(
             Arg.Is<string>(s => s != null && s.Contains("Remove-AppxPackage") && s.Contains("Contoso.RandomApp_1.0.0.0_x64__abc")),
             Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListAsync_WhenTheReadFails_ReturnsNull_NotAnEmptyList()
+    {
+        // #2487. A failed read used to come back as an empty list, and the tab said "No Store apps found." about
+        // a PC whose apps it had not read.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns<Collection<PSObject>>(_ => throw new RuntimeException("The AppX deployment service did not answer."));
+
+        Assert.Null(await new DebloaterService(runner).ListAsync());
     }
 }

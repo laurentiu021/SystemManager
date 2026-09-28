@@ -259,7 +259,7 @@ public class MaintenanceScheduleTests
     }
 
     [Fact]
-    public void NotRegistered_IsTheShapeEveryFailurePathReturns()
+    public void NotRegistered_CarriesNothingButThatThereIsNoTask()
     {
         var status = MaintenanceStatus.NotRegistered;
 

@@ -333,4 +333,54 @@ public class TaskSchedulerViewModelTests
         Assert.Equal(lastRun, shown.LastRun);
         Assert.Same(shown, vm.SelectedTask);
     }
+
+    // ── a read that fails is not "no tasks" (#2487) ───────────────────────
+
+    // A runner whose list answers with two tasks while `fail` is false, and throws the RuntimeException the runner
+    // raises for a failed script once it is set.
+    private static IPowerShellRunner ListRunner(Func<bool> fail)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(_ => fail()
+                  ? Task.FromException<Collection<PSObject>>(new RuntimeException("The Task Scheduler service did not answer."))
+                  : Task.FromResult(new Collection<PSObject>
+                  {
+                      Row(("TaskName", "Defrag"), ("TaskPath", @"\Microsoft\Windows\Defrag\"),
+                          ("State", "Ready"), ("Author", "Microsoft"), ("Description", "desc")),
+                      Row(("TaskName", "Backup"), ("TaskPath", @"\Custom\"),
+                          ("State", "Ready"), ("Author", "me"), ("Description", "desc")),
+                  }));
+        return runner;
+    }
+
+    [Fact]
+    public async Task AFailedFirstRead_SaysSo_InsteadOfNoScheduledTasksFound()
+    {
+        // The service returned an empty list for a failed read, so the tab said "No scheduled tasks found." about
+        // a PC whose tasks it had not read.
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(ListRunner(() => true)));
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.Tasks);
+        Assert.True(vm.ListFailed);
+        Assert.Equal("Scheduled tasks could not be read", vm.EmptyTitle);
+        Assert.DoesNotContain("No scheduled tasks", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFailedRefresh_KeepsWhatWasListed()
+    {
+        var fail = false;
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(ListRunner(() => fail)));
+        await vm.InitializationComplete;
+        Assert.Equal(2, vm.Tasks.Count);
+
+        fail = true;
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vm.Tasks.Count);
+        Assert.True(vm.ListFailed);
+        Assert.Contains("from the last scan", vm.StatusMessage, StringComparison.Ordinal);
+    }
 }

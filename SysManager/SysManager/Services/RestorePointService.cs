@@ -32,6 +32,22 @@ public sealed class RestorePointService
     /// <summary>Printed by <see cref="BuildRestoreScript"/> only after Windows accepted the restore request.</summary>
     internal const string RestoreStartedSentinel = "__SM_RP_RESTORE_STARTED__";
 
+    /// <summary>
+    /// What every confirmation that can lead to a new restore point says about System Protection.
+    /// </summary>
+    /// <remarks>
+    /// Creating a point runs <c>Enable-ComputerRestore</c> first (<see cref="BuildCreateScript"/>), because
+    /// <c>Checkpoint-Computer</c> fails while protection is off. Turning it back on for someone who switched it
+    /// off to save space is a real, lasting change, so it is said before it happens: on the Restore Points tab,
+    /// on Performance Mode's button, and in the notice <see cref="ISessionRestorePoint.ConfirmationNotice"/> gives
+    /// the tabs whose first change takes the session's point (#2483). It happens whether or not Windows then
+    /// grants the point, so it is worded as a side effect, not as a promise of a snapshot.
+    /// </remarks>
+    public const string ProtectionNotice =
+        "If System Protection is currently off for the Windows drive, SysManager will turn it back on — " +
+        "Windows cannot create a restore point otherwise. Protection then reserves some disk space for " +
+        "restore points until you turn it off again in System Properties.";
+
     public RestorePointService(IPowerShellRunner ps) => _ps = ps;
 
     /// <summary>

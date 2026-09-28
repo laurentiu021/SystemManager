@@ -392,6 +392,14 @@ Edit Windows environment variables without the cramped built-in dialog:
   Restore on the system drive first if it's off). Windows makes at most one a day;
   when it declines, SysManager says so rather than reporting a point that was
   never made — here and on every tab that takes one automatically
+- **It says so before turning System Protection back on.** Creating a point turns System
+  Protection back on for the Windows drive if it is off, because Windows cannot make one
+  otherwise, and protection then keeps some disk space for restore points. The confirmation
+  says so here and on Performance Mode, and on the tabs that try a point before their first
+  change of a session: Windows Features, Tweaks Hub, Gaming Profile, Privacy & Telemetry,
+  Preinstalled Apps, Edge/OneDrive Remover and Defender Tweaks. Those say it only while that
+  attempt is still to come and SysManager is running as administrator, since otherwise
+  nothing is changed
 - **Restore** the PC to a selected point, with a clear confirmation that warns
   Windows will restart and that programs/drivers added since that point are removed
 - Admin elevation banner. Listing, creating and restoring all need administrator

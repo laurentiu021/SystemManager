@@ -579,9 +579,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(
                 "Create a System Restore point?\n\n" +
                 "This saves the current system state so you can roll back later if something goes wrong.\n\n" +
-                "If System Protection is currently off for the Windows drive, SysManager will turn it " +
-                "back on — Windows cannot create a restore point otherwise. Protection then reserves " +
-                "some disk space for restore points until you turn it off again in System Properties.",
+                RestorePointService.ProtectionNotice,
                 "Restore Point — Confirm"))
         {
             return;

@@ -168,7 +168,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(
                 $"Remove {targets.Count} app{(targets.Count == 1 ? "" : "s")} for the current user?\n\n{preview}\n\n" +
                 "This uninstalls them for your account only. You can reinstall any of them later " +
-                "from the Microsoft Store. Continue?",
+                "from the Microsoft Store." + _restorePoint.ConfirmationNotice,
                 "Remove selected apps"))
         {
             StatusMessage = "Removal cancelled.";

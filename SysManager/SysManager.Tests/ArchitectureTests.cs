@@ -1540,6 +1540,37 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// What creating a restore point does to System Protection is written once, in
+    /// <c>RestorePointService.ProtectionNotice</c>.
+    /// </summary>
+    /// <remarks>
+    /// The Restore Points tab and Performance Mode each carried their own copy of the sentence, and the seven
+    /// tabs that reach the same attempt through the session restore point had none (#2483). One constant keeps
+    /// all of them saying the same thing. The needle is assembled so this file cannot match itself, and comments
+    /// are stripped so a remark that quotes the sentence is not counted.
+    /// </remarks>
+    [Fact]
+    public void TheSystemProtectionNotice_IsWrittenInOnePlace()
+    {
+        var needle = "System Protection is " + "currently off";
+        const string theOnePlace = "RestorePointService.cs";
+
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} app source files enumerated — this guard is reading the wrong folder.");
+
+        var holders = files
+            .Where(f => WithoutComments(File.ReadAllText(f)).Contains(needle, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Equal([theOnePlace], holders);
+    }
+
+    /// <summary>
     /// No code sets a Dashboard alert to green directly. Green comes only from a <c>Classify…</c> method's
     /// measured good-news branch, which the unit tests pin.
     /// </summary>

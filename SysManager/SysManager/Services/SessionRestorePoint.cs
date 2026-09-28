@@ -3,6 +3,7 @@
 // License: MIT
 
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -19,7 +20,8 @@ namespace SysManager.Services;
 /// code for the benefit of a test; a delegate keeps the seam where it belongs and lets these tests
 /// run with no proxy framework at all.
 /// </remarks>
-public sealed class SessionRestorePoint(Func<string, CancellationToken, Task<bool>> createAsync)
+public sealed class SessionRestorePoint(
+    Func<string, CancellationToken, Task<bool>> createAsync, Func<bool>? isElevated = null)
     : ISessionRestorePoint
 {
     // Interlocked rather than a plain bool: mutating commands live on the UI thread today, but the
@@ -28,8 +30,18 @@ public sealed class SessionRestorePoint(Func<string, CancellationToken, Task<boo
     private int _attempted;
     private volatile bool _created;
 
+    // Whether an attempt could change anything: creating a point, and turning System Protection on with it,
+    // needs administrator. A test passes its own answer rather than depending on how its host was started.
+    private readonly Func<bool> _isElevated = isElevated ?? AdminHelper.IsElevated;
+
     /// <inheritdoc />
     public bool CreatedThisSession => _created;
+
+    /// <inheritdoc />
+    public string ConfirmationNotice =>
+        Volatile.Read(ref _attempted) == 0 && _isElevated()
+            ? "\n\nSysManager will try to create a System Restore point first. " + RestorePointService.ProtectionNotice
+            : "";
 
     /// <inheritdoc />
     public async Task<bool> EnsureAsync(string description, CancellationToken ct = default)

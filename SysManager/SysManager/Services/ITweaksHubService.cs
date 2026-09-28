@@ -21,6 +21,12 @@ public interface ITweaksHubService
     /// before the first change (so the UI can report honestly rather than over-promise).
     /// </summary>
     Task<TweakApplyResult> ApplyAsync(IReadOnlyList<TweakItem> tweaks, bool enable, CancellationToken ct = default);
+
+    /// <summary>
+    /// What the Apply and Undo confirmations add about the restore point <see cref="ApplyAsync"/> tries to take
+    /// first, or an empty string when it will not try. See <see cref="ISessionRestorePoint.ConfirmationNotice"/>.
+    /// </summary>
+    string RestorePointNotice { get; }
 }
 
 /// <summary>Outcome of a Tweaks Hub apply/undo batch.</summary>

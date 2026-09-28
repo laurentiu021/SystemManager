@@ -37,6 +37,12 @@ public interface IGamingProfileService
     Task<GamingApplyResult> ApplyAsync(GamingProfile profile, GameTarget? game, CancellationToken ct = default);
 
     /// <summary>
+    /// What the Start confirmation adds about the restore point <see cref="ApplyAsync"/> tries to take first, or
+    /// an empty string when it will not try. See <see cref="ISessionRestorePoint.ConfirmationNotice"/>.
+    /// </summary>
+    string RestorePointNotice { get; }
+
+    /// <summary>
     /// Revert the active session: undo every applied step in REVERSE order and clear the
     /// persisted active-session record. Idempotent — safe to call with no active session.
     /// Every step is attempted even when one fails, and the result names the ones that could

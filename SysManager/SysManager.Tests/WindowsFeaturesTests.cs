@@ -229,6 +229,22 @@ public class WindowsFeaturesTests
     }
 
     [Fact]
+    public async Task ToggleFeature_SaysWhatTheRestorePointDoesToSystemProtection()
+    {
+        // #2483. The toggle takes the shared restore point first, which turns System Protection back on when it
+        // is off, and this confirmation never said so.
+        var rp = NoRestorePoint();
+        rp.ConfirmationNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = ElevatedVm(RunnerThatSucceeds(), rp);
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(
+            new WindowsFeature { Name = "TelnetClient", DisplayName = "Telnet Client" });
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ToggleFeature_WithoutElevation_TakesNoRestorePoint()
     {
         // The command refuses before the confirmation when not elevated. Creating a point there would

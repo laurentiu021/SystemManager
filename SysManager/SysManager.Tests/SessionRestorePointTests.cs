@@ -18,6 +18,16 @@ namespace SysManager.Tests;
 /// </summary>
 public class SessionRestorePointTests
 {
+    /// <summary>
+    /// What the tab tests make their substitute return for <see cref="ISessionRestorePoint.ConfirmationNotice"/>.
+    /// </summary>
+    /// <remarks>
+    /// A stand-in rather than the real text, whose wording and conditions the tests at the end of this class
+    /// pin. The tab tests are about whether a confirmation carries the notice, and a stand-in keeps them from
+    /// depending on how the host was started.
+    /// </remarks>
+    internal const string NoticeStandIn = "\n\n(the session restore point's notice)";
+
     /// <summary>A create-delegate that records how often it ran and what it was asked to name the point.</summary>
     private sealed class FakeCreator(bool result = true, Exception? throws = null)
     {
@@ -145,5 +155,44 @@ public class SessionRestorePointTests
         Assert.Equal(1, creator.Calls);
         Assert.Single(results, created => created);
         Assert.True(session.CreatedThisSession);
+    }
+
+    // ---------- the notice a confirmation shows before the attempt (#2483) ----------
+    //
+    // Creating the point turns System Protection back on when it is off. The Restore Points tab and Performance
+    // Mode said so, and the seven tabs that reach this seam did not, although their first change makes the same
+    // attempt.
+
+    [Fact]
+    public void ConfirmationNotice_BeforeTheAttempt_SaysProtectionIsTurnedBackOn()
+    {
+        var session = new SessionRestorePoint(new FakeCreator().CreateAsync, isElevated: () => true);
+
+        var notice = session.ConfirmationNotice;
+
+        // Appended to a message as it is, so it brings its own paragraph break.
+        Assert.StartsWith("\n\n", notice, StringComparison.Ordinal);
+        Assert.Contains("restore point", notice, StringComparison.Ordinal);
+        Assert.EndsWith(RestorePointService.ProtectionNotice, notice, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmationNotice_AfterTheSessionsAttempt_IsEmpty()
+    {
+        // The one attempt has been made, so no later change can turn protection on, whatever the attempt did.
+        var session = new SessionRestorePoint(new FakeCreator(result: false).CreateAsync, isElevated: () => true);
+        await session.EnsureAsync("first");
+
+        Assert.Equal("", session.ConfirmationNotice);
+    }
+
+    [Fact]
+    public void ConfirmationNotice_WhenNotElevated_IsEmpty()
+    {
+        // Neither the point nor Enable-ComputerRestore can succeed without administrator, so saying protection
+        // will be turned on would be false.
+        var session = new SessionRestorePoint(new FakeCreator().CreateAsync, isElevated: () => false);
+
+        Assert.Equal("", session.ConfirmationNotice);
     }
 }

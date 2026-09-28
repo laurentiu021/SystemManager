@@ -116,6 +116,26 @@ public class TweaksHubViewModelTests
         finally { DialogService.Instance = prev; }
     }
 
+    // ── The restore point's System Protection notice (#2483) ───────────────
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyAndUndo_SayWhatTheRestorePointDoesToSystemProtection(bool applied)
+    {
+        // Both go through ApplyAsync, which takes the session restore point first. That turns System Protection
+        // back on when it is off. Apply mentioned the restore point but not that, and Undo mentioned neither.
+        var item = Tweak("a", "HKCU", applied); item.IsSelected = true;
+        var svc = NewService(item);
+        svc.RestorePointNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        var vm = NewVm(svc);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await (applied ? vm.UndoSelectedCommand : vm.ApplySelectedCommand).ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
     // ── CanExecute tracks pending counts ───────────────────────────────────
 
     [Fact]

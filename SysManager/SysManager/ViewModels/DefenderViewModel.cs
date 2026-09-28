@@ -252,6 +252,8 @@ public sealed partial class DefenderViewModel : ViewModelBase
         }
     }
 
-    private static bool Confirm(string message)
-        => DialogService.Instance.Confirm(message, "Defender — Confirm");
+    // Every change here runs through RunOperationAsync, which takes the session restore point first, so every
+    // confirmation says what that attempt does to System Protection when it will make one (#2483).
+    private bool Confirm(string message)
+        => DialogService.Instance.Confirm(message + _restorePoint.ConfirmationNotice, "Defender — Confirm");
 }

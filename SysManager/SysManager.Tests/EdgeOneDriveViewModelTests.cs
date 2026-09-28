@@ -141,6 +141,40 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         }
         finally { DialogService.Instance = prevDialog; }
     }
+
+    [Theory]
+    [InlineData("RemoveOneDrive")]
+    [InlineData("RestoreOneDrive")]
+    [InlineData("DisableEdge")]
+    [InlineData("RestoreEdge")]
+    public async Task EveryChange_SaysWhatTheRestorePointDoesToSystemProtection(string change)
+    {
+        // #2483. All four changes take the session restore point first, which turns System Protection back on
+        // when it is off, and none of their confirmations said so.
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject>());
+        var restorePoint = NoRestorePoint();
+        restorePoint.ConfirmationNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root), restorePoint);
+        await vm.InitializationComplete;
+        // The installed precondition, so each guard reaches its confirmation.
+        vm.OneDriveInstalled = true;
+        vm.EdgeInstalled = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var command = change switch
+        {
+            "RemoveOneDrive" => vm.RemoveOneDriveCommand,
+            "RestoreOneDrive" => vm.RestoreOneDriveCommand,
+            "DisableEdge" => vm.DisableEdgeCommand,
+            _ => vm.RestoreEdgeCommand,
+        };
+        await command.ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// A session restore point that never materialises — the honest default on a machine with System
     /// Restore off, and what keeps these tests about Edge/OneDrive rather than about snapshots.

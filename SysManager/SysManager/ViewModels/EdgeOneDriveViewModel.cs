@@ -257,8 +257,10 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         EdgeBackgroundDisabled = status.EdgeBackgroundDisabled;
     }
 
-    private static bool Confirm(string message, string title)
-        => DialogService.Instance.Confirm(message, title);
+    // All four changes run through RunOperationAsync, which takes the session restore point first, so every
+    // confirmation says what that attempt does to System Protection when it will make one (#2483).
+    private bool Confirm(string message, string title)
+        => DialogService.Instance.Confirm(message + _restorePoint.ConfirmationNotice, title);
 
     protected override void Dispose(bool disposing)
     {

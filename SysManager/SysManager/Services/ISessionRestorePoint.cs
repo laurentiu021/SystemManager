@@ -36,4 +36,17 @@ public interface ISessionRestorePoint
     /// Never true when the attempt failed or was skipped.
     /// </summary>
     bool CreatedThisSession { get; }
+
+    /// <summary>
+    /// What a confirmation adds before a change that goes through <see cref="EnsureAsync"/>, or an empty string
+    /// when that change will make no attempt. When not empty it starts with a blank line, so a caller appends it
+    /// to its message as it is.
+    /// </summary>
+    /// <remarks>
+    /// The attempt turns System Protection back on when it is off, a lasting change, and the seven tabs that
+    /// reach this seam used to make it without saying so, while the Restore Points tab and Performance Mode
+    /// both said so (#2483). Empty once this session's one attempt has been made, and when SysManager is not
+    /// running as administrator, because neither the point nor the protection change can happen then.
+    /// </remarks>
+    string ConfirmationNotice { get; }
 }

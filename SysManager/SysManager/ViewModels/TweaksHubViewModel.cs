@@ -98,8 +98,7 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm(
                 $"Apply {toApply.Count} selected tweak(s)?\n\n" +
-                "SysManager will try to create a System Restore point first (when running as " +
-                "administrator), and each tweak is individually reversible from here.",
+                "Each tweak is individually reversible from here." + _service.RestorePointNotice,
                 "Apply Tweaks — Confirm"))
             return;
 
@@ -113,7 +112,7 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
         if (toUndo.Count == 0) return;
 
         if (!DialogService.Instance.Confirm(
-                $"Undo {toUndo.Count} selected tweak(s), restoring the Windows default?",
+                $"Undo {toUndo.Count} selected tweak(s), restoring the Windows default?" + _service.RestorePointNotice,
                 "Undo Tweaks — Confirm"))
             return;
 

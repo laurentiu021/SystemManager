@@ -145,6 +145,22 @@ public class GamingProfileViewModelTests
         await service.DidNotReceive().ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>());
     }
 
+    [Fact]
+    public async Task Start_SaysWhatTheRestorePointDoesToSystemProtection()
+    {
+        // #2483. Starting takes the session restore point first, which turns System Protection back on when it
+        // is off, and this confirmation never said so. Stop and the crash recovery take none.
+        var service = ServiceWith(new GamingProfile());
+        service.RestorePointNotice.Returns(SessionRestorePointTests.NoticeStandIn);
+        var vm = NewVm(service);
+        vm.SilenceNotifications = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.EndsWith(SessionRestorePointTests.NoticeStandIn, Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
     // ── Stop reverts through the service ───────────────────────────────────
 
     [Fact]

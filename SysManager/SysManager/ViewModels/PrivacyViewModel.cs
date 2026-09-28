@@ -141,7 +141,8 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm(
                 $"Apply {changed.Count} privacy change{(changed.Count == 1 ? "" : "s")} to the Windows registry?\n\n" +
-                "Each toggle can be reverted by switching it back and pressing Apply again.",
+                "Each toggle can be reverted by switching it back and pressing Apply again." +
+                _restorePoint.ConfirmationNotice,
                 "Confirm Privacy Changes"))
         {
             StatusMessage = "Apply cancelled.";

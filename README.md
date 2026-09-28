@@ -1065,6 +1065,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   adapter's stable identity and restores its exact prior IPv4 and IPv6
   automatic/static configuration without persisting DHCP-supplied addresses as
   static overrides.
+- **Current DNS** — the servers the active adapter uses, or "Automatic (DHCP)" when none
+  are set. When Windows cannot report them it says "Unavailable" rather than guessing.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them; the changes are written to the hosts file when you press Save,

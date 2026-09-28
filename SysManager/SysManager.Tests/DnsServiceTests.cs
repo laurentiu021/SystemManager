@@ -239,6 +239,57 @@ public class DnsServiceTests
         Assert.Equal("Unavailable", current);
     }
 
+    // ---------- a failed read is a failure, not "Automatic (DHCP)" (#2504) ----------
+    //
+    // The integration suite runs both scripts in real Windows PowerShell and shows a failed cmdlet stopping them.
+    // These pin that the service runs those exact scripts, and that the stop is set before the first cmdlet.
+
+    [Fact]
+    public async Task GetCurrentDnsAsync_RunsTheScriptThatStopsOnAFailedRead()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("8.8.8.8"));
+        using var svc = new DnsService(runner);
+
+        await svc.GetCurrentDnsAsync();
+
+        await runner.Received(1).RunAsync(
+            DnsService.CurrentDnsScript,
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetDnsAsync_FindsTheAdapterWithTheScriptThatStopsOnAFailedRead()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(Result("7"));
+        using var svc = new DnsService(runner);
+
+        await svc.SetDnsAsync("9.9.9.9", "149.112.112.112");
+
+        await runner.Received(1).RunAsync(
+            DnsService.ActiveInterfaceIndexScript,
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("current")]
+    [InlineData("index")]
+    public void TheAdapterScripts_StopBeforeTheFirstCmdlet(string which)
+    {
+        var script = which == "current" ? DnsService.CurrentDnsScript : DnsService.ActiveInterfaceIndexScript;
+
+        var stop = script.IndexOf("$ErrorActionPreference = 'Stop'", StringComparison.Ordinal);
+        var firstCmdlet = script.IndexOf("Get-NetAdapter", StringComparison.Ordinal);
+
+        Assert.True(stop >= 0, "the script does not stop on an error");
+        Assert.True(firstCmdlet > stop, "Get-NetAdapter runs before the script is told to stop on an error");
+    }
+
     // ---------- presets (pure) ----------
 
     [Fact]

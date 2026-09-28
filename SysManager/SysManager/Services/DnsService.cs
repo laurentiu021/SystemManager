@@ -79,6 +79,28 @@ public sealed class DnsService : IDisposable
     ];
 
     /// <summary>
+    /// Prints the IPv4 DNS servers of the active adapter, "Automatic (DHCP)" when it has none set, or "No active
+    /// adapter".
+    /// </summary>
+    /// <remarks>
+    /// <c>$ErrorActionPreference = 'Stop'</c> is what tells a failed read from those answers. Both cmdlets report a
+    /// failure as a non-terminating error, and the script used to carry on past one: a failed
+    /// <c>Get-DnsClientServerAddress</c> left <c>$dns</c> null, its server count read 0, and a PC with custom DNS
+    /// servers was told "Automatic (DHCP)". A failed <c>Get-NetAdapter</c> read as "No active adapter" (#2504).
+    /// Stopped, the script makes the runner throw, and <see cref="GetCurrentDnsAsync"/> says "Unavailable".
+    /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with the
+    /// cmdlets shadowed by functions, as it does for <see cref="RestorePointService.ListScript"/>.</para>
+    /// </remarks>
+    internal const string CurrentDnsScript = "$ErrorActionPreference = 'Stop'; " + ActiveAdapterSelector + """
+
+        if ($adapter) {
+            $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
+            if ($dns.ServerAddresses.Count -gt 0) { $dns.ServerAddresses -join ', ' }
+            else { 'Automatic (DHCP)' }
+        } else { 'No active adapter' }
+        """;
+
+    /// <summary>
     /// Reads the current DNS server addresses from the first active network adapter.
     /// </summary>
     public async Task<string> GetCurrentDnsAsync(CancellationToken ct = default)
@@ -86,16 +108,7 @@ public sealed class DnsService : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            const string script = ActiveAdapterSelector + """
-
-                if ($adapter) {
-                    $dns = Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4
-                    if ($dns.ServerAddresses.Count -gt 0) { $dns.ServerAddresses -join ', ' }
-                    else { 'Automatic (DHCP)' }
-                } else { 'No active adapter' }
-                """;
-
-            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
+            Collection<PSObject> results = await _ps.RunAsync(CurrentDnsScript, cancellationToken: ct)
                 .ConfigureAwait(false);
 
             return results.Count > 0 ? results[0]?.ToString() ?? "Unknown" : "Unknown";
@@ -117,6 +130,17 @@ public sealed class DnsService : IDisposable
         "$adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false } | Sort-Object -Property ifIndex | Select-Object -First 1; " +
         "if (-not $adapter) { $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex | Select-Object -First 1 }";
 
+    /// <summary>Prints the interface index of the active adapter, or nothing when none is up.</summary>
+    /// <remarks>
+    /// Stops on a failed <c>Get-NetAdapter</c> for the same reason as <see cref="CurrentDnsScript"/>. Without it a
+    /// failure printed nothing, and a DNS change was refused as "No active network adapter found." instead of with
+    /// the error Windows gave.
+    /// </remarks>
+    internal const string ActiveInterfaceIndexScript = "$ErrorActionPreference = 'Stop'; " + ActiveAdapterSelector + """
+
+        if ($adapter) { $adapter.ifIndex }
+        """;
+
     /// <summary>
     /// Detects the interface index of the active network adapter using the shared
     /// <see cref="ActiveAdapterSelector"/> rule. Uses the integer index to avoid
@@ -124,12 +148,7 @@ public sealed class DnsService : IDisposable
     /// </summary>
     private async Task<int> GetActiveInterfaceIndexAsync(CancellationToken ct)
     {
-        const string script = ActiveAdapterSelector + """
-
-            if ($adapter) { $adapter.ifIndex }
-            """;
-
-        Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct)
+        Collection<PSObject> results = await _ps.RunAsync(ActiveInterfaceIndexScript, cancellationToken: ct)
             .ConfigureAwait(false);
 
         if (results.Count > 0 && int.TryParse(results[0]?.ToString(), out var index))

@@ -16,10 +16,11 @@ namespace SysManager.Services;
 public interface IFileLockService
 {
     /// <summary>
-    /// Returns the processes currently using <paramref name="path"/> (a file or folder).
-    /// Empty when nothing holds it. Throws <see cref="ArgumentException"/> for bad input.
+    /// Returns the processes currently using <paramref name="path"/>. For a folder, that means the files inside it.
+    /// Null when Restart Manager could not complete the check. Throws <see cref="ArgumentException"/> for an empty
+    /// path and <see cref="System.IO.FileNotFoundException"/> when nothing exists at it.
     /// </summary>
-    IReadOnlyList<FileLocker> FindLockers(string path);
+    FileLockScan? FindLockers(string path);
 
     /// <summary>
     /// Terminates the process with the given id. Returns true on success. Returns false

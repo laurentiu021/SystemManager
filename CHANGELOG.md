@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.18] - 2026-09-28
+
+**File Lock Detector now checks folders, and says when a path does not exist or a check could not be completed.**
+All three used to read "No process is currently using that path."
+
+### Fixed
+
+- **File Lock Detector: a folder is checked through the files inside it.** The tab asks Windows' Restart Manager,
+  which tracks files and refuses a folder outright, even for an administrator. So every folder was reported as
+  unused, including one with a file held open inside it, though the tab invites you to enter a folder.
+  - The tab now checks the files in the folder and its subfolders, up to 1,000, and lists every process holding
+    any of them.
+  - When a folder holds more, the result says that only the first 1,000 were checked.
+  - A folder with no file to check says so, rather than that nothing is using it.
+  - Links and junctions inside the folder are not followed out of it.
+- **A path that does not exist says so.** A mistyped path got the same answer as a file nothing was using. It now
+  reads "No file or folder exists at that path."
+- **A check that could not be completed says so.** Any Restart Manager failure also read as "no process". It now
+  says the check could not be completed and to try again.
+  Present since the tab was added in v1.36.0.
+
 ## [1.114.17] - 2026-09-28
 
 **Quick Tune-Up no longer says "All good" about checks it could not run, and the health score no longer counts

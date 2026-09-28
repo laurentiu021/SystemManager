@@ -34,6 +34,9 @@ public sealed class PrivacyMonitorService
         ("location", "Location"),
     ];
 
+    /// <summary>The capabilities the tab reads, as <see cref="PrivacyAccessEntry.Capability"/> names them, in order.</summary>
+    internal static IReadOnlyList<string> CapabilityLabels { get; } = [.. Capabilities.Select(c => c.Label)];
+
     private readonly RegistryKey _baseKey;
 
     /// <summary>
@@ -44,13 +47,22 @@ public sealed class PrivacyMonitorService
         => _baseKey = baseKey ?? Registry.CurrentUser;
 
     /// <summary>Reads the access history for all capabilities off the UI thread, most-recent first.</summary>
-    public Task<IReadOnlyList<PrivacyAccessEntry>> ReadAsync(CancellationToken ct = default)
+    public Task<PrivacyAccessReport> ReadAsync(CancellationToken ct = default)
         => Task.Run(Read, ct);
 
-    /// <summary>Reads the access history for all capabilities, most-recent first.</summary>
-    public IReadOnlyList<PrivacyAccessEntry> Read()
+    /// <summary>Reads the access history for all capabilities, most-recent first, naming any it could not read.</summary>
+    /// <remarks>
+    /// A capability whose key could not be read used to be skipped without a trace. With all three unreadable the
+    /// tab said "No camera, microphone, or location access has been recorded yet.", and with only the camera
+    /// unreadable it listed the microphone and location as if the camera had been checked (#2503). An absent key
+    /// is not unreadable: Windows creates it the first time an app asks for that device.
+    /// <para>What a capability yielded before its read failed is kept, since it is true, and the capability is still
+    /// named, since its history is incomplete.</para>
+    /// </remarks>
+    public PrivacyAccessReport Read()
     {
         List<PrivacyAccessEntry> entries = [];
+        List<string> unreadable = [];
         foreach (var (capKey, label) in Capabilities)
         {
             try
@@ -63,13 +75,17 @@ public sealed class PrivacyMonitorService
                 using var nonPackaged = cap.OpenSubKey("NonPackaged");
                 if (nonPackaged is not null) CollectFrom(nonPackaged, label, entries);
             }
-            catch (System.Security.SecurityException ex) { Log.Debug("Privacy monitor read denied for {Cap}: {Error}", capKey, ex.Message); }
-            catch (UnauthorizedAccessException ex) { Log.Debug("Privacy monitor read denied for {Cap}: {Error}", capKey, ex.Message); }
-            // A corrupt/locked hive can throw IOException from OpenSubKey/enumeration; skip the
-            // capability rather than let it bubble up and crash the (eagerly-built) ViewModel.
-            catch (IOException ex) { Log.Debug("Privacy monitor read failed for {Cap}: {Error}", capKey, ex.Message); }
+            // A denied or corrupt key can throw from OpenSubKey or from the enumeration. It is named rather than
+            // allowed to bubble up and fail the whole tab.
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
+            {
+                Log.Warning("Privacy monitor could not read {Cap}: {Error}", capKey, ex.Message);
+                unreadable.Add(label);
+            }
         }
-        return [.. entries.OrderByDescending(e => e.InUse).ThenByDescending(e => e.LastUsed ?? DateTime.MinValue)];
+        return new PrivacyAccessReport(
+            [.. entries.OrderByDescending(e => e.InUse).ThenByDescending(e => e.LastUsed ?? DateTime.MinValue)],
+            unreadable);
     }
 
     private static void CollectFrom(RegistryKey capKey, string label, List<PrivacyAccessEntry> entries)

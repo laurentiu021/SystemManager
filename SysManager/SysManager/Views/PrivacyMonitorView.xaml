@@ -60,10 +60,10 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <!-- Empty state -->
+                <!-- Empty state, naming only what could be read (#2503) -->
                 <v:EmptyState Glyph="&#xE730;"
-                              Title="No access recorded"
-                              Message="Windows hasn't logged any camera, microphone, or location access yet."
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasEntries, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

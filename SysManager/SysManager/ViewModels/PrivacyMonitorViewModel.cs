@@ -27,16 +27,23 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
-    private readonly PrivacyMonitorService _service;
+    private readonly Func<CancellationToken, Task<PrivacyAccessReport>> _read;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<PrivacyAccessEntry> Entries { get; } = new();
 
     [ObservableProperty] private bool _hasEntries;
 
-    public PrivacyMonitorViewModel(PrivacyMonitorService service)
+    // Set from each read, so the empty state never claims a capability was checked when it could not be read (#2503).
+    [ObservableProperty] private string _emptyTitle = "No access recorded";
+    [ObservableProperty] private string _emptyMessage = "Windows hasn't logged any camera, microphone, or location access yet.";
+
+    public PrivacyMonitorViewModel(PrivacyMonitorService service) : this(service.ReadAsync) { }
+
+    /// <summary>Test seam: the consent-store read, so a failed one can be supplied without the registry.</summary>
+    internal PrivacyMonitorViewModel(Func<CancellationToken, Task<PrivacyAccessReport>> read)
     {
-        _service = service;
+        _read = read;
         StatusMessage = "Reading access history…";
         PropertyChanged += OnVmPropertyChanged;
         // Read off the UI thread so a registry walk (or a corrupt-hive failure) can never block or
@@ -64,19 +71,82 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         try
         {
-            var entries = await _service.ReadAsync(_cts.Token).ConfigureAwait(true);
-            Entries.ReplaceWith(entries);
+            var report = await _read(_cts.Token).ConfigureAwait(true);
+            if (report.Entries.Count == 0 && report.Unreadable.Count == PrivacyMonitorService.CapabilityLabels.Count)
+            {
+                // Nothing could be read. A failed read changes nothing on screen: what was listed stays listed,
+                // and the status line and empty state say the read failed rather than that nothing was used (#2503).
+                (EmptyTitle, EmptyMessage) = DescribeEmpty(report);
+                StatusMessage = Entries.Count == 0
+                    ? "Could not read the camera, microphone, or location history. Press Refresh to try again."
+                    : "Could not read the camera, microphone, or location history, so the list below is from the last read.";
+                return;
+            }
+
+            Entries.ReplaceWith(report.Entries);
             HasEntries = Entries.Count > 0;
-            var inUse = entries.Count(e => e.InUse);
-            StatusMessage = entries.Count == 0
-                ? "No camera, microphone, or location access has been recorded yet."
-                : inUse > 0
-                    ? $"{entries.Count} access record(s) — {inUse} device(s) in use right now."
-                    : $"{entries.Count} access record(s) across camera, microphone, and location.";
+            (EmptyTitle, EmptyMessage) = DescribeEmpty(report);
+            StatusMessage = Describe(report);
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         finally { IsBusy = false; }
     }
+
+    /// <summary>The status line for a read. Pure, so every combination is testable without the registry.</summary>
+    /// <remarks>
+    /// Names only what was read: "No camera, microphone, or location access has been recorded yet." is a claim about
+    /// all three, and was made when none of them could be read (#2503).
+    /// </remarks>
+    internal static string Describe(PrivacyAccessReport report)
+    {
+        var entries = report.Entries;
+        var read = ReadCapabilities(report);
+        if (entries.Count == 0 && read.Count == 0)
+            return "Could not read the camera, microphone, or location history.";
+
+        var inUse = entries.Count(e => e.InUse);
+        var text = entries.Count == 0
+            ? $"No {Join(read, "or")} access has been recorded yet."
+            : inUse > 0
+                ? $"{entries.Count} access record(s) — {inUse} device(s) in use right now."
+                : report.Unreadable.Count == 0
+                    ? $"{entries.Count} access record(s) across {Join(read, "and")}."
+                    : $"{entries.Count} access record(s).";
+
+        return report.Unreadable.Count == 0
+            ? text
+            : $"{text} Could not read the {Join(Lower(report.Unreadable), "and")} history.";
+    }
+
+    /// <summary>The empty state's title and message for a read, naming only what was read.</summary>
+    internal static (string Title, string Message) DescribeEmpty(PrivacyAccessReport report)
+    {
+        var read = ReadCapabilities(report);
+        if (read.Count == 0)
+            return ("Access history could not be read",
+                "Windows did not let SysManager read which apps used the camera, microphone, or location. "
+                + "Press Refresh to try again.");
+
+        var message = $"Windows hasn't logged any {Join(read, "or")} access yet.";
+        if (report.Unreadable.Count > 0)
+            message += $" SysManager could not read the {Join(Lower(report.Unreadable), "and")} history.";
+        return ("No access recorded", message);
+    }
+
+    private static List<string> ReadCapabilities(PrivacyAccessReport report) =>
+        Lower([.. PrivacyMonitorService.CapabilityLabels.Where(label => !report.Unreadable.Contains(label))]);
+
+    private static List<string> Lower(IReadOnlyList<string> labels) =>
+        [.. labels.Select(label => label.ToLowerInvariant())];
+
+    /// <summary>"a", "a or b", "a, b, or c".</summary>
+    private static string Join(IReadOnlyList<string> items, string conjunction) => items.Count switch
+    {
+        0 => "",
+        1 => items[0],
+        2 => $"{items[0]} {conjunction} {items[1]}",
+        _ => $"{string.Join(", ", items.Take(items.Count - 1))}, {conjunction} {items[^1]}",
+    };
 
     [RelayCommand]
     private void OpenPrivacySettings()

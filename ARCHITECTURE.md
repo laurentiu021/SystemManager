@@ -241,7 +241,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
-- `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions.
+- `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions. `Describe` and `DescribeEmpty` name only the capabilities that were read; a read that got nothing keeps the previous list.
 - `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
@@ -795,6 +795,8 @@ Key services:
 - `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
   store (camera/microphone/location access history). Injectable registry root;
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.
+  `Read` returns a `PrivacyAccessReport`: the entries, and the capabilities whose key
+  could not be read, so a failed read is never presented as no access recorded.
 - `BootAnalyzerService` — read-only reader of the Diagnostics-Performance log
   (event 100 boot durations; 101–110 slow-component events). Event-ID→kind mapping
   and event-XML field parsing are pure, unit-tested static methods; reading the log

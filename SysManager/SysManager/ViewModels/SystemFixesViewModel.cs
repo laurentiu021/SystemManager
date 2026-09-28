@@ -324,7 +324,10 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         "This stops the Windows Update services, clears their cache folders " +
         "(SoftwareDistribution and catroot2, renamed so Windows rebuilds them), and restarts " +
         "the services. Pending updates will re-download. A reboot is recommended afterwards.\n\nContinue?",
-        ct => _service.ResetWindowsUpdateAsync(ct));
+        ct => _service.ResetWindowsUpdateAsync(ct),
+        // It force-stops wuauserv, cryptSvc, bits and msiserver and renames the update caches, so it must not run
+        // during a Windows Update install, an SFC or DISM repair, or a feature change (#2484).
+        systemLock: "Windows Update reset");
 
     [RelayCommand(CanExecute = nameof(CanRunFix))]
     private Task ReinstallWinGetAsync() => RunFixAsync(
@@ -333,13 +336,31 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         "which fixes most cases where app installs or uninstalls fail. No reboot needed.\n\nContinue?",
         ct => _service.ReinstallWinGetAsync(ct));
 
-    private async Task RunFixAsync(string title, string message, Func<CancellationToken, Task<SystemFixResult>> fix)
+    /// <summary>
+    /// Runs one of the scripted repairs: elevation, then the confirmation, then the lock when the fix names one,
+    /// then the script, reported in the status line.
+    /// </summary>
+    /// <param name="systemLock">
+    /// The name to hold the system-modification lock under, or null for a fix that conflicts with nothing that
+    /// takes it. Reinstalling WinGet re-registers a package for the user and needs no lock.
+    /// </param>
+    private async Task RunFixAsync(string title, string message, Func<CancellationToken, Task<SystemFixResult>> fix,
+                                   string? systemLock = null)
     {
         if (IsFixRunning) return;
         if (!RequireElevation(title.TrimEnd('?'))) return;
         if (!DialogService.Instance.Confirm(message, title))
         {
             StatusMessage = "Cancelled.";
+            return;
+        }
+
+        using var opLock = systemLock is null
+            ? null
+            : OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, systemLock);
+        if (systemLock is not null && opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 

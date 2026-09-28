@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.12] - 2026-09-28
+
+**Four more system changes now wait for a running repair instead of cutting into it.** A restore could restart
+Windows in the middle of an SFC scan that SysManager had started.
+
+### Fixed
+
+- **Windows Features, Windows Update, Reset Windows Update and Restore Points take the system-change lock.** SFC
+  and DISM repairs and the component-store cleanup already refused to overlap one another. These four ran
+  regardless, although they touch the same things:
+  - A feature change is DISM servicing of the running Windows image, and it could run against the image a repair
+    was fixing.
+  - A Windows Update install could start during a repair, or during a Reset Windows Update. The reset stops the
+    services the install works through, so the install then failed.
+  - A restore restarts Windows at once, so it could cut off any of the above.
+  Each now refuses to start while another system change is running, and says which one, as the repairs already
+  do. Creating a restore point on the Restore Points tab takes the same lock, as Performance Mode's button
+  already did for the same call. Reinstall WinGet is unchanged, because it conflicts with none of them. Windows
+  Features and Windows Update have been left out since v1.20.56, when the repairs began taking the lock. Restore
+  Points has been left out since it was added in v1.23.0, and Reset Windows Update since v1.26.0.
+
 ## [1.114.11] - 2026-09-28
 
 **Seven tabs now say before their first change that SysManager may turn System Protection back on.** Their

@@ -131,6 +131,16 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             return;
         }
 
+        // The lock Performance Mode's Create button already takes for the same call. Creating a point snapshots
+        // the system drive, which must not overlap an SFC or DISM repair, a feature change or an update install
+        // that SysManager is running (#2484).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Create restore point");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Creating restore point…";
@@ -186,6 +196,15 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
                 "Restore System — this will restart Windows"))
         {
             StatusMessage = "Restore cancelled.";
+            return;
+        }
+
+        // Restore-Computer restarts Windows at once. Holding the lock means it cannot cut off an SFC or DISM
+        // repair, a component-store cleanup, a feature change or an update install SysManager is running (#2484).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "System restore");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
 

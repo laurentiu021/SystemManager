@@ -874,7 +874,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Integrated into every tab that mutates disk, network, or system state
   (Cleanup, Deep Cleanup, Disk Analyzer, Duplicate Finder, Speed Test, Traceroute,
   Network Repair, Shortcut Cleaner, Performance Mode, Gaming Profile, Environment
-  Variables, and the Dashboard's quick actions)
+  Variables, System Fixes, Windows Features, Windows Update, Restore Points, and the
+  Dashboard's quick actions)
+- **Nothing restarts or services Windows in the middle of a repair.** A feature change, a
+  Windows Update install, Reset Windows Update, and creating or restoring a restore point
+  each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.
+  A restore restarts Windows at once, so it can no longer cut off a repair SysManager is running
 - **Gaming Profile takes the lock before it reads your current settings**, not just
   around the changes — it and Performance Mode set the same power plan and the same
   visual-effects switch, so whichever starts second would otherwise write down the

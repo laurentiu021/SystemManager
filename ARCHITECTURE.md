@@ -626,6 +626,12 @@ Key services:
   it: the two must NOT exclude each other, because an SFC scan runs for up to fifteen
   minutes and a user whose taskbar froze during one still has to be able to restart the
   shell. What must be exclusive is two shell restarts.
+  `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
+  DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
+  Windows Update, and creating or restoring a restore point, besides the performance tweaks. Feature
+  changes, update installs, Reset Windows Update and the Restore Points tab took no lock until #2484.
+  System Fixes' `RunFixAsync` takes it only for the fixes that name
+  a lock, so Reinstall WinGet, which conflicts with none of them, still runs during a repair.
 - `ProcessDescriptionService` — enriches process entries with friendly
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for

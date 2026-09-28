@@ -26,6 +26,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly ProcessManagerService _service;
+    private readonly Func<int, DateTime, ProcessManagerService.KillOutcome> _killProcess;
     private CancellationTokenSource? _autoRefreshCts;
 
     public BulkObservableCollection<ProcessEntry> Processes { get; } = new();
@@ -43,8 +44,19 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     partial void OnShowOnlyAppsChanged(bool value) => ApplyFilter();
 
     public ProcessManagerViewModel(ProcessManagerService service)
+        : this(service, ProcessManagerService.KillProcess) { }
+
+    /// <summary>Test seam: the same view-model with the call that ends a process supplied.</summary>
+    /// <param name="service">The process list source.</param>
+    /// <param name="killProcess">
+    /// Ends a process by ID and listed start time. Injected so a test can drive each outcome of a confirmed kill
+    /// without ending anything real.
+    /// </param>
+    internal ProcessManagerViewModel(ProcessManagerService service,
+                                     Func<int, DateTime, ProcessManagerService.KillOutcome> killProcess)
     {
         _service = service;
+        _killProcess = killProcess ?? throw new ArgumentNullException(nameof(killProcess));
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
     }
@@ -74,7 +86,7 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             {
                 await Task.Delay(1000, ct);
                 if (!IsActive) continue;
-                await RefreshAsync();
+                await RefreshListAsync(announce: false);
             }
             catch (OperationCanceledException) { break; /* expected on shutdown */ }
             // A single refresh fault (transient process/WMI/Win32 hiccup) must not kill
@@ -84,11 +96,30 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => RefreshListAsync(announce: true);
+
+    /// <summary>
+    /// Re-reads the process list. <paramref name="announce"/> decides whether the status line and the busy state
+    /// say so.
+    /// </summary>
+    /// <remarks>
+    /// The Refresh button and the first load announce. The once-a-second background refresh does not (#2507). It
+    /// used to call the button's own method, which wrote "Refreshing process list…" and then "Loaded N processes."
+    /// every second. The footer renders that line as a live region, so a screen reader was handed two sentences a
+    /// second for as long as the tab was open. It also overwrote whatever the tab had just reported, so the result
+    /// of ending a process lasted under a second. And it flashed the progress bar and the sidebar's busy state on
+    /// every tick.
+    /// <para>A background refresh that fails is not reported here either. Its exception reaches
+    /// <see cref="AutoRefreshLoopAsync"/>, which logs it and tries again a second later.</para>
+    /// </remarks>
+    internal async Task RefreshListAsync(bool announce)
     {
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-        StatusMessage = "Refreshing process list…";
+        if (announce)
+        {
+            IsBusy = true;
+            IsProgressIndeterminate = true;
+            StatusMessage = "Refreshing process list…";
+        }
 
         try
         {
@@ -131,24 +162,27 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             ReconcileInto(Processes, enriched);
 
             ApplyFilter();
-            StatusMessage = $"Loaded {ProcessCount} processes.";
+            if (announce) StatusMessage = $"Loaded {ProcessCount} processes.";
 
             // Signatures come AFTER the list is on screen — see FillSignaturesAsync. Not awaited: the
             // point is that the refresh finishes without it.
             StartSignatureFill();
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException ex) when (announce)
         {
             StatusMessage = $"Failed: {ex.Message}";
         }
-        catch (System.ComponentModel.Win32Exception ex)
+        catch (System.ComponentModel.Win32Exception ex) when (announce)
         {
             StatusMessage = $"Failed: {ex.Message}";
         }
         finally
         {
-            IsBusy = false;
-            IsProgressIndeterminate = false;
+            if (announce)
+            {
+                IsBusy = false;
+                IsProgressIndeterminate = false;
+            }
         }
     }
 
@@ -303,10 +337,9 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
     /// <item>Security: ending <c>MsMpEng</c> or <c>SecurityHealthService</c> is an antivirus-disable
     /// step, not a cosmetic one. (It fails on a protected-process OS — but the prompt should not be
     /// reassuring about an attempt to switch off the machine's defences.)</item>
-    /// <item>Servicing: <c>ProcessManagerService.KillProcess</c> uses
-    /// <c>Kill(entireProcessTree: true)</c>, so ending <c>TrustedInstaller</c> or <c>msiexec</c>
-    /// mid-operation can leave a half-applied update or a corrupt component store — damage that
-    /// survives the restart the ordinary message offers as the remedy.</item>
+    /// <item>Servicing: ending <c>TrustedInstaller</c> or <c>msiexec</c> mid-operation can leave a
+    /// half-applied update or a corrupt component store — damage that survives the restart the
+    /// ordinary message offers as the remedy.</item>
     /// </list>
     /// Still a confirmation and not a refusal: it is the user's machine, and unlike the boot-critical
     /// set these really can be ended. What changes is that the prompt names the actual risk (#1773).
@@ -329,6 +362,16 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
             StatusMessage = $"⛔ \"{entry.Name}\" is a critical system process and cannot be ended — " +
                             "killing it would cause a system crash (BSOD).";
             Log.Warning("Refused to kill critical process: {Name} (PID {Pid})", entry.Name, entry.Pid);
+            return;
+        }
+
+        // Ending SysManager from its own list would stop it mid-step, with no chance to finish or undo what it is
+        // doing and its tray icon left behind. It used to be refused by accident: the tree kill will not end a
+        // tree that contains its caller, and the failure read as "may need admin rights". Ending just the process
+        // would succeed, so the refusal is now explicit, and it comes before the confirmation rather than after it.
+        if (entry.Pid == Environment.ProcessId)
+        {
+            StatusMessage = "That is SysManager itself. To close it, use the window's close button or Exit in the tray menu.";
             return;
         }
 
@@ -357,21 +400,41 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
         if (!DialogService.Instance.Confirm(prompt, "Kill process")) return;
 
-        var success = ProcessManagerService.KillProcess(entry.Pid);
-        if (success)
+        // The start time goes with the ID, because the prompt can stay open while the process exits and Windows
+        // hands its ID to another one.
+        var outcome = _killProcess(entry.Pid, entry.StartTime);
+        var (rowGone, status) = DescribeKill(entry, outcome);
+        StatusMessage = status;
+        if (!rowGone)
         {
-            Processes.Remove(entry);
-            FilteredProcesses.Remove(entry);
-            ApplyFilter();
-            StatusMessage = $"Killed {entry.Name} (PID {entry.Pid}).";
-            Log.Information("Process killed: PID {Pid}", entry.Pid);
-        }
-        else
-        {
-            StatusMessage = $"Could not kill {entry.Name} — may need admin rights.";
             Log.Warning("Failed to kill process PID {Pid}", entry.Pid);
+            return;
         }
+
+        Processes.Remove(entry);
+        FilteredProcesses.Remove(entry);
+        ApplyFilter();
+        Log.Information("Kill of PID {Pid}: {Outcome}", entry.Pid, outcome);
     }
+
+    /// <summary>
+    /// What a confirmed kill tells the user, and whether the row goes. Pure, so each outcome is testable without
+    /// ending anything.
+    /// </summary>
+    /// <remarks>
+    /// "Could not kill" is kept for a process that is still running. It used to be the answer to every failure,
+    /// including a process that had already closed, and a tree kill that ended the process but not one of its
+    /// children, so it named administrator rights for processes that were gone (#2498). An ended process and one
+    /// that was already gone both lose their row: either way it names a process that is not running.
+    /// </remarks>
+    internal static (bool RowGone, string Status) DescribeKill(ProcessEntry entry, ProcessManagerService.KillOutcome outcome) =>
+        outcome switch
+        {
+            ProcessManagerService.KillOutcome.Ended => (true, $"Killed {entry.Name} (PID {entry.Pid})."),
+            ProcessManagerService.KillOutcome.NotRunning =>
+                (true, $"{entry.Name} (PID {entry.Pid}) had already closed, so nothing was ended."),
+            _ => (false, $"Could not kill {entry.Name} — may need admin rights."),
+        };
 
     /// <summary>
     /// True only for processes whose death actually takes Windows down, so the refusal message

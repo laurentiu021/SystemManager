@@ -781,6 +781,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   protection or interrupt an update part-way, and that a restart does not undo that.
   Other Windows components get a warning that a feature may look broken until you
   sign out. Everything else gets the ordinary "unsaved work may be lost" confirm
+- **Kill ends that one program**, as Task Manager's End task does. The programs it
+  started keep running, so ending Explorer to fix a frozen taskbar does not close
+  everything you opened from it. If the program closed while the confirmation was open
+  and Windows gave its process ID to another one, that other program is left alone.
+  SysManager's own row is refused: close it from its window or the tray instead
 - Open file location in Explorer
 
 ### Resource History

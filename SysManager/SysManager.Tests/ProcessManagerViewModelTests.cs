@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using System.Text.RegularExpressions;
 using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -304,9 +306,9 @@ public class ProcessManagerViewModelTests
     // Dropping the provenance arm from IsKernelCritical made 49 database entries killable, which was
     // the point. But the single warning that replaced the refusal promises "will not crash Windows …
     // a feature may stop working", and that is untrue for two groups inside those 49: Defender's
-    // engine (ending it is an AV-disable step) and Windows' servicing/installer processes (KillProcess
-    // uses entireProcessTree, so a mid-write kill can leave a corrupt component store — damage the
-    // "restart and it comes back" remedy does not repair). These pin the honest third message.
+    // engine (ending it is an AV-disable step) and Windows' servicing/installer processes (a mid-write
+    // kill can leave a corrupt component store — damage the "restart and it comes back" remedy does not
+    // repair). These pin the honest third message.
 
     [Theory]
     [InlineData("MsMpEng.exe")]
@@ -398,5 +400,76 @@ public class ProcessManagerViewModelTests
 
         Assert.True(refused);
         Assert.Contains("cannot be ended", status);
+    }
+
+    // ── The once-a-second refresh stays quiet (#2507) ──────────────────
+
+    /// <summary>
+    /// The once-a-second loop calls the silent refresh, not the Refresh button's.
+    /// </summary>
+    /// <remarks>
+    /// Read from the source because the loop runs on a one-second clock. What the silent refresh does is asserted
+    /// in <c>ProcessManagerSettledTabTests</c>; this pins that the loop is what calls it. Comments are stripped
+    /// first, so a remark that mentions either call cannot satisfy or trip the check.
+    /// </remarks>
+    [Fact]
+    public void AutoRefreshLoop_CallsTheSilentRefresh()
+    {
+        var loop = Regex.Replace(
+            MethodBody(File.ReadAllText(TestPaths.AppFile("ViewModels", "ProcessManagerViewModel.cs")),
+                       "private async Task AutoRefreshLoopAsync("),
+            @"//[^\r\n]*", "");
+
+        Assert.Contains("RefreshListAsync(announce: false)", loop);
+        Assert.DoesNotContain("RefreshAsync()", loop);
+        Assert.DoesNotContain("announce: true", loop);
+    }
+
+    /// <summary>The body of a method, delimited by counting braces from its signature.</summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"{signature} not found — the test would assert over the whole file");
+
+        var open = source.IndexOf('{', at);
+        var close = SourceBraces.MatchingBrace(source, open);
+
+        return close < 0 ? source[open..] : source[open..(close + 1)];
+    }
+
+    // ── What a confirmed kill reports (#2498) ──────────────────────────
+
+    private static readonly ProcessEntry SomeApp = Named("SomeApp.exe", nameof(ProcessSafety.Unknown));
+
+    [Fact]
+    public void DescribeKill_Ended_DropsTheRowAndSaysKilled()
+    {
+        var (rowGone, status) = ProcessManagerViewModel.DescribeKill(SomeApp, ProcessManagerService.KillOutcome.Ended);
+
+        Assert.True(rowGone);
+        Assert.Equal("Killed SomeApp.exe (PID 4242).", status);
+    }
+
+    [Fact]
+    public void DescribeKill_AlreadyGone_DropsTheRowWithoutClaimingAKillOrAFailure()
+    {
+        // It closed, or its ID now belongs to a process that started at another time. Either way the row names a
+        // process that is not running. "Could not kill … may need admin rights" was the old answer, and it was
+        // wrong: nothing was refused.
+        var (rowGone, status) = ProcessManagerViewModel.DescribeKill(SomeApp, ProcessManagerService.KillOutcome.NotRunning);
+
+        Assert.True(rowGone);
+        Assert.Contains("had already closed", status);
+        Assert.DoesNotContain("Could not", status);
+        Assert.DoesNotContain("Killed", status);
+    }
+
+    [Fact]
+    public void DescribeKill_Refused_KeepsTheRowAndSaysItCouldNot()
+    {
+        var (rowGone, status) = ProcessManagerViewModel.DescribeKill(SomeApp, ProcessManagerService.KillOutcome.Refused);
+
+        Assert.False(rowGone);
+        Assert.Equal("Could not kill SomeApp.exe — may need admin rights.", status);
     }
 }

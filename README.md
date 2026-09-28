@@ -1446,6 +1446,11 @@ offers, "rate us" prompts:
   remembers the answer. If you pick the notification area, it tells you where the
   window went so it doesn't look like it vanished. Right-click the tray icon to
   reopen or exit at any time.
+- **Nothing is cut off by closing** — if SysManager is still in the middle of something
+  that changes your system (a repair, a Windows feature or update being installed, a
+  clean-up), closing the window, **Exit** in the tray, **Run as administrator** and
+  installing an update all say what is still running and ask before they go ahead,
+  because closing stops it part-way
 - **Progress on the taskbar button** — a long job keeps reporting while the window is
   minimised. The SysManager button on the taskbar fills up as an SFC scan, a bulk
   install or a deep cleanup progresses, and shows a moving bar for the tabs that know
@@ -1498,7 +1503,8 @@ offers, "rate us" prompts:
   gate; the publisher-and-certificate-chain check is written and switches on with a
   one-line change the day a signing certificate exists.
 - One-click "Install" replaces the running executable in-place and
-  restarts automatically (no manual file copying needed).
+  restarts automatically (no manual file copying needed). It asks first, because it
+  closes SysManager, and names anything still running that closing would cut off.
 - **"Go back to the previous version"** — the build being replaced is kept, so an
   update that installs cleanly but turns out to be broken is not a dead end. The
   button appears in the About tab only when a retained copy exists, asks for

@@ -30,6 +30,13 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>Overrides where the retained previous build is looked for. Null = the real profile.</summary>
     private readonly string? _updatesDir;
+
+    /// <summary>Starts the build that installs or restores SysManager. A test records the call instead.</summary>
+    private readonly Action<ProcessStartInfo> _launch;
+
+    /// <summary>Closes SysManager once that build has started. A test records the call instead.</summary>
+    private readonly Action _shutdown;
+
     private UpdateService.ReleaseInfo? _latest;
 
     // Suppresses saving while the constructor applies the loaded value, so restoring the
@@ -148,6 +155,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// is overridable for the same reason: the rollback check looks for a retained build under
     /// <c>%LocalAppData%</c>, and a test must be able to point that at a temp folder rather than read
     /// (or come to depend on) whatever is in the developer's real profile.</para>
+    /// <para><paramref name="launch"/> and <paramref name="shutdown"/> are what installing and going back end in:
+    /// starting another build and closing this one. A test replaces both, so it can drive the confirmed path
+    /// without starting a file or closing anything (#2499).</para>
     /// </summary>
     internal AboutViewModel(
         IUpdateService updates,
@@ -155,12 +165,16 @@ public sealed partial class AboutViewModel : ViewModelBase
         bool autoCheck,
         UpdateCheckPreferenceService? preferences = null,
         string? updatesDir = null,
-        DiagnosticsBundleService? bundle = null)
+        DiagnosticsBundleService? bundle = null,
+        Action<ProcessStartInfo>? launch = null,
+        Action? shutdown = null)
     {
         _updates = updates;
         _reportService = reportService;
         _preferences = preferences ?? new UpdateCheckPreferenceService();
         _updatesDir = updatesDir;
+        _launch = launch ?? (static startInfo => Process.Start(startInfo)?.Dispose());
+        _shutdown = shutdown ?? App.RequestShutdown;
         // Overridable for the same reason as `preferences` and `updatesDir`: the default reads the real log
         // directory under %LocalAppData%, and a test must be able to point it at a temp folder rather than
         // read whatever is in the developer's own profile.
@@ -889,6 +903,20 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
+            // Step 2b: Ask. Installing closes SysManager, and this was the one exit that did not say so: it
+            // launched the new version and shut down half a second later, cutting off anything still running
+            // (#2499). After the checks, so the user is never asked to approve something that is then refused, and
+            // with the verified file still held, so it cannot change while the dialog is open.
+            if (!DialogService.Instance.Confirm(
+                    $"Install SysManager {LatestVersionLabel}?\n\n" +
+                    "SysManager closes, installs the update and opens again. Your settings are not affected." +
+                    QuitGuard.ActiveWorkWarning(),
+                    "Install update"))
+            {
+                DownloadStatus = "The update is downloaded and checked, ready to install.";
+                return;
+            }
+
             // Step 3: Launch the verified binary. The deny-write handle remains open,
             // guaranteeing the file on disk is byte-for-byte what we hashed. Process.Start
             // opens its own read handle (compatible with FileShare.Read), so the launch
@@ -901,16 +929,16 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             DownloadStatus = "Installing update — SysManager will restart...";
 
-            Process.Start(new ProcessStartInfo
+            _launch(new ProcessStartInfo
             {
                 FileName = DownloadedPath!,
                 Arguments = args,
                 UseShellExecute = true
-            })?.Dispose();
+            });
 
             // Give the applier a moment to start before we exit.
             await Task.Delay(500);
-            App.RequestShutdown();
+            _shutdown();
         }
         catch (InvalidOperationException ex)
         {
@@ -977,7 +1005,8 @@ public sealed partial class AboutViewModel : ViewModelBase
             if (!DialogService.Instance.Confirm(
                     $"Go back to the version you had before the last update?\n\n" +
                     "SysManager will close and reopen on the older version. Anything the newer version " +
-                    "fixed will come back, and your settings are not affected.",
+                    "fixed will come back, and your settings are not affected." +
+                    QuitGuard.ActiveWorkWarning(),
                     "Go back to the previous version"))
             {
                 return;
@@ -986,18 +1015,18 @@ public sealed partial class AboutViewModel : ViewModelBase
             var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId);
             RollBackStatus = "Going back — SysManager will restart…";
 
-            Process.Start(new ProcessStartInfo
+            _launch(new ProcessStartInfo
             {
                 FileName = previous,
                 Arguments = args,
                 UseShellExecute = true
-            })?.Dispose();
+            });
 
             ActivityLogService.Instance.Log("Update", "Went back to the previously installed version");
 
             // Let the applier start before this process exits.
             await Task.Delay(500);
-            App.RequestShutdown();
+            _shutdown();
         }
         catch (InvalidOperationException ex)
         {

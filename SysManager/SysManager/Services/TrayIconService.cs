@@ -231,7 +231,13 @@ public sealed class TrayIconService : IDisposable
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) =>
         {
-            App.RequestShutdown();
+            // Exiting cancels whatever SysManager is still doing, so ask first when something is (#2499). The
+            // window comes back before the question: the work it asks about is shown there, and a dialog raised
+            // while the app has no window on screen is easy to miss.
+            if (OperationLockService.Instance.HasActiveOperations)
+                ShowWindow(mainWindow);
+            if (Helpers.QuitGuard.ConfirmStoppingActiveWork("Exit SysManager", "Exit anyway?"))
+                App.RequestShutdown();
         };
         menu.Items.Add(exitItem);
 

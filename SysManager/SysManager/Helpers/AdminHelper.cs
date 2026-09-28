@@ -76,8 +76,10 @@ public static class AdminHelper
 
     /// <summary>
     /// Start an elevated copy of the current process. Returns true when the elevated copy was
-    /// started, false when it could not be (no <c>Application.Current</c>, unknown process path,
-    /// or the user dismissed the UAC prompt).
+    /// started, false when it was not: no <c>Application.Current</c>, an unknown process path, the
+    /// user dismissed the UAC prompt, or the user chose to keep SysManager open because something
+    /// was still running (<see cref="QuitGuard"/>, #2499). That question comes BEFORE the elevated
+    /// copy starts, because once it has started it is waiting for this instance to close.
     /// <para><b>On true the CALLER must shut this instance down</b> —
     /// <c>Application.Current?.Shutdown()</c> — because this method deliberately does not. The
     /// elevated copy waits on the single-instance mutex (see
@@ -95,6 +97,8 @@ public static class AdminHelper
     public static bool RelaunchAsAdmin(string? argumentHint = null)
     {
         if (System.Windows.Application.Current == null) return false;
+        if (!QuitGuard.ConfirmStoppingActiveWork("Run as administrator", "Restart as administrator anyway?"))
+            return false;
         try
         {
             using var currentProc = Process.GetCurrentProcess();

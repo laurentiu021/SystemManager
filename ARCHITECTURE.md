@@ -503,6 +503,14 @@ Key services:
   `RevocationStatusUnknown` (46 of 48, no cached CRL) and `PartialChain` (29, intermediate not
   local). Loosening the flags enough to pass means `AllowUnknownCertificateAuthority`, which
   accepts any certificate authority and verifies nothing.
+- `Helpers/QuitGuard` — the one question every exit asks while something is still running,
+  defined once. Closing disposes the tabs, each cancels its work, and a cancelled repair or install
+  is ended part-way, so the tray's Exit, closing the window, `AdminHelper.RelaunchAsAdmin` and About's
+  install and go-back all go through it. It reads what is running from `OperationLockService`, which
+  the repairs, installs, clean-ups, scans and tweaks that take a lock register with, rather than
+  keeping a second list. An operation that takes no lock is not seen by it.
+  `ArchitectureTests.EveryExit_AsksFirstWhileSomethingRuns` fails any `App.RequestShutdown()` caller
+  that does not ask.
 - `Helpers/WindowsTrust` — `WinVerifyTrust` behind a four-state answer
   (`Trusted`/`NoSignature`/`Expired`/`NotTrusted`), the mechanism Explorer's Digital Signatures
   tab and Process Explorer use. Over the same 82 images: 46 trusted, 1 genuine failure. Called

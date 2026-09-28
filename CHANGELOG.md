@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.15] - 2026-09-28
+
+**Closing SysManager no longer cuts off a repair or an install without warning.** While a repair, an install, a
+clean-up or another long job is still running, every way out now names it and asks first.
+
+### Fixed
+
+- **Every exit asks first while something is still running.** Closing SysManager cancels whatever its tabs are
+  doing, and a cancelled repair or install is ended part-way: a DISM repair, a Windows feature being turned on,
+  a Windows Update install. Depending on timing it could instead be left running with nothing watching it, and
+  the next launch did not know. No exit said so. Now each of these names what is running and asks:
+  - closing the window;
+  - **Exit** in the tray menu, which also brings the window back first, so the question is not missed;
+  - **Run as administrator** on any tab, before the elevated copy starts;
+  - About → **Install** and About → **Go back to the previous version**.
+  When nothing is running, none of them asks anything new. SysManager already tracked what was running, for
+  the "already running" refusals, but no exit read it. Present since v0.48.15, when closing began disposing
+  every open tab.
+- **About → Install asks before it closes SysManager.** It started the new version and closed half a second
+  later with no confirmation at all, unlike going back to the previous version, which always asked. It now
+  names the version, says SysManager will close and reopen, and asks. Declining leaves the checked download
+  ready to install. Present since the one-click install was added in v0.40.1.
+
 ## [1.114.14] - 2026-09-28
 
 **Ending a program in Process Manager now ends that program only.** It also ended every program the chosen one

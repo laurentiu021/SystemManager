@@ -833,9 +833,14 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   and nothing about your traffic leaves the machine
 
 ### File Lock Detector
-- **Find what's holding a file** — when you get a "file in use" error, enter or
-  browse to a file/folder path and see which process(es) are using it, via the
+- **Find what's holding a file** — when you get a "file in use" error, enter a file or
+  folder path (or browse to a file) and see which process(es) are using it, via the
   Windows Restart Manager (the same mechanism Explorer's own dialog uses)
+- **Folders are checked through the files inside them** — Windows tracks files, not
+  folders, so for a folder the tab checks the files in it and its subfolders (up to
+  1,000; it says so when a folder holds more) and lists every process holding any of them
+- A path that does not exist, or a check Windows could not complete, is reported as
+  exactly that — never as "no process is using it"
 - Shows process name, PID, type, and start time for each locker
 - **Export CSV** saves the list to a file you choose the location for, including the flag that
   marks a process Windows will not let you safely end — the one row nobody should act on

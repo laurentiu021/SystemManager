@@ -186,7 +186,8 @@ public class FileLockViewModelTests
         const int pid = 4242;
         var service = Substitute.For<IFileLockService>();
         service.KillProcess(pid).Returns(true);
-        service.FindLockers(Arg.Any<string>()).Returns(new List<FileLocker>()); // post-kill re-scan
+        service.FindLockers(Arg.Any<string>())
+            .Returns(new FileLockScan([], IsFolder: false, FilesChecked: 1, CheckedOnlyPart: false)); // post-kill re-scan
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -212,5 +213,84 @@ public class FileLockViewModelTests
         {
             DialogService.Instance = prevDialog;
         }
+    }
+
+    // ── What a check reports (#2502) ───────────────────────────────────
+    //
+    // Every failure used to reach "No process is currently using that path.": a folder, which Restart Manager
+    // refuses; a path that does not exist, which it accepts; and a failed check. That is the answer someone who
+    // cannot delete a file acts on.
+
+    private static FileLocker Holder() => new(4242, "editor.exe", "RmMainWindow", null);
+
+    [Fact]
+    public void DescribeScan_AFile()
+    {
+        Assert.Equal("No process is currently using that file.",
+            FileLockViewModel.DescribeScan(new FileLockScan([], false, 1, false)));
+        Assert.Equal("1 process(es) are using that file.",
+            FileLockViewModel.DescribeScan(new FileLockScan([Holder()], false, 1, false)));
+    }
+
+    [Fact]
+    public void DescribeScan_AFolder_SpeaksOfTheFilesInIt()
+    {
+        var none = FileLockViewModel.DescribeScan(new FileLockScan([], true, 12, false));
+        Assert.StartsWith("No process is using any of the", none);
+        Assert.Contains("files in that folder.", none);
+
+        Assert.Equal("1 process(es) are using files in that folder.",
+            FileLockViewModel.DescribeScan(new FileLockScan([Holder()], true, 12, false)));
+    }
+
+    [Fact]
+    public void DescribeScan_AFolderTooLargeToCheckWhole_SaysHowMuchWasChecked()
+    {
+        var text = FileLockViewModel.DescribeScan(new FileLockScan([], true, 1000, CheckedOnlyPart: true));
+
+        Assert.Contains("holds more files", text);
+        Assert.Contains("were checked", text);
+    }
+
+    [Fact]
+    public void DescribeScan_AFolderWithNothingToCheck_DoesNotClaimNothingIsUsingIt()
+    {
+        var text = FileLockViewModel.DescribeScan(new FileLockScan([], true, 0, false));
+
+        Assert.Equal("SysManager found no files it could check in that folder.", text);
+        Assert.DoesNotContain("No process", text);
+    }
+
+    [Fact]
+    public async Task ACheckThatFailed_SaysSo_AndClearsTheList()
+    {
+        var service = Substitute.For<IFileLockService>();
+        var checks = 0;
+        service.FindLockers(Arg.Any<string>())
+            .Returns(_ => ++checks == 1 ? new FileLockScan([Holder()], false, 1, false) : null);
+        var vm = NewVm(service);
+        vm.Path = @"C:\some\file.txt";
+        await vm.ScanCommand.ExecuteAsync(null);
+        Assert.Single(vm.Lockers);   // the premise: the first check listed a process
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.Lockers);
+        Assert.Contains("could not be completed", vm.StatusMessage);
+        Assert.DoesNotContain("No process", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task APathThatDoesNotExist_SaysSo_NotThatNothingIsUsingIt()
+    {
+        var service = Substitute.For<IFileLockService>();
+        service.FindLockers(Arg.Any<string>()).Returns(_ => throw new FileNotFoundException("No file or folder exists at that path."));
+        var vm = NewVm(service);
+        vm.Path = @"C:\some\flie.txt";
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("No file or folder exists at that path.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
     }
 }

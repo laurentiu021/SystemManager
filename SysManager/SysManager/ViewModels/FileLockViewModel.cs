@@ -99,13 +99,24 @@ public sealed partial class FileLockViewModel : ViewModelBase
         try
         {
             string target = Path.Trim().Trim('"');
-            var lockers = await Task.Run(() => _service.FindLockers(target)).ConfigureAwait(true);
-            Lockers.ReplaceWith(lockers);
+            var scan = await Task.Run(() => _service.FindLockers(target)).ConfigureAwait(true);
             HasScanned = true;
-            LockerCount = lockers.Count;
-            StatusMessage = lockers.Count == 0
-                ? "No process is currently using that path."
-                : $"{lockers.Count} process(es) are using that path.";
+            if (scan is null)
+            {
+                // Not "no process": that is the answer someone who cannot delete a file acts on (#2502). The list is
+                // cleared rather than kept, because what it showed may belong to a different path.
+                ShowLockers([]);
+                StatusMessage = "The check could not be completed — Windows did not answer. Try again in a moment.";
+                return;
+            }
+
+            ShowLockers(scan.Lockers);
+            StatusMessage = DescribeScan(scan);
+        }
+        catch (FileNotFoundException)
+        {
+            ShowLockers([]);
+            StatusMessage = "No file or folder exists at that path. Check the spelling, or use Browse to pick the file.";
         }
         catch (ArgumentException)
         {
@@ -116,6 +127,38 @@ public sealed partial class FileLockViewModel : ViewModelBase
             IsBusy = false;
             IsProgressIndeterminate = false;
         }
+    }
+
+    private void ShowLockers(IReadOnlyList<FileLocker> lockers)
+    {
+        Lockers.ReplaceWith(lockers);
+        LockerCount = lockers.Count;
+    }
+
+    /// <summary>
+    /// The status line for a check that completed. Pure, so every case is testable without Restart Manager.
+    /// </summary>
+    /// <remarks>
+    /// A folder is checked through the files inside it, so the sentence says so. "No process is using any of the
+    /// files" is a claim about those files, not about the folder, and it is only as complete as the list checked,
+    /// which is why a folder too large to check whole says how much was covered.
+    /// </remarks>
+    internal static string DescribeScan(FileLockScan scan)
+    {
+        var count = scan.Lockers.Count;
+        if (!scan.IsFolder)
+            return count == 0
+                ? "No process is currently using that file."
+                : $"{count} process(es) are using that file.";
+
+        if (scan.FilesChecked == 0)
+            return "SysManager found no files it could check in that folder.";
+
+        var files = scan.FilesChecked.ToString("N0", CultureInfo.CurrentCulture);
+        var partial = scan.CheckedOnlyPart ? $" The folder holds more files; the first {files} were checked." : "";
+        return count == 0
+            ? $"No process is using any of the {files} files in that folder.{partial}"
+            : $"{count} process(es) are using files in that folder.{partial}";
     }
 
     private bool CanKill => !IsBusy && SelectedLocker is not null;

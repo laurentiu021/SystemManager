@@ -228,7 +228,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `TweaksHubViewModel` — unified front-end over the reversible privacy/UX tweaks, grouped Essential (per-user) / Advanced (machine-wide, needs admin), with selective Apply/Undo, a pending-change count, and an auto restore-point before the first change. Delegates to `TweaksHubService` (no parallel tweak implementation).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
-- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected.
+- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process".
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net.
 - `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID across a refresh; `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
@@ -806,7 +806,12 @@ Key services:
   drops it), so the Timer Resolution tab and Gaming Profile share it: the Gaming Profile
   step releases only a request it made itself.
 - `FileLockService` — Restart Manager (`rstrtmgr.dll`) wrapper that lists the processes
-  using a file/folder and can terminate one. The one place we use classic `[DllImport]`
+  using a file, or any of the files inside a folder, and can terminate one. Restart Manager
+  tracks files only (`RmGetList` refuses a folder with `ERROR_ACCESS_DENIED`, elevated or
+  not), so a folder is checked through its first `MaxFolderFiles` (1,000) files, found with
+  `SafeFileWalk`, and the returned `FileLockScan` says how many were checked and whether
+  that was all. A failed check is null rather than an empty list, and a path that does not
+  exist throws `FileNotFoundException`. The one place we use classic `[DllImport]`
   (not `[LibraryImport]`): `RM_PROCESS_INFO` has inline `ByValTStr` buffers and
   `RmStartSession` needs a `StringBuilder`, neither supported by the source generator.
 - `DisplayProfileService` — `user32` display APIs (`EnumDisplayDevicesW` /

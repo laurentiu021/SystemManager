@@ -5,6 +5,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Serilog;
@@ -29,32 +30,72 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class FileLockService : IFileLockService
 {
+    /// <summary>How many files inside a folder one check covers.</summary>
+    /// <remarks>
+    /// Measured, not guessed: a Restart Manager session with 1,000 registered files answered in about 200 ms and
+    /// still found the one process holding one of them. A folder with more is checked for its first 1,000, and the
+    /// result says so.
+    /// </remarks>
+    internal const int MaxFolderFiles = 1000;
+
     /// <summary>
-    /// Returns the processes currently using <paramref name="path"/> (a file or folder).
-    /// Empty when nothing holds it. Throws <see cref="ArgumentException"/> for bad input.
+    /// Returns the processes currently using <paramref name="path"/>. For a folder, that means the files inside it.
+    /// Null when Restart Manager could not complete the check.
     /// </summary>
-    public IReadOnlyList<FileLocker> FindLockers(string path)
+    /// <remarks>
+    /// Restart Manager tracks files, not folders. Given a folder, <c>RmGetList</c> fails with
+    /// <c>ERROR_ACCESS_DENIED</c>, elevated or not, and this used to read that failure as "no process" (#2502). A
+    /// folder is now checked through its files, found with the same <see cref="SafeFileWalk"/> the cleanup services
+    /// use, so a junction inside it is not followed out of the folder.
+    /// <para>A failed check is null, not an empty list: "nothing is using it" is the one answer the user acts on, by
+    /// trying to delete the thing again.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is empty.</exception>
+    /// <exception cref="FileNotFoundException">No file or folder exists at <paramref name="path"/>.</exception>
+    public FileLockScan? FindLockers(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path must not be empty.", nameof(path));
 
+        if (File.Exists(path))
+            return QueryRestartManager([path]) is { } found ? new FileLockScan(found, IsFolder: false, 1, false) : null;
+
+        // Restart Manager accepts a path that does not exist and reports nobody using it, which answered a typo with
+        // "no process is using that path".
+        if (!Directory.Exists(path))
+            throw new FileNotFoundException("No file or folder exists at that path.", path);
+
+        var files = SafeFileWalk.Files(path, CancellationToken.None, new SafeWalkOptions())
+            .Take(MaxFolderFiles + 1)
+            .ToList();
+        var partial = files.Count > MaxFolderFiles;
+        string[] resources = [.. files.Take(MaxFolderFiles)];
+        if (resources.Length == 0) return new FileLockScan([], IsFolder: true, 0, false);
+
+        return QueryRestartManager(resources) is { } lockers
+            ? new FileLockScan(lockers, IsFolder: true, resources.Length, partial)
+            : null;
+    }
+
+    /// <summary>The processes Restart Manager reports as using any of <paramref name="resources"/>, or null when it failed.</summary>
+    internal static IReadOnlyList<FileLocker>? QueryRestartManager(string[] resources)
+    {
         var key = new StringBuilder(NativeMethods.CchRmSessionKey + 1); // 33 chars
         int rv = NativeMethods.RmStartSession(out uint handle, 0, key);
         if (rv != NativeMethods.ErrorSuccess)
         {
             Log.Debug("RmStartSession failed: {Code}", rv);
-            return [];
+            return null;
         }
 
         try
         {
-            string[] resources = [path];
             rv = NativeMethods.RmRegisterResources(handle,
                 (uint)resources.Length, resources, 0, null, 0, null);
             if (rv != NativeMethods.ErrorSuccess)
             {
                 Log.Debug("RmRegisterResources failed: {Code}", rv);
-                return [];
+                return null;
             }
 
             const int maxRetries = 6;
@@ -77,7 +118,7 @@ public sealed class FileLockService : IFileLockService
                 if (rv != NativeMethods.ErrorMoreData)
                 {
                     Log.Debug("RmGetList failed: {Code}", rv);
-                    return [];
+                    return null;
                 }
 
                 // Restart Manager re-snapshots each call, so the count can grow — loop.
@@ -85,8 +126,8 @@ public sealed class FileLockService : IFileLockService
                 info = new NativeMethods.RM_PROCESS_INFO[needed];
             }
 
-            Log.Debug("RmGetList: locker list kept growing past retry limit for {Path}", path);
-            return [];
+            Log.Debug("RmGetList: locker list kept growing past retry limit for {Count} resource(s)", resources.Length);
+            return null;
         }
         finally
         {

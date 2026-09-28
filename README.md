@@ -1030,6 +1030,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   upload, ping and server — clearable on its own, because comparing an HTTP run against an
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
   even while this tab is open
+- **A reading it could not take says so.** When no ping gets an answer, which is common on
+  networks that block ping, or the server refuses the upload, the card shows "—" and the line
+  under it says why. The history records it as not measured, never as a perfect 0 ms ping
 - Progress bar with a time-remaining estimate and a Cancel button; the Ookla CLI is
   downloaded on first run
 - Only one engine runs at a time, so the two cards can never show conflicting progress

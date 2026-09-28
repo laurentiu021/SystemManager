@@ -695,6 +695,39 @@ public class DashboardViewModelTests
     public void DescribeSpeedTest_SaysWhenTheResultCouldNotBeSaved(bool saved, string expected)
         => Assert.Equal(expected, DashboardViewModel.DescribeSpeedTest(QuickResult, saved));
 
+    // A ping with no answer used to read "Ping 0ms", a perfect score (#2504).
+
+    [Fact]
+    public void DescribeSpeedTest_APingWithNoAnswer_ReadsAsADash_NotAsZero()
+        => Assert.Equal("↓ 312 Mbps · ↑ 42 Mbps · Ping —",
+            DashboardViewModel.DescribeSpeedTest(QuickResult with { PingMs = null }, saved: true));
+
+    [Fact]
+    public void DescribeSpeedTest_AnUploadThatWasNotMeasured_ReadsAsADash()
+        => Assert.Equal("↓ 312 Mbps · ↑ — · Ping 12ms",
+            DashboardViewModel.DescribeSpeedTest(QuickResult with { UploadMbps = null }, saved: true));
+
+    [Fact]
+    public async Task QuickSpeedTest_APingWithNoAnswer_IsRecordedAsNoPing()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var noPing = QuickResult with { PingMs = null };
+            var history = new SpeedTestHistoryService(dir);
+            var vm = NewVm(QuietWinget(), speedTest: EngineThatMeasures(noPing), speedHistory: history);
+
+            await vm.QuickSpeedTestCommand.ExecuteAsync(null);
+
+            Assert.Equal("↓ 312 Mbps · ↑ 42 Mbps · Ping —", vm.QuickActionDetail);
+            Assert.Null(Assert.Single(await history.LoadAsync()).PingMs);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
     // ---------- Tune-Up result card navigation ----------
     // Each finding on the card links to the tab that can act on it ("3 broken shortcuts" is only useful
     // if it can take you to the cleaner). Navigation resolves through the live MainWindow DataContext,

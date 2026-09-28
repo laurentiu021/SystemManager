@@ -197,7 +197,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
 - `TracerouteViewModel` — auto-traceroute + manual trace with own Start/Stop.
-- `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests.
+- `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests. `DescribeFinished` writes the line under a
+  finished run, naming an upload or ping that was not measured. Its internal constructor takes the engine, so a
+  test runs it without a network.
 - `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
@@ -299,7 +301,9 @@ Key services:
   interval-change test used to sleep 1.2 real seconds and count samples, which reported the host's
   spare CPU and went red on a loaded machine. It now asserts the exact delay the pump asks for.
 - `SpeedTestService` — HTTP speed test against Cloudflare plus the Ookla CLI,
-  auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test.
+  auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test. A ping nobody
+  answered and an upload the server refused are null, not 0: `MeasurePingAsync` is handed the single ping and
+  `UploadMbps` is pure, so both are tested without a network. `SpeedTestResult` formats them, "—" when missing.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
   and stream output line-by-line. Always launches spawned processes from
   `System32` so `Access is denied` never bites on `chkdsk` etc. Every runspace,
@@ -662,7 +666,8 @@ Key services:
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis. One instance, shared by the Speed Test tab and the
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a
-  Speed Test tab that has already loaded its list.
+  Speed Test tab that has already loaded its list. An upload or ping that was not measured is left out of
+  the file rather than written as null, so a version from before they could be missing still reads it.
 - `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
   capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
   changed since last time. Same never-throw-on-IO contract and `configDir` test seam as

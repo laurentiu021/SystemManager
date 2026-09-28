@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.25] - 2026-09-28
+
+**Speed Test no longer shows a perfect 0 ms ping when no ping got an answer.** A network that blocks ping was given
+the best reading there is. The card now shows "—" and says why, and the history does not record it as 0.
+
+### Fixed
+
+- **Speed Test: a ping or upload that could not be measured is no longer shown as 0.** When no ping got an answer,
+  which is common on networks that block ping, the result card, the history and the Dashboard's quick test all read
+  0 ms. An upload the server refused read 0.0 Mbps, which looks like a dead line rather than a missing reading.
+  - Both now read "—", and the line under the card says what could not be measured and why.
+  - The history saves them as not measured. Results saved before this version keep the value they were saved with,
+    because a 0 there cannot be told apart from a real reply under a millisecond.
+  - The history columns still sort by the numbers.
+  The 0 ms ping has been there since v0.3.0, and the 0 Mbps upload since v1.20.29.
+
 ## [1.114.24] - 2026-09-28
 
 **Disk Analyzer now says when it could not measure a folder, instead of reporting a finished scan of nothing.** Such

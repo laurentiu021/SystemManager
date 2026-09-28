@@ -66,6 +66,38 @@ public class ModelRecordTests
         Assert.Equal(a, b);
     }
 
+    [Fact]
+    public void SpeedTestResult_Displays_FormatWhatWasMeasured()
+    {
+        var r = new SpeedTestResult("HTTP", 312.4, 41.66, 12.3, "Cloudflare", new DateTime(2026, 9, 29));
+
+        Assert.Equal("41.7 Mbps", r.UploadDisplay);
+        Assert.Equal("12 ms", r.PingDisplay);
+        Assert.Equal("41.7", r.UploadMbpsDisplay);
+        Assert.Equal("12", r.PingMsDisplay);
+    }
+
+    [Fact]
+    public void SpeedTestResult_Displays_ShowADash_ForWhatWasNotMeasured()
+    {
+        // A ping with no answer used to be 0, and "0 ms" is a perfect score (#2504).
+        var r = new SpeedTestResult("HTTP", 312.4, null, null, "Cloudflare", new DateTime(2026, 9, 29));
+
+        Assert.Equal("—", r.UploadDisplay);
+        Assert.Equal("—", r.PingDisplay);
+        Assert.Equal("—", r.UploadMbpsDisplay);
+        Assert.Equal("—", r.PingMsDisplay);
+    }
+
+    [Fact]
+    public void SpeedTestResult_APingUnderAMillisecond_IsShownAsZero_NotAsMissing()
+    {
+        var r = new SpeedTestResult("HTTP", 312.4, 41.7, 0, "Cloudflare", new DateTime(2026, 9, 29));
+
+        Assert.Equal("0 ms", r.PingDisplay);
+        Assert.Equal("0", r.PingMsDisplay);
+    }
+
     // ---------- TargetPreset ----------
 
     [Fact]

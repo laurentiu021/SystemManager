@@ -22,6 +22,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
 
     public NetworkSharedState Shared { get; }
     private readonly SpeedTestHistoryService _history;
+    private readonly ISpeedTestService _engine;
     private readonly EtaCalculator _eta = new();
     private CancellationTokenSource? _speedCts;
 
@@ -59,9 +60,19 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     public BulkObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
 
     public SpeedTestViewModel(NetworkSharedState shared, SpeedTestHistoryService history)
+        : this(shared, history, shared.Speed)
+    {
+    }
+
+    /// <summary>
+    /// Runs both tests on <paramref name="engine"/> instead of the shared service, so a test can hand back a
+    /// result without a network, including one whose upload or ping was not measured.
+    /// </summary>
+    internal SpeedTestViewModel(NetworkSharedState shared, SpeedTestHistoryService history, ISpeedTestService engine)
     {
         Shared = shared;
         _history = history;
+        _engine = engine;
         _history.Saved += OnHistorySaved;
         InitializeAsync(LoadHistoryAsync);
     }
@@ -142,7 +153,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         try
         {
             HttpResult = await progress.SettleAfterAsync(
-                reporter => Shared.Speed.RunHttpAsync(reporter, _speedCts.Token));
+                reporter => _engine.RunHttpAsync(reporter, _speedCts.Token));
             HttpStatus = "HTTP done";
             Log.Information("HTTP speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 HttpResult.DownloadMbps, HttpResult.UploadMbps);
@@ -156,8 +167,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // reading stays on screen for this session — but the status says so, because a result the user
             // believes was recorded and then cannot find next launch is worse than one they were warned
             // about. SaveAsync does not throw; it reports.
-            if (!await _history.SaveAsync(HttpResult))
-                HttpStatus = "HTTP done — result could not be saved to history";
+            HttpStatus = DescribeFinished("HTTP", HttpResult, saved: await _history.SaveAsync(HttpResult));
             AddToHistory(HttpResult);
         }
         catch (OperationCanceledException) { HttpStatus = "Cancelled"; }
@@ -195,7 +205,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         try
         {
             OoklaResult = await progress.SettleAfterAsync(
-                reporter => Shared.Speed.RunOoklaAsync(reporter, _speedCts.Token, ParseServerId(SelectedOoklaServer)));
+                reporter => _engine.RunOoklaAsync(reporter, _speedCts.Token, ParseServerId(SelectedOoklaServer)));
             OoklaStatus = "Ookla done";
             Log.Information("Ookla speed test: {Down:F1} Mbps down, {Up:F1} Mbps up",
                 OoklaResult.DownloadMbps, OoklaResult.UploadMbps);
@@ -204,8 +214,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             OoklaVerdict = SpeedVerdictAnalyzer.Analyze(OoklaResult, OoklaHistory.FirstOrDefault());
 
             // Persist result to history, reporting a failed write — same contract as the HTTP path above.
-            if (!await _history.SaveAsync(OoklaResult))
-                OoklaStatus = "Ookla done — result could not be saved to history";
+            OoklaStatus = DescribeFinished("Ookla", OoklaResult, saved: await _history.SaveAsync(OoklaResult));
             AddToHistory(OoklaResult);
         }
         catch (OperationCanceledException) { OoklaStatus = "Cancelled"; }
@@ -214,6 +223,23 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         catch (InvalidOperationException ex)
         { OoklaStatus = "Error: " + ex.Message; }
         finally { IsSpeedTesting = false; IsOoklaTesting = false; EstimatedTime = string.Empty; }
+    }
+
+    /// <summary>
+    /// The status line under a finished run's card: what was not measured, and whether it was saved.
+    /// </summary>
+    /// <remarks>
+    /// The card shows "—" for an upload or ping that was not measured, and this line says why, so the dash does
+    /// not read as a glitch. A ping with no answer is the common case, because some networks block ping. Pure,
+    /// so it is testable without WPF.
+    /// </remarks>
+    internal static string DescribeFinished(string engine, SpeedTestResult result, bool saved)
+    {
+        List<string> notes = [];
+        if (result.UploadMbps is null) notes.Add("upload could not be measured");
+        if (result.PingMs is null) notes.Add("no reply to ping (some networks block it)");
+        if (!saved) notes.Add("result could not be saved to history");
+        return notes.Count == 0 ? $"{engine} done" : $"{engine} done — {string.Join("; ", notes)}";
     }
 
     [RelayCommand]

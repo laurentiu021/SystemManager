@@ -1062,9 +1062,17 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// The quick test's result line. A result that could not be written says so, as the Speed Test tab does,
     /// because a reading the user expects to find in the history and cannot is worse than a warning.
     /// </summary>
-    internal static string DescribeSpeedTest(SpeedTestResult result, bool saved) =>
-        $"↓ {result.DownloadMbps:F0} Mbps · ↑ {result.UploadMbps:F0} Mbps · Ping {result.PingMs:F0}ms"
-        + (saved ? "" : " — not saved to the Speed Test history");
+    /// <remarks>
+    /// An upload or ping that was not measured reads "—", as on the Speed Test tab. A ping with no answer used to
+    /// read "Ping 0ms", a perfect score (#2504).
+    /// </remarks>
+    internal static string DescribeSpeedTest(SpeedTestResult result, bool saved)
+    {
+        var up = result.UploadMbps is { } u ? $"{u:F0} Mbps" : "—";
+        var ping = result.PingMs is { } p ? $"{p:F0}ms" : "—";
+        return $"↓ {result.DownloadMbps:F0} Mbps · ↑ {up} · Ping {ping}"
+            + (saved ? "" : " — not saved to the Speed Test history");
+    }
 
     [RelayCommand]
     private void NavigateToQuickActionTab()

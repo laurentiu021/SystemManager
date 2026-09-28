@@ -28,6 +28,13 @@ public static class WingetFailure
         "winget (App Installer) isn't available on this PC — install \"App Installer\" from the Microsoft Store to use this tab.";
 
     /// <summary>
+    /// What every confirmation that can upgrade an app warns. App Updates, the Dashboard's Update All Apps and
+    /// the Bulk Installer can all upgrade, because winget turns an install of an installed app into an
+    /// upgrade, so they say it in the same words (#2482).
+    /// </summary>
+    public const string UpgradeWarning = "Apps may restart during the upgrade, and an upgrade cannot be undone.";
+
+    /// <summary>
     /// Explains why an INSTALL failed, and what to do next. Covers the results winget itself ends an install
     /// on, plus the MSI set (1602/1603/1618/1619/1620/1638) and Windows access denied (5) for an installer
     /// whose own code reaches the row.

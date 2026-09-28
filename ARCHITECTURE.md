@@ -211,7 +211,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
-- `BulkInstallerViewModel` — batch app installation via winget with progress tracking.
+- `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
   `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing — which
@@ -1038,7 +1038,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   CLI commands into structured objects.
 - `WingetFailure` — the one translation of winget outcomes into plain language:
   why an install or uninstall failed, whether an install found the app already
-  there, and the missing-App-Installer sentence. `ThrowIfQueryFailed` tells a
+  there, and the missing-App-Installer sentence. `UpgradeWarning` is the one
+  sentence every confirmation that can upgrade an app shows (App Updates, the
+  Dashboard's Update All Apps, the Bulk Installer), and
+  `ArchitectureTests.TheUpgradeWarning_IsWrittenInOnePlace` keeps it there. `ThrowIfQueryFailed` tells a
   query that failed from one that found nothing; every query that parses
   winget's table calls it, because a failed query prints no table and used to
   read as an empty result. winget's own result codes are named constants on

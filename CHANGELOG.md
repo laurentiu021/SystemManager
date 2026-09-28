@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.9] - 2026-09-28
+
+**The Bulk Installer now asks before it installs anything.** Installing can upgrade an app you already have,
+and every other place that upgrades apps already asks first.
+
+### Fixed
+
+- **Bulk Installer: Install Selected asks first.** It started installing as soon as it was pressed. winget
+  turns an install of an app that is already on the PC into an upgrade when a newer version exists, installed
+  apps can be ticked, and Select All ticks every row, so Select All followed by Install Selected could
+  upgrade Chrome, Zoom or Teams without a word and close them mid-use. It now asks, names the apps when
+  there are only a few, and warns that an installed app is upgraded instead. Present since the tab was added
+  in v1.2.0.
+
+### Changed
+
+- **Every confirmation that can upgrade an app gives the same warning:** "Apps may restart during the
+  upgrade, and an upgrade cannot be undone." App Updates already said so. The Dashboard's Update All Apps now
+  says it too, where it had left out that an upgrade cannot be undone, and so does the Bulk Installer.
+
 ## [1.114.8] - 2026-09-28
 
 **System Logs now reports the number of events it actually loaded.** It used to under-count them, and said

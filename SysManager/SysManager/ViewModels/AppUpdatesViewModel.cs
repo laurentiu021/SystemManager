@@ -181,7 +181,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             : "";
         if (!DialogService.Instance.Confirm(
                 $"Upgrade {toUpgrade.Count} app{(toUpgrade.Count == 1 ? "" : "s")} via winget?{names}\n\n" +
-                "Apps may restart during the upgrade, and an upgrade cannot be undone.",
+                WingetFailure.UpgradeWarning,
                 "Confirm App Upgrade"))
         {
             return;

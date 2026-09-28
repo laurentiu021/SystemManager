@@ -36,6 +36,18 @@ public sealed partial class DriversViewModel : ViewModelBase
     /// <summary>True before the first scan — drives the "click List drivers" prompt.</summary>
     [ObservableProperty] private bool _hasNotScanned = true;
 
+    // Distinguishes "Windows answered" from "the scan failed". A failed scan reported "0 drivers found", "Done"
+    // and a completion toast, because the exit code was discarded and an empty answer parsed to nothing (#2503).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listFailed;
+
+    public string EmptyTitle => ListFailed ? "Drivers could not be read" : "No drivers listed";
+
+    public string EmptyMessage => ListFailed
+        ? "Windows did not answer when SysManager asked for the installed drivers. Press List drivers to try again."
+        : "Click 'List drivers' to enumerate installed system drivers.";
+
     public DriversViewModel(IPowerShellRunner runner)
     {
         _runner = runner;
@@ -63,8 +75,6 @@ public sealed partial class DriversViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Scanning installed drivers…";
-        Drivers.Clear();
-        _allDrivers.Clear();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
 
@@ -77,10 +87,11 @@ public sealed partial class DriversViewModel : ViewModelBase
                     json.AppendLine(l.Text);
             }
 
+            int exitCode;
             _runner.LineReceived += Capture;
             try
             {
-                await _runner.RunScriptViaPwshAsync(@"
+                exitCode = await _runner.RunScriptViaPwshAsync(@"
                     Get-CimInstance Win32_PnPSignedDriver |
                       Where-Object { $_.DeviceName -and $_.DriverVersion } |
                       Select-Object DeviceName, DriverVersion, Manufacturer, DriverDate, IsSigned |
@@ -89,14 +100,35 @@ public sealed partial class DriversViewModel : ViewModelBase
             }
             finally { _runner.LineReceived -= Capture; }
 
-            ParseDriverJson(json.ToString());
+            var scan = ReadScan(exitCode, json.ToString());
+            ListFailed = scan.Drivers is null;
+            if (scan.Drivers is null)
+            {
+                // A failed scan changes nothing on screen: what was listed stays listed, and the empty state and the
+                // status line say the scan failed rather than that there are no drivers (#2503).
+                StatusMessage = _allDrivers.Count == 0
+                    ? "Could not read the installed drivers. Press List drivers to try again."
+                    : "Could not read the installed drivers, so the list below is from the last scan.";
+                return;
+            }
+
+            _allDrivers.Clear();
+            _allDrivers.AddRange(scan.Drivers);
+            ApplyFilter();
             HasNotScanned = false;
             Summary = $"{_allDrivers.Count} drivers found" +
                       (HideSystemDrivers ? $" ({DriverCount} shown, built-in Windows drivers hidden)." : ".");
-            StatusMessage = "Done";
+            StatusMessage = scan.Complete
+                ? "Done"
+                : "Windows reported an error while listing the drivers, so some may be missing.";
             ToastService.Instance.Show("Driver scan complete", $"{_allDrivers.Count} drivers found");
         }
-        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = _allDrivers.Count == 0
+                ? "Cancelled."
+                : "Cancelled, so the list below is from the last scan.";
+        }
         catch (InvalidOperationException ex) { StatusMessage = ex.Message; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
@@ -115,9 +147,34 @@ public sealed partial class DriversViewModel : ViewModelBase
         base.Dispose(disposing);
     }
 
-    private void ParseDriverJson(string raw)
+    /// <summary>What one scan returned: the drivers, or null when the scan failed, and whether it ran clean.</summary>
+    internal readonly record struct DriverScan(IReadOnlyList<DriverEntry>? Drivers, bool Complete);
+
+    /// <summary>Reads one scan's exit code and output. Pure, so every outcome is testable without PowerShell.</summary>
+    /// <remarks>
+    /// The exit code used to be discarded. A query that failed outright printed nothing, which parsed to no
+    /// drivers, so the tab reported "0 drivers found", "Done" and a completion toast (#2503).
+    /// <list type="bullet">
+    /// <item><description>Output that is not JSON is a failed scan. <see cref="JsonDocument"/> parses all or
+    /// nothing, so none of it can be shown, and saying "some drivers may not be shown" was never true.</description></item>
+    /// <item><description>A non-zero exit with nothing listed is a failed scan.</description></item>
+    /// <item><description>A non-zero exit with drivers listed keeps them, marked incomplete. Windows PowerShell
+    /// exits 1 when any command in the pipeline wrote an error, and still prints what the pipeline
+    /// produced.</description></item>
+    /// <item><description>A clean exit with no output is Windows answering that there are none.</description></item>
+    /// </list>
+    /// </remarks>
+    internal static DriverScan ReadScan(int exitCode, string output)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return;
+        var drivers = ParseDrivers(output);
+        if (drivers is null || (exitCode != 0 && drivers.Count == 0)) return new DriverScan(null, false);
+        return new DriverScan(drivers, exitCode == 0);
+    }
+
+    /// <summary>The drivers in <paramref name="raw"/>: an empty list for no output, null when it is not JSON.</summary>
+    internal static List<DriverEntry>? ParseDrivers(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
 
         try
         {
@@ -129,25 +186,20 @@ public sealed partial class DriversViewModel : ViewModelBase
                 ? root.EnumerateArray()
                 : [root];
 
-            foreach (var entry in items.Select(el => new DriverEntry
+            return [.. items.Select(el => new DriverEntry
             {
                 DeviceName = el.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "",
                 Manufacturer = el.TryGetProperty("Manufacturer", out var mf) ? mf.GetString() ?? "" : "",
                 DriverVersion = el.TryGetProperty("DriverVersion", out var dv) ? dv.GetString() ?? "" : "",
                 DriverDate = ParseCimDate(el.TryGetProperty("DriverDate", out var dd) ? dd : default),
                 IsSigned = ParseCimBool(el.TryGetProperty("IsSigned", out var sg) ? sg : default),
-            }))
-            {
-                _allDrivers.Add(entry);
-            }
+            })];
         }
         catch (JsonException ex)
         {
             Log.Warning("Failed to parse driver JSON: {Error}", ex.Message);
-            StatusMessage = "Parse error — some drivers may not be shown.";
+            return null;
         }
-
-        ApplyFilter();
     }
 
     private void ApplyFilter()

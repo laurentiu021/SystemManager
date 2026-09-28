@@ -122,10 +122,10 @@
                         </DataGridTextColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-                <!-- Nothing scanned yet -->
+                <!-- Nothing scanned yet, or the only scan so far failed (#2503) -->
                 <v:EmptyState Glyph="&#xE950;"
-                              Title="No drivers listed"
-                              Message="Click 'List drivers' to enumerate installed system drivers."
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasNotScanned, Converter={StaticResource FlexVis}}"/>
                 <!-- Scanned, but the filter hid every driver: telling the user to scan again would be wrong. -->
                 <v:EmptyState Glyph="&#xE721;"

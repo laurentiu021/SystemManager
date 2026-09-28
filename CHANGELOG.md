@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.20] - 2026-09-28
+
+**Drivers now says when a scan failed, instead of reporting "0 drivers found".** When Windows reports an error
+part-way through a scan, the drivers it did list are shown with a note that some may be missing.
+
+### Fixed
+
+- **Drivers: a failed scan is not "0 drivers found".** The scan ignored the exit code, so a query that failed
+  outright reported "0 drivers found", "Done" and a "Driver scan complete" notification.
+  - It now says the drivers could not be read, and keeps the list from the previous scan.
+  - When Windows reports an error part-way through, the drivers it did list are shown, with a note that some
+    may be missing.
+  - Output that cannot be read counts as a failed scan. Its message used to be replaced by "Done" at once.
+  Present since the tab was added in v0.3.0; the replaced message since v0.27.0.
+
 ## [1.114.19] - 2026-09-28
 
 **Battery Health now says when Windows could not read the battery.** It used to tell a laptop it had no battery

@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -98,15 +99,11 @@ public class DriversViewModelTests
         Assert.True(cts.IsCancellationRequested);
     }
 
-    // ---------- ParseDriverJson via reflection ----------
+    // ---------- ParseDrivers ----------
 
     [Fact]
-    public void ParseDriverJson_ValidArray_PopulatesDrivers()
+    public void ParseDrivers_ValidArray_ReadsEveryDriver()
     {
-        var vm = NewVm();
-        var method = typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
         var json = """
         [
             {"DeviceName":"Intel HD","Manufacturer":"Intel","DriverVersion":"10.0.1","DriverDate":"/Date(1609459200000)/"},
@@ -114,20 +111,17 @@ public class DriversViewModelTests
         ]
         """;
 
-        method.Invoke(vm, new object[] { json });
+        var drivers = DriversViewModel.ParseDrivers(json);
 
-        Assert.Equal(2, vm.Drivers.Count);
-        Assert.Equal("Intel HD", vm.Drivers[0].DeviceName);
-        Assert.Equal("NVIDIA GPU", vm.Drivers[1].DeviceName);
+        Assert.NotNull(drivers);
+        Assert.Equal(2, drivers.Count);
+        Assert.Equal("Intel HD", drivers[0].DeviceName);
+        Assert.Equal("NVIDIA GPU", drivers[1].DeviceName);
     }
 
     [Fact]
-    public void ParseDriverJson_CarriesTheSignatureStateThrough()
+    public void ParseDrivers_CarriesTheSignatureStateThrough()
     {
-        var vm = NewVm();
-        var method = typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
         // The third entry omits IsSigned entirely, which is the case that must stay blank rather than
         // become "Unsigned" — a query change or a Windows edition that stops reporting it lands here.
         var json = """
@@ -138,54 +132,85 @@ public class DriversViewModelTests
         ]
         """;
 
-        method.Invoke(vm, new object[] { json });
+        var drivers = DriversViewModel.ParseDrivers(json);
 
-        Assert.Equal(3, vm.Drivers.Count);
-        Assert.Equal("Signed", vm.Drivers[0].SignatureDisplay);
-        Assert.Equal("Unsigned", vm.Drivers[1].SignatureDisplay);
-        Assert.Equal("", vm.Drivers[2].SignatureDisplay);
-        Assert.Null(vm.Drivers[2].IsSigned);
+        Assert.NotNull(drivers);
+        Assert.Equal(3, drivers.Count);
+        Assert.Equal("Signed", drivers[0].SignatureDisplay);
+        Assert.Equal("Unsigned", drivers[1].SignatureDisplay);
+        Assert.Equal("", drivers[2].SignatureDisplay);
+        Assert.Null(drivers[2].IsSigned);
     }
 
     [Fact]
-    public void ParseDriverJson_SingleObject_PopulatesOneDriver()
+    public void ParseDrivers_SingleObject_ReadsOneDriver()
     {
-        var vm = NewVm();
-        var method = typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
-
         var json = """{"DeviceName":"Realtek Audio","Manufacturer":"Realtek","DriverVersion":"6.0.1","DriverDate":null}""";
 
-        method.Invoke(vm, new object[] { json });
+        var drivers = DriversViewModel.ParseDrivers(json);
 
-        Assert.Single(vm.Drivers);
-        Assert.Equal("Realtek Audio", vm.Drivers[0].DeviceName);
+        Assert.NotNull(drivers);
+        Assert.Equal("Realtek Audio", Assert.Single(drivers).DeviceName);
     }
 
     [Fact]
-    public void ParseDriverJson_EmptyString_NoDrivers()
+    public void ParseDrivers_NoOutput_IsAnEmptyList()
     {
-        var vm = NewVm();
-        var method = typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var drivers = DriversViewModel.ParseDrivers("");
 
-        method.Invoke(vm, new object[] { "" });
-
-        Assert.Empty(vm.Drivers);
+        Assert.NotNull(drivers);
+        Assert.Empty(drivers);
     }
 
     [Fact]
-    public void ParseDriverJson_InvalidJson_DoesNotThrow()
+    public void ParseDrivers_OutputThatIsNotJson_IsNull_NotAnEmptyList()
+        => Assert.Null(DriversViewModel.ParseDrivers("not json at all"));
+
+    // ---------- ReadScan: the exit code counts (#2503) ----------
+    //
+    // The exit code was discarded, so a query that failed outright printed nothing, parsed to no drivers, and the
+    // tab reported "0 drivers found", "Done" and a completion toast.
+
+    private const string OneDriver = """[{"DeviceName":"NVIDIA GPU","Manufacturer":"NVIDIA","DriverVersion":"31.0.2"}]""";
+
+    [Theory]
+    [InlineData(1, "")]                 // the query failed outright: Windows PowerShell printed nothing
+    [InlineData(0, "not json at all")]  // output that cannot be read
+    [InlineData(1, "not json at all")]
+    public void ReadScan_AScanThatFailed_HasNoDrivers(int exitCode, string output)
+        => Assert.Null(DriversViewModel.ReadScan(exitCode, output).Drivers);
+
+    [Fact]
+    public void ReadScan_AnErrorWithDriversListed_KeepsThem_MarkedIncomplete()
     {
-        var vm = NewVm();
-        var method = typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        // Windows PowerShell exits 1 when any command in the pipeline wrote an error, and still prints what the
+        // pipeline produced. Probed with a two-path Get-Item where one path does not exist.
+        var scan = DriversViewModel.ReadScan(1, OneDriver);
 
-        var ex = Record.Exception(() => method.Invoke(vm, new object[] { "not json at all" }));
+        Assert.NotNull(scan.Drivers);
+        Assert.Single(scan.Drivers);
+        Assert.False(scan.Complete);
+    }
 
-        // TargetInvocationException wraps internal exceptions; parse errors are caught internally
-        Assert.True(ex == null || ex is TargetInvocationException);
-        Assert.Empty(vm.Drivers);
+    [Fact]
+    public void ReadScan_ACleanScan_IsComplete()
+    {
+        var scan = DriversViewModel.ReadScan(0, OneDriver);
+
+        Assert.NotNull(scan.Drivers);
+        Assert.Single(scan.Drivers);
+        Assert.True(scan.Complete);
+    }
+
+    [Fact]
+    public void ReadScan_ACleanExitWithNothingListed_IsWindowsAnsweringNone()
+    {
+        // ConvertTo-Json prints nothing for an empty pipeline, and exits 0.
+        var scan = DriversViewModel.ReadScan(0, "");
+
+        Assert.NotNull(scan.Drivers);
+        Assert.Empty(scan.Drivers);
+        Assert.True(scan.Complete);
     }
 
     // ---------- ParseCimDate via reflection ----------
@@ -221,10 +246,29 @@ public class DriversViewModelTests
     // bindings in DriversView.xaml — so no user could ever reach it. These pin the behaviour now
     // that the checkbox exists.
 
-    private static void Parse(DriversViewModel vm, string json) =>
-        typeof(DriversViewModel)
-            .GetMethod("ParseDriverJson", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(vm, [json]);
+    /// <summary>A runner whose driver query answers each call in turn: what it prints, and its exit code.</summary>
+    private static IPowerShellRunner RunnerAnswering(params (string Output, int ExitCode)[] answers)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var call = 0;
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                var (output, exitCode) = answers[Math.Min(call++, answers.Length - 1)];
+                if (output.Length > 0)
+                    runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(output));
+                return Task.FromResult(exitCode);
+            });
+        return runner;
+    }
+
+    /// <summary>A view model that has run one scan answered with <paramref name="output"/>.</summary>
+    private static async Task<DriversViewModel> ScannedVm(string output, int exitCode = 0, bool hideSystemDrivers = false)
+    {
+        var vm = new DriversViewModel(RunnerAnswering((output, exitCode))) { HideSystemDrivers = hideSystemDrivers };
+        await vm.ListDriversCommand.ExecuteAsync(null);
+        return vm;
+    }
 
     private const string MixedDrivers = """
     [
@@ -236,20 +280,18 @@ public class DriversViewModelTests
     """;
 
     [Fact]
-    public void HideSystemDrivers_Off_ShowsEveryDriver()
+    public async Task HideSystemDrivers_Off_ShowsEveryDriver()
     {
-        var vm = NewVm();
-        Parse(vm, MixedDrivers);
+        var vm = await ScannedVm(MixedDrivers);
 
         Assert.False(vm.HideSystemDrivers);
         Assert.Equal(4, vm.Drivers.Count);
     }
 
     [Fact]
-    public void HideSystemDrivers_On_KeepsOnlyThirdPartyDrivers()
+    public async Task HideSystemDrivers_On_KeepsOnlyThirdPartyDrivers()
     {
-        var vm = NewVm();
-        Parse(vm, MixedDrivers);
+        var vm = await ScannedVm(MixedDrivers);
 
         vm.HideSystemDrivers = true;
 
@@ -258,10 +300,9 @@ public class DriversViewModelTests
     }
 
     [Fact]
-    public void HideSystemDrivers_Toggling_RestoresTheFullList()
+    public async Task HideSystemDrivers_Toggling_RestoresTheFullList()
     {
-        var vm = NewVm();
-        Parse(vm, MixedDrivers);
+        var vm = await ScannedVm(MixedDrivers);
 
         vm.HideSystemDrivers = true;
         vm.HideSystemDrivers = false;
@@ -270,10 +311,9 @@ public class DriversViewModelTests
     }
 
     [Fact]
-    public void HideSystemDrivers_On_SummaryReportsBothCounts()
+    public async Task HideSystemDrivers_On_SummaryReportsBothCounts()
     {
-        var vm = NewVm();
-        Parse(vm, MixedDrivers);
+        var vm = await ScannedVm(MixedDrivers);
 
         vm.HideSystemDrivers = true;
 
@@ -311,12 +351,11 @@ public class DriversViewModelTests
     }
 
     [Fact]
-    public void WhenTheFilterHidesEveryDriver_TheFilteredStateIsShownNotTheScanPrompt()
+    public async Task WhenTheFilterHidesEveryDriver_TheFilteredStateIsShownNotTheScanPrompt()
     {
         // On a machine where every driver is Microsoft-supplied, the single shared empty state told
         // the user to click a button they had already clicked. Same defect as the Logs tab's.
-        var vm = NewVm();
-        Parse(vm, """
+        var vm = await ScannedVm("""
         [
             {"DeviceName":"Generic Monitor","Manufacturer":"Microsoft","DriverVersion":"10.0.1","DriverDate":null}
         ]
@@ -329,26 +368,105 @@ public class DriversViewModelTests
     }
 
     [Fact]
-    public void WithDriversShown_NeitherEmptyStateIsActive()
+    public async Task WithDriversShown_NeitherEmptyStateIsActive()
     {
-        var vm = NewVm();
-        Parse(vm, MixedDrivers);
+        var vm = await ScannedVm(MixedDrivers);
 
         Assert.False(vm.HasNoResults);
         Assert.NotEmpty(vm.Drivers);
     }
 
-    [Fact]
-    public void AFailedScanThatFoundNothing_DoesNotClaimTheFilterHidThings()
+    [Theory]
+    [InlineData("[]", 0)]   // a scan that listed none
+    [InlineData("", 1)]     // a scan that failed
+    public async Task AScanThatFoundNothing_DoesNotClaimTheFilterHidThings(string output, int exitCode)
     {
-        // Zero drivers parsed is not "filtered to nothing" — HasNoResults must stay false so the
+        // Zero drivers is not "filtered to nothing" — HasNoResults must stay false so the
         // wrong advice ("untick the checkbox") is never shown.
-        var vm = NewVm();
-        vm.HideSystemDrivers = true;
-
-        Parse(vm, "[]");
+        var vm = await ScannedVm(output, exitCode, hideSystemDrivers: true);
 
         Assert.False(vm.HasNoResults);
+    }
+
+    // ---------- a scan that failed says so (#2503) ----------
+
+    [Fact]
+    public async Task AScanThatFailed_SaysSo_NotZeroDriversFound()
+    {
+        var vm = await ScannedVm("", exitCode: 1);
+
+        Assert.True(vm.ListFailed);
+        Assert.True(vm.HasNotScanned);   // the empty state stays up, now saying the scan failed
+        Assert.Equal("Drivers could not be read", vm.EmptyTitle);
+        Assert.StartsWith("Could not read the installed drivers.", vm.StatusMessage);
+        Assert.DoesNotContain("drivers found", vm.Summary);
+    }
+
+    [Fact]
+    public async Task OutputThatCannotBeRead_StaysReportedAsAFailure()
+    {
+        // The parse error used to be overwritten by "Done" on the next line, so it was never seen.
+        var vm = await ScannedVm("not json at all");
+
+        Assert.True(vm.ListFailed);
+        Assert.StartsWith("Could not read the installed drivers.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AFailedRescan_KeepsTheList_AndSaysItIsFromTheLastScan()
+    {
+        var vm = new DriversViewModel(RunnerAnswering((MixedDrivers, 0), ("", 1)));
+        await vm.ListDriversCommand.ExecuteAsync(null);
+        Assert.Equal(4, vm.Drivers.Count);   // the premise: the first scan listed them
+
+        await vm.ListDriversCommand.ExecuteAsync(null);
+
+        Assert.Equal(4, vm.Drivers.Count);
+        Assert.True(vm.ListFailed);
+        Assert.Equal("Could not read the installed drivers, so the list below is from the last scan.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ACancelledRescan_KeepsTheList_AndSaysSo()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var call = 0;
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (call++ > 0) throw new OperationCanceledException();
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(MixedDrivers));
+                return Task.FromResult(0);
+            });
+        var vm = new DriversViewModel(runner);
+        await vm.ListDriversCommand.ExecuteAsync(null);
+        Assert.Equal(4, vm.Drivers.Count);   // the premise: the first scan listed them
+
+        await vm.ListDriversCommand.ExecuteAsync(null);
+
+        Assert.Equal(4, vm.Drivers.Count);
+        Assert.Equal("Cancelled, so the list below is from the last scan.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AScanWithAnError_ShowsWhatItListed_AndSaysSomeMayBeMissing()
+    {
+        var vm = await ScannedVm(MixedDrivers, exitCode: 1);
+
+        Assert.Equal(4, vm.Drivers.Count);
+        Assert.False(vm.ListFailed);
+        Assert.Contains("some may be missing", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ACleanScan_IsDone()
+    {
+        var vm = await ScannedVm(MixedDrivers);
+
+        Assert.False(vm.ListFailed);
+        Assert.False(vm.HasNotScanned);
+        Assert.Equal("Done", vm.StatusMessage);
+        Assert.Equal("4 drivers found.", vm.Summary);
     }
 }
 

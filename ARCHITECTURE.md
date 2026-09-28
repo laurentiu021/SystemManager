@@ -684,6 +684,9 @@ Key services:
 - `DnsService` — manages DNS server configuration via PowerShell
   `Set-DnsClientServerAddress` with preset support (plain resolvers plus
   ad/malware/family-blocking variants), IPv4 + IPv6, and reversible snapshots.
+  Every script stops on an error, so a failed read is "Unavailable" rather than an answer:
+  `CurrentDnsScript` and `ActiveInterfaceIndexScript` are internal so the integration suite runs
+  them in real Windows PowerShell with the cmdlets shadowed (`DnsScriptTests`).
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
   restore it (`HasBackup` / `RestoreBackup`).

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.26] - 2026-09-28
+
+**DNS & Hosts no longer says "Automatic (DHCP)" when it could not read your DNS servers.** A PC with its own DNS
+servers set was told it had none. The tab now says the DNS is unavailable.
+
+### Fixed
+
+- **DNS & Hosts: a DNS read that failed is not shown as "Automatic (DHCP)".** When Windows failed to report the
+  adapter's DNS servers, the read carried on, found none and said "Automatic (DHCP)". A failure to list the network
+  adapters said "No active adapter" the same way.
+  - Either failure now stops the read, and "Current DNS" shows "Unavailable".
+  - A DNS change that fails while finding the adapter now shows the error Windows gave, instead of "No active
+    network adapter found."
+  Present since the tab was added in v1.6.0.
+
 ## [1.114.25] - 2026-09-28
 
 **Speed Test no longer shows a perfect 0 ms ping when no ping got an answer.** A network that blocks ping was given

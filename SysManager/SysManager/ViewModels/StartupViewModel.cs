@@ -21,7 +21,7 @@ public sealed partial class StartupViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
 
-    private readonly StartupService _service;
+    private readonly Func<Task<StartupScan>> _scan;
     private readonly Func<bool> _isElevatedProbe;
 
     /// <summary>
@@ -43,7 +43,8 @@ public sealed partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private bool _hideWindowsEntries;
 
     public StartupViewModel(StartupService service, BootAnalyzerService boot)
-        : this(service, AdminHelper.IsElevated, ReadDegradationsOrNone(boot ?? throw new ArgumentNullException(nameof(boot))))
+        : this(() => service.ScanAsync(), AdminHelper.IsElevated,
+               ReadDegradationsOrNone(boot ?? throw new ArgumentNullException(nameof(boot))))
     {
     }
 
@@ -58,18 +59,18 @@ public sealed partial class StartupViewModel : ViewModelBase
     private static Func<Task<IReadOnlyList<BootDegradation>>> ReadDegradationsOrNone(BootAnalyzerService boot)
         => async () => await boot.ReadDegradationsAsync().ConfigureAwait(false) ?? [];
 
-    /// <summary>Test seam: the same view-model with the elevation probe and the boot reader supplied.</summary>
-    /// <param name="service">The startup scan.</param>
+    /// <summary>Test seam: the same view-model with the scan, the elevation probe and the boot reader supplied.</summary>
+    /// <param name="scan">The startup scan, so a test can supply one whose scheduled tasks could not be listed.</param>
     /// <param name="isElevated">
     /// How this view-model asks whether the process is elevated. Injected rather than called inline, because
     /// the boot-impact read below happens only when elevated and a test has to be able to drive both sides of
     /// that branch. Same seam and same two-constructor shape as <c>WindowsUpdateViewModel</c>.
     /// </param>
     /// <param name="readDegradations">Windows' boot-delay measurements. See <see cref="_readDegradations"/>.</param>
-    internal StartupViewModel(StartupService service, Func<bool> isElevated,
+    internal StartupViewModel(Func<Task<StartupScan>> scan, Func<bool> isElevated,
                               Func<Task<IReadOnlyList<BootDegradation>>> readDegradations)
     {
-        _service = service;
+        _scan = scan ?? throw new ArgumentNullException(nameof(scan));
         _isElevatedProbe = isElevated ?? throw new ArgumentNullException(nameof(isElevated));
         _readDegradations = readDegradations ?? throw new ArgumentNullException(nameof(readDegradations));
         IsElevated = _isElevatedProbe();
@@ -125,8 +126,8 @@ public sealed partial class StartupViewModel : ViewModelBase
         StatusMessage = "Scanning startup items…";
         try
         {
-            var items = await _service.ScanAsync().ConfigureAwait(false);
-            var sorted = items.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            var scan = await _scan().ConfigureAwait(false);
+            var sorted = scan.Entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase).ToList();
             foreach (var item in sorted)
             {
                 var exePath = ExtractExecutablePath(item.Command);
@@ -156,7 +157,7 @@ public sealed partial class StartupViewModel : ViewModelBase
             else
                 Publish();
 
-            StatusMessage = $"Found {_allEntries.Count} startup items.";
+            StatusMessage = DescribeScan(_allEntries.Count, scan.ScheduledTasksListed, _isElevatedProbe());
             ToastService.Instance.Show("Scan complete", $"{_allEntries.Count} startup items found");
         }
         catch (InvalidOperationException ex)
@@ -168,6 +169,21 @@ public sealed partial class StartupViewModel : ViewModelBase
             StatusMessage = $"Scan failed: {ex.Message}";
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>The status line after a scan. Pure, so each answer about the scheduled tasks is testable.</summary>
+    /// <remarks>
+    /// Without elevation the scheduled tasks of other programs cannot be listed at all, and nothing said so: the
+    /// count read as the whole start-up list (#2503).
+    /// </remarks>
+    internal static string DescribeScan(int count, bool scheduledTasksListed, bool elevated)
+    {
+        var found = $"Found {count} startup items.";
+        if (scheduledTasksListed) return found;
+
+        return elevated
+            ? $"{found} Scheduled tasks from other programs could not be listed: Windows did not answer."
+            : $"{found} Scheduled tasks from other programs are not included: Windows lists them only for administrators.";
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

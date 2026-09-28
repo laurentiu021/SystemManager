@@ -182,7 +182,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   the size threshold were read only by the large-file scan — so Deep Cleanup LOST two dependencies
   (`LargeFileScanner`, `FixedDriveService`) rather than gaining a shared seam, and no longer needs an
   async init at all.
-- `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it.
+- `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it. `DescribeScan` says when other programs' scheduled tasks are missing from the list, and why.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
 - `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
@@ -412,7 +412,9 @@ Key services:
   `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the
   Task Scheduler tab owns). `TaskCache` has no enabled flag, so a task's state comes from
   its definition under `System32\Tasks` (`Settings/Enabled`), read without DTDs and only
-  inside that folder. Enriches each entry from `ProcessDescriptionService`
+  inside that folder. `TaskCache` is readable by SYSTEM and Administrators only, so
+  `ScanAsync` returns a `StartupScan` that says whether the tasks could be listed, rather
+  than a list that silently has none. Enriches each entry from `ProcessDescriptionService`
   (plain-language description + `ProcessSafety`) keyed on the executable's base
   name; unrecognised programs are left blank so the UI never guesses a safety. A second
   post-pass, `VerifySignatures`, answers "who really made this" with a certificate rather

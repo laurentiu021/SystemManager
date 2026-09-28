@@ -28,8 +28,9 @@ public class StartupViewModelTests
     /// injected so the test decides, not the console it was started from.
     /// </remarks>
     private static StartupViewModel NewVm(bool elevated = false,
-                                          Func<Task<IReadOnlyList<BootDegradation>>>? readDegradations = null)
-        => new(new StartupService(), () => elevated,
+                                          Func<Task<IReadOnlyList<BootDegradation>>>? readDegradations = null,
+                                          Func<Task<StartupScan>>? scan = null)
+        => new(scan ?? (() => new StartupService().ScanAsync()), () => elevated,
                readDegradations ?? (() => Task.FromResult<IReadOnlyList<BootDegradation>>([])));
 
     [Fact]
@@ -359,4 +360,41 @@ public class StartupViewModelTests
         Assert.Equal(1, reads);
     }
 
+    // ── scheduled tasks that could not be listed (#2503) ──
+    //
+    // Windows lists other programs' scheduled tasks only for administrators. Without elevation the list silently had
+    // none, under a header saying they were included.
+
+    [Fact]
+    public void DescribeScan_SaysWhenScheduledTasksAreMissing_AndWhy()
+    {
+        Assert.Equal("Found 5 startup items.", StartupViewModel.DescribeScan(5, scheduledTasksListed: true, elevated: false));
+        Assert.Equal("Found 5 startup items. Scheduled tasks from other programs are not included: Windows lists them "
+                     + "only for administrators.",
+            StartupViewModel.DescribeScan(5, scheduledTasksListed: false, elevated: false));
+        Assert.Equal("Found 5 startup items. Scheduled tasks from other programs could not be listed: Windows did not "
+                     + "answer.",
+            StartupViewModel.DescribeScan(5, scheduledTasksListed: false, elevated: true));
+    }
+
+    [Fact]
+    public async Task AScanWithoutScheduledTasks_SaysSoOnTheStatusLine()
+    {
+        var entry = new StartupEntry { Name = "Helper", Command = "helper.exe", Location = "HKCU Run" };
+        var vm = NewVm(scan: () => Task.FromResult(new StartupScan([entry], ScheduledTasksListed: false)));
+        await vm.InitializationComplete;
+
+        Assert.Single(vm.Entries);
+        Assert.EndsWith("Windows lists them only for administrators.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AScanWithScheduledTasks_SaysOnlyTheCount()
+    {
+        var entry = new StartupEntry { Name = "Helper", Command = "helper.exe", Location = "HKCU Run" };
+        var vm = NewVm(scan: () => Task.FromResult(new StartupScan([entry], ScheduledTasksListed: true)));
+        await vm.InitializationComplete;
+
+        Assert.Equal("Found 1 startup items.", vm.StatusMessage);
+    }
 }

@@ -22,14 +22,14 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Startup Manager" Style="{StaticResource Display}"/>
-            <TextBlock Text="Programs that run when Windows starts. Disabling is non-destructive — you can re-enable anytime. Scheduled tasks from other programs are listed too; Windows' own tasks are left out, so System → Task Scheduler is where you see every task."
+            <TextBlock Text="Programs that run when Windows starts. Disabling is non-destructive — you can re-enable anytime. Scheduled tasks from other programs are listed too when SysManager runs as administrator; Windows' own tasks are left out, so System → Task Scheduler is where you see every task."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="Changing startup entries requires administrator privileges, and so does reading Windows' start-up delay measurements — the Startup impact column stays empty without them."
-                       ElevatedMessage="Running as administrator — you can enable and disable any startup entry, and Startup impact shows what Windows measured each one delaying the last start-up."/>
+                       NotElevatedMessage="Changing startup entries requires administrator privileges. Without them, the scheduled tasks other programs add are left out of this list and the Startup impact column stays empty, because Windows shows both only to administrators."
+                       ElevatedMessage="Running as administrator — you can enable and disable any startup entry, the scheduled tasks other programs add are listed, and Startup impact shows what Windows measured each one delaying the last start-up."/>
 
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">

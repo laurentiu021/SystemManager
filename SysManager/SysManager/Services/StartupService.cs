@@ -69,10 +69,15 @@ public sealed class StartupService
     private const string ApprovedStartupFolder =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\StartupFolder";
 
-    public Task<IReadOnlyList<StartupEntry>> ScanAsync(CancellationToken ct = default)
-        => Task.Run(() => Scan(), ct);
+    public Task<StartupScan> ScanAsync(CancellationToken ct = default)
+        => Task.Run(() => Scan(results => ReadScheduledTasks(Registry.LocalMachine, results)), ct);
 
-    private static IReadOnlyList<StartupEntry> Scan()
+    /// <summary>
+    /// The scan, handed the scheduled-task read so a test can check that its answer reaches the result. An
+    /// elevated test run can always read the task cache, so the real read alone could never show the answer
+    /// being dropped.
+    /// </summary>
+    internal static StartupScan Scan(Func<List<StartupEntry>, bool> readScheduledTasks)
     {
         List<StartupEntry> results = [];
 
@@ -100,7 +105,7 @@ public sealed class StartupService
             "Common Startup Folder", isCommon: true, results);
 
         // Task Scheduler logon tasks
-        ReadScheduledTasks(results);
+        var scheduledTasksListed = readScheduledTasks(results);
 
         // Check StartupApproved to determine enabled/disabled state
         ApplyApprovedState(results);
@@ -115,7 +120,7 @@ public sealed class StartupService
         // itself. Last, over the finished list, for the same reason as the enrichment above.
         VerifySignatures(results);
 
-        return results;
+        return new StartupScan(results, scheduledTasksListed);
     }
 
     /// <summary>
@@ -304,13 +309,25 @@ public sealed class StartupService
             StatusText = "Enabled"
         };
 
-    private static void ReadScheduledTasks(List<StartupEntry> results)
+    /// <summary>Where Task Scheduler caches each task's triggers and path, under the machine hive.</summary>
+    internal const string TaskCachePath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks";
+
+    /// <summary>
+    /// Adds the scheduled tasks other programs registered. Returns false when the task cache could not be read.
+    /// </summary>
+    /// <remarks>
+    /// The cache grants read access to SYSTEM and Administrators only, so without elevation this read is refused
+    /// every time. The refusal was logged at Debug and nothing said so: a standard user saw a start-up list with
+    /// every third-party scheduled task missing, under a header saying they were listed (#2503). A missing key is
+    /// not a refusal, and one task that cannot be opened is still skipped rather than failing the read.
+    /// <para>The machine hive is passed in so a test can refuse the read for real, on a redirected key.</para>
+    /// </remarks>
+    internal static bool ReadScheduledTasks(RegistryKey machine, List<StartupEntry> results)
     {
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tasks", writable: false);
-            if (key is null) return;
+            using var key = machine.OpenSubKey(TaskCachePath, writable: false);
+            if (key is null) return true;
 
             foreach (var subKeyName in key.GetSubKeyNames())
             {
@@ -368,14 +385,13 @@ public sealed class StartupService
                     Log.Debug("Scheduled task I/O error {Key}: {Error}", subKeyName, ex.Message);
                 }
             }
+            return true;
         }
-        catch (System.Security.SecurityException ex)
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException
+                                       or System.IO.IOException)
         {
-            Log.Debug("Task Scheduler registry inaccessible: {Error}", ex.Message);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Log.Debug("Task Scheduler registry access denied: {Error}", ex.Message);
+            Log.Debug("Task Scheduler cache could not be read: {Error}", ex.Message);
+            return false;
         }
     }
 

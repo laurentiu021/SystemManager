@@ -1229,6 +1229,9 @@ offers, "rate us" prompts:
 - Design vs full-charge capacity via WMI
 - Estimated runtime display
 - Gracefully shows "No battery detected" on desktops
+- If Windows does not answer the battery query, the tab says the battery could not be
+  read rather than that there is none, and a failed Refresh keeps the last reading on
+  screen, saying it is from then
 - Health and wear need administrator rights (Windows only reports capacity to an
   elevated process). Without it they read "Not available" and the page explains
   why, instead of showing a number that isn't a measurement.

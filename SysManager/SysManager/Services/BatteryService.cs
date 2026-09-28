@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Management;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -13,48 +14,81 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class BatteryService
 {
-    public Task<BatteryInfo> GetBatteryInfoAsync(CancellationToken ct = default)
+    /// <summary>The battery as Windows reports it, or null when Windows could not be asked.</summary>
+    public Task<BatteryInfo?> GetBatteryInfoAsync(CancellationToken ct = default)
         => Task.Run(() => GetBatteryInfo(), ct);
 
-    internal static BatteryInfo GetBatteryInfo()
-    {
-        var info = new BatteryInfo();
+    /// <summary>
+    /// The battery as Windows reports it, or null when the <c>Win32_Battery</c> query failed. A PC without a
+    /// battery is a <see cref="BatteryInfo"/> whose <see cref="BatteryInfo.HasBattery"/> is false, not null.
+    /// </summary>
+    /// <remarks>
+    /// A failed query used to fall through to "No battery detected", so a laptop whose WMI did not answer was
+    /// told it runs on AC power only (#2503). The three <c>root\WMI</c> reads after it keep their quiet
+    /// fallbacks: a standard user cannot read those classes, which leaves the health unmeasured and shown as
+    /// such rather than claimed.
+    /// </remarks>
+    internal static BatteryInfo? GetBatteryInfo() => GetBatteryInfo(ReadWin32Battery);
 
-        // ── Win32_Battery (basic info) ──
+    /// <summary><see cref="GetBatteryInfo()"/> handed the <c>Win32_Battery</c> read, so its failures are testable.</summary>
+    internal static BatteryInfo? GetBatteryInfo(Func<BatteryInfo> readBattery)
+    {
+        BatteryInfo info;
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Battery");
-            using var results = searcher.Get();
-
-            foreach (ManagementObject obj in results)
-            {
-                using (obj)
-                {
-                    info.HasBattery = true;
-                    info.Name = obj["Name"]?.ToString() ?? "";
-                    info.Manufacturer = obj["DeviceID"]?.ToString() ?? "";
-                    info.ChargePercent = ToInt32Safe(obj["EstimatedChargeRemaining"]);
-                    info.Chemistry = MapChemistry(ToUInt16Safe(obj["Chemistry"]));
-
-                    var statusCode = ToUInt16Safe(obj["BatteryStatus"]);
-                    info.Status = MapBatteryStatus(statusCode);
-
-                    var runtime = ToInt64Safe(obj["EstimatedRunTime"]);
-                    info.EstimatedRuntimeMinutes = runtime >= 71_582_788 ? -1 : (int)runtime;
-
-                    break; // first battery only
-                }
-            }
+            info = readBattery();
         }
-        catch (ManagementException) { /* WMI class not available */ }
-        catch (UnauthorizedAccessException) { /* insufficient permissions */ }
-        catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
+        catch (Exception ex) when (ex is ManagementException or UnauthorizedAccessException
+                                       or System.Runtime.InteropServices.COMException)
+        {
+            Log.Warning("Battery query failed: {Error}", ex.Message);
+            return null;
+        }
 
         if (!info.HasBattery)
         {
             info.Status = "No battery detected";
             return info;
         }
+
+        ReadCapacities(info);
+        return info;
+    }
+
+    /// <summary>The first battery <c>Win32_Battery</c> lists, or one with <see cref="BatteryInfo.HasBattery"/> false.</summary>
+    private static BatteryInfo ReadWin32Battery()
+    {
+        var info = new BatteryInfo();
+
+        using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Battery");
+        using var results = searcher.Get();
+
+        foreach (ManagementObject obj in results)
+        {
+            using (obj)
+            {
+                info.HasBattery = true;
+                info.Name = obj["Name"]?.ToString() ?? "";
+                info.Manufacturer = obj["DeviceID"]?.ToString() ?? "";
+                info.ChargePercent = ToInt32Safe(obj["EstimatedChargeRemaining"]);
+                info.Chemistry = MapChemistry(ToUInt16Safe(obj["Chemistry"]));
+
+                var statusCode = ToUInt16Safe(obj["BatteryStatus"]);
+                info.Status = MapBatteryStatus(statusCode);
+
+                var runtime = ToInt64Safe(obj["EstimatedRunTime"]);
+                info.EstimatedRuntimeMinutes = runtime >= 71_582_788 ? -1 : (int)runtime;
+
+                break; // first battery only
+            }
+        }
+
+        return info;
+    }
+
+    /// <summary>Design capacity, full-charge capacity and cycle count, each left unset when it cannot be read.</summary>
+    private static void ReadCapacities(BatteryInfo info)
+    {
 
         // ── BatteryStaticData (design capacity) ──
         try
@@ -115,8 +149,6 @@ public sealed class BatteryService
         catch (ManagementException) { /* WMI class not present on this device */ }
         catch (UnauthorizedAccessException) { /* needs elevation for root\WMI */ }
         catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
-
-        return info;
     }
 
     internal static string MapBatteryStatus(ushort code) => code switch

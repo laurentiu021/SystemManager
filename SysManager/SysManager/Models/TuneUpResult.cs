@@ -117,7 +117,7 @@ public sealed record TuneUpResult
     public string OverallColorHex => (WarningCount, NotChecked.Count) switch
     {
         (0, 0) => StatusColors.Good,
-        (<= 2, _) => StatusColors.Warning,
+        ( <= 2, _) => StatusColors.Warning,
         _ => StatusColors.Bad
     };
 

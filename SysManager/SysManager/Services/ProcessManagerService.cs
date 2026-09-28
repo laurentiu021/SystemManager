@@ -265,24 +265,55 @@ public sealed partial class ProcessManagerService
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsHungAppWindow(IntPtr window);
 
+    /// <summary>What happened when <see cref="KillProcess"/> tried to end a process.</summary>
+    public enum KillOutcome
+    {
+        /// <summary>Windows ended the process.</summary>
+        Ended,
+
+        /// <summary>
+        /// The process that was meant is not running: nothing has that ID, or the ID now belongs to a process
+        /// that started at a different time. Nothing was ended.
+        /// </summary>
+        NotRunning,
+
+        /// <summary>Windows refused and the process is still running. Ending it usually needs administrator rights.</summary>
+        Refused,
+    }
+
     /// <summary>
-    /// Kill a process by PID. Returns true if successful.
+    /// Ends the process with <paramref name="pid"/>, and only that process.
     /// </summary>
-    public static bool KillProcess(int pid)
+    /// <param name="pid">The process ID.</param>
+    /// <param name="startTime">
+    /// When the process started, as listed, or <c>default</c> when Windows would not say. Windows reuses a process ID
+    /// once its process exits, and the confirmation can stay open for as long as the user likes, so by the time the
+    /// ID is acted on it can name a different program. When this is set, a process that started at another time is
+    /// left alone and reported as <see cref="KillOutcome.NotRunning"/>. That is the identity the list already keys
+    /// its rows by.
+    /// </param>
+    /// <remarks>
+    /// Not <c>Kill(entireProcessTree: true)</c>, which this was until #2498. That also ends every process the target
+    /// started, one generation at a time, behind a prompt that names one process. Every program opened from the
+    /// taskbar or the Start menu is a child of <c>explorer.exe</c>. After SysManager's own administrator relaunch it
+    /// sits outside that tree, so ending Explorer ended all of those programs. Started from Explorer, it sits inside
+    /// the tree, and .NET refuses to end a tree that contains its caller. Nothing was ended, and the tab blamed
+    /// administrator rights. Task Manager's End task ends the process alone, and so does File Lock Detector.
+    /// <para><see cref="Process.Kill()"/> returns quietly for a process that has already exited, so a
+    /// <see cref="System.ComponentModel.Win32Exception"/> means the process is still running and Windows refused.</para>
+    /// </remarks>
+    public static KillOutcome KillProcess(int pid, DateTime startTime = default)
     {
         try
         {
             using var p = Process.GetProcessById(pid);
-            p.Kill(entireProcessTree: true);
-            return true;
+            if (startTime != default && p.StartTime != startTime) return KillOutcome.NotRunning;
+            p.Kill();
+            return KillOutcome.Ended;
         }
-        catch (ArgumentException) { return false; }
-        catch (InvalidOperationException) { return false; }
-        catch (System.ComponentModel.Win32Exception) { return false; }
-        // Kill(entireProcessTree: true) throws AggregateException when one or more descendants
-        // could not be terminated. Report the failure through the bool contract like the rest,
-        // rather than letting it escape to the (synchronous) Kill command and crash the app.
-        catch (AggregateException) { return false; }
+        catch (ArgumentException) { return KillOutcome.NotRunning; }
+        catch (InvalidOperationException) { return KillOutcome.NotRunning; }
+        catch (System.ComponentModel.Win32Exception) { return KillOutcome.Refused; }
     }
 
     /// <summary>

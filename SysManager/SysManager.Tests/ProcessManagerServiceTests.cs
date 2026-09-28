@@ -177,17 +177,24 @@ public class ProcessManagerServiceTests
     // ── KillProcess ──
 
     [Fact]
-    public void KillProcess_InvalidPid_ReturnsFalse()
+    public void KillProcess_InvalidPid_ReportsNotRunning()
     {
         var result = ProcessManagerService.KillProcess(-1);
-        Assert.False(result);
+        Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, result);
     }
 
+    /// <summary>
+    /// No process has this ID, so there is nothing to end: not running, not refused.
+    /// </summary>
+    /// <remarks>
+    /// <c>int.MaxValue</c>, not the 999999 this used before. Windows ignores the low two bits of a process ID when it
+    /// looks one up, so 999999 names the same slot as 999996 and can reach a real process.
+    /// </remarks>
     [Fact]
-    public void KillProcess_NonExistentPid_ReturnsFalse()
+    public void KillProcess_NonExistentPid_ReportsNotRunning_NotRefused()
     {
-        var result = ProcessManagerService.KillProcess(999999);
-        Assert.False(result);
+        var result = ProcessManagerService.KillProcess(int.MaxValue);
+        Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, result);
     }
 
     // ── OpenFileLocation ──

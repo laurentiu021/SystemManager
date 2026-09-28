@@ -10,6 +10,37 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.14] - 2026-09-28
+
+**Ending a program in Process Manager now ends that program only.** It also ended every program the chosen one
+had started. After SysManager's own "Run as administrator" restart, that meant ending Explorer closed every
+open program.
+
+### Fixed
+
+- **Process Manager: Kill ends the process you chose, and nothing else.** It ended the whole process tree: the
+  program, every program it had started, and theirs in turn, behind a confirmation that named one program.
+  - Every program opened from the taskbar or the Start menu is started by Explorer. So after SysManager's own
+    administrator restart, ending `explorer.exe` closed all of them, with anything unsaved.
+  - When SysManager itself had been started from Explorer, it was inside that tree, and .NET refuses to end a
+    tree that contains the program asking. Nothing was ended, and the tab blamed administrator rights.
+  It now ends the one process, as Task Manager's End task and File Lock Detector already did. Present since the
+  tab was added in v0.9.0.
+- **Process Manager: "Could not kill" now means the process is still running.** The same message covered a
+  process that had already closed, and a tree kill that ended the program but not one of its children. A
+  process that has closed now loses its row and says so.
+  - The kill also checks when the process started. If the program closed while the confirmation was open and
+    Windows gave its ID to another program, that program is left alone.
+  - SysManager's own row is refused before the confirmation, because ending it would stop SysManager
+    mid-step. It used to be refused only by accident.
+- **Process Manager: the once-a-second refresh no longer rewrites the status line.** It wrote "Refreshing process
+  list…" and then "Loaded N processes." every second.
+  - Any result, including "cannot be ended" for a system-critical process, was replaced within a second.
+  - A screen reader was given two announcements a second.
+  - The progress bar and the tab's busy mark in the sidebar flashed on every refresh.
+  The background refresh is now silent, and the Refresh button still reports what it loaded. Present since the
+  automatic refresh was added in v1.10.2.
+
 ## [1.114.13] - 2026-09-28
 
 **Three tabs no longer report "none" when Windows did not answer.** Preinstalled Apps, Task Scheduler and

@@ -531,7 +531,11 @@ Key services:
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
-  open file location. `VerifySignatures(entries, cache)` fills the Signature column from the
+  open file location. `KillProcess(pid, startTime)` ends that process alone, never its tree, and
+  returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had
+  already closed from one Windows would not end. The start time is the listed one: a process ID
+  reused while the confirmation was open names a different program, which is left alone.
+  `VerifySignatures(entries, cache)` fills the Signature column from the
   running image's certificate, through the shared `Helpers/SignatureVerdict`.
   **Deliberately NOT called from `Snapshot`.** It was, and the cost was measured: ~25 ms per
   file over ~82 distinct images, so `SnapshotAsync` took ~3.7–4.2 s — spent before the list

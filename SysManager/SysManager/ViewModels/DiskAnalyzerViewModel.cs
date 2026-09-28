@@ -81,10 +81,35 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
     private bool _hasScanned;
 
-    public string EmptyTitle => HasScanned ? "Nothing to show" : "No results yet";
-    public string EmptyMessage => HasScanned
-        ? "This folder has no subfolders using measurable space."
-        : "Pick a folder and analyze to see what's using space.";
+    // Why the last analysis could not measure the folder at all. It used to arrive as an empty result, reported as a
+    // finished scan with no subfolders and saved as the folder's latest scan (#2504).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private DiskAnalyzerService.AnalysisFailure _lastFailure;
+
+    public string EmptyTitle => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+        ? "This folder could not be measured"
+        : HasScanned ? "Nothing to show" : "No results yet";
+
+    public string EmptyMessage => LastFailure != DiskAnalyzerService.AnalysisFailure.None
+        ? DescribeFailure(LastFailure)
+        : HasScanned
+            ? "This folder has no subfolders using measurable space."
+            : "Pick a folder and analyze to see what's using space.";
+
+    /// <summary>What to tell the user when the chosen folder could not be measured. Pure, so each case is testable.</summary>
+    internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure) => failure switch
+    {
+        DiskAnalyzerService.AnalysisFailure.NotFound =>
+            "It no longer exists. Pick it again, or reconnect the drive it was on.",
+        DiskAnalyzerService.AnalysisFailure.IsLink =>
+            "It is a link to another location, or its details could not be read, so SysManager does not measure it. "
+            + "Pick the folder it points to instead.",
+        DiskAnalyzerService.AnalysisFailure.Unreadable =>
+            "Windows did not let SysManager list what is in it. Try Run as administrator, or pick another folder.",
+        _ => "",
+    };
 
     // Drive-level info
     [ObservableProperty] private long _driveTotal;
@@ -174,6 +199,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         StatusMessage = "Analyzing…";
         TrendSummary = "";
+        LastFailure = DiskAnalyzerService.AnalysisFailure.None;
         Entries.Clear();
         TotalSize = 0;
         TotalFiles = 0;
@@ -188,10 +214,19 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             // folder. See ScanReadout for what over-announcing did here.
             var progress = new SettlingProgress<DiskAnalyzerService.AnalysisProgress>(ApplyScanProgress);
 
-            var results = await progress.SettleAfterAsync(
+            var analysis = await progress.SettleAfterAsync(
                 reporter => _service.AnalyzeAsync(SelectedPath, reporter, ct));
 
-            Entries.ReplaceWith(results);
+            if (analysis.Failure != DiskAnalyzerService.AnalysisFailure.None)
+            {
+                // Not a scan: nothing is recorded as this folder's latest, and nothing says "complete" (#2504).
+                LastFailure = analysis.Failure;
+                ScanSummary = "This folder could not be measured.";
+                StatusMessage = $"This folder could not be measured. {DescribeFailure(analysis.Failure)}";
+                return;
+            }
+
+            Entries.ReplaceWith(analysis.Entries);
 
             EntryCount = Entries.Count;
             TotalSize = Entries.Sum(e => e.SizeBytes);

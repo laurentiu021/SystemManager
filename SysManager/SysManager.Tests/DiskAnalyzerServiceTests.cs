@@ -4,6 +4,8 @@
 
 using System.IO;
 using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -50,7 +52,7 @@ public class DiskAnalyzerServiceTests : IDisposable
     [Fact]
     public async Task Analyze_EmptyDir_ReturnsEmpty()
     {
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Empty(result);
     }
 
@@ -74,7 +76,7 @@ public class DiskAnalyzerServiceTests : IDisposable
     public async Task Analyze_SingleSubfolder_ReturnsOne()
     {
         CreateFile(Path.Combine("docs", "readme.txt"), 2048);
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Single(result);
         Assert.Equal("docs", result[0].Name);
         Assert.Equal(2048, result[0].SizeBytes);
@@ -87,7 +89,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         CreateFile(Path.Combine("big", "b.txt"), 5000);
         CreateFile(Path.Combine("medium", "c.txt"), 3000);
 
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Equal(3, result.Count);
         Assert.Equal("big", result[0].Name);
         Assert.Equal("medium", result[1].Name);
@@ -100,7 +102,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         CreateFile(Path.Combine("parent", "child", "deep.bin"), 4096);
         CreateFile(Path.Combine("parent", "top.bin"), 1024);
 
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Single(result);
         Assert.Equal("parent", result[0].Name);
         Assert.Equal(4096 + 1024, result[0].SizeBytes);
@@ -114,7 +116,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         File.WriteAllBytes(Path.Combine(_root, "rootfile.txt"), new byte[2048]);
         CreateFile(Path.Combine("sub", "nested.txt"), 1024);
 
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Equal(2, result.Count);
         Assert.Contains(result, r => r.Name == "(files in root)");
         Assert.Contains(result, r => r.Name == "sub");
@@ -126,7 +128,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         CreateFile(Path.Combine("a", "f1.bin"), 3000);
         CreateFile(Path.Combine("b", "f2.bin"), 7000);
 
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         var totalPct = result.Sum(r => r.Percentage);
         Assert.InRange(totalPct, 99.0, 101.0); // rounding tolerance
     }
@@ -137,7 +139,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         CreateFile(Path.Combine("big", "f.bin"), 8000);
         CreateFile(Path.Combine("small", "f.bin"), 2000);
 
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         var big = result.First(r => r.Name == "big");
         var small = result.First(r => r.Name == "small");
         Assert.True(big.Percentage > small.Percentage);
@@ -148,7 +150,7 @@ public class DiskAnalyzerServiceTests : IDisposable
     {
         // An empty directory should NOT be flagged as access denied
         CreateDir("emptydir");
-        var result = await _service.AnalyzeAsync(_root);
+        var result = (await _service.AnalyzeAsync(_root)).Entries;
         Assert.Single(result);
         Assert.Equal("emptydir", result[0].Name);
         Assert.False(result[0].IsAccessDenied);
@@ -158,25 +160,107 @@ public class DiskAnalyzerServiceTests : IDisposable
 
     // ── Invalid inputs ──
 
+    // A root that cannot be measured used to be an empty scan, which the tab reported as finished and saved as the
+    // folder's latest (#2504). These three pinned that, and now pin the failure instead.
+
     [Fact]
-    public async Task Analyze_NullRoot_ReturnsEmpty()
+    public async Task Analyze_NullRoot_IsNotFound()
     {
         var result = await _service.AnalyzeAsync(null!);
-        Assert.Empty(result);
+        Assert.Empty(result.Entries);
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, result.Failure);
     }
 
     [Fact]
-    public async Task Analyze_EmptyRoot_ReturnsEmpty()
+    public async Task Analyze_EmptyRoot_IsNotFound()
     {
         var result = await _service.AnalyzeAsync("");
-        Assert.Empty(result);
+        Assert.Empty(result.Entries);
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, result.Failure);
     }
 
     [Fact]
-    public async Task Analyze_NonExistentRoot_ReturnsEmpty()
+    public async Task Analyze_NonExistentRoot_IsNotFound_NotAnEmptyScan()
     {
-        var result = await _service.AnalyzeAsync(@"C:\NoSuchDir_" + Guid.NewGuid().ToString("N"));
-        Assert.Empty(result);
+        var result = await _service.AnalyzeAsync(Path.Combine(_root, "NoSuchDir_" + Guid.NewGuid().ToString("N")));
+        Assert.Empty(result.Entries);
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, result.Failure);
+    }
+
+    [Fact]
+    public async Task Analyze_AnEmptyFolder_IsMeasured_WithNothingInIt()
+    {
+        var result = await _service.AnalyzeAsync(_root);
+        Assert.Empty(result.Entries);
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.None, result.Failure);
+    }
+
+    [Theory]
+    [InlineData("denied")]
+    [InlineData("io")]
+    public void Analyze_AListingThatFails_IsUnreadable(string failure)
+    {
+        Func<string, string[]> list = failure == "denied"
+            ? _ => throw new UnauthorizedAccessException("Access to the path is denied.")
+            : _ => throw new IOException("The device is not ready.");
+
+        var result = DiskAnalyzerService.Analyze(_root, null, CancellationToken.None, list);
+
+        Assert.Empty(result.Entries);
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.Unreadable, result.Failure);
+    }
+
+    [Fact]
+    public void Analyze_AFolderRemovedBeforeItIsListed_IsNotFound()
+    {
+        var result = DiskAnalyzerService.Analyze(_root, null, CancellationToken.None,
+            _ => throw new DirectoryNotFoundException("Could not find a part of the path."));
+
+        Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, result.Failure);
+    }
+
+    [Fact]
+    public async Task Analyze_AFolderThatCannotBeListed_IsUnreadable()
+    {
+        // Made unreadable for real, with a deny entry for this user that is removed again so Dispose can delete it.
+        CreateFile(Path.Combine("sub", "f.bin"), 1024);
+        var identity = WindowsIdentity.GetCurrent().User;
+        Assert.NotNull(identity);
+        var info = new DirectoryInfo(_root);
+        var acl = info.GetAccessControl(AccessControlSections.Access);
+        var deny = new FileSystemAccessRule(identity, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        acl.AddAccessRule(deny);
+        info.SetAccessControl(acl);
+        try
+        {
+            // .NET opens a directory with backup semantics, so a process whose backup privilege is enabled lists it
+            // anyway. There the deny cannot bite, and the theory above is what covers the mapping.
+            if (CanStillList(_root))
+                Assert.Skip("This process lists folders through backup semantics, so a deny entry cannot make one unreadable here.");
+
+            var result = await _service.AnalyzeAsync(_root);
+
+            Assert.Empty(result.Entries);
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.Unreadable, result.Failure);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            info.SetAccessControl(acl);
+        }
+    }
+
+    private static bool CanStillList(string path)
+    {
+        try
+        {
+            Directory.GetDirectories(path);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     // ── Cancellation ──
@@ -313,7 +397,7 @@ public class DiskAnalyzerServiceTests : IDisposable
         Path.Combine(Path.GetTempPath(), "smdisk_" + Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public async Task AnalyzeAsync_RootIsALink_ReportsNothing()
+    public async Task AnalyzeAsync_RootIsALink_IsRefusedAsALink()
     {
         // Junctions one level down were already skipped, which reads as complete until the root itself is
         // one: the breakdown then describes a tree somewhere else while naming the folder that was chosen.
@@ -328,7 +412,9 @@ public class DiskAnalyzerServiceTests : IDisposable
 
         try
         {
-            Assert.Empty(await new DiskAnalyzerService().AnalyzeAsync(rootLink));
+            var result = await new DiskAnalyzerService().AnalyzeAsync(rootLink);
+            Assert.Empty(result.Entries);
+            Assert.Equal(DiskAnalyzerService.AnalysisFailure.IsLink, result.Failure);
         }
         finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
     }
@@ -350,7 +436,7 @@ public class DiskAnalyzerServiceTests : IDisposable
 
         try
         {
-            var folder = Assert.Single(await new DiskAnalyzerService().AnalyzeAsync(root));
+            var folder = Assert.Single((await new DiskAnalyzerService().AnalyzeAsync(root)).Entries);
 
             // 50,000 bytes once rather than twice, and one file rather than two.
             Assert.Equal(50_000, folder.SizeBytes);

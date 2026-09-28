@@ -27,6 +27,29 @@ public sealed class DiskAnalyzerService
     /// rendering this into a sentence would otherwise name a folder that does not exist (#2273, #2274).</param>
     public sealed record AnalysisProgress(int FoldersScanned, string CurrentFolder);
 
+    /// <summary>Why the chosen folder could not be measured at all.</summary>
+    public enum AnalysisFailure
+    {
+        /// <summary>It was measured.</summary>
+        None,
+
+        /// <summary>No folder exists at the path any more: renamed, deleted, or on a drive that was removed.</summary>
+        NotFound,
+
+        /// <summary>
+        /// It is a link to another location, or its attributes could not be read, which is treated the same way.
+        /// </summary>
+        IsLink,
+
+        /// <summary>Windows did not let SysManager list what is in it.</summary>
+        Unreadable,
+    }
+
+    /// <summary>One analysis: the folders measured, or why the chosen folder could not be measured.</summary>
+    /// <param name="Entries">The folders measured, largest first. Empty for a failure, and for a folder with none.</param>
+    /// <param name="Failure"><see cref="AnalysisFailure.None"/> when the folder was measured.</param>
+    public sealed record Analysis(IReadOnlyList<DiskUsageEntry> Entries, AnalysisFailure Failure);
+
     // Skip system subtrees that are slow or inaccessible.
     private static readonly string[] SkipSegments =
     {
@@ -51,19 +74,31 @@ public sealed class DiskAnalyzerService
         @"Windows\CSC"
     ];
 
-    public Task<IReadOnlyList<DiskUsageEntry>> AnalyzeAsync(
+    /// <summary>Measures the top-level subfolders of <paramref name="rootPath"/>, or says why it could not.</summary>
+    /// <remarks>
+    /// A folder that could not be measured used to be an empty list, which the tab reported as a finished scan with
+    /// no subfolders, and saved as the folder's latest scan. The next real scan then read as "larger than your last
+    /// scan" by the whole folder (#2504).
+    /// </remarks>
+    public Task<Analysis> AnalyzeAsync(
         string rootPath,
         IProgress<AnalysisProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Analyze(rootPath, progress, ct), ct);
+        => Task.Run(() => Analyze(rootPath, progress, ct, Directory.GetDirectories), ct);
 
-    private static IReadOnlyList<DiskUsageEntry> Analyze(
+    /// <summary><see cref="AnalyzeAsync"/>'s body, handed the top-level listing so each way it fails is testable.</summary>
+    /// <remarks>
+    /// A real folder cannot be made unreadable on demand everywhere: .NET opens a directory with backup semantics, so an
+    /// elevated process whose backup privilege is enabled lists it whatever its permissions say.
+    /// </remarks>
+    internal static Analysis Analyze(
         string rootPath,
         IProgress<AnalysisProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<string, string[]> listDirectories)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-            return [];
+            return new Analysis([], AnalysisFailure.NotFound);
 
         // Guard the ROOT the user picked, not just the top-level entries inside it. Junctions were already
         // skipped one level down, which reads as complete until the root itself is one: the breakdown then
@@ -71,12 +106,25 @@ public sealed class DiskAnalyzerService
         // nothing is destroyed — but a size report about the wrong folder is the only thing this tab does
         // (#2381). SafeFileWalk.IsReparsePoint fails closed, the same answer as "do not walk it".
         if (SafeFileWalk.IsReparsePoint(rootPath))
-            return [];
+            return new Analysis([], AnalysisFailure.IsLink);
 
         string[] topDirs;
-        try { topDirs = Directory.GetDirectories(rootPath); }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied listing directories in {Root}", rootPath); return []; }
-        catch (IOException ex) { Log.Warning(ex, "I/O error listing directories in {Root}", rootPath); return []; }
+        try { topDirs = listDirectories(rootPath); }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Access denied listing directories in {Root}", rootPath);
+            return new Analysis([], AnalysisFailure.Unreadable);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Removed between the existence check above and the listing.
+            return new Analysis([], AnalysisFailure.NotFound);
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "I/O error listing directories in {Root}", rootPath);
+            return new Analysis([], AnalysisFailure.Unreadable);
+        }
 
         List<DiskUsageEntry> results = [];
         int scanned = 0;
@@ -174,7 +222,7 @@ public sealed class DiskAnalyzerService
         // folder that does not exist. Empty gives the consumer nothing fake to display and needs no sentinel
         // to recognise, the same fix as LargeFileScanner (#2273).
         progress?.Report(new AnalysisProgress(scanned, string.Empty));
-        return results;
+        return new Analysis(results, AnalysisFailure.None);
     }
 
     private static (long size, int files, int folders, bool accessDenied) MeasureFolder(string path, CancellationToken ct)

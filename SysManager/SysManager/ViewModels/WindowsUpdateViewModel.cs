@@ -144,7 +144,17 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         RefreshPolicy();
     }
 
-    private void RefreshPolicy() => PolicySummary = _policy.Read(DateTime.Now).Summary;
+    private void RefreshPolicy() => PolicySummary = DescribePolicy(_policy.Read(DateTime.Now));
+
+    /// <summary>
+    /// The policy line: the policy in plain words, or that it could not be read.
+    /// </summary>
+    /// <remarks>
+    /// A policy that could not be read used to read "Default — Windows manages update timing.", and <b>Restore
+    /// default</b> quotes this line as the state it clears (#2504). Pure, so it is testable without a registry.
+    /// </remarks>
+    internal static string DescribePolicy(WindowsUpdatePolicy? policy) =>
+        policy?.Summary ?? "The update policy could not be read, so any deferral or pause is not known.";
 
     [RelayCommand]
     private void DeferFeatureUpdates()
@@ -157,7 +167,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 "Defer feature updates"))
             return;
         PolicySummary = _policy.DeferFeatureUpdates(DeferDays)
-            ? _policy.Read(DateTime.Now).Summary
+            ? DescribePolicy(_policy.Read(DateTime.Now))
             : "Couldn't apply the policy — administrator rights are required.";
     }
 
@@ -173,7 +183,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 "Pause updates"))
             return;
         PolicySummary = _policy.PauseUpdates(PauseDays, DateTime.Now)
-            ? _policy.Read(DateTime.Now).Summary
+            ? DescribePolicy(_policy.Read(DateTime.Now))
             : "Couldn't apply the policy — administrator rights are required.";
     }
 
@@ -191,7 +201,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
                 "Restore update defaults"))
             return;
         PolicySummary = _policy.RestoreDefault()
-            ? _policy.Read(DateTime.Now).Summary
+            ? DescribePolicy(_policy.Read(DateTime.Now))
             : "Couldn't restore the policy — administrator rights are required.";
     }
 

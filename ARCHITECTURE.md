@@ -334,7 +334,9 @@ Key services:
 - `WindowsUpdatePolicyService` — reads/writes the documented Windows Update
   deferral policy keys (defer feature updates, bounded pause, restore default).
   Injectable registry root for tests; deliberately offers no permanent
-  disable-updates option, only a bounded pause.
+  disable-updates option, only a bounded pause. `Read` returns null for a read Windows refused,
+  which the tab reports as not known (`WindowsUpdateViewModel.DescribePolicy`); no policy key at all
+  is the defaults.
 - `DiskHealthService` — pulls SMART data through WMI.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events. A log it cannot read is thrown,
   never returned as zero errors, so the Dashboard and System Health can say the check did not run.

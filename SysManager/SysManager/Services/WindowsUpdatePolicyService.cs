@@ -40,8 +40,16 @@ public sealed class WindowsUpdatePolicyService
     public WindowsUpdatePolicyService(RegistryKey? baseKey = null)
         => _baseKey = baseKey ?? Registry.LocalMachine;
 
-    /// <summary>Reads the current deferral policy. Never throws — returns defaults on failure.</summary>
-    public WindowsUpdatePolicy Read(DateTime now)
+    /// <summary>
+    /// Reads the current deferral policy, or null when Windows refused the read.
+    /// </summary>
+    /// <remarks>
+    /// Null, not the defaults, for a refused read. The defaults are what a PC with no policy
+    /// has, so a PC whose deferral or pause could not be read was shown "Default — Windows manages update
+    /// timing.", and <b>Restore default</b> quoted that as the state it was about to clear (#2504). No policy key
+    /// at all is still the defaults: that is a read that found nothing.
+    /// </remarks>
+    public WindowsUpdatePolicy? Read(DateTime now)
     {
         try
         {
@@ -61,7 +69,7 @@ public sealed class WindowsUpdatePolicyService
         }
         catch (System.Security.SecurityException ex) { Log.Debug("WU policy read denied: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("WU policy read denied: {Error}", ex.Message); }
-        return new WindowsUpdatePolicy(false, 0, false, null);
+        return null;
     }
 
     /// <summary>Clamps a requested defer-days value into the range Windows accepts (0–365).</summary>

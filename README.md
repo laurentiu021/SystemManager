@@ -539,7 +539,8 @@ need administrator rights:
   Windows auto-resumes), or restore defaults. Uses the documented Windows Update
   policy keys and is fully reversible. No "disable updates forever" option by
   design — the strongest action is a bounded pause, so the machine is never left
-  permanently unpatched.
+  permanently unpatched. If Windows will not let it read the current settings, the
+  tab says so rather than showing the defaults.
 
 ### App Updates (winget)
 - Scan for upgradable packages

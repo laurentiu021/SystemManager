@@ -21,8 +21,6 @@ servers set was told it had none. The tab now says the DNS is unavailable.
   adapter's DNS servers, the read carried on, found none and said "Automatic (DHCP)". A failure to list the network
   adapters said "No active adapter" the same way.
   - Either failure now stops the read, and "Current DNS" shows "Unavailable".
-  - A DNS change that fails while finding the adapter now shows the error Windows gave, instead of "No active
-    network adapter found."
   Present since the tab was added in v1.6.0.
 
 ## [1.114.25] - 2026-09-28

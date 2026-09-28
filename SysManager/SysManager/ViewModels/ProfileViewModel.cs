@@ -32,6 +32,19 @@ public sealed partial class ProfileViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasSections;
 
+    /// <summary>
+    /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>.
+    /// </summary>
+    /// <remarks>
+    /// Becoming visible re-reads the list. The tab is built once and kept for the whole session, which in tray
+    /// mode can be days, so a setting saved on another tab since it opened was otherwise not offered for export
+    /// until the user thought to press Refresh (#2477).
+    /// </remarks>
+    [ObservableProperty] private bool _isActive;
+
+    /// <summary>The list refresh the tab started when it was last shown. Internal so a test can await it.</summary>
+    internal Task ShownRefresh { get; private set; } = Task.CompletedTask;
+
     public ProfileViewModel(ProfileService service)
     {
         _service = service;
@@ -39,6 +52,14 @@ public sealed partial class ProfileViewModel : ViewModelBase
         // Read the config files off the UI thread so the eagerly-built VM doesn't block
         // startup; the collection update runs back on the UI thread.
         InitializeAsync(RefreshSectionsAsync);
+    }
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        // Not while the first read is still running: the tab is shown the moment it is built, and that read is
+        // already the fresh one.
+        if (value && InitializationComplete.IsCompleted)
+            ShownRefresh = RefreshSectionsAsync();
     }
 
     private async Task RefreshSectionsAsync()
@@ -80,11 +101,25 @@ public sealed partial class ProfileViewModel : ViewModelBase
         Helpers.SelectionCarry.Apply(previous, fresh, s => s.Section.Key, StringComparer.Ordinal);
     }
 
+    /// <summary>The keys of the sections the user has ticked.</summary>
+    internal IReadOnlyList<string> SelectedKeys() => [.. Sections.Where(s => s.IsSelected).Select(s => s.Section.Key)];
+
+    /// <summary>
+    /// The profile an export writes: the ticked sections, read from disk now rather than when the list was built.
+    /// </summary>
+    /// <remarks>
+    /// The list keeps each file's contents from when it was read, and export used to write those. A theme,
+    /// preset or speed test changed since the tab opened was then missing from the exported file, and importing
+    /// it elsewhere restored the old values (#2477). Off the UI thread, as the list's own read is.
+    /// </remarks>
+    internal Task<ConfigProfile> BuildExportAsync(IReadOnlyCollection<string> keys)
+        => Task.Run(() => _service.BuildProfile(DateTime.Now, keys));
+
     [RelayCommand]
     private async Task ExportAsync()
     {
-        var chosen = Sections.Where(s => s.IsSelected).Select(s => s.Section).ToList();
-        if (chosen.Count == 0)
+        var keys = SelectedKeys();
+        if (keys.Count == 0)
         {
             StatusMessage = "Select at least one section to export.";
             return;
@@ -101,15 +136,40 @@ public sealed partial class ProfileViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            var profile = _service.BuildProfile(DateTime.Now, chosen);
+            var profile = await BuildExportAsync(keys).ConfigureAwait(true);
+            if (profile.Sections.Count < keys.Count)
+                await RefreshSectionsAsync().ConfigureAwait(true);   // a ticked file is gone; so is its row
+            if (profile.Sections.Count == 0)
+            {
+                StatusMessage = "Nothing was exported: none of the selected settings are saved on this PC any more.";
+                return;
+            }
+
             await _service.ExportToFileAsync(dlg.FileName, profile).ConfigureAwait(true);
-            StatusMessage = $"Exported {chosen.Count} section{(chosen.Count == 1 ? "" : "s")} to {Path.GetFileName(dlg.FileName)}.";
+            StatusMessage = DescribeExport(profile.Sections.Count, keys.Count, Path.GetFileName(dlg.FileName));
             ToastService.Instance.Show("Profile exported", Path.GetFileName(dlg.FileName));
-            Log.Information("Profile: exported {Count} sections", chosen.Count);
+            Log.Information("Profile: exported {Count} of {Selected} sections", profile.Sections.Count, keys.Count);
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
+    }
+
+    /// <summary>
+    /// The status after an export. The sections are read when the export runs, so one the user ticked can have
+    /// been deleted since the list was built; the status then says how many were left out instead of implying
+    /// every ticked one was written.
+    /// </summary>
+    internal static string DescribeExport(int exported, int selected, string fileName)
+    {
+        static string Sections(int n) => $"{n} section{(n == 1 ? "" : "s")}";
+        var missing = selected - exported;
+        return missing > 0
+            ? $"Exported {exported} of {Sections(selected)} to {fileName}. "
+              + (missing == 1
+                  ? "1 is no longer saved on this PC, so it was left out."
+                  : $"{missing} are no longer saved on this PC, so they were left out.")
+            : $"Exported {Sections(exported)} to {fileName}.";
     }
 
     [RelayCommand]

@@ -66,6 +66,44 @@ public class ProfileServiceTests : IDisposable
         Assert.Contains(restored.Sections, s => s.Key == "theme" && s.Json.Contains("deep-ocean"));
     }
 
+    // ---------- BuildProfile reads the files when it is called (#2477) ----------
+
+    [Fact]
+    public void BuildProfile_ReadsEachFileAsItIsWhenCalled()
+    {
+        // Two exports from the same service, as the tab makes over a session: the second writes the file as it
+        // is then, not as the first one found it.
+        var at = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Local);
+        WriteConfig("theme.json", "{\"preset\":\"before\"}");
+        Assert.Contains("before", Assert.Single(_svc.BuildProfile(at, ["theme"]).Sections).Json, StringComparison.Ordinal);
+
+        WriteConfig("theme.json", "{\"preset\":\"after\"}");
+        var profile = _svc.BuildProfile(at, ["theme"]);
+
+        Assert.Contains("after", Assert.Single(profile.Sections).Json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildProfile_WithKeys_CarriesOnlyThoseSections()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        WriteConfig("volume-presets.json", "[]");
+
+        var profile = _svc.BuildProfile(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Local), ["volume"]);
+
+        Assert.Equal(["volume"], profile.Sections.Select(s => s.Key));
+    }
+
+    [Fact]
+    public void BuildProfile_LeavesOutAKeyWhoseFileDoesNotExist()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+
+        var profile = _svc.BuildProfile(new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Local), ["theme", "volume"]);
+
+        Assert.Equal(["theme"], profile.Sections.Select(s => s.Key));
+    }
+
     [Fact]
     public void Deserialize_GarbageJson_ReturnsNull()
         => Assert.Null(ProfileService.Deserialize("{ not a profile "));

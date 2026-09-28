@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.5] - 2026-09-28
+
+**A profile export now contains your settings as they are when you export.** It used to write them as they
+were when the Profile Export / Import tab first opened, which could be days earlier.
+
+### Fixed
+
+- **Profile Export / Import: an export writes each setting as it is now.** The tab read every settings file
+  once, when it first opened, and export wrote what it had read then. The tab stays open for the whole
+  session, so a theme, volume preset, gaming profile or speed-test result changed since was missing from the
+  exported file, and importing that file on another PC restored the old values. Export now reads each ticked
+  section at the moment it runs. The list is also read again whenever you come back to the tab, so a setting
+  saved for the first time since it opened is offered too, and your ticks are kept. If a ticked setting is no
+  longer saved on the PC, the status says it was left out. Present since the tab was added in v1.28.0.
+
 ## [1.114.4] - 2026-09-28
 
 **Several tabs work again for anyone who opens SysManager without "Run as administrator".** Preinstalled

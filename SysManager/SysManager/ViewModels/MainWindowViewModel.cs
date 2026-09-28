@@ -580,8 +580,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         if (newValue is not null) newValue.IsSelected = true;
     }
 
-    // Every tab with a visibility-gated poll exposes an IsActive flag. Toggle it generically so this
-    // doesn't depend on eager VM properties that no longer exist for lazy tabs.
+    // Every tab with a visibility-gated poll exposes an IsActive flag, and so does a tab that re-reads what it
+    // shows when it comes back on screen (Profile Export / Import). Toggle it generically so this doesn't
+    // depend on eager VM properties that no longer exist for lazy tabs.
     // internal (not private) so a test can pin the gate without constructing the whole shell,
     // exactly as UpdateSelectionState above is tested.
     //
@@ -598,6 +599,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             case AudioMixerViewModel am: am.IsActive = active; break;
             case BandwidthMonitorViewModel bw: bw.IsActive = active; break;
             case StandbyMemoryViewModel sm: sm.IsActive = active; break;
+            case ProfileViewModel pr: pr.IsActive = active; break;
         }
     }
 

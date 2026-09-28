@@ -162,10 +162,23 @@ public sealed class ProfileService
         return sections;
     }
 
-    /// <summary>Builds a profile from the given sections (defaults to all available).</summary>
-    public ConfigProfile BuildProfile(DateTime exportedAt, IReadOnlyList<ConfigSection>? sections = null)
-        => new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt)
-        { Sections = sections ?? AvailableSections() };
+    /// <summary>
+    /// Builds a profile from the config files as they are on disk now: every available section, or only those
+    /// whose key is in <paramref name="keys"/>.
+    /// </summary>
+    /// <remarks>
+    /// Reads the files itself rather than taking sections a caller read earlier. The Profile tab reads the
+    /// sections when it opens and lives for the whole session, and export used to write what it read then, so
+    /// a theme, preset or speed test changed since was missing from the file (#2477). A key whose file no
+    /// longer exists is left out, and the caller can compare the counts to say so.
+    /// </remarks>
+    public ConfigProfile BuildProfile(DateTime exportedAt, IReadOnlyCollection<string>? keys = null)
+    {
+        var sections = AvailableSections();
+        if (keys is not null)
+            sections = [.. sections.Where(section => keys.Contains(section.Key, StringComparer.Ordinal))];
+        return new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt) { Sections = sections };
+    }
 
     /// <summary>Serializes a profile to indented JSON.</summary>
     public static string Serialize(ConfigProfile profile) => JsonSerializer.Serialize(profile, JsonOptions);

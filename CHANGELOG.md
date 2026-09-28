@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.21] - 2026-09-28
+
+**App Blocker, and the Dashboard alert for a block that cannot be undone, now say when the block list could not
+be read.** Both used to report that nothing was blocked.
+
+### Fixed
+
+- **App Blocker: a list that could not be read is not "nothing blocked".** When Windows did not let SysManager
+  read the list, the tab said "No applications are currently blocked." The warning for a blocked `consent.exe`,
+  which stops anything on the PC asking for administrator rights, could not appear either.
+  - It now says the list could not be read.
+  - A failed Refresh keeps the list, and its warning, on screen.
+  Present since the tab was added in v0.34.0.
+- **Dashboard: the blocked-apps alert says when it could not check.** A block list that could not be read showed
+  the green "No blocked apps need attention". It now reads "Blocked apps could not be checked", in amber, with a
+  link to App Blocker. Present since the alert was added in v1.111.2.
+
 ## [1.114.20] - 2026-09-28
 
 **Drivers now says when a scan failed, instead of reporting "0 drivers found".** When Windows reports an error

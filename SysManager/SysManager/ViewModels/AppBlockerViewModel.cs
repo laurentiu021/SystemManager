@@ -45,6 +45,19 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     /// </remarks>
     [ObservableProperty] private string _unrecoverableWarning = "";
 
+    // Distinguishes "Windows answered that nothing is blocked" from "the list could not be read". The tab said
+    // "No applications are currently blocked." either way, because the service returned an empty list for a
+    // failed read (#2503).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listFailed;
+
+    public string EmptyTitle => ListFailed ? "The block list could not be read" : "No blocked applications";
+
+    public string EmptyMessage => ListFailed
+        ? "Windows did not let SysManager read which programs are blocked. Press Refresh to try again."
+        : "Block an app above to stop it from launching.";
+
     private readonly IAppBlockerService _blocker;
 
     public AppBlockerViewModel(IAppBlockerService blocker)
@@ -72,8 +85,19 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
     [RelayCommand]
     private void RefreshList() => ApplyBlockedApps(_blocker.GetBlockedApps());
 
-    private void ApplyBlockedApps(IReadOnlyList<BlockedApp> apps)
+    private void ApplyBlockedApps(IReadOnlyList<BlockedApp>? apps)
     {
+        ListFailed = apps is null;
+        if (apps is null)
+        {
+            // A failed read changes nothing on screen: what was listed stays listed, with its warning, and the
+            // status line says the read failed rather than that nothing is blocked (#2503).
+            BlockStatus = BlockedApps.Count == 0
+                ? "Could not read which applications are blocked. Press Refresh to try again."
+                : "Could not read which applications are blocked, so the list below is from the last check.";
+            return;
+        }
+
         // Keep the user's ticks across the refresh. These rows arrive unselected, so a refresh cleared the
         // selection rather than reversing it — "Unblock selected" simply stopped doing anything. Same defect
         // as the tabs whose rows arrive pre-selected, and RefreshOnF5 is RefreshCommand (#2304).
@@ -175,7 +199,9 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
-        if (_blocker.IsBlocked(exeName))
+        // A read that failed (null) goes on to the confirmation like "not blocked": TryBlockApp never overwrites a
+        // Debugger value SysManager did not set, and reports its own failure when the key cannot be opened.
+        if (_blocker.IsBlocked(exeName) == true)
         {
             BlockStatus = $"{exeName} is already blocked.";
             return;

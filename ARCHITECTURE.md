@@ -210,7 +210,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
-- `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism.
+- `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
 - `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
@@ -624,6 +624,8 @@ Key services:
   cannot be lifted from inside the app, so refusal and detection cannot disagree;
   `GetBlockedApps` stamps that verdict onto each row it returns. Detection only —
   the service never removes a block without going through the confirmed unblock path.
+  When the IFEO key cannot be read, `GetBlockedApps` and `IsBlocked` return null, so a
+  failed read is never reported as "nothing blocked".
 - `NotificationBlockerService` — mutes app notification nags via the documented
   per-user registry switches Windows Settings writes (per-app `Enabled` under
   `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable

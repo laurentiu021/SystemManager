@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Microsoft.Win32;
 using SysManager.Services;
 
@@ -81,7 +83,9 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
         _svc.BlockApp("one.exe");
         _svc.BlockApp("two.exe");
 
-        var blocked = _svc.GetBlockedApps().Select(b => b.ExecutableName).ToList();
+        var listed = _svc.GetBlockedApps();
+        Assert.NotNull(listed);
+        var blocked = listed.Select(b => b.ExecutableName).ToList();
 
         Assert.Contains("one.exe", blocked);
         Assert.Contains("two.exe", blocked);
@@ -230,5 +234,51 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
 
         Assert.Null(ReadDebugger("winlogon.exe"));
         Assert.False(_svc.IsBlocked("winlogon.exe"));
+    }
+
+    // ── A block list that could not be read (#2503) ──
+    //
+    // An unreadable Image File Execution Options key made GetBlockedApps return an empty list and IsBlocked
+    // return false, so the tab said nothing was blocked, and a blocked consent.exe raised no warning. The key is
+    // made unreadable for real, with a deny entry for this user that is removed again afterwards.
+
+    [Fact]
+    public void AnUnreadableBlockList_IsNull_NotEmpty()
+    {
+        Assert.True(_svc.BlockApp("notepad.exe"));   // the premise: there is a block to hide
+
+        using var ifeo = _root.OpenSubKey(IfeoPath, RegistryKeyPermissionCheck.ReadWriteSubTree,
+            RegistryRights.ReadKey | RegistryRights.ChangePermissions)!;
+        using var identity = WindowsIdentity.GetCurrent();
+        var deny = new RegistryAccessRule(identity.User!,
+            RegistryRights.QueryValues | RegistryRights.EnumerateSubKeys, AccessControlType.Deny);
+        var security = ifeo.GetAccessControl(AccessControlSections.Access);
+        security.AddAccessRule(deny);
+        ifeo.SetAccessControl(security);
+        try
+        {
+            Assert.Null(_svc.GetBlockedApps());
+            Assert.Null(_svc.IsBlocked("notepad.exe"));
+        }
+        finally
+        {
+            security.RemoveAccessRuleSpecific(deny);
+            ifeo.SetAccessControl(security);
+        }
+
+        Assert.True(_svc.IsBlocked("notepad.exe"));   // readable again, so the cleanup can delete the key
+    }
+
+    [Fact]
+    public void AnAbsentBlockList_IsEmpty_NotAFailure()
+    {
+        // Nothing has ever been blocked on a machine without the key, which is not a failed read.
+        _root.DeleteSubKeyTree(IfeoPath);
+
+        var blocked = _svc.GetBlockedApps();
+
+        Assert.NotNull(blocked);
+        Assert.Empty(blocked);
+        Assert.False(_svc.IsBlocked("notepad.exe"));
     }
 }

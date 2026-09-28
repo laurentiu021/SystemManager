@@ -3,6 +3,7 @@
 // License: MIT
 
 using Microsoft.Win32;
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -53,6 +54,10 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
 
     private AppBlockerService Service(string? ownName = "SysManager.exe") => new(_root, ownExecutableName: ownName);
 
+    /// <summary>The block list, which every test here expects to read: the fixture's key is its own.</summary>
+    private IReadOnlyList<BlockedApp> Listed(string? ownName = "SysManager.exe")
+        => Service(ownName).GetBlockedApps() ?? throw new InvalidOperationException("The test key's block list could not be read.");
+
     // ── the predicate, one definition shared by refusal and classification ──────────────────────────
 
     [Theory]
@@ -88,7 +93,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
     {
         PlantBlock("consent.exe", BlockerDebugger);
 
-        var app = Assert.Single(Service().GetBlockedApps());
+        var app = Assert.Single(Listed());
 
         Assert.Equal("consent.exe", app.ExecutableName);
         Assert.True(app.IsUnrecoverable,
@@ -104,7 +109,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         // then accuse a deliberate block of having cost the user their permission prompt.
         PlantBlock("notepad.exe", BlockerDebugger);
 
-        var app = Assert.Single(Service().GetBlockedApps());
+        var app = Assert.Single(Listed());
 
         Assert.Equal("notepad.exe", app.ExecutableName);
         Assert.False(app.IsUnrecoverable);
@@ -118,7 +123,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         // means the user finds the app simply gone tomorrow.
         PlantBlock("SysManager.exe", BlockerDebugger);
 
-        var app = Assert.Single(Service(ownName: "SysManager.exe").GetBlockedApps());
+        var app = Assert.Single(Listed(ownName: "SysManager.exe"));
 
         Assert.True(app.IsUnrecoverable);
     }
@@ -132,7 +137,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         PlantBlock("notepad.exe", BlockerDebugger);
         PlantBlock("consent.exe", BlockerDebugger);
 
-        var apps = Service(ownName: null).GetBlockedApps();
+        var apps = Listed(ownName: null);
 
         Assert.False(Assert.Single(apps, a => a.ExecutableName == "notepad.exe").IsUnrecoverable);
         Assert.True(Assert.Single(apps, a => a.ExecutableName == "consent.exe").IsUnrecoverable);
@@ -149,7 +154,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         // cannot be removed without administrator rights, so the warning would never clear.
         PlantBlock("consent.exe", debugger: null);
 
-        Assert.Empty(Service().GetBlockedApps());
+        Assert.Empty(Listed());
     }
 
     [Fact]
@@ -159,7 +164,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         // tell the user SysManager broke something it never touched.
         PlantBlock("consent.exe", @"C:\Tools\somedebugger.exe");
 
-        Assert.Empty(Service().GetBlockedApps());
+        Assert.Empty(Listed());
     }
 
     [Fact]
@@ -173,7 +178,7 @@ public sealed class AppBlockerUnrecoverableTests : IDisposable
         PlantBlock("winlogon.exe", debugger: null);
         PlantBlock("chrome.exe", @"C:\Tools\somedebugger.exe");
 
-        var apps = Service().GetBlockedApps();
+        var apps = Listed();
 
         Assert.Equal(2, apps.Count);
         Assert.Single(apps, a => a.IsUnrecoverable);

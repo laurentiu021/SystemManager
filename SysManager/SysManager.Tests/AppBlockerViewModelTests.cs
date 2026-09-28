@@ -30,6 +30,9 @@ public class AppBlockerViewModelTests
     private static AppBlockerViewModel NewVm(IAppBlockerService blocker)
     {
         blocker.GetBlockedApps().Returns([]);
+        // Not blocked unless a test says otherwise. IsBlocked returns bool?, whose default is null: the answer for
+        // a read that failed, which is not what these tests are about.
+        blocker.IsBlocked(Arg.Any<string>()).Returns(false);
         var vm = new AppBlockerViewModel(blocker);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
@@ -415,6 +418,97 @@ public class AppBlockerViewModelTests
 
             Assert.Contains("2 of 3", vm.BlockStatus);
             Assert.Contains("could not be changed", vm.BlockStatus);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+        }
+    }
+
+    // ── A block list that could not be read (#2503) ──
+    //
+    // The service returned an empty list for a failed read, so the tab said "No applications are currently
+    // blocked." and the warning for a blocked consent.exe could not appear.
+
+    private static async Task<AppBlockerViewModel> SettledVm(IAppBlockerService blocker)
+    {
+        var vm = new AppBlockerViewModel(blocker);
+        await vm.InitializationComplete;
+        return vm;
+    }
+
+    [Fact]
+    public async Task AListThatCouldNotBeRead_SaysSo_NotThatNothingIsBlocked()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.GetBlockedApps().Returns((IReadOnlyList<BlockedApp>?)null);
+
+        var vm = await SettledVm(blocker);
+
+        Assert.True(vm.ListFailed);
+        Assert.Equal("The block list could not be read", vm.EmptyTitle);
+        Assert.Equal("Could not read which applications are blocked. Press Refresh to try again.", vm.BlockStatus);
+    }
+
+    [Fact]
+    public async Task AFailedRefresh_KeepsTheListAndItsWarning()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        var reads = 0;
+        blocker.GetBlockedApps().Returns(_ => ++reads == 1
+            ? [new BlockedApp { ExecutableName = "consent.exe", IsUnrecoverable = true }]
+            : null);
+        var vm = await SettledVm(blocker);
+        Assert.True(vm.HasUnrecoverableBlock);   // the premise: the first read raised the warning
+
+        vm.RefreshListCommand.Execute(null);
+
+        Assert.Equal("consent.exe", Assert.Single(vm.BlockedApps).ExecutableName);
+        Assert.True(vm.HasUnrecoverableBlock);
+        Assert.True(vm.ListFailed);
+        Assert.Equal("Could not read which applications are blocked, so the list below is from the last check.",
+            vm.BlockStatus);
+    }
+
+    [Fact]
+    public async Task ARefreshThatWorksAfterAFailedOne_ClearsTheFailure()
+    {
+        var blocker = Substitute.For<IAppBlockerService>();
+        var reads = 0;
+        blocker.GetBlockedApps().Returns(_ => ++reads == 1 ? null : []);
+        var vm = await SettledVm(blocker);
+        Assert.True(vm.ListFailed);
+
+        vm.RefreshListCommand.Execute(null);
+
+        Assert.False(vm.ListFailed);
+        Assert.Equal("No blocked applications", vm.EmptyTitle);
+        Assert.Equal("No applications are currently blocked.", vm.BlockStatus);
+    }
+
+    [Fact]
+    public void BlockApp_WhenItCouldNotBeReadWhetherItIsBlocked_StillAsks_AndLetsTheWriteDecide()
+    {
+        // Not "already blocked", and not refused on a guess: TryBlockApp never overwrites a Debugger value
+        // SysManager did not set, and reports its own failure when the key cannot be opened.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.Success);
+        var vm = NewVm(blocker);
+        blocker.IsBlocked("game.exe").Returns((bool?)null);   // after NewVm, so it wins over the helper's default
+        vm.NewExeName = "game.exe";
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.BlockAppCommand.Execute(null);
+
+            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            blocker.Received(1).TryBlockApp("game.exe");
+            Assert.DoesNotContain("already blocked", vm.BlockStatus);
         }
         finally
         {

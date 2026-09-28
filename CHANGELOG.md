@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.16] - 2026-09-28
+
+**Boot Analyzer now says when Windows' boot history could not be read.** It used to report "no boots recorded
+yet" instead, and one kind of read error could keep it busy at full speed until you pressed Cancel.
+
+### Fixed
+
+- **Boot Analyzer: a read error no longer spins.** A failed read was retried with no limit, and the loop only
+  counted events that came back. So an error that repeats kept a processor core busy, with the tab stuck on
+  "Reading boot performance history…", until Cancel. One such error is common: this log is small and wraps, and
+  when it rolls over or is cleared during a read, every later read fails the same way. A read now gives up after
+  three failures in a row and keeps whatever it had already read. Cancelling now reports "Cancelled." instead of
+  showing a part-read history as if it were complete. Present since the tab was added in v1.33.0.
+- **Boot Analyzer: "No boot performance events found yet" now means Windows returned none.** A log that could
+  not be opened or read gave the same answer as an empty one. When elevated, the tab now says the history could
+  not be read, and a refresh that fails keeps what was already shown. When the slow-component list alone fails,
+  the boots still show, and the status says the list could not be read. Present since v1.33.0.
+
 ## [1.114.15] - 2026-09-28
 
 **Closing SysManager no longer cuts off a repair or an install without warning.** While a repair, an install, a

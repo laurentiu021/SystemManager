@@ -10,7 +10,8 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="BootAnalyzerService"/>'s pure event-XML parsing. Synthetic
 /// Diagnostics-Performance event payloads are fed in directly, so no live event log (or
-/// admin) is needed. The live reader path is not unit-tested.
+/// admin) is needed. The read loop around them is driven through the reader seam in
+/// <see cref="BootAnalyzerReadTests"/>.
 /// </summary>
 public class BootAnalyzerServiceTests
 {

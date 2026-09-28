@@ -40,10 +40,20 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
     private readonly INavigationService _navigation;
 
     public BootAnalyzerViewModel(BootAnalyzerService service, INavigationService navigation)
+        : this(service, navigation, AdminHelper.IsElevated) { }
+
+    /// <summary>Test seam: the same view-model with the elevation probe supplied.</summary>
+    /// <param name="service">The boot-history reader.</param>
+    /// <param name="navigation">Opens the tab that can switch off a slow component.</param>
+    /// <param name="isElevated">
+    /// Whether the process is elevated. Injected so a test can drive what a refused read says in both cases:
+    /// without elevation the answer is the administrator hint, with it the read genuinely failed.
+    /// </param>
+    internal BootAnalyzerViewModel(BootAnalyzerService service, INavigationService navigation, Func<bool> isElevated)
     {
         _service = service;
         _navigation = navigation;
-        IsElevated = AdminHelper.IsElevated();
+        IsElevated = (isElevated ?? throw new ArgumentNullException(nameof(isElevated)))();
         StatusMessage = "Reading boot performance history…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(RefreshAsync);
@@ -89,18 +99,28 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
             var boots = await _service.ReadBootsAsync(20, _cts.Token).ConfigureAwait(true);
             var degr = await _service.ReadDegradationsAsync(60, _cts.Token).ConfigureAwait(true);
 
+            // A read that failed is not an empty history (#2500). Without elevation the log refuses every read, and
+            // the banner and this line say why; with it, the read genuinely failed. Either way what is on screen
+            // stays, so a refresh that fails does not empty the tab.
+            if (boots is null)
+            {
+                StatusMessage = IsElevated
+                    ? "Windows' boot history could not be read. Try Refresh in a moment."
+                    : "Reading boot history requires administrator — use \"Run as administrator\".";
+                return;
+            }
+
             Boots.ReplaceWith(boots);
-            Degradations.ReplaceWith(degr);
+            if (degr is not null) Degradations.ReplaceWith(degr);
             LatestBoot = boots.Count > 0 ? boots[0] : null;
             HasData = boots.Count > 0;
             Trend = ComputeTrend(boots);
 
-            if (boots.Count == 0)
-                StatusMessage = IsElevated
-                    ? "No boot performance events found yet (a few reboots are needed to build history)."
-                    : "Reading boot history requires administrator — use \"Run as administrator\".";
-            else
-                StatusMessage = $"{boots.Count} boots analyzed; {degr.Count} slow-component events. Latest boot: {boots[0].BootSecondsDisplay}.";
+            StatusMessage = boots.Count == 0
+                ? "No boot performance events found yet (a few reboots are needed to build history)."
+                : degr is null
+                    ? $"{boots.Count} boots analyzed; the slow-component list could not be read. Latest boot: {boots[0].BootSecondsDisplay}."
+                    : $"{boots.Count} boots analyzed; {degr.Count} slow-component events. Latest boot: {boots[0].BootSecondsDisplay}.";
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         finally

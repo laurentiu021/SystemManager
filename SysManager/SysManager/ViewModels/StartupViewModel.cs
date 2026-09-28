@@ -43,10 +43,20 @@ public sealed partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private bool _hideWindowsEntries;
 
     public StartupViewModel(StartupService service, BootAnalyzerService boot)
-        : this(service, AdminHelper.IsElevated,
-               () => (boot ?? throw new ArgumentNullException(nameof(boot))).ReadDegradationsAsync())
+        : this(service, AdminHelper.IsElevated, ReadDegradationsOrNone(boot ?? throw new ArgumentNullException(nameof(boot))))
     {
     }
+
+    /// <summary>
+    /// The boot-delay measurements for the Startup impact column, with a failed read taken as none.
+    /// </summary>
+    /// <remarks>
+    /// The column only fills in figures Windows measured, and an entry with no figure is left blank rather than
+    /// claiming it is fast. So a read that failed leaves the column as it would be with no measurements. The Boot
+    /// Analyzer tab is where a failed read is reported as such (#2500).
+    /// </remarks>
+    private static Func<Task<IReadOnlyList<BootDegradation>>> ReadDegradationsOrNone(BootAnalyzerService boot)
+        => async () => await boot.ReadDegradationsAsync().ConfigureAwait(false) ?? [];
 
     /// <summary>Test seam: the same view-model with the elevation probe and the boot reader supplied.</summary>
     /// <param name="service">The startup scan.</param>

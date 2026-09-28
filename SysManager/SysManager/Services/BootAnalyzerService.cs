@@ -16,8 +16,8 @@ namespace SysManager.Services;
 /// events 101–110 name components (apps, drivers, services, devices) that degraded boot.
 /// Strictly read-only — it surfaces what Windows already measured; it changes nothing.
 ///
-/// Reading that log requires administrator; without elevation the queries yield nothing
-/// (handled gracefully). The event-ID→kind mapping and XML field parsing are pure static
+/// Reading that log requires administrator. Without elevation the read is refused and reported as
+/// failed, not as an empty history. The event-ID→kind mapping and XML field parsing are pure static
 /// methods so they can be unit-tested without the live event log.
 /// </summary>
 public sealed class BootAnalyzerService
@@ -25,68 +25,129 @@ public sealed class BootAnalyzerService
     private const string LogName = "Microsoft-Windows-Diagnostics-Performance/Operational";
     private static readonly XNamespace EvtNs = "http://schemas.microsoft.com/win/2004/08/events/event";
 
-    /// <summary>Reads up to <paramref name="maxBoots"/> recent boot summaries, newest first.</summary>
-    public Task<IReadOnlyList<BootRecord>> ReadBootsAsync(int maxBoots = 20, CancellationToken ct = default)
-        => Task.Run<IReadOnlyList<BootRecord>>(() =>
-        {
-            List<BootRecord> boots = [];
-            foreach (var (rec, xml) in ReadEvents("*[System[(EventID=100)]]", maxBoots, ct))
-            {
-                using (rec)
-                {
-                    var b = ParseBoot(rec.TimeCreated ?? DateTime.MinValue, xml);
-                    if (b is not null) boots.Add(b);
-                }
-            }
-            return boots;
-        }, ct);
+    /// <summary>How many reads in a row may fail before a read gives up.</summary>
+    /// <remarks>More than one, because a single failed read can be transient. Few, because an error that repeats
+    /// repeats on every call.</remarks>
+    internal const int MaxConsecutiveReadFailures = 3;
 
-    /// <summary>Reads recent boot-degradation events (slow apps/drivers/services), newest first.</summary>
-    public Task<IReadOnlyList<BootDegradation>> ReadDegradationsAsync(int max = 60, CancellationToken ct = default)
-        => Task.Run<IReadOnlyList<BootDegradation>>(() =>
-        {
-            List<BootDegradation> items = [];
-            foreach (var (rec, xml) in ReadEvents("*[System[(EventID>=101 and EventID<=110)]]", max, ct))
-            {
-                using (rec)
-                {
-                    var id = (int)(rec.Id);
-                    var d = ParseDegradation(rec.TimeCreated ?? DateTime.MinValue, id, xml);
-                    if (d is not null) items.Add(d);
-                }
-            }
-            return items;
-        }, ct);
+    private readonly Func<string, IBootEventReader> _open;
 
-    private IEnumerable<(EventRecord rec, XElement? xml)> ReadEvents(string xpath, int max, CancellationToken ct)
+    public BootAnalyzerService() : this(OpenLog) { }
+
+    /// <summary>Test seam: the same service reading from <paramref name="open"/> instead of the live event log.</summary>
+    /// <param name="open">Opens a reader for an XPath query over the Diagnostics-Performance log, newest first.</param>
+    internal BootAnalyzerService(Func<string, IBootEventReader> open)
+        => _open = open ?? throw new ArgumentNullException(nameof(open));
+
+    /// <summary>
+    /// Reads up to <paramref name="maxBoots"/> recent boot summaries, newest first. Null when the log could not be
+    /// read; empty when it was read and holds none.
+    /// </summary>
+    public Task<IReadOnlyList<BootRecord>?> ReadBootsAsync(int maxBoots = 20, CancellationToken ct = default)
+        => Task.Run<IReadOnlyList<BootRecord>?>(() => ReadEvents("*[System[(EventID=100)]]", maxBoots, ct)?
+            .Select(e => ParseBoot(e.When, e.Xml))
+            .OfType<BootRecord>()
+            .ToList(), ct);
+
+    /// <summary>
+    /// Reads recent boot-degradation events (slow apps/drivers/services), newest first. Null when the log could not
+    /// be read; empty when it was read and holds none.
+    /// </summary>
+    public Task<IReadOnlyList<BootDegradation>?> ReadDegradationsAsync(int max = 60, CancellationToken ct = default)
+        => Task.Run<IReadOnlyList<BootDegradation>?>(() => ReadEvents("*[System[(EventID>=101 and EventID<=110)]]", max, ct)?
+            .Select(e => ParseDegradation(e.When, e.Id, e.Xml))
+            .OfType<BootDegradation>()
+            .ToList(), ct);
+
+    /// <summary>
+    /// Reads up to <paramref name="max"/> events matching <paramref name="xpath"/>, newest first. Null when nothing
+    /// could be read: the log refused, does not exist, or failed before its first event.
+    /// </summary>
+    /// <remarks>
+    /// A failed read ends after <see cref="MaxConsecutiveReadFailures"/> attempts in a row (#2500). It used to be
+    /// retried with no bound, and the counter that ends the loop only moved when an event came back. So an error
+    /// that repeats spun a thread at full speed until the user pressed Cancel. Such errors are real: when the log
+    /// rolls over or is cleared during the read, every later call fails the same way, and this log is 1 MB and
+    /// wraps. What was read before the failure is kept, so a read that stops part-way still shows what it reached.
+    /// <para>Null and empty are different answers. Null is a read that failed, which the tab reports as such. Empty
+    /// is a log that was read and has nothing in it yet, which is normal on a new PC. The tab used to say "No boot
+    /// performance events found yet" for both.</para>
+    /// </remarks>
+    private List<BootEvent>? ReadEvents(string xpath, int max, CancellationToken ct)
     {
-        EventLogReader? reader = null;
-        try
-        {
-            var q = new EventLogQuery(LogName, PathType.LogName, xpath) { ReverseDirection = true };
-            reader = new EventLogReader(q);
-        }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Boot analyzer: log access denied: {Error}", ex.Message); yield break; }
-        catch (EventLogNotFoundException ex) { Log.Debug("Boot analyzer: log not found: {Error}", ex.Message); yield break; }
-        catch (EventLogException ex) { Log.Debug("Boot analyzer: query failed: {Error}", ex.Message); yield break; }
+        IBootEventReader reader;
+        try { reader = _open(xpath); }
+        catch (UnauthorizedAccessException ex) { Log.Debug("Boot analyzer: log access denied: {Error}", ex.Message); return null; }
+        catch (EventLogNotFoundException ex) { Log.Debug("Boot analyzer: log not found: {Error}", ex.Message); return null; }
+        catch (EventLogException ex) { Log.Debug("Boot analyzer: query failed: {Error}", ex.Message); return null; }
 
         using (reader)
         {
-            var emitted = 0;
-            while (!ct.IsCancellationRequested && emitted < max)
+            List<BootEvent> events = [];
+            var failures = 0;
+            while (events.Count < max)
             {
-                EventRecord? rec;
-                try { rec = reader.ReadEvent(); }
-                catch (EventLogException) { continue; }
-                if (rec is null) yield break;
+                ct.ThrowIfCancellationRequested();
 
-                XElement? xml = null;
-                try { xml = XElement.Parse(rec.ToXml()); }
-                catch (System.Xml.XmlException) { /* emit with null xml */ }
-                emitted++;
-                yield return (rec, xml);
+                BootEvent? next;
+                try
+                {
+                    next = reader.ReadNext();
+                }
+                catch (Exception ex) when (ex is EventLogException or UnauthorizedAccessException)
+                {
+                    if (++failures < MaxConsecutiveReadFailures)
+                    {
+                        Log.Debug("Boot analyzer: read failed, retrying: {Error}", ex.Message);
+                        continue;
+                    }
+
+                    Log.Warning("Boot analyzer: read stopped after {Failures} failures in a row: {Error}", failures, ex.Message);
+                    return events.Count > 0 ? events : null;
+                }
+
+                failures = 0;
+                if (next is not { } ev) break;
+                events.Add(ev);
             }
+
+            return events;
         }
+    }
+
+    /// <summary>One event's fields, as the parsers read them.</summary>
+    internal readonly record struct BootEvent(DateTime When, int Id, XElement? Xml);
+
+    /// <summary>Reads the events of one query, one at a time, newest first.</summary>
+    internal interface IBootEventReader : IDisposable
+    {
+        /// <summary>
+        /// The next event, or null when there are no more. Throws <see cref="EventLogException"/> for a read that
+        /// failed, as <see cref="EventLogReader.ReadEvent()"/> does.
+        /// </summary>
+        BootEvent? ReadNext();
+    }
+
+    private static IBootEventReader OpenLog(string xpath) => new LogReader(xpath);
+
+    /// <summary>The live Diagnostics-Performance log.</summary>
+    private sealed class LogReader(string xpath) : IBootEventReader
+    {
+        private readonly EventLogReader _reader =
+            new(new EventLogQuery(LogName, PathType.LogName, xpath) { ReverseDirection = true });
+
+        public BootEvent? ReadNext()
+        {
+            using var record = _reader.ReadEvent();
+            if (record is null) return null;
+
+            XElement? xml = null;
+            try { xml = XElement.Parse(record.ToXml()); }
+            catch (System.Xml.XmlException) { /* kept with no payload, which the parsers treat as nothing to show */ }
+            return new BootEvent(record.TimeCreated ?? DateTime.MinValue, record.Id, xml);
+        }
+
+        public void Dispose() => _reader.Dispose();
     }
 
     // ── Pure parsing (unit-tested) ─────────────────────────────────────────────

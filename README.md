@@ -484,6 +484,9 @@ need administrator rights:
   filtered to that service; a slow app or background task opens Startup Manager. Drivers and devices
   get no link, because SysManager cannot disable one and sending you looking would waste your time
 - Read-only; reading the log requires administrator (elevation banner shown)
+- **A read that fails says so.** "No boots recorded yet" is kept for a history Windows
+  returned empty. When the log could not be read, the tab says that instead, and a
+  refresh that fails keeps what was already shown
 
 ### Task Scheduler
 - **Browse every Windows scheduled task** with its state, type, last and next run, and what the task

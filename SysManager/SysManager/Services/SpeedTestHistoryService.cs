@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -24,7 +25,11 @@ public sealed class SpeedTestHistoryService : IDisposable
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        // An upload or ping that was not measured is left out rather than written as null. A version from
+        // before they could be missing reads them as plain numbers, so a null would make the whole file
+        // unreadable to it. Left out, it reads 0, as it always did.
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     // FUNC-M4: Serialize all file operations to prevent concurrent SaveAsync
@@ -267,8 +272,8 @@ public sealed class SpeedTestHistoryService : IDisposable
     {
         public string? Engine { get; set; }
         public double DownloadMbps { get; set; }
-        public double UploadMbps { get; set; }
-        public double PingMs { get; set; }
+        public double? UploadMbps { get; set; }
+        public double? PingMs { get; set; }
         public string? Server { get; set; }
         public DateTime CompletedAt { get; set; }
     }

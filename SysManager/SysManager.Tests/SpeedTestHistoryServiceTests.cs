@@ -39,7 +39,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
     private string HistoryFile => Path.Combine(_dir, "speedtest-history.json");
 
     private static SpeedTestResult Result(
-        string engine = "HTTP", double down = 100.5, double up = 50.2, double ping = 12.3,
+        string engine = "HTTP", double down = 100.5, double? up = 50.2, double? ping = 12.3,
         string server = "test-server", DateTime? at = null)
         => new(engine, down, up, ping, server, at ?? new DateTime(2026, 1, 1, 12, 0, 0));
 
@@ -87,10 +87,60 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         var only = Assert.Single(loaded);
         Assert.Equal("HTTP", only.Engine);
         Assert.Equal(123.4, only.DownloadMbps, precision: 3);
-        Assert.Equal(56.7, only.UploadMbps, precision: 3);
-        Assert.Equal(8.9, only.PingMs, precision: 3);
+        Assert.NotNull(only.UploadMbps);
+        Assert.Equal(56.7, only.UploadMbps.Value, precision: 3);
+        Assert.NotNull(only.PingMs);
+        Assert.Equal(8.9, only.PingMs.Value, precision: 3);
         Assert.Equal("roundtrip-server", only.Server);
         Assert.Equal(at, only.CompletedAt);
+    }
+
+    // ---------- an upload or ping that was not measured (#2504) ----------
+
+    [Fact]
+    public async Task SaveAndLoad_AnUploadAndPingThatWereNotMeasured_ComeBackNotMeasured()
+    {
+        // They used to be saved as 0, and 0 ms is a perfect ping: the history kept the best reading there is for a
+        // test whose ping got no answer.
+        using var svc = NewService();
+        await svc.SaveAsync(Result("HTTP", down: 123.4, up: null, ping: null, server: "unmeasured"));
+
+        var only = Assert.Single(await svc.LoadAsync());
+
+        Assert.Null(only.UploadMbps);
+        Assert.Null(only.PingMs);
+        Assert.Equal(123.4, only.DownloadMbps, precision: 3);
+        Assert.Equal("unmeasured", only.Server);
+    }
+
+    [Fact]
+    public async Task SaveAsync_LeavesAnUnmeasuredUploadAndPingOutOfTheFile()
+    {
+        // A version from before they could be missing reads both as plain numbers. A null would make the whole file
+        // unreadable to it, where a missing value reads as 0, as it always did.
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Result(up: null, ping: null)));
+
+        var json = await File.ReadAllTextAsync(HistoryFile);
+
+        Assert.Contains("downloadMbps", json);   // the file does hold the entry
+        Assert.DoesNotContain("uploadMbps", json);
+        Assert.DoesNotContain("pingMs", json);
+    }
+
+    [Fact]
+    public async Task LoadAsync_APingSavedAsZeroByAnOlderVersion_IsKeptAsSaved()
+    {
+        // Old results are not reinterpreted. A 0 ms ping from before is usually a ping that got no answer, but a
+        // round trip under a millisecond is also 0, and the file cannot tell the two apart.
+        await File.WriteAllTextAsync(HistoryFile,
+            """[{"engine":"HTTP","downloadMbps":10,"uploadMbps":0,"pingMs":0,"server":"s","completedAt":"2026-01-01T00:00:00"}]""");
+        using var svc = NewService();
+
+        var only = Assert.Single(await svc.LoadAsync());
+
+        Assert.Equal(0, only.PingMs);
+        Assert.Equal(0, only.UploadMbps);
     }
 
     [Fact]

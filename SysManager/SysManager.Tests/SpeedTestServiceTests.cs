@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Net.NetworkInformation;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -137,5 +138,93 @@ public class SpeedTestServiceTests
                 "verification rejected the binary but it is still on disk — the pin was not released before the delete");
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ } }
+    }
+
+    // ---------- a ping or upload that was not measured is not a number (#2504) ----------
+    //
+    // Both used to be 0. 0 ms is a perfect ping, so a network that drops ping was shown the best reading there is,
+    // and 0 Mbps reads as a dead line rather than as no reading.
+
+    /// <summary>Answers each of the four pings in turn.</summary>
+    private static Func<CancellationToken, Task<(IPStatus Status, long RoundtripTime)>> Answering(
+        params (IPStatus Status, long RoundtripTime)[] replies)
+    {
+        var next = 0;
+        return _ => Task.FromResult(replies[next++]);
+    }
+
+    [Fact]
+    public async Task MeasurePing_NoPingAnswered_IsNotMeasured()
+    {
+        var ping = await SpeedTestService.MeasurePingAsync(
+            Answering((IPStatus.TimedOut, 0), (IPStatus.TimedOut, 0), (IPStatus.DestinationHostUnreachable, 0), (IPStatus.TimedOut, 0)),
+            CancellationToken.None);
+
+        Assert.Null(ping);
+    }
+
+    [Fact]
+    public async Task MeasurePing_AveragesOnlyThePingsThatWereAnswered()
+    {
+        var ping = await SpeedTestService.MeasurePingAsync(
+            Answering((IPStatus.Success, 10), (IPStatus.TimedOut, 0), (IPStatus.Success, 20), (IPStatus.TimedOut, 0)),
+            CancellationToken.None);
+
+        Assert.Equal(15.0, ping);
+    }
+
+    [Fact]
+    public async Task MeasurePing_AnswersUnderAMillisecond_AreStillAMeasurement()
+    {
+        // Windows reports a round trip under a millisecond as 0. That is a reading, and must not be taken for none.
+        var ping = await SpeedTestService.MeasurePingAsync(
+            Answering((IPStatus.Success, 0), (IPStatus.Success, 0), (IPStatus.Success, 0), (IPStatus.Success, 0)),
+            CancellationToken.None);
+
+        Assert.Equal(0.0, ping);
+    }
+
+    [Theory]
+    [InlineData("unresolved")]
+    [InlineData("socket")]
+    [InlineData("busy")]
+    public async Task MeasurePing_APingThatCannotBeSent_IsNotMeasured(string failure)
+    {
+        Exception thrown = failure switch
+        {
+            "unresolved" => new PingException("An exception occurred during a Ping request."),
+            "socket" => new System.Net.Sockets.SocketException(),
+            _ => new InvalidOperationException("An asynchronous call is already in progress."),
+        };
+
+        var ping = await SpeedTestService.MeasurePingAsync(_ => throw thrown, CancellationToken.None);
+
+        Assert.Null(ping);
+    }
+
+    [Fact]
+    public async Task MeasurePing_Cancelled_IsACancel_NotAPingWithNoAnswer()
+    {
+        // A cancelled test reaches the view model as "Cancelled". Turned into a missing ping, the run would carry on
+        // into the download.
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SpeedTestService.MeasurePingAsync(
+            token => Task.FromCanceled<(IPStatus, long)>(token), cts.Token));
+    }
+
+    [Fact]
+    public void Upload_TheServerRefused_IsNotMeasured()
+        => Assert.Null(SpeedTestService.UploadMbps(accepted: false, sentBytes: 52_428_800, TimeSpan.FromSeconds(4)));
+
+    [Fact]
+    public void Upload_Accepted_IsTheBytesSentOverTheTimeTaken()
+    {
+        // 50 MiB in 4 s: 52,428,800 bytes × 8 / 1,000,000 / 4.
+        var mbps = SpeedTestService.UploadMbps(accepted: true, sentBytes: 52_428_800, TimeSpan.FromSeconds(4));
+
+        Assert.NotNull(mbps);
+        Assert.Equal(104.8576, mbps.Value, precision: 6);
     }
 }

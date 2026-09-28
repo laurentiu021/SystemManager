@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using NSubstitute;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
@@ -243,4 +244,61 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Equal(newest, vm.HttpHistory[0]);
         Assert.DoesNotContain(At("HTTP", 0), vm.HttpHistory);
     }
+
+    // ---------- a run whose upload or ping was not measured (#2504) ----------
+    //
+    // A ping with no answer used to read 0 ms, a perfect score, on the card and in the history.
+
+    private static Services.ISpeedTestService EngineReturning(Models.SpeedTestResult result)
+    {
+        var engine = Substitute.For<Services.ISpeedTestService>();
+        engine.RunHttpAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>())
+              .Returns(Task.FromResult(result));
+        engine.RunOoklaAsync(Arg.Any<IProgress<(int Percent, string Message)>?>(), Arg.Any<CancellationToken>(), Arg.Any<int?>())
+              .Returns(Task.FromResult(result));
+        return engine;
+    }
+
+    [Fact]
+    public async Task AnHttpRunWhosePingGotNoAnswer_ShowsNoPing_SaysWhy_AndSavesNoPing()
+    {
+        var history = NewHistory();
+        var noPing = new Models.SpeedTestResult("HTTP", 312.4, 41.7, null, "speed.cloudflare.com", new DateTime(2026, 9, 29, 9, 0, 0));
+        var vm = new SpeedTestViewModel(NewShared(), history, EngineReturning(noPing));
+        await vm.InitializationComplete;
+
+        await vm.RunHttpSpeedCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.HttpResult);
+        Assert.Equal("—", vm.HttpResult.PingDisplay);
+        Assert.Equal("HTTP done — no reply to ping (some networks block it)", vm.HttpStatus);
+        Assert.Null(Assert.Single(vm.HttpHistory).PingMs);
+        Assert.Null(Assert.Single(await history.LoadAsync()).PingMs);
+    }
+
+    [Fact]
+    public async Task AnOoklaRun_ThatMeasuredEverything_SaysOnlyThatItIsDone()
+    {
+        var history = NewHistory();
+        var measured = new Models.SpeedTestResult("Ookla", 480.2, 95.1, 7.4, "Bucharest", new DateTime(2026, 9, 29, 9, 5, 0));
+        var vm = new SpeedTestViewModel(NewShared(), history, EngineReturning(measured));
+        await vm.InitializationComplete;
+
+        await vm.RunOoklaSpeedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ookla done", vm.OoklaStatus);
+        Assert.Equal("7 ms", vm.OoklaResult?.PingDisplay);
+        Assert.Equal(measured, Assert.Single(await history.LoadAsync()));
+    }
+
+    [Theory]
+    [InlineData(41.7, 12.3, true, "HTTP done")]
+    [InlineData(41.7, 12.3, false, "HTTP done — result could not be saved to history")]
+    [InlineData(41.7, null, true, "HTTP done — no reply to ping (some networks block it)")]
+    [InlineData(null, 12.3, true, "HTTP done — upload could not be measured")]
+    [InlineData(null, null, false,
+        "HTTP done — upload could not be measured; no reply to ping (some networks block it); result could not be saved to history")]
+    public void DescribeFinished_SaysWhatWasNotMeasured_AndWhetherItWasSaved(double? up, double? ping, bool saved, string expected)
+        => Assert.Equal(expected, SpeedTestViewModel.DescribeFinished(
+            "HTTP", new Models.SpeedTestResult("HTTP", 100, up, ping, "server", new DateTime(2026, 9, 29)), saved));
 }

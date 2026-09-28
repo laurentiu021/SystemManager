@@ -79,11 +79,14 @@
                                       Width="180" Margin="0,0,8,0" VerticalAlignment="Center"
                                       DockPanel.Dock="Right"/>
                         </DockPanel>
+                        <!-- Upload and ping are formatted by the result, which shows "—" for one that was not
+                             measured. A StringFormat here prints a bare " ms" for it, and the ping used to read
+                             0 ms, a perfect score, whenever no ping got an answer (#2504). -->
                         <Grid Margin="0,16,0,0" Visibility="{Binding OoklaResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Info}"/></StackPanel></Border>
-                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
-                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
+                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.UploadDisplay}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
+                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding OoklaResult.PingDisplay}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
                         <!-- What the numbers above mean. Placed right under them, because the verdict is
                              the answer and the Mbps are the working. -->
@@ -119,8 +122,8 @@
                         <Grid Margin="0,16,0,0" Visibility="{Binding HttpResult, Converter={StaticResource FlexVis}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border Grid.Column="0" Style="{StaticResource CardInner}" Margin="0,0,6,0"><StackPanel><TextBlock Text="DOWNLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.DownloadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Info}"/></StackPanel></Border>
-                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.UploadMbps, StringFormat={}{0:F1} Mbps}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
-                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.PingMs, StringFormat={}{0:F0} ms}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
+                            <Border Grid.Column="1" Style="{StaticResource CardInner}" Margin="6,0"><StackPanel><TextBlock Text="UPLOAD" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.UploadDisplay}" Style="{StaticResource Metric}" Foreground="{DynamicResource Success}"/></StackPanel></Border>
+                            <Border Grid.Column="2" Style="{StaticResource CardInner}" Margin="6,0,0,0"><StackPanel><TextBlock Text="PING" Style="{StaticResource SectionLabel}"/><TextBlock Text="{Binding HttpResult.PingDisplay}" Style="{StaticResource Metric}" Foreground="{DynamicResource Warning}"/></StackPanel></Border>
                         </Grid>
                         <!-- Same template as the Ookla card — see UserControl.Resources. -->
                         <ContentControl Content="{Binding HttpVerdict}"
@@ -170,8 +173,10 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
                                 <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80" MinWidth="60"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70" MinWidth="60"/>
+                                <!-- The same "—" in the rows, with the sort kept on the numbers: sorting the text
+                                     would put 100.0 before 41.7. -->
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="80" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="70" MinWidth="60"/>
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>
@@ -202,8 +207,8 @@
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Date" Binding="{Binding CompletedAt, StringFormat={}{0:dd MMM HH:mm}}" Width="110" MinWidth="80"/>
                                 <DataGridTextColumn Header="Down (Mbps)" Binding="{Binding DownloadMbps, StringFormat={}{0:F1}}" Width="90" MinWidth="70"/>
-                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbps, StringFormat={}{0:F1}}" Width="80" MinWidth="60"/>
-                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMs, StringFormat={}{0:F0}}" Width="70" MinWidth="60"/>
+                                <DataGridTextColumn Header="Up (Mbps)" Binding="{Binding UploadMbpsDisplay}" SortMemberPath="UploadMbps" Width="80" MinWidth="60"/>
+                                <DataGridTextColumn Header="Ping (ms)" Binding="{Binding PingMsDisplay}" SortMemberPath="PingMs" Width="70" MinWidth="60"/>
                                 <DataGridTextColumn Header="Server" Binding="{Binding Server}" Width="*" MinWidth="80"/>
                             </DataGrid.Columns>
                         </DataGrid>

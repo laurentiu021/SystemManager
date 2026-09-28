@@ -52,24 +52,44 @@ public sealed class SpeedTestService : ISpeedTestService
         return new SpeedTestResult("HTTP", downloadMbps, uploadMbps, pingMs, CfPingHost, DateTime.Now);
     }
 
-    private static async Task<double> MeasurePingAsync(string host, CancellationToken ct)
+    private static async Task<double?> MeasurePingAsync(string host, CancellationToken ct)
+    {
+        using var p = new Ping();
+        return await MeasurePingAsync(async token =>
+        {
+            // Pass the token so cancelling the speed test interrupts the ping phase
+            // immediately, instead of running all four 2 s probes (up to 8 s) first.
+            var r = await p.SendPingAsync(host, TimeSpan.FromMilliseconds(2000), cancellationToken: token).ConfigureAwait(false);
+            return (r.Status, r.RoundtripTime);
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The average round trip of four pings, or null when none got an answer.
+    /// </summary>
+    /// <remarks>
+    /// Null, not 0, for a ping that was never answered, whether the host timed out, the network drops ping or
+    /// the ping could not be sent. 0 ms is a perfect ping, and networks that drop ping are common, so they were
+    /// shown the best reading there is (#2504). A reply of 0 ms is still a measurement: Windows reports a
+    /// round trip under a millisecond as 0.
+    /// <para>The body is handed the single ping, so a test can answer, time out or throw without a network.</para>
+    /// </remarks>
+    internal static async Task<double?> MeasurePingAsync(
+        Func<CancellationToken, Task<(IPStatus Status, long RoundtripTime)>> sendPing, CancellationToken ct)
     {
         try
         {
-            using var p = new Ping();
             List<long> samples = [];
             for (int i = 0; i < 4; i++)
             {
-                // Pass the token so cancelling the speed test interrupts the ping phase
-                // immediately, instead of running all four 2 s probes (up to 8 s) first.
-                var r = await p.SendPingAsync(host, TimeSpan.FromMilliseconds(2000), cancellationToken: ct).ConfigureAwait(false);
-                if (r.Status == IPStatus.Success) samples.Add(r.RoundtripTime);
+                var (status, roundtripTime) = await sendPing(ct).ConfigureAwait(false);
+                if (status == IPStatus.Success) samples.Add(roundtripTime);
             }
-            return samples.Count > 0 ? samples.Average() : 0;
+            return samples.Count > 0 ? samples.Average() : null;
         }
-        catch (System.Net.NetworkInformation.PingException) { return 0; }
-        catch (System.Net.Sockets.SocketException) { return 0; }
-        catch (InvalidOperationException) { return 0; }
+        catch (System.Net.NetworkInformation.PingException) { return null; }
+        catch (System.Net.Sockets.SocketException) { return null; }
+        catch (InvalidOperationException) { return null; }
     }
 
     private static async Task<double> MeasureDownloadAsync(
@@ -104,7 +124,7 @@ public sealed class SpeedTestService : ISpeedTestService
         return downloaded * 8.0 / 1_000_000.0 / seconds;
     }
 
-    private static async Task<double> MeasureUploadAsync(
+    private static async Task<double?> MeasureUploadAsync(
         IProgress<(int, string)>? progress, CancellationToken ct)
     {
         // Stream random data in chunks instead of allocating a single 50 MB
@@ -120,22 +140,30 @@ public sealed class SpeedTestService : ISpeedTestService
         using var resp = await _http.PostAsync(CfUploadUrl, content, ct).ConfigureAwait(false);
         sw.Stop();
 
-        // If the server rejects the POST (e.g. 4xx on size) it can return before the
-        // full payload is sent. Reporting PayloadBytes over the now-tiny elapsed time
-        // would fabricate a grossly inflated upload speed, so treat a non-success
-        // response as a failed measurement (0) rather than a real number.
-        if (!resp.IsSuccessStatusCode)
-        {
-            progress?.Report((95, $"Upload measurement failed (HTTP {(int)resp.StatusCode})"));
-            return 0;
-        }
-
-        // Measure the bytes actually consumed by the HTTP stack (the stream's final
-        // position), not the intended payload — so a short-circuited upload reports
-        // the true transferred amount instead of the full 50 MB.
         var sentBytes = stream.Position;
-        var seconds = Math.Max(sw.Elapsed.TotalSeconds, 0.001);
-        progress?.Report((95, $"Upload complete: {sentBytes / 1024 / 1024} MB"));
+        var mbps = UploadMbps(resp.IsSuccessStatusCode, sentBytes, sw.Elapsed);
+        progress?.Report((95, mbps is null
+            ? $"Upload measurement failed (HTTP {(int)resp.StatusCode})"
+            : $"Upload complete: {sentBytes / 1024 / 1024} MB"));
+        return mbps;
+    }
+
+    /// <summary>
+    /// The upload rate in Mbps, or null when the server did not accept the upload.
+    /// </summary>
+    /// <remarks>
+    /// If the server rejects the POST (e.g. 4xx on size) it can return before the full payload is sent.
+    /// Reporting the payload over the now-tiny elapsed time would fabricate a grossly inflated upload speed, so a
+    /// rejected upload is not measured. It used to be reported as 0 Mbps, a reading of a dead line rather than
+    /// no reading (#2504).
+    /// <para>Measured on the bytes actually consumed by the HTTP stack (the stream's final position), not the
+    /// intended payload, so a short-circuited upload reports the true transferred amount instead of the full
+    /// 50 MB.</para>
+    /// </remarks>
+    internal static double? UploadMbps(bool accepted, long sentBytes, TimeSpan elapsed)
+    {
+        if (!accepted) return null;
+        var seconds = Math.Max(elapsed.TotalSeconds, 0.001);
         return sentBytes * 8.0 / 1_000_000.0 / seconds;
     }
 

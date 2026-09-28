@@ -15,7 +15,7 @@ namespace SysManager.Services;
 ///   - Free space on the system drive: 25%
 ///   - RAM usage: 20%
 ///   - Uptime: 15%
-///   - Battery wear: 15% (only on laptops; redistributed otherwise, to 30/25/25/20)
+///   - Battery wear: 15% (only when a battery's health was read; redistributed otherwise, to 30/25/25/20)
 ///
 /// No admin required. Read-only queries only.
 /// </summary>
@@ -89,18 +89,19 @@ public sealed class HealthScoreService
         int uptimeScore = ComputeUptimeScore(snapshot);
         int batteryScore = ComputeBatteryScore(battery);
         bool hasBattery = battery?.HasBattery ?? false;
+        bool batteryMeasured = BatteryWasMeasured(battery);
 
-        int overall = Combine(diskScore, freeSpaceScore, ramScore, uptimeScore, batteryScore, hasBattery);
+        int overall = OverallScore(diskScore, freeSpaceScore, ramScore, uptimeScore, battery);
 
         // Build recommendations
         var recommendations = BuildRecommendations(
-            diskScore, freeSpaceScore, ramScore, uptimeScore, batteryScore, hasBattery,
+            diskScore, freeSpaceScore, ramScore, uptimeScore, batteryScore, batteryMeasured,
             snapshot, disks, battery, drives, SystemDriveLetter());
 
         // Recorded so a consumer can say "could not read this" instead of reading a verdict out of a
         // fallback number. The scores above already refuse to claim health; this is what makes the reason
         // visible.
-        var unavailable = UnavailableComponents(disks, snapshot, drives, SystemDriveLetter());
+        var unavailable = UnavailableComponents(disks, snapshot, drives, SystemDriveLetter(), battery);
 
         return new HealthScoreResult
         {
@@ -138,7 +139,7 @@ public sealed class HealthScoreService
     /// </remarks>
     internal static List<string> UnavailableComponents(
         IReadOnlyList<DiskHealthReport>? disks, SystemSnapshot? snapshot,
-        IReadOnlyList<FixedDriveService.FixedDrive>? drives, string? systemDrive)
+        IReadOnlyList<FixedDriveService.FixedDrive>? drives, string? systemDrive, BatteryInfo? battery = null)
     {
         List<string> unavailable = [];
         if (disks is null || disks.All(d => d.HealthPercent is null)) unavailable.Add(DiskComponent);
@@ -160,14 +161,41 @@ public sealed class HealthScoreService
             unavailable.Add(UptimeComponent);
         }
 
+        // A battery Windows reports without the capacities that make up its health, which is every run without
+        // administrator rights. A PC with no battery is not listed: there is nothing to read (#2501).
+        if (battery is { HasBattery: true } && !BatteryWasMeasured(battery)) unavailable.Add(BatteryComponent);
+
         return unavailable;
     }
+
+    /// <summary>
+    /// True when a battery is present and its health was read, which is when it counts toward the score.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BatteryInfo.HealthPercent"/> is -1 when Windows would not give the design and full-charge
+    /// capacities, which is how <c>root\WMI</c> answers a standard user. Such a battery is left out of the weights
+    /// like a desktop's, instead of counting as a perfect one (#2501).
+    /// </remarks>
+    internal static bool BatteryWasMeasured(BatteryInfo? battery) =>
+        battery is { HasBattery: true, HealthPercent: >= 0 };
+
+    /// <summary>
+    /// The overall figure from the four component scores and the battery as read.
+    /// </summary>
+    /// <remarks>
+    /// The battery is weighted only when it was measured (<see cref="BatteryWasMeasured"/>). A battery whose
+    /// capacities Windows would not give scored 100 and counted for 15%, so a worn battery read without
+    /// administrator rights lifted the score as if it were new (#2501). Pure, so that is asserted without WMI.
+    /// </remarks>
+    internal static int OverallScore(int diskScore, int freeSpaceScore, int ramScore, int uptimeScore, BatteryInfo? battery)
+        => Combine(diskScore, freeSpaceScore, ramScore, uptimeScore, ComputeBatteryScore(battery), BatteryWasMeasured(battery));
 
     /// <summary>Component names used in <see cref="HealthScoreResult.UnavailableComponents"/>.</summary>
     internal const string DiskComponent = "Disk";
     internal const string FreeSpaceComponent = "Free space";
     internal const string MemoryComponent = "Memory";
     internal const string UptimeComponent = "Uptime";
+    internal const string BatteryComponent = "Battery";
 
     // ── Component scoring ──────────────────────────────────────────────
 
@@ -359,8 +387,9 @@ public sealed class HealthScoreService
         if (battery is null || !battery.HasBattery) return 100;
 
         double health = battery.HealthPercent;
-        // -1 means capacity data unavailable (no admin for root\WMI).
-        // Return neutral score to avoid false-critical warnings.
+        // -1 means the capacities could not be read (no admin for root\WMI). The 100 is never weighted:
+        // BatteryWasMeasured leaves such a battery out of the score, so all this does is keep the arm from
+        // recommending a replacement nobody measured the need for.
         if (health < 0) return 100;
 
         return health switch

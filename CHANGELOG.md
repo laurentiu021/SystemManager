@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.17] - 2026-09-28
+
+**Quick Tune-Up no longer says "All good" about checks it could not run, and the health score no longer counts
+an unread battery as new.** Both now leave out what was not measured, and say so.
+
+### Fixed
+
+- **Dashboard → Quick Tune-Up: a check that could not run is named, not passed.** When the disk, shortcut or
+  memory-and-uptime check failed, its field stayed at the value that means nothing wrong: no disk rows, no broken
+  shortcuts, 0% memory, an uptime of zero. So with none of them checked the card said "All good" and "memory and
+  disks look fine, and this PC has restarted recently".
+  - The card now says "Not checked this time: …" in place of that line.
+  - The headline reads "Some checks did not run", in amber, when nothing else was found.
+  - "All good" and the reassurance appear only when every check ran.
+  - A disk read that finds no disk at all counts as not checked. A system-info failure reported as a COM error
+    is now caught like the other WMI failures, instead of failing the whole Tune-Up after the clean-up had run.
+  Present since the Tune-Up was added in v0.36.0.
+- **Dashboard → health score: an unread battery is left out, not scored as perfect.** Without administrator
+  rights Windows does not give a battery's design and full-charge capacities. Such a battery scored 100 and
+  counted for 15% of the overall figure, so a worn battery lifted the score as if it were new. It is now left
+  out of the weights, as a desktop's is, and recorded as not read. A battery whose wear was read counts as
+  before. Present since v0.48.23.
+
 ## [1.114.16] - 2026-09-28
 
 **Boot Analyzer now says when Windows' boot history could not be read.** It used to report "no boots recorded

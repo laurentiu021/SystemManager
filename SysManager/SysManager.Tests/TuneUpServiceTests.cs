@@ -377,4 +377,137 @@ public class TuneUpServiceTests
         Assert.Equal(StatusColors.Good, summary.ColorHex);
     }
 
+    // ---------- a check that could not run (#2501) ----------
+    //
+    // Each failed check used to leave its field at the value that means "nothing wrong", so with nothing checked
+    // the card said "All good" and that memory and disks looked fine.
+
+    [Fact]
+    public void ACheckThatDidNotRun_IsNotAllGood_AndIsNamed()
+    {
+        var result = new TuneUpResult { NotChecked = ["the disks"] };
+
+        Assert.Equal(0, result.WarningCount);   // not a recommendation
+        Assert.False(result.AllChecksPassed);
+        Assert.True(result.HasUncheckedItems);
+        Assert.Equal("Some checks did not run", result.OverallVerdict);
+        Assert.Equal(StatusColors.Warning, result.OverallColorHex);
+        Assert.Equal("Not checked this time: the disks. The result above does not cover it.", result.NotCheckedDisplay);
+    }
+
+    [Fact]
+    public void SeveralChecksThatDidNotRun_AreNamedInOneSentence()
+    {
+        var result = new TuneUpResult { NotChecked = ["shortcuts", "the disks", "memory", "uptime"] };
+
+        Assert.Equal("Not checked this time: shortcuts, the disks, memory and uptime. The result above does not cover them.",
+            result.NotCheckedDisplay);
+    }
+
+    [Fact]
+    public void AFindingAlongsideACheckThatDidNotRun_StillLeadsTheHeadline()
+    {
+        var result = new TuneUpResult { BrokenShortcutsFound = 2, NotChecked = ["memory", "uptime"] };
+
+        Assert.Equal("1 recommendation", result.OverallVerdict);
+        Assert.False(result.AllChecksPassed);
+    }
+
+    [Fact]
+    public void EveryCheckRan_AndFoundNothing_IsTheOnlyAllGood()
+    {
+        var result = new TuneUpResult();
+
+        Assert.True(result.AllChecksPassed);
+        Assert.False(result.HasUncheckedItems);
+        Assert.Equal("", result.NotCheckedDisplay);
+        Assert.Equal("All good", result.OverallVerdict);
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("denied")]
+    public async Task AShortcutScanThatFails_IsNotChecked_NotZeroBroken(string failure)
+    {
+        Exception thrown = failure == "io"
+            ? new IOException("The device is not ready.")
+            : new UnauthorizedAccessException("Access to the path is denied.");
+
+        Assert.Null(await TuneUpService.CountBrokenShortcutsAsync(() => throw thrown));
+    }
+
+    [Fact]
+    public async Task AShortcutScanThatRuns_CountsTheBrokenOnes()
+    {
+        var report = new ShortcutScanReport
+        {
+            Broken = [new BrokenShortcut { Name = "Old app", ShortcutPath = "a.lnk", TargetPath = "gone.exe", Location = "Desktop" }],
+        };
+
+        Assert.Equal(1, await TuneUpService.CountBrokenShortcutsAsync(() => Task.FromResult(report)));
+    }
+
+    [Theory]
+    [InlineData("empty")]
+    [InlineData("wmi")]
+    [InlineData("com")]
+    [InlineData("invalid")]
+    public async Task ADiskReadThatFindsNothingOrFails_IsNotChecked(string failure)
+    {
+        Func<Task<IReadOnlyList<DiskHealthReport>>> collect = failure switch
+        {
+            "empty" => () => Task.FromResult<IReadOnlyList<DiskHealthReport>>([]),
+            "wmi" => () => throw new System.Management.ManagementException("Invalid namespace"),
+            "com" => () => throw new System.Runtime.InteropServices.COMException("The RPC server is unavailable."),
+            _ => () => throw new InvalidOperationException("The object has no path."),
+        };
+
+        Assert.Null(await TuneUpService.ReadDisksAsync(collect));
+    }
+
+    [Fact]
+    public async Task ADiskReadThatWorks_GivesOneRowPerDisk()
+    {
+        var disk = new DiskHealthReport
+        {
+            FriendlyName = "Samsung 980 Pro",
+            Verdict = "Healthy — 38 °C · wear 2% · 4210 h on",
+            VerdictColorHex = StatusColors.Good,
+        };
+
+        var rows = await TuneUpService.ReadDisksAsync(() => Task.FromResult<IReadOnlyList<DiskHealthReport>>([disk]));
+
+        var row = Assert.Single(rows!);
+        Assert.Equal("Samsung 980 Pro", row.Name);
+        Assert.Equal("Healthy — 38 °C · wear 2% · 4210 h on", row.Verdict);
+        Assert.Equal(StatusColors.Good, row.ColorHex);
+    }
+
+    [Theory]
+    [InlineData("wmi")]
+    [InlineData("com")]
+    [InlineData("invalid")]
+    public async Task AVitalsReadThatFails_IsNotChecked_NotZeroMemoryAndUptime(string failure)
+    {
+        Func<Task<SystemSnapshot>> capture = failure switch
+        {
+            "wmi" => () => throw new System.Management.ManagementException("Generic failure"),
+            "com" => () => throw new System.Runtime.InteropServices.COMException("The RPC server is unavailable."),
+            _ => () => throw new InvalidOperationException("No data."),
+        };
+
+        Assert.Null(await TuneUpService.CaptureVitalsAsync(capture));
+    }
+
+    [Fact]
+    public void NotChecked_NamesEachCheckThatDidNotRun_InTheOrderTheCardReads()
+    {
+        Assert.Equal(["shortcuts", "the disks", "memory", "uptime"], TuneUpService.NotChecked(null, null, null));
+        Assert.Empty(TuneUpService.NotChecked(0, [], new SystemSnapshot(
+            new OsInfo("Windows 11", "10.0", "26200", TimeSpan.FromDays(1), "64-bit"),
+            new CpuInfo("Test CPU", 8, 16, 3600, 10),
+            new MemoryInfo(16, 8, 8, 50, []),
+            [],
+            DateTime.Now)));
+    }
 }

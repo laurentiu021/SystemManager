@@ -73,18 +73,59 @@ public sealed record TuneUpResult
         }
     }
 
-    public string OverallVerdict => WarningCount switch
+    // ── Checks that could not run ──────────────────────────────────────
+
+    /// <summary>
+    /// What the Tune-Up could not check this time, in words for a sentence: "the disks", "shortcuts",
+    /// "memory", "uptime". Empty when every check ran.
+    /// </summary>
+    /// <remarks>
+    /// A check that failed used to leave its field at the value that means "nothing wrong": no disk rows, no
+    /// broken shortcuts, 0% memory, an uptime of zero. So with nothing checked the card read "All good" and "memory
+    /// and disks look fine, and this PC has restarted recently" (#2501). Kept apart from <see cref="WarningCount"/>,
+    /// because something that was not checked is not a recommendation either.
+    /// </remarks>
+    public IReadOnlyList<string> NotChecked { get; init; } = [];
+
+    /// <summary>True when at least one check could not run. Shows <see cref="NotCheckedDisplay"/>.</summary>
+    public bool HasUncheckedItems => NotChecked.Count > 0;
+
+    /// <summary>
+    /// True only when every check ran and none found anything. The one state in which the card may say that
+    /// nothing else needs attention.
+    /// </summary>
+    public bool AllChecksPassed => WarningCount == 0 && NotChecked.Count == 0;
+
+    /// <summary>The line naming what was not checked, or empty when everything was.</summary>
+    public string NotCheckedDisplay => NotChecked.Count == 0
+        ? ""
+        : $"Not checked this time: {JoinForSentence(NotChecked)}. The result above does not cover "
+          + (NotChecked.Count == 1 ? "it." : "them.");
+
+    public string OverallVerdict => (WarningCount, NotChecked.Count) switch
     {
-        0 => "All good",
-        1 => "1 recommendation",
+        (0, 0) => "All good",
+        (0, _) => "Some checks did not run",
+        (1, _) => "1 recommendation",
         _ => $"{WarningCount} recommendations"
     };
 
-    public string OverallColorHex => WarningCount switch
+    /// <summary>
+    /// Green only for <see cref="AllChecksPassed"/>. A result with checks that did not run is amber even with nothing
+    /// found, because nothing found is not the same as nothing wrong.
+    /// </summary>
+    public string OverallColorHex => (WarningCount, NotChecked.Count) switch
     {
-        0 => StatusColors.Good,
-        <= 2 => StatusColors.Warning,
+        (0, 0) => StatusColors.Good,
+        (<= 2, _) => StatusColors.Warning,
         _ => StatusColors.Bad
+    };
+
+    /// <summary>"a", "a and b", "a, b and c".</summary>
+    private static string JoinForSentence(IReadOnlyList<string> items) => items.Count switch
+    {
+        1 => items[0],
+        _ => string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1],
     };
 }
 

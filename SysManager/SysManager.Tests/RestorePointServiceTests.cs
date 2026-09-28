@@ -10,10 +10,10 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="RestorePointService.ParseRestorePoints"/> — the pure parser that
-/// turns <c>Get-ComputerRestorePoint</c> output into <see cref="RestorePoint"/> records.
-/// Building PSObjects directly keeps these deterministic and free of any live PowerShell
-/// or System Restore dependency. The create/restore paths hit the OS and are not unit-tested.
+/// Tests for <see cref="RestorePointService"/>: the pure parser that turns <c>Get-ComputerRestorePoint</c>
+/// output into <see cref="RestorePoint"/> records, and the list, create and restore paths over a substituted
+/// runner. Building PSObjects directly keeps these deterministic and free of any live PowerShell or System
+/// Restore dependency; the scripts themselves run in the integration suite's <c>RestorePointScriptTests</c>.
 /// </summary>
 public class RestorePointServiceTests
 {
@@ -108,6 +108,59 @@ public class RestorePointServiceTests
     {
         var ex = Assert.Throws<ArgumentNullException>(() => RestorePointService.ParseRestorePoints(null!));
         Assert.Equal("objects", ex.ParamName);
+    }
+
+    // ---------- ListAsync: a refusal is not an empty answer (#2476) ----------
+
+    [Fact]
+    public async Task ListAsync_WhenWindowsRefusesTheList_ReturnsNull()
+    {
+        // Windows answers a standard user's Get-ComputerRestorePoint with "Access denied", and -ErrorAction Stop
+        // turns that into this exception. Null rather than an empty list, so the tab can say the list was refused
+        // instead of telling the user the PC has no restore points.
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(
+                Arg.Any<string>(),
+                Arg.Any<IDictionary<string, object?>?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<System.Collections.ObjectModel.Collection<PSObject>>>(
+                _ => throw new RuntimeException("Access denied"));
+
+        Assert.Null(await new RestorePointService(runner).ListAsync());
+    }
+
+    [Fact]
+    public async Task ListAsync_WhenWindowsAnswersWithNone_ReturnsAnEmptyList()
+    {
+        var points = await new RestorePointService(RunnerReturning()).ListAsync();
+
+        Assert.NotNull(points);
+        Assert.Empty(points);
+    }
+
+    [Fact]
+    public async Task ListAsync_RunsTheListScript()
+    {
+        // The wiring: the integration suite runs ListScript against real PowerShell, which proves nothing about
+        // ListAsync unless ListAsync is what runs it.
+        var runner = RunnerReturning();
+
+        await new RestorePointService(runner).ListAsync();
+
+        await runner.Received(1).RunAsync(
+            RestorePointService.ListScript,
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ListScript_StopsOnARefusal()
+    {
+        // The shape that does the work: -ErrorAction Stop on Get-ComputerRestorePoint itself, before the pipe.
+        var query = RestorePointService.ListScript.Split('|')[0];
+
+        Assert.Contains("Get-ComputerRestorePoint", query, StringComparison.Ordinal);
+        Assert.Contains("-ErrorAction Stop", query, StringComparison.Ordinal);
     }
 
     [Fact]

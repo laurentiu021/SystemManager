@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Management.Automation;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 using Xunit;
@@ -279,5 +280,48 @@ public class DefenderViewModelTests
 
         Assert.Contains("was not changed", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("restore point", vm.StatusMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---------- exclusions Windows withholds from a standard user (#2476) ----------
+    // For a standard user, Windows puts "N/A: Must be an administrator to view exclusions" where each exclusion list
+    // should be. The card listed that sentence as an excluded folder, and with it hidden it said "No exclusion
+    // folders", which is a claim about the machine that nobody had read. The service decides on the session's
+    // elevation when it reads the status, so elevation is pinned for the whole test.
+
+    private static IPowerShellRunner RunnerReportingExclusions(params string[] paths)
+    {
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("ExclusionPath", paths));
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject> { projection });
+        return ps;
+    }
+
+    [Fact]
+    public async Task ForAStandardUser_TheExclusionsCardSaysTheyAreHidden()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = new DefenderViewModel(
+            new DefenderService(RunnerReportingExclusions("N/A: Must be an administrator to view exclusions")),
+            NoRestorePoint());
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.ExclusionPaths);
+        Assert.False(vm.ExclusionsReadable);
+        Assert.Equal("Exclusions are hidden", vm.ExclusionsEmptyTitle);
+        Assert.Contains("administrator", vm.ExclusionsEmptyMessage, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ForAnAdministrator_TheExclusionsAreListed()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingExclusions(@"C:\Games")), NoRestorePoint());
+        await vm.InitializationComplete;
+
+        Assert.Equal(new[] { @"C:\Games" }, vm.ExclusionPaths);
+        Assert.True(vm.ExclusionsReadable);
+        Assert.Equal("No exclusion folders", vm.ExclusionsEmptyTitle);   // what an empty list would then say
     }
 }

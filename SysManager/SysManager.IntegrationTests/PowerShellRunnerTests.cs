@@ -28,10 +28,11 @@ public class PowerShellRunnerTests
     /// lands in a few SECONDS, so 20 turns an all-or-nothing hang into an ordinary failure carrying its
     /// diagnosis.</para>
     /// <para><b><c>[DateTime]::UtcNow</c> rather than <c>Get-Date</c></b>, and <c>Thread::Sleep</c> rather
-    /// than <c>Start-Sleep</c>: the unelevated transport builds its runspace from
-    /// <c>InitialSessionState.CreateDefault2()</c>, which loads <c>Microsoft.PowerShell.Core</c> ONLY. Both
-    /// cmdlets live in <c>Microsoft.PowerShell.Utility</c> and would error instantly, returning normally — so
-    /// a cancellation that never happened would read as a fast success. A .NET static call needs no module.
+    /// than <c>Start-Sleep</c>: until #2476 the unelevated transport built its runspace from
+    /// <c>InitialSessionState.CreateDefault2()</c>, which loads <c>Microsoft.PowerShell.Core</c> ONLY, and the
+    /// tests here that inject a runspace still build it that way. Both cmdlets live in
+    /// <c>Microsoft.PowerShell.Utility</c> and would error instantly there, returning normally — so a
+    /// cancellation that never happened would read as a fast success. A .NET static call needs no module.
     /// </para>
     /// </remarks>
     private const string BlockingScript =
@@ -67,14 +68,13 @@ public class PowerShellRunnerTests
     /// the handle.
     /// </summary>
     /// <remarks>
-    /// <para><b>Was "a run's teardown", and that changed.</b> An elevated runner now REUSES its runspace
-    /// across calls rather than building one per call (#2149), so the end of a run is no longer when the
-    /// child is released — the release points are eviction after
+    /// <para><b>Was "a run's teardown", and that changed.</b> A runner now REUSES its runspace across calls
+    /// rather than building one per call (#2149, and for a standard user's runner too since #2476), so the end
+    /// of a run is no longer when the child is released — the release points are eviction after
     /// <see cref="PowerShellRunner.IdleRunspaceLifetime"/> and disposal of the runner. This asserts the
     /// deterministic one.</para>
-    /// <para>Elevation is forced rather than inherited so the test exercises the reuse path on any machine.
-    /// The runspace itself is in-process, so nothing here needs administrator rights; the injected child
-    /// stands in for the <c>powershell.exe</c> that the real elevated path would have started.</para>
+    /// <para>The runspace itself is in-process, so nothing here needs administrator rights; the injected child
+    /// stands in for the <c>powershell.exe</c> that the real runspace would have started.</para>
     /// </remarks>
     /// <remarks>
     /// #2149(a), end to end through <c>RunAsync</c>. Disposing a <see cref="System.Diagnostics.Process"/>
@@ -88,7 +88,7 @@ public class PowerShellRunnerTests
     /// child through the <c>createRunspace</c> seam and letting <c>RunAsync</c> tear it down is what closes
     /// that: it covers the wiring and the behaviour in one assertion.</para>
     /// <para>An in-process runspace is used, so the run itself needs no elevation; the child injected beside it
-    /// stands in for the <c>powershell.exe</c> the elevated path would have started.</para>
+    /// stands in for the <c>powershell.exe</c> the real runspace would have started.</para>
     /// <para><b>Nothing is redirected, and that is load-bearing.</b> The first stand-in was <c>cmd /c pause</c>
     /// with redirected stdin, and it made the test undiscriminating: disposing the <c>Process</c> closes its
     /// redirected handles, <c>pause</c> saw EOF, and the child exited on its own — so a mutation that removed
@@ -121,7 +121,6 @@ public class PowerShellRunnerTests
                 System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2());
             var runner = new PowerShellRunner(
                 action => Task.Run(action),
-                isElevated: static () => true,
                 createRunspace: () => (runspace, null, child));
 
             var result = await runner.RunAsync("2 + 2");
@@ -130,7 +129,7 @@ public class PowerShellRunnerTests
             // Still alive, because the runspace is now cached for reuse rather than torn down per call.
             Assert.False(observer.HasExited,
                 "the child was released at the end of the run — reuse is not taking effect, so every "
-                + "elevated call still spawns and hands-shakes its own powershell.exe");
+                + "call still spawns and hands-shakes its own powershell.exe");
 
             runner.Dispose();
 
@@ -149,23 +148,29 @@ public class PowerShellRunnerTests
     }
 
     /// <summary>
-    /// An elevated runner builds ONE runspace for several calls, not one per call.
+    /// A runner builds ONE runspace for several calls, not one per call, whatever the session's elevation.
     /// </summary>
     /// <remarks>
     /// The point of #2149's second half. Every elevated call used to spawn a <c>powershell.exe</c> 5.1 child
     /// and complete a remoting handshake with it, then throw both away — and the services that use this make
     /// their calls in bursts: <c>DnsService</c> six, <c>EdgeOneDriveService</c> four, three others three each.
+    /// <para><b>Both rows since #2476.</b> A standard user's runner used to build an in-process runspace per
+    /// call, and a test here pinned that it still did. It now starts the same child, so it pays the same
+    /// handshake and must reuse it the same way; the unelevated row is the one that fails if reuse is ever
+    /// gated on elevation again.</para>
     /// <para>Counted through the <c>createRunspace</c> seam rather than by timing, so the assertion is
     /// exact and cannot go flaky on a slow machine. The runspaces are in-process, so nothing here needs
     /// administrator rights.</para>
     /// </remarks>
-    [Fact]
-    public async Task ElevatedRunner_ReusesOneRunspaceAcrossCalls()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Runner_ReusesOneRunspaceAcrossCalls(bool isElevated)
     {
         var built = 0;
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
+            isElevated: () => isElevated,
             createRunspace: () =>
             {
                 built++;
@@ -181,36 +186,6 @@ public class PowerShellRunnerTests
     }
 
     /// <summary>
-    /// The unelevated path is untouched: it still builds a runspace per call.
-    /// </summary>
-    /// <remarks>
-    /// Scope, asserted rather than described. The in-process runspace starts no child and opens in a
-    /// fraction of the time, so caching it would add a lifetime to reason about for almost no gain — and
-    /// #2149 is about the out-of-process branch only. Without this, narrowing or widening the elevation
-    /// check would go unnoticed.
-    /// </remarks>
-    [Fact]
-    public async Task UnelevatedRunner_StillBuildsARunspacePerCall()
-    {
-        var built = 0;
-        using var runner = new PowerShellRunner(
-            action => Task.Run(action),
-            isElevated: static () => false,
-            createRunspace: () =>
-            {
-                built++;
-                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
-                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
-                        null, null);
-            });
-
-        for (var call = 0; call < 3; call++)
-            await runner.RunAsync("2 + 2");
-
-        Assert.Equal(3, built);
-    }
-
-    /// <summary>
     /// A reused runspace is released once it has been idle, not held for the session.
     /// </summary>
     /// <remarks>
@@ -222,12 +197,11 @@ public class PowerShellRunnerTests
     /// polls for the state change rather than sleeping a fixed interval and hoping.</para>
     /// </remarks>
     [Fact]
-    public async Task ElevatedRunner_ReleasesTheRunspaceOnceIdle()
+    public async Task Runner_ReleasesTheRunspaceOnceIdle()
     {
         var built = 0;
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
             idleRunspaceLifetime: TimeSpan.FromMilliseconds(200),
             createRunspace: () =>
             {
@@ -268,13 +242,12 @@ public class PowerShellRunnerTests
     /// deterministically instead of by killing something and hoping.</para>
     /// </remarks>
     [Fact]
-    public async Task ElevatedRunner_RebuildsARunspaceThatIsNoLongerOpen()
+    public async Task Runner_RebuildsARunspaceThatIsNoLongerOpen()
     {
         var built = 0;
         System.Management.Automation.Runspaces.Runspace? last = null;
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
             createRunspace: () =>
             {
                 built++;
@@ -305,17 +278,19 @@ public class PowerShellRunnerTests
     /// this test stayed GREEN under a mutation that deleted the gate entirely. Establishing the cache first is
     /// what makes both callers actually reach for the same runspace.</para>
     /// <para>The sleep exists to hold the first pipeline open while the second arrives. It creates the
-    /// overlap rather than being asserted on, so there is no timing in the assertions.</para>
+    /// overlap rather than being asserted on, so there is no timing in the assertions. It is
+    /// <c>Thread::Sleep</c> for the reason given on <see cref="BlockingScript"/>: this was
+    /// <c>Start-Sleep</c>, which the injected runspace cannot load, so it failed at once and held nothing
+    /// open.</para>
     /// <para>Cheap in practice: the type is registered Transient so each consumer has its own runner, and the
     /// consumers that make several calls already serialise them. The gate is the guarantee rather than a
     /// dependency on that staying true.</para>
     /// </remarks>
     [Fact]
-    public async Task ElevatedRunner_OverlappingCallsOnACachedRunspace_BothComplete()
+    public async Task Runner_OverlappingCallsOnACachedRunspace_BothComplete()
     {
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
             createRunspace: () =>
                 (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
                      System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
@@ -323,7 +298,7 @@ public class PowerShellRunnerTests
 
         await runner.RunAsync("2 + 2");   // establishes the cache — see the remarks
 
-        var slow = runner.RunAsync("Start-Sleep -Milliseconds 300; 2 + 2");
+        var slow = runner.RunAsync("[System.Threading.Thread]::Sleep(300); 2 + 2");
         var quick = runner.RunAsync("3 + 3");
 
         var results = await Task.WhenAll(slow, quick);
@@ -341,8 +316,49 @@ public class PowerShellRunnerTests
         Assert.Equal(4, (int)result[0].BaseObject);
     }
 
+    /// <summary>
+    /// A standard user's runner loads the modules the app's own scripts use.
+    /// </summary>
+    /// <remarks>
+    /// #2476, end to end. A standard user's runner used to build an in-process runspace: PowerShell 7 hosted
+    /// from the SDK package alone, which loads <c>Microsoft.PowerShell.Core</c> and nothing else. The Utility
+    /// and Management modules were missing, and PowerShell 7 would not load Appx, ConfigDefender or Dism at all.
+    /// Every script that used them failed and returned normally with nothing, which Preinstalled Apps showed as
+    /// "No Store apps found". CI runs elevated, and so took the other branch, which is why no test saw it.
+    /// <para>Elevation is injected as false, so this is the standard user's path on any machine, and the
+    /// runspace is the real Windows PowerShell 5.1 child. An import that fails is terminating here, so a module
+    /// that cannot load fails the run rather than dropping a name from the list.</para>
+    /// </remarks>
     [Fact]
-    public async Task RunAsync_WhenElevated_IsolatesModuleDiscoveryInChildProcess()
+    public async Task RunAsync_WithoutElevation_LoadsTheModulesTheAppsScriptsUse()
+    {
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: static () => false);
+
+        var results = await runner.RunAsync(
+            "@(3, 1, 2 | Sort-Object | Select-Object -First 1); " +
+            "Test-Path -LiteralPath $env:SystemRoot; " +
+            "foreach ($name in 'Appx', 'ConfigDefender', 'Dism') { Import-Module -Name $name -ErrorAction Stop; $name }");
+
+        Assert.Equal(
+            ["1", "True", "Appx", "ConfigDefender", "Dism"],
+            results.Select(static item => item.BaseObject.ToString()).ToList());
+    }
+
+    /// <summary>
+    /// The runspace's child discovers modules from the machine-owned roots only, whatever the elevation.
+    /// </summary>
+    /// <remarks>
+    /// For an administrator this is the isolation boundary: a module under a user-writable path must never run
+    /// with the administrator token. For a standard user, whose runspace has been the same child since #2476,
+    /// it keeps one module policy for both, and it keeps the app's scripts on the inbox cmdlets they were
+    /// written against. A personal module that exports <c>Get-NetAdapter</c> would otherwise be found first.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_IsolatesModuleDiscoveryInChildProcess(bool isElevated)
     {
         const string marker = "UNTRUSTED_MODULE_EXECUTED";
         var tempRoot = Path.Combine(
@@ -369,9 +385,9 @@ public class PowerShellRunnerTests
                     .Where(static path => !string.IsNullOrWhiteSpace(path)));
             Environment.SetEnvironmentVariable("PSModulePath", inheritedModulePath);
 
-            var runner = new PowerShellRunner(
+            using var runner = new PowerShellRunner(
                 action => Task.Run(action),
-                isElevated: static () => true);
+                isElevated: () => isElevated);
             var sawCommandNotFound = false;
             runner.LineReceived += line =>
                 sawCommandNotFound |= line.Kind == Models.OutputKind.Error;
@@ -493,30 +509,47 @@ public class PowerShellRunnerTests
         Assert.Contains(lines, s => s.Contains("hello-from-ps"));
     }
 
+    /// <summary>
+    /// A warning reaches <see cref="PowerShellRunner.LineReceived"/> as a warning line.
+    /// </summary>
+    /// <remarks>
+    /// This used to assert only that the script completed, and a comment put the missing warning down to
+    /// ambient preferences. <c>Write-Warning</c> is a Utility cmdlet, and the in-process runspace a standard
+    /// user's runner built could not load Utility (#2476), so on such a machine the script failed and still
+    /// completed normally. Every runspace is now the Windows PowerShell 5.1 child, so the warning is asserted.
+    /// </remarks>
     [Fact]
     public async Task RunAsync_EmitsWarnings_AsWarningKind()
     {
-        // Under InitialSessionState.CreateDefault2 the Warning stream can be
-        // silenced by ambient preferences in some hosts. We only assert that
-        // the runner processes the script to completion; the stream mapping is
-        // exercised indirectly by the Info/Error tests below.
-        var runner = new PowerShellRunner();
-        var ex = await Record.ExceptionAsync(async () =>
-            await runner.RunAsync("Write-Warning 'beware'"));
-        Assert.Null(ex);
+        using var runner = new PowerShellRunner();
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        runner.LineReceived += lines.Enqueue;
+
+        await runner.RunAsync("Write-Warning 'beware'");
+
+        Assert.Contains(lines, line =>
+            line.Kind == Models.OutputKind.Warning && line.Text.Contains("beware", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// An error reaches <see cref="PowerShellRunner.LineReceived"/> as an error line carrying its own text.
+    /// </summary>
+    /// <remarks>
+    /// The text is asserted, not only the kind. <c>Write-Error</c> is a Utility cmdlet too, and where the
+    /// runspace could not load it (#2476), the "module could not be loaded" error was an error line of its
+    /// own, so asserting the kind alone passed for the wrong reason.
+    /// </remarks>
     [Fact]
     public async Task RunAsync_EmitsErrors_AsErrorKind()
     {
-        var runner = new PowerShellRunner();
-        var gotError = false;
-        runner.LineReceived += l =>
-        {
-            if (l.Kind == Models.OutputKind.Error) gotError = true;
-        };
+        using var runner = new PowerShellRunner();
+        var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
+        runner.LineReceived += lines.Enqueue;
+
         await runner.RunAsync("Write-Error 'nope'");
-        Assert.True(gotError);
+
+        Assert.Contains(lines, line =>
+            line.Kind == Models.OutputKind.Error && line.Text.Contains("nope", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -551,10 +584,10 @@ public class PowerShellRunnerTests
     /// late" from "the token fired on time and was ignored", which is the whole question.</para>
     ///
     /// <para>Error lines are captured because of a trap this bug already produced twice: on a dev box
-    /// <c>Start-Sleep</c> does not exist in this runner's runspace — <c>CreateDefault2()</c> loads
-    /// <c>Microsoft.PowerShell.Core</c> only — so the script errors instantly, returns normally, and a
-    /// cancellation that never happened reads as a fast success. If that is what is happening, the captured
-    /// error says so instead of leaving the next person to rediscover it.</para>
+    /// <c>Start-Sleep</c> did not exist in this runner's runspace until #2476 — <c>CreateDefault2()</c> loads
+    /// <c>Microsoft.PowerShell.Core</c> only — so the script errored instantly, returned normally, and a
+    /// cancellation that never happened read as a fast success. If anything like that happens again, the
+    /// captured error says so instead of leaving the next person to rediscover it.</para>
     /// </remarks>
     [Fact]
     public async Task RunAsync_SupportsCancellation()
@@ -631,8 +664,8 @@ public class PowerShellRunnerTests
     /// <para>Three seconds of real waiting, deliberately: a shorter block would not reliably still be
     /// running when the cancel arrives, and a cancel that lands before the script starts is a different
     /// scenario with its own test. <c>Thread::Sleep</c> rather than <c>Start-Sleep</c> because the latter
-    /// needs <c>Microsoft.PowerShell.Utility</c>, which the in-process runspace does not load — it would
-    /// fail instantly on a dev box and pin nothing at all.</para>
+    /// needs <c>Microsoft.PowerShell.Utility</c>, which the in-process runspace a dev box used until #2476
+    /// could not load — it failed instantly there and pinned nothing at all.</para>
     ///
     /// <para><b>Either cancellation message is correct here, and finding out why corrected the model above.</b>
     /// Running this locally reported "stopped by cancellation" after the full three seconds: the stop stays
@@ -725,7 +758,13 @@ public class PowerShellRunnerTests
 
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => false,
+            // In process on purpose, as a standard user's runspace was until #2476. The subject is the open
+            // window, and a cold powershell.exe start inside it would add the child's start-up to what is
+            // measured.
+            createRunspace: static () =>
+                (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                     System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                 null, null),
             openRunspace: async runspace =>
             {
                 reachedOpen.Release();
@@ -798,7 +837,13 @@ public class PowerShellRunnerTests
 
         using var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => false,
+            // In process on purpose, as a standard user's runspace was until #2476. The subject is the open
+            // window, and a cold powershell.exe start inside it would add the child's start-up to what is
+            // measured.
+            createRunspace: static () =>
+                (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                     System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                 null, null),
             openRunspace: async runspace =>
             {
                 reachedOpen.Release();
@@ -845,9 +890,9 @@ public class PowerShellRunnerTests
     /// executing. <c>EndInvoke</c> then throws <c>PipelineStoppedException</c> and the translation arm is
     /// what has to convert it — a different line of the runner from the one the test above exercises.</para>
     /// <para>The script is deliberately module-free. <c>Start-Sleep</c> lives in
-    /// <c>Microsoft.PowerShell.Utility</c>, which <c>CreateDefault2()</c> does not load, so on a dev box it
-    /// fails instantly with "the module could not be loaded" and the script returns in milliseconds —
-    /// a cancellation that never happened reading as a fast pass. That trap cost a whole round of
+    /// <c>Microsoft.PowerShell.Utility</c>, which <c>CreateDefault2()</c> does not load, so on a dev box, until
+    /// #2476, it failed instantly with "the module could not be loaded" and the script returned in
+    /// milliseconds — a cancellation that never happened reading as a fast pass. That trap cost a whole round of
     /// investigation on #2206; <c>[System.Threading.Thread]::Sleep</c> needs no module and blocks for real.
     /// The assertion that the probe actually blocked is what keeps this test from repeating the mistake.</para>
     /// </remarks>

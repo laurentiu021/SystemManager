@@ -40,6 +40,18 @@ public sealed partial class DefenderViewModel : ViewModelBase
     [ObservableProperty] private bool _cfaEnabled;
     [ObservableProperty] private string? _selectedExclusion;
 
+    // Windows shows the exclusion lists only to an administrator. Without this the card said "No exclusion
+    // folders" to a standard user, which is a claim about the machine the tab never checked (#2476).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExclusionsEmptyTitle), nameof(ExclusionsEmptyMessage))]
+    private bool _exclusionsReadable = true;
+
+    public string ExclusionsEmptyTitle => ExclusionsReadable ? "No exclusion folders" : "Exclusions are hidden";
+
+    public string ExclusionsEmptyMessage => ExclusionsReadable
+        ? "Add a folder above to exclude it from Defender scans."
+        : "Windows shows Defender's exclusions only to an administrator. Use \"Run as administrator\" to see and change them.";
+
     public DefenderViewModel(DefenderService service, ISessionRestorePoint restorePoint)
     {
         _service = service;
@@ -210,6 +222,7 @@ public sealed partial class DefenderViewModel : ViewModelBase
         MapsDisplay = status.MapsDisplay;
         PuaEnabled = status.PuaProtection == 1;
         CfaEnabled = status.ControlledFolderAccess == 1;
+        ExclusionsReadable = status.ExclusionsReadable;
         ExclusionPaths.ReplaceWith(status.ExclusionPaths);
         RemoveExclusionCommand.NotifyCanExecuteChanged();
     }

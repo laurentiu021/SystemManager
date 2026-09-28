@@ -10,8 +10,8 @@ namespace SysManager.Tests;
 /// The hosted PowerShell must not be able to report anything anywhere.
 /// </summary>
 /// <remarks>
-/// The in-process runspace is the PowerShell 7 SDK, and <c>System.Management.Automation</c> ships
-/// <c>Microsoft.ApplicationInsights</c> for its telemetry subsystem — resolved in the dependency graph and
+/// The runner hosts the PowerShell 7 SDK to drive its Windows PowerShell child, and <c>System.Management.Automation</c>
+/// ships <c>Microsoft.ApplicationInsights</c> for its telemetry subsystem — resolved in the dependency graph and
 /// bundled into the self-contained single-file .exe. PowerShell gates that subsystem on one environment
 /// variable and nothing else, so the opt-out is the whole defence and deserves a test rather than trust.
 /// </remarks>

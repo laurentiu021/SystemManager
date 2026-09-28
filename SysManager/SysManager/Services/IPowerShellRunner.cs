@@ -34,7 +34,7 @@ public interface IPowerShellRunner
 
     /// <summary>
     /// Execute a script and return the collected PSObject results.
-    /// When SysManager is elevated, execution uses Windows PowerShell 5.1 and crosses
+    /// Execution uses Windows PowerShell 5.1, elevated or not, and crosses
     /// an out-of-process remoting boundary. Scripts must remain PowerShell 5.1-compatible,
     /// project complex results to explicit properties, and callers must not rely on live
     /// object identity or methods after deserialization.

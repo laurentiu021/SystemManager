@@ -11,13 +11,27 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Runs PowerShell scripts with live streaming of all output streams. Normal sessions
-/// use an in-process runspace; elevated sessions use an isolated Windows PowerShell 5.1
-/// child so per-user module paths never enter an administrator runspace.
+/// Runs PowerShell scripts with live streaming of all output streams. Every runspace is an isolated
+/// Windows PowerShell 5.1 child process, elevated or not, and its module discovery is limited to
+/// machine-owned paths, so per-user module paths never enter an administrator runspace.
+///
+/// <para><b>Why never in-process (#2476).</b> An in-process runspace here is PowerShell 7 hosted from
+/// the <c>System.Management.Automation</c> package alone, and <c>InitialSessionState.CreateDefault2()</c>
+/// gives it <c>Microsoft.PowerShell.Core</c> and nothing else:</para>
+/// <list type="bullet">
+///   <item>The PowerShell 7 built-in modules (Utility, Management, Security) are not shipped with the app.</item>
+///   <item>PowerShell 7 will not load the Windows PowerShell modules the scripts use: Appx, ConfigDefender, Dism.</item>
+/// </list>
+/// <para>Standard-user sessions used that runspace. Every script that named <c>Select-Object</c>,
+/// <c>Test-Path</c>, <c>Get-AppxPackage</c> or <c>Get-MpPreference</c> therefore failed with "the module
+/// could not be loaded" and returned normally with nothing. Preinstalled Apps showed that as "No Store apps
+/// found", and Defender Tweaks as a status it had never read. Administrator sessions, and therefore CI,
+/// already ran the 5.1 child, which is why nothing caught it.</para>
 ///
 /// <para><b>Security note (SEC-005 / SEC-M8):</b> ExecutionPolicy is set to Bypass because
 /// SysManager only executes its own static scripts — never user-supplied or downloaded
-/// scripts. Elevated child processes also receive a machine-owned-only module path.</para>
+/// scripts. Every runspace child receives a machine-owned-only module path, and so does a
+/// <c>powershell.exe</c> this class starts directly when the session is elevated.</para>
 ///
 /// <para><b>SECURITY CONTRACT:</b> Callers MUST only pass hard-coded script strings to
 /// RunAsync and RunScriptViaPwshAsync. User input MUST NEVER be interpolated into scripts.
@@ -123,8 +137,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     }
 
     /// <summary>
-    /// Execute a script and return the collected PSObject results. Elevated execution
-    /// is isolated in a child process with a sanitized module path.
+    /// Execute a script and return the collected PSObject results. Every run is isolated
+    /// in a Windows PowerShell 5.1 child process with a sanitized module path.
     /// All streams are forwarded via <see cref="LineReceived"/> for live UI display.
     /// </summary>
     public async Task<Collection<PSObject>> RunAsync(
@@ -152,9 +166,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     {
         // Open the runspace on a thread-pool thread — this can take
         // several hundred milliseconds and must not block the UI.
-        var lease = await LeaseRunspaceAsync().ConfigureAwait(false);
-        using var perCall = lease.Reusable ? null : lease.Resources;
-        var runspace = lease.Resources.Runspace;
+        var runspace = (await LeaseRunspaceAsync().ConfigureAwait(false)).Runspace;
 
         using var ps = PowerShell.Create();
         ps.Runspace = runspace;
@@ -593,8 +605,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// Opts the hosted PowerShell out of telemetry before any runspace exists.
     /// </summary>
     /// <remarks>
-    /// The in-process runspace is the PowerShell 7 SDK, and <c>System.Management.Automation</c> pulls in
-    /// <c>Microsoft.ApplicationInsights</c> for one reason: its telemetry subsystem. That DLL is not
+    /// SysManager hosts the PowerShell 7 engine, <c>System.Management.Automation</c>, to drive its Windows
+    /// PowerShell child over remoting, and that package pulls in <c>Microsoft.ApplicationInsights</c> for one
+    /// reason: its telemetry subsystem. That DLL is not
     /// theoretical here — it resolves in the dependency graph and ships inside the self-contained
     /// single-file .exe. PowerShell gates the whole subsystem on this one variable and nothing else.
     /// <para>SysManager's standing promise, repeated on every release page, is that it transfers nothing
@@ -606,8 +619,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// point — instead of only the one that remembers to call it.</para>
     /// <para><see cref="EnvironmentVariableTarget.Process"/> deliberately. This changes nothing the user
     /// can see or keep; the machine and user scopes are what <c>EnvironmentVariableService</c> edits on
-    /// their behalf, and writing there would be a side effect nobody asked for. The elevated path starts
-    /// Windows PowerShell 5.1 as a child process, which inherits this, so one assignment covers both.</para>
+    /// their behalf, and writing there would be a side effect nobody asked for. Every runspace is a Windows
+    /// PowerShell 5.1 child process, which inherits this, so one assignment covers both engines.</para>
     /// </remarks>
     static PowerShellRunner() => OptOutOfPowerShellTelemetry();
 
@@ -632,13 +645,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         // depend on type-initialisation order. Idempotent, so calling it per runspace costs nothing.
         OptOutOfPowerShellTelemetry();
 
-        if (!_isElevated)
-        {
-            var initialSessionState = InitialSessionState.CreateDefault2();
-            initialSessionState.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
-            return (RunspaceFactory.CreateRunspace(initialSessionState), null, null);
-        }
-
+        // Out of process for every session, elevated or not. The class remarks say what an in-process
+        // runspace cannot load here (#2476).
         var processInstance = new PowerShellProcessInstance(
             new Version(5, 1),
             credential: null,
@@ -649,6 +657,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         Runspace? runspace = null;
         try
         {
+            // Whatever the session's own elevation: the child always discovers modules from the machine-owned
+            // roots only, so one module policy covers both kinds of session.
             ApplyTrustedPowerShellModulePath(
                 processInstance.Process.StartInfo,
                 isElevated: true,
@@ -675,7 +685,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             var (runspace, processInstance, process) = _createRunspace();
             return new RunspaceResources(runspace, processInstance, process, ReleaseProcess);
         }
-        catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
+        catch (Exception ex) when (IsPowerShellHostUnavailable(ex))
         {
             throw CreatePowerShellHostUnavailableException(ex);
         }
@@ -685,7 +695,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// How long a reusable runspace may sit unused before it and its child process are released.
     /// </summary>
     /// <remarks>
-    /// The benefit of reuse is in BURSTS, not over a session: <c>DnsService</c> makes six elevated calls,
+    /// The benefit of reuse is in BURSTS, not over a session: <c>DnsService</c> makes six calls,
     /// <c>EdgeOneDriveService</c> four, three services three each, and those arrive together. Twenty seconds
     /// covers a burst with room for a slow one in the middle.
     /// <para>Keeping it for the session instead would be the obvious reading of "one runspace per session"
@@ -698,24 +708,20 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     internal static readonly TimeSpan IdleRunspaceLifetime = TimeSpan.FromSeconds(20);
 
     /// <summary>
-    /// A runspace ready to run a pipeline, and whether it belongs to the cache or to this call alone.
-    /// </summary>
-    private readonly record struct RunspaceLease(RunspaceResources Resources, bool Reusable);
-
-    /// <summary>
     /// True when <paramref name="ex"/> means "the pipeline was stopped", whichever transport reported it.
     /// </summary>
     /// <remarks>
     /// The type depends on WHERE the pipeline ran, which is why naming one of them was not enough (#2206):
     /// <list type="bullet">
-    /// <item>unelevated, in-process runspace → <see cref="PipelineStoppedException"/> directly;</item>
-    /// <item>elevated, out-of-process Windows PowerShell 5.1 over remoting →
+    /// <item>an in-process runspace, which a test can still inject → <see cref="PipelineStoppedException"/>
+    /// directly;</item>
+    /// <item>the out-of-process Windows PowerShell 5.1 child, which every session uses since #2476 →
     /// <see cref="RemoteException"/> whose <c>SerializedRemoteException</c> is the stopped-pipeline error,
     /// because the failure happened in the child and was serialized across the transport.</item>
     /// </list>
     /// <para>The arm above named the in-process type only, so on an ELEVATED runspace it never matched and
-    /// cancellation escaped as a raw PowerShell error. That is invisible on a developer machine, which runs
-    /// unelevated and takes the first branch, and it is what CI kept hitting: the failure reported
+    /// cancellation escaped as a raw PowerShell error. That was invisible on a developer machine, which then
+    /// ran unelevated in process and took the first branch, and it is what CI kept hitting: the failure reported
     /// <c>RemoteException (The pipeline has been stopped.)</c> — the right event, the wrong type, no
     /// translation. Nine words of a CI log that a local run could not have produced.</para>
     /// <para><b>The remote arm checks the TYPE NAME, not the type.</b> Remoting does not hand back the
@@ -747,7 +753,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// guarded by <c>cancellationToken.IsCancellationRequested</c>, so this is only ever consulted after we
     /// have called <c>Stop()</c> ourselves. With no cancellation requested the exception propagates as
     /// itself, which is what a real remoting failure must do.</para>
-    /// <para>Found by CI, and only by CI: the in-process runspace this workstation uses raises
+    /// <para>Found by CI, and only by CI: the in-process runspace a developer machine then used raised
     /// <c>PipelineStoppedException</c>, which the method above already matches. Closing the lost-stop window
     /// in #2286 meant the stop started landing on the elevated out-of-process transport too, where
     /// <c>EndInvoke</c> instead threw <c>PSRemotingDataStructureException("The remote pipeline has been
@@ -763,10 +769,10 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// Returns an open runspace: the cached one when it is still usable, otherwise a fresh one.
     /// </summary>
     /// <remarks>
-    /// <para><b>Elevated only.</b> The in-process runspace the unelevated path uses starts no child process
-    /// and opens in a fraction of the time, so caching it would add a lifetime to reason about and buy
-    /// almost nothing. The out-of-process branch is the one that spawns <c>powershell.exe</c> 5.1 and
-    /// completes a remoting handshake, and it is the only branch #2149 is about.</para>
+    /// <para><b>Every runner.</b> Each runspace spawns <c>powershell.exe</c> 5.1 and completes a remoting
+    /// handshake, which is the slow part (#2149). Until #2476 only elevated runners did; the unelevated path
+    /// built a per-call in-process runspace instead, and that runspace could not load the modules the scripts
+    /// use.</para>
     /// <para><b>State is re-checked every time, not assumed.</b> A cached runspace can be broken by things
     /// outside this class — the child killed by a user or by cleanup, the remoting channel dropped — and a
     /// runspace that is not <c>Opened</c> cannot run a pipeline. Anything other than <c>Opened</c> means
@@ -774,28 +780,12 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
     /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
     /// </remarks>
-    private async Task<RunspaceLease> LeaseRunspaceAsync()
+    private async Task<RunspaceResources> LeaseRunspaceAsync()
     {
-        if (!_isElevated)
-        {
-            var single = CreateRunspaceResources();
-            try
-            {
-                await OpenRunspaceAsync(single.Runspace).ConfigureAwait(false);
-            }
-            catch
-            {
-                single.Dispose();
-                throw;
-            }
-
-            return new RunspaceLease(single, Reusable: false);
-        }
-
         if (_cached is { } cached)
         {
             if (cached.Runspace.RunspaceStateInfo.State == RunspaceState.Opened)
-                return new RunspaceLease(cached, Reusable: true);
+                return cached;
 
             Log.Debug("PowerShell: cached runspace is {State}; rebuilding it",
                       cached.Runspace.RunspaceStateInfo.State);
@@ -815,7 +805,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         }
 
         _cached = fresh;
-        return new RunspaceLease(fresh, Reusable: true);
+        return fresh;
     }
 
     /// <summary>
@@ -823,7 +813,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// </summary>
     /// <remarks>
     /// Called from the <c>finally</c> of every run, inside the pipeline gate, so it cannot race the lease.
-    /// Nothing is armed when there is no cache to evict — the unelevated path never creates a timer at all.
+    /// Nothing is armed when there is no cache to evict, which is the case after a lease that failed to open.
     /// </remarks>
     private void ArmIdleEviction()
     {
@@ -883,7 +873,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// How long to wait for a runspace to become ready before giving up on it.
     /// </summary>
     /// <remarks>
-    /// Deliberately generous rather than tight. Opening the elevated runspace starts a <c>powershell.exe</c>
+    /// Deliberately generous rather than tight. Opening a runspace starts a <c>powershell.exe</c>
     /// 5.1 child and completes a handshake with it, and a cold start on a slow or busy machine is legitimately
     /// slow — a timeout that fired on that would turn a working feature into a broken one, which is worse than
     /// the defect it fixes. What it has to beat is not "slow", it is "never".
@@ -905,10 +895,6 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         }
         catch (TimeoutException ex)
         {
-            // NOT gated on _isElevated, unlike the mapping below. The out-of-process path is elevated-only, so
-            // that is where a hang has actually been observed — but an unbounded wait is the wrong behaviour
-            // either way, and gating this would leave the in-process path with no answer at all.
-            //
             // Thrown as RuntimeException like its neighbour, because callers already map that onto their
             // established unavailable/failed states. A timeout that surfaced as a novel exception type would
             // reach them as an unhandled fault instead of as "PowerShell is not available".
@@ -917,11 +903,12 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
                 + "seconds and the request was abandoned.",
                 ex);
         }
-        catch (Exception ex) when (_isElevated && IsPowerShellHostUnavailable(ex))
+        catch (Exception ex) when (IsPowerShellHostUnavailable(ex))
         {
-            // Keep the isolation boundary fail-closed. Callers already map RuntimeException
-            // to their established unavailable/failed states; an in-process fallback here
-            // would reintroduce per-user module discovery under the administrator token.
+            // Keep the isolation boundary fail-closed. Callers already map RuntimeException to their
+            // established unavailable/failed states. An in-process fallback here would reintroduce per-user
+            // module discovery under the administrator token, and for a standard user it would bring back a
+            // runspace that cannot load the scripts' modules (#2476).
             throw CreatePowerShellHostUnavailableException(ex);
         }
     }
@@ -947,7 +934,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// Tears down a runspace and the child process behind it, in dependency order.
     /// </summary>
     /// <param name="releaseProcess">
-    /// How to release the child. Defaults to disposing the handle, which is all this used to do; the elevated
+    /// How to release the child. Defaults to disposing the handle, which is all this used to do; the runspace
     /// path passes <see cref="ReleaseProcess"/>, which also stops a child that is still running.
     /// </param>
     /// <remarks>

@@ -393,8 +393,10 @@ Edit Windows environment variables without the cramped built-in dialog:
   never made — here and on every tab that takes one automatically
 - **Restore** the PC to a selected point, with a clear confirmation that warns
   Windows will restart and that programs/drivers added since that point are removed
-- Admin elevation banner — viewing the list works unprivileged; creating and
-  restoring need administrator rights
+- Admin elevation banner. Listing, creating and restoring all need administrator
+  rights, because Windows answers a standard user's request for the list with
+  "Access denied". The tab says so, rather than reporting that there are no
+  restore points
 
 ### Legacy Panels
 - One-click launcher for the classic Windows applets that newer releases keep
@@ -1158,7 +1160,9 @@ Manage Microsoft Defender without digging through Windows Security:
 - **Toggle PUA protection and Controlled Folder Access** (ransomware protection)
 - **Scan exclusions** — add or remove folders Defender should skip (handy for
   big game libraries); paths are validated and additions never replace your
-  existing exclusions
+  existing exclusions. Windows shows the list only to an administrator, so
+  without elevation the card says the exclusions are hidden rather than showing
+  an empty list
 - **Honest about Tamper Protection** — if it's on, Windows can silently ignore
   changes, so the tab detects it, warns you, and only reports a change as done
   after reading it back and confirming Windows actually applied it

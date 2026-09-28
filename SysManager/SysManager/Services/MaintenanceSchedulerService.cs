@@ -143,8 +143,8 @@ public sealed class MaintenanceSchedulerService
         # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
         # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,
         # and -StartWhenAvailable then fired it late, whenever the condition next cleared.
-        # [TimeSpan]::FromHours, not New-TimeSpan: the runner's runspace is InitialSessionState.CreateDefault2,
-        # which loads Microsoft.PowerShell.Core only — a Utility cmdlet here cannot be relied on.
+        # [TimeSpan]::FromHours, not New-TimeSpan: a .NET call needs no module. Until #2476 a standard user's
+        # runspace loaded Microsoft.PowerShell.Core only, and a Utility cmdlet here failed there.
         $settingsArgs = @{
             StartWhenAvailable = $true
             DontStopOnIdleEnd  = $true

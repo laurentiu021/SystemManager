@@ -32,28 +32,39 @@ public sealed class DefenderService
 
     public DefenderService(IPowerShellRunner ps) => _ps = ps;
 
+    /// <summary>
+    /// The status read. Both reads stop on failure.
+    /// </summary>
+    /// <remarks>
+    /// Without <c>-ErrorAction Stop</c>, a failed <c>Get-MpPreference</c> left <c>$p</c> null and the object
+    /// below was still emitted, with every field null. <see cref="ParseStatus"/> turns a null "Disable" flag
+    /// into protection ON, so a status that was never read showed real-time protection "On" (#2476). A failed
+    /// read now throws, and <see cref="GetStatusAsync"/> reports it as <see cref="DefenderStatus.Unavailable"/>.
+    /// <para><c>internal</c> so a test can run this exact text against shadowed Defender cmdlets.</para>
+    /// </remarks>
+    internal const string StatusScript = """
+        $p = Get-MpPreference -ErrorAction Stop
+        $s = Get-MpComputerStatus -ErrorAction Stop
+        [PSCustomObject]@{
+            DisableRealtimeMonitoring   = $p.DisableRealtimeMonitoring
+            PUAProtection               = [int]$p.PUAProtection
+            MAPSReporting               = [int]$p.MAPSReporting
+            EnableControlledFolderAccess = [int]$p.EnableControlledFolderAccess
+            ExclusionPath               = @($p.ExclusionPath)
+            ExclusionExtension          = @($p.ExclusionExtension)
+            ExclusionProcess            = @($p.ExclusionProcess)
+            IsTamperProtected           = [bool]$s.IsTamperProtected
+        }
+        """;
+
     /// <summary>Read the current Defender status, or <see cref="DefenderStatus.Unavailable"/>.</summary>
     public async Task<DefenderStatus> GetStatusAsync(CancellationToken ct = default)
     {
         try
         {
-            const string script = """
-                $p = Get-MpPreference
-                $s = Get-MpComputerStatus
-                [PSCustomObject]@{
-                    DisableRealtimeMonitoring   = $p.DisableRealtimeMonitoring
-                    PUAProtection               = [int]$p.PUAProtection
-                    MAPSReporting               = [int]$p.MAPSReporting
-                    EnableControlledFolderAccess = [int]$p.EnableControlledFolderAccess
-                    ExclusionPath               = @($p.ExclusionPath)
-                    ExclusionExtension          = @($p.ExclusionExtension)
-                    ExclusionProcess            = @($p.ExclusionProcess)
-                    IsTamperProtected           = [bool]$s.IsTamperProtected
-                }
-                """;
-            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            Collection<PSObject> results = await _ps.RunAsync(StatusScript, cancellationToken: ct).ConfigureAwait(false);
             if (results.Count == 0) return DefenderStatus.Unavailable;
-            return ParseStatus(results[0]);
+            return HideWithheldExclusions(ParseStatus(results[0]), Helpers.AdminHelper.IsElevated());
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
@@ -61,6 +72,21 @@ public sealed class DefenderService
             return DefenderStatus.Unavailable;
         }
     }
+
+    /// <summary>
+    /// Empties the exclusion lists and marks them unreadable when the session is not elevated.
+    /// </summary>
+    /// <remarks>
+    /// Windows shows the exclusion lists only to an administrator. For a standard user it puts the sentence
+    /// "N/A: Must be an administrator to view exclusions", in the display language, where each list should
+    /// be. That sentence would otherwise be listed as an excluded folder. The decision rests on the session's
+    /// elevation, not on matching the sentence, so it holds in any language; the PowerShell child that ran
+    /// the read has the same token as the app.
+    /// </remarks>
+    internal static DefenderStatus HideWithheldExclusions(DefenderStatus status, bool elevated) =>
+        elevated
+            ? status
+            : status with { ExclusionPaths = [], ExclusionExtensions = [], ExclusionProcesses = [], ExclusionsReadable = false };
 
     /// <summary>Parse a Get-MpPreference/Get-MpComputerStatus projection into a status.</summary>
     public static DefenderStatus ParseStatus(PSObject obj)

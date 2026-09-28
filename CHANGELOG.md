@@ -10,6 +10,44 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.4] - 2026-09-28
+
+**Several tabs work again for anyone who opens SysManager without "Run as administrator".** Preinstalled
+Apps found no apps, DNS found no network adapter, Scheduled Maintenance could not be turned on, and Defender
+Tweaks showed protection as "On" without having read it. They now read the PC as they already did for an
+administrator, and where Windows itself keeps something from a standard user, the tab says so.
+
+### Fixed
+
+- **Tabs that use PowerShell came back empty for anyone not running as administrator.** A standard user's
+  session ran SysManager's PowerShell scripts inside the app, on a PowerShell that has only its core
+  commands: none of the everyday ones such as `Select-Object`, `Sort-Object` or `Test-Path`, and none of the
+  Windows modules for Store apps, Defender or optional features. Every script that used one failed and came
+  back with nothing, and nothing said so. Preinstalled Apps showed "No Store apps found", DNS could not find
+  the active network adapter, Scheduled Maintenance could not register its task, Task Scheduler never showed
+  a task's last and next run, and Defender Tweaks showed a status it had never read. Every session now runs
+  its scripts in Windows PowerShell 5.1, as an administrator's already did, and finds modules only in the
+  machine-wide folders, never in the user's own. The first PowerShell action on a tab can take a moment
+  longer while Windows PowerShell starts. Standard-user sessions have used the in-app PowerShell since the
+  first release, v0.3.0; since v1.56.2 moved administrator sessions to Windows PowerShell 5.1, only standard
+  users were affected.
+- **Restore Points: a standard user is told the list needs administrator, not that there are none.**
+  Windows answers a standard user's request for the list with "Access denied". The tab reported that as "No
+  restore points found. System Restore may be turned off for this PC." on PCs that had several, and its
+  banner said the list could be viewed without elevation. It now says the list could not be read and that
+  "Run as administrator" shows it, and the banner and subtitle say listing needs administrator too. Present
+  since the tab was added in v1.23.0.
+- **Defender Tweaks: a status that could not be read is shown as unavailable, not as protection "On".** When
+  a Defender read failed, the tab still built a status out of nothing, and a missing "turned off" setting
+  reads as protection on. That was every standard user's status until the fix above, and it is still what
+  happens when the Defender service is not running. The read now stops, and the tab shows the status as
+  unavailable. Present since the tab was added in v1.39.0.
+- **Defender Tweaks: a standard user's exclusion list says it is hidden.** Windows shows Defender's
+  exclusions only to an administrator and gives a standard user the sentence "N/A: Must be an administrator
+  to view exclusions" in their place. The card said "No exclusion folders", which it could not know, and
+  with the first fix above it would have listed that sentence as a folder. It now says the exclusions are
+  hidden and that "Run as administrator" shows them. Present since the card was added in v1.45.0.
+
 ## [1.114.3] - 2026-09-25
 
 **The Dashboard's Quick Cleanup no longer runs at the same time as another cleanup.** While a disk

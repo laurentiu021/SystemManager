@@ -42,6 +42,12 @@ public sealed record DefenderStatus(
     public string MapsDisplay => MapsLabel(MapsReporting);
     public string RealtimeDisplay => RealtimeProtection ? "On" : "Off";
 
+    /// <summary>
+    /// False when Windows withheld the exclusion lists, which it does for a standard user. The three lists
+    /// are then empty because they are unknown, not because there are no exclusions.
+    /// </summary>
+    public bool ExclusionsReadable { get; init; } = true;
+
     public static DefenderStatus Unavailable { get; } =
         new(false, false, false, 0, 0, 0, [], [], []);
 }

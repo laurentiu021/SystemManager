@@ -13,14 +13,14 @@ namespace SysManager.Tests;
 /// </summary>
 /// <remarks>
 /// Cancelling a PowerShell run calls <c>ps.Stop()</c>, and the exception that surfaces depends on WHERE the
-/// pipeline ran. Unelevated, the runspace is in-process and <c>EndInvoke</c> throws
-/// <see cref="PipelineStoppedException"/> directly. Elevated, the runspace is an out-of-process Windows
-/// PowerShell 5.1 child reached over remoting, and the failure comes back as a
-/// <see cref="RemoteException"/> carrying a serialized copy.
+/// pipeline ran. In an in-process runspace <c>EndInvoke</c> throws <see cref="PipelineStoppedException"/>
+/// directly. In the out-of-process Windows PowerShell 5.1 child reached over remoting, the failure comes back
+/// as a <see cref="RemoteException"/> carrying a serialized copy. At the time only elevated sessions used the
+/// child; since #2476 every session does, and the in-process shape is what an injected test runspace raises.
 ///
 /// <para>The runner's translation arm named the in-process type only, so on an elevated runspace it never
 /// matched and cancellation escaped as a raw PowerShell error rather than as
-/// <c>OperationCanceledException</c>. A developer machine runs unelevated and cannot see that; CI runs as
+/// <c>OperationCanceledException</c>. A developer machine ran unelevated and could not see that; CI runs as
 /// an administrator and hit it repeatedly, reporting
 /// <c>RemoteException (The pipeline has been stopped.)</c>.</para>
 ///
@@ -96,7 +96,8 @@ public class PipelineStoppedDetectionTests
     // Closing the lost-stop window meant the stop started landing on the elevated out-of-process transport,
     // where EndInvoke throws PSRemotingDataStructureException("The remote pipeline has been stopped.")
     // rather than the PipelineStoppedException an in-process runspace raises. So a cancellation that now
-    // WORKED surfaced as a raw remoting error. CI found it; this workstation's in-process runspace cannot.
+    // WORKED surfaced as a raw remoting error. CI found it; a workstation's in-process runspace, which a
+    // standard user's session used until #2476, could not.
 
     [Fact]
     public void ARemotingDataStructureFault_IsRecognisedAsOurStop()

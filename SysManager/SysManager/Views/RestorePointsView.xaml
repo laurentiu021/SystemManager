@@ -22,14 +22,14 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Restore Points" Style="{StaticResource Display}"/>
-            <TextBlock Text="List, create, and restore Windows System Restore points. Creating and restoring require administrator rights; restoring restarts Windows to roll the system back."
+            <TextBlock Text="List, create, and restore Windows System Restore points. All three need administrator rights; restoring restarts Windows to roll the system back."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="Creating and restoring restore points require administrator privileges. You can still view existing points without elevation."
-                       ElevatedMessage="Running as administrator — you can create and restore restore points."/>
+                       NotElevatedMessage="Listing, creating and restoring restore points all need administrator privileges. Windows does not show the list to a standard user."
+                       ElevatedMessage="Running as administrator — you can list, create and restore restore points."/>
 
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
@@ -86,8 +86,8 @@
 
                 <!-- Empty state -->
                 <v:EmptyState Glyph="&#xE777;"
-                              Title="No restore points"
-                              Message="Create one above, or enable System Restore in Windows if the list stays empty."
+                              Title="{Binding EmptyTitle}"
+                              Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasPoints, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

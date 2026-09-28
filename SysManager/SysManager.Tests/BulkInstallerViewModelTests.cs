@@ -14,6 +14,9 @@ namespace SysManager.Tests;
 /// Tests for <see cref="BulkInstallerViewModel"/>. Verifies curated app list,
 /// filtering, selection commands, and category logic.
 /// </summary>
+// Serialized: the install tests swap the static DialogService.Instance, which is process-wide shared state.
+// Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+[Collection("ProcessWideStatics")]
 public class BulkInstallerViewModelTests
 {
     // AppIconService gets a temp configDir. With the default it resolves the user's real
@@ -231,11 +234,62 @@ public class BulkInstallerViewModelTests
         vm.DeselectAllCommand.Execute(null);
         var app = vm.Apps[0];
         app.IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: true);
 
         await vm.InstallSelectedCommand.ExecuteAsync(null);
 
         Assert.Equal(BulkInstallerViewModel.AlreadyInstalledStatus, app.Status);
         Assert.Equal("Done. Installed: 0, Already installed: 1, Failed: 0.", vm.StatusMessage);
+    }
+
+    // ── Install Selected asks first, because an install can be an upgrade (#2482) ──
+
+    [Fact]
+    public async Task InstallSelected_WhenTheUserDeclines_InstallsNothing()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        vm.Apps[0].IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);   // the gate ran, and it blocked
+        // Only installs: building the view model runs `winget list` to mark what is already installed.
+        await runner.DidNotReceive().RunProcessAsync(
+            "winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Equal("Install cancelled.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task InstallSelected_WarnsThatAnInstalledAppIsUpgraded_InTheWordsAppUpdatesUses()
+    {
+        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        vm.DeselectAllCommand.Execute(null);
+        vm.Apps[0].IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        var shown = Assert.Single(dialog.Messages);
+        Assert.Contains(vm.Apps[0].Name, shown, StringComparison.Ordinal);
+        Assert.Contains("upgraded instead", shown, StringComparison.Ordinal);
+        Assert.Contains(WingetFailure.UpgradeWarning, shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildInstallConfirmation_NamesTheAppsOnlyWhenThereAreFewEnoughToRead()
+    {
+        var few = BulkInstallerViewModel.BuildInstallConfirmation(["Firefox"]);
+        var many = BulkInstallerViewModel.BuildInstallConfirmation(["A1", "B2", "C3", "D4", "E5", "F6"]);
+
+        Assert.StartsWith("Install 1 app via winget?", few, StringComparison.Ordinal);
+        Assert.Contains("• Firefox", few, StringComparison.Ordinal);
+        Assert.StartsWith("Install 6 apps via winget?", many, StringComparison.Ordinal);
+        Assert.DoesNotContain("• A1", many, StringComparison.Ordinal);
     }
 
     [Theory]

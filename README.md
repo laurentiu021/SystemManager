@@ -1034,7 +1034,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Curated catalog of popular applications grouped by category: Browsers,
   Communication, Media, Development, Utilities, Gaming, Security,
   Office & Productivity, Creativity, Networking & VPN, Runtimes & Frameworks
-- Select multiple apps and install all via winget in one batch operation
+- Select multiple apps and install all via winget in one batch operation. It asks
+  first, naming the apps when there are only a few, and warns that an app that is
+  already installed is upgraded instead when a newer version exists, in the same
+  words App Updates uses
 - **Custom winget search** — search the entire winget repository and add
   any package to your install queue. A search that fails says why, rather than
   "No packages found"

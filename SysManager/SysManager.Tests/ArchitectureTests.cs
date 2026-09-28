@@ -1508,6 +1508,38 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The warning that an upgrade restarts apps and cannot be undone is written once, in
+    /// <c>WingetFailure.UpgradeWarning</c>.
+    /// </summary>
+    /// <remarks>
+    /// Three confirmations can upgrade an app: App Updates, the Dashboard's Update All Apps, and the Bulk
+    /// Installer, because winget turns an install of an installed app into an upgrade. The Dashboard's copy had
+    /// already drifted to a shorter sentence, and the Bulk Installer asked nothing at all (#2482). One constant
+    /// keeps them saying the same thing. The needle is assembled so this file cannot match itself, and comments
+    /// are stripped so a remark that quotes the sentence is not counted.
+    /// </remarks>
+    [Fact]
+    public void TheUpgradeWarning_IsWrittenInOnePlace()
+    {
+        var needle = "Apps may " + "restart";
+        const string theOnePlace = "WingetFailure.cs";
+
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} app source files enumerated — this guard is reading the wrong folder.");
+
+        var holders = files
+            .Where(f => WithoutComments(File.ReadAllText(f)).Contains(needle, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Equal([theOnePlace], holders);
+    }
+
+    /// <summary>
     /// No test hands the PowerShell runner a script that can run forever.
     /// </summary>
     /// <remarks>

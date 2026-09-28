@@ -896,7 +896,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     {
         if (!DialogService.Instance.Confirm(
                 "Upgrade all installed apps that have updates available via winget?\n\n" +
-                "Apps may restart during the upgrade.",
+                WingetFailure.UpgradeWarning,
                 "Confirm Update All Apps"))
             return;
 

@@ -233,6 +233,16 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             return;
         }
 
+        // Confirm, because an install can be an upgrade: winget turns an install of an app that is already there
+        // into an upgrade when a newer version exists, and Select All ticks installed rows too. The same upgrade
+        // asks first on App Updates and on the Dashboard, so it warns in their words (#2482).
+        if (!DialogService.Instance.Confirm(BuildInstallConfirmation(selected.Select(a => a.Name).ToList()),
+                "Confirm Install"))
+        {
+            StatusMessage = "Install cancelled.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = false;
         // Re-entrancy is prevented by the NotBusy CanExecute gate, so the running
@@ -324,6 +334,18 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     /// <summary>The row status for an app that was already installed, with nothing newer to put over it.</summary>
     internal const string AlreadyInstalledStatus = "Already installed";
+
+    /// <summary>
+    /// The question Install Selected asks. It names the apps when there are few enough to read, as App Updates
+    /// does, and warns that an installed one is upgraded instead, in the words every upgrade confirmation uses.
+    /// </summary>
+    internal static string BuildInstallConfirmation(IReadOnlyList<string> names)
+    {
+        var list = names.Count <= 5 ? "\n\n" + string.Join("\n", names.Select(name => "• " + name)) : "";
+        return $"Install {names.Count} app{(names.Count == 1 ? "" : "s")} via winget?{list}\n\n"
+            + "An app that is already installed is upgraded instead when a newer version is available. "
+            + WingetFailure.UpgradeWarning;
+    }
 
     /// <summary>
     /// The end-of-run count. Apps that were already installed get their own figure, and only when there are

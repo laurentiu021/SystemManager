@@ -294,4 +294,80 @@ public class LogsViewModelTests
 
         Assert.Equal("Loaded 42 events from Application", message);
     }
+
+    // ---------- the status line counts every event the load added (#2480) ----------
+
+    /// <summary>
+    /// The load runs under a context that behaves like WPF's: posted work waits in a queue until it is pumped, and
+    /// each piece of work runs under a NEW context instance, as WPF installs a fresh
+    /// <c>DispatcherSynchronizationContext</c> for every dispatcher operation.
+    /// </summary>
+    /// <remarks>
+    /// Without a context, which is how every other test here builds the view model, the batches were added inline
+    /// and the count was right, so no test could see the defect. It needs the real mechanism: the old helper
+    /// compared <see cref="SynchronizationContext.Current"/> with the instance captured at construction, found them
+    /// different after the first <c>await</c>, and queued every batch behind the status line.
+    /// </remarks>
+    [Theory]
+    [InlineData(7)]     // fewer than one batch of 50: the status line said "Loaded 0 events"
+    [InlineData(120)]   // two whole batches and a partial one: it said 100
+    public void Refresh_CountsEveryEventItLoaded(int loaded)
+    {
+        var queue = new Queue<(SendOrPostCallback Work, object? State)>();
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherLikeContext(queue));
+        try
+        {
+            var vm = new LogsViewModel(new EventLogService(), (_, ct) => EventsAsync(loaded, ct));
+
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+            PumpUntilDone(queue, refresh);
+
+            Assert.Equal(loaded, vm.Entries.Count);
+            Assert.Equal($"Loaded {loaded} events from {vm.SelectedLog}", vm.StatusMessage);
+            Assert.False(vm.LoadWasRefused);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    /// <summary>Events that arrive one continuation at a time, as the real reader's do.</summary>
+    private static async IAsyncEnumerable<FriendlyEventEntry> EventsAsync(
+        int count, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            await Task.Yield();
+            ct.ThrowIfCancellationRequested();
+            yield return Make(EventSeverity.Error, $"event {i}", id: i);
+        }
+    }
+
+    /// <summary>
+    /// Runs the queued work, each item under a fresh context, until <paramref name="done"/> has completed and
+    /// nothing is left queued. Single-threaded, so the order is the order WPF would run it in.
+    /// </summary>
+    private static void PumpUntilDone(Queue<(SendOrPostCallback Work, object? State)> queue, Task done)
+    {
+        var ran = 0;
+        while (!done.IsCompleted || queue.Count > 0)
+        {
+            Assert.True(queue.Count > 0, "the load is waiting on something that is not queued here");
+            Assert.True(++ran < 100_000, "the load never finished");
+            var (work, state) = queue.Dequeue();
+            SynchronizationContext.SetSynchronizationContext(new DispatcherLikeContext(queue));
+            work(state);
+        }
+        done.GetAwaiter().GetResult();   // surfaces a fault instead of passing over it
+    }
+
+    private sealed class DispatcherLikeContext(Queue<(SendOrPostCallback Work, object? State)> queue)
+        : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => queue.Enqueue((d, state));
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+    }
 }

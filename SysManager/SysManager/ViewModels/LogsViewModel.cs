@@ -31,7 +31,7 @@ public sealed partial class LogsViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly EventLogService _eventLogs;
-    private readonly SynchronizationContext? _sync;
+    private readonly Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> _readEvents;
     private CancellationTokenSource? _cts;
 
     // Characters that force a CSV field to be quoted. Hoisted to a SearchValues so the
@@ -104,9 +104,20 @@ public sealed partial class LogsViewModel : ViewModelBase
     [ObservableProperty] private bool _loadWasRefused;
 
     public LogsViewModel(EventLogService eventLogs)
+        : this(eventLogs, eventLogs.ReadAsync)
+    {
+    }
+
+    /// <summary>
+    /// Test seam: <paramref name="readEvents"/> stands in for <see cref="EventLogService.ReadAsync"/>, so a test
+    /// can feed the load a known number of events without reading this machine's event logs.
+    /// </summary>
+    internal LogsViewModel(
+        EventLogService eventLogs,
+        Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> readEvents)
     {
         _eventLogs = eventLogs;
-        _sync = SynchronizationContext.Current;
+        _readEvents = readEvents;
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = EntryFilter;
         // Disable Refresh while a scan runs — a second concurrent Refresh lets the
@@ -227,14 +238,20 @@ public sealed partial class LogsViewModel : ViewModelBase
             const int batchSize = 50;
             var batch = new List<FriendlyEventEntry>(batchSize);
 
-            await foreach (var entry in _eventLogs.ReadAsync(opt, _cts.Token))
+            // UiThread.Post runs a batch inline on the UI thread, which is where this loop resumes. It asks the
+            // dispatcher which thread it is on. The helper this replaced compared SynchronizationContext.Current
+            // with the one captured at construction, and WPF installs a new context instance for every dispatcher
+            // operation, so after the first await that comparison failed even on the UI thread. Every batch was
+            // then queued, and the status line below was written before the last one ran: it under-counted, and
+            // said "Loaded 0 events" for fewer than 50 (#2480).
+            await foreach (var entry in _readEvents(opt, _cts.Token))
             {
                 batch.Add(entry);
                 if (batch.Count >= batchSize)
                 {
                     var items = batch.ToArray();
                     batch.Clear();
-                    Post(() =>
+                    UiThread.Post(() =>
                     {
                         foreach (var item in items)
                         {
@@ -249,7 +266,7 @@ public sealed partial class LogsViewModel : ViewModelBase
             if (batch.Count > 0)
             {
                 var remaining = batch.ToArray();
-                Post(() =>
+                UiThread.Post(() =>
                 {
                     foreach (var item in remaining)
                     {
@@ -416,12 +433,6 @@ public sealed partial class LogsViewModel : ViewModelBase
             case EventSeverity.Warning: WarningCount += delta; break;
             case EventSeverity.Info: InfoCount += delta; break;
         }
-    }
-
-    private void Post(Action action)
-    {
-        if (_sync is null || SynchronizationContext.Current == _sync) action();
-        else _sync.Post(_ => action(), null);
     }
 
     private static string Csv(string? s)

@@ -201,7 +201,10 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory via Win32_PnPSignedDriver.
-- `LogsViewModel` — friendly Event Log viewer.
+- `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which
+  asks the dispatcher whether it is on the UI thread; comparing `SynchronizationContext` instances, as it once
+  did, fails there after the first await, and `ArchitectureTests.NothingComparesSynchronizationContextInstances`
+  keeps that comparison out of the code.
 - `AboutViewModel` — version info, auto-update, release history.
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.

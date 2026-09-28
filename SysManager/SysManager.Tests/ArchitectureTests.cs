@@ -14234,6 +14234,51 @@ public partial class ArchitectureTests
     private static partial Regex AsyncMarshal();
 
     /// <summary>
+    /// No code asks "am I on the UI thread?" by comparing <c>SynchronizationContext</c> instances.
+    /// </summary>
+    /// <remarks>
+    /// WPF installs a new <c>DispatcherSynchronizationContext</c> for every dispatcher operation, unless
+    /// <c>ReuseDispatcherSynchronizationContextInstance</c> is set, which this app does not do. So
+    /// <c>SynchronizationContext.Current == captured</c> is false on the UI thread after the first <c>await</c>. The
+    /// System Logs tab decided that way whether to add a batch inline, queued every batch, and wrote its
+    /// "Loaded N events" line before the last one had run (#2480). The question belongs to the dispatcher:
+    /// <c>Dispatcher.CheckAccess</c>, which <c>UiThread.Post</c> asks. Comments are stripped first, so a remark
+    /// describing the trap, like this one, is not read as the trap.
+    /// </remarks>
+    [Fact]
+    public void NothingComparesSynchronizationContextInstances()
+    {
+        var files = Directory
+            .EnumerateFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} source files enumerated — this guard is reading the wrong folder.");
+
+        var offenders = files
+            .SelectMany(file => ContextInstanceComparison().Matches(WithoutComments(File.ReadAllText(file)))
+                .Select(hit => $"{Path.GetFileName(file)} — {hit.Value.Trim()}"))
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "These compare SynchronizationContext instances, which WPF replaces for every dispatcher "
+            + "operation, so the comparison is false on the UI thread after the first await. Use "
+            + "UiThread.Post, which asks the dispatcher:\n  " + string.Join("\n  ", offenders));
+
+        // Positive controls: both operand orders and both operators, and not an assignment.
+        Assert.Matches(ContextInstanceComparison(), "if (_sync is null || SynchronizationContext.Current == _sync)");
+        Assert.Matches(ContextInstanceComparison(), "if (captured != SynchronizationContext.Current)");
+        Assert.DoesNotMatch(ContextInstanceComparison(), "_sync = SynchronizationContext.Current;");
+    }
+
+    [GeneratedRegex(@"SynchronizationContext\.Current\s*[!=]=|[!=]=\s*SynchronizationContext\.Current",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex ContextInstanceComparison();
+
+    /// <summary>
     /// A documentation comment that describes parameters, a return value or a thrown exception must also
     /// carry a <c>&lt;summary&gt;</c>. Those tags describe the pieces and never say what the member is
     /// for, which is the half a reader needs first.

@@ -3,13 +3,15 @@
 // License: MIT
 
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="RestorePointsViewModel"/>'s confirmation gate.
+/// Tests for <see cref="RestorePointsViewModel"/>'s confirmation gate, and for what the tab says when Windows
+/// refuses to list the restore points.
 /// </summary>
 /// <remarks>
 /// Creating a checkpoint runs <c>Enable-ComputerRestore -Drive $env:SystemDrive</c> before
@@ -89,5 +91,57 @@ public class RestorePointsViewModelTests
 
         Assert.Equal(1, dialog.Calls);
         await runner.ReceivedWithAnyArgs().RunAsync(default!, default, default);
+    }
+
+    // ---------- a refused list is not an empty one (#2476) ----------
+    // Windows answers a standard user's request for the list with "Access denied". The tab used to report that as
+    // "No restore points found. System Restore may be turned off for this PC." about a PC that had several.
+    // Elevation is pinned before the view-model is built, because it reads elevation once, in its constructor.
+
+    private static RestorePointsViewModel NewVmWhoseListIsRefused()
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<System.Collections.ObjectModel.Collection<System.Management.Automation.PSObject>>>(
+                _ => throw new System.Management.Automation.RuntimeException("Access denied"));
+        return new RestorePointsViewModel(new RestorePointService(runner));
+    }
+
+    [Fact]
+    public async Task Refresh_WhenAStandardUserIsRefusedTheList_SaysAdministratorIsNeeded()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        var vm = NewVmWhoseListIsRefused();
+        await vm.InitializationComplete;
+
+        Assert.False(vm.HasPoints);
+        Assert.Equal("Restore points could not be listed", vm.EmptyTitle);
+        Assert.Contains("administrator", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("administrator", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("No restore points", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("turned off", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Refresh_WhenAnAdministratorIsRefusedTheList_DoesNotBlameElevation()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = NewVmWhoseListIsRefused();
+        await vm.InitializationComplete;
+
+        Assert.Equal("Restore points could not be listed", vm.EmptyTitle);
+        Assert.DoesNotContain("administrator", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("No restore points", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Refresh_WhenWindowsHasNone_SaysThereAreNone()
+    {
+        var vm = NewVm(out _);   // the runner answers with an empty list: Windows was asked and had none
+        await vm.InitializationComplete;
+
+        Assert.False(vm.HasPoints);
+        Assert.Equal("No restore points", vm.EmptyTitle);
+        Assert.Contains("No restore points found", vm.StatusMessage, StringComparison.Ordinal);
     }
 }

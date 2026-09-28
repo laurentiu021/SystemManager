@@ -214,8 +214,8 @@ public class MaintenanceScheduleTests
     public void RegisterScript_BoundsTheRunWithoutAUtilityCmdlet()
     {
         // A bounded ExecutionTimeLimit so a wedged maintenance run cannot sit in the scheduler forever, and
-        // [TimeSpan]::FromHours rather than New-TimeSpan: the runner's runspace is CreateDefault2, which loads
-        // Microsoft.PowerShell.Core only, so a Utility cmdlet here is not something to depend on.
+        // [TimeSpan]::FromHours rather than New-TimeSpan, because a .NET call needs no module. Until #2476 a
+        // standard user's runspace loaded Microsoft.PowerShell.Core only, and a Utility cmdlet here failed there.
         var script = CodeOnly(MaintenanceSchedulerService.RegisterScript);
 
         Assert.Contains("ExecutionTimeLimit = [TimeSpan]::FromHours(1)", script, StringComparison.Ordinal);

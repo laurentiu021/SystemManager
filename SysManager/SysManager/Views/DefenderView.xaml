@@ -125,8 +125,8 @@
 
                     <!-- Empty state -->
                     <v:EmptyState Glyph="&#xE730;"
-                                  Title="No exclusion folders"
-                                  Message="Add a folder above to exclude it from Defender scans."
+                                  Title="{Binding ExclusionsEmptyTitle}"
+                                  Message="{Binding ExclusionsEmptyMessage}"
                                   Visibility="{Binding ExclusionPaths.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
             </DockPanel>

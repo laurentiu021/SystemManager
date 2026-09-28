@@ -9,7 +9,7 @@ using System.Text;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Runs a script in a real Windows PowerShell 5.1 — the engine an elevated SysManager uses — for tests that pin
+/// Runs a script in a real Windows PowerShell 5.1 — the engine every SysManager runspace uses — for tests that pin
 /// PowerShell's own semantics, which a substituted runner cannot show.
 /// </summary>
 /// <remarks>

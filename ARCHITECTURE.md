@@ -218,7 +218,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
 - `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup or standby trim) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched.
-- `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for create/restore; restore reboots, gated by confirmation).
+- `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
 - `TweaksHubViewModel` — unified front-end over the reversible privacy/UX tweaks, grouped Essential (per-user) / Advanced (machine-wide, needs admin), with selective Apply/Undo, a pending-change count, and an auto restore-point before the first change. Delegates to `TweaksHubService` (no parallel tweak implementation).
@@ -298,11 +298,16 @@ Key services:
   auto-downloaded on first use. Behind `ISpeedTestService` for the Dashboard's quick test.
 - `PowerShellRunner` — wraps `System.Management.Automation` to run scripts
   and stream output line-by-line. Always launches spawned processes from
-  `System32` so `Access is denied` never bites on `chkdsk` etc. Normal sessions
-  use an in-process runspace and retain per-user modules. Elevated sessions use
-  an isolated Windows PowerShell 5.1 child with module discovery limited to canonical
-  machine-owned roots, avoiding process-global environment mutation.
-  An elevated runner REUSES its runspace across calls, because starting that child
+  `System32` so `Access is denied` never bites on `chkdsk` etc. Every runspace,
+  elevated or not, is an isolated Windows PowerShell 5.1 child with module discovery
+  limited to canonical machine-owned roots, avoiding process-global environment
+  mutation. Never in process: that runspace would be PowerShell 7 hosted from the SDK
+  package alone, which loads `Microsoft.PowerShell.Core` and nothing else, and until
+  #2476 a standard user's session used it, so every script that named a Utility,
+  Management, Appx or Defender cmdlet failed and returned nothing. Scripts started as
+  a separate `powershell.exe` (`RunScriptViaPwshAsync`) keep per-user modules when
+  unelevated, which is where PSWindowsUpdate lives.
+  A runner REUSES its runspace across calls, because starting that child
   and completing a remoting handshake with it is the slow part and the services
   that use it call in bursts (`DnsService` six times, `EdgeOneDriveService` four).
   Three properties make reuse safe: the runspace state is re-checked on every
@@ -313,9 +318,7 @@ Key services:
   nine runners are constructed directly in `MainWindowViewModel`'s designer graph
   and nothing ever disposes them — without eviction a dozen `powershell.exe`
   processes would be resident for the whole run. `Dispose` releases it
-  deterministically where a consumer is disposed. The unelevated path is
-  unchanged and still builds per call: it starts no child, so caching would add a
-  lifetime to reason about for almost no gain.
+  deterministically where a consumer is disposed.
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
@@ -705,8 +708,11 @@ Key services:
   static method. Create and restore report success only through a sentinel their
   script prints last, never the absence of an exception, and create stops on
   warnings too: Windows PowerShell 5.1 reports the one-a-day limit as a warning,
-  which `-ErrorAction Stop` does not catch. The integration suite runs both
-  scripts in real Windows PowerShell with the cmdlets shadowed by functions.
+  which `-ErrorAction Stop` does not catch. Listing needs administrator: Windows
+  answers a standard user with "Access denied", so the list stops on that error and
+  `ListAsync` returns null for a refusal and an empty list only for a PC with no
+  restore points, which lets the tab say which one it is. The integration suite runs
+  all three scripts in real Windows PowerShell with the cmdlets shadowed by functions.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
   Every tab that changes system settings calls `EnsureAsync` before its first mutation; the first
   call wins and the rest are no-ops, so a session takes at most one point no matter how many tabs
@@ -873,7 +879,11 @@ Key services:
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are
   bound parameters (never interpolated); every change is verified by reading the value
-  back (Tamper Protection can silently reject). The parse helpers are pure, unit-tested.
+  back (Tamper Protection can silently reject). The status read stops if either cmdlet
+  fails, so an unread status is reported as unavailable rather than as protection "On".
+  Windows shows the exclusion lists only to an administrator, so for a standard user
+  they are emptied and marked unreadable, and the tab says they are hidden. The parse
+  helpers are pure, unit-tested.
 - `TaskSchedulerService` — the `ScheduledTasks` PowerShell module (`Get-ScheduledTask`
   / `Get-ScheduledTaskInfo` / `Enable`/`Disable-ScheduledTask`) through `IPowerShellRunner`.
   Disabling is reversible and never unregisters; toggles are verified by read-back. The

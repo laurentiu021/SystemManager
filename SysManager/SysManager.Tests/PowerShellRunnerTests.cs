@@ -119,11 +119,19 @@ public class PowerShellRunnerTests
             assignment);
     }
 
-    [Fact]
-    public async Task RunAsync_ElevatedHostOpenFailure_IsNormalizedToRuntimeException()
+    // The host-failure tests below run for both kinds of session. Since #2476 a standard user's runspace is the
+    // same Windows PowerShell 5.1 child an administrator's is, so a blocked or missing host must reach the
+    // caller as the same "unavailable" RuntimeException. Before it, the mapping was gated on elevation, and a
+    // standard user got the raw PowerShell exception, which the services' RuntimeException catches let through.
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_HostOpenFailure_IsNormalizedToRuntimeException(bool isElevated)
     {
         var runner = CreateRunnerWithOpenFailure(
-            new PSInvalidOperationException("Windows PowerShell was blocked."));
+            new PSInvalidOperationException("Windows PowerShell was blocked."),
+            isElevated);
 
         var exception = await Assert.ThrowsAsync<RuntimeException>(
             () => runner.RunAsync("'never-runs'"));
@@ -135,12 +143,15 @@ public class PowerShellRunnerTests
         Assert.IsType<PSInvalidOperationException>(exception.InnerException);
     }
 
-    [Fact]
-    public async Task RunAsync_ElevatedTransportFailure_IsNormalizedToRuntimeException()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_TransportFailure_IsNormalizedToRuntimeException(bool isElevated)
     {
         var runner = CreateRunnerWithOpenFailure(
             new System.Management.Automation.Remoting.PSRemotingTransportException(
-                "The child-process transport failed."));
+                "The child-process transport failed."),
+            isElevated);
 
         var exception = await Assert.ThrowsAsync<RuntimeException>(
             () => runner.RunAsync("'never-runs'"));
@@ -153,14 +164,16 @@ public class PowerShellRunnerTests
             exception.InnerException);
     }
 
-    [Fact]
-    public async Task RunAsync_ElevatedHostCreationFailure_IsNormalizedToRuntimeException()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_HostCreationFailure_IsNormalizedToRuntimeException(bool isElevated)
     {
         var failure = new PSInvalidOperationException(
             "Windows PowerShell is unavailable.");
         var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
+            isElevated: () => isElevated,
             trustedPowerShellModulePath:
                 @"C:\Program Files\WindowsPowerShell\Modules;" +
                 @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
@@ -176,8 +189,10 @@ public class PowerShellRunnerTests
         Assert.Same(failure, exception.InnerException);
     }
 
-    [Fact]
-    public async Task RunAsync_ElevatedHostRegistrationFailure_IsNormalizedToRuntimeException()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_HostRegistrationFailure_IsNormalizedToRuntimeException(bool isElevated)
     {
         var registrationFailure = new System.Security.SecurityException(
             "Windows PowerShell registration is inaccessible.");
@@ -186,7 +201,7 @@ public class PowerShellRunnerTests
             registrationFailure);
         var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
+            isElevated: () => isElevated,
             trustedPowerShellModulePath:
                 @"C:\Program Files\WindowsPowerShell\Modules;" +
                 @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
@@ -201,8 +216,10 @@ public class PowerShellRunnerTests
         Assert.Same(registrationFailure, wrappedFailure.InnerException);
     }
 
-    [Fact]
-    public async Task RunAsync_ElevatedHostOpenFailure_DisposesInjectedProcessResources()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_HostOpenFailure_DisposesInjectedProcessResources(bool isElevated)
     {
         var order = new List<string>();
         var processInstance = new RecordingDisposable("process instance", order);
@@ -210,7 +227,7 @@ public class PowerShellRunnerTests
         var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
         var runner = new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
+            isElevated: () => isElevated,
             trustedPowerShellModulePath:
                 @"C:\Program Files\WindowsPowerShell\Modules;" +
                 @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
@@ -263,10 +280,10 @@ public class PowerShellRunnerTests
     /// The timeout applies whether or not the session is elevated.
     /// </summary>
     /// <remarks>
-    /// The exception MAPPING beside it is gated on <c>_isElevated</c>, because only the elevated path uses an
-    /// out-of-process host whose failures need translating. The timeout is not, and this asserts that: the
-    /// out-of-process path is where a hang has been observed, but an unbounded wait is the wrong behaviour on
-    /// either path, and gating it would leave the in-process one with no answer at all.
+    /// Both kinds of session open the same out-of-process Windows PowerShell 5.1 child since #2476, so both can
+    /// meet the hang the timeout exists for. Before that, only the elevated path used the child and the
+    /// exception mapping beside the timeout was gated on elevation. The timeout never was, and this kept it that
+    /// way; it now also keeps a future elevation check from creeping back in around it.
     /// </remarks>
     [Theory]
     [InlineData(true)]
@@ -380,11 +397,14 @@ public class PowerShellRunnerTests
             order);
     }
 
-    [Fact]
-    public async Task DefenderStatus_ElevatedHostOpenFailure_ReturnsUnavailable()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DefenderStatus_HostOpenFailure_ReturnsUnavailable(bool isElevated)
     {
         var runner = CreateRunnerWithOpenFailure(
-            new PSInvalidOperationException("Windows PowerShell was blocked."));
+            new PSInvalidOperationException("Windows PowerShell was blocked."),
+            isElevated);
         var service = new DefenderService(runner);
 
         var status = await service.GetStatusAsync();
@@ -392,11 +412,14 @@ public class PowerShellRunnerTests
         Assert.False(status.Available);
     }
 
-    [Fact]
-    public async Task DnsStatus_ElevatedHostOpenFailure_ReturnsUnavailable()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DnsStatus_HostOpenFailure_ReturnsUnavailable(bool isElevated)
     {
         var runner = CreateRunnerWithOpenFailure(
-            new PSInvalidOperationException("Windows PowerShell was blocked."));
+            new PSInvalidOperationException("Windows PowerShell was blocked."),
+            isElevated);
         using var service = new DnsService(runner);
 
         var status = await service.GetCurrentDnsAsync();
@@ -404,12 +427,53 @@ public class PowerShellRunnerTests
         Assert.Equal("Unavailable", status);
     }
 
-    private static PowerShellRunner CreateRunnerWithOpenFailure(Exception exception)
+    /// <summary>
+    /// A standard user's runner builds the same out-of-process Windows PowerShell 5.1 runspace as an
+    /// administrator's.
+    /// </summary>
+    /// <remarks>
+    /// The root of #2476. A standard user's runner built an in-process runspace instead: PowerShell 7 hosted from
+    /// the SDK package alone, which loads <c>Microsoft.PowerShell.Core</c> and nothing else. Every script that
+    /// named a Utility, Management, Appx or Defender cmdlet therefore failed and returned nothing.
+    /// <para>No process is started. The open is stubbed to fail, so the runspace is inspected before a child
+    /// would exist and the test needs no elevation. That the child then loads those modules is asserted end to
+    /// end by <c>RunAsync_WithoutElevation_LoadsTheModulesTheAppsScriptsUse</c> in
+    /// <c>SysManager.IntegrationTests</c>.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_BuildsAnOutOfProcessRunspace_WhateverTheElevation(bool isElevated)
+    {
+        bool? remote = null;
+        var opened = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: () => isElevated,
+            trustedPowerShellModulePath:
+                @"C:\Program Files\WindowsPowerShell\Modules;" +
+                @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",
+            openRunspace: runspace =>
+            {
+                opened++;
+                remote = runspace.RunspaceIsRemote;
+                return Task.FromException(new PSInvalidOperationException("Stopped before the child starts."));
+            });
+
+        await Assert.ThrowsAsync<RuntimeException>(() => runner.RunAsync("'never-runs'"));
+
+        Assert.Equal(1, opened);
+        Assert.True(remote,
+            "the runner built an in-process runspace, which loads Microsoft.PowerShell.Core and nothing else, so "
+            + "every script that uses a Utility, Management, Appx or Defender cmdlet fails and returns nothing");
+    }
+
+    private static PowerShellRunner CreateRunnerWithOpenFailure(Exception exception, bool isElevated)
     {
         var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
         return new PowerShellRunner(
             action => Task.Run(action),
-            isElevated: static () => true,
+            isElevated: () => isElevated,
             trustedPowerShellModulePath:
                 @"C:\Program Files\WindowsPowerShell\Modules;" +
                 @"C:\Windows\System32\WindowsPowerShell\v1.0\Modules",

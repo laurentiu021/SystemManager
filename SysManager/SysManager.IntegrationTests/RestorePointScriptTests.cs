@@ -7,8 +7,8 @@ using SysManager.Services;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Runs the exact scripts <see cref="RestorePointService"/> builds in a real Windows PowerShell 5.1 — the engine an
-/// elevated SysManager uses — with the restore-point cmdlets shadowed by local functions (#2436).
+/// Runs the exact scripts <see cref="RestorePointService"/> builds in a real Windows PowerShell 5.1 — the engine every
+/// SysManager runspace uses — with the restore-point cmdlets shadowed by local functions (#2436, #2476).
 /// </summary>
 /// <remarks>
 /// A function takes precedence over a cmdlet of the same name, so each stub stands in for Windows' answer and System
@@ -40,6 +40,38 @@ public class RestorePointScriptTests
         WindowsPowerShellScript.StubsInEffect("Enable-ComputerRestore", "Checkpoint-Computer");
 
     private static readonly string RestoreGuard = WindowsPowerShellScript.StubsInEffect("Restore-Computer");
+
+    private static readonly string ListGuard = WindowsPowerShellScript.StubsInEffect("Get-ComputerRestorePoint");
+
+    // Printed by the statement after the list, so it shows whether a failed list STOPPED the script. Stopping is what
+    // makes the runner throw, and the throw is how ListAsync tells a refusal from an empty answer.
+    private const string AfterList = "; '__SM_AFTER_LIST__'";
+
+    [Fact]
+    public async Task ListScript_WhenWindowsRefusesTheList_StopsTheScript()
+    {
+        // #2476. Windows answers a standard user with "Access denied" as a NON-terminating error. Without
+        // -ErrorAction Stop the script went on and returned nothing, and the tab reported that the PC had no
+        // restore points.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            "function Get-ComputerRestorePoint { [CmdletBinding()] param() " +
+            "Write-Error -Message 'Access denied' -Category PermissionDenied } ; " +
+            ListGuard + RestorePointService.ListScript + AfterList);
+
+        Assert.DoesNotContain("__SM_AFTER_LIST__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListScript_WhenWindowsHasNone_CarriesOn()
+    {
+        // The positive control: an empty answer is not a failure. A script that stopped on everything would pass
+        // the refusal case above.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(
+            "function Get-ComputerRestorePoint { [CmdletBinding()] param() } ; " +
+            ListGuard + RestorePointService.ListScript + AfterList);
+
+        Assert.Contains("__SM_AFTER_LIST__", output, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task CreateScript_WhenWindowsDeclinesForTheDay_DoesNotConfirm()

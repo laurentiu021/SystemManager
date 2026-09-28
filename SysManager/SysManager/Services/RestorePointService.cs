@@ -35,26 +35,38 @@ public sealed class RestorePointService
     public RestorePointService(IPowerShellRunner ps) => _ps = ps;
 
     /// <summary>
-    /// Lists existing restore points, newest first. Returns an empty list if System
-    /// Restore is disabled or the query is denied (logged at Debug).
+    /// The script <see cref="ListAsync"/> runs. <c>Get-ComputerRestorePoint</c> surfaces SequenceNumber,
+    /// Description, CreationTime (a WMI CIM_DATETIME string), RestorePointType and EventType.
     /// </summary>
-    public async Task<IReadOnlyList<RestorePoint>> ListAsync(CancellationToken ct = default)
+    /// <remarks>
+    /// Listing needs administrator: <c>Get-ComputerRestorePoint</c> reads the SystemRestore WMI class, which
+    /// answers a standard user with "Access denied". <c>-ErrorAction Stop</c> is what separates that from an
+    /// empty answer. Without it the refusal was a non-terminating error that returned nothing, and a
+    /// standard user was told "No restore points found. System Restore may be turned off for this PC." about
+    /// a PC that had several (#2476).
+    /// <para>Internal so the integration suite can run this exact text in a real Windows PowerShell 5.1 with
+    /// the cmdlet shadowed by a function, as it does for <see cref="BuildCreateScript"/>.</para>
+    /// </remarks>
+    internal const string ListScript =
+        "Get-ComputerRestorePoint -ErrorAction Stop | Select-Object SequenceNumber, Description, " +
+        "@{N='CreationTimeIso';E={ $_.ConvertToDateTime($_.CreationTime).ToString('o') }}, " +
+        "RestorePointType, EventType";
+
+    /// <summary>
+    /// Lists existing restore points, newest first. Returns null when Windows refused or failed the query,
+    /// and an empty list only when it answered with none. <see cref="ListScript"/> says why the two differ.
+    /// </summary>
+    public async Task<IReadOnlyList<RestorePoint>?> ListAsync(CancellationToken ct = default)
     {
-        // Get-ComputerRestorePoint surfaces SequenceNumber, Description, CreationTime
-        // (a WMI CIM_DATETIME string), RestorePointType, and EventType.
-        const string script =
-            "Get-ComputerRestorePoint | Select-Object SequenceNumber, Description, " +
-            "@{N='CreationTimeIso';E={ $_.ConvertToDateTime($_.CreationTime).ToString('o') }}, " +
-            "RestorePointType, EventType";
         try
         {
-            Collection<PSObject> results = await _ps.RunAsync(script, cancellationToken: ct).ConfigureAwait(false);
+            Collection<PSObject> results = await _ps.RunAsync(ListScript, cancellationToken: ct).ConfigureAwait(false);
             return ParseRestorePoints(results);
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
-            Log.Debug("RestorePoint: list failed (System Restore may be disabled): {Error}", ex.Message);
-            return [];
+            Log.Debug("RestorePoint: list failed: {Error}", ex.Message);
+            return null;
         }
     }
 
@@ -126,7 +138,7 @@ public sealed class RestorePointService
     /// an exception.
     /// </summary>
     /// <remarks>
-    /// Windows allows one restore point per 24 hours, and Windows PowerShell 5.1 — the engine an elevated run
+    /// Windows allows one restore point per 24 hours, and Windows PowerShell 5.1 — the engine every run
     /// uses — reports the refusal as a WARNING (its resource is <c>CannotCreateRestorePointWarning</c>), not as
     /// an error. <c>-ErrorAction Stop</c> does not govern warnings, so without <c>-WarningAction Stop</c> the
     /// script went on to print the sentinel and every caller reported "Restore point created" for a point

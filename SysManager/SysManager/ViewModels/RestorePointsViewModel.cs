@@ -36,6 +36,21 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
     [ObservableProperty] private bool _hasPoints;
     [ObservableProperty] private string _newDescription = "";
 
+    // Distinguishes "Windows answered with none" from "Windows would not answer", so the empty state does not
+    // tell a standard user to enable System Restore on a PC that has restore points it will not list (#2476).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle), nameof(EmptyMessage))]
+    private bool _listWasRefused;
+
+    public string EmptyTitle => ListWasRefused ? "Restore points could not be listed" : "No restore points";
+
+    public string EmptyMessage => (ListWasRefused, IsElevated) switch
+    {
+        (true, false) => "Windows lists restore points only to an administrator. Use \"Run as administrator\" to see them.",
+        (true, true) => "Windows would not list them. Check that System Restore is available on this PC.",
+        _ => "Create one above, or enable System Restore in Windows if the list stays empty.",
+    };
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     private RestorePoint? _selectedPoint;
@@ -76,11 +91,15 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
         try
         {
             var points = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
-            RestorePoints.ReplaceWith(points);
-            HasPoints = points.Count > 0;
-            StatusMessage = points.Count == 0
-                ? "No restore points found. System Restore may be turned off for this PC."
-                : $"{points.Count} restore point{(points.Count == 1 ? "" : "s")}.";
+            ListWasRefused = points is null;
+            RestorePoints.ReplaceWith(points ?? []);
+            HasPoints = RestorePoints.Count > 0;
+            StatusMessage = points switch
+            {
+                null => EmptyMessage,
+                [] => "No restore points found. System Restore may be turned off for this PC.",
+                _ => $"{points.Count} restore point{(points.Count == 1 ? "" : "s")}.",
+            };
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         finally
@@ -129,9 +148,14 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
                 StatusMessage = "Restore point created.";
                 ActivityLogService.Instance.Log("Restore point", $"Created \"{description}\"");
                 ToastService.Instance.Show("Restore point created", description);
-                var points = await _service.ListAsync(_cts.Token).ConfigureAwait(true);
-                RestorePoints.ReplaceWith(points);
-                HasPoints = points.Count > 0;
+                // Null only if Windows refused the read straight after making the point. The list then stays
+                // as it was rather than emptying.
+                if (await _service.ListAsync(_cts.Token).ConfigureAwait(true) is { } points)
+                {
+                    ListWasRefused = false;
+                    RestorePoints.ReplaceWith(points);
+                    HasPoints = points.Count > 0;
+                }
             }
             else
             {

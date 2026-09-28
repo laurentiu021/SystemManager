@@ -126,10 +126,10 @@ public sealed class ActivityLogService
     /// Takes the cross-process lock on the store: an exclusive handle on <c>activity.json.lock</c> beside it.
     /// </summary>
     /// <remarks>
-    /// A file rather than a named mutex, because the GUI and a scheduled run can differ in elevation: a mutex an
-    /// administrator session creates is closed to a standard one by its default security, while a file in the
-    /// user's own AppData folder inherits permissions both can use. Windows releases the handle when a process
-    /// ends, so a crash cannot leave the lock held. Returns null, and the write goes ahead unlocked, if the
+    /// A file beside the store rather than a named mutex, so the lock is bound to the file it protects: a test's
+    /// temp directory gets its own, there is no name to derive from a path, and it holds whichever session or
+    /// elevation each process runs in. Windows releases the handle when a process ends, so a crash cannot leave
+    /// the lock held. Returns null, and the write goes ahead unlocked, if the
     /// lock cannot be had within <see cref="DefaultLockWaitMs"/>: losing a history line is better than losing the
     /// action.
     /// </remarks>

@@ -128,6 +128,16 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             $"Confirm {action} feature"))
             return;
 
+        // Enabling or disabling a feature is DISM servicing of the running image, the same image System Fixes'
+        // SFC and DISM repairs and Cleanup's component-store cleanup work on, so it takes the lock they take and
+        // cannot run in the middle of one (#2484). Before the restore point, which is a system change too.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows feature change");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";

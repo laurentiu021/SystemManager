@@ -245,6 +245,27 @@ public class WindowsFeaturesTests
     }
 
     [Fact]
+    public async Task ToggleFeature_WhileAnotherSystemChangeRuns_ChangesNothing()
+    {
+        // #2484. A feature change is DISM servicing of the running image, and it could run in the middle of an
+        // SFC or DISM repair SysManager itself had started. Refused before the restore point too, which is a
+        // system change of its own.
+        var runner = RunnerThatSucceeds();
+        var rp = RestorePointTaken();
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(runner, rp);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
+        Assert.NotNull(held);
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(
+            new WindowsFeature { Name = "TelnetClient", DisplayName = "Telnet Client" });
+
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+        await rp.DidNotReceiveWithAnyArgs().EnsureAsync(default!, default);
+        Assert.Equal("Cannot start — SFC scan is already running.", vm.StatusMessage);
+    }
+
+    [Fact]
     public async Task ToggleFeature_WithoutElevation_TakesNoRestorePoint()
     {
         // The command refuses before the confirmation when not elevated. Creating a point there would

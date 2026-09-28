@@ -535,6 +535,16 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             return;
         }
 
+        // An install services the running image, and System Fixes' Reset Windows Update stops the very services
+        // it downloads and installs through. It takes the lock the SFC and DISM repairs take, so none of those
+        // can start in the middle of it and it cannot start in the middle of them (#2484).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = $"Installing {selected.Count} update(s) (do not reboot)…";

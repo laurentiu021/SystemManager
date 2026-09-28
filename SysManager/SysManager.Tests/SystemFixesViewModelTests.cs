@@ -425,6 +425,44 @@ public class SystemFixesViewModelTests
 
         Assert.DoesNotContain("after dispose", vm.Console.Lines.Select(l => l.Text));
     }
+
+    // ---------- Reset Windows Update and the system-modification lock (#2484) ----------
+
+    [Fact]
+    public async Task ResetWindowsUpdate_WhileAnotherSystemChangeRuns_DoesNotRun()
+    {
+        // The reset force-stops the Windows Update services and renames their caches, and it could run in the
+        // middle of an install from the Windows Update tab, which then failed.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(serviceRunner: serviceRunner);
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        Assert.NotNull(held);
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        await serviceRunner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        Assert.Equal("Cannot start — Windows Update install is already running.", vm.StatusMessage);
+        Assert.False(vm.IsFixRunning);
+    }
+
+    [Fact]
+    public async Task ReinstallWinGet_TakesNoSystemLock()
+    {
+        // The other half. Re-registering WinGet for the user conflicts with nothing that holds this lock, so an
+        // SFC scan running in the background must not stop it.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(serviceRunner: serviceRunner);
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
+        Assert.NotNull(held);
+
+        await vm.ReinstallWinGetCommand.ExecuteAsync(null);
+
+        await serviceRunner.ReceivedWithAnyArgs(1).RunAsync(default!, default, default);
+    }
 }
 
 // ---------- SFC result parsing ----------

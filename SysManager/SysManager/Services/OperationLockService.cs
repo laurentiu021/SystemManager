@@ -20,7 +20,14 @@ public enum OperationCategory
     /// <summary>Network-intensive: speed test, traceroute, ping flood, network repair.</summary>
     Network,
 
-    /// <summary>System modification: performance tweaks, driver operations, Windows Update.</summary>
+    /// <summary>
+    /// System modification: performance tweaks, SFC and DISM repairs, component-store cleanup, Windows feature
+    /// changes, Windows Update installs and resets, and creating or restoring a restore point.
+    /// </summary>
+    /// <remarks>
+    /// Most of these service the same running Windows image, and a restore restarts it, so no two may overlap.
+    /// Windows Features, Windows Update, Reset Windows Update and the Restore Points tab took no lock until #2484.
+    /// </remarks>
     SystemModification,
 
     /// <summary>

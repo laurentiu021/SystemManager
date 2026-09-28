@@ -93,6 +93,45 @@ public class RestorePointsViewModelTests
         await runner.ReceivedWithAnyArgs().RunAsync(default!, default, default);
     }
 
+    // ---------- the system-modification lock (#2484) ----------
+    // Performance Mode's Create button already took this lock for the same call, and this tab took none, so a
+    // restore could restart Windows in the middle of an SFC or DISM repair SysManager had started.
+
+    [Fact]
+    public async Task Create_WhileAnotherSystemChangeRuns_CreatesNothing()
+    {
+        var vm = NewVm(out var runner);
+        await vm.InitializationComplete;
+        runner.ClearReceivedCalls();
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan");
+        Assert.NotNull(held);
+
+        await vm.CreateCommand.ExecuteAsync(null);
+
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        Assert.Equal("Cannot start — SFC scan is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Restore_WhileAnotherSystemChangeRuns_DoesNotRestartWindows()
+    {
+        var vm = NewVm(out var runner);
+        await vm.InitializationComplete;
+        runner.ClearReceivedCalls();
+        vm.SelectedPoint = new SysManager.Models.RestorePoint(7, "Before the driver update", DateTime.Now, "12", "100");
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
+        Assert.NotNull(held);
+
+        await vm.RestoreCommand.ExecuteAsync(null);
+
+        await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        Assert.Equal("Cannot start — DISM RestoreHealth is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
     // ---------- a refused list is not an empty one (#2476) ----------
     // Windows answers a standard user's request for the list with "Access denied". The tab used to report that as
     // "No restore points found. System Restore may be turned off for this PC." about a PC that had several.

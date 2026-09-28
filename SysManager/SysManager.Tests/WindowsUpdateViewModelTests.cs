@@ -966,6 +966,25 @@ public class WindowsUpdateViewModelTests
             Substitute.For<IPowerShellRunner>(), new WindowsUpdateService(),
             new WindowsUpdatePolicyService(), isElevated: null!));
 
+    [Fact]
+    public async Task InstallUpdates_WhileAnotherSystemChangeRuns_InstallsNothing()
+    {
+        // #2484. An install services the running image, and it could start in the middle of an SFC or DISM
+        // repair, or of a Reset Windows Update that stops the services it installs through.
+        var wu = Substitute.For<IWindowsUpdateService>();
+        var vm = new WindowsUpdateViewModel(
+            Substitute.For<IPowerShellRunner>(), wu, new WindowsUpdatePolicyService(), static () => true);
+        vm.Updates.Add(new UpdateEntry { Title = "2026-09 Cumulative Update", IsSelected = true });
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update reset");
+        Assert.NotNull(held);
+
+        await vm.InstallUpdatesCommand.ExecuteAsync(null);
+
+        await wu.DidNotReceiveWithAnyArgs().InstallAsync(default!, default);
+        Assert.Equal("Cannot start — Windows Update reset is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
 }
 
 // ---------- UpdateEntry model ----------

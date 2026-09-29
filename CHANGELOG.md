@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.28] - 2026-09-29
+
+**Bandwidth Monitor no longer rebuilds its chart while SysManager is closing.** Picking a saved range and closing
+SysManager straight away could let the range finish loading after the chart's drawing resources were released.
+
+### Fixed
+
+- **Bandwidth Monitor: a saved range still loading when SysManager closes is dropped.** Picking a range loads its
+  samples in the background. A load that finished after SysManager had released the chart's drawing resources went
+  on to rebuild the chart with them.
+  - The load now checks that the tab is still open when it finishes, as the live sampling already did.
+  Present since saved ranges were added in v1.57.0.
+
 ## [1.114.27] - 2026-09-29
 
 **Windows Update no longer says "Default" when it could not read your update settings.** A PC whose deferral or pause

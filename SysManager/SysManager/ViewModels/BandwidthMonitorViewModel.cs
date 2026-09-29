@@ -55,6 +55,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     private const double MaxCreditedGapSeconds = HistoryWriteIntervalSeconds * 4;
 
     private readonly BandwidthHistoryService _history;
+    private readonly Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> _loadHistory;
     private readonly Func<IBandwidthMonitorService> _connectionSourceFactory;
     private readonly Func<IBandwidthMonitorService>? _etwSourceFactory;
 
@@ -175,8 +176,22 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         BandwidthHistoryService history,
         Func<IBandwidthMonitorService> connectionSourceFactory,
         Func<IBandwidthMonitorService>? etwSourceFactory)
+        : this(history, connectionSourceFactory, etwSourceFactory, history.LoadAsync)
+    {
+    }
+
+    /// <summary>
+    /// Loads the stored ranges through <paramref name="loadHistory"/> instead of the history service, so a test
+    /// decides when a load finishes, before or after the tab closes.
+    /// </summary>
+    internal BandwidthMonitorViewModel(
+        BandwidthHistoryService history,
+        Func<IBandwidthMonitorService> connectionSourceFactory,
+        Func<IBandwidthMonitorService>? etwSourceFactory,
+        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>> loadHistory)
     {
         _history = history;
+        _loadHistory = loadHistory;
         _connectionSourceFactory = connectionSourceFactory;
         _etwSourceFactory = etwSourceFactory;
         IsElevated = AdminHelper.IsElevated();
@@ -447,7 +462,13 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             IsBusy = true;
             try
             {
-                var loaded = await _history.LoadAsync(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
+                var loaded = await _loadHistory(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
+
+                // Re-check AFTER the await, as the poll does. Dispose cancels the load's token, but a load that had
+                // already finished resumes here anyway. It would rebuild the chart buffers and repaint through the
+                // paints and typefaces Dispose released, which the check at the top is there to prevent (#2522).
+                if (IsDisposed) return;
+
                 var points = BandwidthHistoryService.Downsample(loaded, MaxHistoryPoints);
 
                 _downBuffer.ReplaceWith(points.Select(p => new DateTimePoint(p.Timestamp, p.DownBytesPerSec)));

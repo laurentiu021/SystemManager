@@ -186,6 +186,14 @@ public class DiskAnalyzerViewModelTests
     // It used to arrive as an empty scan: "No subfolders found.", "Analysis complete." and a completion toast, and the
     // empty result was saved as the folder's latest scan, so the next real one read as "larger than your last scan".
 
+    // What the history holds for a root once it could be read (#2521).
+    private static async Task<DiskScanSnapshot?> FoundAsync(DiskScanHistoryService history, string root)
+    {
+        var (readable, snapshot) = await history.FindAsync(root);
+        Assert.True(readable, "the history could not be read");
+        return snapshot;
+    }
+
     private static (DiskAnalyzerViewModel Vm, DiskScanHistoryService History) NewVmWithHistory()
     {
         var history = new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
@@ -210,7 +218,47 @@ public class DiskAnalyzerViewModelTests
         Assert.Equal("This folder could not be measured.", vm.ScanSummary);
         Assert.DoesNotContain("complete", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
         Assert.False(vm.HasScanned);
-        Assert.Null(await history.FindAsync(missing));
+        Assert.Null(await FoundAsync(history, missing));
+    }
+
+    [Fact]
+    public async Task AScan_WhenTheEarlierScansCannotBeRead_SaysSo_AndRecordsNothingOverThem()
+    {
+        // The earlier scans used to read as none, so the trend line looked like a first scan and the save wrote
+        // this scan over every other folder's (#2521).
+        var historyDir = Path.Combine(Path.GetTempPath(), "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "sub"));
+        File.WriteAllBytes(Path.Combine(dir, "sub", "data.bin"), new byte[40_000]);
+        try
+        {
+            var history = new DiskScanHistoryService(historyDir);
+            Assert.True(await history.SaveAsync(new DiskScanSnapshot
+            {
+                RootPath = @"C:\Other",
+                TotalSize = 1,
+                CapturedAt = new DateTime(2026, 1, 1),
+                TopFolders = [],
+            }));
+            var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history);
+            await vm.InitializationComplete;
+            vm.SelectedPath = dir;
+
+            // Held open with delete sharing only: the reads fail, and a write would still succeed.
+            using (new FileStream(Path.Combine(historyDir, "disk-scan-history.json"),
+                       FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.True(vm.HasScanned);
+            Assert.Equal(DiskAnalyzerViewModel.HistoryUnreadable, vm.TrendSummary);
+            Assert.NotNull(await FoundAsync(history, @"C:\Other"));
+            Assert.Null(await FoundAsync(history, dir));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            if (Directory.Exists(historyDir)) Directory.Delete(historyDir, recursive: true);
+        }
     }
 
     [Fact]
@@ -225,14 +273,14 @@ public class DiskAnalyzerViewModelTests
             var (vm, history) = NewVmWithHistory();
             vm.SelectedPath = dir;
             await vm.AnalyzeCommand.ExecuteAsync(null);
-            var recorded = await history.FindAsync(dir);
+            var recorded = await FoundAsync(history, dir);
             Assert.NotNull(recorded);   // the premise: the real scan was recorded
 
             Directory.Move(dir, moved);   // now it "no longer exists"
             await vm.AnalyzeCommand.ExecuteAsync(null);
 
             Assert.Equal(DiskAnalyzerService.AnalysisFailure.NotFound, vm.LastFailure);
-            var after = await history.FindAsync(dir);
+            var after = await FoundAsync(history, dir);
             Assert.NotNull(after);
             Assert.Equal(recorded.TotalSize, after.TotalSize);
             Assert.Equal(recorded.CapturedAt, after.CapturedAt);

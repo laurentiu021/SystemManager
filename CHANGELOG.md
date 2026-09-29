@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.33] - 2026-09-29
+
+**Disk Analyzer no longer forgets your other folders' last scans when it cannot read them.** One failed read
+could leave only the folder just scanned, and with it the "since your last scan" line for all the others.
+
+### Fixed
+
+- **Disk Analyzer: the last scan of each folder is never written over when it could not be read.** The tab
+  remembers the last scan of up to 20 folders to show what changed. A history that could not be read was
+  taken as empty, so the scan just finished was saved as the only one, over every other folder's.
+  - The line under the results now says the earlier scans could not be read, instead of looking like a
+    first scan, and this scan is not saved over them.
+  - A history file that is damaged is kept as `disk-scan-history.json.unreadable` before a new one is
+    written.
+  Present since the tab started remembering scans in v1.73.0.
+
 ## [1.114.32] - 2026-09-29
 
 **Speed Test no longer replaces your saved results when it cannot read them.** One failed read could make the

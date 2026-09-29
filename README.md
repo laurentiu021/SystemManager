@@ -713,7 +713,8 @@ System → System Fixes, where the tab name matches what they do.
 - **Remembers your last scan of each folder** and shows what changed — "3.2 GB larger than your
   last scan on 12 Jul" — so a one-off number becomes an answer to "why did my disk fill up?". It is
   always phrased as *since your last scan*, never as live monitoring, because you choose when to
-  scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there)
+  scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there).
+  If the earlier scans cannot be read, the tab says so, and never saves a new scan over them
 
 ### Large Files
 Answers "what is actually using my space?" by listing the biggest files in one place.

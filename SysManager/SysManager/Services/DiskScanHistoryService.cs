@@ -71,28 +71,36 @@ public sealed class DiskScanHistoryService : IDisposable
         _fileLock.Dispose();
     }
 
-    /// <summary>Every remembered snapshot, newest first. Empty on any error.</summary>
-    public async Task<IReadOnlyList<DiskScanSnapshot>> LoadAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Every remembered snapshot, newest first, or null when the history is there and could not be read. A
+    /// history that does not parse holds no snapshot that could be used, so it loads as empty.
+    /// </summary>
+    /// <remarks>
+    /// Null is not "no scans". A failed read used to load as an empty history, and the next save wrote a history
+    /// holding only that one scan over every other folder's (#2521).
+    /// </remarks>
+    public async Task<IReadOnlyList<DiskScanSnapshot>?> LoadAsync(CancellationToken ct = default)
     {
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
-        try { return await LoadCoreAsync(ct).ConfigureAwait(false); }
+        try { return (await LoadCoreAsync(ct).ConfigureAwait(false)).Snapshots; }
         finally { ReleaseFileLock(); }
     }
 
     /// <summary>
     /// The remembered snapshot for one root, or <c>null</c> if that root has never been scanned. Path
     /// comparison is normalised so a trailing separator does not create a second entry for the same
-    /// folder.
+    /// folder. <c>Readable</c> is false when the history could not be read, and then nothing is known about
+    /// the root: "never scanned" would be a guess (#2521).
     /// </summary>
-    public async Task<DiskScanSnapshot?> FindAsync(string rootPath, CancellationToken ct = default)
+    public async Task<(bool Readable, DiskScanSnapshot? Snapshot)> FindAsync(string rootPath, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(rootPath)) return null;
+        if (string.IsNullOrWhiteSpace(rootPath)) return (true, null);
         var key = Normalize(rootPath);
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var all = await LoadCoreAsync(ct).ConfigureAwait(false);
-            return all.FirstOrDefault(s => Normalize(s.RootPath) == key);
+            var (all, _) = await LoadCoreAsync(ct).ConfigureAwait(false);
+            return all is null ? (false, null) : (true, all.FirstOrDefault(s => Normalize(s.RootPath) == key));
         }
         finally { ReleaseFileLock(); }
     }
@@ -103,6 +111,8 @@ public sealed class DiskScanHistoryService : IDisposable
     /// disk. Never throws to the caller — a failed write must not take the tab down — but reports the
     /// outcome so a caller need not pretend it succeeded, the same contract
     /// <see cref="SpeedTestHistoryService.SaveAsync"/> learned the hard way.
+    /// <para>It is also <c>false</c> when the history could not be read. Nothing is written then: the file holds
+    /// every other folder's last scan, and writing would replace them all with this one (#2521).</para>
     /// </summary>
     public async Task<bool> SaveAsync(DiskScanSnapshot snapshot, CancellationToken ct = default)
     {
@@ -112,7 +122,11 @@ public sealed class DiskScanHistoryService : IDisposable
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var all = (await LoadCoreAsync(ct).ConfigureAwait(false)).ToList();
+            var (loaded, unparsable) = await LoadCoreAsync(ct).ConfigureAwait(false);
+            // A history that could not be read is not written over, and one that does not parse is kept aside first.
+            if (loaded is null) return false;
+            if (unparsable && !StoreFile.SetAside(_historyPath)) return false;
+            var all = loaded.ToList();
 
             // Upsert by root: the newest scan of a folder replaces the old one rather than accumulating.
             all.RemoveAll(s => Normalize(s.RootPath) == key);
@@ -176,38 +190,31 @@ public sealed class DiskScanHistoryService : IDisposable
         }
     }
 
-    /// <summary>Load without locking — called only from inside a locked section.</summary>
-    private async Task<IReadOnlyList<DiskScanSnapshot>> LoadCoreAsync(CancellationToken ct)
+    /// <summary>
+    /// Load without locking — called only from inside a locked section. The snapshots, null when the file could
+    /// not be read, and whether it was there but did not parse.
+    /// </summary>
+    private async Task<(IReadOnlyList<DiskScanSnapshot>? Snapshots, bool Unparsable)> LoadCoreAsync(CancellationToken ct)
     {
+        var json = await StoreFile.ReadTextAsync(_historyPath, ct).ConfigureAwait(false);
+        if (json is null) return (null, false);
+        if (json.Length == 0) return ([], false);
         try
         {
-            if (!File.Exists(_historyPath)) return [];
-
-            var json = await File.ReadAllTextAsync(_historyPath, ct).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<DiskScanSnapshot>>(json, JsonOpts);
-            if (entries is null) return [];
+            if (entries is null) return ([], false);
 
             // A file that parses but omits TopFolders leaves that list null on the DTO; normalise so no
             // caller has to null-check a collection that is documented as never-null.
             foreach (var e in entries)
                 e.TopFolders ??= [];
 
-            return entries;
-        }
-        catch (IOException ex)
-        {
-            Log.Warning(ex, "Failed to load disk-scan history");
-            return [];
+            return (entries, false);
         }
         catch (JsonException ex)
         {
             Log.Warning(ex, "Failed to parse disk-scan history JSON");
-            return [];
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Log.Warning(ex, "Access denied loading disk-scan history");
-            return [];
+            return ([], true);
         }
     }
 

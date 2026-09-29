@@ -678,7 +678,9 @@ Key services:
 - `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
   capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
   changed since last time. Same never-throw-on-IO contract and `configDir` test seam as
-  `SpeedTestHistoryService`. Machine-specific by nature (absolute paths + sizes on this disk), so it
+  `SpeedTestHistoryService`, and the same rule for a history that could not be read: `LoadAsync` is
+  null, `FindAsync` says it is not `Readable` rather than "never scanned", and `SaveAsync` writes
+  nothing over it. Machine-specific by nature (absolute paths + sizes on this disk), so it
   is deliberately absent from `ProfileService.Catalog` and pinned OUT by a test.
 - `ShortcutCleanerService` — scans Start Menu and Desktop for broken
   shortcuts (dead targets) and offers safe removal.

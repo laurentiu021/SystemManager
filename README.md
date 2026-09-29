@@ -1454,7 +1454,8 @@ offers, "rate us" prompts:
   your own disk. Opening a tab isn't an action, so it isn't listed, and neither is a speed
   test, which goes into the Speed Test history instead. It does note when SysManager closed
   unexpectedly the previous time. A cleanup run from the command line or from Scheduled
-  Maintenance appears here too, even while SysManager is open.
+  Maintenance appears here too, even while SysManager is open. If the history cannot be read
+  for a moment, a new action waits and is written once it can be, rather than replacing it
 - **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays

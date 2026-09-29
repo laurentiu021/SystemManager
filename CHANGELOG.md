@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.37] - 2026-09-29
+
+**Recent Activity on the Dashboard no longer loses its history when SysManager cannot read it.** A read that
+failed when SysManager started could leave the next action as the only one listed.
+
+### Fixed
+
+- **Recent Activity: the history is never written over when it could not be read.** When the activity file
+  could not be read, the next action was added to what SysManager held in memory and written over the file.
+  After a read that failed at startup, that was nothing, so the whole history went, including actions that
+  a command-line or scheduled run had recorded.
+  - An action logged while the file cannot be read now waits, is listed on the Dashboard meanwhile, and is
+    written with the next action once the file can be read.
+  - An activity file that is damaged is kept as `activity.json.unreadable` before a new one is written.
+  Present since Recent Activity was added in v1.17.0.
+
 ## [1.114.36] - 2026-09-29
 
 **DNS & Hosts no longer empties your hosts file when it could not read it.** Pressing Save after a failed read

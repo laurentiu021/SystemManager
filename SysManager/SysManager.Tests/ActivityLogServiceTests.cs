@@ -110,6 +110,63 @@ public sealed class ActivityLogServiceTests : IDisposable
         Assert.Empty(log.GetRecent(10));
     }
 
+    // ── a file that cannot be read or parsed (#2521) ────────────────────────
+    // A failed read gave Log this instance's own list, which it wrote over the file, so a read that failed at
+    // startup lost the whole history. The file is held open with delete sharing only while a read must fail: the
+    // read fails, and the replace a write ends with would still succeed.
+
+    private FileStream HoldAgainstReads() => new(StoreFile, FileMode.Open, FileAccess.Read, FileShare.Delete);
+
+    [Fact]
+    public void Log_WhenNoReadHasWorked_DoesNotReplaceTheHistory()
+    {
+        NewLog().Log("Scheduled cleanup", "Freed 300 MB");   // written by another run
+        var before = File.ReadAllBytes(StoreFile);
+
+        ActivityLogService gui;
+        using (HoldAgainstReads())
+        {
+            gui = NewLog();   // its read at startup fails
+            gui.Log("Quick Cleanup", "Freed 12 MB");
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
+        gui.Log("Deep Cleanup", "Freed 2 GB");
+        Assert.Equal(["Deep Cleanup", "Quick Cleanup", "Scheduled cleanup"],
+            new ActivityLogService(_dir).GetRecent(10).Select(e => e.Action));
+    }
+
+    [Fact]
+    public void Log_WhenTheFileCannotBeRead_ListsTheEntry_AndWritesItWithTheNextLog()
+    {
+        var log = NewLog();
+        log.Log("A", "d");
+        log.Log("B", "d");
+        var before = File.ReadAllBytes(StoreFile);
+
+        using (HoldAgainstReads())
+        {
+            log.Log("C", "d");
+            Assert.Equal(["C", "B", "A"], log.GetRecent(10).Select(e => e.Action));
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(StoreFile));
+        log.Log("D", "d");
+        Assert.Equal(["D", "C", "B", "A"], new ActivityLogService(_dir).GetRecent(10).Select(e => e.Action));
+    }
+
+    [Fact]
+    public void Log_OverAFileThatDoesNotParse_KeepsItAside_AndLogs()
+    {
+        File.WriteAllText(StoreFile, "{ not json");
+        var log = NewLog();
+
+        log.Log("A", "d");
+
+        Assert.Equal("{ not json", File.ReadAllText(StoreFile + ".unreadable"));
+        Assert.Equal("A", Assert.Single(new ActivityLogService(_dir).GetRecent(10)).Action);
+    }
+
     [Fact]
     public void GetRecent_ReturnsAtMostTheRequestedCount()
     {

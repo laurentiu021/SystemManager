@@ -405,6 +405,28 @@ public class GamingProfileServiceTests
     }
 
     [Fact]
+    public void SaveLastConfig_WhenAStoreThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-stuck-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{ this is not valid json ][");
+            // A folder where the set-aside copy would go: the move fails, and a write to the file itself would
+            // not.
+            Directory.CreateDirectory(path + ".unreadable");
+
+            StoreOnlyService(path).SaveLastConfig(new GamingProfile { FinestTimerResolution = true });
+
+            Assert.Equal("{ this is not valid json ][", File.ReadAllText(path));
+        }
+        finally
+        {
+            DeleteStore(path);
+            if (Directory.Exists(path + ".unreadable")) Directory.Delete(path + ".unreadable");
+        }
+    }
+
+    [Fact]
     public void SaveLastConfig_OverAStoreANewerSysManagerWrote_KeepsItAside_ThenSaves()
     {
         var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-newer-aside-{Guid.NewGuid():N}.json");

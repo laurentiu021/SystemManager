@@ -358,6 +358,19 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAsync_WhenAHistoryThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(HistoryFile + ".unreadable");
+        using var svc = NewService();
+
+        Assert.False(await svc.SaveAsync(Result("HTTP")));
+
+        Assert.Equal("{ this is not valid json", await File.ReadAllTextAsync(HistoryFile));
+    }
+
+    [Fact]
     public async Task ClearAsync_OneEngine_OverAHistoryThatDoesNotParse_KeepsItAside()
     {
         await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
@@ -367,6 +380,19 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
 
         Assert.Equal("{ this is not valid json", await File.ReadAllTextAsync(HistoryFile + ".unreadable"));
         Assert.False(File.Exists(HistoryFile));
+    }
+
+    [Fact]
+    public async Task ClearAsync_OneEngine_WhenAHistoryThatDoesNotParseCannotBeSetAside_LeavesIt()
+    {
+        await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(HistoryFile + ".unreadable");
+        using var svc = NewService();
+
+        Assert.False(await svc.ClearAsync("HTTP"));
+
+        Assert.Equal("{ this is not valid json", await File.ReadAllTextAsync(HistoryFile));
     }
 
     [Fact]

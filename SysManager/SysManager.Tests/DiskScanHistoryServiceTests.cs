@@ -208,6 +208,19 @@ public sealed class DiskScanHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Save_WhenAHistoryThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(HistoryFile, "{ this is not valid json ]");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(HistoryFile + ".unreadable");
+        using var svc = NewService();
+
+        Assert.False(await svc.SaveAsync(Snap(@"C:\Data", 1, new DateTime(2026, 1, 1))));
+
+        Assert.Equal("{ this is not valid json ]", File.ReadAllText(HistoryFile));
+    }
+
+    [Fact]
     public async Task Clear_RemovesEverything()
     {
         using var svc = NewService();

@@ -326,14 +326,14 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     [Fact]
     public void Remember_OverAFileThatDoesNotParse_AndCannotBeMoved_WritesNothing()
     {
-        // Held open for reading, which lets the ledger be read but not moved.
         File.WriteAllText(LedgerFile, "{ not valid json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        // The sharing hold this used to use failed the write as well, so it passed with the refusal removed.
+        Directory.CreateDirectory(LedgerFile + ".unreadable");
 
-        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Read))
-            Assert.False(NewService().Remember("wuauserv", "Automatic", At));
+        Assert.False(NewService().Remember("wuauserv", "Automatic", At));
 
         Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile));
-        Assert.False(File.Exists(LedgerFile + ".unreadable"));
     }
 
     [Fact]

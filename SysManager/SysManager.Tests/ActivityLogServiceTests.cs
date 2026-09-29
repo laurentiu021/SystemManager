@@ -168,6 +168,20 @@ public sealed class ActivityLogServiceTests : IDisposable
     }
 
     [Fact]
+    public void Log_WhenAFileThatDoesNotParseCannotBeSetAside_WritesNothing_AndListsTheEntry()
+    {
+        File.WriteAllText(StoreFile, "{ not json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(StoreFile + ".unreadable");
+        var log = NewLog();
+
+        log.Log("A", "d");
+
+        Assert.Equal("{ not json", File.ReadAllText(StoreFile));
+        Assert.Equal("A", Assert.Single(log.GetRecent(10)).Action);   // it waits, and is listed meanwhile
+    }
+
+    [Fact]
     public void GetRecent_ReturnsAtMostTheRequestedCount()
     {
         var log = NewLog();

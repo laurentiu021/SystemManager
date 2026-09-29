@@ -241,6 +241,19 @@ public class VolumePresetServiceTests : IDisposable
     }
 
     [Fact]
+    public void Save_WhenAFileThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(PresetsFile, "{ not a preset list");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(PresetsFile + ".unreadable");
+        var service = new VolumePresetService(_dir);
+
+        Assert.Null(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+
+        Assert.Equal("{ not a preset list", File.ReadAllText(PresetsFile));
+    }
+
+    [Fact]
     public void Delete_OverAFileThatDoesNotParse_KeepsItAside()
     {
         File.WriteAllText(PresetsFile, "{ not a preset list");
@@ -250,6 +263,19 @@ public class VolumePresetServiceTests : IDisposable
 
         Assert.Equal("{ not a preset list", File.ReadAllText(PresetsFile + ".unreadable"));
         Assert.Empty(Loaded(service));
+    }
+
+    [Fact]
+    public void Delete_WhenAFileThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(PresetsFile, "{ not a preset list");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(PresetsFile + ".unreadable");
+        var service = new VolumePresetService(_dir);
+
+        Assert.Null(service.Delete("Gaming"));
+
+        Assert.Equal("{ not a preset list", File.ReadAllText(PresetsFile));
     }
 
     // ── the two mutators racing each other ─────────────────────────────────

@@ -160,6 +160,281 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No test leaves a <c>configDir</c> at its default, which is the real profile folder.
+    /// </summary>
+    /// <remarks>
+    /// The other half of <see cref="Services_DoNotHoldUserDataPathsInStaticFields"/>: that one keeps a store
+    /// redirectable, this one checks that the tests redirect it. <c>NotificationsTweakTests</c> built
+    /// <c>NotificationBlockerService</c> with a test registry root and the default <c>configDir</c>, so every run of
+    /// the suite added one to the real notification write-count, the number Gaming Profile compares to decide
+    /// whether to turn notifications back on after a game (#2555).
+    /// <para>The types are found by reflection: every constructor in the app with a parameter named
+    /// <c>configDir</c>, so a store is covered from the day it gains the seam. A construction passes when it gives
+    /// <c>configDir</c> a value other than <c>null</c>, by name or at its position in the overload its argument count
+    /// binds to. A target-typed <c>new(...)</c> and an object the service container builds are out of a source
+    /// scan's reach; <see cref="TestAssemblyInit"/> redirects the activity log, the one store those reach.</para>
+    /// </remarks>
+    [Fact]
+    public void Tests_NeverLeaveAConfigDirAtTheRealProfile()
+    {
+        var seams = ConfigDirSeams();
+        Assert.True(seams.Count >= 17,
+            $"only {seams.Count} types with a configDir constructor were found, and 20 were measured. The "
+            + "reflection stopped matching, so the scan below would check nothing.");
+
+        var projects = new[] { TestPaths.TestProject(), Path.Combine(TestPaths.SolutionDir(), "SysManager.IntegrationTests") };
+        var scanned = 0;
+        var leaks = new List<string>();
+        foreach (var file in projects
+                     .SelectMany(p => Directory.EnumerateFiles(p, "*.cs", SearchOption.AllDirectories))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                             StringComparison.Ordinal)))
+        {
+            var code = WithStringsBlanked(WithoutComments(File.ReadAllText(file)));
+            foreach (var (type, arguments) in ConfigDirConstructions(code, seams))
+            {
+                scanned++;
+                if (LeavesConfigDirAtItsDefault(arguments, seams[type]))
+                    leaks.Add($"{Path.GetFileName(file)}: new {type}({string.Join(", ", arguments)})");
+            }
+        }
+
+        Assert.True(scanned >= 130,
+            $"only {scanned} constructions of those types were found in the tests, and 148 were measured. The "
+            + "match stopped working, so this guard would pass while checking nothing.");
+        Assert.True(leaks.Count == 0,
+            "These tests build a type over the REAL profile folder, %LocalAppData%\\SysManager: its configDir is left "
+            + "at the default. Pass a temp folder, as the other tests of each type do (#2555):\n  "
+            + string.Join("\n  ", leaks));
+    }
+
+    [Theory]
+    [InlineData("new NotificationBlockerService(_root)", true)]
+    [InlineData("new NotificationBlockerService(_root, config.Path)", false)]
+    [InlineData("new NotificationBlockerService(baseKey: _root, configDir: dir)", false)]
+    [InlineData("new NotificationBlockerService(_root, configDir: null)", true)]
+    [InlineData("new NotificationBlockerService(_root, null)", true)]
+    [InlineData("new NotificationsTweak(originalToastEnabled: null, _root)", true)]
+    [InlineData("new NotificationsTweak(null, _root, null, dir)", false)]
+    [InlineData("new AboutViewModel()", true)]
+    [InlineData("new AboutViewModel(dir)", false)]
+    [InlineData("new AboutViewModel(updates, report)", true)]
+    [InlineData("new AboutViewModel(updates, report, dir)", false)]
+    [InlineData("new SysManager.Services.SpeedTestHistoryService()", true)]
+    [InlineData("new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), \"a, (b\", Guid.NewGuid().ToString()))", false)]
+    [InlineData("new AppIconService(null, otherDir)", false)]
+    [InlineData("new PerformanceService(runner, restore)", true)]
+    [InlineData("new PerformanceService(runner, restore, dir)", false)]
+    [InlineData("new ProfileService()", true)]
+    [InlineData("new ProfileService(local, roaming)", false)]
+    public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
+    {
+        // Proves the guard above from both sides, against the real overloads reflection finds: a construction that
+        // leaves configDir at its default is caught, however it is written, and one that sets it is not. The comma and
+        // parenthesis inside the string literal must not split or end the argument list.
+        var seams = ConfigDirSeams();
+
+        var (type, arguments) = Assert.Single(ConfigDirConstructions(WithStringsBlanked(construction), seams));
+
+        Assert.Equal(leaks, LeavesConfigDirAtItsDefault(arguments, seams[type]));
+    }
+
+    [Fact]
+    public void TheConfigDirScan_DoesNotReadAConstructionInsideAStringLiteral()
+    {
+        // The theory above keeps its constructions in string literals, and so would any message quoting one. The scan
+        // reads this very file, so a match inside a literal would report the guard's own test data as a leak.
+        const string code = """
+            var a = "new NotificationBlockerService(_root)";
+            var b = @"new AboutViewModel()";
+            var c = $"{x} new SpeedTestHistoryService()";
+            var d = new SpeedTestHistoryService(dir);
+            """;
+
+        var (type, arguments) = Assert.Single(ConfigDirConstructions(WithStringsBlanked(code), ConfigDirSeams()));
+
+        Assert.Equal("SpeedTestHistoryService", type);
+        Assert.Equal(["dir"], arguments);
+    }
+
+    /// <summary>
+    /// Every type in the app with a constructor that takes a <c>configDir</c>, keyed by name, and all of its
+    /// constructors: how many arguments each requires and takes, where <c>configDir</c> sits (-1 when it has none),
+    /// and whether it takes a string at all.
+    /// </summary>
+    private static Dictionary<string, List<(int Required, int Total, int At, bool TakesAString)>> ConfigDirSeams() =>
+        AppAssembly.GetTypes()
+            .Select(t => (Type: t, Constructors: t
+                .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .Select(c => c.GetParameters())
+                .ToList()))
+            .Where(x => x.Constructors.Any(ps => ps.Any(p => p.Name == "configDir")))
+            .GroupBy(x => x.Type.Name)
+            .ToDictionary(g => g.Key, g => g
+                .SelectMany(x => x.Constructors)
+                .Select(ps => (
+                    Required: ps.Count(p => !p.IsOptional),
+                    Total: ps.Length,
+                    At: Array.FindIndex(ps, p => p.Name == "configDir"),
+                    TakesAString: ps.Any(p => p.ParameterType == typeof(string))))
+                .ToList());
+
+    /// <summary>Each <c>new T(...)</c> in <paramref name="code"/> for one of the seam types, with its top-level
+    /// arguments.</summary>
+    private static IEnumerable<(string Type, List<string> Arguments)> ConfigDirConstructions(
+        string code, Dictionary<string, List<(int Required, int Total, int At, bool TakesAString)>> seams)
+    {
+        foreach (var type in seams.Keys)
+        {
+            foreach (Match m in Regex.Matches(code, @"\bnew\s+(?:[A-Za-z_]\w*\.)*" + Regex.Escape(type) + @"\s*\("))
+            {
+                var arguments = TopLevelArguments(code, m.Index + m.Length - 1);
+                if (arguments is not null) yield return (type, arguments);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a construction with these arguments leaves <c>configDir</c> at its default. It does when no argument
+    /// names it and no overload the argument count binds to has it within the arguments given, and also when the
+    /// value given is <c>null</c> or <c>default</c>, which resolve the same real folder.
+    /// </summary>
+    /// <remarks>
+    /// A count can also bind to an overload without <c>configDir</c>. One that takes no string at all cannot be handed
+    /// a folder, so it resolves its own, the real one: <c>PerformanceService(ps, restorePoints)</c> passes
+    /// <c>%LocalAppData%\SysManager</c> on to the overload that takes a folder. One that takes a string is handed its
+    /// folders another way, as <c>ProfileService(local, roaming)</c> is, and is left alone.
+    /// </remarks>
+    private static bool LeavesConfigDirAtItsDefault(
+        IReadOnlyList<string> arguments, IReadOnlyList<(int Required, int Total, int At, bool TakesAString)> overloads)
+    {
+        var named = arguments.FirstOrDefault(a => ConfigDirNamedArgument().IsMatch(a));
+        if (named is not null) return IsNullValue(named[(named.IndexOf(':') + 1)..]);
+
+        var fits = overloads.Where(o => o.Required <= arguments.Count && arguments.Count <= o.Total).ToList();
+        if (fits.Count == 0 || fits.Any(o => o.At < 0 && o.TakesAString)) return false;
+        return fits.All(o => o.At < 0 || arguments.Count <= o.At || IsNullValue(arguments[o.At]));
+    }
+
+    private static bool IsNullValue(string argument) => argument.Trim() is "null" or "null!" or "default";
+
+    [GeneratedRegex(@"^configDir\s*:")]
+    private static partial Regex ConfigDirNamedArgument();
+
+    /// <summary>
+    /// The top-level arguments of the call whose opening parenthesis is at <paramref name="open"/>, or null when it
+    /// does not close. Nested parentheses, brackets and braces, and string and character literals, are stepped over,
+    /// so a <c>Path.Combine(a, b)</c> argument counts once.
+    /// </summary>
+    private static List<string>? TopLevelArguments(string code, int open)
+    {
+        var arguments = new List<string>();
+        var depth = 0;
+        var start = open + 1;
+        for (var i = open + 1; i < code.Length; i++)
+        {
+            var c = code[i];
+            if (c == '"')
+            {
+                var verbatim = code[i - 1] == '@' || (code[i - 1] == '$' && code[i - 2] == '@');
+                i = ClosingQuote(code, i, '"', verbatim);
+            }
+            else if (c == '\'')
+            {
+                i = ClosingQuote(code, i, '\'', verbatim: false);
+            }
+            else if (c is '(' or '[' or '{')
+            {
+                depth++;
+            }
+            else if (c is ')' or ']' or '}')
+            {
+                if (depth > 0)
+                {
+                    depth--;
+                    continue;
+                }
+                var last = code[start..i].Trim();
+                if (last.Length > 0 || arguments.Count > 0) arguments.Add(last);
+                return arguments;
+            }
+            else if (c == ',' && depth == 0)
+            {
+                arguments.Add(code[start..i].Trim());
+                start = i + 1;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// <paramref name="code"/> with the contents of every string and character literal replaced by spaces, the quotes
+    /// and line breaks kept, so a construction quoted in a literal is not read as one. Raw literals (three or more
+    /// quotes) end at the same run of quotes.
+    /// </summary>
+    private static string WithStringsBlanked(string code)
+    {
+        var chars = code.ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            int close;
+            if (chars[i] == '"')
+            {
+                // Verbatim first: @"""a"" b" opens with three quotes too, the second and third an escaped one.
+                var verbatim = i > 0 && (chars[i - 1] == '@' || (i > 1 && chars[i - 1] == '$' && chars[i - 2] == '@'));
+                var run = 0;
+                while (i + run < chars.Length && chars[i + run] == '"') run++;
+                if (!verbatim && run >= 3)
+                {
+                    var end = code.IndexOf(new string('"', run), i + run, StringComparison.Ordinal);
+                    close = end < 0 ? chars.Length - 1 : end + run - 1;
+                    Blank(chars, i + run, end < 0 ? chars.Length : end);
+                    i = close;
+                    continue;
+                }
+                close = ClosingQuote(code, i, '"', verbatim);
+            }
+            else if (chars[i] == '\'')
+            {
+                close = ClosingQuote(code, i, '\'', verbatim: false);
+            }
+            else
+            {
+                continue;
+            }
+            Blank(chars, i + 1, close);
+            i = close;
+        }
+        return new string(chars);
+
+        static void Blank(char[] text, int from, int to)
+        {
+            for (var k = from; k < to && k < text.Length; k++)
+                if (text[k] is not ('\r' or '\n')) text[k] = ' ';
+        }
+    }
+
+    /// <summary>The index of the quote that closes the literal opened at <paramref name="open"/>.</summary>
+    private static int ClosingQuote(string code, int open, char quote, bool verbatim)
+    {
+        for (var i = open + 1; i < code.Length; i++)
+        {
+            if (!verbatim && code[i] == '\\')
+            {
+                i++;
+            }
+            else if (code[i] == quote)
+            {
+                if (!verbatim || i + 1 >= code.Length || code[i + 1] != quote) return i;
+                i++;
+            }
+        }
+        return code.Length - 1;
+    }
+
+    /// <summary>
     /// Any test class that touches a process-wide mutable singleton must be in the serialized collection.
     /// </summary>
     /// <remarks>
@@ -221,7 +496,7 @@ public partial class ArchitectureTests
         }
 
         Assert.True(lockTakers.Count >= 10,
-            $"only {lockTakers.Count} view models were found taking the operation lock, and 20 were measured. "
+            $"only {lockTakers.Count} view models were found taking the operation lock, and 29 were measured. "
             + "The marker stopped matching, so the indirect half of this guard would check nothing.");
 
         var testDir = TestPaths.TestProject();

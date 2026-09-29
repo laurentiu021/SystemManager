@@ -535,7 +535,8 @@ need administrator rights:
   `Installed X/Y. Failed: Z. Not applied: W.`
 - Reboot detection — toast notification if any update requires reboot
 - Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
-- Admin banner with a one-click "Run as Administrator" relaunch
+- Admin banner with a one-click "Run as Administrator" relaunch. Installing needs it, and
+  without it the tab says so before asking you to approve anything
 - PSWindowsUpdate is optional now (used only for the History view); install it
   from a normal, non-administrator SysManager session. The installer validates
   the official PowerShell Gallery endpoint and uses the current-user module directory.

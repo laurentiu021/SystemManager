@@ -935,41 +935,36 @@ public class WindowsUpdateViewModelTests
     }
 
     /// <summary>
-    /// Installing updates without elevation offers to relaunch rather than failing, and installs nothing.
+    /// Installing updates without elevation says what is needed before asking anything, and installs nothing.
     /// </summary>
     /// <remarks>
-    /// The only test here that has to replace the process-wide probe, because <c>InstallUpdatesAsync</c>
-    /// calls <c>AdminHelper.IsElevated()</c> directly instead of reading the injected answer its three
-    /// siblings use. Filed as an inconsistency rather than changed inside a test-only change.
-    /// <para>This gate also sits AFTER the confirmation, unlike the refusals elsewhere in the app, and
-    /// that is coherent rather than an oversight: the non-elevated path is not a refusal but a
-    /// continuation — it relaunches elevated and carries the user's intent across — so asking first is
-    /// what makes the relaunch worth doing. <c>RelaunchAsAdmin</c> returns false when
-    /// <c>Application.Current</c> is null, which it is under the test runner, so nothing is spawned.</para>
-    /// </remarks>
-    /// <remarks>
-    /// This used to open with <c>AdminHelper.ForceElevation(false)</c>, because the gate read
+    /// The gate sits before the confirmation, like the refusals elsewhere in the app. It used to sit after it
+    /// and relaunch SysManager as administrator, on the reasoning that the relaunch carried the user's intent
+    /// across. It did not: the new window had no selection, so the user approved an install that never ran
+    /// (#2505). Now nothing is asked until an install can actually follow the answer.
+    /// <para>This used to open with <c>AdminHelper.ForceElevation(false)</c>, because the gate read
     /// <c>AdminHelper.IsElevated()</c> at call time and the injected value could not reach it — one test
     /// pinning elevation a different way from its eight neighbours, and a reason for the whole class to
     /// swap a process-wide static. #2181 routed that gate through the same seam, so this now says what it
-    /// means with the constructor argument.
+    /// means with the constructor argument.</para>
     /// </remarks>
     [Fact]
-    public async Task InstallUpdates_WhenNotElevated_OffersToRelaunchAndInstallsNothing()
+    public async Task InstallUpdates_WhenNotElevated_SaysSoBeforeAsking_AndInstallsNothing()
     {
         var vm = NewVm(elevated: false, out var runner);
         vm.Updates.Add(new UpdateEntry { Title = "KB0000001", IsSelected = true });
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // the user agrees to install
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // the user would agree to install
         DialogService.Instance = dialog;
         try
         {
             await vm.InstallUpdatesCommand.ExecuteAsync(null);
 
-            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
-            Assert.Contains("Admin required", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.StartsWith("Installing updates needs administrator rights.", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Contains("select them again", vm.StatusMessage, StringComparison.Ordinal);
             Assert.False(vm.IsBusy, "the install never started, so the tab must not look busy");
             Assert.Equal("", vm.Updates[0].Status);
         }
@@ -1012,7 +1007,7 @@ public class WindowsUpdateViewModelTests
             await vm.InstallUpdatesCommand.ExecuteAsync(null);
 
             Assert.Equal(2, asked);
-            Assert.Contains("Admin required", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith("Installing updates needs administrator rights.", vm.StatusMessage, StringComparison.Ordinal);
         }
         finally
         {

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.46] - 2026-09-29
+
+**Windows Update no longer asks you to approve an install it cannot carry out.** Without administrator rights
+it now says so first, instead of asking and then restarting SysManager with nothing installed.
+
+### Fixed
+
+- **Windows Update: installing without administrator rights says what is needed before asking anything.** The
+  tab asked "Install N selected Windows update(s)?", and after a Yes it relaunched SysManager as administrator
+  and closed. Nothing was installed, and the new window had no selection to install. Now the refusal comes
+  first, and says to use "Run as administrator" and select the updates again in the window that opens.
+  Present since v0.3.0.
+
 ## [1.114.45] - 2026-09-29
 
 **System Fixes now asks before SFC and DISM start, as the tab always said it did.** The Windows Update reset

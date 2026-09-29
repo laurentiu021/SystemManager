@@ -642,7 +642,12 @@ Key services:
 - `NotificationBlockerService` — mutes app notification nags via the documented
   per-user registry switches Windows Settings writes (per-app `Enabled` under
   `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable
-  registry root for tests; per-user, reversible, no window hooking.
+  registry root for tests; per-user, reversible, no window hooking. Every master-toggle write
+  is counted in `notification-master-writes.json`, which Gaming Profile's `NotificationsTweak`
+  compares at apply and at revert to keep a mute the user made during a game.
+  `ReadMasterToggleWriteCount` returns null for a ledger that cannot be read or parsed, and the
+  revert then restores; a write still counts from 0 over such a ledger, because its number only
+  has to change.
 - `BatteryService` — battery charge, health, wear level and cycle count via WMI
   (`Win32_Battery`, then the `root\WMI` capacity classes). `GetBatteryInfo` returns null
   when the `Win32_Battery` query fails, so a failed read is never reported as no battery.

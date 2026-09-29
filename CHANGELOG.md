@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.41] - 2026-09-29
+
+**Gaming Profile no longer leaves notifications muted after a game when SysManager cannot read its record of
+your notification changes.** Notifications could stay off after the game although you never touched them.
+
+### Fixed
+
+- **Gaming Profile: notifications come back after a game even when the Notifications tab's write count cannot
+  be read.** "Silence notifications" mutes Windows notifications during a game and switches them back on
+  afterwards, unless you muted them yourself on the Notifications tab meanwhile. It tells the two apart by a
+  count that tab keeps of its own changes. A count that could not be read, when the game started or when it
+  ended, was taken as 0, which looked like a change you had made, so notifications stayed muted.
+  - A count that cannot be read is now unknown, and the profile then switches notifications back on, as it
+    did before the count existed.
+  - A mute you make during a game is still kept whenever the count can be read, including when it could not
+    be read at the moment you made it.
+  Present since the count was added in v1.75.10.
+
 ## [1.114.40] - 2026-09-29
 
 **Settings Watchdog no longer replaces a saved baseline it could not read without asking.** A baseline that

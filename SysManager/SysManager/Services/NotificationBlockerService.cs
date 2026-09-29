@@ -104,27 +104,20 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     private sealed record Ledger(int Writes);
 
     /// <summary>
-    /// How many times the Notifications tab has written the master toggle on this machine.
+    /// How many times the Notifications tab has written the master toggle on this machine: 0 when there is no
+    /// ledger yet, or null when it is there and could not be read or does not parse.
     /// </summary>
     /// <remarks>
     /// Static so <see cref="NotificationsTweak"/> can read it without taking a dependency on this service,
     /// mirroring how it already reads <see cref="PushKeyPath"/> and <see cref="ToastValueName"/> from here.
-    /// <para>Returns 0 when the file is missing or unreadable. That is the safe direction: a count that
-    /// looks unchanged makes Gaming Profile restore its snapshot, which is the behaviour that shipped before
-    /// this ledger existed — a lost file degrades to the old semantics rather than to never reverting.</para>
+    /// <para>Null, not 0, for a count that could not be read. Gaming Profile compares the count at apply with
+    /// the count at revert, and takes a change for the user muting notifications themselves. A read that failed
+    /// used to return 0, which differs from every real count, so the revert left notifications muted after the
+    /// game when nobody had touched them (#2538). An unknown count skips the comparison and restores, which is
+    /// the behaviour that shipped before this ledger existed.</para>
     /// </remarks>
-    internal static int ReadMasterToggleWriteCount(string? configDir = null)
-    {
-        var path = LedgerPath(configDir);
-        try
-        {
-            if (!File.Exists(path)) return 0;
-            return JsonSerializer.Deserialize<Ledger>(File.ReadAllText(path))?.Writes ?? 0;
-        }
-        catch (IOException ex) { Log.Debug("Toast write-ledger read failed: {Error}", ex.Message); return 0; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Toast write-ledger denied: {Error}", ex.Message); return 0; }
-        catch (JsonException ex) { Log.Debug("Toast write-ledger malformed: {Error}", ex.Message); return 0; }
-    }
+    internal static int? ReadMasterToggleWriteCount(string? configDir = null) =>
+        ReadMasterToggleWriteCountAt(LedgerPath(configDir));
 
     /// <summary>
     /// Records that the user-facing path just wrote the master toggle.
@@ -145,9 +138,13 @@ public sealed class NotificationBlockerService : INotificationBlockerService
             lock (_ledgerLock)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_ledgerPath)!);
-                var next = ReadMasterToggleWriteCountAt(_ledgerPath) + 1;
+                // A ledger that could not be read counts from 0, and is written over. Its number is not data: it
+                // only has to change, because an unchanged count tells a revert the user never touched the
+                // toggle. Leaving it unwritten would lose this write every time; writing 1 is mistaken for no
+                // write only when the count at apply was exactly 1.
+                var next = (ReadMasterToggleWriteCountAt(_ledgerPath) ?? 0) + 1;
                 // AtomicFile, like every other store here: a torn write would read back as a malformed
-                // ledger, which degrades to 0 and makes revert restore when it should have held back.
+                // ledger, which reads as unknown and makes revert restore when it should have held back.
                 AtomicFile.WriteAllText(_ledgerPath, JsonSerializer.Serialize(new Ledger(next)));
             }
         }
@@ -155,17 +152,17 @@ public sealed class NotificationBlockerService : INotificationBlockerService
         catch (UnauthorizedAccessException ex) { Log.Debug("Toast write-ledger update denied: {Error}", ex.Message); }
     }
 
-    /// <summary>Reads the ledger at an explicit path, so the instance uses its own injected location.</summary>
-    private static int ReadMasterToggleWriteCountAt(string path)
+    /// <summary>
+    /// Reads the ledger at an explicit path, so the instance uses its own injected location: 0 for no ledger, null
+    /// for one that could not be read or does not parse.
+    /// </summary>
+    private static int? ReadMasterToggleWriteCountAt(string path)
     {
-        try
-        {
-            if (!File.Exists(path)) return 0;
-            return JsonSerializer.Deserialize<Ledger>(File.ReadAllText(path))?.Writes ?? 0;
-        }
-        catch (IOException) { return 0; }
-        catch (UnauthorizedAccessException) { return 0; }
-        catch (JsonException) { return 0; }
+        var text = StoreFile.ReadText(path);
+        if (text is null) return null;
+        if (text.Length == 0) return 0;
+        try { return JsonSerializer.Deserialize<Ledger>(text)?.Writes ?? 0; }
+        catch (JsonException ex) { Log.Debug("Toast write-ledger malformed: {Error}", ex.Message); return null; }
     }
 
     /// <inheritdoc />

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.40] - 2026-09-29
+
+**Settings Watchdog no longer replaces a saved baseline it could not read without asking.** A baseline that
+could not be read looked like no baseline at all, so saving a new one replaced it at once.
+
+### Fixed
+
+- **Settings Watchdog: a saved baseline that cannot be read is no longer replaced without a word.** When the
+  baseline file could not be read or did not parse, the tab said "No baseline yet", and Save baseline wrote
+  over it without the confirmation an overwrite gets.
+  - The tab now says the saved baseline could not be read, so nothing is compared with it.
+  - Save baseline asks before replacing it, and keeps the old file as `settings-baseline.json.unreadable`
+    rather than deleting it. If the old file cannot be moved aside, nothing is replaced, and the tab says the
+    baseline was not saved.
+  - A baseline file that Windows refuses to let SysManager read now counts as one that could not be read,
+    instead of leaving the tab half-loaded.
+  Present since Settings Watchdog was added in v1.48.0.
+
 ## [1.114.39] - 2026-09-29
 
 **Turning off the startup update check now stays off, even when SysManager cannot read that setting for a

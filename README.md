@@ -882,7 +882,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   from the moment you open the tab rather than only after something has changed
 - **Save a baseline** of your current preferences with one click; the watchdog
   remembers exactly what each watched setting was. If the baseline cannot be written — a
-  full disk, for example — the tab says it was not saved, and why
+  full disk, for example — the tab says it was not saved, and why. If a saved baseline
+  cannot be read, the tab says so, and saving a new one asks first and keeps the old file
+  aside
 - **Check now** re-reads the live values and lists any drift in plain language —
   e.g. *"Diagnostic data: was 'Off (Security)', now 'Full'"* — with the category
   and a before/after comparison

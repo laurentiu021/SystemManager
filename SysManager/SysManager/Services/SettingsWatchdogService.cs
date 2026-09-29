@@ -31,6 +31,9 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     // ArchitectureTests.Services_DoNotHoldUserDataPathsInStaticFields.
     private readonly string _baselinePath;
 
+    // Serializes SaveBaseline, which reads the baseline file to decide whether to set it aside before replacing it.
+    private readonly Lock _saveLock = new();
+
     /// <summary>
     /// Creates the service.
     /// </summary>
@@ -60,16 +63,31 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     }
 
     /// <summary>Captures the current values as the saved baseline. Returns the snapshot taken.</summary>
-    /// <exception cref="IOException">The baseline file could not be written.</exception>
+    /// <remarks>
+    /// A baseline file that is there and did not load is set aside first, so its bytes survive (#2521).
+    /// </remarks>
+    /// <exception cref="IOException">
+    /// The baseline file could not be written, or one that did not load could not be set aside.
+    /// </exception>
     /// <exception cref="UnauthorizedAccessException">The baseline folder or file is not writable.</exception>
     public IReadOnlyDictionary<string, int?> SaveBaseline(DateTime takenAt)
     {
-        var current = ReadCurrent();
-        Persist(new BaselineSnapshot(takenAt, new Dictionary<string, int?>(current)));
-        return current;
+        // The check and the write are one step: the check reads the file this write replaces.
+        lock (_saveLock)
+        {
+            if (BaselineFileExists && LoadBaseline() is null && !StoreFile.SetAside(_baselinePath))
+                throw new IOException("The saved baseline could not be read or moved aside, so it was not replaced.");
+
+            var current = ReadCurrent();
+            Persist(new BaselineSnapshot(takenAt, new Dictionary<string, int?>(current)));
+            return current;
+        }
     }
 
-    /// <summary>Loads the saved baseline, or null if none exists yet.</summary>
+    /// <summary>
+    /// Loads the saved baseline, or null when none exists yet or the file could not be read or parsed.
+    /// <see cref="BaselineFileExists"/> tells those apart.
+    /// </summary>
     public BaselineSnapshot? LoadBaseline()
     {
         try
@@ -82,14 +100,15 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
             // a malformed-but-parseable file.
             return snapshot is { Values: null } ? snapshot with { Values = [] } : snapshot;
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             Log.Debug("Settings baseline load failed: {Error}", ex.Message);
             return null;
         }
     }
 
-    public bool HasBaseline => File.Exists(_baselinePath);
+    /// <inheritdoc />
+    public bool BaselineFileExists => File.Exists(_baselinePath);
 
     /// <summary>
     /// Compares the saved baseline against the live system and returns the drifted settings.

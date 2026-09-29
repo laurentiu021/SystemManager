@@ -35,6 +35,13 @@ public interface ISettingsWatchdogService
     BaselineSnapshot? LoadBaseline();
 
     /// <summary>
+    /// True when a baseline file is on disk, whether or not it could be read. With <see cref="LoadBaseline"/>
+    /// returning null it tells a baseline that could not be read or used from none at all, which is the
+    /// difference between asking before replacing it and not (#2521).
+    /// </summary>
+    bool BaselineFileExists { get; }
+
+    /// <summary>
     /// The settings that have changed since the baseline. Returns an EMPTY list — never null — when
     /// there is no baseline or nothing drifted.
     /// <para>Reads the baseline and the live values itself. A caller that is going to display those

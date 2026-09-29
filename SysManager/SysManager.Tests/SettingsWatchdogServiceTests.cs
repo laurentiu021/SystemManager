@@ -195,14 +195,14 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
     }
 
     [Fact]
-    public void HasBaseline_ReflectsTheGivenConfigDir()
+    public void BaselineFileExists_ReflectsTheGivenConfigDir()
     {
         var svc = NewService();
-        Assert.False(svc.HasBaseline);
+        Assert.False(svc.BaselineFileExists);
 
         svc.SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0));
 
-        Assert.True(NewService().HasBaseline);
+        Assert.True(NewService().BaselineFileExists);
     }
 
     [Fact]
@@ -231,10 +231,49 @@ public sealed class SettingsWatchdogServiceTests : IDisposable
         {
             NewService().SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0));
 
-            Assert.False(new SettingsWatchdogService(otherDir).HasBaseline);
-            Assert.True(NewService().HasBaseline);
+            Assert.False(new SettingsWatchdogService(otherDir).BaselineFileExists);
+            Assert.True(NewService().BaselineFileExists);
         }
         finally { Directory.Delete(otherDir, recursive: true); }
+    }
+
+    // A baseline that is there and did not load read as "none", so a save replaced it without asking (#2521).
+
+    [Fact]
+    public void SaveBaseline_OverAFileThatDoesNotParse_KeepsItAside_ThenSaves()
+    {
+        File.WriteAllText(BaselineFile, "{ this is not json");
+
+        NewService().SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0));
+
+        Assert.Equal("{ this is not json", File.ReadAllText(BaselineFile + ".unreadable"));
+        Assert.NotNull(NewService().LoadBaseline());
+    }
+
+    [Fact]
+    public void SaveBaseline_WhenABaselineThatDoesNotLoadCannotBeSetAside_Throws_AndLeavesIt()
+    {
+        File.WriteAllText(BaselineFile, "{ this is not json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not,
+        // so only the refusal keeps the file. A sharing hold would fail the write as well and prove nothing.
+        Directory.CreateDirectory(BaselineFile + ".unreadable");
+
+        Assert.Throws<IOException>(() => NewService().SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0)));
+
+        Assert.Equal("{ this is not json", File.ReadAllText(BaselineFile));
+    }
+
+    [Fact]
+    public void LoadBaseline_WhenTheFileCannotBeRead_ReturnsNull_ButTheFileStillCounts()
+    {
+        NewService().SaveBaseline(new DateTime(2026, 3, 1, 12, 0, 0));
+
+        using (new FileStream(BaselineFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+        {
+            var svc = NewService();
+            Assert.Null(svc.LoadBaseline());
+            Assert.True(svc.BaselineFileExists);
+        }
     }
 
     [Fact]

@@ -49,6 +49,10 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     [ObservableProperty] private bool _hasDrift;
     [ObservableProperty] private bool _isElevated;
 
+    // True when a baseline file is there and could not be read or used. It is not "no baseline yet": saving
+    // over it without asking replaced a baseline the user could not see (#2521).
+    private bool _baselineUnusable;
+
     public SettingsWatchdogViewModel(ISettingsWatchdogService service)
     {
         _service = service;
@@ -69,6 +73,7 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     {
         var baseline = _service.LoadBaseline();
         HasBaseline = baseline is not null;
+        _baselineUnusable = baseline is null && _service.BaselineFileExists;
         BaselineTaken = baseline is not null ? $"Baseline saved {baseline.TakenAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}" : "";
 
         // ONE read of the live values, feeding BOTH lists. It used to be two — DetectDrift() read
@@ -88,11 +93,13 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         Watched.ReplaceWith(_service.Catalog.Select(s =>
             new WatchedRow(s, current.TryGetValue(s.Key, out var v) ? v : null, drifted.Contains(s.Key))));
 
-        StatusMessage = !HasBaseline
-            ? "No baseline yet — save your current settings to start watching for changes."
-            : HasDrift
-                ? $"{Drifts.Count} setting(s) changed since your baseline."
-                : "All watched settings match your baseline.";
+        StatusMessage = _baselineUnusable
+            ? "Your saved baseline could not be read, so nothing is compared with it. Save a new baseline to replace it."
+            : !HasBaseline
+                ? "No baseline yet — save your current settings to start watching for changes."
+                : HasDrift
+                    ? $"{Drifts.Count} setting(s) changed since your baseline."
+                    : "All watched settings match your baseline.";
     }
 
     /// <summary>Captures the current settings as the new baseline (with confirmation).</summary>
@@ -102,6 +109,12 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         if (HasBaseline && !DialogService.Instance.Confirm(
                 "Overwrite your saved baseline with the current settings?\n\n" +
                 "Any current drift will be accepted as the new normal.",
+                "Save Baseline — Confirm"))
+            return;
+
+        if (_baselineUnusable && !DialogService.Instance.Confirm(
+                "Your saved baseline could not be read. Replace it with the current settings?\n\n" +
+                "SysManager keeps the old file aside rather than deleting it.",
                 "Save Baseline — Confirm"))
             return;
 

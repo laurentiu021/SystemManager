@@ -1053,7 +1053,10 @@ Key services:
   `DetectDrift` has two shapes: the no-argument one reads the live values itself, and the
   overload takes a snapshot the caller already read. A caller that also DISPLAYS those values
   must use the overload, so the drift verdict and the displayed value describe one moment —
-  two reads let a setting move in between and appear settled while it had changed.
+  two reads let a setting move in between and appear settled while it had changed. A baseline
+  file that is there and did not load is not "no baseline": `BaselineFileExists` tells the two
+  apart, the VM asks before replacing it, and `SaveBaseline` sets it aside under `_saveLock`
+  first, throwing `IOException` rather than replacing it when it cannot.
 - `CliRunner` — the headless command-line entry point (dispatched from `App.OnStartup`
   before the single-instance mutex, attaching to the parent console). Exposes only
   read-only/safe verbs (`--health`, `--cleanup`, `--purge-standby` — with `--trim-ram`

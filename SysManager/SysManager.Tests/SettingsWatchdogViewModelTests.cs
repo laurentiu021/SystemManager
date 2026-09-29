@@ -96,6 +96,27 @@ public class SettingsWatchdogViewModelTests
     }
 
     [Fact]
+    public async Task SaveBaseline_OverABaselineThatCouldNotBeRead_Asks_AndKeepsItWhenDeclined()
+    {
+        // A baseline that is there and did not load used to read as "No baseline yet", so Save replaced it
+        // without the confirmation an overwrite gets (#2521).
+        var svc = Substitute.For<ISettingsWatchdogService>();
+        svc.Catalog.Returns([]);
+        svc.LoadBaseline().Returns((BaselineSnapshot?)null);
+        svc.BaselineFileExists.Returns(true);
+        svc.DetectDrift().Returns([]);
+        var vm = new SettingsWatchdogViewModel(svc);
+        await vm.InitializationComplete;
+        Assert.StartsWith("Your saved baseline could not be read", vm.StatusMessage, StringComparison.Ordinal);
+
+        using var dialog = new DialogAnswer(confirm: false);
+        vm.SaveBaselineCommand.Execute(null);
+
+        Assert.Equal(1, dialog.Calls);
+        svc.DidNotReceive().SaveBaseline(Arg.Any<DateTime>());
+    }
+
+    [Fact]
     public void SaveBaseline_WhenTheWriteFails_SaysItWasNotSaved()
     {
         // The service now lets a failed write through instead of swallowing it (#2452).

@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.34] - 2026-09-29
+
+**Volume Control no longer replaces your saved presets when it cannot read them, and says when a preset was
+not saved.** One failed read could leave only the preset just saved, and deleting one could remove them all.
+
+### Fixed
+
+- **Volume Control: saved presets are never written over when they could not be read.** A presets file that
+  could not be read was taken as empty. Saving a preset then left it as the only one, and deleting a preset
+  left none.
+  - Save and Delete now change nothing when the presets cannot be read, and say so.
+  - A presets file that is damaged is kept as `volume-presets.json.unreadable` before a new one is written.
+- **Volume Control: a preset that could not be written no longer reads as saved.** The tab said "Saved
+  preset" and showed it in the list even when writing the file failed, and it was gone at the next start. It
+  now says the preset was not saved, and the same for Delete.
+  Both present since presets were added in v1.55.0.
+
 ## [1.114.33] - 2026-09-29
 
 **Disk Analyzer no longer forgets your other folders' last scans when it cannot read them.** One failed read

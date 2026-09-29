@@ -337,7 +337,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`. The summary counts
   only the apps Windows actually changed, and says how many it refused — an app that has
-  just stopped playing, for example
+  just stopped playing, for example. A preset that could not be saved or deleted says so, and
+  saved presets that cannot be read are never written over
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
   to this tab, alongside shortcuts to Process Manager and Quick Cleanup
 

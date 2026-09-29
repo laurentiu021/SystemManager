@@ -84,6 +84,14 @@ public class AudioMixerViewModelTests
             byId.TryGetValue((string)call[0], out var v) ? v : 0f);
     }
 
+    // The saved presets once the file could be read. Null is its own answer, "could not be read" (#2521).
+    private static IReadOnlyList<VolumePreset> Loaded(VolumePresetService presets)
+    {
+        var loaded = presets.Load();
+        Assert.NotNull(loaded);
+        return loaded;
+    }
+
     // The constructor kicks off an async reconcile off the UI thread; await init so
     // Sessions is populated before asserting (mirrors CpuAffinityViewModelTests.NewVm).
     private static AudioMixerViewModel NewVm(IAudioMixerService service)
@@ -1067,7 +1075,7 @@ public class AudioMixerViewModelTests
         // test here is the DELETE gate, so the preset is put on disk directly.
         presets.Save(new VolumePreset("Movie night",
             [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)]));
-        vm.Presets.ReplaceWith(presets.Load());
+        vm.Presets.ReplaceWith(Loaded(presets));
         Assert.Single(vm.Presets);
         vm.SelectedPreset = vm.Presets[0];
 
@@ -1077,7 +1085,7 @@ public class AudioMixerViewModelTests
         Assert.Equal(1, answer.Calls);                       // the gate really ran
         Assert.Single(vm.Presets);                           // still in the list
         Assert.Equal("Movie night", vm.Presets[0].Name);
-        Assert.Single(presets.Load());                       // and still on disk
+        Assert.Single(Loaded(presets));                       // and still on disk
     }
 
     [Fact]
@@ -1093,15 +1101,67 @@ public class AudioMixerViewModelTests
         // Seeded directly for the same reason as the declined case above.
         presets.Save(new VolumePreset("Movie night",
             [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)]));
-        vm.Presets.ReplaceWith(presets.Load());
+        vm.Presets.ReplaceWith(Loaded(presets));
         vm.SelectedPreset = vm.Presets[0];
 
         using var _ = new DialogAnswer(true);
         vm.DeletePresetCommand.Execute(null);
 
         Assert.Empty(vm.Presets);
-        Assert.Empty(presets.Load());
+        Assert.Empty(Loaded(presets));
         Assert.Null(vm.SelectedPreset);
+    }
+
+    // ── Presets that cannot be read (#2521) ─────────────────────────────────
+    //
+    // A presets file that could not be read loaded as none, so the next Save wrote only its own preset over every
+    // other, and Delete wrote none. The file is held open with delete sharing only for as long as a read must
+    // fail: the read fails, and the replace a write ends with would still succeed.
+
+    private static System.IO.FileStream HoldAgainstReads(string dir) => new(
+        System.IO.Path.Combine(dir, "volume-presets.json"),
+        System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Delete);
+
+    [Fact]
+    public async Task SavePreset_WhenThePresetsCannotBeRead_SaysSo_AndKeepsThem()
+    {
+        var dir = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N"));
+        var presets = new VolumePresetService(dir);
+        Assert.NotNull(presets.Save(new VolumePreset("Movie night",
+            [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)])));
+        var vm = new AudioMixerViewModel(ServiceWith(SessionWithExe(volume: 0.5f)), presets);
+        await vm.InitializationComplete;
+        vm.NewPresetName = "Gaming";
+
+        using (HoldAgainstReads(dir))
+        using (new DialogAnswer(confirm: false))
+            vm.SavePresetCommand.Execute(null);
+
+        Assert.StartsWith("Preset \"Gaming\" was not saved", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(vm.Presets, p => p.Name == "Gaming");
+        Assert.Equal(["Movie night"], Loaded(presets).Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public async Task DeletePreset_WhenThePresetsCannotBeRead_SaysSo_AndKeepsThem()
+    {
+        var dir = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "SysManagerTests", System.Guid.NewGuid().ToString("N"));
+        var presets = new VolumePresetService(dir);
+        Assert.NotNull(presets.Save(new VolumePreset("Movie night",
+            [new VolumePresetEntry("chrome.exe", "Chrome", 0.8f, false)])));
+        var vm = new AudioMixerViewModel(ServiceWith(Session("s1", pid: 10, name: "Chrome")), presets);
+        await vm.InitializationComplete;
+        vm.SelectedPreset = Assert.Single(vm.Presets);
+
+        using (HoldAgainstReads(dir))
+        using (new DialogAnswer(confirm: true))
+            vm.DeletePresetCommand.Execute(null);
+
+        Assert.StartsWith("Preset \"Movie night\" was not deleted", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Single(vm.Presets);
+        Assert.Single(Loaded(presets));
     }
 
     // ── Input validation at the trust boundary (real service, no COM) ──────

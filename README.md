@@ -446,10 +446,12 @@ need administrator rights:
 - **Repair Windows' own repair source (DISM)** — runs `DISM /RestoreHealth`, which rebuilds
   the store of known-good copies that SFC draws from, downloading replacements through
   Windows Update. Run this first when SFC reports files it could not fix
-- **Reset Windows Update** — stop the update services, clear the
-  SoftwareDistribution and catroot2 caches, and restart the services. If a cache
-  folder is still in use and cannot be cleared, the fix says so instead of asking
-  for a pointless reboot — and restarts the services either way
+- **Reset Windows Update** — stop the update services and Windows Installer, rename the
+  SoftwareDistribution and catroot2 caches so Windows rebuilds them, and restart the
+  services. The confirmation says that it interrupts an installation running elsewhere, and
+  that the old folders are kept, a new pair on every reset. If a cache folder is still in use
+  and cannot be renamed, the fix says so instead of asking for a pointless reboot — and
+  restarts the services either way
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
 - **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
   stores the credential securely and SysManager never handles your password

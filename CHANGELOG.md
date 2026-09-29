@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.45] - 2026-09-29
+
+**System Fixes now asks before SFC and DISM start, as the tab always said it did.** The Windows Update reset
+also says what it stops and what it leaves behind.
+
+### Fixed
+
+- **System Fixes: SFC and DISM ask for confirmation before they start.** The tab promises that "each fix
+  explains what it does and asks for confirmation before it runs", but these two started at the first click.
+  Both change system files and take 5 to 30 minutes.
+  - SFC says it replaces damaged system files, how long it takes, and that some repairs finish only after a
+    restart. DISM says it downloads replacements from Windows Update, so it needs an internet connection.
+- **System Fixes: Reset Windows Update names what it stops and what it keeps.** Its prompt said it "clears"
+  the update caches. It renames them and keeps the old folders, a new pair on every reset, which can take
+  several GB, and it also stops Windows Installer, which interrupts an installation running in another
+  program. The prompt now says all three, and the README no longer says the caches are cleared.
+  Present since v1.107.0 for SFC and DISM, when they moved to this tab, and since the tab was added in v1.26.0
+  for the Windows Update reset.
+
 ## [1.114.44] - 2026-09-29
 
 **Preinstalled Apps no longer promises that every app can be reinstalled.** Skype and Mail & Calendar,

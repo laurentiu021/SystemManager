@@ -283,6 +283,7 @@ public class SystemFixesViewModelTests
     public async Task RunSfc_WhenElevated_LaunchesScannow()
     {
         using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
         var runner = Substitute.For<IPowerShellRunner>();
         var vm = NewVm(runner);
         Assert.True(vm.IsElevated);
@@ -302,6 +303,7 @@ public class SystemFixesViewModelTests
     public async Task RunDism_WhenElevated_LaunchesRestoreHealth()
     {
         using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
         var runner = Substitute.For<IPowerShellRunner>();
         var vm = NewVm(runner);
 
@@ -316,6 +318,7 @@ public class SystemFixesViewModelTests
     public async Task NoRepair_PassesResetBase()
     {
         using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
         var runner = Substitute.For<IPowerShellRunner>();
         var vm = NewVm(runner);
 
@@ -462,6 +465,58 @@ public class SystemFixesViewModelTests
         await vm.ReinstallWinGetCommand.ExecuteAsync(null);
 
         await serviceRunner.ReceivedWithAnyArgs(1).RunAsync(default!, default, default);
+    }
+
+    // ---------- every repair asks first (#2505) ----------
+    // The tab says each fix asks for confirmation before it runs. SFC and DISM started straight away.
+
+    [Fact]
+    public async Task RunSfc_AsksFirst_AndChangesNothingWhenDeclined()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: false);
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(runner);
+
+        await vm.RunSfcCommand.ExecuteAsync(null);
+
+        Assert.Contains("replaces the damaged ones", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        Assert.Equal("Cancelled.", vm.StatusMessage);
+        Assert.False(vm.IsSfcRunning);
+        await runner.DidNotReceive().RunProcessAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task RunDism_AsksFirst_AndChangesNothingWhenDeclined()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: false);
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(runner);
+
+        await vm.RunDismCommand.ExecuteAsync(null);
+
+        Assert.Contains("needs an internet connection", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        Assert.Equal("Cancelled.", vm.StatusMessage);
+        Assert.False(vm.IsDismRunning);
+        await runner.DidNotReceive().RunProcessAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task ResetWindowsUpdate_Confirmation_NamesWindowsInstallerAndTheKeptFolders()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = NewVm();
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("Stopping Windows Installer interrupts any installation", message, StringComparison.Ordinal);
+        Assert.Contains("The old folders are kept", message, StringComparison.Ordinal);
+        Assert.Contains("SysManager does not remove them", message, StringComparison.Ordinal);
     }
 }
 

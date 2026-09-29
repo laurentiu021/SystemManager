@@ -908,6 +908,9 @@ Key services:
   `ServiceManagerService.RestorableStartTypes`, the one list the mapping to sc.exe tokens reads too:
   `Automatic`, `Automatic (Delayed Start)` and `Manual` — and rehydration applies only to services
   Windows currently reports as `Disabled`, so a stale entry can never override the machine.
+  `Load` returns null for a ledger that could not be read, and `Remember` returns false and writes
+  nothing then, so Disable records before it changes a service and refuses when it cannot. A ledger
+  that does not parse is set aside by `StoreFile` before a fresh one is written.
 - `CrashMarkerService` — records that the process died from an unhandled exception, as JSON under
   `%LocalAppData%\SysManager\last-crash.json`, so the next launch can say so. `App.OnDomain` writes
   the marker (a domain-level unhandled exception kills the process with no UI at all, so this is the
@@ -1095,6 +1098,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   on a second attempt. After the budget the exception propagates exactly as
   before and the previous file is intact, so the class's promise is unchanged.
   The pause is a parameter so the retry can be tested without sleeping.
+- `StoreFile` — the read half of a load-modify-save. `ReadText` tells a missing file ("") from
+  one that could not be read (null), which a store must never write over, because the write would
+  replace everything the file held with the one change. `SetAside` moves a file that does not parse
+  to `<name>.unreadable` (then `-2`, `-3`) before a fresh one is written, keeping its bytes.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that
   suppresses change notifications during bulk add/remove for UI performance
   (in `ObservableCollectionExtensions.cs`).

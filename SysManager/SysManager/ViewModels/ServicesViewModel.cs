@@ -132,8 +132,10 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     /// </summary>
     private void RehydratePreviousStartTypes()
     {
+        // A ledger that could not be read leaves the entries as they are. Enable reads it again, and says so if it
+        // still cannot.
         var ledger = _ledger.Load();
-        if (ledger.Count == 0) return;
+        if (ledger is null || ledger.Count == 0) return;
 
         foreach (var entry in _allServices)
         {
@@ -270,20 +272,32 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // delay included: StartType alone reads a delayed-start service as plain Automatic.
         var previous = ServiceManagerService.StartTypeWithDelay(entry);
 
+        // Recorded BEFORE the change, and the change is not made if it cannot be. The in-memory value is lost by the
+        // next scan, which rebuilds every ServiceEntry, so a service disabled without a record came back as Manual
+        // after a refresh or restart. A ledger that could not be read is not written over either: it holds how every
+        // other service SysManager disabled was set (#2521).
+        if (!_ledger.Remember(entry.Name, previous, DateTimeOffset.UtcNow))
+        {
+            StatusMessage = $"⚠ {entry.DisplayName} was not changed: SysManager could not update its record of how the "
+                + "services it disables were set, which it needs to set them back. Try again in a moment.";
+            return;
+        }
+
         try
         {
             await ServiceManagerService.SetStartupTypeAsync(entry.Name, "disabled", _ps);
             // The ledger's rule for the in-memory copy too: only a type Enable can put back is worth keeping.
             entry.PreviousStartType = ServiceManagerService.IsRestorable(previous) ? previous : null;
-            // Persist it too. The in-memory value is lost by the next scan, which rebuilds every
-            // ServiceEntry — so without this, Enable after a refresh or restart silently restored
-            // an Automatic service as Manual while reporting success.
-            _ledger.Remember(entry.Name, previous, DateTimeOffset.UtcNow);
             ServiceManagerService.RefreshStatus(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to Disabled.";
             Log.Information("Service disabled: {ServiceName} (was {Previous})", entry.Name, previous);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Disable service failed: {ex.Message}"; }
+        catch (InvalidOperationException ex)
+        {
+            // The service was not disabled, so there is nothing to set back.
+            _ledger.Forget(entry.Name);
+            StatusMessage = $"Disable service failed: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -319,7 +333,17 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // persisted ledger over the in-memory value: the property is wiped by every scan, so
         // in-memory only survives until the next Refresh. If neither knows, fall back to Manual
         // (the conservative default that StartTypeToScToken applies to an unknown value).
-        var previous = _ledger.PreviousStartTypeFor(entry.Name) ?? entry.PreviousStartType;
+        //
+        // A ledger that could not be read is not "no record": the prompt below would promise Manual for a
+        // service whose original type is recorded, just not readable right now (#2521).
+        if (_ledger.Load() is not { } ledger)
+        {
+            StatusMessage = $"⚠ {entry.DisplayName} was not changed: SysManager could not read its record of how "
+                + "this service was set before. Try again in a moment.";
+            return;
+        }
+        var previous = (ledger.TryGetValue(entry.Name, out var record) ? record.PreviousStartType : null)
+            ?? entry.PreviousStartType;
         var targetToken = ServiceManagerService.StartTypeToScToken(previous);
 
         // Confirm, like Start / Stop / Disable already do. This is a persistent, machine-scope change

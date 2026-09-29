@@ -7018,7 +7018,11 @@ public partial class ArchitectureTests
             + string.Join("\n  ", offenders));
     }
 
-    [GeneratedRegex(@"\bFile\.Read(?:AllText|AllBytes|AllLines)(?:Async)?\s*\(", RegexOptions.CultureInvariant)]
+    // StoreFile.ReadText counts: it is the read a store is meant to make before it writes back, because it tells a
+    // missing file from one that could not be read (#2521). Without it, a store that switched to it would drop out
+    // of this guard, and the floor above would read the drop as a broken regex.
+    [GeneratedRegex(@"\b(?:File\.Read(?:AllText|AllBytes|AllLines)(?:Async)?|StoreFile\.ReadText(?:Async)?)\s*\(",
+                    RegexOptions.CultureInvariant)]
     private static partial Regex FileRead();
 
     // Optional "Atomic" so a raw write counts too: the guard above bans those from Services, but this
@@ -13989,6 +13993,11 @@ public partial class ArchitectureTests
         // to flush, so the allowlist is not a way out of the durability requirement.
         string[] stagesItsOwnSwap = ["UpdateApplier.cs", "UpdateService.cs"];
 
+        // Not a swap at all: StoreFile.SetAside renames a store file that does not parse to a name that is free, so a
+        // fresh one can be written without destroying it (#2521). It writes no content, so there is nothing to flush.
+        // Pinned to that one move below, so a temp-then-swap added to the same file is still caught.
+        string[] movesAsideOnly = ["StoreFile.cs"];
+
         var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
         var files = Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
@@ -14016,6 +14025,13 @@ public partial class ArchitectureTests
             if (!HandRolledSwap().IsMatch(code)) continue;
 
             var name = Path.GetFileName(file);
+            if (movesAsideOnly.Contains(name))
+            {
+                Assert.True(HandRolledSwap().Matches(code).Count == 1 && !code.Contains("File.Replace(", StringComparison.Ordinal),
+                    $"{name} is allowed its one File.Move, which sets a file aside. Anything more is a swap and must go through AtomicFile.");
+                continue;
+            }
+
             if (!stagesItsOwnSwap.Contains(name))
             {
                 offenders.Add(name);
@@ -14050,6 +14066,7 @@ public partial class ArchitectureTests
         // An allowlist that names a file which no longer exists is a rule nobody is checking.
         var present = files.Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
         Assert.All(stagesItsOwnSwap, name => Assert.Contains(name, present));
+        Assert.All(movesAsideOnly, name => Assert.Contains(name, present));
     }
 
     /// <summary>A file swapped into place by hand, in either of the two forms the app used.</summary>

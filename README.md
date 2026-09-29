@@ -1392,7 +1392,9 @@ offers, "rate us" prompts:
 - Start, stop, disable, or enable services with confirmation dialogs
 - **Enable puts back what was there** — the startup type a service had before SysManager disabled
   it, remembered across restarts, "Automatic (Delayed Start)" included. For a service disabled some
-  other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so
+  other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so.
+  If SysManager cannot read or update that record, Disable and Enable leave the service alone and
+  say so, rather than losing how the other services were set
 - **Never claims a change it did not make** — Enable acts only on a disabled service and Disable only
   on one that is not, and each says so and leaves the service alone otherwise. Stop says when Windows
   will not stop a service rather than reporting that it did

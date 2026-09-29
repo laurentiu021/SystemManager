@@ -64,16 +64,23 @@ public sealed class ServiceStartupLedgerService
         _path = Path.Combine(dir, "service-startup-ledger.json");
     }
 
-    /// <summary>Loads the ledger, keyed by service name. Never throws; returns empty on any problem.</summary>
-    public IReadOnlyDictionary<string, ServiceStartupRecord> Load()
+    /// <summary>
+    /// Loads the ledger, keyed by service name, or null when the file is there and could not be read. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// Null is not "no records". A failed read used to load as an empty ledger, so Enable restored every service it
+    /// could not see as Manual, and the next <see cref="Remember"/> wrote a ledger holding only the service it
+    /// recorded over all the others (#2521). A file that does not parse holds no record that could be restored, so it
+    /// loads as empty, and <see cref="Remember"/> sets it aside instead of writing over it.
+    /// </remarks>
+    public IReadOnlyDictionary<string, ServiceStartupRecord>? Load() => Read().Records;
+
+    /// <summary>The records, null when the file could not be read, and whether it was there but did not parse.</summary>
+    private (IReadOnlyDictionary<string, ServiceStartupRecord>? Records, bool Unparsable) Read()
     {
-        try
-        {
-            if (!File.Exists(_path)) return EmptyLedger;
-            return Parse(File.ReadAllText(_path));
-        }
-        catch (IOException ex) { Log.Debug("Service ledger load failed: {Error}", ex.Message); return EmptyLedger; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Service ledger load denied: {Error}", ex.Message); return EmptyLedger; }
+        var text = StoreFile.ReadText(_path);
+        if (text is null) return (null, false);
+        return TryParse(text) is { } ledger ? (ledger, false) : (EmptyLedger, true);
     }
 
     /// <summary>
@@ -83,23 +90,32 @@ public sealed class ServiceStartupLedgerService
     /// <para>Serialized against <see cref="Forget"/> by <see cref="_mutateLock"/>. The validation
     /// above it is not: rejecting a bad argument reads nothing shared.</para>
     /// </summary>
-    public void Remember(string serviceName, string? previousStartType, DateTimeOffset disabledAtUtc)
+    /// <returns>
+    /// False only when the ledger could not be read or written, and then the caller must not make the change: a
+    /// ledger that could not be read is not written over, because it holds how every other service was set. True
+    /// when the record reached the file, or there was nothing to record.
+    /// </returns>
+    public bool Remember(string serviceName, string? previousStartType, DateTimeOffset disabledAtUtc)
     {
-        if (string.IsNullOrWhiteSpace(serviceName)) return;
+        if (string.IsNullOrWhiteSpace(serviceName)) return true;
         if (!ServiceManagerService.IsRestorable(previousStartType))
         {
             Log.Debug("Not recording an unrestorable startup type for {Service}: {Type}",
                 serviceName, previousStartType ?? "(null)");
-            return;
+            return true;
         }
 
         lock (_mutateLock)
         {
-            var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase)
+            var (records, unparsable) = Read();
+            if (records is null) return false;
+            if (unparsable && !StoreFile.SetAside(_path)) return false;
+
+            var ledger = new Dictionary<string, ServiceStartupRecord>(records, StringComparer.OrdinalIgnoreCase)
             {
                 [serviceName] = new(serviceName, previousStartType, disabledAtUtc)
             };
-            Persist(ledger);
+            return Persist(ledger);
         }
     }
 
@@ -113,27 +129,34 @@ public sealed class ServiceStartupLedgerService
 
         lock (_mutateLock)
         {
-            var ledger = new Dictionary<string, ServiceStartupRecord>(Load(), StringComparer.OrdinalIgnoreCase);
+            // A ledger that could not be read is left as it is: there is no copy of the other records to write back.
+            if (Read().Records is not { } records) return;
+            var ledger = new Dictionary<string, ServiceStartupRecord>(records, StringComparer.OrdinalIgnoreCase);
             if (!ledger.Remove(serviceName)) return;
             Persist(ledger);
         }
     }
 
-    /// <summary>The startup type to restore for a service, or null when nothing is recorded.</summary>
+    /// <summary>
+    /// The startup type to restore for a service, or null when nothing is recorded or the ledger could not be read.
+    /// A caller that must tell those two apart uses <see cref="Load"/>.
+    /// </summary>
     public string? PreviousStartTypeFor(string serviceName) =>
-        !string.IsNullOrWhiteSpace(serviceName) && Load().TryGetValue(serviceName, out var record)
+        !string.IsNullOrWhiteSpace(serviceName) && Load() is { } ledger && ledger.TryGetValue(serviceName, out var record)
             ? record.PreviousStartType
             : null;
 
-    private void Persist(IReadOnlyDictionary<string, ServiceStartupRecord> ledger)
+    private bool Persist(IReadOnlyDictionary<string, ServiceStartupRecord> ledger)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             AtomicFile.WriteAllText(_path, Serialize(ledger));
+            return true;
         }
         catch (IOException ex) { Log.Debug("Service ledger save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Service ledger save denied: {Error}", ex.Message); }
+        return false;
     }
 
     // ── Pure helpers (unit-testable, no file IO) ───────────────────────────
@@ -150,7 +173,10 @@ public sealed class ServiceStartupLedgerService
     /// missing a name or carrying a startup type Windows would reject are skipped rather than
     /// failing the whole file, so one bad entry cannot lose the rest of the ledger.
     /// </summary>
-    public static IReadOnlyDictionary<string, ServiceStartupRecord> Parse(string? json)
+    public static IReadOnlyDictionary<string, ServiceStartupRecord> Parse(string? json) => TryParse(json) ?? EmptyLedger;
+
+    /// <summary><see cref="Parse"/>, except that input which is not a ledger at all is null rather than empty.</summary>
+    internal static IReadOnlyDictionary<string, ServiceStartupRecord>? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return EmptyLedger;
         try
@@ -168,6 +194,6 @@ public sealed class ServiceStartupLedgerService
             }
             return ledger;
         }
-        catch (JsonException ex) { Log.Debug("Service ledger parse failed: {Error}", ex.Message); return EmptyLedger; }
+        catch (JsonException ex) { Log.Debug("Service ledger parse failed: {Error}", ex.Message); return null; }
     }
 }

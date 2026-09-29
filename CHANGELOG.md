@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.29] - 2026-09-29
+
+**Services no longer loses how the services it disabled were set when it cannot read its record of them.** One
+failed read could replace that record with a single service, and Enable then brought the others back as Manual.
+
+### Fixed
+
+- **Services: the record of what Disable changed is never written over when it could not be read.** SysManager keeps
+  the startup type each service had before it disabled it, so Enable can put it back. A record that could not be
+  read was taken as empty. The next Disable replaced it with just the one service, and Enable promised Manual for
+  services whose original type was recorded.
+  - Disable now records the service before it changes it, and changes nothing when the record cannot be updated. A
+    Disable that fails leaves no record behind.
+  - Enable says it could not read the record and changes nothing, instead of asking to set the service to Manual.
+  - A damaged record file is kept as `service-startup-ledger.json.unreadable` rather than written over.
+  Present since the record was added in v1.57.0.
+
 ## [1.114.28] - 2026-09-29
 
 **Bandwidth Monitor no longer rebuilds its chart while SysManager is closing.** Picking a saved range and closing

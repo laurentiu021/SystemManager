@@ -184,8 +184,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 return;
             }
 
-            // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
-            // Network Repair's own DNS reset must not race (#2510).
+            // A change that is cancelled with nothing to name it when SysManager closes mid-run (#2510). The Network
+            // lock also keeps it from landing in the middle of Network Repair's reset of the network stack, a speed
+            // test or a traceroute (#2553).
             using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Change DNS");
             if (opLock is null)
             {
@@ -275,8 +276,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 return;
             }
 
-            // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
-            // Network Repair's own DNS reset must not race (#2510).
+            // A change that is cancelled with nothing to name it when SysManager closes mid-run (#2510). The Network
+            // lock also keeps it from landing in the middle of Network Repair's reset of the network stack, a speed
+            // test or a traceroute (#2553).
             using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Reset DNS");
             if (opLock is null)
             {
@@ -350,8 +352,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
-        // Network Repair's own DNS reset must not race (#2510).
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run (#2510). The Network
+        // lock also keeps it from landing in the middle of Network Repair's reset of the network stack, a speed
+        // test or a traceroute (#2553).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Restore previous DNS");
         if (opLock is null)
         {
@@ -546,14 +549,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        // A write that is cancelled with nothing to name it when SysManager closes mid-run, and that
-        // Network Repair's own DNS reset must not race (#2510).
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Save hosts file");
-        if (opLock is null)
-        {
-            HostsStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
-            return;
-        }
+        // No operation lock (#2553). Nothing else in SysManager writes the hosts file, and SaveHosts swaps a finished
+        // copy into place, so a close mid-save leaves the old file or the new one. The Network lock it took refused the
+        // save for as long as a speed test or a traceroute ran, which conflict with nothing here.
 
         // Snapshot the entries on the UI thread, then write off-thread: SaveHosts does
         // synchronous file I/O (WriteAllLines + File.Replace on the System32 hosts file)
@@ -600,14 +598,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        // A write that is cancelled with nothing to name it when SysManager closes mid-run, and that
-        // Network Repair's own DNS reset must not race (#2510).
-        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Restore hosts file");
-        if (opLock is null)
-        {
-            HostsStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
-            return;
-        }
+        // No operation lock, for SaveHostsAsync's reasons (#2553): RestoreBackup swaps a finished copy into place too.
 
         try
         {

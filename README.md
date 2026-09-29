@@ -449,9 +449,10 @@ need administrator rights:
 - **Reset Windows Update** — stop the update services and Windows Installer, rename the
   SoftwareDistribution and catroot2 caches so Windows rebuilds them, and restart the
   services. The confirmation says that it interrupts an installation running elsewhere, and
-  that the old folders are kept, a new pair on every reset. If a cache folder is still in use
-  and cannot be renamed, the fix says so instead of asking for a pointless reboot — and
-  restarts the services either way
+  that the old folders are kept, a new pair on every reset. It waits for an app install, upgrade
+  or uninstall SysManager itself is running, and none starts until it is done. If a cache folder
+  is still in use and cannot be renamed, the fix says so instead of asking for a pointless reboot
+  — and restarts the services either way
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
 - **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
   stores the credential securely and SysManager never handles your password
@@ -914,12 +915,15 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
   Installer, Uninstaller, Preinstalled Apps, Tweaks Hub, Privacy & Telemetry, Defender Tweaks,
   Edge/OneDrive Remover, Services, and the Dashboard's quick actions)
-- **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer or
-  Uninstaller while another is running fails with exit code 1618, because Windows Installer only
-  ever runs one installation at a time.** The three now refuse to start a second one instead
-- **Changing DNS, resetting it, or editing the hosts file on DNS & Hosts shares Network Repair's
-  own lock**, so a preset change and a repair's DNS reset cannot run at the same time and undo
-  each other
+- **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
+  Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
+  1618, because Windows Installer only ever runs one installation at a time.** The four now refuse
+  to start a second one instead. Reset Windows Update stops Windows Installer, so it waits for all
+  four, and none of them starts while it runs
+- **Changing DNS on DNS & Hosts waits for Network Repair, a speed test or a traceroute, and they
+  wait for it**, so a DNS change never lands in the middle of a network reset or a measurement.
+  Saving or restoring the hosts file waits for nothing: nothing else in SysManager writes that
+  file, and each save puts a finished copy in place, so it cannot be left half-written
 - **Nothing restarts or services Windows in the middle of a repair.** A feature change, a
   Windows Update install, Reset Windows Update, and creating or restoring a restore point
   each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.
@@ -1505,7 +1509,9 @@ offers, "rate us" prompts:
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and
   does not start while another speed test, a traceroute or a network repair is running. In the same
-  way, Run Quick Cleanup does not start while another cleanup or disk scan is running
+  way, Run Quick Cleanup does not start while another cleanup or disk scan is running, and Update
+  All Apps does not start while App Updates, Bulk Installer or Uninstaller is at work or Reset
+  Windows Update is running
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the

@@ -450,6 +450,54 @@ public class SystemFixesViewModelTests
         Assert.False(vm.IsFixRunning);
     }
 
+    // ---------- Reset Windows Update and the install lock (#2553) ----------
+
+    [Fact]
+    public async Task ResetWindowsUpdate_WhileAnAppInstallRuns_DoesNotRun()
+    {
+        // The reset stops Windows Installer, which cuts off an app install, upgrade or uninstall in the middle. It took
+        // only the system-modification lock, so it started under one that App Updates, Bulk Installer, Uninstaller or
+        // Update All Apps was running.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(serviceRunner: serviceRunner);
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates");
+        Assert.NotNull(held);
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        await serviceRunner.DidNotReceiveWithAnyArgs().RunAsync(default!, default, default);
+        Assert.Equal("Cannot start — App Updates is already running.", vm.StatusMessage);
+        Assert.False(vm.IsFixRunning);
+        // The system-modification lock it took first goes back with the refusal; a kept one would block every
+        // repair, feature change and update install until SysManager restarted.
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification));
+    }
+
+    [Fact]
+    public async Task ResetWindowsUpdate_HoldsTheInstallLockWhileItRuns()
+    {
+        // The other direction: while the reset has Windows Installer stopped, an install started on another tab is
+        // refused rather than started into a stopped service.
+        using var elevated = AdminHelper.ForceElevation(true);
+        string? heldBy = null;
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        serviceRunner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install);
+                return Task.FromResult(new Collection<PSObject>());
+            });
+        var vm = NewVm(serviceRunner: serviceRunner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("Windows Update reset", heldBy);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install));
+    }
+
     [Fact]
     public async Task ReinstallWinGet_TakesNoSystemLock()
     {

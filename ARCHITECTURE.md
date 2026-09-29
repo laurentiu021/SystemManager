@@ -665,9 +665,14 @@ Key services:
   it: the two must NOT exclude each other, because an SFC scan runs for up to fifteen
   minutes and a user whose taskbar froze during one still has to be able to restart the
   shell. What must be exclusive is two shell restarts.
-  `Install` is separate for the same kind of reason. App Updates, Bulk Installer and Uninstaller exclude one
-  another because Windows Installer runs one installation at a time, and an MSI package started while another
-  runs fails with 1618 (#2510). None of them services Windows, so an SFC scan does not hold them up.
+  `Install` is separate for the same kind of reason. App Updates, Bulk Installer, Uninstaller and the
+  Dashboard's Update All Apps exclude one another because Windows Installer runs one installation at a time,
+  and an MSI package started while another runs fails with 1618 (#2510; Update All Apps joined at #2553).
+  None of them services Windows, so an SFC scan does not hold them up. Reset Windows Update stops the Windows
+  Installer service, so it holds `Install` as well as `SystemModification` (#2553).
+  `Network` covers the speed tests, traceroute, Network Repair, and DNS & Hosts' DNS changes. Saving or
+  restoring the hosts file takes no lock: nothing else writes that file, and `HostsFileService` swaps a
+  finished copy into place (#2553).
   `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
   Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
@@ -677,7 +682,8 @@ Key services:
   #2484; the last five joined at #2510, mainly so closing SysManager mid-change can name them — overlap
   between any two of them is not itself dangerous the way an SFC repair racing a feature change is.
   System Fixes' `RunFixAsync` takes it only for the fixes that name
-  a lock, so Reinstall WinGet, which conflicts with none of them, still runs during a repair.
+  a lock, so Reinstall WinGet, which conflicts with none of them, still runs during a repair. Its
+  `stopsWindowsInstaller` flag adds `Install` under the same name, for Reset Windows Update.
   Deep Cleanup takes it in addition to `Disk` when one of its two Windows Update caches is ticked: both sit
   inside `SoftwareDistribution`, which an update install reads from and Reset Windows Update renames. It gives
   it back after the delete, before the read-only rescan (#2510).

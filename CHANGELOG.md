@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.31] - 2026-09-29
+
+**Gaming Profile no longer loses its record of a game mode left on when it cannot read its saved settings.**
+Starting game mode could replace that record, which is what puts your settings back after SysManager closes
+during a game.
+
+### Fixed
+
+- **Gaming Profile: its saved settings are never written over when they could not be read.** Gaming Profile
+  keeps the options you last used and, while game mode is on, a record of the settings it changed, so they can
+  be put back if SysManager closes during a game. A file that could not be read was taken as empty, and Start
+  saved your options over it, the record of a game mode still left on included.
+  - Start now changes nothing when the file cannot be read, and says so.
+  - A file that is damaged, or was saved by a newer SysManager, is kept as `gaming-profiles.json.unreadable`
+    before a new one is written.
+  - Saving your options and clearing the record after a restore can no longer overlap and undo each other.
+  Present since Gaming Profile was added in v1.52.38.
+
 ## [1.114.30] - 2026-09-29
 
 **Performance Mode no longer replaces its record of your original settings when it cannot read it.** After an

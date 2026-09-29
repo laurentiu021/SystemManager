@@ -49,6 +49,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     // UI thread while Process.Exited fires OnGameExited on a thread-pool thread — both mutate
     // _appliedSteps and _boundGame, so they must not overlap.
     private readonly SemaphoreSlim _gate = new(1, 1);
+    // Serializes every read-modify-write of the store file. Held only around the file IO, never across an await, so
+    // SaveLastConfig on the UI thread cannot wait behind a revert that holds _gate.
+    private readonly Lock _storeLock = new();
     private Process? _boundGame;
     private bool _disposed;
 
@@ -166,6 +169,16 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public async Task<GamingApplyResult> ApplyAsync(GamingProfile profile, GameTarget? game, CancellationToken ct = default)
     {
+        // The session's crash-recovery record is written into the store once the steps apply. A store that could not
+        // be read cannot take it without being written over, and it may hold a leftover session's record, so nothing
+        // is changed until it can be read (#2521). Checked first: the revert below, the restore point and the steps
+        // are all changes.
+        if (ReadStore().Store is null)
+        {
+            Log.Warning("Gaming Profile apply refused: its store could not be read");
+            return new GamingApplyResult([], RestorePointCreated: false, StoreUnreadable: true);
+        }
+
         if (IsActive) await RevertAsync(ct).ConfigureAwait(false); // never stack sessions
 
         // Acquired BEFORE the snapshot, not merely around the writes, because the snapshot IS the
@@ -221,8 +234,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // next-launch recovery sweep replays exactly those — never a step that was skipped for
             // admin or was a no-op (which is how a WSearch we never stopped could get restarted).
             var effective = EffectiveMachineWideProfile(profile, appliedThisRun);
-            if (effective.HasAnyEnabled)
-                SaveStore(LoadStore() with { ActiveSession = new GamingSessionRecord(effective, snapshot) });
+            if (effective.HasAnyEnabled
+                && !UpdateStore(store => store with { ActiveSession = new GamingSessionRecord(effective, snapshot) }))
+                Log.Warning("Gaming Profile is on without its crash-recovery record: the store could not be updated");
         }
         finally { _gate.Release(); }
 
@@ -275,9 +289,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             }
 
             // Clear the persisted active-session marker (whether or not steps were live).
-            var store = LoadStore();
-            if (store.ActiveSession is not null)
-                SaveStore(store with { ActiveSession = null });
+            ClearActiveSession();
             return result;
         }
         finally { _gate.Release(); }
@@ -285,8 +297,13 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public GamingProfile LoadLastConfig() => LoadStore().LastConfig;
 
+    /// <summary>
+    /// Saves the configuration for the next launch, or nothing when the store could not be read. The configuration
+    /// is only a preference, and the store it would be written over may hold a leftover session's crash-recovery
+    /// record (#2521).
+    /// </summary>
     public void SaveLastConfig(GamingProfile profile)
-        => SaveStore(LoadStore() with { LastConfig = profile });
+        => UpdateStore(store => store with { LastConfig = profile });
 
     public async Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default)
     {
@@ -314,15 +331,14 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var store = LoadStore();
-            if (store.ActiveSession is not { } session) return GamingRevertResult.Complete;
+            if (LoadStore().ActiveSession is not { } session) return GamingRevertResult.Complete;
 
             // Rebuild ONLY the machine-wide tweaks from the persisted snapshot (per-game
             // affinity/priority are not persisted — a since-recycled PID must never be touched)
             // and revert them through the SAME engine path as an in-session revert.
             var steps = BuildMachineWideSteps(session.Profile, session.Snapshot);
             var result = await RunRevertAsync(steps, ct).ConfigureAwait(false);
-            SaveStore(store with { ActiveSession = null });
+            ClearActiveSession();
             Log.Information("Gaming Profile recovered a leftover session from a previous run, {Failed} step(s) not restored",
                 result.NotRestored.Count);
             return result;
@@ -495,30 +511,80 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     // ── Persistence (own file, versioned JSON — mirrors ProfileService idiom) ──
 
-    private GamingProfileStore LoadStore()
+    /// <summary>
+    /// The store for a caller that only reads it: a fresh one when there is no file, or when the file could not be
+    /// read or used.
+    /// </summary>
+    private GamingProfileStore LoadStore() => ReadStore().Store ?? NewStore();
+
+    private static GamingProfileStore NewStore() => new() { SchemaVersion = CurrentSchemaVersion };
+
+    /// <summary>
+    /// The store, a fresh one when there is no file yet, or null when the file is there and could not be read.
+    /// Unusable is true when the file was read and holds nothing this build can use: it does not parse, or a newer
+    /// SysManager wrote it. The store is then a fresh one, and the file is set aside before it is written over.
+    /// </summary>
+    /// <remarks>
+    /// Null is not "nothing saved". A failed read used to load as a fresh store, and the next write replaced the
+    /// file with it, a leftover session's crash-recovery record included (#2521).
+    /// </remarks>
+    private (GamingProfileStore? Store, bool Unusable) ReadStore()
     {
+        var json = StoreFile.ReadText(_storePath);
+        if (json is null) return (null, false);
+        if (json.Length == 0) return (NewStore(), false);
         try
         {
-            if (!File.Exists(_storePath)) return new GamingProfileStore { SchemaVersion = CurrentSchemaVersion };
-            var json = File.ReadAllText(_storePath);
             var store = JsonSerializer.Deserialize<GamingProfileStore>(json);
-            if (store is null) return new GamingProfileStore { SchemaVersion = CurrentSchemaVersion };
+            if (store is null) return (NewStore(), false);
             if (store.SchemaVersion > CurrentSchemaVersion)
             {
-                // A newer build wrote this — don't misread it; start clean rather than corrupt.
+                // A newer build wrote this — don't misread it, and don't write over it either.
                 Log.Warning("Gaming profile store schema {Found} newer than {Known}; ignoring",
                     store.SchemaVersion, CurrentSchemaVersion);
-                return new GamingProfileStore { SchemaVersion = CurrentSchemaVersion };
+                return (NewStore(), true);
             }
-            return store;
+            return (store, false);
         }
-        catch (IOException ex) { Log.Warning(ex, "Failed to read gaming profile store"); }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Access denied reading gaming profile store"); }
-        catch (JsonException ex) { Log.Warning(ex, "Failed to parse gaming profile store"); }
-        return new GamingProfileStore { SchemaVersion = CurrentSchemaVersion };
+        catch (JsonException ex)
+        {
+            Log.Warning(ex, "Failed to parse gaming profile store");
+            return (NewStore(), true);
+        }
     }
 
-    private void SaveStore(GamingProfileStore store)
+    /// <summary>
+    /// Reads the store, applies <paramref name="change"/> and writes the result back, under <see cref="_storeLock"/>.
+    /// Writes nothing and returns false when the store could not be read, when one this build cannot use could not
+    /// be set aside first, or when the write failed.
+    /// </summary>
+    private bool UpdateStore(Func<GamingProfileStore, GamingProfileStore> change)
+    {
+        lock (_storeLock)
+        {
+            var (store, unusable) = ReadStore();
+            if (store is null) return false;
+            if (unusable && !StoreFile.SetAside(_storePath)) return false;
+            return SaveStore(change(store));
+        }
+    }
+
+    /// <summary>
+    /// Clears the crash-recovery record once the session it describes has been reverted. A store that could not be
+    /// read keeps its record, so the next launch offers the restore again, rather than being written over with
+    /// whatever else it holds unknown.
+    /// </summary>
+    private void ClearActiveSession()
+    {
+        lock (_storeLock)
+        {
+            var (store, _) = ReadStore();
+            if (store?.ActiveSession is null) return;
+            SaveStore(store with { ActiveSession = null });
+        }
+    }
+
+    private bool SaveStore(GamingProfileStore store)
     {
         try
         {
@@ -528,9 +594,11 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                 store with { SchemaVersion = CurrentSchemaVersion },
                 JsonDefaults.Indented);
             AtomicFile.WriteAllText(_storePath, json);
+            return true;
         }
         catch (IOException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to save gaming profile store"); }
+        return false;
     }
 
     public void Dispose()

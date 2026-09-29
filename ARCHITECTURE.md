@@ -938,7 +938,10 @@ Key services:
   reimplements a tweak. A machine-wide `GamingSnapshot` is captured before the first change
   and persisted to its OWN `gaming-profiles.json` (never the Performance tab's snapshot);
   revert undoes each applied step in reverse order, and a leftover on-disk session is
-  offered for restore on next launch (crash recovery). Every revert path — Stop, the
+  offered for restore on next launch (crash recovery). The store is read through `StoreFile`:
+  one that could not be read is never written over, so Apply refuses before any change, and one
+  that does not parse or that a newer build wrote is set aside first. Every read-modify-write of
+  it holds `_storeLock`, and never across an await. Every revert path — Stop, the
   automatic revert when the game exits, and recovery — returns a `GamingRevertResult` naming
   the steps whose undo failed, so the tab never announces a restore it did not get. The
   apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is an internal

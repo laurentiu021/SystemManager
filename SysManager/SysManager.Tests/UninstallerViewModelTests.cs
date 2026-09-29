@@ -248,6 +248,38 @@ public class UninstallerViewModelGateTests
     }
 
     [Fact]
+    public async Task UninstallSelected_WhileInstallCategoryLocked_RefusesAndUninstallsNothing()
+    {
+        // #2510. Windows Installer runs one installation at a time process-wide, so an MSI-based app
+        // uninstalled here while App Updates or Bulk Installer is mid-run can fail with exit code 1618.
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = NewVm(runner);
+        Seed(vm, 1);
+        vm.FilteredApps[0].Source = "winget";
+        vm.FilteredApps[0].IsSelected = true;
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.UninstallSelectedCommand.ExecuteAsync(null);
+
+            await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(
+                default!, default!, default, default);
+            Assert.Equal("Cannot start — App Updates is already running.", vm.StatusMessage);
+            Assert.False(vm.IsBusy);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+        }
+    }
+
+    [Fact]
     public async Task UninstallSelected_WhenRunnerFails_ReportsErrorsNotCompletion()
     {
         var runner = Substitute.For<IPowerShellRunner>();

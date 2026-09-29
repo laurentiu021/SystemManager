@@ -338,6 +338,26 @@ public class AppUpdatesViewModelTests
     }
 
     [Fact]
+    public async Task UpgradeSelected_WhileInstallCategoryLocked_RefusesAndUpgradesNothing()
+    {
+        // #2510. Windows Installer runs one installation at a time process-wide, so an MSI upgrade
+        // started here while Bulk Installer or Uninstaller is mid-run can fail with exit code 1618.
+        var winget = Substitute.For<IWingetService>();
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(new AppPackage { Name = "A", Id = "a", CurrentVersion = "1", AvailableVersion = "2", IsSelected = true });
+
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "Bulk Installer");
+        Assert.NotNull(held);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        await winget.DidNotReceiveWithAnyArgs().UpgradeAsync(default!, default);
+        Assert.Equal("Cannot start — Bulk Installer is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task UpgradeSelected_AsksOnce_ForTheWholeBatch()
     {
         // One prompt for the batch, not one per app. Three dialogs in a row for a three-app upgrade is

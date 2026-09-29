@@ -221,7 +221,7 @@ public partial class ArchitectureTests
         }
 
         Assert.True(lockTakers.Count >= 10,
-            $"only {lockTakers.Count} view models were found taking the operation lock, and 14 were measured. "
+            $"only {lockTakers.Count} view models were found taking the operation lock, and 20 were measured. "
             + "The marker stopped matching, so the indirect half of this guard would check nothing.");
 
         var testDir = TestPaths.TestProject();

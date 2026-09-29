@@ -22,6 +22,10 @@ namespace SysManager.Tests;
 /// exists and can be substituted — that is the strongest available proof. Profile takes a concrete service,
 /// so its carry-forward is tested directly and a source guard holds the call site.</para>
 /// </remarks>
+// Serialized: constructs AppUpdatesViewModel and runs its commands, and that view model now takes the
+// process-wide OperationLockService.Instance lock (#2510). Required by
+// ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
+[Collection("ProcessWideStatics")]
 public class SelectionSurvivesRescanPart2Tests
 {
     // ── App Updates: end to end through the real command ───────────────────

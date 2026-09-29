@@ -41,7 +41,18 @@ public enum OperationCategory
     /// overlapping ones can leave the user with no desktop at all, and now that two tabs can start one,
     /// a per-view-model IsBusy flag cannot prevent it.
     /// </remarks>
-    Shell
+    Shell,
+
+    /// <summary>Installing, upgrading or uninstalling software: App Updates, Bulk Installer and Uninstaller.</summary>
+    /// <remarks>
+    /// Windows Installer runs one installation at a time process-wide, so an MSI-based package started while
+    /// another of these three is mid-install, mid-upgrade or mid-uninstall can fail with exit code 1618
+    /// ("another installation is already in progress"), regardless of which of the three tabs started either
+    /// one (#2510). Its own category rather than <see cref="SystemModification"/>: none of the three touches
+    /// Windows components, servicing or restore points, and gating an app upgrade behind an SFC scan or a
+    /// Windows Update install would block ordinary app management for a resource the two do not share.
+    /// </remarks>
+    Install
 }
 
 /// <summary>

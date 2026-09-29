@@ -673,6 +673,8 @@ Key services:
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a
   Speed Test tab that has already loaded its list. An upload or ping that was not measured is left out of
   the file rather than written as null, so a version from before they could be missing still reads it.
+  `LoadAsync` returns null for a history that could not be read, and the tab says so; a save or a
+  one-engine clear then writes nothing, and a history that does not parse is set aside by `StoreFile`.
 - `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
   capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
   changed since last time. Same never-throw-on-IO contract and `configDir` test seam as
@@ -1104,10 +1106,11 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   on a second attempt. After the budget the exception propagates exactly as
   before and the previous file is intact, so the class's promise is unchanged.
   The pause is a parameter so the retry can be tested without sleeping.
-- `StoreFile` — the read half of a load-modify-save. `ReadText` tells a missing file ("") from
-  one that could not be read (null), which a store must never write over, because the write would
-  replace everything the file held with the one change. `SetAside` moves a file that does not parse
-  to `<name>.unreadable` (then `-2`, `-3`) before a fresh one is written, keeping its bytes.
+- `StoreFile` — the read half of a load-modify-save. `ReadText` and `ReadTextAsync` tell a missing
+  file ("") from one that could not be read (null), which a store must never write over, because the
+  write would replace everything the file held with the one change. A cancelled async read throws
+  rather than reading as unreadable. `SetAside` moves a file that does not parse to
+  `<name>.unreadable` (then `-2`, `-3`) before a fresh one is written, keeping its bytes.
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass that
   suppresses change notifications during bulk add/remove for UI performance
   (in `ObservableCollectionExtensions.cs`).

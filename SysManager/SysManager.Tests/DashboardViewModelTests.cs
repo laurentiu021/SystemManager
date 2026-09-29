@@ -636,7 +636,9 @@ public class DashboardViewModelTests
 
             Assert.Equal("✓ Done", vm.QuickActionStatus);
             Assert.Equal(DashboardViewModel.DescribeSpeedTest(QuickResult, saved: true), vm.QuickActionDetail);
-            Assert.Equal(QuickResult, Assert.Single(await history.LoadAsync()));
+            var saved = await history.LoadAsync();
+            Assert.NotNull(saved);
+            Assert.Equal(QuickResult, Assert.Single(saved));
             Assert.DoesNotContain(ActivityLogService.Instance.GetRecent(ActivityLogService.MaxEntries),
                 entry => entry.Action == "Speed Test");
         }
@@ -720,7 +722,9 @@ public class DashboardViewModelTests
             await vm.QuickSpeedTestCommand.ExecuteAsync(null);
 
             Assert.Equal("↓ 312 Mbps · ↑ 42 Mbps · Ping —", vm.QuickActionDetail);
-            Assert.Null(Assert.Single(await history.LoadAsync()).PingMs);
+            var saved = await history.LoadAsync();
+            Assert.NotNull(saved);
+            Assert.Null(Assert.Single(saved).PingMs);
         }
         finally
         {

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.32] - 2026-09-29
+
+**Speed Test no longer replaces your saved results when it cannot read them.** One failed read could make the
+next test the only result left, and clearing one engine's history could delete the other's.
+
+### Fixed
+
+- **Speed Test: saved results are never written over when they could not be read.** A history file that could
+  not be read was taken as empty. The next result was then saved as the only one, over up to 40 saved results,
+  and clearing one engine's history deleted the file, the other engine's results with it.
+  - The tab now says under both cards when your saved results could not be read, instead of showing none.
+  - A new result is not saved over them, and the line under the card says it was not saved. Clearing one
+    engine leaves them as they are and says it could not be cleared.
+  - A history file that is damaged is kept as `speedtest-history.json.unreadable` before a new one is written.
+  Present since the history was added in v0.41.0.
+
 ## [1.114.31] - 2026-09-29
 
 **Gaming Profile no longer loses its record of a game mode left on when it cannot read its saved settings.**

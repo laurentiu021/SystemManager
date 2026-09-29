@@ -1008,7 +1008,9 @@ Key services:
   runs, which are separate processes, so `GetRecent` reads it rather than a list held since
   startup, and `Log` reads, adds and writes as one step under an exclusive handle on
   `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects.
-  Without that, the open app's next write erased a scheduled run's entry.
+  Without that, the open app's next write erased a scheduled run's entry. A file that could not
+  be read is never written over: the entry waits in `_unsaved`, is listed by `GetRecent`, and is
+  written by the next `Log` that can read the file. One that does not parse is set aside first.
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,

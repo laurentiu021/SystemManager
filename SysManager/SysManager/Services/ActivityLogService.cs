@@ -25,6 +25,10 @@ public sealed class ActivityLogService
     private readonly Lock _lock = new();
     private List<ActivityEntry> _entries = [];
 
+    // Entries logged while the file could not be read, newest first. The next Log that can read the file writes
+    // them with it. Writing sooner would replace every entry the file holds with this instance's (#2521).
+    private readonly List<ActivityEntry> _unsaved = [];
+
     /// <summary>
     /// Shared singleton the ViewModels log through. Settable for the same reason
     /// <see cref="DialogService.Instance"/> is: 20+ ViewModel code paths call
@@ -74,8 +78,8 @@ public sealed class ActivityLogService
     {
         lock (_lock)
         {
-            if (ReadStore() is { } stored) _entries = stored;
-            return _entries.Take(count).ToArray();
+            if (ReadStore().Entries is { } stored) _entries = stored;
+            return _unsaved.Concat(_entries).Take(count).ToArray();
         }
     }
 
@@ -88,8 +92,11 @@ public sealed class ActivityLogService
     /// open, which for a tray app is most of the time, the next action it logged overwrote whatever a
     /// command-line or scheduled run had written meanwhile, and that run left no trace anywhere (#2478).
     /// <para>Reading first is not enough on its own: two processes that read before either writes still lose
-    /// one entry. <see cref="LockStore"/> closes that. If the file cannot be read, the entry goes onto this
-    /// instance's list rather than nowhere.</para>
+    /// one entry. <see cref="LockStore"/> closes that.</para>
+    /// <para>If the file cannot be read, nothing is written: the entry waits, is listed by <see cref="GetRecent"/>
+    /// meanwhile, and is written by the next Log that can read the file. It used to go onto this instance's
+    /// list, which was written over the file, so a failed read at startup lost the whole history (#2521). A
+    /// file that does not parse is set aside before the first write.</para>
     /// </remarks>
     public void Log(string action, string detail)
     {
@@ -97,14 +104,20 @@ public sealed class ActivityLogService
         lock (_lock)
         {
             using var storeLock = LockStore();
-            var entries = ReadStore() ?? _entries;
-            entries.Insert(0, entry);
-            if (entries.Count > MaxEntries)
-                entries.RemoveRange(MaxEntries, entries.Count - MaxEntries);
-            _entries = entries;
+            _unsaved.Insert(0, entry);
+            if (_unsaved.Count > MaxEntries)
+                _unsaved.RemoveRange(MaxEntries, _unsaved.Count - MaxEntries);
+
+            var (stored, unparsable) = ReadStore();
+            if (stored is null) return;
+            if (unparsable && !StoreFile.SetAside(_filePath)) return;
+
+            var entries = _unsaved.Concat(stored).Take(MaxEntries).ToList();
             // Written while both locks are held: inside the process, a concurrent Log() cannot mutate the list
             // mid-serialisation; across processes, nobody can write between this read and this write.
-            Save(entries);
+            if (!Save(entries)) return;
+            _unsaved.Clear();
+            _entries = entries;
         }
     }
 
@@ -155,27 +168,31 @@ public sealed class ActivityLogService
         }
     }
 
-    private void Load() => _entries = ReadStore() ?? [];
+    private void Load() => _entries = ReadStore().Entries ?? [];
 
-    /// <summary>The entries in the file: empty if there is no file yet, null if it could not be read.</summary>
-    private List<ActivityEntry>? ReadStore()
+    /// <summary>
+    /// The entries in the file: empty if there is no file yet, null if it could not be read. Unparsable is true
+    /// when it was read and is not an activity list, and then the entries are empty.
+    /// </summary>
+    private (List<ActivityEntry>? Entries, bool Unparsable) ReadStore()
     {
+        var json = StoreFile.ReadText(_filePath);
+        if (json is null) return (null, false);
+        if (json.Length == 0) return ([], false);
         try
         {
-            if (!File.Exists(_filePath)) return [];
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [];
+            return (JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [], false);
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        catch (JsonException ex)
         {
-            Serilog.Log.Debug("ActivityLog load failed: {Error}", ex.Message);
-            return null;
+            Serilog.Log.Debug("ActivityLog parse failed: {Error}", ex.Message);
+            return ([], true);
         }
     }
 
     // Instance method (was static) because the destination path is now per-instance — that is what
     // lets a test point the store at a temp directory instead of the user's real activity history.
-    private void Save(List<ActivityEntry> snapshot)
+    private bool Save(List<ActivityEntry> snapshot)
     {
         try
         {
@@ -185,10 +202,12 @@ public sealed class ActivityLogService
             // one per save would only defeat System.Text.Json's per-options metadata cache.
             var json = JsonSerializer.Serialize(snapshot);
             AtomicFile.WriteAllText(_filePath, json);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Serilog.Log.Debug("ActivityLog save failed: {Error}", ex.Message);
+            return false;
         }
     }
 }

@@ -531,19 +531,22 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             return;
         }
 
+        // Before the confirmation, and a refusal rather than a relaunch. It used to ask, then relaunch SysManager
+        // as administrator and close: the user approved an install that never ran, and the new window had no
+        // selection to carry it out (#2505).
+        if (!_isElevatedProbe())
+        {
+            StatusMessage = "Installing updates needs administrator rights. Use \"Run as administrator\" above; "
+                + "SysManager reopens, and you can check for updates and select them again there.";
+            return;
+        }
+
         if (!DialogService.Instance.Confirm(
                 $"Install {selected.Count} selected Windows update(s)?\n\n" +
                 "This may install drivers or feature updates and can require a restart. " +
                 "Do not reboot while the install is in progress.",
                 "Confirm Windows Update"))
             return;
-
-        if (!_isElevatedProbe())
-        {
-            StatusMessage = "Admin required. Relaunching elevated...";
-            if (AdminHelper.RelaunchAsAdmin()) App.RequestShutdown();
-            return;
-        }
 
         // An install services the running image, and System Fixes' Reset Windows Update stops the very services
         // it downloads and installs through. It takes the lock the SFC and DISM repairs take, so none of those

@@ -39,4 +39,9 @@ public sealed partial class StoreApp : ObservableObject, Helpers.ISelectableRow
 
     /// <summary>True for items in the curated "commonly removed bloat" preset.</summary>
     public bool IsCommonBloat { get; init; }
+
+    /// <summary>
+    /// True for an app Microsoft has retired. The Store no longer offers it, so removing it cannot be undone.
+    /// </summary>
+    public bool IsRetired { get; init; }
 }

@@ -21,7 +21,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Preinstalled Apps" Style="{StaticResource Display}"/>
-            <TextBlock Text="Remove preinstalled Store apps you don't use. A curated preset pre-selects commonly-removed bloat; system-critical apps are protected and can't be removed. Everything is uninstalled for your account only and can be reinstalled from the Microsoft Store."
+            <TextBlock Text="Remove preinstalled Store apps you don't use. A curated preset pre-selects commonly-removed bloat; system-critical apps are protected and can't be removed. Everything is uninstalled for your account only. Most apps can be reinstalled from the Microsoft Store; ones Microsoft has retired, such as Skype, cannot."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <!-- This tab has no ad controls at all, and its old name ("Debloater & Ads") promised them: the
                  five switches that actually turn ads and suggestions off live in Privacy & Telemetry. Someone
@@ -51,7 +51,7 @@
                 <Button Content="Remove selected…" Command="{Binding RemoveSelectedCommand}"
                         AutomationProperties.Name="Remove selected… — the selected apps"
                         Style="{StaticResource DangerButton}" Margin="0,0,16,0"
-                        ToolTip="Uninstall the ticked apps for the current user (reversible via the Store)."/>
+                        ToolTip="Uninstall the ticked apps for the current user. Most can be reinstalled from the Store; apps Microsoft has retired cannot."/>
 
                 <Grid Width="220" VerticalAlignment="Center">
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"

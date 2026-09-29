@@ -793,6 +793,8 @@ Key services:
   denylist check are pure, unit-tested static methods. `ListAsync` returns null for a read that
   failed and an empty list only for an empty answer: `ListScript` throws when `Get-AppxPackage`
   listed nothing and reported an error, and keeps what it listed when only some packages failed.
+  `IsRetired` flags the families Microsoft has retired (Skype, Mail & Calendar), which the Store no
+  longer offers, so the confirmation and the result line never promise them back.
 - `BrowserCleanerService` — scans + cleans per-browser data (Chromium family +
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Chrome, Edge, Brave and Vivaldi share
   one per-profile expansion; Opera is the family exception (no `\Default\` segment, two roots)

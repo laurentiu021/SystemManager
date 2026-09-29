@@ -49,4 +49,14 @@ public static class FormatHelper
                               : bits.ToString("F1", CultureInfo.InvariantCulture);
         return $"{value} {units[u]}";
     }
+
+    /// <summary>
+    /// Joins names for a sentence: "a", "a and b", "a, b and c", or "" for none.
+    /// </summary>
+    public static string JoinForSentence(IReadOnlyList<string> items) => items.Count switch
+    {
+        0 => "",
+        1 => items[0],
+        _ => string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1],
+    };
 }

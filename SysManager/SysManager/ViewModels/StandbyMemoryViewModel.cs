@@ -133,7 +133,8 @@ public sealed partial class StandbyMemoryViewModel : ViewModelBase
     private void SavePreferences()
     {
         if (_loadingPreferences) return;
-        _preferences.Save(new StandbyPreference(AutoPurgeEnabled, ThresholdMb));
+        if (!_preferences.Save(new StandbyPreference(AutoPurgeEnabled, ThresholdMb)))
+            StatusMessage = ChangeNotSavedStatus;
     }
 
     [RelayCommand]

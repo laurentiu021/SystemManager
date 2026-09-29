@@ -32,6 +32,9 @@ public interface IWindowsThemeService
     /// <summary>Load the saved schedule, or defaults if none exists / it's unreadable.</summary>
     DarkModeSchedule LoadSchedule();
 
-    /// <summary>Persist the schedule as indented JSON in the app's roaming AppData folder.</summary>
-    void SaveSchedule(DarkModeSchedule schedule);
+    /// <summary>
+    /// Persist the schedule as indented JSON in the app's roaming AppData folder. Returns false when nothing was
+    /// written, and then the file still holds what it held (#2521).
+    /// </summary>
+    bool SaveSchedule(DarkModeSchedule schedule);
 }

@@ -21,6 +21,12 @@ public sealed class ThemeService
     private readonly string _settingsPath;
     private readonly Func<bool> _windowsPrefersDark;
 
+    // What Load found, for Save. After a load that could not read the file, the theme on screen is the shipped one
+    // and the file still holds the user's own, so Save does not write over it. A file that is not a theme
+    // SysManager can use is set aside before the first write (#2521).
+    private bool _unreadAtLoad;
+    private bool _unparsableAtLoad;
+
     public event Action? ThemeChanged;
 
     /// <summary>The theme the app ships with, and the shade position it ships at.</summary>
@@ -816,6 +822,14 @@ public sealed class ThemeService
 
     private void Save()
     {
+        if (_unreadAtLoad)
+        {
+            Log.Debug("Theme not saved: the file could not be read when it was loaded");
+            return;
+        }
+        if (_unparsableAtLoad && !StoreFile.SetAside(_settingsPath)) return;
+        _unparsableAtLoad = false;
+
         try
         {
             var dir = Path.GetDirectoryName(_settingsPath)!;
@@ -838,10 +852,13 @@ public sealed class ThemeService
 
     private void Load()
     {
+        var json = StoreFile.ReadText(_settingsPath);
+        _unreadAtLoad = json is null;
+        _unparsableAtLoad = false;
+        if (string.IsNullOrWhiteSpace(json)) return;
+
         try
         {
-            if (!File.Exists(_settingsPath)) return;
-            var json = File.ReadAllText(_settingsPath);
             var data = JsonSerializer.Deserialize<ThemeSettings>(json);
             if (data is null) return;
 
@@ -864,7 +881,15 @@ public sealed class ThemeService
                 ApplyShade();
             }
         }
-        catch (Exception ex) { Log.Debug("Theme load failed: {Error}", ex.Message); }
+        // Broad, as it was: this runs at startup on a file the user can edit, and whatever fails in here (JSON that
+        // does not parse, a colour that does not convert, a value that is missing) means the same thing. The file
+        // is not a theme SysManager can use, so the shipped theme stays on screen and the file is set aside rather
+        // than written over.
+        catch (Exception ex)
+        {
+            Log.Debug("Theme load failed: {Error}", ex.Message);
+            _unparsableAtLoad = true;
+        }
     }
 
     private sealed record ThemeSettings(

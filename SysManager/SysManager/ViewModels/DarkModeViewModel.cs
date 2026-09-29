@@ -92,9 +92,11 @@ public sealed partial class DarkModeViewModel : ViewModelBase
         }
     }
 
-    partial void OnScheduleEnabledChanged(bool value) { SaveSchedule(); EvaluateSchedule(); }
-    partial void OnDarkStartChanged(string value) { SaveSchedule(); EvaluateSchedule(); }
-    partial void OnLightStartChanged(string value) { SaveSchedule(); EvaluateSchedule(); }
+    // Saved after the schedule is evaluated, so a change that could not be saved is the last word on the status
+    // line: switching the theme would otherwise replace it with "Schedule applied" (#2521).
+    partial void OnScheduleEnabledChanged(bool value) { EvaluateSchedule(); SaveSchedule(); }
+    partial void OnDarkStartChanged(string value) { EvaluateSchedule(); SaveSchedule(); }
+    partial void OnLightStartChanged(string value) { EvaluateSchedule(); SaveSchedule(); }
     partial void OnApplyToSystemChanged(bool value) => SaveSchedule();
 
     private void LoadFromSchedule()
@@ -111,13 +113,14 @@ public sealed partial class DarkModeViewModel : ViewModelBase
     private void SaveSchedule()
     {
         if (_suppressSave) return;
-        _service.SaveSchedule(new DarkModeSchedule
+        var saved = _service.SaveSchedule(new DarkModeSchedule
         {
             Enabled = ScheduleEnabled,
             DarkStart = DarkStart,
             LightStart = LightStart,
             ApplyToSystem = ApplyToSystem,
         });
+        if (!saved) StatusMessage = ChangeNotSavedStatus;
     }
 
     private static TimeOnly ParseTime(string value, int h, int m)

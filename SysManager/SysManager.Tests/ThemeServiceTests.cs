@@ -181,6 +181,63 @@ public class ThemeServiceTests : IDisposable
         Assert.Equal(ThemeService.DefaultShade, reloaded.ShadePosition, precision: 3);
     }
 
+    // ---------- a file that could not be read or used (#2521) ----------
+    // Every choice saves the whole theme, so the first one after a load that failed wrote the shipped theme over
+    // the user's own, custom colours included.
+
+    [Fact]
+    public void AChoice_AfterALoadThatCouldNotReadTheFile_DoesNotReplaceIt()
+    {
+        new ThemeService(_dir).SetPreset("dark-forest");
+        var before = File.ReadAllBytes(ThemeFile);
+        var svc = new ThemeService(_dir);
+
+        // Held with delete sharing only while it loads: the read fails.
+        using (new FileStream(ThemeFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            svc.Initialize();
+
+        svc.SetPreset("deep-ocean");
+
+        Assert.Equal(before, File.ReadAllBytes(ThemeFile));
+        var reloaded = new ThemeService(_dir);
+        reloaded.Initialize();
+        Assert.Equal("dark-forest", reloaded.CurrentPresetId);
+    }
+
+    [Theory]
+    [InlineData("{ not a theme")]
+    // Parses, but the accent is not a colour, so the custom theme cannot be built from it.
+    [InlineData("""{"PresetId":"custom","Mode":"custom","ShadePosition":0.5,"Accent":"not-a-colour","Background":"#070A0F","Surface":"#0E1218","Text":"#F1F3F7"}""")]
+    public void AChoice_OverAFileThatIsNotATheme_KeepsItAside_ThenSaves(string content)
+    {
+        File.WriteAllText(ThemeFile, content);
+        var svc = new ThemeService(_dir);
+        svc.Initialize();
+
+        svc.SetPreset("deep-ocean");
+        svc.SetPreset("warm-ember");
+
+        Assert.Equal(content, File.ReadAllText(ThemeFile + ".unreadable"));
+        Assert.False(File.Exists(ThemeFile + ".unreadable-2"), "the file the first choice wrote was set aside too");
+        var reloaded = new ThemeService(_dir);
+        reloaded.Initialize();
+        Assert.Equal("warm-ember", reloaded.CurrentPresetId);
+    }
+
+    [Fact]
+    public void AChoice_WhenAFileThatIsNotAThemeCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(ThemeFile, "{ not a theme");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(ThemeFile + ".unreadable");
+        var svc = new ThemeService(_dir);
+        svc.Initialize();
+
+        svc.SetPreset("deep-ocean");
+
+        Assert.Equal("{ not a theme", File.ReadAllText(ThemeFile));
+    }
+
     // ---------- the panel correction that makes readable text possible at all ----------
 
     [Theory]

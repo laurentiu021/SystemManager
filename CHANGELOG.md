@@ -12,21 +12,27 @@ prospective user reads. CI fails a pull request whose newest entry is missing it
 
 ## [1.114.49] - 2026-09-29
 
-**Deep Cleanup no longer deletes the Windows Update cache while an update is installing.** Tick that
-category during an install and Deep Cleanup now says so instead of clearing files the install may still
-need.
+**Deep Cleanup and Windows Update no longer work on the same folder at the same time.** Cleaning the Windows
+Update caches now waits for an update install or a Windows Update reset to finish, and they wait for it.
 
 ### Fixed
 
-- **Deep Cleanup could delete the Windows Update download cache while a Windows Update install was using
-  it.** Deep Cleanup's "Windows Update cache" category removes `SoftwareDistribution\Download`, and a
-  Windows Update install can still be reading payloads from there while it runs — the two held different
-  locks (Disk and SystemModification), so neither excluded the other. Cleaning now checks whether that one
-  category is selected and an install is running, and if so refuses with "Cannot start — untick "Windows
-  Update cache" or wait: Windows Update install is already running." Every other category is unaffected —
-  Deep Cleanup only holds up on this one selection, and only while an install is actually in progress.
-  Present since v0.5.0, when Deep Cleanup gained the Windows Update cache category alongside the
-  already-shipped Windows Update install.
+- **Deep Cleanup could delete inside the Windows Update folder while Windows Update was using it.** Two of its
+  categories, "Windows Update cache" and "Delivery Optimization cache", delete inside
+  `%WinDir%\SoftwareDistribution`. A Windows Update install reads its downloaded packages from there while it
+  runs, and Reset Windows Update renames the whole folder, which fails while anything inside it is open. Deep
+  Cleanup held a different lock from both, so a clean could remove packages an install still needed, or make
+  a reset fail.
+  - With either category ticked, Deep Cleanup now also takes the lock the install and the reset hold, so none
+    of the three starts while another runs. A clean started during an install says "Cannot start — untick
+    "Windows Update cache" or wait: Windows Update install is already running.", and an install or a reset
+    started during a clean says that Deep Cleanup is running.
+  - The lock is given back as soon as the files are deleted, before the rescan that follows. The rescan only
+    reads, and on a used PC it can take minutes.
+  - A clean without either category is unchanged.
+
+  Present since v0.5.0 for an update install, and since v1.26.0, when System Fixes gained Reset Windows
+  Update, for the reset.
 
 ## [1.114.48] - 2026-09-29
 

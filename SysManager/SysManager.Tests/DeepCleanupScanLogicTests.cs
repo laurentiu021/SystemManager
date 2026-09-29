@@ -161,6 +161,36 @@ public sealed class DeepCleanupScanLogicTests
         Assert.DoesNotContain(categories, c => c.Name.Contains("Windows.old", StringComparison.Ordinal));
     }
 
+    // ── The Windows Update caches ────────────────────────────────────────────
+
+    /// <summary>
+    /// The categories flagged <see cref="CleanupCategory.IsWindowsUpdateCache"/> are exactly the ones that delete
+    /// inside <c>SoftwareDistribution</c>, the folder a Windows Update install reads from and Reset Windows Update
+    /// renames. Cleaning a flagged one takes the lock those two hold (#2510), so a category there without the flag
+    /// would delete under an install or a reset again.
+    /// </summary>
+    [Fact]
+    public async Task Scan_FlagsExactlyTheCategoriesInsideSoftwareDistribution()
+    {
+        using var roots = Roots();
+        var softwareDistribution = Path.Combine(roots.WindowsDirectory, "SoftwareDistribution");
+        WriteFile(Path.Combine(softwareDistribution, "Download", "cab.bin"), 10);
+        WriteFile(Path.Combine(softwareDistribution, "DeliveryOptimization", "Cache", "piece.bin"), 10);
+
+        var categories = await new DeepCleanupService(roots).ScanAsync();
+
+        var inside = categories
+            .Where(c => c.Paths.Any(p => p.StartsWith(softwareDistribution + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+            .Select(c => c.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var flagged = categories.Where(c => c.IsWindowsUpdateCache).Select(c => c.Name).Order(StringComparer.Ordinal).ToArray();
+
+        // Named, so a category that moves out of the folder fails here rather than shrinking both lists together.
+        Assert.Equal(new[] { "Delivery Optimization cache", "Windows Update cache" }, inside);
+        Assert.Equal(inside, flagged);
+    }
+
     // ── Progress ─────────────────────────────────────────────────────────────
 
     [Fact]

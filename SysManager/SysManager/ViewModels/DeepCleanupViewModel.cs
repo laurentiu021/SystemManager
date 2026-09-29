@@ -260,18 +260,21 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             return;
         }
 
-        // The Windows Update cache bucket deletes SoftwareDistribution\Download, which a Windows Update
-        // install (holding SystemModification) can still be reading mid-install — deleting it out from
-        // under the install, rather than merely racing it, is why this checks the OTHER category instead
-        // of just relying on the Disk lock above (#2510). Checked only when that one bucket is actually
-        // selected, so the rest of Deep Cleanup is never held up by an unrelated Windows Update install.
-        if (selected.Any(c => c.Name == DeepCleanupService.WindowsUpdateCacheCategoryName)
-            && OperationLockService.Instance.IsLocked(OperationCategory.SystemModification))
+        // The two categories inside SoftwareDistribution also take the lock a Windows Update install and Reset
+        // Windows Update hold, so none of the three can start while another runs (#2510). Why they conflict is on
+        // CleanupCategory.IsWindowsUpdateCache. Only when one of them is ticked: any other clean neither waits for
+        // an unrelated system change nor holds one up.
+        var windowsUpdateCaches = selected.Where(c => c.IsWindowsUpdateCache).Select(c => $"\"{c.Name}\"").ToList();
+        using var systemLock = windowsUpdateCaches.Count > 0
+            ? OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Deep Cleanup")
+            : null;
+        if (windowsUpdateCaches.Count > 0 && systemLock is null)
         {
-            CleanSummary = $"Cannot start — untick \"{DeepCleanupService.WindowsUpdateCacheCategoryName}\" or wait: "
+            CleanSummary = $"Cannot start — untick {FormatHelper.JoinForSentence(windowsUpdateCaches)} or wait: "
                 + $"{OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
             return;
         }
+
         IsCleaning = true;
         CleanProgress = 0;
         CleanStatusLine = "Starting...";
@@ -290,6 +293,10 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             });
             var result = await progress.SettleAfterAsync(
                 reporter => _cleanup.CleanAsync(Categories, reporter, _cleanCts.Token));
+            // Released here rather than at the end of the method: the rescan below only reads, and holding the
+            // system lock through a scan of the whole machine would refuse every other system change for minutes.
+            // The using above still releases it if the clean throws; a second Dispose does nothing.
+            systemLock?.Dispose();
             CleanSummary = result.Summary;
             CleanStatusLine = "Clean complete.";
             ToastService.Instance.Show("Deep cleanup complete", result.Summary);

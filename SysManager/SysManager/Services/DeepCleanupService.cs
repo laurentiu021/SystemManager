@@ -40,15 +40,6 @@ public sealed class DeepCleanupService
     public DeepCleanupService(ICleanupRoots roots)
         => _roots = roots ?? throw new ArgumentNullException(nameof(roots));
 
-    /// <summary>
-    /// The exact <see cref="CleanupCategory.Name"/> of the Windows Update download cache bucket. Shared
-    /// with <see cref="SysManager.ViewModels.DeepCleanupViewModel"/>, which refuses to clean it while a
-    /// Windows Update install holds <see cref="OperationCategory.SystemModification"/>: deleting
-    /// <c>SoftwareDistribution\Download</c> mid-install can remove payloads the install still needs
-    /// (#2510). A named constant rather than two copies of the literal, so the two can never drift apart.
-    /// </summary>
-    internal const string WindowsUpdateCacheCategoryName = "Windows Update cache";
-
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
     public Task<IReadOnlyList<CleanupCategory>> ScanAsync(
@@ -74,6 +65,10 @@ public sealed class DeepCleanupService
     /// emptied folders are left in place. Every bucket but two owns its whole folder, so the default is
     /// null and means "everything under the path" — see <see cref="Scan"/> for why both halves matter.
     /// </param>
+    /// <param name="IsWindowsUpdateCache">
+    /// True for the buckets inside <c>%WinDir%\SoftwareDistribution</c>. See
+    /// <see cref="CleanupCategory.IsWindowsUpdateCache"/> for what cleaning one also has to wait for.
+    /// </param>
     private sealed record Def(
         string Name,
         string Description,
@@ -81,7 +76,8 @@ public sealed class DeepCleanupService
         string[]? FilePatterns = null,
         TimeSpan? OlderThan = null,
         bool IsDestructiveHint = false,
-        bool IsRecycleBin = false);
+        bool IsRecycleBin = false,
+        bool IsWindowsUpdateCache = false);
 
     private static List<Def> BuildDefinitions(ICleanupRoots roots)
     {
@@ -115,13 +111,15 @@ public sealed class DeepCleanupService
                 "Temporary driver package extracts from Intel installers.",
                 [Path.Combine(systemDrive, "Intel")]),
 
-            new(WindowsUpdateCacheCategoryName,
+            new("Windows Update cache",
                 "Previously downloaded Windows Update packages. Windows re-downloads anything it still needs next time.",
-                [Path.Combine(windowsDir, "SoftwareDistribution", "Download")]),
+                [Path.Combine(windowsDir, "SoftwareDistribution", "Download")],
+                IsWindowsUpdateCache: true),
 
             new("Delivery Optimization cache",
                 "Peer-to-peer update cache. Regenerated on demand.",
-                [Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache")]),
+                [Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache")],
+                IsWindowsUpdateCache: true),
 
             new("Windows Installer patch cache",
                 "C:\\Windows\\Installer\\$PatchCache$ stores baseline patch files used only when uninstalling an MSI patch. Safe per Microsoft devblog.",
@@ -306,6 +304,7 @@ public sealed class DeepCleanupService
                 FilePatterns = d.FilePatterns,
                 IsDestructiveHint = d.IsDestructiveHint,
                 IsRecycleBin = d.IsRecycleBin,
+                IsWindowsUpdateCache = d.IsWindowsUpdateCache,
                 IsSelected = size > 0 && !d.IsDestructiveHint
             });
         }

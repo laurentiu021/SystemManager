@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using NSubstitute;
@@ -399,96 +400,180 @@ public class DeepCleanupViewModelTests : IDisposable
         }
     }
 
-    // ---------- Windows Update cache vs a Windows Update install (#2510) ----------
+    // ---------- the Windows Update caches vs a Windows Update install or reset (#2510) ----------
 
     [Fact]
-    public async Task Clean_WhenWindowsUpdateCacheSelectedAndInstallRunning_RefusesAndDeletesNothing()
+    public async Task Clean_WithAWindowsUpdateCacheTicked_WhileASystemChangeRuns_RefusesAndDeletesNothing()
     {
-        // Deleting SoftwareDistribution\Download while a Windows Update install (SystemModification) is
-        // reading it can remove payloads the install still needs — a different hazard from the Disk lock
-        // above, so it needs its own check.
-        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, "cab.tmp");
-        File.WriteAllText(file, "x");
+        // Reset Windows Update renames the folder both caches live in, and fails while anything inside it is open;
+        // an install reads its packages from the download cache. Both hold the system-modification lock.
+        var downloads = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_" + Guid.NewGuid().ToString("N"));
+        var peerCache = Path.Combine(Path.GetTempPath(), "smtest_clean_do_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(downloads);
+        Directory.CreateDirectory(peerCache);
+        var downloaded = Path.Combine(downloads, "cab.tmp");
+        var shared = Path.Combine(peerCache, "piece.tmp");
+        File.WriteAllText(downloaded, "x");
+        File.WriteAllText(shared, "x");
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
-        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update reset");
         Assert.NotNull(held);
         try
         {
             var vm = NewVm();
             vm.Categories.Add(new CleanupCategory
             {
-                Name = Services.DeepCleanupService.WindowsUpdateCacheCategoryName,
+                Name = "Windows Update cache",
                 Description = "test",
-                Paths = new[] { dir },
+                Paths = new[] { downloads },
                 TotalSizeBytes = 1,
                 FileCount = 1,
-                IsSelected = true
+                IsSelected = true,
+                IsWindowsUpdateCache = true
+            });
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = "Delivery Optimization cache",
+                Description = "test",
+                Paths = new[] { peerCache },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true,
+                IsWindowsUpdateCache = true
             });
 
             await vm.CleanCommand.ExecuteAsync(null);
 
-            Assert.True(File.Exists(file), "Files were deleted even though a Windows Update install was running");
+            Assert.True(File.Exists(downloaded), "the download cache was cleaned while a Windows Update reset ran");
+            Assert.True(File.Exists(shared), "the Delivery Optimization cache was cleaned while a Windows Update reset ran");
             Assert.Equal(
-                "Cannot start — untick \"Windows Update cache\" or wait: Windows Update install is already running.",
+                "Cannot start — untick \"Windows Update cache\" and \"Delivery Optimization cache\" or wait: "
+                + "Windows Update reset is already running.",
                 vm.CleanSummary);
             Assert.False(vm.IsCleaning);
         }
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            try { Directory.Delete(downloads, recursive: true); } catch (IOException) { /* a leftover temp folder is harmless */ }
+            try { Directory.Delete(peerCache, recursive: true); } catch (IOException) { /* ditto */ }
         }
     }
 
     [Fact]
-    public async Task Clean_WhenWindowsUpdateCacheSelectedButNoInstallRunning_StillCleans()
+    public async Task Clean_WithAWindowsUpdateCacheTicked_HoldsTheSystemLockWhileItDeletes()
     {
-        // The check must not over-block: with no Windows Update install running, selecting this bucket
-        // is exactly as safe as it always was.
-        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_free_" + Guid.NewGuid().ToString("N"));
+        // The other direction: an install or a reset started DURING the clean has to be refused too, so the clean
+        // holds the lock rather than checking it once at the start. Seen through the lock's own change events:
+        // taken while the file is still there, given back once it is gone.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_held_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "cab.tmp");
         File.WriteAllText(file, "x");
+
+        // Enqueued from whichever thread takes or gives back a lock. The handler is named so the process-wide
+        // singleton can be unsubscribed below, rather than calling into a test that has finished.
+        var seen = new ConcurrentQueue<(string? Holder, bool FileThere)>();
+        void onLocksChanged(object? _, System.ComponentModel.PropertyChangedEventArgs e) => seen.Enqueue(
+            (OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification), File.Exists(file)));
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
+        OperationLockService.Instance.PropertyChanged += onLocksChanged;
         try
         {
             var vm = NewVm();
             vm.Categories.Add(new CleanupCategory
             {
-                Name = Services.DeepCleanupService.WindowsUpdateCacheCategoryName,
+                Name = "Windows Update cache",
                 Description = "test",
                 Paths = new[] { dir },
                 TotalSizeBytes = 1,
                 FileCount = 1,
-                IsSelected = true
+                IsSelected = true,
+                IsWindowsUpdateCache = true
             });
 
             await vm.CleanCommand.ExecuteAsync(null);
-
-            Assert.False(File.Exists(file), "The file should have been deleted — nothing was locking SystemModification");
         }
         finally
         {
+            OperationLockService.Instance.PropertyChanged -= onLocksChanged;
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* a leftover temp folder is harmless */ }
         }
+
+        var events = seen.ToArray();
+        var taken = Array.FindIndex(events, e => e.Holder == "Deep Cleanup");
+        Assert.True(taken >= 0, "the clean never took the system lock");
+        Assert.True(events[taken].FileThere, "the clean took the system lock only after it had deleted the file");
+        var given = Array.FindIndex(events, taken, e => e.Holder is null);
+        Assert.True(given > taken, "the clean never gave the system lock back");
+        Assert.False(events[given].FileThere, "the clean gave the system lock back before it deleted the file");
     }
 
     [Fact]
-    public async Task Clean_WhenInstallRunningButWindowsUpdateCacheNotSelected_StillCleans()
+    public async Task Clean_WithAWindowsUpdateCacheTicked_GivesTheSystemLockBackBeforeTheRescan()
     {
-        // The check must be scoped to the one bucket that actually conflicts, not a blanket rule that
-        // blocks all of Deep Cleanup whenever SystemModification happens to be busy.
+        // The rescan after a clean only reads, and a scan of a used machine was measured at 170 seconds (#2333).
+        // Holding the system lock through it would refuse every other system change for that long.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_rescan_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "cab.tmp"), "x");
+
+        var holders = new ConcurrentQueue<string?>();
+        var heldAtRescan = new ConcurrentQueue<bool>();
+        void onLocksChanged(object? _, System.ComponentModel.PropertyChangedEventArgs e) =>
+            holders.Enqueue(OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification));
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        OperationLockService.Instance.PropertyChanged += onLocksChanged;
+        try
+        {
+            var vm = NewVm();
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DeepCleanupViewModel.IsScanning) && vm.IsScanning)
+                    heldAtRescan.Enqueue(OperationLockService.Instance.IsLocked(OperationCategory.SystemModification));
+            };
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = "Windows Update cache",
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true,
+                IsWindowsUpdateCache = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            OperationLockService.Instance.PropertyChanged -= onLocksChanged;
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* a leftover temp folder is harmless */ }
+        }
+
+        Assert.Contains("Deep Cleanup", holders);   // it was taken, or "given back" below would prove nothing
+        Assert.False(Assert.Single(heldAtRescan), "the system lock was still held when the read-only rescan began");
+    }
+
+    [Fact]
+    public async Task Clean_WithOnlyOtherCategoriesTicked_IsNotHeldUpByASystemChange()
+    {
+        // Scoped to the two categories that conflict: a clean of anything else must not wait for, or hold up, an
+        // unrelated system change. It still cleans with the system lock taken by someone else, so it never asked.
         var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_unrelated_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, "keep.dat");
@@ -515,12 +600,12 @@ public class DeepCleanupViewModelTests : IDisposable
 
             await vm.CleanCommand.ExecuteAsync(null);
 
-            Assert.False(File.Exists(file), "An unrelated category must not be blocked by a Windows Update install");
+            Assert.False(File.Exists(file), "an unrelated category was held up by a Windows Update install");
         }
         finally
         {
             DialogService.Instance = prevDialog;
-            try { Directory.Delete(dir, recursive: true); } catch { }
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { /* a leftover temp folder is harmless */ }
         }
     }
 

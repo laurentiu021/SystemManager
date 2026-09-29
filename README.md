@@ -923,10 +923,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Windows Update install, Reset Windows Update, and creating or restoring a restore point
   each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.
   A restore restarts Windows at once, so it can no longer cut off a repair SysManager is running
-- **Deep Cleanup checks a Windows Update install before deleting the Windows Update cache.** That one
-  category can remove files an install is still reading, so ticking it while an install is running
-  refuses with a message naming both ways out — untick it, or wait — rather than blocking every other
-  category too
+- **Deep Cleanup and Windows Update take turns with the Windows Update folder.** The "Windows Update cache"
+  and "Delivery Optimization cache" categories delete inside it, so a clean with either ticked waits for an
+  update install or a Windows Update reset, and they wait for it. The refusal names both ways out, untick
+  them or wait, and a clean without them is never held up
 - **Gaming Profile takes the lock before it reads your current settings**, not just
   around the changes — it and Performance Mode set the same power plan and the same
   visual-effects switch, so whichever starts second would otherwise write down the

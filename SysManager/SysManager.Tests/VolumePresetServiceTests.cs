@@ -35,6 +35,14 @@ public class VolumePresetServiceTests : IDisposable
     private static VolumePreset Preset(string name, params (string exe, float vol, bool mute)[] apps)
         => new(name, apps.Select(a => new VolumePresetEntry(a.exe, a.exe, a.vol, a.mute)).ToList());
 
+    // The saved presets once the file could be read. Null is its own answer, "could not be read" (#2521).
+    private static IReadOnlyList<VolumePreset> Loaded(VolumePresetService service)
+    {
+        var loaded = service.Load();
+        Assert.NotNull(loaded);
+        return loaded;
+    }
+
     // ── Serialize / Parse round-trip ───────────────────────────────────────
 
     [Fact]
@@ -159,6 +167,91 @@ public class VolumePresetServiceTests : IDisposable
         Assert.Empty(plan);
     }
 
+    // ── A presets file that cannot be read, parsed or written (#2521) ─────────
+    //
+    // A file that could not be read loaded as no presets, so Save wrote only its own preset over every other and
+    // Delete wrote none. Held open with delete sharing only, a read fails and a write would still succeed; held
+    // with read sharing only, a read succeeds and the write fails.
+
+    private string PresetsFile => Path.Combine(_dir, "volume-presets.json");
+
+    private FileStream Hold(FileShare share) => new(PresetsFile, FileMode.Open, FileAccess.Read, share);
+
+    [Fact]
+    public void Load_WhenTheFileCannotBeRead_IsNull_NotEmpty()
+    {
+        var service = new VolumePresetService(_dir);
+        Assert.NotNull(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+
+        using (Hold(FileShare.Delete))
+            Assert.Null(service.Load());
+
+        Assert.Single(Loaded(service));   // readable again once the file is released
+    }
+
+    [Fact]
+    public void Save_WhenTheFileCannotBeRead_WritesNothing_AndReturnsNull()
+    {
+        var service = new VolumePresetService(_dir);
+        Assert.NotNull(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+        Assert.NotNull(service.Save(Preset("Focus", ("chrome.exe", 0.2f, true))));
+
+        using (Hold(FileShare.Delete))
+            Assert.Null(service.Save(Preset("Movie night", ("vlc.exe", 0.6f, false))));
+
+        Assert.Equal(["Gaming", "Focus"], Loaded(service).Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public void Delete_WhenTheFileCannotBeRead_WritesNothing_AndReturnsNull()
+    {
+        var service = new VolumePresetService(_dir);
+        Assert.NotNull(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+        Assert.NotNull(service.Save(Preset("Focus", ("chrome.exe", 0.2f, true))));
+
+        using (Hold(FileShare.Delete))
+            Assert.Null(service.Delete("Gaming"));
+
+        Assert.Equal(["Gaming", "Focus"], Loaded(service).Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public void Save_WhenTheWriteFails_ReturnsNull_RatherThanTheListItCouldNotSave()
+    {
+        // The tab used to say "Saved preset" whatever happened, because Persist swallowed the failure.
+        var service = new VolumePresetService(_dir);
+        Assert.NotNull(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+
+        using (Hold(FileShare.Read))
+            Assert.Null(service.Save(Preset("Focus", ("chrome.exe", 0.2f, true))));
+
+        Assert.Equal(["Gaming"], Loaded(service).Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public void Save_OverAFileThatDoesNotParse_KeepsItAside_ThenSaves()
+    {
+        File.WriteAllText(PresetsFile, "{ not a preset list");
+        var service = new VolumePresetService(_dir);
+
+        Assert.NotNull(service.Save(Preset("Gaming", ("game.exe", 0.9f, false))));
+
+        Assert.Equal("{ not a preset list", File.ReadAllText(PresetsFile + ".unreadable"));
+        Assert.Equal("Gaming", Assert.Single(Loaded(service)).Name);
+    }
+
+    [Fact]
+    public void Delete_OverAFileThatDoesNotParse_KeepsItAside()
+    {
+        File.WriteAllText(PresetsFile, "{ not a preset list");
+        var service = new VolumePresetService(_dir);
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<VolumePreset>>(service.Delete("Gaming")));
+
+        Assert.Equal("{ not a preset list", File.ReadAllText(PresetsFile + ".unreadable"));
+        Assert.Empty(Loaded(service));
+    }
+
     // ── the two mutators racing each other ─────────────────────────────────
 
     /// <summary>
@@ -191,7 +284,7 @@ public class VolumePresetServiceTests : IDisposable
 
             await StartLine.RaceAsync(() => first(service), () => second(service));
 
-            assert(attempt, new VolumePresetService(dir).Load());
+            assert(attempt, Loaded(new VolumePresetService(dir)));
         }
     }
 

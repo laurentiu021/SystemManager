@@ -99,7 +99,9 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         try
         {
             RoutingSupported = _service.IsRoutingSupported;
-            Presets.ReplaceWith(_presets.Load());
+            // A presets file that could not be read shows no presets; Save and Delete then refuse to write over it,
+            // and say so (#2521).
+            Presets.ReplaceWith(_presets.Load() ?? []);
             await RefreshDevicesAsync();
             await ReconcileAsync();
         }
@@ -337,7 +339,14 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             return;
         }
 
-        Presets.ReplaceWith(_presets.Save(new VolumePreset(name, entries)));
+        if (_presets.Save(new VolumePreset(name, entries)) is not { } saved)
+        {
+            StatusMessage = $"Preset \"{name}\" was not saved: SysManager could not read or update your saved "
+                + "presets, and it will not write over them. Try again in a moment.";
+            return;
+        }
+
+        Presets.ReplaceWith(saved);
         NewPresetName = "";
         StatusMessage = $"Saved preset \"{name}\" with {entries.Count} app{(entries.Count == 1 ? "" : "s")}.";
         ActivityLogService.Instance.Log("Volume", $"Saved preset '{name}'");
@@ -394,7 +403,14 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
                 "Delete Preset — Confirm"))
             return;
 
-        Presets.ReplaceWith(_presets.Delete(name));
+        if (_presets.Delete(name) is not { } remaining)
+        {
+            StatusMessage = $"Preset \"{name}\" was not deleted: SysManager could not read or update your saved "
+                + "presets. Try again in a moment.";
+            return;
+        }
+
+        Presets.ReplaceWith(remaining);
         SelectedPreset = null;
         StatusMessage = $"Deleted preset \"{name}\".";
     }

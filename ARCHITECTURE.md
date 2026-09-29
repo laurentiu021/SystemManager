@@ -877,6 +877,9 @@ Key services:
   `%LocalAppData%\SysManager\volume-presets.json`, keyed by exe name so a preset re-applies to
   whatever instance of an app is running. Save/parse/upsert and the "apply preset → live
   sessions" plan are pure, unit-tested static helpers; the file IO never throws to the caller.
+  `Load` returns null for a file that could not be read, and `Save`/`Delete` return null, writing
+  nothing, when the file could not be read or written; one that does not parse is set aside by
+  `StoreFile` first.
 - `ClosePreferenceService` — remembers what the window's close button should do, as JSON under
   `%LocalAppData%\SysManager\close-preference.json`. `MainWindow.OnClosing` asks once
   (`IDialogService.AskCloseOrMinimize`, a three-way prompt) and honours the stored answer

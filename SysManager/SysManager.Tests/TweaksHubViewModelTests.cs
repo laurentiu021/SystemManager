@@ -72,6 +72,33 @@ public class TweaksHubViewModelTests
     }
 
     [Fact]
+    public void ApplySelected_WhileSystemModificationLocked_RefusesAndAppliesNothing()
+    {
+        // #2510. A batch that is cancelled with nothing to name it when SysManager closes mid-run now
+        // shares the lock the other tabs that take a restore point before changing the system already do.
+        var item = Tweak("a", "HKCU", applied: false);
+        item.IsSelected = true;
+        var svc = NewService(item);
+        var vm = NewVm(svc);
+
+        var prev = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Privacy & Telemetry");
+        Assert.NotNull(held);
+        try
+        {
+            vm.ApplySelectedCommand.Execute(null);
+
+            svc.DidNotReceive().ApplyAsync(Arg.Any<IReadOnlyList<TweakItem>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+            Assert.Equal("Cannot start — Privacy & Telemetry is already running.", vm.StatusMessage);
+            Assert.False(vm.IsBusy);
+        }
+        finally { DialogService.Instance = prev; }
+    }
+
+    [Fact]
     public void ApplySelected_WhenConfirmed_AppliesOnlySelectedNotYetApplied()
     {
         var sel = Tweak("a", "HKCU", applied: false); sel.IsSelected = true;

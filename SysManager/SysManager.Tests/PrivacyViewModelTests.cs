@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Microsoft.Win32;
 using NSubstitute;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -185,6 +186,40 @@ public class PrivacyViewModelTests
 
         // The snapshot is taken after the confirmation, so a declined apply costs the user nothing.
         await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApplyChanges_WhileSystemModificationLocked_RefusesAndTakesNoRestorePoint()
+    {
+        // #2510. A batch that is cancelled with nothing to name it when SysManager closes mid-run now
+        // shares the lock the other tabs that take a restore point before changing the system already do.
+        // It answers yes, so the service reads and writes under a throwaway HKCU key: the lock refuses before any
+        // write, and a regression that let the apply through changes that key, never this machine's policies.
+        var rootName = @"Software\SysManagerTests\PrivacyVm_" + Guid.NewGuid().ToString("N");
+        var root = Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        try
+        {
+            var restorePoint = NoRestorePoint();
+            using var dialog = new DialogAnswer(confirm: true);
+            var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: root, hklmRoot: root), restorePoint);
+            await vm.InitializationComplete;
+            vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
+            var pendingBefore = vm.PendingChangeCount;
+            using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Tweaks Hub");
+            Assert.NotNull(held);
+
+            await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Assert.Empty(root.GetSubKeyNames());   // reading creates nothing; any write would have
+            Assert.Equal(pendingBefore, vm.PendingChangeCount);
+            Assert.Equal("Cannot start — Tweaks Hub is already running.", vm.StatusMessage);
+        }
+        finally
+        {
+            root.Dispose();
+            Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false);
+        }
     }
 
     [Fact]

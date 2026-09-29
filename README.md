@@ -912,7 +912,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Files, Duplicate Finder, Speed Test, Traceroute, Network Repair, DNS & Hosts, Shortcut Cleaner,
   File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
   Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
-  Installer, Uninstaller, Preinstalled Apps, and the Dashboard's quick actions)
+  Installer, Uninstaller, Preinstalled Apps, Tweaks Hub, Privacy & Telemetry, Defender Tweaks,
+  Edge/OneDrive Remover, Services, and the Dashboard's quick actions)
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer or
   Uninstaller while another is running fails with exit code 1618, because Windows Installer only
   ever runs one installation at a time.** The three now refuse to start a second one instead

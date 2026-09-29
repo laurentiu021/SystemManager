@@ -1372,6 +1372,42 @@ public class ServicesViewModelTests
         Assert.DoesNotContain("requires admin", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("Start")]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    [InlineData("Enable")]
+    public async Task ServiceCommand_WhileSystemModificationLocked_RefusesAfterConfirming(string verb)
+    {
+        // #2510. A change that is cancelled with nothing to name it when SysManager closes mid-run now
+        // shares the lock the other quick system-wide changes already do.
+        // It answers yes, so nothing past the lock may be able to reach this machine, even if the lock were
+        // missing: the row names a service that does not exist, the runner is a substitute and the ledger is a
+        // temp one. With a real row and a real runner, a regression here started, stopped and reconfigured a real
+        // service on the machine running the suite, which is why the tests above decline instead.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var entry = new ServiceEntry
+        {
+            Name = FakeServiceName,
+            DisplayName = "Lock Test",
+            Status = "Stopped",
+            StartType = verb == "Enable" ? "Disabled" : "Manual",
+            SafetyLevel = Models.SafetyLevel.Safe,
+        };
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync([entry], temp.NewLedger(), runner);
+        runner.ClearReceivedCalls();
+        using var dialog = new DialogScope(answer: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Tweaks Hub");
+        Assert.NotNull(held);
+
+        await ExecuteAsync(vm, verb, entry);
+
+        Assert.Equal("Cannot start — Tweaks Hub is already running.", vm.StatusMessage);
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+    }
+
     private static Task ExecuteAsync(ServicesViewModel vm, string verb, ServiceEntry entry) => verb switch
     {
         "Start" => vm.StartServiceCommand.ExecuteAsync(entry),

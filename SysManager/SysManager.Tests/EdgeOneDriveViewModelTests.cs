@@ -142,6 +142,40 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         finally { DialogService.Instance = prevDialog; }
     }
 
+    [Fact]
+    public async Task RemoveOneDrive_WhileSystemModificationLocked_RefusesAndTakesNoRestorePoint()
+    {
+        // #2510. A change that is cancelled with nothing to name it when SysManager closes mid-run now
+        // shares the lock the other tabs that take a restore point before changing the system already do.
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        Assert.NotNull(held);
+        try
+        {
+            var ps = Substitute.For<IPowerShellRunner>();
+            ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+            var restorePoint = NoRestorePoint();
+            var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root),
+                                      restorePoint);
+            await vm.InitializationComplete;
+            vm.OneDriveInstalled = true;
+            ps.ClearReceivedCalls();
+
+            await vm.RemoveOneDriveCommand.ExecuteAsync(null);
+
+            await ps.DidNotReceive().RunProcessAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+            await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Assert.Equal("Cannot start — Services is already running.", vm.StatusMessage);
+            Assert.False(vm.IsBusy);
+        }
+        finally { DialogService.Instance = prevDialog; }
+    }
+
     [Theory]
     [InlineData("RemoveOneDrive")]
     [InlineData("RestoreOneDrive")]

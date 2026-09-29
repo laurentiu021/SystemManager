@@ -670,9 +670,12 @@ Key services:
   runs fails with 1618 (#2510). None of them services Windows, so an SFC scan does not hold them up.
   `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
-  Windows Update, and creating or restoring a restore point, besides the tabs that change Windows settings
-  (Performance Mode, Gaming Profile, Environment Variables, Preinstalled Apps). Feature
-  changes, update installs, Reset Windows Update and the Restore Points tab took no lock until #2484.
+  Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
+  registry value or changes a Windows service (Performance Mode, Gaming Profile, Environment Variables,
+  Preinstalled Apps, Tweaks Hub, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services).
+  Feature changes, update installs, Reset Windows Update and the Restore Points tab took no lock until
+  #2484; the last five joined at #2510, mainly so closing SysManager mid-change can name them — overlap
+  between any two of them is not itself dangerous the way an SFC repair racing a feature change is.
   System Fixes' `RunFixAsync` takes it only for the fixes that name
   a lock, so Reinstall WinGet, which conflicts with none of them, still runs during a repair.
   Deep Cleanup takes it in addition to `Disk` when one of its two Windows Update caches is ticked: both sit

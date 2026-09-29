@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.50] - 2026-09-29
+
+**Closing SysManager mid-change can now name it on five more tabs.** Tweaks Hub, Privacy & Telemetry,
+Defender Tweaks, Edge/OneDrive Remover and Services took no operation lock, so the question SysManager
+asks before closing while something is still running could not see them.
+
+### Fixed
+
+- **Tweaks Hub, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services took no
+  operation lock.** Closing SysManager, or choosing Exit from the tray, while one of them was mid-change
+  said nothing about it — the warning SysManager shows before an exit that would cut something off reads
+  from the same lock every other tab already registers with, and an operation that takes none is invisible
+  to it. Each of the five now takes the same lock the tabs that change other Windows settings already do
+  (Performance Mode, Gaming Profile, Environment Variables, Preinstalled Apps), and refuses to start a
+  second change with "Cannot start — X is already running." while another of the five, or one of those
+  four, is mid-change.
+  - Overlap between any two of these five is not itself dangerous — none of them restarts Windows or reads
+    files another is writing, the way an SFC repair racing a Windows feature change is. The lock exists
+    mainly so closing can name what it would cut off; that it also serialises the five is a side effect of
+    sharing the one category, not the reason for it.
+  - Tweaks Hub and Defender Tweaks and Edge/OneDrive Remover already route every one of their changes
+    through a single shared method, so the lock is taken once, there, for all of them. Services takes it
+    in each of Start, Stop, Disable and Enable individually, the way it already has its own confirmation
+    in each.
+  - Present since v1.51.0 (Tweaks Hub), v1.5.0 (Privacy & Telemetry), v1.39.0 (Defender Tweaks), v1.53.0
+    (Edge/OneDrive Remover) and v0.13.0 (Services).
+
 ## [1.114.49] - 2026-09-29
 
 **Deep Cleanup and Windows Update no longer work on the same folder at the same time.** Cleaning the Windows

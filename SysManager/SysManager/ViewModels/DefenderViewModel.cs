@@ -204,6 +204,15 @@ public sealed partial class DefenderViewModel : ViewModelBase
         string failureVerb,
         Func<DefenderStatus, bool> applied)
     {
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run. One funnel
+        // for all four changes, so the lock cannot end up guarding some of them and not others (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Defender Tweaks");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try

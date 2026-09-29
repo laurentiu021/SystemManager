@@ -121,6 +121,15 @@ public sealed partial class TweaksHubViewModel : ViewModelBase
 
     private async Task RunBatchAsync(IReadOnlyList<TweakItem> items, bool enable, string verb)
     {
+        // A batch that is cancelled with nothing to name it when SysManager closes mid-run. One funnel for
+        // both Apply and Undo, so the lock cannot end up guarding one and not the other (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Tweaks Hub");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         try
         {

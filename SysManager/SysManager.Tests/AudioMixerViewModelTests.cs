@@ -539,6 +539,54 @@ public class AudioMixerViewModelTests
         Assert.Contains("Chrome", vm.StatusMessage, StringComparison.Ordinal);
     }
 
+    // ── The once-a-second refresh and the status line (#2532) ──────────────
+    //
+    // The refresh ended every pass by writing the app count on the one status line, so any outcome or failure was
+    // replaced within a second. ReconcileAsync is what the refresh loop runs.
+
+    [Fact]
+    public async Task ARefresh_LeavesAChangeWindowsRefusedOnTheStatusLine()
+    {
+        var service = ServiceWith(Session("s1", volume: 0.5f, name: "Chrome"));
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(false);
+        using var vm = NewVm(service);
+        vm.Sessions.Single().Volume = 0.25f;
+        var refused = vm.StatusMessage;
+        Assert.Contains("Could not change the volume", refused, StringComparison.Ordinal);
+
+        await vm.ReconcileAsync();
+
+        Assert.Equal(refused, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ARefresh_LeavesASavedPresetOnTheStatusLine()
+    {
+        using var vm = NewVm(ServiceWith(SessionWithExe(volume: 0.8f)));
+        vm.NewPresetName = "Gaming";
+        using (new DialogAnswer(confirm: false)) vm.SavePresetCommand.Execute(null);
+        var saved = vm.StatusMessage;
+        Assert.StartsWith("Saved preset \"Gaming\"", saved, StringComparison.Ordinal);
+
+        await vm.ReconcileAsync();
+
+        Assert.Equal(saved, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ARefresh_KeepsTheCountCurrent_WhileTheLineShowsIt()
+    {
+        // The other half: the count must not freeze at its first value.
+        var service = ServiceWith(Session("s1", pid: 10, name: "Chrome"));
+        using var vm = NewVm(service);
+        Assert.Equal("1 app playing audio.", vm.StatusMessage);
+        service.GetSessions().Returns([Session("s1", pid: 10, name: "Chrome"), Session("s2", pid: 11, name: "Spotify")]);
+
+        await vm.ReconcileAsync();
+
+        Assert.Equal("2 apps playing audio.", vm.StatusMessage);
+    }
+
     [Fact]
     public void RowMuteToggle_WhenTheServiceRefusesIt_SaysSoInTheStatus()
     {

@@ -78,6 +78,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         _service = service;
         _presets = presets;
         StatusMessage = "Reading audio sessions…";
+        LetRefreshReplaceStatus();
         InitializeAsync(InitAsync);
     }
 
@@ -185,9 +186,11 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         }
 
         HasSessions = Sessions.Count > 0;
-        StatusMessage = Sessions.Count > 0
+        // Through ShowRefreshStatus: this runs every second, and a saved preset, an applied one or a change
+        // Windows refused must stay on the line until the user does something else (#2532).
+        ShowRefreshStatus(Sessions.Count > 0
             ? $"{Sessions.Count} app{(Sessions.Count == 1 ? "" : "s")} playing audio."
-            : "No apps are playing audio right now.";
+            : "No apps are playing audio right now.");
     }
 
     /// <summary>

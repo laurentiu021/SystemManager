@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.35] - 2026-09-29
+
+**Volume Control and Bandwidth Monitor now leave a message on screen long enough to read.** Saving a preset,
+exporting, or a change Windows refused used to be replaced within a second by the number of apps.
+
+### Fixed
+
+- **Volume Control, Bandwidth Monitor: an outcome stays on the status line until you do something else.** Both
+  tabs refresh their list every second, and every refresh rewrote the status line with how many apps were
+  playing audio or using the network. A saved or deleted preset, a preset applied, a volume change Windows
+  refused, an export, a loaded range or the "needs administrator" note was gone within a second.
+  - The refresh now writes the count only while the line still shows the count. It keeps up while nothing
+    else has been said, and a message stays until the next thing you do.
+  - On Bandwidth Monitor, going back to the live chart lets the count return, since the line would otherwise
+    still describe the range just left.
+  Present since the tabs were added: Volume Control in v1.52.38, Bandwidth Monitor in v1.54.0. Closes #2532.
+
 ## [1.114.34] - 2026-09-29
 
 **Volume Control no longer replaces your saved presets when it cannot read them, and says when a preset was

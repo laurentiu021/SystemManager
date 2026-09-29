@@ -175,6 +175,28 @@ public class StandbyMemoryTests
             "_autoPurgeInFlight", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance));
     }
 
+    // ── A setting that cannot be saved (#2521) ──
+
+    [Fact]
+    public void ChangingASetting_ThatCannotBeSaved_SaysSo_AndLeavesTheSavedOne()
+    {
+        using var temp = new TempConfigDir();
+        var file = System.IO.Path.Combine(temp.Path, "standby-preference.json");
+        new Services.StandbyPreferenceService(temp.Path).Save(new Services.StandbyPreference(true, 2048));
+        var before = System.IO.File.ReadAllBytes(file);
+
+        // Held with delete sharing only while the tab opens, so it cannot read what was saved.
+        StandbyMemoryViewModel vm;
+        using (new System.IO.FileStream(
+                   file, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Delete))
+            vm = NewVm(temp.Path);
+
+        vm.ThresholdMb = 4096;
+
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StatusMessage);
+        Assert.Equal(before, System.IO.File.ReadAllBytes(file));
+    }
+
     /// <summary>A throwaway preference directory, so the developer's real settings are untouched.</summary>
     private sealed class TempConfigDir : IDisposable
     {

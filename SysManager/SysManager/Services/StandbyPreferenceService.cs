@@ -24,7 +24,8 @@ public sealed record StandbyPreference(bool AutoPurgeEnabled, double ThresholdMb
 /// the same shape as <see cref="ClosePreferenceService"/> and <see cref="VolumePresetService"/>:
 /// injectable directory, pure testable Serialize/Parse, file IO that never throws. An
 /// unreadable or out-of-range value falls back to the safe default (auto-purge off) rather than
-/// arming an automatic action the user did not choose.</para>
+/// arming an automatic action the user did not choose. A file that could not be read is not
+/// written over, and one that does not parse is kept aside before it is (#2521).</para>
 /// </summary>
 public sealed class StandbyPreferenceService
 {
@@ -47,6 +48,12 @@ public sealed class StandbyPreferenceService
 
     private readonly string _path;
 
+    // What Load found, for Save. After a load that could not read the file, the settings on screen are the
+    // defaults and the file still holds the user's own, so Save does not write over it. A file that does not
+    // parse is set aside before the first write (#2521).
+    private bool _unreadAtLoad;
+    private bool _unparsableAtLoad;
+
     /// <summary>Creates the service. <paramref name="configDir"/> is overridable for tests.</summary>
     public StandbyPreferenceService(string? configDir = null)
     {
@@ -62,27 +69,39 @@ public sealed class StandbyPreferenceService
     /// Loads the saved settings, or <see cref="Default"/> when nothing is stored or the file
     /// cannot be trusted. Never throws.
     /// </summary>
+    /// <remarks>What it found decides what <see cref="Save"/> may do with the file.</remarks>
     public StandbyPreference Load()
     {
-        try
-        {
-            if (!File.Exists(_path)) return Default;
-            return Parse(File.ReadAllText(_path));
-        }
-        catch (IOException ex) { Log.Debug("Standby preference load failed: {Error}", ex.Message); return Default; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Standby preference load denied: {Error}", ex.Message); return Default; }
+        var text = StoreFile.ReadText(_path);
+        var parsed = text is null ? null : TryParse(text);
+        _unreadAtLoad = text is null;
+        _unparsableAtLoad = text is not null && parsed is null;
+        return parsed ?? Default;
     }
 
-    /// <summary>Saves the settings. Never throws; a failure just means the value is not remembered.</summary>
-    public void Save(StandbyPreference preference)
+    /// <summary>
+    /// Saves the settings. Never throws. Returns false when nothing was written: the file could not be read when
+    /// it was loaded, a file that did not parse could not be set aside, or the write failed.
+    /// </summary>
+    public bool Save(StandbyPreference preference)
     {
+        if (_unreadAtLoad)
+        {
+            Log.Debug("Standby preference not saved: the file could not be read when it was loaded");
+            return false;
+        }
+        if (_unparsableAtLoad && !StoreFile.SetAside(_path)) return false;
+        _unparsableAtLoad = false;
+
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             AtomicFile.WriteAllText(_path, Serialize(preference));
+            return true;
         }
         catch (IOException ex) { Log.Debug("Standby preference save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Standby preference save denied: {Error}", ex.Message); }
+        return false;
     }
 
     // ── Pure helpers (unit-testable, no file IO) ───────────────────────────
@@ -97,7 +116,13 @@ public sealed class StandbyPreferenceService
     /// but a value that cannot be read at all disarms auto-purge, because arming an automatic
     /// system action on the strength of a corrupt file is the wrong way to fail.
     /// </summary>
-    public static StandbyPreference Parse(string? json)
+    public static StandbyPreference Parse(string? json) => TryParse(json) ?? Default;
+
+    /// <summary>
+    /// <see cref="Parse"/>, except that input which is not settings at all is null rather than
+    /// <see cref="Default"/>, so <see cref="Load"/> can tell a file to set aside from one that holds nothing.
+    /// </summary>
+    internal static StandbyPreference? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return Default;
         try
@@ -112,6 +137,6 @@ public sealed class StandbyPreferenceService
 
             return new StandbyPreference(stored.AutoPurgeEnabled, threshold);
         }
-        catch (JsonException ex) { Log.Debug("Standby preference parse failed: {Error}", ex.Message); return Default; }
+        catch (JsonException ex) { Log.Debug("Standby preference parse failed: {Error}", ex.Message); return null; }
     }
 }

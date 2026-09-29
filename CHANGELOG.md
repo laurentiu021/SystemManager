@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.42] - 2026-09-29
+
+**The Standby List Cleaner, the Dark Mode Scheduler and the appearance popup no longer replace your saved
+settings with the defaults when SysManager cannot read them.** A change made after such a read wrote the
+defaults over everything else you had saved there.
+
+### Fixed
+
+- **Standby List Cleaner, Dark Mode Scheduler and appearance: saved settings are never written over after a
+  read that failed.** Each reads its settings once, when SysManager starts, and saves everything on screen
+  whenever one setting changes. When the read failed, the screen showed the defaults, and the first change
+  wrote them over the file: the auto-purge switch and threshold, the dark and light times, or a custom
+  theme.
+  - After a read that failed, a change still takes effect, but nothing is saved over the file, and the next
+    start reads your saved settings again. The Standby List Cleaner and the Dark Mode Scheduler say so on
+    their status line.
+  - A settings file that is damaged is kept as `<name>.unreadable` before a new one is written. If it cannot
+    be moved aside, nothing is saved.
+  - The Dark Mode Scheduler now switches the theme before it saves the schedule, so "Schedule applied" no
+    longer covers a schedule that could not be saved.
+  Present since each setting was first saved: v1.13.0 for the theme, v1.41.0 for the dark-mode schedule and
+  v1.56.12 for auto-purge.
+
 ## [1.114.41] - 2026-09-29
 
 **Gaming Profile no longer leaves notifications muted after a game when SysManager cannot read its record of

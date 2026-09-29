@@ -55,6 +55,17 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     protected void LetRefreshReplaceStatus() => _refreshableStatus = StatusMessage;
 
     /// <summary>
+    /// The status line for a setting that was changed but could not be saved.
+    /// </summary>
+    /// <remarks>
+    /// One sentence for every tab that saves a setting the moment it changes, because the case is the same on each:
+    /// the change is in use, and the file still holds what it held before (#2521).
+    /// </remarks>
+    internal const string ChangeNotSavedStatus =
+        "This change takes effect now, but SysManager could not save it, so it will not be kept after "
+        + "SysManager closes.";
+
+    /// <summary>
     /// The command Escape should run on this tab, or <c>null</c> when there is nothing to stop.
     /// </summary>
     /// <remarks>

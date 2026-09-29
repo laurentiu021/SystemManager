@@ -158,6 +158,56 @@ public class StandbyPreferenceServiceTests : IDisposable
         Assert.Equal(StandbyPreferenceService.DefaultThresholdMb, loaded.ThresholdMb);
     }
 
+    // ---------- a file that could not be read or parsed (#2521) ----------
+    // Save wrote the settings on screen over the file, and after a load that failed those were the defaults rather
+    // than the settings the file held.
+
+    private string PreferenceFile => Path.Combine(_dir, "standby-preference.json");
+
+    [Fact]
+    public void Save_AfterALoadThatCouldNotReadTheFile_WritesNothing()
+    {
+        NewService().Save(new StandbyPreference(true, 2048));
+        var before = File.ReadAllBytes(PreferenceFile);
+        var svc = NewService();
+
+        // Held with delete sharing only while it loads: the read fails.
+        using (new FileStream(PreferenceFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Assert.Equal(StandbyPreferenceService.Default, svc.Load());
+
+        Assert.False(svc.Save(new StandbyPreference(false, 4096)));
+        Assert.Equal(before, File.ReadAllBytes(PreferenceFile));
+        Assert.Equal(new StandbyPreference(true, 2048), NewService().Load());
+    }
+
+    [Fact]
+    public void Save_OverAFileThatDoesNotParse_KeepsItAside_ThenSaves()
+    {
+        File.WriteAllText(PreferenceFile, "{ not valid json");
+        var svc = NewService();
+        svc.Load();
+
+        Assert.True(svc.Save(new StandbyPreference(true, 2048)));
+        Assert.True(svc.Save(new StandbyPreference(true, 4096)));
+
+        Assert.Equal("{ not valid json", File.ReadAllText(PreferenceFile + ".unreadable"));
+        Assert.False(File.Exists(PreferenceFile + ".unreadable-2"), "the file the first save wrote was set aside too");
+        Assert.Equal(new StandbyPreference(true, 4096), NewService().Load());
+    }
+
+    [Fact]
+    public void Save_WhenAFileThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(PreferenceFile, "{ not valid json");
+        // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not.
+        Directory.CreateDirectory(PreferenceFile + ".unreadable");
+        var svc = NewService();
+        svc.Load();
+
+        Assert.False(svc.Save(new StandbyPreference(true, 2048)));
+        Assert.Equal("{ not valid json", File.ReadAllText(PreferenceFile));
+    }
+
     // ---------- serialization shape ----------
 
     [Fact]

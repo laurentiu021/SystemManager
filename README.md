@@ -177,7 +177,8 @@ A palette button in the top-right corner opens an appearance popup with:
 - **Custom mode** — free hex input for accent, background, surface, and text colors
 - Background shade slider for fine-tuning lightness/darkness
 - **Reset to default theme** — one click back to the shipped dark theme and shade, from any mode
-- Settings persist between sessions
+- Settings persist between sessions. If they cannot be read when SysManager starts, a change
+  applies for that session but is not saved over them
 
 Custom colours cannot make the app unreadable. Text is adjusted to stay legible against every surface
 it lands on, and a panel colour that leaves no room for readable text at all — a near-white card on a
@@ -316,6 +317,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Applies immediately with no sign-out, no admin needed, and is fully reversible
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)
   is open; it's not a background Windows service
+- If the saved schedule cannot be read when SysManager starts, a change still applies but
+  is not saved over it, and the status line says so
 
 ### Volume Control
 - **Per-app volume mixer** — lists every app currently playing on your default
@@ -1358,7 +1361,9 @@ offers, "rate us" prompts:
   same privilege RAMMap and ISLC use) and reports cleanly if not elevated
 - The auto-purge switch and its threshold are remembered between sessions, so
   arming it once is enough: after a restart it starts watching as soon as
-  SysManager opens (as administrator), without the tab being opened first
+  SysManager opens (as administrator), without the tab being opened first. If they
+  cannot be read when SysManager starts, a change still applies but is not saved over
+  them, and the status line says so
 
 ### Performance Mode
 - **Per-tweak Apply buttons** — each setting is independent

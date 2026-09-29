@@ -36,13 +36,14 @@ public class DarkModeViewModelTests
     private static DarkModeViewModel NewVm(IWindowsThemeService service) => new(service);
 
     // A substitute that loads a known schedule (so LoadFromSchedule has a non-null result)
-    // and reports the Windows theme as light by default. SetTheme succeeds unless overridden.
+    // and reports the Windows theme as light by default. SetTheme and SaveSchedule succeed unless overridden.
     private static IWindowsThemeService FakeThemeService(DarkModeSchedule? schedule = null)
     {
         var service = Substitute.For<IWindowsThemeService>();
         service.LoadSchedule().Returns(schedule ?? new DarkModeSchedule { Enabled = false });
         service.GetCurrentTheme().Returns(WindowsTheme.Light);
         service.SetTheme(Arg.Any<bool>(), Arg.Any<bool>()).Returns(true);
+        service.SaveSchedule(Arg.Any<DarkModeSchedule>()).Returns(true);
         return service;
     }
 
@@ -178,6 +179,36 @@ public class DarkModeViewModelTests
         vm.ScheduleEnabled = true;
 
         service.DidNotReceive().SetTheme(Arg.Any<bool>(), Arg.Any<bool>());
+    }
+
+    // ── A schedule that cannot be saved (#2521) ─────────────
+
+    [Fact]
+    public void ChangingTheSchedule_WhenItCannotBeSaved_SaysSo()
+    {
+        var service = FakeThemeService();
+        service.SaveSchedule(Arg.Any<DarkModeSchedule>()).Returns(false);
+        var vm = NewVm(service);
+
+        vm.ApplyToSystem = !vm.ApplyToSystem;
+
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StatusMessage);
+    }
+
+    [Fact]
+    public void AScheduleThatCannotBeSaved_StaysOnTheStatusLine_WhenItAlsoSwitchesTheTheme()
+    {
+        // Equal times make ShouldBeDark false whatever the clock says, so turning the schedule on while Windows is
+        // dark always switches it to light, and says so.
+        var service = FakeThemeService(new DarkModeSchedule { Enabled = false, DarkStart = "09:00", LightStart = "09:00" });
+        service.GetCurrentTheme().Returns(WindowsTheme.Dark);
+        service.SaveSchedule(Arg.Any<DarkModeSchedule>()).Returns(false);
+        var vm = NewVm(service);
+
+        vm.ScheduleEnabled = true;
+
+        service.Received(1).SetTheme(Arg.Is(false), Arg.Any<bool>());
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StatusMessage);
     }
 
     private static void SetSuppressSave(DarkModeViewModel vm, bool value) =>

@@ -40,6 +40,12 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     // AppIconService's overwriting a real setting every run (#1758).
     private readonly string _schedulePath;
 
+    // What LoadSchedule found, for SaveSchedule. After a load that could not read the file, the schedule on
+    // screen is the default and the file still holds the user's own, so SaveSchedule does not write over it. A
+    // file that does not parse is set aside before the first write (#2521).
+    private bool _unreadAtLoad;
+    private bool _unparsableAtLoad;
+
     /// <summary>
     /// Creates the service.
     /// </summary>
@@ -96,34 +102,51 @@ public sealed partial class WindowsThemeService : IWindowsThemeService
     }
 
     /// <summary>Load the saved schedule, or defaults if none exists / it's unreadable.</summary>
+    /// <remarks>What it found decides what <see cref="SaveSchedule"/> may do with the file.</remarks>
     public DarkModeSchedule LoadSchedule()
     {
+        var json = StoreFile.ReadText(_schedulePath);
+        _unreadAtLoad = json is null;
+        _unparsableAtLoad = false;
+        if (string.IsNullOrWhiteSpace(json)) return new DarkModeSchedule();
+
         try
         {
-            if (File.Exists(_schedulePath))
-            {
-                string json = File.ReadAllText(_schedulePath);
-                var s = JsonSerializer.Deserialize<DarkModeSchedule>(json);
-                if (s is not null) return s;
-            }
+            return JsonSerializer.Deserialize<DarkModeSchedule>(json) ?? new DarkModeSchedule();
         }
-        catch (IOException ex) { Log.Debug("Dark-mode schedule read failed: {Error}", ex.Message); }
-        catch (JsonException ex) { Log.Debug("Dark-mode schedule parse failed: {Error}", ex.Message); }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Dark-mode schedule access denied: {Error}", ex.Message); }
-        return new DarkModeSchedule();
+        catch (JsonException ex)
+        {
+            Log.Debug("Dark-mode schedule parse failed: {Error}", ex.Message);
+            _unparsableAtLoad = true;
+            return new DarkModeSchedule();
+        }
     }
 
-    /// <summary>Persist the schedule as indented JSON in the app's roaming AppData folder.</summary>
-    public void SaveSchedule(DarkModeSchedule schedule)
+    /// <summary>
+    /// Persist the schedule as indented JSON in the app's roaming AppData folder. Returns false when nothing was
+    /// written: the file could not be read when it was loaded, a file that did not parse could not be set aside,
+    /// or the write failed.
+    /// </summary>
+    public bool SaveSchedule(DarkModeSchedule schedule)
     {
+        if (_unreadAtLoad)
+        {
+            Log.Debug("Dark-mode schedule not saved: the file could not be read when it was loaded");
+            return false;
+        }
+        if (_unparsableAtLoad && !StoreFile.SetAside(_schedulePath)) return false;
+        _unparsableAtLoad = false;
+
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_schedulePath)!);
             string json = JsonSerializer.Serialize(schedule, JsonDefaults.Indented);
             AtomicFile.WriteAllText(_schedulePath, json);
+            return true;
         }
         catch (IOException ex) { Log.Warning("Dark-mode schedule save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Warning("Dark-mode schedule save denied: {Error}", ex.Message); }
+        return false;
     }
 
     /// <summary>

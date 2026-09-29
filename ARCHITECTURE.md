@@ -609,6 +609,9 @@ Key services:
   working set trim, hibernation toggle. Its timestamped restore snapshot is
   persisted locally, bounded and validated at load, then rehydrated by
   `PerformanceViewModel` before live profile probes during initialization.
+  `LoadSnapshot(out SnapshotProblem)` tells no snapshot from one that could not be read or is
+  invalid, so the first Apply captures a baseline only when there is none: an unreadable one
+  stops the change, and an invalid one is set aside by `StoreFile` and the change stopped once.
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming

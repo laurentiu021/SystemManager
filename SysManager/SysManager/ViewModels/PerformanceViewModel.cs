@@ -125,13 +125,24 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         {
             if (_snapshot is null)
             {
-                var persisted = await Task.Run(_service.LoadSnapshot);
+                var (persisted, problem) = await Task.Run(() =>
+                {
+                    var loaded = _service.LoadSnapshot(out var why);
+                    return (loaded, why);
+                });
                 if (persisted is not null)
                 {
                     _snapshot = persisted;
                 }
                 else
                 {
+                    // A snapshot that is there but cannot be used is not "none". The settings on the machine may be
+                    // the tweaks of an earlier Apply, and capturing them now would record the tweaks as the original,
+                    // so Restore All would put them back (#2521).
+                    if (problem == PerformanceService.SnapshotProblem.Unreadable) throw SnapshotUnreadable();
+                    if (problem == PerformanceService.SnapshotProblem.Invalid)
+                        throw SnapshotDamaged(setAside: await Task.Run(_service.SetSnapshotAside));
+
                     // Refuse to CAPTURE while a game profile is live. The lock that keeps this tab and
                     // Gaming Profile from overlapping is held per operation, but a gaming SESSION
                     // outlives it: the profile applies, releases the lock, and its power plan and
@@ -159,6 +170,21 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     /// </summary>
     private static InvalidOperationException SnapshotUnavailable() =>
         new("The recovery snapshot could not be saved, so no setting was changed.");
+
+    /// <summary>The refusal for "the recovery snapshot is there, and could not be read just now".</summary>
+    private static InvalidOperationException SnapshotUnreadable() =>
+        new("SysManager could not read its record of your original settings, so no setting was changed. Try again in a moment.");
+
+    /// <summary>
+    /// The refusal for "the recovery snapshot is there and cannot be restored". Once it is set aside, the next Apply
+    /// finds no snapshot and records the current settings as the new original, so the user has been told first.
+    /// </summary>
+    private static InvalidOperationException SnapshotDamaged(bool setAside) => setAside
+        ? new("SysManager's record of your original settings is damaged and cannot be restored, so no setting was "
+              + "changed. SysManager set the damaged record aside. Apply again to record the current settings as the "
+              + "new original.")
+        : new("SysManager's record of your original settings is damaged and could not be set aside, so no setting "
+              + "was changed. Try again in a moment.");
 
     /// <summary>
     /// The refusal for "a game profile is running, so the settings on this machine right now are the

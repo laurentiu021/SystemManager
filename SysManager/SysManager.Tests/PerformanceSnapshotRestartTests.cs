@@ -433,6 +433,158 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    // ── A snapshot that is there but cannot be used (#2521) ─────────────────────────────────────
+    //
+    // LoadSnapshot returned null for no file and for a file it could not read or use alike, so the first Apply
+    // captured the settings on the machine and saved them over it. After an earlier Apply those settings are the
+    // tweaks, and Restore All would then put the tweaks back and report "Original settings restored." The file is
+    // held open with delete sharing only while a read must fail: the read fails, and a write would still succeed.
+
+    private static async Task AnswerYesAsync(Func<Task> body)
+    {
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try { await body(); }
+        finally { DialogService.Instance = previousDialog; }
+    }
+
+    [Fact]
+    public void LoadSnapshot_TellsNoFileFromAnUnreadableOneFromAnInvalidOne()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            var file = Path.Combine(dir, "performance-snapshot.json");
+
+            Assert.Null(service.LoadSnapshot(out var none));
+            Assert.Equal(PerformanceService.SnapshotProblem.None, none);
+
+            Assert.True(service.SaveSnapshot(ValidSnapshot()));
+            using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            {
+                Assert.Null(service.LoadSnapshot(out var unreadable));
+                Assert.Equal(PerformanceService.SnapshotProblem.Unreadable, unreadable);
+            }
+
+            File.WriteAllText(file, "{ not a snapshot");
+            Assert.Null(service.LoadSnapshot(out var invalid));
+            Assert.Equal(PerformanceService.SnapshotProblem.Invalid, invalid);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_WhenTheSnapshotCannotBeRead_ChangesNothing_AndKeepsIt()
+    {
+        var dir = CreateTempDirectory();
+        var runner = NewRunner();
+        try
+        {
+            using var service = NewService(dir, runner);
+            var original = ValidSnapshot();
+            Assert.True(service.SaveSnapshot(original));
+
+            using (new FileStream(Path.Combine(dir, "performance-snapshot.json"), FileMode.Open, FileAccess.Read, FileShare.Delete))
+            {
+                using var vm = new PerformanceViewModel(service, NoGamingSession());
+                await vm.InitializationComplete;
+                Assert.False(vm.HasSnapshot, "precondition: the first read failed as well");
+
+                vm.SelectedPlan = "high";
+                await AnswerYesAsync(() => vm.ApplyPowerPlanCommand.ExecuteAsync(null));
+
+                Assert.Contains("could not read its record of your original settings", vm.StatusMessage, StringComparison.Ordinal);
+            }
+
+            Assert.Equal(original, service.LoadSnapshot());
+            await runner.DidNotReceive().RunProcessAsync(
+                "powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_WhenTheSnapshotIsDamaged_KeepsItAside_ChangesNothing_ThenRecordsANewOne()
+    {
+        var dir = CreateTempDirectory();
+        var runner = NewRunner();
+        try
+        {
+            using var service = NewService(dir, runner);
+            var file = Path.Combine(dir, "performance-snapshot.json");
+            File.WriteAllText(file, "{ not a snapshot");
+
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+            vm.SelectedPlan = "high";
+
+            await AnswerYesAsync(() => vm.ApplyPowerPlanCommand.ExecuteAsync(null));
+
+            Assert.Contains("set the damaged record aside", vm.StatusMessage, StringComparison.Ordinal);
+            Assert.Equal("{ not a snapshot", File.ReadAllText(file + ".unreadable"));
+            Assert.False(File.Exists(file));
+            await runner.DidNotReceive().RunProcessAsync(
+                "powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+
+            // Told first, the user can go ahead: the next Apply records the current settings as the new original.
+            await AnswerYesAsync(() => vm.ApplyPowerPlanCommand.ExecuteAsync(null));
+
+            Assert.NotNull(service.LoadSnapshot());
+            Assert.True(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Apply_WhenADamagedSnapshotCannotBeSetAside_ChangesNothing_AndLeavesIt()
+    {
+        var dir = CreateTempDirectory();
+        var runner = NewRunner();
+        try
+        {
+            using var service = NewService(dir, runner);
+            var file = Path.Combine(dir, "performance-snapshot.json");
+            File.WriteAllText(file, "{ not a snapshot");
+
+            // Held with read sharing only: the snapshot reads as damaged, and it cannot be moved.
+            using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using var vm = new PerformanceViewModel(service, NoGamingSession());
+                await vm.InitializationComplete;
+                vm.SelectedPlan = "high";
+
+                await AnswerYesAsync(() => vm.ApplyPowerPlanCommand.ExecuteAsync(null));
+
+                Assert.Contains("could not be set aside", vm.StatusMessage, StringComparison.Ordinal);
+                Assert.False(vm.HasSnapshot);
+            }
+
+            Assert.Equal("{ not a snapshot", File.ReadAllText(file));
+            Assert.False(File.Exists(file + ".unreadable"));
+            await runner.DidNotReceive().RunProcessAsync(
+                "powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     /// <summary>
     /// A live Gaming Profile session must stop this tab from inventing a recovery baseline out of the
     /// profile's settings.

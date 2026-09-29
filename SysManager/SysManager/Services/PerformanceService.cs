@@ -187,8 +187,32 @@ public sealed partial class PerformanceService : IDisposable
     /// Loads and validates a previously saved snapshot. Invalid, incomplete, or oversized
     /// files are rejected before any value can reach a restore operation.
     /// </summary>
-    public OriginalSnapshot? LoadSnapshot()
+    public OriginalSnapshot? LoadSnapshot() => LoadSnapshot(out _);
+
+    /// <summary>Why <see cref="LoadSnapshot(out SnapshotProblem)"/> returned no snapshot.</summary>
+    internal enum SnapshotProblem
     {
+        /// <summary>There is no snapshot file: nothing has been changed since the last Restore All, if ever.</summary>
+        None,
+
+        /// <summary>The file is there and could not be read.</summary>
+        Unreadable,
+
+        /// <summary>The file was read and is not a snapshot that could be restored.</summary>
+        Invalid,
+    }
+
+    /// <summary>
+    /// <see cref="LoadSnapshot()"/>, and when it finds no usable snapshot, whether there was none or it could not be used.
+    /// </summary>
+    /// <remarks>
+    /// The difference decides whether a baseline may be captured. With no snapshot, the settings now are the user's
+    /// own. With one that is there but unusable, they may be the tweaks of an earlier Apply, and capturing them would
+    /// record the tweaks as the original: Restore All would then put them back (#2521).
+    /// </remarks>
+    internal OriginalSnapshot? LoadSnapshot(out SnapshotProblem problem)
+    {
+        problem = SnapshotProblem.None;
         try
         {
             if (!File.Exists(_snapshotPath)) return null;
@@ -198,16 +222,24 @@ public sealed partial class PerformanceService : IDisposable
             if (!TryValidateSnapshot(snapshot, out var reason))
             {
                 Log.Warning("Rejected invalid performance snapshot: {Reason}", reason);
+                problem = SnapshotProblem.Invalid;
                 return null;
             }
             return snapshot;
         }
-        catch (InvalidDataException ex) { Log.Warning(ex, "Rejected invalid performance snapshot"); return null; }
-        catch (IOException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
-        catch (SecurityException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
-        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to load performance snapshot"); return null; }
-        catch (JsonException ex) { Log.Warning(ex, "Failed to parse performance snapshot"); return null; }
+        catch (InvalidDataException ex) { Log.Warning(ex, "Rejected invalid performance snapshot"); problem = SnapshotProblem.Invalid; }
+        catch (IOException ex) { Log.Warning(ex, "Failed to load performance snapshot"); problem = SnapshotProblem.Unreadable; }
+        catch (SecurityException ex) { Log.Warning(ex, "Failed to load performance snapshot"); problem = SnapshotProblem.Unreadable; }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Failed to load performance snapshot"); problem = SnapshotProblem.Unreadable; }
+        catch (JsonException ex) { Log.Warning(ex, "Failed to parse performance snapshot"); problem = SnapshotProblem.Invalid; }
+        return null;
     }
+
+    /// <summary>
+    /// Keeps a snapshot that is not usable as "performance-snapshot.json.unreadable", so a new baseline can be
+    /// recorded without destroying it. False when it could not be moved, and then nothing may be recorded.
+    /// </summary>
+    internal bool SetSnapshotAside() => StoreFile.SetAside(_snapshotPath);
 
     private byte[] ReadBoundedSnapshot()
     {

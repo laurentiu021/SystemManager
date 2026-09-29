@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.30] - 2026-09-29
+
+**Performance Mode no longer replaces its record of your original settings when it cannot read it.** After an
+earlier Apply, the settings it recorded instead were its own tweaks, so Restore All would have put the tweaks back.
+
+### Fixed
+
+- **Performance Mode: the record of your original settings is never replaced when it could not be read or used.**
+  Before its first change, Performance Mode records your settings so Restore All can put them back. A record that
+  could not be read, or was damaged, was taken as no record at all. The next Apply recorded the settings on the PC
+  as the original instead. After an earlier Apply those were the tweaks, so Restore All put the tweaks back and
+  said "Original settings restored."
+  - A record that cannot be read stops the change, says so, and is left as it is.
+  - A damaged record stops the change once and is kept as `performance-snapshot.json.unreadable`. The message says
+    the next Apply records the current settings as the new original.
+  Present since the record was first saved to disk in v0.28.23.
+
 ## [1.114.29] - 2026-09-29
 
 **Services no longer loses how the services it disabled were set when it cannot read its record of them.** One

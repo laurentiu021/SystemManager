@@ -87,7 +87,7 @@ public sealed partial class DebloaterService
             ["Microsoft.ZuneVideo"] = ("Movies & TV", "Video store and player."),
             ["Microsoft.MicrosoftSolitaireCollection"] = ("Solitaire Collection", "Bundled solitaire games (with ads)."),
             ["Microsoft.People"] = ("People", "Contacts aggregator app."),
-            ["Microsoft.windowscommunicationsapps"] = ("Mail & Calendar", "Legacy Mail and Calendar apps."),
+            ["Microsoft.windowscommunicationsapps"] = ("Mail & Calendar", "Legacy Mail and Calendar apps, retired by Microsoft at the end of 2024."),
             ["Microsoft.YourPhone"] = ("Phone Link", "Android/iPhone companion."),
             ["Microsoft.Todos"] = ("Microsoft To Do", "Task list app."),
             ["Microsoft.PowerAutomateDesktop"] = ("Power Automate", "Desktop automation tool."),
@@ -98,10 +98,24 @@ public sealed partial class DebloaterService
             ["Microsoft.MicrosoftOfficeHub"] = ("Office Hub", "Office app launcher/upsell."),
             ["Microsoft.3DBuilder"] = ("3D Builder", "Legacy 3D model viewer."),
             ["Microsoft.MixedReality.Portal"] = ("Mixed Reality Portal", "Windows Mixed Reality."),
-            ["Microsoft.SkypeApp"] = ("Skype", "Bundled Skype app."),
+            ["Microsoft.SkypeApp"] = ("Skype", "Bundled Skype app, retired by Microsoft in May 2025."),
             ["Microsoft.WindowsMaps"] = ("Maps", "Offline maps app."),
             ["Microsoft.WindowsFeedbackHub"] = ("Feedback Hub", "Sends feedback to Microsoft."),
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Package families Microsoft has retired. The Store no longer offers them, so a removal cannot be undone by
+    /// reinstalling, and the confirmation says so instead of promising the Store (#2505).
+    /// </summary>
+    /// <remarks>
+    /// Only retirements Microsoft has announced: Skype was shut down on 5 May 2025, and Mail and Calendar reached
+    /// the end of support on 31 December 2024. Matched like <see cref="ProtectedPrefixes"/>.
+    /// </remarks>
+    private static readonly string[] RetiredPrefixes =
+    [
+        "Microsoft.SkypeApp",
+        "Microsoft.windowscommunicationsapps",
+    ];
 
     /// <summary>
     /// The script <see cref="ListAsync"/> runs: the non-framework, non-resource packages for the current user.
@@ -183,7 +197,8 @@ public sealed partial class DebloaterService
                 Version = version,
                 Description = description,
                 IsProtected = isProtected,
-                IsCommonBloat = inCatalog && !isProtected
+                IsCommonBloat = inCatalog && !isProtected,
+                IsRetired = IsRetired(name)
             });
         }
         // Curated bloat first, then the rest; alphabetical within each band.
@@ -195,6 +210,10 @@ public sealed partial class DebloaterService
     /// <summary>True if the package name matches a system-critical denylist prefix.</summary>
     public static bool IsProtected(string packageName) =>
         ProtectedPrefixes.Any(p => packageName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>True if the package name matches a family Microsoft has retired, which cannot be reinstalled.</summary>
+    public static bool IsRetired(string packageName) =>
+        RetiredPrefixes.Any(p => packageName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
     private static bool TryGetCatalog(string name, out string display, out string description)
     {

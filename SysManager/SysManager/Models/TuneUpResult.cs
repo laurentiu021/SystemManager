@@ -99,7 +99,7 @@ public sealed record TuneUpResult
     /// <summary>The line naming what was not checked, or empty when everything was.</summary>
     public string NotCheckedDisplay => NotChecked.Count == 0
         ? ""
-        : $"Not checked this time: {JoinForSentence(NotChecked)}. The result above does not cover "
+        : $"Not checked this time: {FormatHelper.JoinForSentence(NotChecked)}. The result above does not cover "
           + (NotChecked.Count == 1 ? "it." : "them.");
 
     public string OverallVerdict => (WarningCount, NotChecked.Count) switch
@@ -119,13 +119,6 @@ public sealed record TuneUpResult
         (0, 0) => StatusColors.Good,
         ( <= 2, _) => StatusColors.Warning,
         _ => StatusColors.Bad
-    };
-
-    /// <summary>"a", "a and b", "a, b and c".</summary>
-    private static string JoinForSentence(IReadOnlyList<string> items) => items.Count switch
-    {
-        1 => items[0],
-        _ => string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1],
     };
 }
 

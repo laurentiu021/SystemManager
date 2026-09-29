@@ -329,4 +329,73 @@ public class DebloaterViewModelTests
         Assert.True(vm.ListFailed);
         Assert.Contains("from the last scan", vm.StatusMessage, StringComparison.Ordinal);
     }
+
+    // ---------- apps Microsoft has retired cannot be reinstalled (#2505) ----------
+
+    private static StoreApp RetiredApp(string name, string display) => new()
+    {
+        Name = name,
+        DisplayName = display,
+        PackageFullName = $"{name}_1.0.0.0_x64__8wekyb3d8bbwe",
+        PackageFamilyName = $"{name}_8wekyb3d8bbwe",
+        Publisher = "CN=Test",
+        Version = "1.0.0.0",
+        IsRetired = true,
+        IsSelected = true,
+    };
+
+    [Fact]
+    public async Task RemoveSelected_WithARetiredApp_NamesIt_AndPromisesTheStoreOnlyForTheOthers()
+    {
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = NewVm(NoRestorePoint());
+        vm.Apps.Add(RetiredApp("Microsoft.SkypeApp", "Skype"));
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("Skype cannot be reinstalled afterwards: Microsoft has retired it.", message, StringComparison.Ordinal);
+        Assert.Contains("The others can be reinstalled later from the Microsoft Store.", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("reinstall any of them", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WithNoRetiredApp_StillPromisesTheStore()
+    {
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = NewVm(NoRestorePoint());
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.Contains("You can reinstall any of them later from the Microsoft Store.", Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_AfterRemovingOnlyARetiredApp_DoesNotPromiseItBack()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = NewVm(NoRestorePoint());
+        vm.Apps.Add(RetiredApp("Microsoft.SkypeApp", "Skype"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Removed 1 app. Skype cannot be reinstalled: Microsoft has retired it.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_AfterRemovingARetiredAppAndAnother_PromisesTheStoreOnlyForTheOther()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = NewVm(NoRestorePoint());
+        vm.Apps.Add(RetiredApp("Microsoft.SkypeApp", "Skype"));
+        vm.Apps.Add(Removable("Contoso.AppA"));
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Removed 2 apps. Reinstall the others from the Microsoft Store if needed. Skype cannot be "
+            + "reinstalled: Microsoft has retired it.", vm.StatusMessage);
+    }
 }

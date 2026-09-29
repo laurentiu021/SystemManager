@@ -244,4 +244,35 @@ public class DebloaterServiceTests
 
         Assert.Null(await new DebloaterService(runner).ListAsync());
     }
+
+    // ---------- IsRetired (#2505) ----------
+
+    [Theory]
+    [InlineData("Microsoft.SkypeApp")]
+    [InlineData("Microsoft.windowscommunicationsapps")]
+    [InlineData("microsoft.skypeapp")]
+    public void IsRetired_TrueForTheAppsMicrosoftHasRetired(string name)
+        => Assert.True(DebloaterService.IsRetired(name));
+
+    [Theory]
+    [InlineData("Microsoft.BingNews")]
+    [InlineData("Microsoft.Todos")]
+    [InlineData("Clipchamp.Clipchamp")]
+    public void IsRetired_FalseForAppsTheStoreStillOffers(string name)
+        => Assert.False(DebloaterService.IsRetired(name));
+
+    [Fact]
+    public void Parse_FlagsRetiredApps_AndOnlyThem()
+    {
+        var rows = new[]
+        {
+            MakePkg("Microsoft.SkypeApp", "Microsoft.SkypeApp_15_x64__kzf8qxf38zg5c", "Microsoft.SkypeApp_kzf8qxf38zg5c"),
+            MakePkg("Microsoft.BingNews", "Microsoft.BingNews_1.2_x64__abc", "Microsoft.BingNews_abc"),
+        };
+
+        var result = DebloaterService.ParsePackages(rows);
+
+        Assert.True(Assert.Single(result, a => a.Name == "Microsoft.SkypeApp").IsRetired);
+        Assert.False(Assert.Single(result, a => a.Name == "Microsoft.BingNews").IsRetired);
+    }
 }

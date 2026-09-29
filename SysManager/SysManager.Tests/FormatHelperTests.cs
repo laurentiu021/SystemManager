@@ -128,4 +128,17 @@ public class FormatHelperTests
             CultureInfo.CurrentCulture = previous;
         }
     }
+
+    // ── JoinForSentence ──
+
+    [Fact]
+    public void JoinForSentence_OfNothing_IsEmpty()
+        => Assert.Equal("", FormatHelper.JoinForSentence(Array.Empty<string>()));
+
+    [Theory]
+    [InlineData(new[] { "Skype" }, "Skype")]
+    [InlineData(new[] { "Skype", "Maps" }, "Skype and Maps")]
+    [InlineData(new[] { "Skype", "Maps", "Mail & Calendar" }, "Skype, Maps and Mail & Calendar")]
+    public void JoinForSentence_ReadsAsASentence(string[] items, string expected)
+        => Assert.Equal(expected, FormatHelper.JoinForSentence(items));
 }

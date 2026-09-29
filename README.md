@@ -1159,7 +1159,9 @@ them:
   matched by the identity that stays the same across versions
 - **A scan that fails says so**, rather than reporting that there are no Store apps, and a refresh
   that fails keeps the list you already had. One app Windows cannot read does not hide the others
-- **Reversible** — removal is per-user, so any app can be reinstalled from the Store
+- **Reversible for most apps** — removal is per-user, so an app can be reinstalled from the
+  Store, unless Microsoft has retired it, as it has Skype and Mail & Calendar. The confirmation
+  names any such app in your selection
 - **A Windows restore point is attempted before the first removal**, shared with the other tabs
   that change system settings. Described honestly rather than reassuringly: System Restore does
   **not** bring Store apps back, so reinstalling from the Store stays the real undo and the app

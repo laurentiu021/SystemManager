@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.44] - 2026-09-29
+
+**Preinstalled Apps no longer promises that every app can be reinstalled.** Skype and Mail & Calendar,
+which Microsoft has retired, cannot be, and the tab now says so before you remove them.
+
+### Fixed
+
+- **Preinstalled Apps: apps Microsoft has retired are no longer promised back from the Store.** The
+  confirmation said "You can reinstall any of them later from the Microsoft Store", and so did the tab's
+  description, the Remove button's tooltip and the message after a removal. Skype was shut down in May 2025
+  and Mail & Calendar reached the end of support at the end of 2024, so neither can be reinstalled.
+  - When the selection includes one of them, the confirmation names it and says it cannot be reinstalled,
+    and promises the Store only for the others. The message after the removal does the same.
+  - Their descriptions in the list now say when Microsoft retired them.
+  Present since Preinstalled Apps was added in v1.24.0.
+
 ## [1.114.43] - 2026-09-29
 
 **Five confirmations now say what the change costs you, not only what it does.** Quick Tune-Up, App Blocker,

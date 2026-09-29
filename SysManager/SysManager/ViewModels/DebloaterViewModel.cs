@@ -204,6 +204,15 @@ public sealed partial class DebloaterViewModel : ViewModelBase
             return;
         }
 
+        // A removal batch that is cancelled with nothing to name it when SysManager closes mid-run. The same
+        // lock the other tabs that take a restore point before changing the system already share (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Preinstalled Apps");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         // The snapshot takes seconds and reports no percentage, so the bar stays a marquee until it
         // is done and only then switches to the determinate per-app progress below. Deliberately

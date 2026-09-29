@@ -156,6 +156,15 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
             return;
         }
 
+        // A deletion batch that is cancelled with nothing to name it when SysManager closes mid-run. Shares
+        // the disk-scanning/deleting tabs' lock (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Browser Cleaner");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Cleaning…";

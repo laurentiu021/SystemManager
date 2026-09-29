@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.48] - 2026-09-29
+
+**Preinstalled Apps, File Shredder, Browser Cleaner and DNS & Hosts now take the operation lock.**
+Closing SysManager mid-run can now name what it is cutting off on all four, and a DNS change no longer
+races Network Repair's own reset.
+
+### Fixed
+
+- **Preinstalled Apps, File Shredder, Browser Cleaner and DNS & Hosts took no operation lock, so
+  SysManager closing mid-run could not name what it was cutting off, and a DNS preset change on DNS &
+  Hosts could run at the same time as Network Repair resetting DNS.** Preinstalled Apps now shares the
+  lock the other tabs that take a restore point before changing the system already do. File Shredder and
+  Browser Cleaner share the disk-scanning/deleting tabs' lock. DNS & Hosts shares Network Repair's lock,
+  so the two can no longer undo each other. Each refuses to start with "Cannot start — X is already
+  running." when its category is busy. Present since v1.24.0 (Preinstalled Apps), v1.4.0 (File
+  Shredder), v1.31.0 (Browser Cleaner), and v1.6.0 (DNS & Hosts, when it joined the already-shipped
+  Network Repair).
+
 ## [1.114.47] - 2026-09-29
 
 **App Updates, Bulk Installer and Uninstaller no longer step on each other.** Starting one while another is

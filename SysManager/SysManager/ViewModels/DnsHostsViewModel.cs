@@ -184,6 +184,16 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 return;
             }
 
+            // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
+            // Network Repair's own DNS reset must not race (#2510).
+            using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Change DNS");
+            if (opLock is null)
+            {
+                await RefreshDnsAsync();
+                SetStatusMessage($"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.");
+                return;
+            }
+
             // Arm Undo before the guarded mutation so an ambiguous partial failure remains
             // recoverable. A typed precondition rejection proves no mutation began and safely
             // removes only this pending entry, exposing any older rollback point again.
@@ -265,6 +275,16 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 return;
             }
 
+            // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
+            // Network Repair's own DNS reset must not race (#2510).
+            using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Reset DNS");
+            if (opLock is null)
+            {
+                await RefreshDnsAsync();
+                SetStatusMessage($"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.");
+                return;
+            }
+
             pendingUndo = ArmDnsUndo(confirmedSnapshot);
             StatusMessage = "Resetting DNS to DHCP...";
 
@@ -327,6 +347,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 "Confirm DNS Restore"))
         {
             StatusMessage = "DNS restore cancelled.";
+            return;
+        }
+
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run, and that
+        // Network Repair's own DNS reset must not race (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Restore previous DNS");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;
         }
 
@@ -517,6 +546,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        // A write that is cancelled with nothing to name it when SysManager closes mid-run, and that
+        // Network Repair's own DNS reset must not race (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Save hosts file");
+        if (opLock is null)
+        {
+            HostsStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
+            return;
+        }
+
         // Snapshot the entries on the UI thread, then write off-thread: SaveHosts does
         // synchronous file I/O (WriteAllLines + File.Replace on the System32 hosts file)
         // that would otherwise block the UI until the disk write completes.
@@ -559,6 +597,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
                 "Confirm Restore Hosts File"))
         {
             HostsStatus = "Restore cancelled.";
+            return;
+        }
+
+        // A write that is cancelled with nothing to name it when SysManager closes mid-run, and that
+        // Network Repair's own DNS reset must not race (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Restore hosts file");
+        if (opLock is null)
+        {
+            HostsStatus = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network)} is already running.";
             return;
         }
 

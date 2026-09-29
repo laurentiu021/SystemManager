@@ -909,13 +909,16 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   is blocking and refuses to start the new one
 - Integrated into every tab that mutates disk, network, or system state, restarts the Windows
   shell, or installs, upgrades or uninstalls software (Cleanup, Deep Cleanup, Disk Analyzer, Large
-  Files, Duplicate Finder, Speed Test, Traceroute, Network Repair, Shortcut Cleaner, Performance
-  Mode, Gaming Profile, Environment Variables, System Fixes, Windows Features, Windows Update,
-  Restore Points, Context Menu, App Updates, Bulk Installer, Uninstaller, and the Dashboard's
-  quick actions)
+  Files, Duplicate Finder, Speed Test, Traceroute, Network Repair, DNS & Hosts, Shortcut Cleaner,
+  File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
+  Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
+  Installer, Uninstaller, Preinstalled Apps, and the Dashboard's quick actions)
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer or
   Uninstaller while another is running fails with exit code 1618, because Windows Installer only
   ever runs one installation at a time.** The three now refuse to start a second one instead
+- **Changing DNS, resetting it, or editing the hosts file on DNS & Hosts shares Network Repair's
+  own lock**, so a preset change and a repair's DNS reset cannot run at the same time and undo
+  each other
 - **Nothing restarts or services Windows in the middle of a repair.** A feature change, a
   Windows Update install, Reset Windows Update, and creating or restoring a restore point
   each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.

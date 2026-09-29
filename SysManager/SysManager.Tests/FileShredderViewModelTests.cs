@@ -132,6 +132,45 @@ public class FileShredderViewModelTests
     }
 
     [Fact]
+    public async Task ShredAll_WhileDiskCategoryLocked_RefusesAndShredsNothing()
+    {
+        // #2510. A multi-pass overwrite that is cancelled with nothing to name it when SysManager
+        // closes mid-run now shares the disk-scanning/deleting tabs' lock.
+        var file = Path.Combine(Path.GetTempPath(), "smtest_shred_locked_" + Guid.NewGuid().ToString("N") + ".dat");
+        File.WriteAllText(file, "must survive — the Disk category was locked");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
+        Assert.NotNull(held);
+        try
+        {
+            var vm = NewVm();
+            vm.Items.Add(new ShredItem
+            {
+                Path = file,
+                Name = Path.GetFileName(file),
+                SizeBytes = 1,
+                IsFolder = false
+            });
+
+            await vm.ShredAllCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(file), "File was shredded even though the Disk category was locked");
+            Assert.Single(vm.Items);
+            Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
+            Assert.False(vm.IsShredding);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
     public async Task ShredAll_WhenUserConfirms_ShredsSelectedFile()
     {
         var file = Path.Combine(Path.GetTempPath(), "smtest_shred_yes_" + Guid.NewGuid().ToString("N") + ".dat");

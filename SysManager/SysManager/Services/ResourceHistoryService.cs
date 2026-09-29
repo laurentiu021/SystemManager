@@ -53,6 +53,10 @@ public sealed class ResourceHistoryService : IDisposable
 
     private int _retentionDays = 7;
 
+    // False while the saved retention could not be read or used. The choice may have been the longest one, so
+    // no prune may drop a sample that choice would keep (#2521).
+    private bool _retentionKnown = true;
+
     /// <summary>
     /// Creates the service. <paramref name="configDir"/> is overridable so tests exercise the real
     /// append/load/prune paths against a temp directory instead of the user's own history file —
@@ -70,7 +74,7 @@ public sealed class ResourceHistoryService : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _dataPath = Path.Join(_dataDir, "resource-history.ndjson");
         _configPath = Path.Join(_dataDir, "resource-history-config.json");
-        _retentionDays = LoadRetention();
+        (_retentionDays, _retentionKnown) = LoadRetention() is { } days ? (days, true) : (7, false);
     }
 
     /// <summary>Days of history to keep. Persisted; shrinking it prunes the file.</summary>
@@ -80,8 +84,9 @@ public sealed class ResourceHistoryService : IDisposable
         set
         {
             var clamped = RetentionOptions.Contains(value) ? value : 7;
-            if (clamped == _retentionDays) return;
+            if (clamped == _retentionDays && _retentionKnown) return;
             _retentionDays = clamped;
+            _retentionKnown = true;
             SaveRetention(clamped);
             _ = PruneAsync(_cts?.Token ?? CancellationToken.None);
         }
@@ -239,6 +244,11 @@ public sealed class ResourceHistoryService : IDisposable
         finally { if (!_disposed) _fileLock.Release(); }
     }
 
+    /// <summary>
+    /// The days a prune keeps: the saved choice, or while it cannot be read or used, the longest one offered.
+    /// </summary>
+    private int PruneWindowDays => _retentionKnown ? _retentionDays : RetentionOptions.Max();
+
     /// <summary>Rewrites the file dropping samples older than the retention window and any malformed lines.</summary>
     public async Task PruneAsync(CancellationToken ct = default)
     {
@@ -248,7 +258,7 @@ public sealed class ResourceHistoryService : IDisposable
         {
             if (!File.Exists(_dataPath)) return;
             var lines = await File.ReadAllLinesAsync(_dataPath, ct).ConfigureAwait(false);
-            var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(_retentionDays));
+            var kept = Prune(lines, DateTime.Now, TimeSpan.FromDays(PruneWindowDays));
             // Only rewrite when something actually changed, to avoid needless disk churn.
             if (kept.Count == lines.Length) return;
             // Atomic rewrite through AtomicFile: it names the temp, flushes it onto the device and
@@ -362,18 +372,28 @@ public sealed class ResourceHistoryService : IDisposable
 
     private sealed record RetentionConfig(int RetentionDays);
 
-    private int LoadRetention()
+    /// <summary>
+    /// The saved retention in days: 7 when nothing is saved yet, or null when the file is there and could not be
+    /// read, or does not hold one of the offered choices.
+    /// </summary>
+    /// <remarks>
+    /// Null is not "7". A setting that could not be read used to be taken as 7 days, and the prune that runs at
+    /// every start then deleted the samples a 14- or 30-day choice was keeping (#2521).
+    /// </remarks>
+    private int? LoadRetention()
     {
+        var json = StoreFile.ReadText(_configPath);
+        if (json is null) return null;
+        if (json.Length == 0) return 7;
         try
         {
-            if (!File.Exists(_configPath)) return 7;
-            var cfg = JsonSerializer.Deserialize<RetentionConfig>(File.ReadAllText(_configPath));
-            return cfg is not null && RetentionOptions.Contains(cfg.RetentionDays) ? cfg.RetentionDays : 7;
+            var cfg = JsonSerializer.Deserialize<RetentionConfig>(json);
+            return cfg is not null && RetentionOptions.Contains(cfg.RetentionDays) ? cfg.RetentionDays : null;
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        catch (JsonException ex)
         {
-            Log.Debug("Resource history config load failed: {Error}", ex.Message);
-            return 7;
+            Log.Debug("Resource history config parse failed: {Error}", ex.Message);
+            return null;
         }
     }
 

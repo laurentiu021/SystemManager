@@ -808,7 +808,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   30 days); the usage chart (CPU / RAM / GPU %) and a separate temperature chart
   (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth
 - **Configurable retention** — keep 7, 14, or 30 days of history; older samples
-  are pruned automatically
+  are pruned automatically. If the setting cannot be read, nothing newer than 30 days
+  is pruned until it can be, or until you choose again
 - **Export to CSV** — save the visible range for analysis in Excel or elsewhere
 - Strictly local: history is stored in your `%LocalAppData%\SysManager` folder
   and nothing ever leaves the machine

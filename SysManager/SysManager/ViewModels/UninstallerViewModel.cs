@@ -159,6 +159,16 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             $"You are about to uninstall {toRemove.Count} application(s):\n\n{names}\n\nThis cannot be undone. Continue?",
             "Confirm uninstall")) return;
 
+        // Windows Installer runs one installation at a time process-wide, so an MSI-based app uninstalled
+        // here while App Updates or Bulk Installer is also mid-run can fail with exit code 1618. The same
+        // lock stops any two of the three from overlapping (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "Uninstaller");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();

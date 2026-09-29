@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.47] - 2026-09-29
+
+**App Updates, Bulk Installer and Uninstaller no longer step on each other.** Starting one while another is
+mid-run now refuses instead of risking a failed install.
+
+### Fixed
+
+- **App Updates, Bulk Installer and Uninstaller now refuse to run at the same time as one another.** Windows
+  Installer only ever runs one installation at a time, so an MSI-based package started on one of these three
+  tabs while another was mid-upgrade, mid-install or mid-uninstall could fail with exit code 1618 ("another
+  installation is already in progress"). They now share a lock: starting one while another is running says
+  "Cannot start — X is already running." instead of attempting it. Present since v0.11.0, when Uninstaller
+  joined App Updates as the second of the three.
+
 ## [1.114.46] - 2026-09-29
 
 **Windows Update no longer asks you to approve an install it cannot carry out.** Without administrator rights

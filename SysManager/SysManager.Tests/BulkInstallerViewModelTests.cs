@@ -265,6 +265,28 @@ public class BulkInstallerViewModelTests
     }
 
     [Fact]
+    public async Task InstallSelected_WhileInstallCategoryLocked_RefusesAndInstallsNothing()
+    {
+        // #2510. Windows Installer runs one installation at a time process-wide, so an MSI package
+        // installed here while App Updates or Uninstaller is mid-run can fail with exit code 1618.
+        var runner = Substitute.For<IPowerShellRunner>();
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        vm.Apps[0].IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates");
+        Assert.NotNull(held);
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        await runner.DidNotReceive().RunProcessAsync(
+            "winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Equal("Cannot start — App Updates is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task InstallSelected_WarnsThatAnInstalledAppIsUpgraded_InTheWordsAppUpdatesUses()
     {
         var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());

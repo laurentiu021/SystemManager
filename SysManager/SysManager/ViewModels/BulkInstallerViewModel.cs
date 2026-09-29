@@ -243,6 +243,16 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             return;
         }
 
+        // Windows Installer runs one installation at a time process-wide, so an MSI package installed here
+        // while App Updates or Uninstaller is also mid-run can fail with exit code 1618. The same lock
+        // stops any two of the three from overlapping (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "Bulk Installer");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = false;
         // Re-entrancy is prevented by the NotBusy CanExecute gate, so the running

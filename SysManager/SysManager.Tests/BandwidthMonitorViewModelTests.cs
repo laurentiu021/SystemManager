@@ -52,12 +52,15 @@ public class BandwidthMonitorViewModelTests : IDisposable
     private BandwidthMonitorViewModel NewVm(
         Func<IBandwidthMonitorService>? connFactory = null,
         Func<IBandwidthMonitorService>? etwFactory = null,
-        BandwidthHistoryService? history = null)
+        BandwidthHistoryService? history = null,
+        Func<TimeSpan, CancellationToken, Task<IReadOnlyList<BandwidthSample>>>? loadHistory = null)
     {
+        var store = history ?? new BandwidthHistoryService(_dir);
         var vm = new BandwidthMonitorViewModel(
-            history ?? new BandwidthHistoryService(_dir),
+            store,
             connFactory ?? (() => new FakeSource(BandwidthMode.Connections, available: true)),
-            etwFactory);
+            etwFactory,
+            loadHistory ?? store.LoadAsync);
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -746,17 +749,84 @@ public class BandwidthMonitorViewModelTests : IDisposable
     [Fact]
     public async Task ReloadAfterDispose_IsANoOpRatherThanAThrow()
     {
-        var now = DateTime.UtcNow;
-        var history = SeededHistory(new BandwidthSample(now.AddMinutes(-10), 1_048_576, 131_072));
-        var vm = NewVm(history: history);
-        vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+        await Task.Run(async () =>
+        {
+            var load = new GatedLoad();
+            var vm = NewVm(loadHistory: load.Load);
+            vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+            load.Finish(OneSample);
+            vm.Dispose();
 
-        vm.Dispose();
+            // No throw, and nothing loaded: the chart buffers' paints and typefaces are already released, so a
+            // completed reload here would draw through disposed SkiaSharp handles.
+            await vm.ReloadHistoryCommand.ExecuteAsync(null);
+            Assert.Equal(1, load.Calls);
+        });
+    }
 
-        // No throw, and nothing repainted: the chart buffers' paints and typefaces are already released,
-        // so a completed reload here would draw through disposed SkiaSharp handles.
-        await vm.ReloadHistoryCommand.ExecuteAsync(null);
-        Assert.False(vm.ShowingHistory);
+    // ── A history load still running when the tab closes (#2522) ──
+    //
+    // Picking a range starts a reload without waiting for it. The test above used to pick one, dispose, and assert
+    // nothing showed, and whether that first reload finished before or after the dispose was timing: it failed 2 of 3
+    // runs on its own. The load is handed in and finishes only when the test says so, and the reloads run on a
+    // thread-pool thread, which has no synchronization context, so a finished load resumes its reload inline: by the
+    // time Finish returns, the reload has run to its end.
+
+    private static readonly BandwidthSample OneSample = new(new DateTime(2026, 9, 29, 9, 0, 0), 1_048_576, 131_072);
+
+    /// <summary>A history load that finishes only when the test says so, counting how often it was asked.</summary>
+    private sealed class GatedLoad
+    {
+        private readonly TaskCompletionSource<IReadOnlyList<BandwidthSample>> _result = new();
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        public Task<IReadOnlyList<BandwidthSample>> Load(TimeSpan range, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _calls);
+            return _result.Task;
+        }
+
+        public void Finish(params BandwidthSample[] samples) => _result.SetResult(samples);
+    }
+
+    [Fact]
+    public async Task AHistoryLoadThatFinishesWhileTheTabIsOpen_ShowsIt()
+    {
+        // The positive control: a reload that never showed anything would pass the test below.
+        await Task.Run(() =>
+        {
+            var load = new GatedLoad();
+            var vm = NewVm(loadHistory: load.Load);
+            vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+            Assert.Equal(1, load.Calls);
+            Assert.False(vm.ShowingHistory);
+
+            load.Finish(OneSample);
+
+            Assert.True(vm.ShowingHistory);
+            Assert.NotEqual("", vm.HistorySummary);
+            vm.Dispose();
+        });
+    }
+
+    [Fact]
+    public async Task AHistoryLoadThatFinishesAfterTheTabCloses_ChangesNothing()
+    {
+        await Task.Run(() =>
+        {
+            var load = new GatedLoad();
+            var vm = NewVm(loadHistory: load.Load);
+            vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+            Assert.Equal(1, load.Calls);
+
+            vm.Dispose();
+            load.Finish(OneSample);
+
+            Assert.False(vm.ShowingHistory);
+            Assert.Equal("", vm.HistorySummary);
+        });
     }
 
     [Fact]

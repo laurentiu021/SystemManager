@@ -110,7 +110,7 @@ public sealed class ActivityLogService
 
             var (stored, unparsable) = ReadStore();
             if (stored is null) return;
-            if (unparsable && !SysManager.Helpers.StoreFile.SetAside(_filePath)) return;
+            if (unparsable && !StoreFile.SetAside(_filePath)) return;
 
             var entries = _unsaved.Concat(stored).Take(MaxEntries).ToList();
             // Written while both locks are held: inside the process, a concurrent Log() cannot mutate the list
@@ -176,7 +176,7 @@ public sealed class ActivityLogService
     /// </summary>
     private (List<ActivityEntry>? Entries, bool Unparsable) ReadStore()
     {
-        var json = SysManager.Helpers.StoreFile.ReadText(_filePath);
+        var json = StoreFile.ReadText(_filePath);
         if (json is null) return (null, false);
         if (json.Length == 0) return ([], false);
         try

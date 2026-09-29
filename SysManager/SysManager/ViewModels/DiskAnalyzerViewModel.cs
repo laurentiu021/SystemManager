@@ -307,8 +307,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     {
         try
         {
-            var previous = await _history.FindAsync(root, ct).ConfigureAwait(true);
-            TrendSummary = DescribeTrend(previous, TotalSize);
+            var (readable, previous) = await _history.FindAsync(root, ct).ConfigureAwait(true);
+            // Without the earlier scans there is nothing to compare with, and an empty line would read as a first
+            // scan. The save below then refuses too, rather than replace them with this one (#2521).
+            TrendSummary = readable ? DescribeTrend(previous, TotalSize) : HistoryUnreadable;
 
             var snapshot = new DiskScanSnapshot
             {
@@ -326,6 +328,10 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             // The tab closed between the scan finishing and this running — nothing to record.
         }
     }
+
+    /// <summary>The trend line when the earlier scans could not be read.</summary>
+    internal const string HistoryUnreadable =
+        "Your earlier scans could not be read, so this one could not be compared with them.";
 
     /// <summary>
     /// The one-line "since last scan" delta. Returns empty when this root has never been scanned, so a

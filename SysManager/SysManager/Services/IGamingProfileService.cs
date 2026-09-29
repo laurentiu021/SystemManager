@@ -114,10 +114,16 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// idea of the original, so whichever starts second must not capture the other's applied state as a
 /// baseline it will later "restore".
 /// </param>
+/// <param name="StoreUnreadable">
+/// True when the Gaming Profile store could not be read, so NOTHING was changed. The session's crash-recovery
+/// record is written into that store, and it could not have been without writing over whatever the store held,
+/// a leftover session's record among it (#2521).
+/// </param>
 public sealed record GamingApplyResult(
     IReadOnlyList<GamingStepOutcome> Steps,
     bool RestorePointCreated,
-    string? BlockedBy = null)
+    string? BlockedBy = null,
+    bool StoreUnreadable = false)
 {
     /// <summary>Count of steps that applied successfully.</summary>
     public int AppliedCount => Steps.Count(s => s.Status == GamingStepStatus.Applied);

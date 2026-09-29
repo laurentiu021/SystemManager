@@ -184,6 +184,15 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 return;
             }
 
+            if (result.StoreUnreadable)
+            {
+                // Nothing was applied either. The record it could not read is the one that undoes game mode
+                // when SysManager closes during a game, so it must not be written over (#2521).
+                StatusMessage = "Cannot start — SysManager could not read the record it keeps to undo game mode "
+                    + "if it closes during a game. Try again in a moment.";
+                return;
+            }
+
             IsSessionActive = _service.IsActive;
             StatusMessage = DescribeResult(result, game);
             ActivityLogService.Instance.Log("Gaming Profile",

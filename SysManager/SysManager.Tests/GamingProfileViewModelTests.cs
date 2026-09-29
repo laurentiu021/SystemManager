@@ -127,10 +127,26 @@ public class GamingProfileViewModelTests
 
         await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
 
-        service.SaveLastConfig(Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority));
+        service.Received(1).SaveLastConfig(
+            Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority));
         await service.Received(1).ApplyAsync(
             Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority),
             Arg.Is<GameTarget?>(g => g != null && g.ProcessId == 4242 && g.Name == "doom.exe"));
+    }
+
+    [Fact]
+    public async Task Start_WhenTheServiceCouldNotReadItsStore_SaysSo_AndStartsNothing()
+    {
+        var service = ServiceWith(new GamingProfile());
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult([], false, StoreUnreadable: true));
+        var vm = NewVm(service);
+        vm.SilenceNotifications = true;
+
+        await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.Contains("could not read the record it keeps to undo game mode", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.False(vm.IsSessionActive);
     }
 
     [Fact]

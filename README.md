@@ -1282,7 +1282,8 @@ offers, "rate us" prompts:
   your choice alone instead of silencing them again when the game exits. Likewise, if the fast
   timer was already on from the Timer Resolution tab, game mode leaves it on when it ends
 - **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
-  system-wide changes are offered for restore on next launch
+  system-wide changes are offered for restore on next launch. If SysManager cannot read that
+  record, Start changes nothing and says so, rather than writing over it
 - **Honest about the restore** — every setting is put back even if one of them fails, and the
   tab names any setting it could not restore, instead of saying everything is back
 - **Honest about admin** — freeing standby memory and pausing indexing need

@@ -269,7 +269,8 @@ public class GamingProfileServiceTests
     // Builds a service pointed at a throwaway store file. The composed services are never
     // invoked in these tests (only LoadLastConfig/SaveLastConfig, which touch the file only),
     // so their construction is inert — no power/timer/registry call fires.
-    private static GamingProfileService StoreOnlyService(string path)
+    private static GamingProfileService StoreOnlyService(
+        string path, Func<string, CancellationToken, Task<bool>>? createRestorePoint = null)
     {
         var runner = new PowerShellRunner();
         var restore = new RestorePointService(runner);
@@ -280,7 +281,7 @@ public class GamingProfileServiceTests
             new StandbyMemoryService(),
             // Never creates a point: these tests are about the engine, and a real System Restore
             // call needs admin, takes seconds and is rate-limited.
-            new SessionRestorePoint((_, _) => Task.FromResult(false)),
+            new SessionRestorePoint(createRestorePoint ?? ((_, _) => Task.FromResult(false))),
             isElevated: false,
             storePath: path);
     }
@@ -347,6 +348,136 @@ public class GamingProfileServiceTests
             Assert.Equal(GamingProfile.Default, cfg);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── A store that is there but cannot be read or used (#2521) ──────────
+    //
+    // LoadStore returned a fresh store for a file it could not read or parse, and SaveLastConfig, which runs on every
+    // Start, wrote that fresh store back with the new configuration. A leftover session's crash-recovery record went
+    // with it. The file is held open with delete sharing only for as long as a read must fail: the read fails, and the
+    // replace a write ends with would still succeed, so a writer that refused can be told from one that could not.
+
+    private static string PendingStore(GamingProfile lastConfig) => SerializePendingStore(new GamingProfileStore
+    {
+        LastConfig = lastConfig,
+        ActiveSession = new GamingSessionRecord(new GamingProfile(), new GamingSnapshot()),
+    });
+
+    private static void DeleteStore(string path)
+    {
+        foreach (var file in new[] { path, path + ".unreadable" })
+            if (File.Exists(file)) File.Delete(file);
+    }
+
+    [Fact]
+    public void SaveLastConfig_WhenTheStoreCannotBeRead_WritesNothing_SoTheRecoveryRecordSurvives()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-held-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile { SilenceNotifications = true }));
+            var before = File.ReadAllBytes(path);
+            var svc = StoreOnlyService(path);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                svc.SaveLastConfig(new GamingProfile { FinestTimerResolution = true });
+
+            Assert.Equal(before, File.ReadAllBytes(path));
+            Assert.True(StoreOnlyService(path).HasPendingRecovery);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void SaveLastConfig_OverAStoreThatDoesNotParse_KeepsItAside_ThenSaves()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-aside-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{ this is not valid json ][");
+
+            StoreOnlyService(path).SaveLastConfig(new GamingProfile { FinestTimerResolution = true });
+
+            Assert.Equal("{ this is not valid json ][", File.ReadAllText(path + ".unreadable"));
+            Assert.True(StoreOnlyService(path).LoadLastConfig().FinestTimerResolution);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void SaveLastConfig_OverAStoreANewerSysManagerWrote_KeepsItAside_ThenSaves()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-newer-aside-{Guid.NewGuid():N}.json");
+        try
+        {
+            var future = JsonSerializer.Serialize(new
+            {
+                SchemaVersion = GamingProfileService.CurrentSchemaVersion + 1,
+                LastConfig = new { SilenceNotifications = true },
+            });
+            File.WriteAllText(path, future);
+
+            StoreOnlyService(path).SaveLastConfig(new GamingProfile { FinestTimerResolution = true });
+
+            Assert.Equal(future, File.ReadAllText(path + ".unreadable"));
+            Assert.True(StoreOnlyService(path).LoadLastConfig().FinestTimerResolution);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenTheStoreCannotBeRead_IsRefusedBeforeAnyChange()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-held-apply-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var before = File.ReadAllBytes(path);
+            var restorePointAttempts = 0;
+            var svc = StoreOnlyService(path, (_, _) =>
+            {
+                restorePointAttempts++;
+                return Task.FromResult(false);
+            });
+
+            GamingApplyResult result;
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            {
+                // Only a step that needs administrator, which this service is not: were the refusal missing, the
+                // batch would still change nothing on this machine.
+                result = await svc.ApplyAsync(new GamingProfile { PurgeStandbyMemory = true }, game: null);
+            }
+
+            Assert.True(result.StoreUnreadable);
+            Assert.Empty(result.Steps);
+            Assert.Equal(0, restorePointAttempts);
+            Assert.False(svc.IsActive);
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task RevertAsync_WhenTheStoreCannotBeRead_StillReverts_AndKeepsTheRecord()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-held-revert-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var before = File.ReadAllBytes(path);
+            var svc = StoreOnlyService(path);
+            var tweak = new FakeTweak("power plan", []);
+            svc.SeedAppliedStepForTest(tweak);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await svc.RevertAsync();
+
+            // The settings came back; the record stays, so the next launch offers the restore again rather than
+            // having the store written over.
+            Assert.True(tweak.Reverted);
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { DeleteStore(path); }
     }
 
     // ── Audit-1 fix: crash-recovery replays ONLY what actually applied ─────

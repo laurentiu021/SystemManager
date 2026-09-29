@@ -248,6 +248,26 @@ public class DebloaterViewModelTests
     }
 
     [Fact]
+    public async Task RemoveSelected_WhileSystemModificationLocked_RefusesAndTakesNoRestorePoint()
+    {
+        // #2510. A removal batch is cancelled with nothing to name it when SysManager closes mid-run;
+        // it now shares the lock the other tabs that take a restore point before changing the system do.
+        var restorePoint = RestorePointTaken();
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = NewVm(restorePoint);
+        vm.Apps.Add(Removable("Contoso.AppA"));
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        Assert.NotNull(held);
+
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Equal("Cannot start — Windows Update install is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+        Assert.Single(vm.Apps);
+    }
+
+    [Fact]
     public async Task RemoveSelected_WhenAPointWasCreated_LeadsWithTheStoreAndScopesThePoint()
     {
         using var dialog = new DialogAnswer(confirm: true);

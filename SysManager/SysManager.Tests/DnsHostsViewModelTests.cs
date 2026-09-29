@@ -420,6 +420,41 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
+    public async Task ApplyDns_WhileNetworkCategoryLocked_RefusesAndDoesNotMutate()
+    {
+        // #2510. A change that is cancelled with nothing to name it when SysManager closes mid-run, and
+        // that Network Repair's own DNS reset must not race.
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        Assert.NotNull(held);
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare");
+
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+            Assert.Equal("Cannot start — Network Repair is already running.", vm.StatusMessage);
+            Assert.False(vm.IsDnsApplying);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
     public async Task ResetDns_WhenDnsChangesDuringConfirmation_DoesNotMutateOrArmUndo()
     {
         var (vm, _, dir, runner) = NewVm();
@@ -455,6 +490,38 @@ public class DnsHostsViewModelGateTests
                 (call.GetArguments()[0] as string)?.Contains(
                     "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
             dialog.Received(1).Confirm(Arg.Any<string>(), "Confirm DNS Reset");
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ResetDns_WhileNetworkCategoryLocked_RefusesAndDoesNotMutate()
+    {
+        // #2510. Shares Network Repair's own lock: a DNS reset from this tab must not race one from that tab.
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            Assert.DoesNotContain(runner.ReceivedCalls(), call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true);
+            Assert.Equal("Cannot start — Network Repair is already running.", vm.StatusMessage);
+            Assert.False(vm.IsDnsApplying);
         }
         finally
         {
@@ -1359,6 +1426,44 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
+    public async Task RestorePreviousDns_WhileNetworkCategoryLocked_RefusesAndKeepsUndo()
+    {
+        // #2510. Shares Network Repair's own lock: restoring the previous DNS from this tab must not
+        // race a reset from that tab.
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult()));
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            // Arms the undo with no lock held, so the lock below is what refuses the restore, not this.
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+            Assert.True(vm.CanRestorePreviousDns);
+
+            using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+            Assert.NotNull(held);
+
+            await vm.RestorePreviousDnsCommand.ExecuteAsync(null);
+
+            Assert.True(vm.CanRestorePreviousDns);
+            Assert.Equal("Cannot start — Network Repair is already running.", vm.StatusMessage);
+            Assert.Equal(1, runner.ReceivedCalls().Count(call =>
+                (call.GetArguments()[0] as string)?.Contains(
+                    "Set-DnsClientServerAddress", StringComparison.Ordinal) == true));
+            Assert.False(vm.IsDnsApplying);
+        }
+        finally
+        {
+            DialogService.Instance = previousDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
     public async Task ResetDns_WhenUserDeclinesCapturedTarget_DoesNotMutate()
     {
         var (vm, _, dir, runner) = NewVm();
@@ -1441,6 +1546,66 @@ public class DnsHostsViewModelGateTests
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             // Declining must leave the live hosts file untouched (not restored from .bak).
             Assert.Equal(current, File.ReadAllText(hostsPath));
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task SaveHosts_WhileNetworkCategoryLocked_RefusesAndDoesNotWrite()
+    {
+        // #2510. A write that is cancelled with nothing to name it when SysManager closes mid-run, and
+        // that Network Repair's own DNS reset must not race.
+        var (vm, hostsPath, dir, _) = NewVm();
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        Assert.NotNull(held);
+        try
+        {
+            var before = File.ReadAllText(hostsPath);
+            await vm.RefreshHostsCommand.ExecuteAsync(null);   // Save rewrites the file only from a list read from it
+            vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local" });
+
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+
+            Assert.Equal(before, File.ReadAllText(hostsPath));
+            Assert.Equal("Cannot start — Network Repair is already running.", vm.HostsStatus);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task RestoreHosts_WhileNetworkCategoryLocked_RefusesAndDoesNotRestore()
+    {
+        // #2510. Shares the SaveHosts lock: restoring the backup must not race a write to the same file.
+        var (vm, hostsPath, dir, _) = NewVm();
+        var backup = hostsPath + ".bak";
+        File.WriteAllText(backup, "# ORIGINAL pristine\n127.0.0.1 original\n");
+        var current = "# CURRENT managed\n10.0.0.1 managed\n";
+        File.WriteAllText(hostsPath, current);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        Assert.NotNull(held);
+        try
+        {
+            await vm.RestoreHostsCommand.ExecuteAsync(null);
+
+            Assert.Equal(current, File.ReadAllText(hostsPath));
+            Assert.Equal("Cannot start — Network Repair is already running.", vm.HostsStatus);
         }
         finally
         {

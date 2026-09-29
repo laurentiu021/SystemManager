@@ -161,6 +161,15 @@ public sealed partial class FileShredderViewModel : ViewModelBase
 
         if (!confirmed) return;
 
+        // A multi-pass overwrite that is cancelled with nothing to name it when SysManager closes mid-run.
+        // Shares the disk-scanning/deleting tabs' lock (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "File Shredder");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;

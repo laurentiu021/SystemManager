@@ -37,6 +37,16 @@ public class ServiceStartupLedgerServiceTests : IDisposable
 
     private ServiceStartupLedgerService NewService() => new(_dir);
 
+    private string LedgerFile => Path.Combine(_dir, "service-startup-ledger.json");
+
+    /// <summary>The ledger a fresh service instance reads, asserted to have been readable.</summary>
+    private IReadOnlyDictionary<string, ServiceStartupRecord> Loaded()
+    {
+        var ledger = NewService().Load();
+        Assert.NotNull(ledger);
+        return ledger;
+    }
+
     // ---------- the regression this exists for ----------
 
     [Fact]
@@ -99,7 +109,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         svc.Remember("Spooler", "Manual", At);
         svc.Remember("WSearch", "Automatic", At);
 
-        var ledger = NewService().Load();
+        var ledger = Loaded();
 
         Assert.Equal(3, ledger.Count);
         Assert.Equal("Automatic", ledger["wuauserv"].PreviousStartType);
@@ -163,7 +173,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     {
         NewService().Remember(name, "Automatic", At);
 
-        Assert.Empty(NewService().Load());
+        Assert.Empty(Loaded());
     }
 
     [Theory]
@@ -179,7 +189,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     [Fact]
     public void Load_WithNothingSaved_IsEmpty()
     {
-        Assert.Empty(NewService().Load());
+        Assert.Empty(Loaded());
     }
 
     [Fact]
@@ -197,7 +207,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_dir, "service-startup-ledger.json"), "{ not valid json");
 
-        Assert.Empty(NewService().Load());
+        Assert.Empty(Loaded());
     }
 
     [Theory]
@@ -240,7 +250,7 @@ public class ServiceStartupLedgerServiceTests : IDisposable
         var svc = NewService();
         svc.Remember("wuauserv", "Automatic", At);
         svc.Remember("Spooler", "Manual", At.AddHours(1));
-        var original = svc.Load();
+        var original = Loaded();
 
         var parsed = ServiceStartupLedgerService.Parse(ServiceStartupLedgerService.Serialize(original));
 
@@ -254,7 +264,93 @@ public class ServiceStartupLedgerServiceTests : IDisposable
     {
         NewService().Remember("svc", "Automatic", At);
 
-        Assert.Equal(At, NewService().Load()["svc"].DisabledAtUtc);
+        Assert.Equal(At, Loaded()["svc"].DisabledAtUtc);
+    }
+
+    // ---------- a ledger that could not be read is not written over (#2521) ----------
+    //
+    // A failed read used to load as an empty ledger. Enable then restored every service it could not see as Manual,
+    // and the next Remember wrote a ledger holding only the service it recorded over all the others. The file is held
+    // open with delete sharing only, for as long as the read must fail. A read then fails, but the replace a write
+    // ends with still succeeds, so a writer that refused can be told from one that simply could not write.
+
+    [Fact]
+    public void Load_WhenTheFileCannotBeRead_IsNull_NotEmpty()
+    {
+        NewService().Remember("wuauserv", "Automatic", At);
+
+        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Assert.Null(NewService().Load());
+
+        Assert.Single(Loaded());   // readable again once the file is released
+    }
+
+    [Fact]
+    public void Remember_WhenTheLedgerCannotBeRead_WritesNothing_AndSaysSo()
+    {
+        var svc = NewService();
+        svc.Remember("wuauserv", "Automatic", At);
+        svc.Remember("Spooler", "Manual", At);
+
+        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Assert.False(svc.Remember("WSearch", "Automatic", At));
+
+        var ledger = Loaded();
+        Assert.Equal(["Spooler", "wuauserv"], ledger.Keys.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void Forget_WhenTheLedgerCannotBeRead_LeavesItAsItIs()
+    {
+        var svc = NewService();
+        svc.Remember("wuauserv", "Automatic", At);
+        svc.Remember("Spooler", "Manual", At);
+
+        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            svc.Forget("Spooler");
+
+        Assert.Equal(2, Loaded().Count);
+    }
+
+    [Fact]
+    public void Remember_OverAFileThatDoesNotParse_KeepsItAside_AndRecords()
+    {
+        File.WriteAllText(LedgerFile, "{ not valid json");
+
+        Assert.True(NewService().Remember("wuauserv", "Automatic", At));
+
+        Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile + ".unreadable"));
+        Assert.Equal("Automatic", Assert.Single(Loaded()).Value.PreviousStartType);
+    }
+
+    [Fact]
+    public void Remember_OverAFileThatDoesNotParse_AndCannotBeMoved_WritesNothing()
+    {
+        // Held open for reading, which lets the ledger be read but not moved.
+        File.WriteAllText(LedgerFile, "{ not valid json");
+
+        using (new FileStream(LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Assert.False(NewService().Remember("wuauserv", "Automatic", At));
+
+        Assert.Equal("{ not valid json", File.ReadAllText(LedgerFile));
+        Assert.False(File.Exists(LedgerFile + ".unreadable"));
+    }
+
+    [Fact]
+    public void Remember_WhenTheWriteFails_SaysSo()
+    {
+        // A folder where the file goes: the read finds no file, and the write cannot put one there.
+        Directory.CreateDirectory(LedgerFile);
+
+        Assert.False(NewService().Remember("wuauserv", "Automatic", At));
+    }
+
+    [Fact]
+    public void Remember_WithNothingToRecord_IsNotAFailure()
+    {
+        // An unrestorable type is not recorded, and that must not stop the caller from disabling the service.
+        Assert.True(NewService().Remember("svc", "Boot", At));
+        Assert.Empty(Loaded());
     }
 
     // ---------- agreement with the token mapping it feeds ----------
@@ -363,7 +459,9 @@ public class ServiceStartupLedgerServiceTests : IDisposable
 
             await StartLine.RaceAsync(() => first(service), () => second(service));
 
-            assert(attempt, new ServiceStartupLedgerService(dir).Load());
+            var ledger = new ServiceStartupLedgerService(dir).Load();
+            Assert.NotNull(ledger);
+            assert(attempt, ledger);
         }
     }
 

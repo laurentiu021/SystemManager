@@ -807,6 +807,100 @@ public class ServicesViewModelTests
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
+    // ── A ledger that could not be read (#2521) ─────────────────────────────────────────────────
+    //
+    // It holds how every service SysManager disabled was set, and it used to load as empty when it could not be
+    // read. Disable then wrote a ledger holding only the new service over the others, and Enable promised Manual for
+    // a service whose type was recorded. The file is held open with delete sharing only while the read must fail: a
+    // read fails, and a write would still succeed, so nothing passes just because the file could not be written.
+
+    private static List<ServiceEntry> OneRunningAutomaticService() =>
+    [
+        new()
+        {
+            Name = FakeServiceName, DisplayName = "Ledger Test", Status = "Running",
+            StartType = "Automatic", IsDelayedAutoStart = false, SafetyLevel = Models.SafetyLevel.Safe,
+        },
+    ];
+
+    [Fact]
+    public async Task Refresh_WhenTheLedgerCannotBeRead_LeavesTheEntriesAlone()
+    {
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        Assert.True(ledger.Remember("Spooler", "Automatic", DateTimeOffset.UnixEpoch));
+        var scanned = new List<ServiceEntry> { new() { Name = "Spooler", StartType = "Disabled" } };
+
+        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+        {
+            using var vm = await CreateWithLedgerAsync(scanned, ledger);
+            Assert.Null(scanned[0].PreviousStartType);
+        }
+    }
+
+    [Fact]
+    public async Task Disable_WhenTheLedgerCannotBeRead_ChangesNothing_AndSaysSo()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        Assert.True(ledger.Remember("wuauserv", "Automatic", DateTimeOffset.UnixEpoch));   // a record to protect
+        var scanned = OneRunningAutomaticService();
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Contains("was not changed", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal("Automatic", ledger.PreviousStartTypeFor("wuauserv"));
+        Assert.Null(ledger.PreviousStartTypeFor(FakeServiceName));
+    }
+
+    [Fact]
+    public async Task Disable_ThatFails_LeavesNoRecordBehind()
+    {
+        // Recorded before the change now, so a change that did not happen must not leave a record of one.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        var scanned = OneRunningAutomaticService();
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, RunnerReturning(5));
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.DisableServiceCommand.ExecuteAsync(scanned[0]);
+
+        Assert.StartsWith("Disable service failed", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Null(ledger.PreviousStartTypeFor(FakeServiceName));
+    }
+
+    [Fact]
+    public async Task Enable_WhenTheLedgerCannotBeRead_ChangesNothing_AndDoesNotAsk()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var temp = new TempLedgerDir();
+        var ledger = temp.NewLedger();
+        Assert.True(ledger.Remember(FakeServiceName, "Automatic", DateTimeOffset.UnixEpoch));
+        var scanned = OneRunningAutomaticService();
+        AsDisabledByWindows(scanned[0]);
+        var runner = RunnerReturning(0);
+        using var vm = await CreateWithLedgerAsync(scanned, ledger, runner);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        using (new FileStream(temp.LedgerFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            await vm.EnableServiceCommand.ExecuteAsync(scanned[0]);
+
+        // It did not ask whether to set the service to Manual, and it did not.
+        Assert.Equal(0, dialog.Calls);
+        await runner.DidNotReceive().RunProcessAsync(
+            "sc.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Contains("could not read its record", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal("Automatic", ledger.PreviousStartTypeFor(FakeServiceName));
+    }
+
     // ── Commands that must look at the service before acting (#2430, #2431, #2432) ─────────────────
     //
     // Same safety net as the section above: a substituted runner that launches nothing, and names no machine
@@ -1299,6 +1393,9 @@ public class ServicesViewModelTests
         }
 
         public ServiceStartupLedgerService NewLedger() => new(_dir);
+
+        /// <summary>Where the ledger keeps its records, so a test can hold it open.</summary>
+        public string LedgerFile => Path.Combine(_dir, "service-startup-ledger.json");
 
         public void Dispose()
         {

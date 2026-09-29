@@ -128,7 +128,17 @@ public sealed partial class DefenderViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task ToggleCfaAsync()
     {
-        if (!Confirm($"{(CfaEnabled ? "Disable" : "Enable")} Controlled Folder Access (ransomware protection)?")) return;
+        // Turning it on is the costly direction: apps Windows does not trust can no longer save into the protected
+        // folders, and this tab has no way to allow one (#2505).
+        var cfaMessage = CfaEnabled
+            ? "Disable Controlled Folder Access (ransomware protection)?\n\nApps will be able to change the files "
+              + "in your protected folders again, and so would ransomware."
+            : "Enable Controlled Folder Access (ransomware protection)?\n\nOnce it is on, only apps Windows "
+              + "trusts can change files in Documents, Pictures, Videos, Music, Favorites and Desktop. Some games "
+              + "then cannot save their progress, and some programs cannot save files, until you allow them: in "
+              + "Windows Security, open Virus & threat protection, then Manage ransomware protection, then Allow "
+              + "an app through Controlled folder access.";
+        if (!Confirm(cfaMessage)) return;
         int target = CfaEnabled ? 0 : 1;
         await RunOperationAsync(() => _service.SetControlledFolderAccessAsync(target),
             "Controlled Folder Access", "change Controlled Folder Access",

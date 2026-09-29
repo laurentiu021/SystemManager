@@ -144,7 +144,9 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
                 "Disable and de-integrate Microsoft Edge?\n\n" +
                 "Edge is never uninstalled — Windows needs it and would reinstall it anyway. This turns " +
                 "off Edge's background mode and startup boost and disables its automatic-update tasks, so " +
-                "it stops running on its own. You can still open Edge normally, and you can undo all of " +
+                "it stops running on its own. Without those tasks Edge no longer updates itself in the " +
+                "background, so its security fixes can arrive late until you restore it. You can still " +
+                "open Edge normally, and you can undo all of " +
                 "this from the Restore button. This needs administrator rights.",
                 "Disable & de-integrate Edge"))
         {

@@ -495,4 +495,22 @@ public class PerformanceViewModelTests
 
         Assert.Null(field.GetValue(vm));
     }
+
+    // ---------- what the hibernation confirmation says (#2505) ----------
+
+    [Fact]
+    public async Task DisablingHibernation_Confirmation_SaysFastStartupAndHybridSleepGoToo()
+    {
+        using var elevated = Helpers.AdminHelper.ForceElevation(true);
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.IsHibernationEnabled = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ToggleHibernationCommand.ExecuteAsync(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("Disable hibernation?", message, StringComparison.Ordinal);
+        Assert.Contains("turns off Fast Startup and hybrid sleep", message, StringComparison.Ordinal);
+    }
 }

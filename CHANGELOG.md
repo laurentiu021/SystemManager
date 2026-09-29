@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.43] - 2026-09-29
+
+**Five confirmations now say what the change costs you, not only what it does.** Quick Tune-Up, App Blocker,
+the hibernation switch, Controlled Folder Access and the Edge switch each left out the part you could lose.
+
+### Fixed
+
+- **Confirmations name the cost of the change.**
+  - **Quick Tune-Up** says the Recycle Bin is emptied permanently, and that its contents cannot be recovered.
+    It always empties the bin; the prompt listed that as one chore among three.
+  - **App Blocker** says a block goes by file name, so it stops every program with that name on the PC, for
+    every user. Blocking `setup.exe` or `update.exe` blocks other programs' installers and updaters too.
+  - **Performance Mode**: turning hibernation off also turns off Fast Startup and hybrid sleep, which need the
+    hibernation file. The prompt and the tab now say so.
+  - **Defender Tweaks**: turning Controlled Folder Access on now says that only apps Windows trusts can then
+    change files in Documents, Pictures and the other protected folders, so some games and programs cannot
+    save, and where in Windows Security to allow one. Turning it off says those folders are open to
+    ransomware again.
+  - **Edge/OneDrive Remover**: disabling Edge says that without its update tasks it no longer updates itself
+    in the background, so its security fixes can arrive late until you restore it.
+  - The README no longer calls Quick Tune-Up non-destructive, or says it empties the Recycle Bin only
+    optionally.
+  Present since each confirmation was written: v0.13.0 for hibernation, v0.34.0 for App Blocker, v0.36.0 for
+  Quick Tune-Up, v1.39.0 for Controlled Folder Access and v1.53.0 for Edge.
+
 ## [1.114.42] - 2026-09-29
 
 **The Standby List Cleaner, the Dark Mode Scheduler and the appearance popup no longer replace your saved

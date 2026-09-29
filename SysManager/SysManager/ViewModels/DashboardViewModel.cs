@@ -1214,8 +1214,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunTuneUp))]
     private async Task RunTuneUpAsync()
     {
+        // Says that the bin is emptied for good, as Quick Cleanup does: the Tune-Up always empties it (#2505).
         if (!DialogService.Instance.Confirm(
-            "Quick Tune-Up will clean temp files, empty Recycle Bin, and scan your system.\n\nProceed?",
+            "Quick Tune-Up will clean temp files, permanently empty the Recycle Bin, and scan your system.\n\n"
+            + "What is in the Recycle Bin cannot be recovered afterwards.\n\nProceed?",
             "Quick Tune-Up — Confirm"))
             return;
 

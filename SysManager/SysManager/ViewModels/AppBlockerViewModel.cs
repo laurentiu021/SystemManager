@@ -213,9 +213,13 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         // than as a block doing its job. The mechanism is deliberate and stays: shipping a real stub into
         // System32 would be a worse trade for an unsigned app, and a stub on a writable path invoked by an
         // elevated target would be a privilege problem. So the dialog sets the expectation instead (#2357).
+        // It also says how far a block reaches: Windows applies it by file name, to the whole PC (#2505).
         if (!DialogService.Instance.Confirm(
             $"Block \"{exeName}\" from running?\n\nThis will prevent the application from launching until "
-            + "you unblock it. Nothing is deleted and the program stays installed.\n\nWhen someone tries "
+            + "you unblock it. Nothing is deleted and the program stays installed.\n\n"
+            + $"The block goes by file name, so it stops every program named \"{exeName}\" on this PC, for every "
+            + "user. A common name such as setup.exe or update.exe blocks other programs' installers and "
+            + "updaters too.\n\nWhen someone tries "
             + "to open it, Windows shows an error saying it cannot find SysManager_Blocked.exe. That is "
             + "what a block looks like — it is not a fault, and it goes away when you unblock.",
             "Block Application — Confirm")) return;

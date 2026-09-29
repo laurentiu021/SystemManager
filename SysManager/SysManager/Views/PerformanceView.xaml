@@ -229,8 +229,8 @@
                         <StackPanel>
                             <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,4">
                                 Hibernation saves your session to disk (hiberfil.sys) so the PC can power off completely
-                                and resume later. Disabling it deletes hiberfil.sys and frees several GB of disk space.
-                                Requires admin.
+                                and resume later. Disabling it deletes hiberfil.sys and frees several GB of disk space,
+                                and also turns off Fast Startup and hybrid sleep, which need that file. Requires admin.
                             </TextBlock>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                 <TextBlock Text="Currently: " Style="{StaticResource Subtle}" VerticalAlignment="Center"/>

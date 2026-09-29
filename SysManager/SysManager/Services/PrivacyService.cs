@@ -17,6 +17,21 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class PrivacyService
 {
+    private readonly RegistryKey _hkcuRoot;
+    private readonly RegistryKey _hklmRoot;
+
+    /// <summary>
+    /// Creates the service. <paramref name="hkcuRoot"/> defaults to <see cref="Registry.CurrentUser"/> and
+    /// <paramref name="hklmRoot"/> to <see cref="Registry.LocalMachine"/>, the two hives the toggles' paths name.
+    /// Tests pass redirected roots (an HKCU subkey they own), as <see cref="EdgeOneDriveService"/>'s tests do, so
+    /// a test that applies a change writes there rather than into this machine's privacy policies.
+    /// </summary>
+    public PrivacyService(RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null)
+    {
+        _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
+        _hklmRoot = hklmRoot ?? Registry.LocalMachine;
+    }
+
     /// <summary>
     /// Creates the full toggle list with current state read from the registry.
     /// </summary>
@@ -125,7 +140,7 @@ public sealed class PrivacyService
     /// Returns true (privacy ON) if the current value matches <see cref="PrivacyToggle.EnabledValue"/>.
     /// If the key/value does not exist, returns false (default Windows state = privacy off).
     /// </summary>
-    private static bool ReadCurrentState(PrivacyToggle toggle)
+    private bool ReadCurrentState(PrivacyToggle toggle)
     {
         try
         {
@@ -159,7 +174,7 @@ public sealed class PrivacyService
     /// Opens or creates a registry key from a full path string (e.g. "HKLM\SOFTWARE\...").
     /// Returns null if the root hive is unrecognized or access is denied.
     /// </summary>
-    private static RegistryKey? OpenOrCreateKey(string fullPath, bool writable)
+    private RegistryKey? OpenOrCreateKey(string fullPath, bool writable)
     {
         var separatorIndex = fullPath.IndexOf('\\');
         if (separatorIndex < 0) return null;
@@ -169,8 +184,8 @@ public sealed class PrivacyService
 
         var hive = hiveName switch
         {
-            "HKCU" or "HKEY_CURRENT_USER" => Registry.CurrentUser,
-            "HKLM" or "HKEY_LOCAL_MACHINE" => Registry.LocalMachine,
+            "HKCU" or "HKEY_CURRENT_USER" => _hkcuRoot,
+            "HKLM" or "HKEY_LOCAL_MACHINE" => _hklmRoot,
             _ => null
         };
 

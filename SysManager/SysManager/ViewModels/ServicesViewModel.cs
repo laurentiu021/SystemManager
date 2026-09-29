@@ -169,6 +169,15 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             $"Start service \"{entry.DisplayName}\"?",
             "Start Service — Confirm")) return;
 
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run. Shares the
+        // lock the other quick system-wide changes already do (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         try
         {
             // Resume on the UI thread (no ConfigureAwait(false)): the continuation updates
@@ -211,6 +220,15 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
                   + $"Windows will also stop: {entry.DependentNames}."
                 : $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
             "Stop Service — Confirm")) return;
+
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run. Shares the
+        // lock the other quick system-wide changes already do (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         try
         {
@@ -266,6 +284,15 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
                   + $"they will not be able to start either: {entry.DependentNames}."
                 : $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
             "Disable Service — Confirm")) return;
+
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run. Checked
+        // before the ledger write below, so a refusal never records a change that did not happen (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         // Snapshot the current startup type BEFORE disabling so Enable can restore the
         // exact previous type (e.g. Automatic) instead of always falling back to Manual —
@@ -366,6 +393,15 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
               "SysManager disabled it.";
 
         if (!DialogService.Instance.Confirm(message, "Enable Service — Confirm")) return;
+
+        // A change that is cancelled with nothing to name it when SysManager closes mid-run. Shares the
+        // lock the other quick system-wide changes already do (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Services");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         try
         {

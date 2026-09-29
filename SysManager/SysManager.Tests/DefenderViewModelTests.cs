@@ -219,6 +219,25 @@ public class DefenderViewModelTests
     }
 
     [Fact]
+    public async Task TogglePua_WhileSystemModificationLocked_RefusesAndTakesNoRestorePoint()
+    {
+        // #2510. A change that is cancelled with nothing to name it when SysManager closes mid-run now
+        // shares the lock the other tabs that take a restore point before changing the system already do.
+        var restorePoint = RestorePointTaken();
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), restorePoint);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Edge/OneDrive Remover");
+        Assert.NotNull(held);
+
+        await vm.TogglePuaCommand.ExecuteAsync(null);
+
+        await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<System.Threading.CancellationToken>());
+        Assert.Equal("Cannot start — Edge/OneDrive Remover is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
     public async Task EveryChange_GoesThroughTheOneFunnel()
     {
         // The reason for a funnel rather than four private calls: a command that skips it changes

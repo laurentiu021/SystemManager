@@ -149,6 +149,15 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             return;
         }
 
+        // A batch that is cancelled with nothing to name it when SysManager closes mid-run. Shares the
+        // lock the other tabs that take a restore point before changing the system already do (#2510).
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Privacy & Telemetry");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
         // Before the write, never after: a snapshot taken afterwards would record the state the
         // user is trying to be able to get back FROM. Taken after the confirmation, so declining
         // costs nothing, and it is the same seam Tweaks Hub uses rather than a second copy.

@@ -48,6 +48,38 @@ public sealed class StoreFileTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadTextAsync_NoFileYet_IsEmpty_NotNull()
+        => Assert.Equal("", await StoreFile.ReadTextAsync(File1));
+
+    [Fact]
+    public async Task ReadTextAsync_AFileThatCanBeRead_IsItsText()
+    {
+        File.WriteAllText(File1, "[1,2,3]");
+
+        Assert.Equal("[1,2,3]", await StoreFile.ReadTextAsync(File1));
+    }
+
+    [Fact]
+    public async Task ReadTextAsync_AFileThatCannotBeRead_IsNull()
+    {
+        File.WriteAllText(File1, "[1,2,3]");
+
+        using (new FileStream(File1, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Assert.Null(await StoreFile.ReadTextAsync(File1));
+    }
+
+    [Fact]
+    public async Task ReadTextAsync_ACancelledRead_Throws_RatherThanReadingAsUnreadable()
+    {
+        // "Could not be read" makes a store refuse its write. A read the caller cancelled is not that: it is the
+        // caller stopping, and must reach the caller as a cancellation.
+        File.WriteAllText(File1, "[1,2,3]");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => StoreFile.ReadTextAsync(File1, new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
     public void SetAside_KeepsTheBytes_AndFreesTheName()
     {
         File.WriteAllText(File1, "{ not valid json");

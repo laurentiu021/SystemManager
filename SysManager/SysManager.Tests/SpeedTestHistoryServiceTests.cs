@@ -38,6 +38,15 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
 
     private string HistoryFile => Path.Combine(_dir, "speedtest-history.json");
 
+    // The history as a reader sees it once the file could be read. Null is its own answer, "the file could not be
+    // read", and only the tests about that ask for it (#2521).
+    private static async Task<List<SpeedTestResult>> LoadedAsync(SpeedTestHistoryService svc)
+    {
+        var results = await svc.LoadAsync();
+        Assert.NotNull(results);
+        return results;
+    }
+
     private static SpeedTestResult Result(
         string engine = "HTTP", double down = 100.5, double? up = 50.2, double? ping = 12.3,
         string server = "test-server", DateTime? at = null)
@@ -57,7 +66,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         Assert.False(File.Exists(HistoryFile));
 
-        var results = await svc.LoadAsync();
+        var results = await LoadedAsync(svc);
 
         Assert.Empty(results);
     }
@@ -82,7 +91,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         var at = new DateTime(2026, 3, 4, 5, 6, 7);
         await svc.SaveAsync(Result("HTTP", 123.4, 56.7, 8.9, "roundtrip-server", at));
 
-        var loaded = await svc.LoadAsync();
+        var loaded = await LoadedAsync(svc);
 
         var only = Assert.Single(loaded);
         Assert.Equal("HTTP", only.Engine);
@@ -105,7 +114,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         await svc.SaveAsync(Result("HTTP", down: 123.4, up: null, ping: null, server: "unmeasured"));
 
-        var only = Assert.Single(await svc.LoadAsync());
+        var only = Assert.Single(await LoadedAsync(svc));
 
         Assert.Null(only.UploadMbps);
         Assert.Null(only.PingMs);
@@ -137,7 +146,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
             """[{"engine":"HTTP","downloadMbps":10,"uploadMbps":0,"pingMs":0,"server":"s","completedAt":"2026-01-01T00:00:00"}]""");
         using var svc = NewService();
 
-        var only = Assert.Single(await svc.LoadAsync());
+        var only = Assert.Single(await LoadedAsync(svc));
 
         Assert.Equal(0, only.PingMs);
         Assert.Equal(0, only.UploadMbps);
@@ -151,12 +160,12 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         using var svc = NewService();
         await svc.SaveAsync(Result("HTTP", 100, 10, 5, "http-server"));
         await svc.SaveAsync(Result("Ookla", 200, 20, 6, "ookla-server"));
-        Assert.Equal(2, (await svc.LoadAsync()).Count);
+        Assert.Equal(2, (await LoadedAsync(svc)).Count);
 
         Assert.True(await svc.ClearAsync("HTTP"),
             "ClearAsync reported failure — the view model turns that into \"history could not be cleared\" and leaves the rows on screen.");
 
-        var remaining = await svc.LoadAsync();
+        var remaining = await LoadedAsync(svc);
         var only = Assert.Single(remaining);
         Assert.Equal("Ookla", only.Engine);
         Assert.Equal("ookla-server", only.Server);
@@ -170,7 +179,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
 
         Assert.True(await svc.ClearAsync("http"), "ClearAsync reported failure.");   // lower case — the service compares OrdinalIgnoreCase
 
-        Assert.Empty(await svc.LoadAsync());
+        Assert.Empty(await LoadedAsync(svc));
     }
 
     [Fact]
@@ -183,7 +192,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.True(await svc.ClearAsync("HTTP"), "ClearAsync reported failure.");
 
         Assert.False(File.Exists(HistoryFile));   // no empty-array file left behind
-        Assert.Empty(await svc.LoadAsync());
+        Assert.Empty(await LoadedAsync(svc));
     }
 
     [Fact]
@@ -196,7 +205,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.True(await svc.ClearAsync(null), "ClearAsync reported failure.");
 
         Assert.False(File.Exists(HistoryFile));
-        Assert.Empty(await svc.LoadAsync());
+        Assert.Empty(await LoadedAsync(svc));
     }
 
     [Fact]
@@ -239,7 +248,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
                              + "measuring a history with a hole in it.");
         }
 
-        var loaded = await svc.LoadAsync();
+        var loaded = await LoadedAsync(svc);
 
         // Newest first, exactly s24 down to s5: 25 saved, 20 kept.
         var expected = Enumerable.Range(5, 20).Reverse().Select(i => $"s{i}").ToArray();
@@ -262,7 +271,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.True(await svc.SaveAsync(Result("Ookla", server: "ookla-kept", at: start.AddMinutes(100))),
             "the Ookla save failed to reach disk.");
 
-        var loaded = await svc.LoadAsync();
+        var loaded = await LoadedAsync(svc);
 
         // The exact surviving HTTP set, newest first: h21 down to h2. Counts alone do not discriminate —
         // any 20 of the 22 would satisfy them, including a window that trimmed from the wrong end.
@@ -280,9 +289,84 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
         using var svc = NewService();
 
-        var results = await svc.LoadAsync();
+        var results = await LoadedAsync(svc);
 
         Assert.Empty(results);
+    }
+
+    // ── A history that is there but cannot be read or parsed (#2521) ──────────────────────────────
+    //
+    // A history that could not be read loaded as empty, so the next save wrote a history holding only the new
+    // result over every saved one, and clearing one engine deleted the other engine's results with it. The file is
+    // held open with delete sharing only for as long as a read must fail: the read fails, and the replace a write
+    // ends with would still succeed, so a writer that refused can be told from one that could not write.
+
+    private FileStream HoldAgainstReads() => new(HistoryFile, FileMode.Open, FileAccess.Read, FileShare.Delete);
+
+    [Fact]
+    public async Task LoadAsync_WhenTheFileCannotBeRead_IsNull_NotEmpty()
+    {
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Result("HTTP", at: new DateTime(2026, 1, 1, 12, 0, 0))));
+
+        using (HoldAgainstReads())
+            Assert.Null(await svc.LoadAsync());
+
+        Assert.Single(await LoadedAsync(svc));   // readable again once the file is released
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenTheHistoryCannotBeRead_WritesNothing_AndSaysSo()
+    {
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Result("HTTP", server: "first", at: new DateTime(2026, 1, 1, 12, 0, 0))));
+        Assert.True(await svc.SaveAsync(Result("Ookla", server: "second", at: new DateTime(2026, 1, 1, 12, 5, 0))));
+        var raised = 0;
+        svc.Saved += _ => raised++;
+
+        using (HoldAgainstReads())
+            Assert.False(await svc.SaveAsync(Result("HTTP", server: "third", at: new DateTime(2026, 1, 1, 12, 10, 0))));
+
+        Assert.Equal(["second", "first"], (await LoadedAsync(svc)).Select(r => r.Server).ToArray());
+        Assert.Equal(0, raised);
+    }
+
+    [Fact]
+    public async Task ClearAsync_OneEngine_WhenTheHistoryCannotBeRead_LeavesItAsItIs()
+    {
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Result("HTTP", server: "http-server", at: new DateTime(2026, 1, 1, 12, 0, 0))));
+        Assert.True(await svc.SaveAsync(Result("Ookla", server: "ookla-server", at: new DateTime(2026, 1, 1, 12, 5, 0))));
+
+        using (HoldAgainstReads())
+            Assert.False(await svc.ClearAsync("HTTP"));
+
+        Assert.Equal(2, (await LoadedAsync(svc)).Count);
+    }
+
+    [Fact]
+    public async Task SaveAsync_OverAHistoryThatDoesNotParse_KeepsItAside_AndSaves()
+    {
+        await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
+        using var svc = NewService();
+        var result = Result("HTTP");
+
+        Assert.True(await svc.SaveAsync(result));
+
+        Assert.Equal("{ this is not valid json", await File.ReadAllTextAsync(HistoryFile + ".unreadable"));
+        Assert.Equal(result, Assert.Single(await LoadedAsync(svc)));
+    }
+
+    [Fact]
+    public async Task ClearAsync_OneEngine_OverAHistoryThatDoesNotParse_KeepsItAside()
+    {
+        await File.WriteAllTextAsync(HistoryFile, "{ this is not valid json");
+        using var svc = NewService();
+
+        Assert.True(await svc.ClearAsync("HTTP"));
+
+        Assert.Equal("{ this is not valid json", await File.ReadAllTextAsync(HistoryFile + ".unreadable"));
+        Assert.False(File.Exists(HistoryFile));
     }
 
     [Fact]
@@ -292,7 +376,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         await File.WriteAllTextAsync(HistoryFile, "null");
         using var svc = NewService();
 
-        Assert.Empty(await svc.LoadAsync());
+        Assert.Empty(await LoadedAsync(svc));
     }
 
     [Fact]
@@ -304,7 +388,7 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
             """[{"downloadMbps":10,"uploadMbps":2,"pingMs":5,"server":"s","completedAt":"2026-01-01T00:00:00"}]""");
         using var svc = NewService();
 
-        var only = Assert.Single(await svc.LoadAsync());
+        var only = Assert.Single(await LoadedAsync(svc));
 
         Assert.Equal("HTTP", only.Engine);
         Assert.Equal("s", only.Server);
@@ -323,8 +407,8 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
 
             await a.SaveAsync(Result("HTTP", server: "in-a"));
 
-            Assert.Single(await a.LoadAsync());
-            Assert.Empty(await b.LoadAsync());
+            Assert.Single(await LoadedAsync(a));
+            Assert.Empty(await LoadedAsync(b));
         }
         finally
         {

@@ -115,7 +115,15 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     {
         try
         {
-            var all = (await _history.LoadAsync()).Union(HttpHistory).Union(OoklaHistory).ToList();
+            if (await _history.LoadAsync() is not { } saved)
+            {
+                // Said under both cards, because the one file holds both engines' results. Until it can be read,
+                // a new result is not saved either: the save refuses to write over it (#2521).
+                HttpStatus = OoklaStatus = HistoryUnreadable;
+                return;
+            }
+
+            var all = saved.Union(HttpHistory).Union(OoklaHistory).ToList();
             HttpHistory.ReplaceWith(NewestFirst(all, "HTTP"));
             OoklaHistory.ReplaceWith(NewestFirst(all, "Ookla"));
         }
@@ -124,6 +132,10 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             Log.Warning(ex, "Failed to load speed test history");
         }
     }
+
+    /// <summary>The status line under each card when the saved results could not be read.</summary>
+    internal const string HistoryUnreadable =
+        "Your saved results could not be read, so none are shown. New results are not saved until they can be.";
 
     private static IEnumerable<SpeedTestResult> NewestFirst(IEnumerable<SpeedTestResult> all, string engine) =>
         all.Where(r => string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase))
@@ -272,7 +284,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
             // Reported under the engine's OWN card. The two engines have separate status lines in separate
             // cards (SpeedTestView.xaml binds OoklaStatus and HttpStatus independently), so writing to the
             // wrong one would put an Ookla failure under the HTTP heading.
-            var message = $"{engine} history could not be cleared — the saved file could not be written.";
+            var message = $"{engine} history could not be cleared — the saved file could not be read or written.";
             if (string.Equals(engine, "Ookla", StringComparison.OrdinalIgnoreCase)) OoklaStatus = message;
             else HttpStatus = message;
 

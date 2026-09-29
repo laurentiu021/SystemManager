@@ -36,6 +36,18 @@ internal static class StoreFile
         return null;
     }
 
+    /// <summary><see cref="ReadText"/>, reading the file asynchronously. A cancelled read throws, as it should.</summary>
+    public static async Task<string?> ReadTextAsync(string path, CancellationToken ct = default)
+    {
+        try
+        {
+            return File.Exists(path) ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false) : "";
+        }
+        catch (IOException ex) { Log.Warning("Could not read {File}: {Error}", Path.GetFileName(path), ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Could not read {File}: {Error}", Path.GetFileName(path), ex.Message); }
+        return null;
+    }
+
     /// <summary>
     /// Moves a file that does not parse out of the way, to "&lt;name&gt;.unreadable", so a fresh one can be written
     /// in its place without destroying it. Returns false when it could not be moved, and then nothing may be

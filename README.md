@@ -1030,7 +1030,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Separate persistent history per engine**, the last 20 results each — date, download,
   upload, ping and server — clearable on its own, because comparing an HTTP run against an
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
-  even while this tab is open
+  even while this tab is open. If the saved results cannot be read, the tab says so rather
+  than showing none, and a new result is never saved over them
 - **A reading it could not take says so.** When no ping gets an answer, which is common on
   networks that block ping, or the server refuses the upload, the card shows "—" and the line
   under it says why. The history records it as not measured, never as a perfect 0 ms ping

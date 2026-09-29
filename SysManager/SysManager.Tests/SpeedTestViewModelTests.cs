@@ -195,6 +195,29 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Empty(vm.HttpHistory);
     }
 
+    // ---------- saved results that cannot be read (#2521) ----------
+
+    [Fact]
+    public async Task ALoad_ThatCannotReadTheSavedResults_SaysSoUnderBothCards()
+    {
+        // A history that could not be read used to show as no results, and the next run was saved over it.
+        var history = NewHistory();
+        Assert.True(await history.SaveAsync(At("HTTP", 1)));
+
+        SpeedTestViewModel vm;
+        // Held open with delete sharing only, so the first load cannot read it.
+        using (new System.IO.FileStream(System.IO.Path.Combine(_dir, "speedtest-history.json"),
+                   System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Delete))
+        {
+            vm = new SpeedTestViewModel(NewShared(), history);
+            await vm.InitializationComplete;
+        }
+
+        Assert.Equal(SpeedTestViewModel.HistoryUnreadable, vm.HttpStatus);
+        Assert.Equal(SpeedTestViewModel.HistoryUnreadable, vm.OoklaStatus);
+        Assert.Empty(vm.HttpHistory);
+    }
+
     // ---------- the first load and the Saved event, in the order that loses a row ----------
 
     [Fact]
@@ -273,7 +296,9 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Equal("—", vm.HttpResult.PingDisplay);
         Assert.Equal("HTTP done — no reply to ping (some networks block it)", vm.HttpStatus);
         Assert.Null(Assert.Single(vm.HttpHistory).PingMs);
-        Assert.Null(Assert.Single(await history.LoadAsync()).PingMs);
+        var saved = await history.LoadAsync();
+        Assert.NotNull(saved);
+        Assert.Null(Assert.Single(saved).PingMs);
     }
 
     [Fact]
@@ -288,7 +313,9 @@ public sealed class SpeedTestViewModelTests : IDisposable
 
         Assert.Equal("Ookla done", vm.OoklaStatus);
         Assert.Equal("7 ms", vm.OoklaResult?.PingDisplay);
-        Assert.Equal(measured, Assert.Single(await history.LoadAsync()));
+        var saved = await history.LoadAsync();
+        Assert.NotNull(saved);
+        Assert.Equal(measured, Assert.Single(saved));
     }
 
     [Theory]

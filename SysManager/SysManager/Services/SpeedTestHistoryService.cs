@@ -80,45 +80,42 @@ public sealed class SpeedTestHistoryService : IDisposable
     }
 
     /// <summary>
-    /// Loads all saved results from disk. Returns empty list on any error.
+    /// Loads all saved results from disk, or null when the file is there and could not be read. A file that does
+    /// not parse holds no result that could be shown, so it loads as empty.
     /// </summary>
-    public async Task<List<SpeedTestResult>> LoadAsync(CancellationToken ct = default)
-        => await LoadCoreAsync(ct).ConfigureAwait(false);
+    /// <remarks>
+    /// Null is not "no results". A failed read used to load as an empty history, and the next save wrote a history
+    /// holding only the new result over every saved one (#2521).
+    /// </remarks>
+    public async Task<List<SpeedTestResult>?> LoadAsync(CancellationToken ct = default)
+        => (await LoadCoreAsync(ct).ConfigureAwait(false)).Results;
 
-    /// <summary>Internal load without locking — called from within locked sections.</summary>
-    private async Task<List<SpeedTestResult>> LoadCoreAsync(CancellationToken ct)
+    /// <summary>
+    /// Internal load without locking — called from within locked sections. The results, null when the file could
+    /// not be read, and whether it was there but did not parse.
+    /// </summary>
+    private async Task<(List<SpeedTestResult>? Results, bool Unparsable)> LoadCoreAsync(CancellationToken ct)
     {
+        var json = await StoreFile.ReadTextAsync(_historyPath, ct).ConfigureAwait(false);
+        if (json is null) return (null, false);
+        if (json.Length == 0) return ([], false);
         try
         {
-            if (!File.Exists(_historyPath))
-                return [];
-
-            var json = await File.ReadAllTextAsync(_historyPath, ct).ConfigureAwait(false);
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
-            if (entries is null) return [];
+            if (entries is null) return ([], false);
 
-            return entries.Select(e => new SpeedTestResult(
+            return (entries.Select(e => new SpeedTestResult(
                 e.Engine ?? "HTTP",
                 e.DownloadMbps,
                 e.UploadMbps,
                 e.PingMs,
                 e.Server ?? "",
-                e.CompletedAt)).ToList();
-        }
-        catch (IOException ex)
-        {
-            Log.Warning(ex, "Failed to load speed test history");
-            return [];
+                e.CompletedAt)).ToList(), false);
         }
         catch (JsonException ex)
         {
             Log.Warning(ex, "Failed to parse speed test history JSON");
-            return [];
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            Log.Warning(ex, "Access denied loading speed test history");
-            return [];
+            return ([], true);
         }
     }
 
@@ -134,6 +131,8 @@ public sealed class SpeedTestHistoryService : IDisposable
     /// single dropped write — on a run whose predecessor had passed.</para>
     /// <para>The exception is still not rethrown: losing one reading must not take the tab down. But the
     /// outcome is now reported, so a caller can tell the user instead of pretending.</para>
+    /// <para>It is also <c>false</c> when the history could not be read. Nothing is written then: the file holds
+    /// every saved result of both engines, and writing would replace them all with this one (#2521).</para>
     /// </summary>
     public async Task<bool> SaveAsync(SpeedTestResult result, CancellationToken ct = default)
     {
@@ -159,7 +158,11 @@ public sealed class SpeedTestHistoryService : IDisposable
         await _fileLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var all = await LoadCoreAsync(ct).ConfigureAwait(false);
+            var (all, unparsable) = await LoadCoreAsync(ct).ConfigureAwait(false);
+            // A history that could not be read is not written over: it holds every saved result of both engines,
+            // and there is no copy of them to write back (#2521). One that does not parse is kept aside first.
+            if (all is null) return false;
+            if (unparsable && !StoreFile.SetAside(_historyPath)) return false;
             all.Add(result);
 
             // Trim per engine: keep only the most recent MaxPerEngine entries.
@@ -227,7 +230,11 @@ public sealed class SpeedTestHistoryService : IDisposable
                 return true;
             }
 
-            var all = await LoadCoreAsync(ct).ConfigureAwait(false);
+            var (all, unparsable) = await LoadCoreAsync(ct).ConfigureAwait(false);
+            // Clearing one engine rewrites the other engine's results, so a history that could not be read is left
+            // as it is (#2521). One that does not parse is kept aside, which also leaves no result of this engine.
+            if (all is null) return false;
+            if (unparsable && !StoreFile.SetAside(_historyPath)) return false;
             var filtered = all.Where(r => !string.Equals(r.Engine, engine, StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (filtered.Count == 0)

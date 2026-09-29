@@ -57,6 +57,75 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         => Assert.True(UpdateCheckPreferenceService.ShouldCheckAtStartup(
             UpdateCheckPreferenceService.Default, Now));
 
+    // ── A preference file that cannot be read or parsed (#2521) ────────────
+    //
+    // A file that could not be read loaded as the default, "on", and the check that then ran recorded itself by
+    // writing that default back: the user's "off" was gone for good. The file is held open with delete sharing
+    // only while a read must fail: the read fails, and the replace a write ends with would still succeed.
+
+    private string PreferenceFile => Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+
+    [Fact]
+    public void RecordCheck_WhenThePreferenceCannotBeRead_KeepsTheUsersOff()
+    {
+        NewService().SetCheckOnStartup(false);
+
+        using (new FileStream(PreferenceFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            NewService().RecordCheck(Now);
+
+        var pref = NewService().Load();
+        Assert.False(pref.CheckOnStartup);
+        Assert.Null(pref.LastCheckUtc);   // nothing was written
+    }
+
+    [Fact]
+    public void RecordCheck_OverAFileThatDoesNotParse_KeepsItAside_AndRecords()
+    {
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+
+        NewService().RecordCheck(Now);
+
+        Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile + ".unreadable"));
+        Assert.Equal(Now, NewService().Load().LastCheckUtc);
+    }
+
+    [Fact]
+    public void SetCheckOnStartup_OverAFileThatDoesNotParse_KeepsItAside_AndSaves()
+    {
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+
+        NewService().SetCheckOnStartup(false);
+
+        Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile + ".unreadable"));
+        Assert.False(NewService().Load().CheckOnStartup);
+    }
+
+    // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not. A
+    // sharing hold would fail the write as well, and could not tell a refusal from a write that failed.
+
+    [Fact]
+    public void RecordCheck_WhenAFileThatDoesNotParseCannotBeSetAside_WritesNothing()
+    {
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+        Directory.CreateDirectory(PreferenceFile + ".unreadable");
+
+        NewService().RecordCheck(Now);
+
+        Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile));
+    }
+
+    [Fact]
+    public void SetCheckOnStartup_WhenAFileThatDoesNotParseCannotBeSetAside_StillSavesTheChoice()
+    {
+        // The user's choice wins over keeping a damaged file: all it can hold besides is when the last check ran.
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+        Directory.CreateDirectory(PreferenceFile + ".unreadable");
+
+        NewService().SetCheckOnStartup(false);
+
+        Assert.False(NewService().Load().CheckOnStartup);
+    }
+
     // ── The on/off switch ───────────────────────────────────────────────────
 
     [Fact]

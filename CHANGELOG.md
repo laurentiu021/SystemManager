@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.39] - 2026-09-29
+
+**Turning off the startup update check now stays off, even when SysManager cannot read that setting for a
+moment.** A check that ran while the setting could not be read switched it back on for good.
+
+### Fixed
+
+- **About: "Check GitHub for a new version when SysManager starts" is no longer switched back on.** When the
+  setting could not be read, it counted as on, the check ran, and recording that check wrote "on" back with
+  the time of the check, over the "off" the file held.
+  - Recording a check now writes nothing over a setting that could not be read. The check may still run that
+    once, since an unreadable setting counts as on, but the "off" survives it.
+  - A setting file that is damaged is kept as `update-check.json.unreadable` before a new one is written.
+  - Ticking or clearing the box still saves your choice even then: the only other thing the file holds is when
+    the last check ran.
+  Present since the startup check became optional in v1.58.0.
+
 ## [1.114.38] - 2026-09-29
 
 **Resource History no longer deletes older samples when SysManager cannot read how many days to keep.** A

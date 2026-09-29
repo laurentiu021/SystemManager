@@ -902,7 +902,9 @@ Key services:
   to off would silently close the only channel that tells the user about a fix. `AboutViewModel`
   applies it on the startup path only — the manual "Check for updates" and "Retry" buttons always
   bypass the throttle. Registered in `ProfileService`'s catalog so it survives profile
-  export/import.
+  export/import. `RecordCheck` writes nothing over a file it could not read, since that file may
+  hold "off"; `SetCheckOnStartup` writes the user's choice regardless, losing at most the last-run
+  time. A file that does not parse is set aside first.
 - `StandbyPreferenceService` — persists the Standby List Cleaner's auto-purge toggle and
   threshold as JSON under `%LocalAppData%\SysManager\standby-preference.json`. Auto-purge is a
   set-and-forget setting, so losing it on every restart made it effectively unusable. Same shape

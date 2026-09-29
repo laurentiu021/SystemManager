@@ -80,15 +80,17 @@ public sealed class UpdateCheckPreferenceService
     /// or the file cannot be trusted — falling back to "enabled" keeps a corrupt file from
     /// silently turning update notifications off, which the user would never notice.
     /// </summary>
-    public UpdateCheckPreference Load()
+    public UpdateCheckPreference Load() => Read().Preference ?? Default;
+
+    /// <summary>
+    /// The stored preference, or null when the file is there and could not be read. Unparsable is true when it was
+    /// read and holds no preference, and the preference is then <see cref="Default"/>.
+    /// </summary>
+    private (UpdateCheckPreference? Preference, bool Unparsable) Read()
     {
-        try
-        {
-            if (!File.Exists(_path)) return Default;
-            return Parse(File.ReadAllText(_path));
-        }
-        catch (IOException ex) { Log.Debug("Update-check preference load failed: {Error}", ex.Message); return Default; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Update-check preference load denied: {Error}", ex.Message); return Default; }
+        var text = StoreFile.ReadText(_path);
+        if (text is null) return (null, false);
+        return TryParse(text) is { } preference ? (preference, false) : (Default, true);
     }
 
     /// <summary>Saves the preference. Best-effort: an IO failure must not break the UI.</summary>
@@ -107,11 +109,17 @@ public sealed class UpdateCheckPreferenceService
     /// Records that a check just ran, keeping the user's on/off choice. Serialized against
     /// <see cref="SetCheckOnStartup"/> by <see cref="_mutateLock"/>.
     /// </summary>
+    /// <remarks>
+    /// Writes nothing over a file that could not be read. It may hold "off", and writing the default back with the
+    /// new time turned the startup check on for good (#2521). A file that does not parse is set aside first.
+    /// </remarks>
     public void RecordCheck(DateTimeOffset whenUtc)
     {
         lock (_mutateLock)
         {
-            var current = Load();
+            var (current, unparsable) = Read();
+            if (current is null) return;
+            if (unparsable && !StoreFile.SetAside(_path)) return;
             Save(current with { LastCheckUtc = whenUtc });
         }
     }
@@ -120,12 +128,17 @@ public sealed class UpdateCheckPreferenceService
     /// Turns the startup check on or off, keeping the last-checked timestamp. Serialized against
     /// <see cref="RecordCheck"/> by <see cref="_mutateLock"/>.
     /// </summary>
+    /// <remarks>
+    /// The user's own choice is written even over a file that could not be read: all that can be lost is when the
+    /// last check ran. A file that does not parse is set aside first, when it can be (#2521).
+    /// </remarks>
     public void SetCheckOnStartup(bool enabled)
     {
         lock (_mutateLock)
         {
-            var current = Load();
-            Save(current with { CheckOnStartup = enabled });
+            var (current, unparsable) = Read();
+            if (unparsable) StoreFile.SetAside(_path);
+            Save((current ?? Default) with { CheckOnStartup = enabled });
         }
     }
 
@@ -160,7 +173,10 @@ public sealed class UpdateCheckPreferenceService
     /// to a prompt: there is nothing to ask here, and defaulting to off would quietly stop the
     /// only channel that tells the user about a fix.
     /// </summary>
-    public static UpdateCheckPreference Parse(string? json)
+    public static UpdateCheckPreference Parse(string? json) => TryParse(json) ?? Default;
+
+    /// <summary><see cref="Parse"/>, except that input which is not a preference at all is null rather than the default.</summary>
+    internal static UpdateCheckPreference? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return Default;
         try
@@ -169,6 +185,6 @@ public sealed class UpdateCheckPreferenceService
             if (stored is null) return Default;
             return new UpdateCheckPreference(stored.CheckOnStartup, stored.LastCheckUtc);
         }
-        catch (JsonException ex) { Log.Debug("Update-check preference parse failed: {Error}", ex.Message); return Default; }
+        catch (JsonException ex) { Log.Debug("Update-check preference parse failed: {Error}", ex.Message); return null; }
     }
 }

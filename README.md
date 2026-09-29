@@ -1532,7 +1532,8 @@ offers, "rate us" prompts:
   license** and **What's new** open the licence and the changelog
 - **The startup version check is a checkbox here** — "Check GitHub for a new version when
   SysManager starts" — and switching it off does not disable the **Check for updates**
-  button, which still works on demand. What that check does and does not send is described
+  button, which still works on demand. Switched off, it stays off even if the setting cannot
+  be read for a moment. What that check does and does not send is described
   under [Privacy](#privacy).
 
 ### Updates (for SysManager itself)

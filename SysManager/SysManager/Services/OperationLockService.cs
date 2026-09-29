@@ -14,19 +14,30 @@ namespace SysManager.Services;
 /// </summary>
 public enum OperationCategory
 {
-    /// <summary>Disk-intensive: cleanup, disk analysis, duplicate scan, large file scan.</summary>
+    /// <summary>
+    /// Disk-intensive: scanning or deleting across the disk. Temp Cleanup, Deep Cleanup's scan and clean, Disk
+    /// Analyzer, Large Files, Duplicate Finder, Shortcut Cleaner, File Shredder, Browser Cleaner, and the
+    /// Dashboard's Quick Cleanup and Quick Tune-Up.
+    /// </summary>
     Disk,
 
-    /// <summary>Network-intensive: speed test, traceroute, ping flood, network repair.</summary>
+    /// <summary>
+    /// Network-intensive or network-changing: the speed tests, traceroute, Network Repair, and DNS &amp; Hosts,
+    /// which changes the DNS servers and the hosts file that Network Repair also resets.
+    /// </summary>
     Network,
 
     /// <summary>
-    /// System modification: performance tweaks, SFC and DISM repairs, component-store cleanup, Windows feature
-    /// changes, Windows Update installs and resets, and creating or restoring a restore point.
+    /// System modification: the repairs that service the running Windows image (SFC, DISM, the component-store
+    /// cleanup), Windows feature changes, Windows Update installs and resets, creating or restoring a restore point,
+    /// and the tabs that change Windows settings: Performance Mode, Gaming Profile, Environment Variables and
+    /// Preinstalled Apps. Deep Cleanup takes it too while it deletes one of its Windows Update caches.
     /// </summary>
     /// <remarks>
     /// Most of these service the same running Windows image, and a restore restarts it, so no two may overlap.
-    /// Windows Features, Windows Update, Reset Windows Update and the Restore Points tab took no lock until #2484.
+    /// Deep Cleanup's two caches sit inside SoftwareDistribution, which an update install reads from and Reset
+    /// Windows Update renames (#2510). Windows Features, Windows Update, Reset Windows Update and the Restore Points
+    /// tab took no lock until #2484.
     /// </remarks>
     SystemModification,
 

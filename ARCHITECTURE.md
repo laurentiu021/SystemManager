@@ -658,19 +658,26 @@ Key services:
 - `IconExtractorService` — extracts application icons from executables
   for display in process/app lists; caches results.
 - `OperationLockService` — prevents concurrent conflicting operations by
-  category (Disk / Network / SystemModification / Shell) via a thread-safe
+  category (Disk / Network / SystemModification / Shell / Install) via a thread-safe
   `ConcurrentDictionary` try-acquire. Returns a disposable handle, or `null`
   immediately if that category is already locked (non-blocking; no timeout).
   `Shell` is deliberately separate from `SystemModification` rather than folded into
   it: the two must NOT exclude each other, because an SFC scan runs for up to fifteen
   minutes and a user whose taskbar froze during one still has to be able to restart the
   shell. What must be exclusive is two shell restarts.
+  `Install` is separate for the same kind of reason. App Updates, Bulk Installer and Uninstaller exclude one
+  another because Windows Installer runs one installation at a time, and an MSI package started while another
+  runs fails with 1618 (#2510). None of them services Windows, so an SFC scan does not hold them up.
   `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
-  Windows Update, and creating or restoring a restore point, besides the performance tweaks. Feature
+  Windows Update, and creating or restoring a restore point, besides the tabs that change Windows settings
+  (Performance Mode, Gaming Profile, Environment Variables, Preinstalled Apps). Feature
   changes, update installs, Reset Windows Update and the Restore Points tab took no lock until #2484.
   System Fixes' `RunFixAsync` takes it only for the fixes that name
   a lock, so Reinstall WinGet, which conflicts with none of them, still runs during a repair.
+  Deep Cleanup takes it in addition to `Disk` when one of its two Windows Update caches is ticked: both sit
+  inside `SoftwareDistribution`, which an update install reads from and Reset Windows Update renames. It gives
+  it back after the delete, before the read-only rescan (#2510).
 - `ProcessDescriptionService` — enriches process entries with friendly
   descriptions from file version info and known-process database.
 - `SpeedTestHistoryService` — persists speed test results to JSON for

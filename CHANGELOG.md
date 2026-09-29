@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.49] - 2026-09-29
+
+**Deep Cleanup and Windows Update no longer work on the same folder at the same time.** Cleaning the Windows
+Update caches now waits for an update install or a Windows Update reset to finish, and they wait for it.
+
+### Fixed
+
+- **Deep Cleanup could delete inside the Windows Update folder while Windows Update was using it.** Two of its
+  categories, "Windows Update cache" and "Delivery Optimization cache", delete inside
+  `%WinDir%\SoftwareDistribution`. A Windows Update install reads its downloaded packages from there while it
+  runs, and Reset Windows Update renames the whole folder, which fails while anything inside it is open. Deep
+  Cleanup held a different lock from both, so a clean could remove packages an install still needed, or make
+  a reset fail.
+  - With either category ticked, Deep Cleanup now also takes the lock the install and the reset hold, so none
+    of the three starts while another runs. A clean started during an install says "Cannot start — untick
+    "Windows Update cache" or wait: Windows Update install is already running.", and an install or a reset
+    started during a clean says that Deep Cleanup is running.
+  - The lock is given back as soon as the files are deleted, before the rescan that follows. The rescan only
+    reads, and on a used PC it can take minutes.
+  - A clean without either category is unchanged.
+
+  Present since v0.5.0 for an update install, and since v1.26.0, when System Fixes gained Reset Windows
+  Update, for the reset.
+
 ## [1.114.48] - 2026-09-29
 
 **Preinstalled Apps, File Shredder, Browser Cleaner and DNS & Hosts now take the operation lock.**

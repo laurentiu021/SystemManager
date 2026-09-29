@@ -46,6 +46,18 @@ public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelecta
     /// </summary>
     public bool IsRecycleBin { get; init; }
 
+    /// <summary>
+    /// True for the two categories inside <c>%WinDir%\SoftwareDistribution</c>: the Windows Update download
+    /// cache and the Delivery Optimization cache. Cleaning one also takes the system-modification lock (#2510).
+    /// </summary>
+    /// <remarks>
+    /// Two operations elsewhere in SysManager use that folder and hold that lock. A Windows Update install reads
+    /// its downloaded packages from the cache while it runs. Reset Windows Update renames the whole folder, and
+    /// the rename fails while anything inside it is open. Deleting there at the same time as either one could
+    /// remove packages an install still needs, or fail the reset.
+    /// </remarks>
+    public bool IsWindowsUpdateCache { get; init; }
+
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
     public string CountDisplay => SkippedCount > 0 ? string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files · {SkippedCount:N0} skipped") : string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files");
 }

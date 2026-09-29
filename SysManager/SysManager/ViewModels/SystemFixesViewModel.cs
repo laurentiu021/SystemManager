@@ -153,6 +153,16 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     {
         if (IsSfcRunning) return;
         if (!RequireElevation("Repairing Windows files")) return;
+        // The tab promises a confirmation before every fix, and this one changes system files (#2505).
+        if (!DialogService.Instance.Confirm(
+                "This checks every protected Windows system file and replaces the damaged ones with a known-good "
+                + "copy. It changes system files and takes 5 to 15 minutes. You can keep using the app while it "
+                + "runs, and some repairs finish only after a restart.\n\nContinue?",
+                "Run SFC?"))
+        {
+            StatusMessage = "Cancelled.";
+            return;
+        }
 
         // Cross-TAB exclusion. Quick Cleanup's component-store operations are the other holder of
         // this lock, and they are DISM against the same online image, so they must not overlap
@@ -245,6 +255,16 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     {
         if (IsDismRunning) return;
         if (!RequireElevation("Repairing the component store")) return;
+        if (!DialogService.Instance.Confirm(
+                "This checks the store Windows keeps its known-good copies of system files in, and replaces the "
+                + "damaged ones with copies downloaded from Windows Update, so it needs an internet connection. It "
+                + "changes system files and takes 10 to 30 minutes. You can keep using the app while it runs."
+                + "\n\nContinue?",
+                "Run DISM?"))
+        {
+            StatusMessage = "Cancelled.";
+            return;
+        }
 
         // Same cross-tab lock as SFC, for the same reason — see RunSfcAsync.
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "DISM RestoreHealth");
@@ -321,9 +341,15 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunFix))]
     private Task ResetWindowsUpdateAsync() => RunFixAsync(
         "Reset Windows Update?",
-        "This stops the Windows Update services, clears their cache folders " +
-        "(SoftwareDistribution and catroot2, renamed so Windows rebuilds them), and restarts " +
-        "the services. Pending updates will re-download. A reboot is recommended afterwards.\n\nContinue?",
+        // Names the two things the reset does beyond its headline: it stops Windows Installer, and it keeps the
+        // renamed folders, a new pair every time (#2505).
+        "This stops the Windows Update services and Windows Installer, renames their cache folders " +
+        "(SoftwareDistribution and catroot2) so Windows rebuilds them, and restarts the services. Pending " +
+        "updates will re-download. A reboot is recommended afterwards.\n\n" +
+        "Stopping Windows Installer interrupts any installation running in another program right now, so let " +
+        "it finish first.\n\n" +
+        "The old folders are kept beside the new ones, named with .old and the date, and every reset keeps " +
+        "another copy. They can take several GB, and SysManager does not remove them.\n\nContinue?",
         ct => _service.ResetWindowsUpdateAsync(ct),
         // It force-stops wuauserv, cryptSvc, bits and msiserver and renames the update caches, so it must not run
         // during a Windows Update install, an SFC or DISM repair, or a feature change (#2484).

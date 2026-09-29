@@ -55,6 +55,35 @@ public class HostsFileServiceTests
     }
 
     [Fact]
+    public void SaveHosts_WhenTheHostsFileCannotBeRead_Throws_AndWritesNothing()
+    {
+        // The comments and unparsable lines are re-read from the file on every save. A read that failed used to
+        // read as "nothing to keep", so a save while the file was locked dropped all of them (#2521).
+        var (svc, hosts, dir) = NewServiceWithTempHosts("# my own note\n127.0.0.1 original\n");
+        try
+        {
+            // The first save takes the backup, so the second reads the file only to keep what it holds.
+            svc.SaveHosts([new HostsEntry { IpAddress = "1.1.1.1", Hostname = "first", IsEnabled = true }]);
+            var before = File.ReadAllText(hosts);
+            Assert.Contains("# my own note", before);
+
+            // Held open with delete sharing only: the read fails, and the swap that ends a save would succeed.
+            using (new FileStream(hosts, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            {
+                Assert.Throws<IOException>(() => svc.SaveHosts(
+                    [new HostsEntry { IpAddress = "2.2.2.2", Hostname = "second", IsEnabled = true }]));
+            }
+
+            Assert.Equal(before, File.ReadAllText(hosts));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); }
+            catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+        }
+    }
+
+    [Fact]
     public void RestoreBackup_RestoresPristineOriginal()
     {
         const string original = "# ORIGINAL pristine hosts\n127.0.0.1 originalhost\n";

@@ -152,16 +152,16 @@ public sealed partial class HostsFileService
     /// is exactly a line ReadHostsAsync did not turn into an entry, so nothing is duplicated and
     /// nothing is dropped. Returns an empty list when the file is absent, so a file of plain entries
     /// produces output byte-identical to the earlier behaviour.
+    /// <para>A file that is there and could not be read throws, and <see cref="SaveHosts"/> with it, before
+    /// anything is written. It used to read as "nothing to keep", so a save during a lock dropped every comment
+    /// and every line the parser could not read (#2521).</para>
     /// </remarks>
     private List<string> ReadPreservedLines()
     {
         List<string> preserved = [];
         if (!File.Exists(HostsPath)) return preserved;
 
-        string[] rawLines;
-        try { rawLines = File.ReadAllLines(HostsPath); }
-        catch (IOException) { return preserved; }
-        catch (UnauthorizedAccessException) { return preserved; }
+        var rawLines = File.ReadAllLines(HostsPath);
 
         // Trim in the projection: the loop body never needs the untrimmed line, and rawLines is
         // already a materialised array from ReadAllLines, so this is the same work in the same order.

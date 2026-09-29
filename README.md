@@ -1076,7 +1076,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them; the changes are written to the hosts file when you press Save,
-  and the tab says so. Backs up hosts file before modifications.
+  and the tab says so. Backs up hosts file before modifications. It never saves a list
+  it could not read from the file: after a failed read, Save asks you to Refresh first
 - Requires administrator privileges for both DNS and hosts operations
 - Admin elevation banner with one-click restart
 

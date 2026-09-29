@@ -698,7 +698,9 @@ Key services:
   them in real Windows PowerShell with the cmdlets shadowed (`DnsScriptTests`).
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
-  restore it (`HasBackup` / `RestoreBackup`).
+  restore it (`HasBackup` / `RestoreBackup`). `SaveHosts` re-reads the file to keep the lines it
+  does not manage, and throws before writing when that read fails. `DnsHostsViewModel` refuses
+  Save until a read of the file has succeeded, since Save rewrites it from the list.
 - `ContextMenuService` — scans Explorer context menu registrations in both
   shapes Windows stores them in: `shell` verbs (a name and a command line,
   hidden with `LegacyDisable`) and `shellex\ContextMenuHandlers` COM

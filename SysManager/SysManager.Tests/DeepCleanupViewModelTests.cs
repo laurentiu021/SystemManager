@@ -399,6 +399,131 @@ public class DeepCleanupViewModelTests : IDisposable
         }
     }
 
+    // ---------- Windows Update cache vs a Windows Update install (#2510) ----------
+
+    [Fact]
+    public async Task Clean_WhenWindowsUpdateCacheSelectedAndInstallRunning_RefusesAndDeletesNothing()
+    {
+        // Deleting SoftwareDistribution\Download while a Windows Update install (SystemModification) is
+        // reading it can remove payloads the install still needs — a different hazard from the Disk lock
+        // above, so it needs its own check.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "cab.tmp");
+        File.WriteAllText(file, "x");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        Assert.NotNull(held);
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = Services.DeepCleanupService.WindowsUpdateCacheCategoryName,
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(file), "Files were deleted even though a Windows Update install was running");
+            Assert.Equal(
+                "Cannot start — untick \"Windows Update cache\" or wait: Windows Update install is already running.",
+                vm.CleanSummary);
+            Assert.False(vm.IsCleaning);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Clean_WhenWindowsUpdateCacheSelectedButNoInstallRunning_StillCleans()
+    {
+        // The check must not over-block: with no Windows Update install running, selecting this bucket
+        // is exactly as safe as it always was.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_free_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "cab.tmp");
+        File.WriteAllText(file, "x");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = Services.DeepCleanupService.WindowsUpdateCacheCategoryName,
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            Assert.False(File.Exists(file), "The file should have been deleted — nothing was locking SystemModification");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task Clean_WhenInstallRunningButWindowsUpdateCacheNotSelected_StillCleans()
+    {
+        // The check must be scoped to the one bucket that actually conflicts, not a blanket rule that
+        // blocks all of Deep Cleanup whenever SystemModification happens to be busy.
+        var dir = Path.Combine(Path.GetTempPath(), "smtest_clean_wu_unrelated_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, "keep.dat");
+        File.WriteAllText(file, "x");
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Windows Update install");
+        Assert.NotNull(held);
+        try
+        {
+            var vm = NewVm();
+            vm.Categories.Add(new CleanupCategory
+            {
+                Name = "Temp",
+                Description = "test",
+                Paths = new[] { dir },
+                TotalSizeBytes = 1,
+                FileCount = 1,
+                IsSelected = true
+            });
+
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            Assert.False(File.Exists(file), "An unrelated category must not be blocked by a Windows Update install");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            try { Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task Clean_WhenUserConfirms_DeletesSelectedFiles()
     {

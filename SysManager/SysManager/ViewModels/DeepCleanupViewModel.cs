@@ -259,6 +259,19 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             CleanSummary = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
             return;
         }
+
+        // The Windows Update cache bucket deletes SoftwareDistribution\Download, which a Windows Update
+        // install (holding SystemModification) can still be reading mid-install — deleting it out from
+        // under the install, rather than merely racing it, is why this checks the OTHER category instead
+        // of just relying on the Disk lock above (#2510). Checked only when that one bucket is actually
+        // selected, so the rest of Deep Cleanup is never held up by an unrelated Windows Update install.
+        if (selected.Any(c => c.Name == DeepCleanupService.WindowsUpdateCacheCategoryName)
+            && OperationLockService.Instance.IsLocked(OperationCategory.SystemModification))
+        {
+            CleanSummary = $"Cannot start — untick \"{DeepCleanupService.WindowsUpdateCacheCategoryName}\" or wait: "
+                + $"{OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
         IsCleaning = true;
         CleanProgress = 0;
         CleanStatusLine = "Starting...";

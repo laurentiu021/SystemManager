@@ -40,6 +40,15 @@ public sealed class DeepCleanupService
     public DeepCleanupService(ICleanupRoots roots)
         => _roots = roots ?? throw new ArgumentNullException(nameof(roots));
 
+    /// <summary>
+    /// The exact <see cref="CleanupCategory.Name"/> of the Windows Update download cache bucket. Shared
+    /// with <see cref="SysManager.ViewModels.DeepCleanupViewModel"/>, which refuses to clean it while a
+    /// Windows Update install holds <see cref="OperationCategory.SystemModification"/>: deleting
+    /// <c>SoftwareDistribution\Download</c> mid-install can remove payloads the install still needs
+    /// (#2510). A named constant rather than two copies of the literal, so the two can never drift apart.
+    /// </summary>
+    internal const string WindowsUpdateCacheCategoryName = "Windows Update cache";
+
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
     public Task<IReadOnlyList<CleanupCategory>> ScanAsync(
@@ -106,7 +115,7 @@ public sealed class DeepCleanupService
                 "Temporary driver package extracts from Intel installers.",
                 [Path.Combine(systemDrive, "Intel")]),
 
-            new("Windows Update cache",
+            new(WindowsUpdateCacheCategoryName,
                 "Previously downloaded Windows Update packages. Windows re-downloads anything it still needs next time.",
                 [Path.Combine(windowsDir, "SoftwareDistribution", "Download")]),
 

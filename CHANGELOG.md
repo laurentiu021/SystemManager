@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.49] - 2026-09-29
+
+**Deep Cleanup no longer deletes the Windows Update cache while an update is installing.** Tick that
+category during an install and Deep Cleanup now says so instead of clearing files the install may still
+need.
+
+### Fixed
+
+- **Deep Cleanup could delete the Windows Update download cache while a Windows Update install was using
+  it.** Deep Cleanup's "Windows Update cache" category removes `SoftwareDistribution\Download`, and a
+  Windows Update install can still be reading payloads from there while it runs — the two held different
+  locks (Disk and SystemModification), so neither excluded the other. Cleaning now checks whether that one
+  category is selected and an install is running, and if so refuses with "Cannot start — untick "Windows
+  Update cache" or wait: Windows Update install is already running." Every other category is unaffected —
+  Deep Cleanup only holds up on this one selection, and only while an install is actually in progress.
+  Present since v0.5.0, when Deep Cleanup gained the Windows Update cache category alongside the
+  already-shipped Windows Update install.
+
 ## [1.114.48] - 2026-09-29
 
 **Preinstalled Apps, File Shredder, Browser Cleaner and DNS & Hosts now take the operation lock.**

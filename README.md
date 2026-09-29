@@ -1366,6 +1366,11 @@ offers, "rate us" prompts:
   profile's power plan and visual effects, not yours, and saving them as your baseline
   would restore you to them later. It asks you to stop the profile first. A baseline
   saved *before* the profile started is still used normally
+- **It never records over a baseline it cannot read** — after an earlier change, the settings
+  on the PC are the tweaks, and recording them as your original would make Restore All put them
+  back. If the saved baseline cannot be read, the change is stopped and nothing is recorded. A
+  damaged one is set aside once, you are told, and the next Apply records your current settings
+  as the new original
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
   making changes (requires admin)

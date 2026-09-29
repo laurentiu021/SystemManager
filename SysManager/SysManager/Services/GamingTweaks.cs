@@ -263,13 +263,15 @@ internal sealed class NotificationsTweak(
         // restoring the snapshot would silently re-enable notifications they had just deliberately turned
         // off. Nothing in the registry can attribute the write, which is why the Notifications tab keeps a
         // write ledger and this compares against the count captured at apply.
+        // Compared only when both counts are known. A count that could not be read, at apply or now, says
+        // nothing about the user, and treating it as 0 left notifications muted after every such game (#2538).
         var writesNow = NotificationBlockerService.ReadMasterToggleWriteCount(configDir);
-        if (writeCountAtApply is { } atApply && writesNow != atApply)
+        if (writeCountAtApply is { } atApply && writesNow is { } now && now != atApply)
         {
             Log.Information(
                 "Gaming Profile: the user set the notifications master toggle themselves while the profile "
                 + "was active (ledger {AtApply} -> {Now}); leaving it muted instead of restoring {Original}",
-                atApply, writesNow, originalToastEnabled);
+                atApply, now, originalToastEnabled);
             return Task.CompletedTask;
         }
 

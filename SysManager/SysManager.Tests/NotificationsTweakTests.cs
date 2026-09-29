@@ -290,15 +290,122 @@ public sealed class NotificationsTweakTests : IDisposable
         Assert.Equal(3, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
     }
 
-    /// <summary>
-    /// A missing or unreadable ledger reads as 0 rather than throwing, and 0 equals the captured 0, so a lost
-    /// file degrades to the behaviour that shipped before the ledger existed instead of to never reverting.
-    /// </summary>
+    /// <summary>A missing ledger reads as 0 rather than throwing: nothing has been counted yet.</summary>
     [Fact]
     public void AMissingLedger_ReadsAsZeroRatherThanThrowing()
     {
         using var config = new TempConfig();
 
         Assert.Equal(0, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+    }
+
+    // ── A ledger that cannot be read (#2538) ─────────────────────────────
+    // It read as 0, which differs from every real count, so a revert took it for the user muting notifications
+    // and left them muted after the game. The ledger is held open with delete sharing only while its read must
+    // fail: the read fails, and the replace a write ends with still succeeds.
+
+    private static string LedgerFile(TempConfig config) =>
+        Path.Combine(config.Path, NotificationBlockerService.WriteLedgerFileName);
+
+    private static FileStream HoldAgainstReads(TempConfig config) =>
+        new(LedgerFile(config), FileMode.Open, FileAccess.Read, FileShare.Delete);
+
+    /// <summary>Two earlier toggles on the Notifications tab, leaving notifications on and the count at 2.</summary>
+    private void CountTwoWrites(TempConfig config)
+    {
+        var service = new NotificationBlockerService(_root, config.Path);
+        service.SetGlobalToastEnabled(false);
+        service.SetGlobalToastEnabled(true);
+        Assert.Equal(2, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+        Assert.Null(Current());
+    }
+
+    [Fact]
+    public void ALedgerThatCannotBeRead_IsUnknown_NotZero()
+    {
+        using var config = new TempConfig();
+        CountTwoWrites(config);
+
+        using (HoldAgainstReads(config))
+            Assert.Null(NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+
+        File.WriteAllText(LedgerFile(config), "{ not a ledger");
+        Assert.Null(NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+    }
+
+    [Fact]
+    public async Task Revert_WhenTheLedgerCannotBeReadAtRevert_RestoresTheSnapshot()
+    {
+        using var config = new TempConfig();
+        CountTwoWrites(config);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root,
+            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+        Assert.Equal(0, Current());
+
+        using (HoldAgainstReads(config))
+            await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Null(Current());                         // nobody touched the toggle, so notifications are back
+    }
+
+    [Fact]
+    public async Task Revert_WhenTheLedgerDoesNotParseAtRevert_RestoresTheSnapshot()
+    {
+        using var config = new TempConfig();
+        CountTwoWrites(config);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root,
+            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+
+        File.WriteAllText(LedgerFile(config), "{ not a ledger");
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Null(Current());
+    }
+
+    [Fact]
+    public async Task Revert_WhenTheLedgerCouldNotBeReadAtApply_RestoresTheSnapshot()
+    {
+        using var config = new TempConfig();
+        CountTwoWrites(config);
+
+        int? atApply;
+        using (HoldAgainstReads(config))
+            atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+
+        await tweak.RevertAsync(CancellationToken.None);   // the ledger reads 2 again now
+
+        Assert.Null(Current());
+    }
+
+    /// <summary>
+    /// The user's own mute is still kept when the ledger could not be read at the moment they made it.
+    /// </summary>
+    /// <remarks>
+    /// The write side counts from 0 and writes 1 over a ledger it could not read. Writing nothing instead
+    /// would leave the count at 2 and make the revert undo the mute.
+    /// </remarks>
+    [Fact]
+    public async Task Revert_WhenTheUsersMuteCouldNotReadTheLedger_StillLeavesThemMuted()
+    {
+        using var config = new TempConfig();
+        CountTwoWrites(config);
+        var tweak = new NotificationsTweak(
+            originalToastEnabled: null, baseKey: _root,
+            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+        await tweak.ApplyAsync(CancellationToken.None);
+
+        using (HoldAgainstReads(config))
+            Assert.True(new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false));
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Equal(0, Current());
     }
 }

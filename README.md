@@ -1288,8 +1288,10 @@ offers, "rate us" prompts:
   SysManager also tries a System Restore point first (best-effort, needs administrator)
 - **Your own changes win** — if you switch notifications back on yourself while a profile is
   running (from Privacy & Security → Notifications, which is the same switch), the restore leaves
-  your choice alone instead of silencing them again when the game exits. Likewise, if the fast
-  timer was already on from the Timer Resolution tab, game mode leaves it on when it ends
+  your choice alone instead of silencing them again when the game exits. If you mute them yourself
+  on the Notifications tab, they stay muted, and if SysManager cannot tell whether you did, it
+  switches them back on. Likewise, if the fast timer was already on from the Timer Resolution tab,
+  game mode leaves it on when it ends
 - **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
   system-wide changes are offered for restore on next launch. If SysManager cannot read that
   record, Start changes nothing and says so, rather than writing over it

@@ -91,9 +91,10 @@ public sealed record GamingSnapshot
     /// <remarks>
     /// Revert compares this against the current count to tell a <c>ToastEnabled = 0</c> the profile wrote
     /// from one the user wrote on the Notifications tab, which are byte-identical in the registry.
-    /// <para>Null means a snapshot taken before this field existed, or a profile that does not silence
-    /// notifications. Revert then skips the comparison and behaves exactly as it did before, so an
-    /// in-flight session written by an older build still reverts rather than refusing to.</para>
+    /// <para>Null means a snapshot taken before this field existed, a profile that does not silence
+    /// notifications, or a ledger that could not be read at apply. Revert then skips the comparison and
+    /// behaves exactly as it did before, so an in-flight session written by an older build still reverts
+    /// rather than refusing to.</para>
     /// </remarks>
     public int? ToastWriteCountAtApply { get; init; }
 }

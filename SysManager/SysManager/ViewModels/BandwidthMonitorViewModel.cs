@@ -209,6 +209,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         ThemeService.Instance.ThemeChanged += ApplyChartTheme;
 
         StatusMessage = "Starting network monitor…";
+        LetRefreshReplaceStatus();
         InitializeAsync(InitAsync);
     }
 
@@ -243,6 +244,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
                 _source = etw;
                 PreciseMode = true;
                 StatusMessage = "Precise per-app monitoring active.";
+                LetRefreshReplaceStatus();
                 return;
             }
             // ETW couldn't start — fall back cleanly.
@@ -254,6 +256,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         safe.Start();
         _source = safe;
         StatusMessage = "Monitoring network activity.";
+        LetRefreshReplaceStatus();
     }
 
     private async Task PollLoopAsync(CancellationToken ct)
@@ -326,9 +329,11 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
                 .ConfigureAwait(true);
         }
 
-        StatusMessage = HasProcesses
+        // Through ShowRefreshStatus: this runs every second, and an export, a refusal or a loaded range must stay
+        // on the line until the user does something else (#2532).
+        ShowRefreshStatus(HasProcesses
             ? $"{Processes.Count} app{(Processes.Count == 1 ? "" : "s")} using the network."
-            : "No network activity from user apps right now.";
+            : "No network activity from user apps right now.");
     }
 
     /// <summary>
@@ -448,6 +453,8 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
                 ShowingHistory = false;
                 HistoryIsEmpty = false;
                 HistorySummary = "";
+                // The line may still describe the range just left, which is no longer shown.
+                LetRefreshReplaceStatus();
                 // Start the live window from empty rather than showing stale points from before the
                 // history detour; the poll loop refills it within a second.
                 _downBuffer.Clear();

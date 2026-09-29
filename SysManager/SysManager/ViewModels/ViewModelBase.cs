@@ -28,6 +28,33 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     protected bool IsDisposed { get; private set; }
 
     /// <summary>
+    /// What the status line said when a background refresh last wrote it, or a status the refresh may replace.
+    /// </summary>
+    private string? _refreshableStatus;
+
+    /// <summary>
+    /// Sets the status line from a background refresh, unless it now holds something newer than what the refresh
+    /// last wrote there.
+    /// </summary>
+    /// <remarks>
+    /// Volume Control and Bandwidth Monitor refresh once a second, and every refresh ended by writing a count on
+    /// the one status line. A saved preset, an export or a refusal was replaced within a second (#2532). Now a
+    /// message set any other way stays until the user does something else, and while the line still shows the
+    /// refresh's own text, the count keeps up.
+    /// </remarks>
+    protected void ShowRefreshStatus(string status)
+    {
+        if (StatusMessage != _refreshableStatus) return;
+        StatusMessage = _refreshableStatus = status;
+    }
+
+    /// <summary>
+    /// Lets the next <see cref="ShowRefreshStatus"/> replace what the status line says now: a placeholder shown
+    /// before the first refresh, or a message that is no longer true.
+    /// </summary>
+    protected void LetRefreshReplaceStatus() => _refreshableStatus = StatusMessage;
+
+    /// <summary>
     /// The command Escape should run on this tab, or <c>null</c> when there is nothing to stop.
     /// </summary>
     /// <remarks>

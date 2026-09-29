@@ -322,7 +322,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   playback device, each with its own volume slider, mute toggle, and a live peak meter
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
   update on a shared timer, both paused while the tab is hidden so it costs nothing in
-  the background
+  the background. The refresh never replaces a message on the status line, so a saved preset
+  or a change Windows refused stays there until you do something else
 - **Real names and icons** — resolved from each audio session's process (with a safe
   fallback for protected processes), including the Windows "system sounds" session
 - **Per-app output routing** — send one app to your headset and another to your speakers.
@@ -827,7 +828,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   no-admin view automatically if the trace can't start — it never breaks the tab
 - **Export CSV** saves the per-app list to a file you choose the location for, with the raw
   bytes-per-second and byte totals beside the readable figures — a file whose only numbers are
-  "1.2 MB/s" cannot be sorted or added up
+  "1.2 MB/s" cannot be sorted or added up. What it says afterwards stays on screen: the
+  once-a-second refresh does not write over it
 - **Threshold alert** — set a Mbps limit and the tab warns you when total download
   or upload goes over it (handy for catching a runaway background upload); set it to
   0 to turn the alert off

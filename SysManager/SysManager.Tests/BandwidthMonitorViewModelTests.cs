@@ -218,6 +218,63 @@ public class BandwidthMonitorViewModelTests : IDisposable
         Assert.Contains("live kernel trace", vm.ModeDescription, StringComparison.Ordinal);
     }
 
+    // ── The once-a-second poll and the status line (#2532) ──────────────────
+    //
+    // The poll ended every pass by writing the app count on the one status line, so an export, a refusal or a
+    // loaded range was replaced within a second. PollOnceAsync is private; it is what the poll loop runs.
+
+    private static Task PollOnceAsync(BandwidthMonitorViewModel vm) => (Task)typeof(BandwidthMonitorViewModel)
+        .GetMethod("PollOnceAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+        .Invoke(vm, [CancellationToken.None])!;
+
+    [Fact]
+    public async Task APoll_ReplacesTheMonitorState_WithTheActivity()
+    {
+        using var vm = NewVm();
+        Assert.Equal("Monitoring network activity.", vm.StatusMessage);
+
+        await PollOnceAsync(vm);
+
+        Assert.Equal("No network activity from user apps right now.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task APoll_LeavesARefusalOnTheStatusLine()
+    {
+        using var notElevated = AdminHelper.ForceElevation(false);
+        using var vm = NewVm(etwFactory: () => new FakeSource(BandwidthMode.PreciseEtw, available: true));
+        vm.PreciseRequested = true;
+        var refusal = vm.StatusMessage;
+        Assert.Contains("Run as administrator", refusal, StringComparison.Ordinal);
+
+        await PollOnceAsync(vm);
+
+        Assert.Equal(refusal, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task APoll_LeavesALoadedRangeOnTheStatusLine_UntilLiveIsPickedAgain()
+    {
+        var now = DateTime.Now;
+        var history = SeededHistory(
+            new BandwidthSample(now.AddMinutes(-30), 1_048_576, 131_072),
+            new BandwidthSample(now.AddMinutes(-20), 524_288, 65_536));
+        using var vm = NewVm(history: history);
+        vm.SelectedRange = vm.RangeOptions.First(r => r.Range == TimeSpan.FromHours(1));
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);
+        var loaded = vm.StatusMessage;
+        Assert.Contains("2 recorded sample(s)", loaded, StringComparison.Ordinal);
+
+        await PollOnceAsync(vm);
+        Assert.Equal(loaded, vm.StatusMessage);
+
+        // Back on the live chart, the line no longer describes what is shown, so the poll may replace it.
+        vm.SelectedRange = vm.RangeOptions.First(r => r.IsLive);
+        await vm.ReloadHistoryCommand.ExecuteAsync(null);
+        await PollOnceAsync(vm);
+        Assert.Equal("No network activity from user apps right now.", vm.StatusMessage);
+    }
+
     [Fact]
     public void Dispose_IsIdempotent()
     {

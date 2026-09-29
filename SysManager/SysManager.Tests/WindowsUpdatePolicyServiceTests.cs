@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Microsoft.Win32;
 using SysManager.Services;
 
@@ -36,6 +38,7 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
     public void Read_NoPolicy_ReturnsDefaults()
     {
         var p = _svc.Read(Now);
+        Assert.NotNull(p);
         Assert.False(p.DeferFeatureUpdates);
         Assert.False(p.PauseActive);
         Assert.Contains("Default", p.Summary);
@@ -46,6 +49,7 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
     {
         Assert.True(_svc.DeferFeatureUpdates(45));
         var p = _svc.Read(Now);
+        Assert.NotNull(p);
         Assert.True(p.DeferFeatureUpdates);
         Assert.Equal(45, p.FeatureDeferDays);
         Assert.Contains("deferred 45", p.Summary);
@@ -56,6 +60,7 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
     {
         Assert.True(_svc.PauseUpdates(7, Now));
         var p = _svc.Read(Now);
+        Assert.NotNull(p);
         Assert.True(p.PauseActive);
         Assert.Equal(Now.AddDays(7), p.PauseUntil);
         Assert.Contains("paused until", p.Summary);
@@ -66,6 +71,7 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
     {
         Assert.True(_svc.PauseUpdates(999, Now));
         var p = _svc.Read(Now);
+        Assert.NotNull(p);
         Assert.Equal(Now.AddDays(WindowsUpdatePolicyService.MaxPauseDays), p.PauseUntil);
     }
 
@@ -75,6 +81,7 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
         _svc.PauseUpdates(7, Now);
         // 10 days later the pause has lapsed.
         var p = _svc.Read(Now.AddDays(10));
+        Assert.NotNull(p);
         Assert.False(p.PauseActive);
     }
 
@@ -86,9 +93,42 @@ public sealed class WindowsUpdatePolicyServiceTests : IDisposable
         Assert.True(_svc.RestoreDefault());
 
         var p = _svc.Read(Now);
+        Assert.NotNull(p);
         Assert.False(p.DeferFeatureUpdates);
         Assert.False(p.PauseActive);
         Assert.Equal(0, p.FeatureDeferDays);
+    }
+
+    // ── A policy that could not be read (#2504) ──
+    //
+    // A refused read returned the defaults, so the tab said "Default — Windows manages update timing." about a PC
+    // whose deferral or pause it could not see, and Restore default quoted that as the state it would clear. The key
+    // is made unreadable for real, with a deny entry for this user that is removed again afterwards.
+
+    [Fact]
+    public void Read_APolicyThatCannotBeRead_IsNull_NotTheDefaults()
+    {
+        Assert.True(_svc.DeferFeatureUpdates(30));   // the premise: there is a deferral to hide
+
+        using var policy = _root.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate",
+            RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.ReadKey | RegistryRights.ChangePermissions)!;
+        using var identity = WindowsIdentity.GetCurrent();
+        var deny = new RegistryAccessRule(identity.User!,
+            RegistryRights.QueryValues | RegistryRights.EnumerateSubKeys, AccessControlType.Deny);
+        var security = policy.GetAccessControl(AccessControlSections.Access);
+        security.AddAccessRule(deny);
+        policy.SetAccessControl(security);
+        try
+        {
+            Assert.Null(_svc.Read(Now));
+        }
+        finally
+        {
+            security.RemoveAccessRuleSpecific(deny);
+            policy.SetAccessControl(security);
+        }
+
+        Assert.True(_svc.Read(Now)?.DeferFeatureUpdates);   // readable again, so the cleanup can delete the key
     }
 
     [Theory]

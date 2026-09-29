@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.27] - 2026-09-29
+
+**Windows Update no longer says "Default" when it could not read your update settings.** A PC whose deferral or pause
+could not be read was told Windows manages update timing, and Restore default quoted that as what it would clear.
+
+### Fixed
+
+- **Windows Update: a deferral or pause that could not be read is not shown as "Default".** When Windows refused to
+  let SysManager read the update policy, the tab said "Default — Windows manages update timing." whatever was set.
+  - It now says the update policy could not be read, so any deferral or pause is not known.
+  - **Restore default** quotes that in its confirmation, instead of implying there is nothing to clear.
+  - A PC with no update policy at all still reads as the default.
+  Present since the timing controls were added in v1.30.0. The confirmation has quoted the policy since v1.61.8.
+
 ## [1.114.26] - 2026-09-28
 
 **DNS & Hosts no longer says "Automatic (DHCP)" when it could not read your DNS servers.** A PC with its own DNS

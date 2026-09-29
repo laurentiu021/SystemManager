@@ -697,6 +697,66 @@ public class WindowsUpdateViewModelTests
         }
     }
 
+    // ---------- a policy that could not be read is not "Default" (#2504) ----------
+
+    [Fact]
+    public void DescribePolicy_SaysWhenThePolicyCouldNotBeRead()
+    {
+        Assert.Equal("The update policy could not be read, so any deferral or pause is not known.",
+            WindowsUpdateViewModel.DescribePolicy(null));
+        Assert.Equal("Default — Windows manages update timing.",
+            WindowsUpdateViewModel.DescribePolicy(new WindowsUpdatePolicy(false, 0, false, null)));
+    }
+
+    [Fact]
+    public void AnUnreadablePolicy_IsNotShownAsDefault_AndRestoreQuotesThat()
+    {
+        // The policy key is made unreadable for real, on a redirected root, with a deny entry for this user that is
+        // removed again afterwards. The confirm is declined, so nothing is written.
+        var rootName = @"Software\SysManagerTests\WUPolicyVm_" + Guid.NewGuid().ToString("N");
+        using var root = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(rootName, writable: true)!;
+        var policyService = new WindowsUpdatePolicyService(root);
+        Assert.True(policyService.DeferFeatureUpdates(30));   // the premise: there is a deferral to hide
+
+        using var policy = root.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate",
+            Microsoft.Win32.RegistryKeyPermissionCheck.ReadWriteSubTree,
+            System.Security.AccessControl.RegistryRights.ReadKey | System.Security.AccessControl.RegistryRights.ChangePermissions)!;
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        var deny = new System.Security.AccessControl.RegistryAccessRule(identity.User!,
+            System.Security.AccessControl.RegistryRights.QueryValues | System.Security.AccessControl.RegistryRights.EnumerateSubKeys,
+            System.Security.AccessControl.AccessControlType.Deny);
+        var security = policy.GetAccessControl(System.Security.AccessControl.AccessControlSections.Access);
+        security.AddAccessRule(deny);
+        policy.SetAccessControl(security);
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        string? shown = null;
+        dialog.Confirm(Arg.Do<string>(m => shown = m), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = new WindowsUpdateViewModel(
+                Substitute.For<IPowerShellRunner>(), new WindowsUpdateService(), policyService, static () => true);
+
+            Assert.Equal(WindowsUpdateViewModel.DescribePolicy(null), vm.PolicySummary);
+
+            vm.RestoreUpdatePolicyCommand.Execute(null);
+
+            Assert.NotNull(shown);
+            Assert.Contains("could not be read", shown, StringComparison.Ordinal);
+            Assert.DoesNotContain("Windows manages update timing", shown, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            security.RemoveAccessRuleSpecific(deny);
+            policy.SetAccessControl(security);
+            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(rootName, throwOnMissingSubKey: false); }
+            catch (UnauthorizedAccessException) { /* best-effort: a leftover test key under HKCU */ }
+        }
+    }
+
     // ---------- progress reporting ----------
 
     [Fact]

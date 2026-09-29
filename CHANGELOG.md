@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.38] - 2026-09-29
+
+**Resource History no longer deletes older samples when SysManager cannot read how many days to keep.** A
+setting that could not be read counted as 7 days, so a 14- or 30-day history lost everything past the first
+week.
+
+### Fixed
+
+- **Resource History: a retention setting that cannot be read no longer shortens the history.** The number of
+  days to keep was taken as 7 whenever its file could not be read or did not hold one of the offered choices,
+  and the prune that runs when SysManager starts then deleted every sample older than a week.
+  - While the setting cannot be read, a prune keeps what the longest choice, 30 days, would keep.
+  - Choosing a retention on the tab replaces the unreadable setting, and that choice is the one used,
+    including 7 days, which is what the tab shows meanwhile. The file holds only that one number, so it is
+    replaced rather than kept aside.
+  Present since Resource History was added in v1.47.0.
+
 ## [1.114.37] - 2026-09-29
 
 **Recent Activity on the Dashboard no longer loses its history when SysManager cannot read it.** A read that

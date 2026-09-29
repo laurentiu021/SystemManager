@@ -422,6 +422,62 @@ public class ResourceHistoryServiceDiskTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "resource-history-config.json")));
     }
 
+    // ── A retention setting that cannot be read (#2521) ─────────────────────
+    //
+    // It used to be taken as 7 days, and the prune that runs at every start then deleted what a 14- or 30-day
+    // choice was keeping. The setting is held open with delete sharing only while its read must fail.
+
+    private string ConfigPath => Path.Combine(_dir, "resource-history-config.json");
+
+    private void SeedAcrossTheOptions()
+    {
+        var now = DateTime.Now;
+        Seed(At(now.AddDays(-40)), At(now.AddDays(-20)), At(now.AddMinutes(-5)));
+    }
+
+    [Fact]
+    public async Task Prune_WhenTheRetentionCannotBeRead_KeepsWhatTheLongestChoiceWould()
+    {
+        using (var first = NewService()) first.RetentionDays = 30;
+        SeedAcrossTheOptions();
+
+        ResourceHistoryService service;
+        using (new FileStream(ConfigPath, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            service = NewService();   // its read of the setting fails
+        using (service)
+            await service.PruneAsync();
+
+        Assert.Equal(2, File.ReadAllLines(DataPath).Length);   // the 20-day sample the 30-day choice keeps is there
+    }
+
+    [Fact]
+    public async Task Prune_WhenTheRetentionDoesNotParse_KeepsWhatTheLongestChoiceWould()
+    {
+        File.WriteAllText(ConfigPath, "{ not a retention setting");
+        SeedAcrossTheOptions();
+
+        using (var service = NewService())
+            await service.PruneAsync();
+
+        Assert.Equal(2, File.ReadAllLines(DataPath).Length);
+    }
+
+    [Fact]
+    public async Task RetentionDays_ChosenAfterAnUnreadableSetting_IsTheOnePruneUses()
+    {
+        // Choosing 7, which is also what the tab shows while the setting is unknown, still counts as a choice.
+        File.WriteAllText(ConfigPath, "{ not a retention setting");
+        SeedAcrossTheOptions();
+
+        using (var service = NewService())
+        {
+            service.RetentionDays = 7;
+            await service.PruneAsync();
+        }
+
+        Assert.Single(File.ReadAllLines(DataPath));
+    }
+
     [Fact]
     public void RetentionDays_RejectsAValueOutsideTheOfferedOptions()
     {

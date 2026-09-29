@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.36] - 2026-09-29
+
+**DNS & Hosts no longer empties your hosts file when it could not read it.** Pressing Save after a failed read
+rewrote the file with no entries, and a save while the file was locked dropped every comment you had written in
+it.
+
+### Fixed
+
+- **DNS & Hosts: Save refuses until the hosts file has been read.** When the file could not be read, the list
+  stayed empty, and Save rewrote the system hosts file from it, asking to "overwrite the system hosts file with
+  these 0 entries". Every mapping it held was removed. Save now says the file has not been read, and asks you
+  to press Refresh first. Present since the hosts editor was added in v1.6.0.
+- **DNS & Hosts: a save never drops your own comments because the file was locked.** Save keeps the comments
+  and the lines it cannot read by reading them back from the file. When that read failed it kept none of them.
+  The save now stops, and says it could not be saved, before anything is written. Present since those lines
+  have been kept, in v1.52.21.
+
 ## [1.114.35] - 2026-09-29
 
 **Volume Control and Bandwidth Monitor now leave a message on screen long enough to read.** Saving a preset,

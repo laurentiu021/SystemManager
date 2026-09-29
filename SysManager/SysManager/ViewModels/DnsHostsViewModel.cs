@@ -58,6 +58,11 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     [ObservableProperty] private string _newHostname = "";
     [ObservableProperty] private string _hostsStatus = "";
 
+    // True once the hosts file has been read into HostEntries, and false again when a read fails. Save rewrites
+    // the whole file from HostEntries, so a list that did not come from the file would write over every mapping
+    // the file holds (#2521).
+    private bool _hostsRead;
+
     // ── Elevation ────────────────────────────────────────────────────────
 
     [ObservableProperty] private bool _isElevated;
@@ -109,15 +114,18 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         {
             var entries = await _hostsService.ReadHostsAsync(_cts.Token).ConfigureAwait(true);
             HostEntries.ReplaceWith(entries);
+            _hostsRead = true;
             HostsStatus = $"Loaded {entries.Count} entries.";
         }
         catch (OperationCanceledException) { /* expected on view teardown — nothing to report */ }
         catch (UnauthorizedAccessException)
         {
+            _hostsRead = false;
             HostsStatus = "Access denied — run as administrator to read hosts file.";
         }
         catch (IOException ex)
         {
+            _hostsRead = false;
             HostsStatus = $"Error reading hosts file: {ex.Message}";
             Log.Warning(ex, "Failed to read hosts file");
         }
@@ -487,6 +495,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         if (!IsElevated)
         {
             HostsStatus = "Saving hosts file requires administrator privileges.";
+            return;
+        }
+
+        // Before the confirmation, which would otherwise ask to overwrite the file with a list that is not its
+        // content: after a read that failed, "these 0 entries" (#2521).
+        if (!_hostsRead)
+        {
+            HostsStatus = "The hosts file was not saved: SysManager has not been able to read it, and saving now "
+                + "would remove the entries in it. Press Refresh, and save again once they are listed.";
             return;
         }
 

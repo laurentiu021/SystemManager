@@ -195,6 +195,7 @@ public class DnsHostsViewModelGateTests
         try
         {
             var before = File.ReadAllText(hostsPath);
+            await vm.RefreshHostsCommand.ExecuteAsync(null);   // Save rewrites the file only from a list read from it
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local" });
 
             await vm.SaveHostsCommand.ExecuteAsync(null);
@@ -221,6 +222,7 @@ public class DnsHostsViewModelGateTests
         DialogService.Instance = dialog;
         try
         {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);   // Save rewrites the file only from a list read from it
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local", IsEnabled = true });
 
             await vm.SaveHostsCommand.ExecuteAsync(null);
@@ -230,6 +232,72 @@ public class DnsHostsViewModelGateTests
             var written = File.ReadAllText(hostsPath);
             Assert.Contains("managed.local", written);
             Assert.Contains("managed by SysManager", written);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    // ── Save after a read that failed (#2521) ──────────────────────────────
+    //
+    // Save rewrites the whole hosts file from the list. After a read that failed the list was empty, and the
+    // confirmation offered to overwrite the file "with these 0 entries", removing every mapping in it.
+
+    [StaFact]
+    public async Task SaveHosts_AfterAReadThatFailed_SaysSo_AndWritesNothing()
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            var before = File.ReadAllText(hostsPath);
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            Assert.Single(vm.HostEntries);   // read once, so the refusal below is the failed read's, not a first load's
+
+            // Held open with delete sharing only: the read fails, and a write would still succeed.
+            using (new FileStream(hostsPath, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await vm.RefreshHostsCommand.ExecuteAsync(null);
+            Assert.StartsWith("Error reading hosts file", vm.HostsStatus, StringComparison.Ordinal);
+
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.StartsWith("The hosts file was not saved", vm.HostsStatus, StringComparison.Ordinal);
+            Assert.Equal(before, File.ReadAllText(hostsPath));
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task SaveHosts_AfterTheReadSucceedsAgain_Saves()
+    {
+        // The other half: the refusal lasts only until the file can be read again.
+        var (vm, hostsPath, dir, _) = NewVm();
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        try
+        {
+            using (new FileStream(hostsPath, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await vm.RefreshHostsCommand.ExecuteAsync(null);
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local", IsEnabled = true });
+
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+
+            var written = File.ReadAllText(hostsPath);
+            Assert.Contains("localhost", written);
+            Assert.Contains("managed.local", written);
         }
         finally
         {

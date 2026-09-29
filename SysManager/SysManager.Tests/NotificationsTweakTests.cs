@@ -15,6 +15,9 @@ namespace SysManager.Tests;
 /// write this tweak really performs. The tweak now takes an injectable registry root, so the
 /// apply/revert round-trip runs against a disposable HKCU subkey instead of the machine's real
 /// notification settings (mirrors <see cref="NotificationBlockerServiceTests"/>).
+/// <para>Every tweak and service here also gets a <see cref="TempConfig"/>. Left at its default, the
+/// write-count ledger they read and write is the real one under <c>%LocalAppData%\SysManager</c>, and one
+/// test here incremented it on every run of the suite (#2555).</para>
 /// </summary>
 public sealed class NotificationsTweakTests : IDisposable
 {
@@ -49,9 +52,11 @@ public sealed class NotificationsTweakTests : IDisposable
     [Fact]
     public async Task Apply_WhenNotificationsWereOn_SuppressesThem()
     {
+        using var config = new TempConfig();
         Seed(null);
 
-        var result = await new NotificationsTweak(originalToastEnabled: null, _root).ApplyAsync(default);
+        var result = await new NotificationsTweak(originalToastEnabled: null, _root, configDir: config.Path)
+            .ApplyAsync(default);
 
         Assert.Equal(GamingTweakResult.Applied, result);
         Assert.Equal(0, Current());
@@ -61,7 +66,9 @@ public sealed class NotificationsTweakTests : IDisposable
     public async Task Apply_WhenAlreadySuppressed_ReportsNoChangeAndWritesNothing()
     {
         // No key at all, so a stray write would be visible as the key coming into existence.
-        var result = await new NotificationsTweak(originalToastEnabled: 0, _root).ApplyAsync(default);
+        using var config = new TempConfig();
+        var result = await new NotificationsTweak(originalToastEnabled: 0, _root, configDir: config.Path)
+            .ApplyAsync(default);
 
         Assert.Equal(GamingTweakResult.NoChange, result);
         using var key = _root.OpenSubKey(NotificationBlockerService.PushKeyPath);
@@ -71,8 +78,9 @@ public sealed class NotificationsTweakTests : IDisposable
     [Fact]
     public async Task Revert_WhenTheValueWasAbsent_RemovesItAgain()
     {
+        using var config = new TempConfig();
         Seed(null);
-        var tweak = new NotificationsTweak(originalToastEnabled: null, _root);
+        var tweak = new NotificationsTweak(originalToastEnabled: null, _root, configDir: config.Path);
         await tweak.ApplyAsync(default);
         Assert.Equal(0, Current());
 
@@ -90,8 +98,9 @@ public sealed class NotificationsTweakTests : IDisposable
     [Fact]
     public async Task Revert_WhenTheValueWasExplicitlyOne_RestoresOneRatherThanDeletingIt()
     {
+        using var config = new TempConfig();
         Seed(1);
-        var tweak = new NotificationsTweak(originalToastEnabled: 1, _root);
+        var tweak = new NotificationsTweak(originalToastEnabled: 1, _root, configDir: config.Path);
         await tweak.ApplyAsync(default);
         Assert.Equal(0, Current());
 
@@ -114,13 +123,14 @@ public sealed class NotificationsTweakTests : IDisposable
         // re-enables by DELETING the value, so a snapshot of 1 is what makes the old unconditional
         // restore observable. With a null snapshot both the bug and the fix leave the value absent,
         // and the test would pass either way — proving nothing.
+        using var config = new TempConfig();
         Seed(1);
-        var tweak = new NotificationsTweak(originalToastEnabled: 1, _root);
+        var tweak = new NotificationsTweak(originalToastEnabled: 1, _root, configDir: config.Path);
         await tweak.ApplyAsync(default);
         Assert.Equal(0, Current());
 
         // The user re-enables notifications from the Notifications tab, mid-session.
-        new NotificationBlockerService(_root).SetGlobalToastEnabled(true);
+        new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(true);
         Assert.Null(Current());
 
         await tweak.RevertAsync(default);
@@ -135,8 +145,9 @@ public sealed class NotificationsTweakTests : IDisposable
     [Fact]
     public async Task Revert_WhenTheUserSetAnExplicitOneMidSession_KeepsIt()
     {
+        using var config = new TempConfig();
         Seed(null);
-        var tweak = new NotificationsTweak(originalToastEnabled: null, _root);
+        var tweak = new NotificationsTweak(originalToastEnabled: null, _root, configDir: config.Path);
         await tweak.ApplyAsync(default);
 
         Seed(1);

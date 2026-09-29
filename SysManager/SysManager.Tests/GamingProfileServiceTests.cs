@@ -275,7 +275,10 @@ public class GamingProfileServiceTests
         var runner = new PowerShellRunner();
         var restore = new RestorePointService(runner);
         return new GamingProfileService(
-            new PerformanceService(runner, restore),
+            // A folder of its own even though nothing here calls it: the two-argument constructor resolves the real
+            // profile for its snapshot (#2555).
+            new PerformanceService(runner, restore,
+                Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
             new TimerResolutionService(),
             new CpuAffinityService(),
             new StandbyMemoryService(),

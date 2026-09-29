@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -43,8 +44,10 @@ public class PerformanceServiceExtendedTests
     [Fact]
     public void Service_AcceptsPowerShellRunner()
     {
+        // The folder overload: the two-argument one resolves the real profile for its snapshot (#2555).
         var ps = new PowerShellRunner();
-        var service = new PerformanceService(ps, new RestorePointService(ps));
+        var service = new PerformanceService(ps, new RestorePointService(ps),
+            Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N")));
         Assert.NotNull(service);
     }
 }

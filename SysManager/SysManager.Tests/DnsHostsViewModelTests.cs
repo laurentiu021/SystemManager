@@ -1555,27 +1555,29 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
-    public async Task SaveHosts_WhileNetworkCategoryLocked_RefusesAndDoesNotWrite()
+    public async Task SaveHosts_WhileASpeedTestHoldsTheNetworkLock_StillSaves()
     {
-        // #2510. A write that is cancelled with nothing to name it when SysManager closes mid-run, and
-        // that Network Repair's own DNS reset must not race.
+        // #2553. Saving took the Network lock in #2510, so it was refused for as long as a speed test or a traceroute
+        // ran. Nothing else in SysManager writes the hosts file, and the save swaps a finished copy into place, so
+        // neither of those conflicts with it.
         var (vm, hostsPath, dir, _) = NewVm();
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
-        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Ookla Speed Test");
         Assert.NotNull(held);
         try
         {
-            var before = File.ReadAllText(hostsPath);
             await vm.RefreshHostsCommand.ExecuteAsync(null);   // Save rewrites the file only from a list read from it
             vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local" });
 
             await vm.SaveHostsCommand.ExecuteAsync(null);
 
-            Assert.Equal(before, File.ReadAllText(hostsPath));
-            Assert.Equal("Cannot start — Network Repair is already running.", vm.HostsStatus);
+            Assert.Contains("managed.local", File.ReadAllText(hostsPath), StringComparison.Ordinal);
+            Assert.StartsWith("Saved ", vm.HostsStatus, StringComparison.Ordinal);
+            // The speed test's lock is untouched: the save neither took it over nor gave it back.
+            Assert.Equal("Ookla Speed Test", OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network));
         }
         finally
         {
@@ -1585,27 +1587,28 @@ public class DnsHostsViewModelGateTests
     }
 
     [StaFact]
-    public async Task RestoreHosts_WhileNetworkCategoryLocked_RefusesAndDoesNotRestore()
+    public async Task RestoreHosts_WhileATracerouteHoldsTheNetworkLock_StillRestores()
     {
-        // #2510. Shares the SaveHosts lock: restoring the backup must not race a write to the same file.
+        // #2553. The same for restoring the backup, which swaps a finished copy into place too.
         var (vm, hostsPath, dir, _) = NewVm();
         var backup = hostsPath + ".bak";
-        File.WriteAllText(backup, "# ORIGINAL pristine\n127.0.0.1 original\n");
-        var current = "# CURRENT managed\n10.0.0.1 managed\n";
-        File.WriteAllText(hostsPath, current);
+        var original = "# ORIGINAL pristine\n127.0.0.1 original\n";
+        File.WriteAllText(backup, original);
+        File.WriteAllText(hostsPath, "# CURRENT managed\n10.0.0.1 managed\n");
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
-        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Network Repair");
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Network, "Traceroute");
         Assert.NotNull(held);
         try
         {
             await vm.RestoreHostsCommand.ExecuteAsync(null);
 
-            Assert.Equal(current, File.ReadAllText(hostsPath));
-            Assert.Equal("Cannot start — Network Repair is already running.", vm.HostsStatus);
+            Assert.Equal(original, File.ReadAllText(hostsPath));
+            Assert.Equal("Original hosts file restored from backup.", vm.HostsStatus);
+            Assert.Equal("Traceroute", OperationLockService.Instance.GetActiveOperationName(OperationCategory.Network));
         }
         finally
         {

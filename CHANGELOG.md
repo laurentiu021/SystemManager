@@ -10,6 +10,33 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.51] - 2026-09-29
+
+**Update All Apps and Reset Windows Update no longer cut into an app install, and saving the hosts file no
+longer waits for a speed test.** The Dashboard's Update All Apps now takes turns with App Updates, Bulk
+Installer and Uninstaller, Reset Windows Update waits for all four, and DNS & Hosts saves the hosts file
+while a speed test runs.
+
+### Fixed
+
+- **The Dashboard's Update All Apps took no lock**, so it could run `winget upgrade --all` beside an upgrade,
+  install or uninstall on App Updates, Bulk Installer or Uninstaller. Windows Installer runs one installation
+  at a time, so an MSI package in either could fail with exit code 1618: the overlap v1.114.47 fixed between
+  the three tabs themselves. Closing SysManager while it ran did not name it either. It now takes the same lock
+  as the three tabs, so it refuses with "Cannot start — X is already running." while one of them is at work,
+  and they refuse while it runs. Present since v1.17.0, when the Dashboard gained Update All Apps.
+- **Reset Windows Update could stop Windows Installer under an install SysManager itself was running.** It
+  force-stops the Windows Installer service, and its confirmation warns that this interrupts an installation
+  in another program, but it waited only for work that services Windows, such as a repair or a Windows Update
+  install. It now also waits for App Updates, Bulk Installer, Uninstaller and Update All Apps, and none of
+  them starts while it runs. Present since v1.26.0, when System Fixes gained Reset Windows Update.
+- **Saving or restoring the hosts file on DNS & Hosts was refused while a speed test or a traceroute ran.**
+  v1.114.48 gave it the lock the speed tests, traceroute and Network Repair share, on the grounds that Network
+  Repair resets the hosts file. It never touches it: it flushes the DNS cache and resets Winsock and TCP/IP.
+  Nothing else in SysManager writes the hosts file, and each save puts a finished copy in place, so a save now
+  waits for nothing. Changing DNS keeps the lock, so a DNS change still never lands in the middle of a network
+  reset or a measurement. Present since v1.114.48.
+
 ## [1.114.50] - 2026-09-29
 
 **Closing SysManager mid-change can now name it on five more tabs.** Tweaks Hub, Privacy & Telemetry,

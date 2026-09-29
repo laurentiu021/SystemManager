@@ -22,16 +22,21 @@ public enum OperationCategory
     Disk,
 
     /// <summary>
-    /// Network-intensive or network-changing: the speed tests, traceroute, Network Repair, and DNS &amp; Hosts,
-    /// which changes the DNS servers and the hosts file that Network Repair also resets.
+    /// Network-intensive or network-changing: the speed tests, traceroute, Network Repair, and the DNS changes on
+    /// DNS &amp; Hosts, so a DNS change never lands in the middle of a network-stack reset or a measurement.
     /// </summary>
+    /// <remarks>
+    /// Saving or restoring the hosts file takes no lock: nothing else in SysManager writes it, and each write swaps a
+    /// finished copy into place. It took this one in #2510, which refused it for as long as a speed test ran (#2553).
+    /// </remarks>
     Network,
 
     /// <summary>
     /// System modification: the repairs that service the running Windows image (SFC, DISM, the component-store
     /// cleanup), Windows feature changes, Windows Update installs and resets, creating or restoring a restore point,
-    /// and the tabs that change Windows settings: Performance Mode, Gaming Profile, Environment Variables and
-    /// Preinstalled Apps. Deep Cleanup takes it too while it deletes one of its Windows Update caches.
+    /// and the tabs that change Windows settings or services: Performance Mode, Gaming Profile, Environment Variables,
+    /// Preinstalled Apps, Tweaks Hub, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services.
+    /// Deep Cleanup takes it too while it deletes one of its Windows Update caches.
     /// </summary>
     /// <remarks>
     /// Most of these service the same running Windows image, and a restore restarts it, so no two may overlap.
@@ -54,14 +59,19 @@ public enum OperationCategory
     /// </remarks>
     Shell,
 
-    /// <summary>Installing, upgrading or uninstalling software: App Updates, Bulk Installer and Uninstaller.</summary>
+    /// <summary>
+    /// Installing, upgrading or uninstalling software: App Updates, Bulk Installer, Uninstaller and the Dashboard's
+    /// Update All Apps. Reset Windows Update takes it too, because it stops the Windows Installer service.
+    /// </summary>
     /// <remarks>
     /// Windows Installer runs one installation at a time process-wide, so an MSI-based package started while
-    /// another of these three is mid-install, mid-upgrade or mid-uninstall can fail with exit code 1618
-    /// ("another installation is already in progress"), regardless of which of the three tabs started either
-    /// one (#2510). Its own category rather than <see cref="SystemModification"/>: none of the three touches
-    /// Windows components, servicing or restore points, and gating an app upgrade behind an SFC scan or a
-    /// Windows Update install would block ordinary app management for a resource the two do not share.
+    /// another is mid-install, mid-upgrade or mid-uninstall can fail with exit code 1618 ("another installation
+    /// is already in progress"), whichever of them started either one (#2510). Update All Apps runs the same winget
+    /// upgrade and took no lock until #2553; Reset Windows Update, which stops the service outright, holds this lock
+    /// besides <see cref="SystemModification"/> since then. Its own category rather than
+    /// <see cref="SystemModification"/>: none of the installers touches Windows components, servicing or restore
+    /// points, and gating an app upgrade behind an SFC scan or a Windows Update install would block ordinary app
+    /// management for a resource the two do not share.
     /// </remarks>
     Install
 }

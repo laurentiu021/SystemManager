@@ -952,6 +952,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
         await RunQuickActionAsync("Update All Apps", "App Updates", "nav-app-updates", async () =>
         {
+            // The install lock App Updates, Bulk Installer and Uninstaller take around their own winget runs. Without it,
+            // this ran beside one of them, and an MSI package in either could fail with 1618, because Windows Installer
+            // runs one installation at a time (#2553).
+            using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "Update All Apps");
+            if (opLock is null)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install)} is already running.");
+            }
+
             QuickActionDetail = "Checking for upgrades...";
             QuickActionProgress = 30;
             // Delegate to the injected WingetService (the IPowerShellRunner-backed seam) so the

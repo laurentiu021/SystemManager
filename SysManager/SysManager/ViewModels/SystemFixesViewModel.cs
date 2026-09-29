@@ -353,7 +353,10 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         ct => _service.ResetWindowsUpdateAsync(ct),
         // It force-stops wuauserv, cryptSvc, bits and msiserver and renames the update caches, so it must not run
         // during a Windows Update install, an SFC or DISM repair, or a feature change (#2484).
-        systemLock: "Windows Update reset");
+        systemLock: "Windows Update reset",
+        // msiserver is Windows Installer: stopping it cuts off an app install, upgrade or uninstall that App Updates,
+        // Bulk Installer, Uninstaller or Update All Apps is running (#2553).
+        stopsWindowsInstaller: true);
 
     [RelayCommand(CanExecute = nameof(CanRunFix))]
     private Task ReinstallWinGetAsync() => RunFixAsync(
@@ -370,8 +373,12 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     /// The name to hold the system-modification lock under, or null for a fix that conflicts with nothing that
     /// takes it. Reinstalling WinGet re-registers a package for the user and needs no lock.
     /// </param>
+    /// <param name="stopsWindowsInstaller">
+    /// True for a fix that stops the Windows Installer service. It then also holds the install lock, under the same
+    /// name, so it neither starts under an install SysManager is running nor lets one start until it is done.
+    /// </param>
     private async Task RunFixAsync(string title, string message, Func<CancellationToken, Task<SystemFixResult>> fix,
-                                   string? systemLock = null)
+                                   string? systemLock = null, bool stopsWindowsInstaller = false)
     {
         if (IsFixRunning) return;
         if (!RequireElevation(title.TrimEnd('?'))) return;
@@ -387,6 +394,15 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         if (systemLock is not null && opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
+
+        using var installLock = stopsWindowsInstaller
+            ? OperationLockService.Instance.TryAcquire(OperationCategory.Install, systemLock ?? title.TrimEnd('?'))
+            : null;
+        if (stopsWindowsInstaller && installLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install)} is already running.";
             return;
         }
 

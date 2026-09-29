@@ -496,6 +496,68 @@ public class DashboardViewModelTests
         }
     }
 
+    // ── Update All Apps and the install lock (#2553) ──
+
+    [Fact]
+    public async Task QuickUpdateApps_WhileAnAppInstallRuns_DoesNotUpgrade()
+    {
+        // App Updates, Bulk Installer and Uninstaller take the install lock around their own winget runs (#2510).
+        // Update All Apps runs the same upgrade and took none, so it ran beside any of them, and an MSI package in
+        // either could fail with 1618, because Windows Installer runs one installation at a time.
+        using var confirm = new DialogAnswer(confirm: true);
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        var vm = NewVm(winget);
+
+        using (var held = OperationLockService.Instance.TryAcquire(OperationCategory.Install, "App Updates"))
+        {
+            Assert.NotNull(held);
+            await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+        }
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Equal("Cannot start — App Updates is already running.", vm.QuickActionDetail);
+        await winget.DidNotReceiveWithAnyArgs().UpgradeAllAsync(default);
+    }
+
+    [Fact]
+    public async Task QuickUpdateApps_HoldsTheInstallLockWhileItUpgrades_AndReleasesItAfter()
+    {
+        // The other direction: an install, upgrade or uninstall started on one of the three tabs while this runs is
+        // refused, because the lock is held for the whole winget run.
+        using var confirm = new DialogAnswer(confirm: true);
+        string? heldBy = null;
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install);
+            return Task.FromResult(WingetResult.From(0));
+        });
+        var vm = NewVm(winget);
+
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+        Assert.Equal("Update All Apps", heldBy);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install));
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+    }
+
+    [Fact]
+    public async Task QuickUpdateApps_ThatFails_StillReleasesTheInstallLock()
+    {
+        // A lock left behind would refuse every later install, upgrade and uninstall, on every tab, until the app
+        // restarted.
+        using var confirm = new DialogAnswer(confirm: true);
+        var winget = QuietWinget();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>()).Returns(WingetResult.From(1));
+        var vm = NewVm(winget);
+
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+        Assert.Equal("Failed", vm.QuickActionStatus);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Install));
+    }
+
     // ---------- Check Windows Updates: a real scan, then the way to the tab ----------
     //
     // #2437 found the action ended in "✓ Done" after half a second without contacting Windows Update, and made

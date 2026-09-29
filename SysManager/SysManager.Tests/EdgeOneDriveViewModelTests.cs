@@ -186,4 +186,21 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
         return rp;
     }
 
+    // ---------- what the Edge confirmation says (#2505) ----------
+
+    [Fact]
+    public async Task DisablingEdge_Confirmation_SaysItsSecurityFixesCanArriveLate()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject>());
+        var vm = new EdgeOneDriveViewModel(new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.EdgeInstalled = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.DisableEdgeCommand.ExecuteAsync(null);
+
+        Assert.Contains("security fixes can arrive late", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
 }

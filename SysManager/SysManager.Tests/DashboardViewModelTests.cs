@@ -1056,4 +1056,20 @@ public class DashboardViewModelTests
         Assert.Equal(AlertSeverity.Yellow, alert.Severity);
         Assert.Equal("nav-system-health", alert.NavTargetId);
     }
+
+    // ---------- what the Tune-Up confirmation says (#2505) ----------
+
+    [Fact]
+    public async Task RunTuneUp_Confirmation_SaysTheRecycleBinCannotBeRecovered()
+    {
+        // The Tune-Up always empties the bin, and its prompt used to mention it as one chore among three.
+        var tuneUp = Substitute.For<ITuneUpService>();
+        var vm = NewVm(tuneUp: tuneUp);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Contains("cannot be recovered", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        await tuneUp.DidNotReceive().RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>());
+    }
 }

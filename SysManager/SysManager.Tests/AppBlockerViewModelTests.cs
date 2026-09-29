@@ -515,4 +515,24 @@ public class AppBlockerViewModelTests
             DialogService.Instance = prevDialog;
         }
     }
+
+    // ---------- what the block confirmation says (#2505) ----------
+
+    [Fact]
+    public void BlockApp_Confirmation_SaysItStopsEveryProgramWithThatName()
+    {
+        // An Image File Execution Options block applies to the file name for the whole PC, and the prompt
+        // talked about "the application".
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.NewExeName = "setup.exe";
+        using var dialog = new DialogAnswer(confirm: false);
+
+        vm.BlockAppCommand.Execute(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("every program named \"setup.exe\" on this PC, for every user", message, StringComparison.Ordinal);
+        blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
+    }
 }

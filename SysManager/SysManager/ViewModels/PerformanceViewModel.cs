@@ -693,7 +693,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var action = enabling ? "Enable" : "Disable";
         var detail = enabling
             ? "This creates hiberfil.sys and allows the PC to hibernate."
-            : "This deletes hiberfil.sys and frees disk space (often several GB).";
+            // Fast Startup and hybrid sleep both write to the hibernation file, so they go with it (#2505).
+            : "This deletes hiberfil.sys and frees disk space (often several GB). It also turns off Fast Startup "
+              + "and hybrid sleep, which both need that file.";
 
         if (!DialogService.Instance.Confirm(
             $"{action} hibernation?\n\n{detail}",

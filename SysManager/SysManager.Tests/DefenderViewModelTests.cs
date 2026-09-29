@@ -351,4 +351,34 @@ public class DefenderViewModelTests
         Assert.True(vm.ExclusionsReadable);
         Assert.Equal("No exclusion folders", vm.ExclusionsEmptyTitle);   // what an empty list would then say
     }
+
+    // ---------- what the Controlled Folder Access confirmation says (#2505) ----------
+
+    [Fact]
+    public async Task EnablingControlledFolderAccess_Confirmation_SaysWhatItBlocksAndWhereToAllowAnApp()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.CfaEnabled = false;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        var message = Assert.Single(dialog.Messages);
+        Assert.Contains("only apps Windows trusts can change files in Documents", message, StringComparison.Ordinal);
+        Assert.Contains("Allow an app through Controlled folder access", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DisablingControlledFolderAccess_Confirmation_SaysTheFoldersAreOpenAgain()
+    {
+        var vm = new DefenderViewModel(new DefenderService(RunnerReportingPua(1)), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.CfaEnabled = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ToggleCfaCommand.ExecuteAsync(null);
+
+        Assert.Contains("and so would ransomware", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
 }

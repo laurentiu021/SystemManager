@@ -1125,6 +1125,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Enter an exe name or browse for a file, confirm, and the app is prevented
   from launching
 - Fully reversible — unblock restores normal execution
+- A block goes by file name: it stops every program with that name on the PC, for every
+  user, and the confirmation says so
 - Shows list of currently blocked apps with select/deselect and batch unblock. Your ticks
   survive a refresh, so the Unblock button cannot quietly stop doing anything
 - If Windows does not let SysManager read which programs are blocked, the tab says so
@@ -1202,7 +1204,9 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
 - **Edge: disable & de-integrate, never uninstall** — Windows relies on Edge (WebView2)
   and reinstalls it if forced out, so instead this turns off its background mode and
   startup boost (via the documented Group-Policy keys) and disables its automatic-update
-  scheduled tasks, so Edge stops running on its own. You can still open it normally
+  scheduled tasks, so Edge stops running on its own. You can still open it normally.
+  Without those tasks it no longer updates itself in the background, so its security
+  fixes can arrive late until you restore it
 - **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
   clear the Edge policies and re-enable its update tasks — so nothing here is one-way.
   The OneDrive entry comes back only once its setup has succeeded; a failed reinstall
@@ -1221,7 +1225,9 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
 Manage Microsoft Defender without digging through Windows Security:
 - **Status at a glance** — real-time protection, cloud protection (MAPS), PUA
   protection, and Controlled Folder Access
-- **Toggle PUA protection and Controlled Folder Access** (ransomware protection)
+- **Toggle PUA protection and Controlled Folder Access** (ransomware protection). Turning
+  Controlled Folder Access on first says which apps it will stop from saving into your
+  folders, and where in Windows Security to allow one
 - **Scan exclusions** — add or remove folders Defender should skip (handy for
   big game libraries); paths are validated and additions never replace your
   existing exclusions. Windows shows the list only to an administrator, so
@@ -1394,7 +1400,8 @@ offers, "rate us" prompts:
 - **RAM working set trim**: free physical RAM by trimming all process working
   sets — same as RAMMap's "Empty Working Set" (useful before launching a game)
 - **Hibernation toggle**: enable/disable hibernation to free disk space
-  (deletes hiberfil.sys when disabled). On a PC that does not support hibernation it
+  (deletes hiberfil.sys when disabled, which also turns off Fast Startup and hybrid sleep).
+  On a PC that does not support hibernation it
   says the change failed instead of reporting it done
 
 ### Services
@@ -1466,13 +1473,14 @@ offers, "rate us" prompts:
   unexpectedly the previous time. A cleanup run from the command line or from Scheduled
   Maintenance appears here too, even while SysManager is open. If the history cannot be read
   for a moment, a new action waits and is written once it can be, rather than replacing it.
-- **Quick Tune-Up** — one-click wizard that cleans temp files, optionally
+- **Quick Tune-Up** — one-click wizard that cleans temp files, permanently
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
   A check that could not run is named on the card ("Not checked this time:
   the disks") rather than counted as fine, so "All good" means every check
-  ran and found nothing. Non-destructive, no admin required.
+  ran and found nothing. The confirmation says that the Recycle Bin's contents
+  cannot be recovered; nothing else it does is destructive. No admin required.
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks

@@ -380,7 +380,8 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         if (profile.PinGameToPerformanceCores)
         {
             long target = PerformanceCoreMask(_cpu.GetCores());
-            long? original = _cpu.GetAffinity(g.ProcessId);
+            // A GameTarget keeps no start time, so the game's ID is not checked against it (#2559).
+            long? original = _cpu.GetAffinity(g.ProcessId, startTime: null);
             steps.Add(new GameAffinityTweak(_cpu, g.ProcessId, target, original));
         }
         if (profile.HighGameCpuPriority)

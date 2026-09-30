@@ -53,7 +53,7 @@ public class CpuAffinityViewModelTests
         {
             new(pid, "target.exe", originalMask),
         });
-        service.GetAffinity(pid).Returns(originalMask);
+        service.GetAffinity(pid, Arg.Any<DateTime?>()).Returns(originalMask);
         return service;
     }
 
@@ -179,7 +179,7 @@ public class CpuAffinityViewModelTests
         const int pid = 4242;
         const long originalMask = 0b0001; // core 0 only
         var service = FourCoreServiceWith(pid, originalMask);
-        service.TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>()).Returns(true);
+        service.TrySetAffinity(pid, Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>()).Returns(true);
 
         var vm = NewVm(service);
         // Selecting the loaded process captures its original mask via GetAffinity(pid).
@@ -191,7 +191,7 @@ public class CpuAffinityViewModelTests
 
         // All four cores selected → mask 0b1111 (the low 4 bits).
         long expectedMask = CpuAffinityService.AllCoresMask(4);
-        service.Received(1).TrySetAffinity(pid, expectedMask, out Arg.Any<string>());
+        service.Received(1).TrySetAffinity(pid, Arg.Any<DateTime?>(), expectedMask, out Arg.Any<string>());
         Assert.Contains("Pinned", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -201,8 +201,8 @@ public class CpuAffinityViewModelTests
         const int pid = 4242;
         var service = FourCoreServiceWith(pid, 0b0001);
         // Service rejects the change and reports an error via the out parameter.
-        service.TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>())
-            .Returns(call => { call[2] = "needs administrator rights."; return false; });
+        service.TrySetAffinity(pid, Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>())
+            .Returns(call => { call[3] = "needs administrator rights."; return false; });
 
         var vm = NewVm(service);
         vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == pid);
@@ -210,8 +210,11 @@ public class CpuAffinityViewModelTests
 
         vm.ApplyCommand.Execute(null);
 
-        service.Received(1).TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>());
+        service.Received(1).TrySetAffinity(pid, Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>());
         Assert.Equal("needs administrator rights.", vm.StatusMessage);
+        // A process that refused is still running, so its row stands: no refresh after the one at load.
+        service.Received(1).HasExited(pid, null);
+        service.Received(1).GetProcesses();
     }
 
     [Fact]
@@ -220,7 +223,7 @@ public class CpuAffinityViewModelTests
         const int pid = 4242;
         const long originalMask = 0b0010; // core 1 only — the captured original
         var service = FourCoreServiceWith(pid, originalMask);
-        service.TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>()).Returns(true);
+        service.TrySetAffinity(pid, Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>()).Returns(true);
 
         var vm = NewVm(service);
         // Selecting captures originalMask; flipping the selection proves Restore uses the
@@ -231,7 +234,7 @@ public class CpuAffinityViewModelTests
 
         vm.RestoreCommand.Execute(null);
 
-        service.Received(1).TrySetAffinity(pid, originalMask, out Arg.Any<string>());
+        service.Received(1).TrySetAffinity(pid, Arg.Any<DateTime?>(), originalMask, out Arg.Any<string>());
         // The checkboxes were reset to reflect the restored original mask (core 1 only).
         Assert.All(vm.Cores, c => Assert.Equal(c.Index == 1, c.IsSelected));
         Assert.Contains("Restored", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
@@ -466,13 +469,13 @@ public class CpuAffinityViewModelTests
             new(2, 0, "Standard"), new(3, 0, "Standard"),
         });
         service.GetProcesses().Returns(_ => new List<RunningProcess> { new(pid, name, live[0]) });
-        service.GetAffinity(pid).Returns(_ => live[0]);
-        service.TrySetAffinity(pid, Arg.Any<long>(), out Arg.Any<string>())
+        service.GetAffinity(pid, Arg.Any<DateTime?>()).Returns(_ => live[0]);
+        service.TrySetAffinity(pid, Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>())
                .Returns(ci =>
                {
-                   live[0] = (long)ci[1];
+                   live[0] = (long)ci[2];
                    writes.Add(live[0]);
-                   ci[2] = string.Empty;
+                   ci[3] = string.Empty;
                    return true;
                });
         return service;
@@ -533,7 +536,7 @@ public class CpuAffinityViewModelTests
             new(2, 0, "Standard"), new(3, 0, "Standard"),
         });
         service.GetProcesses().Returns(new List<RunningProcess> { new(4242, "protected", 0) });
-        service.GetAffinity(4242).Returns((long?)null);
+        service.GetAffinity(4242, Arg.Any<DateTime?>()).Returns((long?)null);
 
         var vm = NewVm(service);
         vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 4242);
@@ -566,6 +569,128 @@ public class CpuAffinityViewModelTests
 
         // Its own original is 0b0001, the mask it was seen with. Keyed on the pid alone this would
         // have written 0b1111 and handed a stranger the old process's cores.
+        Assert.Equal(0b0001, writes[^1]);
+    }
+
+    // ---------- the process a row names (#2514) ----------
+    // The list is only as fresh as its last refresh, and Windows gives a closed process's pid to the next one
+    // started. Every call that reads or changes a process passes the row's start time, so the service can tell the
+    // listed process from a new one with its pid, and a row whose process has closed comes off the list.
+
+    private static readonly DateTime Started = new(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);
+    private static readonly DateTime StartedLater = Started.AddMinutes(7);
+
+    /// <summary>
+    /// The four-core fake, listing <paramref name="first"/> at load and <paramref name="afterRefresh"/>, or nothing,
+    /// on every refresh after it. Every change is refused as "no longer running" unless a test says otherwise.
+    /// </summary>
+    private static ICpuAffinityService ServiceListing(RunningProcess first, RunningProcess? afterRefresh = null)
+    {
+        var service = ServiceWithProcesses(first);
+        IReadOnlyList<RunningProcess> refreshed = afterRefresh is null ? [] : [afterRefresh];
+        service.GetProcesses().Returns([first], refreshed);
+        service.GetAffinity(Arg.Any<int>(), Arg.Any<DateTime?>()).Returns(0b0001L);
+        service.TrySetAffinity(Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>())
+            .Returns(call => { call[3] = "That process is no longer running."; return false; });
+        return service;
+    }
+
+    [Fact]
+    public void Selecting_AProcess_ReadsItsMaskAtItsStartTime()
+    {
+        var service = ServiceListing(new(4242, "game", 0b0001, Started));
+        var vm = NewVm(service);
+
+        vm.SelectedProcess = vm.Processes.Single();
+
+        service.Received(1).GetAffinity(4242, Started);
+    }
+
+    [Fact]
+    public void Apply_AndRestore_TellTheServiceWhenTheProcessStarted()
+    {
+        var service = ServiceListing(new(4242, "game", 0b0001, Started));
+        service.TrySetAffinity(Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>())
+            .Returns(true);
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+        vm.SelectAllCoresCommand.Execute(null);
+
+        vm.ApplyCommand.Execute(null);
+        vm.RestoreCommand.Execute(null);
+
+        service.Received(1).TrySetAffinity(4242, Started, 0b1111, out Arg.Any<string>());
+        service.Received(1).TrySetAffinity(4242, Started, 0b0001, out Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Apply_WhenTheProcessHadClosed_SaysSo_AndTakesItOffTheList()
+    {
+        // The pid now belongs to a program that started later. The service refused, and the refresh must not carry
+        // the selection over to that program either.
+        var service = ServiceListing(new(4242, "game", 0b0001, Started), new(4242, "game", 0b1111, StartedLater));
+        service.HasExited(4242, Started).Returns(true);
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+
+        await vm.ApplyCommand.ExecuteAsync(null);
+
+        Assert.Equal("game (4242) had already closed, so nothing was changed.", vm.StatusMessage);
+        Assert.Null(vm.SelectedProcess);
+        Assert.Equal(StartedLater, Assert.Single(vm.Processes).StartTime);
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Restore_WhenTheProcessHadClosed_SaysSo_AndTakesItOffTheList()
+    {
+        var service = ServiceListing(new(4242, "game", 0b0001, Started));
+        service.HasExited(4242, Started).Returns(true);
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+        Assert.True(vm.RestoreCommand.CanExecute(null));   // the premise: its original was captured
+
+        await vm.RestoreCommand.ExecuteAsync(null);
+
+        Assert.Equal("game (4242) had already closed, so nothing was changed.", vm.StatusMessage);
+        Assert.Null(vm.SelectedProcess);
+        Assert.Empty(vm.Processes);
+    }
+
+    [Fact]
+    public async Task Refresh_DoesNotCarryTheSelectionToANewProcessWithTheSamePidAndName()
+    {
+        // A restarted program can come back with the same name and, by chance, the same pid. It is not the process
+        // that was selected, so nothing is selected rather than it.
+        var service = ServiceListing(new(4242, "game", 0b0001, Started), new(4242, "game", 0b0001, StartedLater));
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.SelectedProcess);
+    }
+
+    [Fact]
+    public void Restore_ForANewProcessWithTheSamePidAndName_UsesItsOwnOriginal()
+    {
+        // Restore_WhenAPidIsReused_UsesTheNewProcessOwnOriginal, in the case the name cannot tell apart.
+        const long allFour = 0b1111;
+        long[] live = [allFour];
+        var writes = new List<long>();
+        var service = LiveMaskService(4242, "game", live, writes);
+        service.GetProcesses().Returns(_ => new List<RunningProcess> { new(4242, "game", live[0], Started) });
+        var vm = NewVm(service);
+
+        vm.SelectedProcess = vm.Processes.Single();
+        foreach (var c in vm.Cores) c.IsSelected = c.Index == 0;
+        vm.ApplyCommand.Execute(null);
+        Assert.Equal(0b0001, live[0]);
+
+        // "game" restarts and is handed the same pid, inheriting the live mask.
+        vm.SelectedProcess = new RunningProcess(4242, "game", live[0], StartedLater);
+        vm.RestoreCommand.Execute(null);
+
         Assert.Equal(0b0001, writes[^1]);
     }
 }

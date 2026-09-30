@@ -13,11 +13,10 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="FileLockViewModel"/>. The read-only / gating tests drive the real
 /// <see cref="FileLockService"/> (its <c>FindLockers</c> is a read-only Restart Manager
-/// query, safe against a temp file); the mutating-path test substitutes
-/// <see cref="IFileLockService"/> so the confirmed <c>KillSelected</c> success path can be
-/// executed (asserting <c>KillProcess</c> is called with the selected pid) without
-/// terminating a real process. The confirmation-gated branches (critical-process block,
-/// user-declines) and CanExecute gating are covered against the real service.
+/// query, safe against a temp file). Every test that reaches <c>KillSelected</c> substitutes
+/// <see cref="IFileLockService"/>, the ones that must not end anything as well as the ones
+/// that do: a regression in a guard then shows up as a call to a substitute, never as a
+/// real process ended.
 ///
 /// Serialized because several tests swap the global <see cref="DialogService.Instance"/> static.
 /// </summary>
@@ -125,13 +124,15 @@ public class FileLockViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = NewVm();
+            var service = Substitute.For<IFileLockService>();
+            var vm = NewVm(service);
             vm.SelectedLocker = new FileLocker(4, "System", "RmCritical", null);
 
             vm.KillSelectedCommand.Execute(null);
 
             dialog.Received(1).Inform(Arg.Any<string>(), Arg.Any<string>());
             dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            service.DidNotReceiveWithAnyArgs().KillProcess(default, default);
         }
         finally
         {
@@ -150,13 +151,15 @@ public class FileLockViewModelTests
         DialogService.Instance = dialog;
         try
         {
-            var vm = NewVm();
+            var service = Substitute.For<IFileLockService>();
+            var vm = NewVm(service);
             string statusBefore = vm.StatusMessage;
-            vm.SelectedLocker = new FileLocker(999999, "phantom.exe", "RmMainWindow", null);
+            vm.SelectedLocker = new FileLocker(4242, "phantom.exe", "RmMainWindow", null);
 
             vm.KillSelectedCommand.Execute(null);
 
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+            service.DidNotReceiveWithAnyArgs().KillProcess(default, default);
             Assert.Equal(statusBefore, vm.StatusMessage);
         }
         finally
@@ -175,44 +178,96 @@ public class FileLockViewModelTests
         Assert.Null(ex);
     }
 
-    // ── Mutating-path test (substituted IFileLockService) ──────────────────
+    // ── Mutating-path tests (substituted IFileLockService) ──────────────────
+    //
+    // End process passes the locker's start time with its ID. The list can be minutes old, and Windows gives a closed
+    // process's ID to the next one started, so the ID alone ended whichever program had it by then (#2514).
+
+    private const int Pid = 4242;
+    private static readonly DateTime Started = new(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);
+
+    /// <summary>A substitute whose end-process call answers <paramref name="outcome"/> and whose re-scan finds nothing.</summary>
+    private static IFileLockService ServiceThatAnswers(ProcessManagerService.KillOutcome outcome)
+    {
+        var service = Substitute.For<IFileLockService>();
+        service.KillProcess(Arg.Any<int>(), Arg.Any<DateTime?>()).Returns(outcome);
+        service.FindLockers(Arg.Any<string>())
+            .Returns(new FileLockScan([], IsFolder: false, FilesChecked: 1, CheckedOnlyPart: false));
+        return service;
+    }
+
+    /// <summary>A view model with the locker at <see cref="Pid"/>, started at <see cref="Started"/>, selected.</summary>
+    private static FileLockViewModel VmWithTheLockerSelected(IFileLockService service)
+    {
+        var vm = NewVm(service);
+        vm.Path = @"C:\some\locked\file.txt";
+        vm.SelectedLocker = new FileLocker(Pid, "target.exe", "RmMainWindow", Started);
+        return vm;
+    }
 
     [Fact]
-    public async Task KillSelected_WhenConfirmed_CallsKillProcessWithPid_AndRescans()
+    public async Task KillSelected_WhenConfirmed_EndsTheListedProcess_AndRescans()
     {
-        // A non-critical locker, the user confirms, and the service reports a successful kill.
-        // The VM must call KillProcess(pid) exactly once, then trigger the re-scan via the
-        // substituted FindLockers (returning no lockers). No real process is touched.
-        const int pid = 4242;
-        var service = Substitute.For<IFileLockService>();
-        service.KillProcess(pid).Returns(true);
-        service.FindLockers(Arg.Any<string>())
-            .Returns(new FileLockScan([], IsFolder: false, FilesChecked: 1, CheckedOnlyPart: false)); // post-kill re-scan
+        var service = ServiceThatAnswers(ProcessManagerService.KillOutcome.Ended);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = VmWithTheLockerSelected(service);
 
-        var prevDialog = DialogService.Instance;
-        var dialog = Substitute.For<IDialogService>();
-        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true); // user clicks "Yes"
-        DialogService.Instance = dialog;
-        try
-        {
-            var vm = NewVm(service);
-            vm.Path = @"C:\some\locked\file.txt"; // CanScan needs a non-empty path for the re-scan
-            vm.SelectedLocker = new FileLocker(pid, "target.exe", "RmMainWindow", null);
+        await vm.KillSelectedCommand.ExecuteAsync(null);
 
-            vm.KillSelectedCommand.Execute(null);
+        service.Received(1).KillProcess(Pid, Started);
+        service.Received(1).FindLockers(Arg.Any<string>());
+        Assert.Empty(vm.Lockers);
+        Assert.Equal("Ended target.exe (4242). No process is currently using that file.", vm.StatusMessage);
+    }
 
-            service.Received(1).KillProcess(pid);
-            dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
+    [Fact]
+    public async Task KillSelected_WhenTheListedProcessHadAlreadyClosed_SaysNothingWasEnded_AndRescans()
+    {
+        // NotRunning: nothing has the ID, or a process that started at another time has it now. Either way the row
+        // is stale, so the list is checked again.
+        var service = ServiceThatAnswers(ProcessManagerService.KillOutcome.NotRunning);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = VmWithTheLockerSelected(service);
 
-            // KillSelected fires ScanCommand.Execute (async) to refresh the locker list; await it.
-            await vm.ScanCommand.ExecuteAsync(null);
-            service.Received().FindLockers(Arg.Any<string>());
-            Assert.Empty(vm.Lockers);
-        }
-        finally
-        {
-            DialogService.Instance = prevDialog;
-        }
+        await vm.KillSelectedCommand.ExecuteAsync(null);
+
+        service.Received(1).KillProcess(Pid, Started);
+        service.Received(1).FindLockers(Arg.Any<string>());
+        Assert.Equal(
+            "target.exe (4242) had already closed, so nothing was ended. No process is currently using that file.",
+            vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task KillSelected_WhenWindowsRefuses_SaysWhy_AndDoesNotRescan()
+    {
+        // The process is still running, so the row still names it. The message no longer offers "or it already
+        // exited": that is its own outcome now.
+        var service = ServiceThatAnswers(ProcessManagerService.KillOutcome.Refused);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = VmWithTheLockerSelected(service);
+
+        await vm.KillSelectedCommand.ExecuteAsync(null);
+
+        service.Received(1).KillProcess(Pid, Started);
+        service.DidNotReceive().FindLockers(Arg.Any<string>());
+        Assert.Equal("Couldn't end target.exe (4242) — it may need administrator rights.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task KillSelected_ForALockerWithNoStartTime_PassesNone()
+    {
+        // Restart Manager's start time is null only when it gave an unusable one. The service then skips the check, as
+        // Process Manager does for a process whose start time Windows would not give.
+        var service = ServiceThatAnswers(ProcessManagerService.KillOutcome.Ended);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = NewVm(service);
+        vm.Path = @"C:\some\locked\file.txt";
+        vm.SelectedLocker = new FileLocker(Pid, "target.exe", "RmMainWindow", null);
+
+        await vm.KillSelectedCommand.ExecuteAsync(null);
+
+        service.Received(1).KillProcess(Pid, null);
     }
 
     // ── What a check reports (#2502) ───────────────────────────────────

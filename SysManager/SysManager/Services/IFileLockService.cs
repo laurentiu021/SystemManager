@@ -23,9 +23,15 @@ public interface IFileLockService
     FileLockScan? FindLockers(string path);
 
     /// <summary>
-    /// Terminates the process with the given id. Returns true on success. Returns false
-    /// (and logs) if the process is gone, access is denied (needs elevation), or it exits
-    /// on its own. Callers must confirm with the user first.
+    /// Ends the process with <paramref name="processId"/>, and only if it is the locker that was listed: a process
+    /// with that ID that started at another time is left alone and reported as
+    /// <see cref="ProcessManagerService.KillOutcome.NotRunning"/>. Callers must confirm with the user first.
     /// </summary>
-    bool KillProcess(int processId);
+    /// <param name="processId">The locker's process ID.</param>
+    /// <param name="startTime">
+    /// When the locker started, as Restart Manager reported it, or null when it did not say, which skips the check.
+    /// Windows gives a closed process's ID to the next one started, so an ID from a list can name a different
+    /// program (#2514).
+    /// </param>
+    ProcessManagerService.KillOutcome KillProcess(int processId, DateTime? startTime);
 }

@@ -2,7 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -54,6 +57,23 @@ public sealed class FileLockServiceTests : IDisposable
         Assert.NotNull(scan);
         Assert.False(scan.IsFolder);
         Assert.Contains(scan.Lockers, l => l.ProcessId == Environment.ProcessId);
+    }
+
+    [Fact]
+    public void AFileHeldOpen_IsReportedWithTheStartTimeWindowsGivesItsProcess()
+    {
+        // End process checks the locker's start time against the one Process.StartTime reads, so the two must be the
+        // same instant to the tick. Restart Manager documents its time as GetProcessTimes' creation time; this pins
+        // it (#2514). Were they to differ, every End process would report the locker as already closed.
+        var file = NewFile("held.txt");
+        using var held = Hold(file);
+        using var self = Process.GetCurrentProcess();
+
+        var scan = new FileLockService().FindLockers(file);
+
+        Assert.NotNull(scan);
+        var locker = Assert.Single(scan.Lockers, l => l.ProcessId == Environment.ProcessId);
+        Assert.Equal(self.StartTime, locker.StartTime);
     }
 
     [Fact]
@@ -130,4 +150,65 @@ public sealed class FileLockServiceTests : IDisposable
     [Fact]
     public void AnEmptyPath_IsRefused()
         => Assert.Throws<ArgumentException>(() => new FileLockService().FindLockers("  "));
+
+    // ── KillProcess (#2514) ──
+    // Through the seam: the unit suite ends no process. The integration suite ends a real locker it started.
+
+    [Fact]
+    public void KillProcess_PassesTheListedStartTime_AndReturnsWhatHappened()
+    {
+        var started = new DateTime(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);
+        var calls = new List<(int Pid, DateTime StartTime)>();
+        var service = new FileLockService((pid, startTime) =>
+        {
+            calls.Add((pid, startTime));
+            return ProcessManagerService.KillOutcome.NotRunning;
+        });
+
+        var outcome = service.KillProcess(4242, started);
+
+        Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, outcome);
+        Assert.Equal([(4242, started)], calls);
+    }
+
+    [Fact]
+    public void KillProcess_ForALockerWithNoStartTime_SkipsTheCheck()
+    {
+        // default is how ProcessManagerService.KillProcess is told there is no start time to compare.
+        var calls = new List<DateTime>();
+        var service = new FileLockService((_, startTime) =>
+        {
+            calls.Add(startTime);
+            return ProcessManagerService.KillOutcome.Ended;
+        });
+
+        service.KillProcess(4242, null);
+
+        Assert.Equal([default(DateTime)], calls);
+    }
+
+    [Fact]
+    public void KillProcess_AsTheAppBuildsTheService_EndsThroughProcessManager()
+    {
+        // The wiring the tests above cannot run. Read from the delegate, never called: calling it ends a process.
+        // Without this, the public constructor could hand the service any kill at all with every test still green.
+        var services = new ServiceCollection();
+        services.ConfigureServices();
+        using var provider = services.BuildServiceProvider();
+        var service = Assert.IsType<FileLockService>(provider.GetRequiredService<IFileLockService>());
+
+        var kill = Assert.IsType<Func<int, DateTime, ProcessManagerService.KillOutcome>>(typeof(FileLockService)
+            .GetField("_killProcess", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(service));
+
+        Assert.Equal(typeof(ProcessManagerService).GetMethod(nameof(ProcessManagerService.KillProcess)), kill.Method);
+    }
+
+    [Fact]
+    public void KillProcess_ForAnIdNoProcessHas_ReportsNotRunning()
+    {
+        // The real call, safely: int.MaxValue names no process, and Windows ignores the low two bits of an ID, so
+        // a smaller made-up ID could name a real one (see ProcessManagerServiceTests).
+        Assert.Equal(ProcessManagerService.KillOutcome.NotRunning, new FileLockService().KillProcess(int.MaxValue, null));
+    }
 }

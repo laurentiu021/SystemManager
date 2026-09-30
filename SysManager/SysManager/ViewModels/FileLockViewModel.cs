@@ -164,7 +164,7 @@ public sealed partial class FileLockViewModel : ViewModelBase
     private bool CanKill => !IsBusy && SelectedLocker is not null;
 
     [RelayCommand(CanExecute = nameof(CanKill))]
-    private void KillSelected()
+    private async Task KillSelectedAsync()
     {
         var locker = SelectedLocker;
         if (locker is null) return;
@@ -184,17 +184,24 @@ public sealed partial class FileLockViewModel : ViewModelBase
             $"End \"{locker.Display}\"?\n\nUnsaved work in that process will be lost. This force-terminates the process to release the file.",
             "End Process — Confirm")) return;
 
-        bool ok = _service.KillProcess(locker.ProcessId);
-        if (ok)
+        // The start time goes with the ID. The list can be minutes old and the prompt can stay open, and Windows gives
+        // a closed process's ID to the next one started, so the ID alone can name a different program (#2514).
+        var outcome = _service.KillProcess(locker.ProcessId, locker.StartTime);
+        if (outcome == ProcessManagerService.KillOutcome.Refused)
         {
-            Log.Information("User ended locking process {Pid} ({Name})", locker.ProcessId, locker.ProcessName);
-            StatusMessage = $"Ended {locker.Display}. Re-scanning…";
-            ScanCommand.Execute(null);
+            StatusMessage = $"Couldn't end {locker.Display} — it may need administrator rights.";
+            return;
         }
-        else
-        {
-            StatusMessage = $"Couldn't end {locker.Display} — it may need administrator rights, or it already exited.";
-        }
+
+        Log.Information("End locking process {Pid} ({Name}): {Outcome}", locker.ProcessId, locker.ProcessName, outcome);
+        var ended = outcome == ProcessManagerService.KillOutcome.Ended
+            ? $"Ended {locker.Display}."
+            : $"{locker.Display} had already closed, so nothing was ended.";
+
+        // Re-scanned either way: the row names a process that is not running, and something may still hold the file.
+        // The scan puts its own result on the status line, so what happened to the process goes in front of it.
+        await ScanCommand.ExecuteAsync(null);
+        StatusMessage = $"{ended} {StatusMessage}";
     }
 
     /// <summary>

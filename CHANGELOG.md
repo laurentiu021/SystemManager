@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.52] - 2026-09-30
+
+**File Lock Detector and CPU Core Affinity now act only on the process you picked.** If it has closed and
+Windows has given its process ID to another program, End process, Apply and Restore leave that program alone
+and say the process had already closed.
+
+### Fixed
+
+- **File Lock Detector's End process ended whichever program had the listed process ID when you confirmed.**
+  The list can be minutes old, and Windows gives a closed process's ID to the next one started, so a locker
+  that had closed could have been replaced, and the replacement was ended behind a prompt that warned about
+  the locker's unsaved work. End process now passes the start time Restart Manager reported with the ID, and
+  ends the process through the same call Process Manager uses (#2498), which leaves a process that started at
+  another time alone. The tab then says "X had already closed, so nothing was ended." and checks the file
+  again. Present since v1.36.0, when File Lock Detector was added.
+- **CPU Core Affinity's Apply and Restore changed whichever program had the listed process ID.** Each process
+  in the list now carries its start time, and reading or changing its affinity checks it. A change aimed at a
+  process that has closed leaves the new owner of its ID alone, says "X had already closed, so nothing was
+  changed.", and refreshes the list, and a refresh no longer keeps the selection on a new process with the old
+  one's ID. The original affinity Restore puts back is remembered per process, start time included, so a
+  restarted program that gets the same name and ID is restored to its own. Present since v1.38.0, when CPU
+  Core Affinity was added. Gaming Profile picks its game from the same list and is tracked in #2559.
+
+### Changed
+
+- **File Lock Detector keeps the outcome of End process on the status line.** "Ended X." now stays in front
+  of the result of the check that follows it, which used to replace "Ended X. Re-scanning…" the moment it
+  began. A refusal reads "Couldn't end X — it may need administrator rights.", without the old "or it already
+  exited", which is its own outcome now.
+
 ## [1.114.51] - 2026-09-29
 
 **Update All Apps and Reset Windows Update no longer cut into an app install, and saving the hosts file no

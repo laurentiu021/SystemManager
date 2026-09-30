@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using SysManager.Services;
 
 namespace SysManager.Tests;
@@ -57,5 +58,80 @@ public class CpuAffinityServiceTests
         Assert.True(CpuAffinityService.IsCoreInMask(mask, 5));
         Assert.True(CpuAffinityService.IsCoreInMask(mask, 7));
         Assert.False(CpuAffinityService.IsCoreInMask(mask, 3));
+    }
+
+    // ── Which process an ID names (#2514) ──
+    // Windows gives a closed process's ID to the next one started, so the tab's list can name a process by an ID that
+    // now belongs to another. Driven on this test process, with its own start time and with one a second off, which is
+    // what a reused ID looks like from the list's side. Nothing here changes the process: the one write passes the
+    // mask it already has, so even a broken check would leave it as it was. The integration suite changes a child.
+
+    private static (int Id, DateTime StartTime, long Mask) Self()
+    {
+        using var self = Process.GetCurrentProcess();
+        return (self.Id, self.StartTime, (long)self.ProcessorAffinity);
+    }
+
+    [Fact]
+    public void GetProcesses_ListsThisProcessWithItsStartTime()
+    {
+        var (id, startTime, _) = Self();
+
+        var listed = Assert.Single(new CpuAffinityService().GetProcesses(), p => p.ProcessId == id);
+
+        Assert.Equal(startTime, listed.StartTime);
+    }
+
+    [Fact]
+    public void GetAffinity_AtTheListedStartTime_ReadsTheMask()
+    {
+        var (id, startTime, mask) = Self();
+
+        Assert.Equal(mask, new CpuAffinityService().GetAffinity(id, startTime));
+    }
+
+    [Fact]
+    public void GetAffinity_ForAProcessThatStartedAtAnotherTime_IsNull()
+    {
+        var (id, startTime, _) = Self();
+
+        Assert.Null(new CpuAffinityService().GetAffinity(id, startTime.AddSeconds(-1)));
+    }
+
+    [Fact]
+    public void TrySetAffinity_ForAProcessThatStartedAtAnotherTime_ChangesNothing()
+    {
+        var (id, startTime, mask) = Self();
+
+        var changed = new CpuAffinityService().TrySetAffinity(id, startTime.AddSeconds(-1), mask, out var error);
+
+        Assert.False(changed);
+        Assert.Equal("That process is no longer running.", error);
+    }
+
+    [Fact]
+    public void HasExited_ForThisProcessAtItsStartTime_IsFalse()
+    {
+        var (id, startTime, _) = Self();
+
+        Assert.False(new CpuAffinityService().HasExited(id, startTime));
+    }
+
+    [Fact]
+    public void HasExited_ForAProcessThatStartedAtAnotherTime_IsTrue()
+    {
+        var (id, startTime, _) = Self();
+
+        Assert.True(new CpuAffinityService().HasExited(id, startTime.AddSeconds(-1)));
+    }
+
+    [Fact]
+    public void HasExited_WithNoStartTimeToCheck_AsksOnlyWhetherTheIdIsRunning()
+    {
+        // int.MaxValue names no process; a smaller made-up ID could, since Windows ignores an ID's low two bits.
+        var service = new CpuAffinityService();
+
+        Assert.False(service.HasExited(Environment.ProcessId, null));
+        Assert.True(service.HasExited(int.MaxValue, null));
     }
 }

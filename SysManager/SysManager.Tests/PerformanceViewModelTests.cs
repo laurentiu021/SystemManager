@@ -25,7 +25,11 @@ public class PerformanceViewModelTests
     /// <summary>A view model whose process calls — powercfg among them — go to a substituted runner.</summary>
     /// <param name="completeInitialization">Let the constructor's process calls finish, so initialization settles.</param>
     /// <param name="configure">Applied after the defaults, so a test can make one specific call answer differently.</param>
-    private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null)
+    /// <param name="processes">What Trim RAM works through. Left out, it is none, never the machine's own (#2557).</param>
+    /// <param name="trim">The trim call for each of <paramref name="processes"/>.</param>
+    private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null,
+                                              Func<System.Diagnostics.Process[]>? processes = null,
+                                              Func<System.Diagnostics.Process, bool>? trim = null)
     {
         var ps = Substitute.For<IPowerShellRunner>();
         var processCall = ps.RunProcessAsync(
@@ -50,7 +54,7 @@ public class PerformanceViewModelTests
             Path.GetTempPath(),
             "SysManagerPerformanceTests",
             Guid.NewGuid().ToString("N"));
-        return new(new PerformanceService(ps, new RestorePointService(ps), configDir),
+        return new(new PerformanceService(ps, new RestorePointService(ps), configDir, processes, trim),
                    NoGamingSession());
     }
 
@@ -253,6 +257,23 @@ public class PerformanceViewModelTests
         // (offloaded), not executed synchronously on the dispatcher.
         var vm = NewVm();
         Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.TrimRamCommand);
+    }
+
+    [Fact]
+    public async Task TrimRam_ReportsTheProcessesItsServiceTrimmed()
+    {
+        // #2557. The command trims through the service it was given, so a test drives it with a list of its own. It
+        // called the static trim, which a test could only run by trimming every process on the machine.
+        var answers = new Queue<bool>([true, true, false]);
+        var vm = NewVm(completeInitialization: true,
+            processes: () => [new(), new(), new()], trim: _ => answers.Dequeue());
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.TrimRamCommand.ExecuteAsync(null);
+
+        Assert.Equal("✓ Trimmed working set of 2 processes.", vm.StatusMessage);
+        Assert.Empty(answers);
     }
 
     // ── System-modification lock ──

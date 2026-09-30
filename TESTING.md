@@ -287,6 +287,19 @@ To fix a failure, put the call behind the service's interface and hand the view-
 (`IUpdateService` is the model), or build it with the startup work switched off. A test that really needs the
 network belongs in `SysManager.IntegrationTests`.
 
+### The unit suite never writes the real profile folder, or changes the machine
+
+Every store that keeps data under `%LocalAppData%\SysManager` takes a `configDir` (or, for the activity log, is
+redirected for the whole assembly by `TestAssemblyInit`). `ArchitectureTests.Tests_NeverLeaveAConfigDirAtTheRealProfile`
+fails when a test builds one of those types without passing a folder. The types come from reflection, so a store is
+covered from the day it gains the seam. It was written because one test added to the real notification write-count on
+every run, the number Gaming Profile reads after a game (#2555).
+
+The same holds for system state. Trim RAM empties the working set of every process on the machine, and two unit
+tests used to run it for real (#2557). The loop now takes its process list and trim call as a seam, and the test
+constructor of `PerformanceService` defaults to no processes, so a test that forgets the list trims nothing. The
+real `EmptyWorkingSet` call is tried in `SysManager.IntegrationTests`, on the test's own process alone.
+
 ### Dependency-graph validation
 
 `ServiceRegistrationGraphTests` builds the real container from `ServiceRegistration.ConfigureServices`

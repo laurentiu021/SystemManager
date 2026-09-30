@@ -33,6 +33,8 @@ public sealed partial class PerformanceService : IDisposable
     private readonly IPowerShellRunner _ps;
     private readonly RestorePointService _restorePoints;
     private readonly string _snapshotPath;
+    private readonly Func<System.Diagnostics.Process[]> _processes;
+    private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -78,19 +80,33 @@ public sealed partial class PerformanceService : IDisposable
             restorePoints,
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SysManager"))
+                "SysManager"),
+            System.Diagnostics.Process.GetProcesses)
     {
     }
 
-    /// <summary>Test seam for snapshot persistence without touching the real app profile.</summary>
+    /// <summary>
+    /// Test seam for snapshot persistence without touching the real app profile, and for the RAM trim without touching
+    /// the machine's processes.
+    /// </summary>
+    /// <param name="processes">
+    /// The processes the RAM trim works through. Unlike the folder, which every test passes, it defaults to none: the
+    /// public constructor passes every process on the machine, so a test that leaves it out trims nothing instead of
+    /// paging out every program on the computer running the suite (#2557).
+    /// </param>
+    /// <param name="trimWorkingSet">Empties one process's working set; the real call unless a test passes its own.</param>
     internal PerformanceService(
         IPowerShellRunner ps,
         RestorePointService restorePoints,
-        string configDir)
+        string configDir,
+        Func<System.Diagnostics.Process[]>? processes = null,
+        Func<System.Diagnostics.Process, bool>? trimWorkingSet = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
         _snapshotPath = Path.Combine(configDir, "performance-snapshot.json");
+        _processes = processes ?? (() => []);
+        _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -850,16 +866,27 @@ public sealed partial class PerformanceService : IDisposable
     /// RAMMap. Does not require a reboot.
     /// </summary>
     /// <returns>Number of processes successfully trimmed.</returns>
-    public static int TrimWorkingSets()
+    /// <remarks>
+    /// An instance method, not static, so a test can hand the service its own process list: as a static it could only
+    /// be tested by trimming every process on the machine running the suite, which two unit tests did (#2557).
+    /// </remarks>
+    public int TrimWorkingSets() => TrimWorkingSets(_processes(), _trimWorkingSet);
+
+    /// <summary>
+    /// The trim loop: counts the processes whose trim succeeded, skips one it cannot open or that has exited, and
+    /// disposes every process it is given.
+    /// </summary>
+    internal static int TrimWorkingSets(
+        IEnumerable<System.Diagnostics.Process> processes, Func<System.Diagnostics.Process, bool> trim)
     {
         int trimmed = 0;
-        foreach (var proc in System.Diagnostics.Process.GetProcesses())
+        foreach (var proc in processes)
         {
             using (proc)
             {
                 try
                 {
-                    if (EmptyWorkingSet(proc.Handle))
+                    if (trim(proc))
                         trimmed++;
                 }
                 catch (System.ComponentModel.Win32Exception) { /* access denied — skip */ }
@@ -868,6 +895,12 @@ public sealed partial class PerformanceService : IDisposable
         }
         return trimmed;
     }
+
+    /// <summary>
+    /// Empties one process's working set. Internal so the integration suite can make the real call on its own process
+    /// alone.
+    /// </summary>
+    internal static bool TrimWorkingSet(System.Diagnostics.Process process) => EmptyWorkingSet(process.Handle);
 
     // ═══════════════════════════════════════════════════════════════
     //  HIBERNATION TOGGLE — powercfg (requires admin)

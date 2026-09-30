@@ -606,7 +606,9 @@ Key services:
   injectable, so the check is tested against a redirected registry.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
-  working set trim, hibernation toggle. Its timestamped restore snapshot is
+  working set trim, hibernation toggle. The trim works through a process list and a trim call the
+  constructor takes: every process and `EmptyWorkingSet` from the public constructor, none from the
+  test one unless a test passes its own (#2557). Its timestamped restore snapshot is
   persisted locally, bounded and validated at load, then rehydrated by
   `PerformanceViewModel` before live profile probes during initialization.
   `LoadSnapshot(out SnapshotProblem)` tells no snapshot from one that could not be read or is

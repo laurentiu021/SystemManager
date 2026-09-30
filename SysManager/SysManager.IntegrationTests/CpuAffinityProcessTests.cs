@@ -77,24 +77,28 @@ public sealed class CpuAffinityProcessTests
     }
 
     /// <summary>
-    /// The priority Gaming Profile raises a game to, changed only at the game's start time (#2559). Lowered rather than
-    /// raised here, since a lower class needs no privilege and the child is the test's own.
+    /// The priority Gaming Profile raises a game to, changed only at the game's start time (#2559).
     /// </summary>
+    /// <remarks>
+    /// The child starts at the test host's class, which on the CI runner is Below Normal, so the target is whichever of
+    /// High and Above Normal it is not already at. Neither needs a privilege for a process's own child; only Realtime
+    /// does.
+    /// </remarks>
     [Fact]
     public async Task TrySetPriority_AtTheListedStartTime_ChangesTheChild_AndAtAnotherLeavesItAsItWas()
     {
         using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         using var child = await RunningChild.StartAsync(heldFile: null, bounded.Token);
         var service = new CpuAffinityService();
-        Assert.NotEqual(ProcessPriorityClass.BelowNormal, PriorityOf(child));   // the premise: the change would show
+        var before = PriorityOf(child);
+        var target = before == ProcessPriorityClass.High ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.High;
 
-        Assert.False(service.TrySetPriority(child.Id, child.StartTime.AddSeconds(-1), ProcessPriorityClass.BelowNormal,
-            out var refused));
+        Assert.False(service.TrySetPriority(child.Id, child.StartTime.AddSeconds(-1), target, out var refused));
         Assert.Equal("That process is no longer running.", refused);
-        Assert.NotEqual(ProcessPriorityClass.BelowNormal, PriorityOf(child));
+        Assert.Equal(before, PriorityOf(child));
 
-        Assert.True(service.TrySetPriority(child.Id, child.StartTime, ProcessPriorityClass.BelowNormal, out var error), error);
-        Assert.Equal(ProcessPriorityClass.BelowNormal, PriorityOf(child));
+        Assert.True(service.TrySetPriority(child.Id, child.StartTime, target, out var error), error);
+        Assert.Equal(target, PriorityOf(child));
     }
 
     private static long MaskOf(RunningChild child)

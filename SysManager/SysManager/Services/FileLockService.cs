@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -37,6 +36,20 @@ public sealed class FileLockService : IFileLockService
     /// result says so.
     /// </remarks>
     internal const int MaxFolderFiles = 1000;
+
+    private readonly Func<int, DateTime, ProcessManagerService.KillOutcome> _killProcess;
+
+    public FileLockService() : this(ProcessManagerService.KillProcess) { }
+
+    /// <summary>Test seam: the same service with the call that ends a process supplied.</summary>
+    /// <param name="killProcess">
+    /// Ends a process by ID and listed start time. Injected so a test can see what <see cref="KillProcess"/> passes
+    /// on without ending anything real.
+    /// </param>
+    internal FileLockService(Func<int, DateTime, ProcessManagerService.KillOutcome> killProcess)
+    {
+        _killProcess = killProcess ?? throw new ArgumentNullException(nameof(killProcess));
+    }
 
     /// <summary>
     /// Returns the processes currently using <paramref name="path"/>. For a folder, that means the files inside it.
@@ -136,33 +149,27 @@ public sealed class FileLockService : IFileLockService
     }
 
     /// <summary>
-    /// Terminates the process with the given id. Returns true on success. Returns false
-    /// (and logs) if the process is gone, access is denied (needs elevation), or it exits
-    /// on its own. Callers must confirm with the user first.
+    /// Ends the process with <paramref name="processId"/>, and only if it is the locker that was listed: a process
+    /// with that ID that started at another time is left alone and reported as
+    /// <see cref="ProcessManagerService.KillOutcome.NotRunning"/>. Callers must confirm with the user first.
     /// </summary>
-    public bool KillProcess(int processId)
+    /// <param name="processId">The locker's process ID.</param>
+    /// <param name="startTime">
+    /// When the locker started, as Restart Manager reported it (<see cref="FileLocker.StartTime"/>), or null when it
+    /// did not say, which skips the check. The list can be minutes old, and Windows gives a closed process's ID to
+    /// the next one started, so the ID alone can name a different program (#2514). Restart Manager's time is the
+    /// creation time <c>GetProcessTimes</c> reports, the one <see cref="Process.StartTime"/> reads.
+    /// </param>
+    /// <remarks>
+    /// Process Manager's <see cref="ProcessManagerService.KillProcess"/> does the work, so the two tabs end a process
+    /// the same way: the process alone, not its tree, after the same start-time check.
+    /// </remarks>
+    public ProcessManagerService.KillOutcome KillProcess(int processId, DateTime? startTime)
     {
-        try
-        {
-            using var p = Process.GetProcessById(processId);
-            p.Kill();
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            // Process already exited / no such id.
-            return false;
-        }
-        catch (InvalidOperationException)
-        {
-            return false;
-        }
-        catch (Win32Exception ex)
-        {
-            // Typically access denied — the target is higher integrity / another user.
-            Log.Debug("Kill process {Pid} denied: {Error}", processId, ex.Message);
-            return false;
-        }
+        var outcome = _killProcess(processId, startTime ?? default);
+        if (outcome == ProcessManagerService.KillOutcome.Refused)
+            Log.Debug("Kill process {Pid} refused: it may need administrator rights", processId);
+        return outcome;
     }
 
     private static FileLocker Map(in NativeMethods.RM_PROCESS_INFO p)

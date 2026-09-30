@@ -35,16 +35,17 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
     private readonly ICpuAffinityService _service;
 
     /// <summary>
-    /// The affinity each process had when SysManager FIRST saw it this session, keyed by pid+name.
-    /// Captured once and never overwritten, which is the entire point: this used to be a single field
-    /// re-read on every selection change, so a Refresh after Apply re-baselined "original" to the mask
+    /// The affinity each process had when SysManager FIRST saw it this session, keyed by pid, name and
+    /// start time. Captured once and never overwritten, which is the entire point: this used to be a single
+    /// field re-read on every selection change, so a Refresh after Apply re-baselined "original" to the mask
     /// the user had just pinned — Restore then wrote the pinned value back and still reported
-    /// "Restored … to its original cores". Keyed on the name as well as the pid because Windows reuses
-    /// pids: a recycled pid is a different process and must not inherit the old one's original mask.
+    /// "Restored … to its original cores". Keyed on more than the pid because Windows reuses pids: a
+    /// recycled pid is a different process and must not inherit the old one's original mask. The start time
+    /// tells them apart even when the new process has the same name, as a restarted program does (#2514).
     /// <para>One entry per process the user actually selects, so it is bounded by clicks rather than by
     /// the process list; a refresh re-selecting the same process adds nothing.</para>
     /// </summary>
-    private readonly Dictionary<(int Pid, string Name), long> _originalMasks = [];
+    private readonly Dictionary<(int Pid, string Name, DateTime? StartTime), long> _originalMasks = [];
 
     // The full list; Processes is the filtered view the picker binds. Kept separate so typing in the
     // filter never loses a process, exactly as ServicesViewModel keeps _allServices behind Services.
@@ -96,15 +97,17 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            // Preserve the selection across a refresh by PID: the list is a fresh set of records, so the
-            // previously-selected instance is gone, but the process it named may still be running.
-            var selectedId = SelectedProcess?.ProcessId;
+            // Preserve the selection across a refresh by PID and start time: the list is a fresh set of records,
+            // so the previously-selected instance is gone, but the process it named may still be running. The
+            // start time is what tells that process from a new one Windows has given the same PID (#2514).
+            var selected = SelectedProcess;
 
             _allProcesses = (await Task.Run(_service.GetProcesses).ConfigureAwait(true)).ToList();
             ApplyFilter();
 
-            if (selectedId is { } id)
-                SelectedProcess = Processes.FirstOrDefault(p => p.ProcessId == id);
+            if (selected is not null)
+                SelectedProcess = Processes.FirstOrDefault(
+                    p => p.ProcessId == selected.ProcessId && p.StartTime == selected.StartTime);
 
             StatusMessage = IsHybrid
                 ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
@@ -140,7 +143,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
             return;
         }
 
-        long? mask = _service.GetAffinity(value.ProcessId);
+        long? mask = _service.GetAffinity(value.ProcessId, value.StartTime);
         if (mask is { } m)
         {
             // Capture the original ONCE per process. TryAdd, not an assignment: re-selecting a process
@@ -156,18 +159,19 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         RestoreCommand.NotifyCanExecuteChanged();
     }
 
-    private static (int Pid, string Name) OriginalKey(RunningProcess p) => (p.ProcessId, p.Name);
+    private static (int Pid, string Name, DateTime? StartTime) OriginalKey(RunningProcess p) =>
+        (p.ProcessId, p.Name, p.StartTime);
 
     private bool HasSelection => SelectedProcess is not null;
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    private void Apply()
+    private async Task ApplyAsync()
     {
         var proc = SelectedProcess;
         if (proc is null) return;
 
         long mask = CpuAffinityService.MaskFromIndices(Cores.Where(c => c.IsSelected).Select(c => c.Index));
-        if (_service.TrySetAffinity(proc.ProcessId, mask, out string error))
+        if (_service.TrySetAffinity(proc.ProcessId, proc.StartTime, mask, out string error))
         {
             Log.Information("Set CPU affinity 0x{Mask:X} on {Name} ({Pid})", mask, proc.Name, proc.ProcessId);
             StatusMessage = $"Pinned {proc.Name} to {CountBits(mask)} core(s). Reverts when the process exits.";
@@ -175,6 +179,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         else
         {
             StatusMessage = error;
+            await RefreshIfClosedAsync(proc);
         }
     }
 
@@ -182,13 +187,13 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         SelectedProcess is not null && _originalMasks.ContainsKey(OriginalKey(SelectedProcess));
 
     [RelayCommand(CanExecute = nameof(CanRestore))]
-    private void Restore()
+    private async Task RestoreAsync()
     {
         var proc = SelectedProcess;
         if (proc is null) return;
         if (!_originalMasks.TryGetValue(OriginalKey(proc), out long original)) return;
 
-        if (_service.TrySetAffinity(proc.ProcessId, original, out string error))
+        if (_service.TrySetAffinity(proc.ProcessId, proc.StartTime, original, out string error))
         {
             foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(original, c.Index);
             StatusMessage = $"Restored {proc.Name} to its original cores.";
@@ -196,7 +201,26 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         else
         {
             StatusMessage = error;
+            await RefreshIfClosedAsync(proc);
         }
+    }
+
+    /// <summary>
+    /// After a change that failed, refreshes the list if the process it was meant for has closed, and says so.
+    /// </summary>
+    /// <remarks>
+    /// The list is only as fresh as its last refresh, and Windows gives a closed process's PID to the next one
+    /// started. The service checks the start time before it changes anything, so a new process with the old PID is
+    /// left alone (#2514). The refresh then takes the closed process off the list, and the selection with it, so
+    /// the next Apply cannot be aimed at it again. Not after every failure: a change refused for want of
+    /// administrator rights names a process that is still running.
+    /// </remarks>
+    private async Task RefreshIfClosedAsync(RunningProcess proc)
+    {
+        if (!_service.HasExited(proc.ProcessId, proc.StartTime)) return;
+
+        await RefreshProcessesAsync();
+        StatusMessage = $"{proc.Display} had already closed, so nothing was changed.";
     }
 
     [RelayCommand]

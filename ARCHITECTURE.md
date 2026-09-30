@@ -230,9 +230,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `TweaksHubViewModel` — unified front-end over the reversible privacy/UX tweaks, grouped Essential (per-user) / Advanced (machine-wide, needs admin), with selective Apply/Undo, a pending-change count, and an auto restore-point before the first change. Delegates to `TweaksHubService` (no parallel tweak implementation).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
-- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process".
+- `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.
 - `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net.
-- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID across a refresh; `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
+- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID and start time across a refresh. Every read and change passes `RunningProcess.StartTime` with the PID, and a change that fails for a process that has closed refreshes the list and says so (#2514); `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. Holds TWO cancellation sources: one for the task-list scan (driven by the Cancel button) and one for the per-selection run-info query, which each new selection supersedes so arrow-keying the grid cannot queue a PowerShell round-trip per row. Enable/disable is deliberately NOT cancellable — its script writes then reads back, so a cancel between the two would leave the task toggled while the grid showed the old state.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
@@ -861,7 +861,10 @@ Key services:
   drops it), so the Timer Resolution tab and Gaming Profile share it: the Gaming Profile
   step releases only a request it made itself.
 - `FileLockService` — Restart Manager (`rstrtmgr.dll`) wrapper that lists the processes
-  using a file, or any of the files inside a folder, and can terminate one. Restart Manager
+  using a file, or any of the files inside a folder, and can terminate one. Termination goes
+  through `ProcessManagerService.KillProcess` with the start time Restart Manager reported,
+  which is the creation time `Process.StartTime` reads, so a process whose ID Windows has
+  given to another program is left alone (#2514). Restart Manager
   tracks files only (`RmGetList` refuses a folder with `ERROR_ACCESS_DENIED`, elevated or
   not), so a folder is checked through its first `MaxFolderFiles` (1,000) files, found with
   `SafeFileWalk`, and the returned `FileLockScan` says how many were checked and whether
@@ -876,7 +879,10 @@ Key services:
 - `CpuAffinityService` — gets/sets per-process CPU affinity via `Process.ProcessorAffinity`
   and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
   (variable-length buffer walked by each record's `Size`). The mask helpers
-  (build/test/all-cores) are pure, unit-tested static methods.
+  (build/test/all-cores) are pure, unit-tested static methods. Each process it lists
+  carries its start time, and `GetAffinity`, `TrySetAffinity` and `HasExited` take it
+  with the ID: a process with that ID that started at another time is not the one listed
+  (#2514). Gaming Profile does not pass one yet (#2559).
 - `AudioMixerService` (`IAudioMixerService`) — per-app volume/mute/peak on the default
   render endpoint via Windows Core Audio, using raw `[ComImport]` interop for the six
   documented interfaces (`IMMDeviceEnumerator` → `IAudioSessionManager2` →

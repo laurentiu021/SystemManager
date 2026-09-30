@@ -117,6 +117,7 @@ internal sealed class GamePriorityTweak(ICpuAffinityService cpu, int gamePid, Pr
 /// Pin the game process to the performance cores (all cores on a non-hybrid CPU); restore the
 /// original affinity mask on revert. Affinity also self-clears when the process exits.
 /// </summary>
+/// <remarks>Acts on the game's ID alone: a GameTarget keeps no start time to check it against (#2559).</remarks>
 internal sealed class GameAffinityTweak(ICpuAffinityService cpu, int gamePid, long targetMask, long? originalMask) : IGamingTweak
 {
     public string Label => "Pin game to performance cores";
@@ -126,14 +127,14 @@ internal sealed class GameAffinityTweak(ICpuAffinityService cpu, int gamePid, lo
     {
         // No performance cores to target (unknown topology) → benign no-op, not a failure.
         if (targetMask == 0) return Task.FromResult(GamingTweakResult.NoChange);
-        return Task.FromResult(cpu.TrySetAffinity(gamePid, targetMask, out _)
+        return Task.FromResult(cpu.TrySetAffinity(gamePid, startTime: null, targetMask, out _)
             ? GamingTweakResult.Applied
             : GamingTweakResult.Failed);
     }
 
     public Task RevertAsync(CancellationToken ct)
     {
-        if (originalMask is { } m && m != 0) cpu.TrySetAffinity(gamePid, m, out _);
+        if (originalMask is { } m && m != 0) cpu.TrySetAffinity(gamePid, startTime: null, m, out _);
         return Task.CompletedTask;
     }
 }

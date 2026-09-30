@@ -863,6 +863,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   marks a process Windows will not let you safely end — the one row nobody should act on
 - **End process** — terminate a selected locker (with confirmation) to release
   the file; critical system processes are protected from termination
+- **Ends the locker you picked, and no other** — if it closed after the check and
+  Windows gave its process ID to another program, that program is left alone, the tab
+  says the locker had already closed, and the file is checked again
 - Detection works as a standard user; ending a process owned by SYSTEM or
   another user needs administrator rights (surfaced, not crashed)
 
@@ -1373,6 +1376,9 @@ offers, "rate us" prompts:
 - **Safe and temporary** — affinity is per-running-process and reverts when the
   process exits; no admin for your own processes (changing another user's
   process is surfaced as needing admin, not a crash)
+- **Changes the process you picked, and no other** — if it closed after the list was
+  read and Windows gave its process ID to another program, Apply and Restore leave that
+  program alone, say the process had already closed, and refresh the list
 - An empty selection is rejected — Windows treats an empty mask as "let the OS
   decide", so the app never silently does the opposite of what you picked
 

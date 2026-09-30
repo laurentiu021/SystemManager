@@ -9,7 +9,12 @@ namespace SysManager.Models;
 /// is the current processor-affinity bitmask (bit i = logical CPU i), or 0 if it
 /// couldn't be read (e.g. access denied).
 /// </summary>
-public sealed record RunningProcess(int ProcessId, string Name, long AffinityMask)
+/// <param name="StartTime">
+/// When the process started, or null when Windows would not say. With the ID it names one process: Windows gives a
+/// closed process's ID to the next one started, so by the time a row is acted on its ID alone can name a different
+/// program (#2514).
+/// </param>
+public sealed record RunningProcess(int ProcessId, string Name, long AffinityMask, DateTime? StartTime = null)
 {
     public string Display => $"{Name} ({ProcessId})";
 

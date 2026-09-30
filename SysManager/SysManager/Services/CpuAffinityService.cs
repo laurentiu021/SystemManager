@@ -49,7 +49,7 @@ public sealed class CpuAffinityService : ICpuAffinityService
         return list;
     }
 
-    /// <summary>List running processes with their current affinity mask (0 if unreadable).</summary>
+    /// <summary>List running processes with their current affinity mask (0 if unreadable) and start time.</summary>
     public IReadOnlyList<RunningProcess> GetProcesses()
     {
         var result = new List<RunningProcess>();
@@ -57,22 +57,34 @@ public sealed class CpuAffinityService : ICpuAffinityService
         {
             try
             {
-                long mask = (long)p.ProcessorAffinity;
-                result.Add(new RunningProcess(p.Id, p.ProcessName, mask));
+                long mask;
+                try { mask = (long)p.ProcessorAffinity; }
+                catch (Win32Exception) { mask = 0; }
+                result.Add(new RunningProcess(p.Id, p.ProcessName, mask, StartTimeOf(p)));
             }
-            catch (Win32Exception) { result.Add(new RunningProcess(p.Id, p.ProcessName, 0)); }
             catch (InvalidOperationException) { /* exited between enumerate and read */ }
             finally { p.Dispose(); }
         }
         return result.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>Read the current affinity mask for a process, or null if unavailable.</summary>
-    public long? GetAffinity(int processId)
+    /// <summary>When <paramref name="p"/> started, or null when Windows will not say.</summary>
+    private static DateTime? StartTimeOf(Process p)
+    {
+        try { return p.StartTime; }
+        catch (Win32Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Read the current affinity mask for a process, or null if unavailable. Null too when the process with that ID
+    /// did not start at <paramref name="startTime"/>.
+    /// </summary>
+    public long? GetAffinity(int processId, DateTime? startTime)
     {
         try
         {
             using var p = Process.GetProcessById(processId);
+            if (!IsListed(p, startTime)) return null;
             p.Refresh();
             return (long)p.ProcessorAffinity;
         }
@@ -84,9 +96,10 @@ public sealed class CpuAffinityService : ICpuAffinityService
     /// <summary>
     /// Apply an affinity mask to a process. Returns true on success; on failure sets
     /// <paramref name="error"/>. A mask of 0 is rejected (Windows treats it as
-    /// "OS decides", which is not what an explicit selection means).
+    /// "OS decides", which is not what an explicit selection means). A process with that ID that did not start at
+    /// <paramref name="startTime"/> is left alone and reported as no longer running.
     /// </summary>
-    public bool TrySetAffinity(int processId, long mask, out string error)
+    public bool TrySetAffinity(int processId, DateTime? startTime, long mask, out string error)
     {
         error = "";
         if (mask == 0)
@@ -104,6 +117,11 @@ public sealed class CpuAffinityService : ICpuAffinityService
         try
         {
             using var p = Process.GetProcessById(processId);
+            if (!IsListed(p, startTime))
+            {
+                error = "That process is no longer running.";
+                return false;
+            }
             p.ProcessorAffinity = (IntPtr)mask;
             return true;
         }
@@ -124,6 +142,41 @@ public sealed class CpuAffinityService : ICpuAffinityService
             return false;
         }
     }
+
+    /// <summary>
+    /// True when the process listed with <paramref name="processId"/> and <paramref name="startTime"/> is no longer
+    /// running: nothing has that ID, or the ID now belongs to a process that started at another time. False while it
+    /// runs, and when Windows will not say when the process with that ID started.
+    /// </summary>
+    /// <remarks>
+    /// A process that has exited while another program still holds a handle to it keeps its ID and start time until
+    /// that handle closes. <see cref="Process.GetProcessById(int)"/> refuses it all the same, as it refuses an ID
+    /// nothing has, so no separate exit check is needed; the integration suite pins that on a child it holds.
+    /// </remarks>
+    public bool HasExited(int processId, DateTime? startTime)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(processId);
+            return !IsListed(p, startTime);
+        }
+        catch (ArgumentException) { return true; }
+        catch (InvalidOperationException) { return true; }
+        catch (Win32Exception) { return false; }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is the process listed as starting at <paramref name="startTime"/>. Always so when
+    /// the list had no start time to give.
+    /// </summary>
+    /// <remarks>
+    /// The check <see cref="ProcessManagerService.KillProcess"/> makes before ending a process, for the same reason:
+    /// the list can be minutes old, and Windows gives a closed process's ID to the next one started (#2514). Reading
+    /// the start time throws <see cref="Win32Exception"/> when Windows will not say, and
+    /// <see cref="InvalidOperationException"/> when the process has exited; each caller handles both.
+    /// </remarks>
+    private static bool IsListed(Process p, DateTime? startTime) =>
+        startTime is not { } listed || p.StartTime == listed;
 
     /// <summary>Read the current scheduling priority class for a process, or null if unavailable.</summary>
     public ProcessPriorityClass? GetPriority(int processId)

@@ -65,15 +65,23 @@ public interface ICpuAffinityService
     /// <summary>
     /// Read the current scheduling priority class for a process, or null if unavailable
     /// (exited / access denied). Used by Gaming Profile to capture the original priority
-    /// before raising it, so revert can restore the exact prior value.
+    /// before raising it, so revert can restore the exact prior value. Null too when the process with that ID did
+    /// not start at <paramref name="startTime"/>.
     /// </summary>
-    ProcessPriorityClass? GetPriority(int processId);
+    /// <param name="processId">The process ID.</param>
+    /// <param name="startTime">When the process started, as listed, or null when Windows would not say.</param>
+    ProcessPriorityClass? GetPriority(int processId, DateTime? startTime);
 
     /// <summary>
     /// Set a process's scheduling priority class. Returns true on success; on failure sets
     /// <paramref name="error"/>. Your own processes need no admin; another user's / an
     /// elevated process raises access-denied, surfaced cleanly (mirrors
-    /// <see cref="TrySetAffinity"/>).
+    /// <see cref="TrySetAffinity"/>). A process with that ID that did not start at <paramref name="startTime"/> is
+    /// left alone and reported as no longer running.
     /// </summary>
-    bool TrySetPriority(int processId, ProcessPriorityClass priority, out string error);
+    /// <param name="processId">The process ID.</param>
+    /// <param name="startTime">When the process started, as listed, or null when Windows would not say.</param>
+    /// <param name="priority">The priority class to set.</param>
+    /// <param name="error">Why nothing was changed, in words for the status line.</param>
+    bool TrySetPriority(int processId, DateTime? startTime, ProcessPriorityClass priority, out string error);
 }

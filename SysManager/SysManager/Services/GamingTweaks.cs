@@ -96,19 +96,23 @@ internal sealed class TimerResolutionTweak(ITimerResolutionService timer) : IGam
 }
 
 /// <summary>Raise the game process's CPU priority to High; restore the original class on revert.</summary>
-internal sealed class GamePriorityTweak(ICpuAffinityService cpu, int gamePid, ProcessPriorityClass? original) : IGamingTweak
+/// <remarks>
+/// Both calls pass the game's start time with its ID. By the time game mode is stopped the game may have closed and
+/// its ID gone to another program, which must not be given the game's original priority (#2559).
+/// </remarks>
+internal sealed class GamePriorityTweak(ICpuAffinityService cpu, GameTarget game, ProcessPriorityClass? original) : IGamingTweak
 {
     public string Label => "High game CPU priority";
     public bool RequiresAdmin => false;
 
     public Task<GamingTweakResult> ApplyAsync(CancellationToken ct)
-        => Task.FromResult(cpu.TrySetPriority(gamePid, ProcessPriorityClass.High, out _)
+        => Task.FromResult(cpu.TrySetPriority(game.ProcessId, game.StartTime, ProcessPriorityClass.High, out _)
             ? GamingTweakResult.Applied
             : GamingTweakResult.Failed);
 
     public Task RevertAsync(CancellationToken ct)
     {
-        if (original is { } p) cpu.TrySetPriority(gamePid, p, out _);
+        if (original is { } p) cpu.TrySetPriority(game.ProcessId, game.StartTime, p, out _);
         return Task.CompletedTask;
     }
 }
@@ -117,8 +121,8 @@ internal sealed class GamePriorityTweak(ICpuAffinityService cpu, int gamePid, Pr
 /// Pin the game process to the performance cores (all cores on a non-hybrid CPU); restore the
 /// original affinity mask on revert. Affinity also self-clears when the process exits.
 /// </summary>
-/// <remarks>Acts on the game's ID alone: a GameTarget keeps no start time to check it against (#2559).</remarks>
-internal sealed class GameAffinityTweak(ICpuAffinityService cpu, int gamePid, long targetMask, long? originalMask) : IGamingTweak
+/// <remarks>Both calls pass the game's start time with its ID, for the reason <see cref="GamePriorityTweak"/> does.</remarks>
+internal sealed class GameAffinityTweak(ICpuAffinityService cpu, GameTarget game, long targetMask, long? originalMask) : IGamingTweak
 {
     public string Label => "Pin game to performance cores";
     public bool RequiresAdmin => false;
@@ -127,14 +131,14 @@ internal sealed class GameAffinityTweak(ICpuAffinityService cpu, int gamePid, lo
     {
         // No performance cores to target (unknown topology) → benign no-op, not a failure.
         if (targetMask == 0) return Task.FromResult(GamingTweakResult.NoChange);
-        return Task.FromResult(cpu.TrySetAffinity(gamePid, startTime: null, targetMask, out _)
+        return Task.FromResult(cpu.TrySetAffinity(game.ProcessId, game.StartTime, targetMask, out _)
             ? GamingTweakResult.Applied
             : GamingTweakResult.Failed);
     }
 
     public Task RevertAsync(CancellationToken ct)
     {
-        if (originalMask is { } m && m != 0) cpu.TrySetAffinity(gamePid, startTime: null, m, out _);
+        if (originalMask is { } m && m != 0) cpu.TrySetAffinity(game.ProcessId, game.StartTime, m, out _);
         return Task.CompletedTask;
     }
 }

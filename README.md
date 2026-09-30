@@ -1313,6 +1313,9 @@ offers, "rate us" prompts:
   then restore them automatically when the game exits (or with a single Stop)
 - **Optionally target a running game** — its CPU priority is raised to High and it's
   pinned to the performance cores, and its exit is what triggers the automatic revert
+- **Changes the game you picked, and no other** — if it closed after the list was read and
+  Windows gave its process ID to another program, Start changes nothing and says the game had
+  already closed, and neither raising, restoring nor waiting for the game ever reaches that program
 - **System-wide optimizations** — Ultimate Performance power plan, reduced visual
   effects, finest (~0.5 ms) timer resolution, freeing standby memory, pausing Windows
   Search indexing, and silencing notifications — each ticked individually

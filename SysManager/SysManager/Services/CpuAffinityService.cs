@@ -178,12 +178,16 @@ public sealed class CpuAffinityService : ICpuAffinityService
     private static bool IsListed(Process p, DateTime? startTime) =>
         startTime is not { } listed || p.StartTime == listed;
 
-    /// <summary>Read the current scheduling priority class for a process, or null if unavailable.</summary>
-    public ProcessPriorityClass? GetPriority(int processId)
+    /// <summary>
+    /// Read the current scheduling priority class for a process, or null if unavailable. Null too when the process
+    /// with that ID did not start at <paramref name="startTime"/>.
+    /// </summary>
+    public ProcessPriorityClass? GetPriority(int processId, DateTime? startTime)
     {
         try
         {
             using var p = Process.GetProcessById(processId);
+            if (!IsListed(p, startTime)) return null;
             p.Refresh();
             return p.PriorityClass;
         }
@@ -194,14 +198,20 @@ public sealed class CpuAffinityService : ICpuAffinityService
 
     /// <summary>
     /// Set a process's scheduling priority class. Returns true on success; on failure sets
-    /// <paramref name="error"/> (mirrors <see cref="TrySetAffinity"/>'s error idiom).
+    /// <paramref name="error"/> (mirrors <see cref="TrySetAffinity"/>'s error idiom). A process with that ID that
+    /// did not start at <paramref name="startTime"/> is left alone and reported as no longer running.
     /// </summary>
-    public bool TrySetPriority(int processId, ProcessPriorityClass priority, out string error)
+    public bool TrySetPriority(int processId, DateTime? startTime, ProcessPriorityClass priority, out string error)
     {
         error = "";
         try
         {
             using var p = Process.GetProcessById(processId);
+            if (!IsListed(p, startTime))
+            {
+                error = "That process is no longer running.";
+                return false;
+            }
             p.PriorityClass = priority;
             return true;
         }

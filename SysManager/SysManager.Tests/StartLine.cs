@@ -28,9 +28,13 @@ namespace SysManager.Tests;
 internal static class StartLine
 {
     /// <summary>
-    /// Generous enough never to trip on a loaded CI runner, and short enough to fail rather than hang. Shared
-    /// with a race that has a rendezvous of its own inside the writers.
+    /// Generous for the races as they are sized, and short enough to fail rather than hang. Shared with a race
+    /// that has a rendezvous of its own inside the writers.
     /// </summary>
+    /// <remarks>
+    /// Not "never trips": the activity-log race ran out of it twice, on CI runners many times slower than usual. That
+    /// race was cut down to fit rather than the bound raised for every race (#2548).
+    /// </remarks>
     internal static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     /// <summary>

@@ -247,7 +247,11 @@ public sealed class ActivityLogServiceTests : IDisposable
         // two. The long wait keeps a stalled runner from turning contention into an unlocked write.
         var a = new ActivityLogService(_dir, lockWait: StartLine.Bound);
         var b = new ActivityLogService(_dir, lockWait: StartLine.Bound);
-        const int each = 25;
+        // Ten each, down from 25 (#2548). The store lock makes the writes take turns, so the race lasts as long as all of
+        // them together: 1.3 to 2.6 seconds for 50 on a normal CI run, and more than the 30-second bound on the two runs
+        // that failed. Twenty writes fit in the bound on a runner nearly 30 times slower than the slowest normal run, and
+        // a missing store lock still loses entries in every run: 20 of 20 at 5, 10 and 25 each alike.
+        const int each = 10;
         var took = new LogTimings();
 
         try
@@ -258,8 +262,7 @@ public sealed class ActivityLogServiceTests : IDisposable
         }
         finally
         {
-            // On a workstation this race takes about a third of a second; on the CI runner it has twice run out of its
-            // 30 (#2548). What each Log took says where the time goes, pass or fail, in the test's output.
+            // What each Log took, and when, pass or fail, in the test's output: the report a slow run needs.
             TestContext.Current.TestOutputHelper?.WriteLine(took.Report());
         }
 

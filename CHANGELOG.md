@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.53] - 2026-09-30
+
+**Gaming Profile now acts only on the game you picked.** If the game closed after the list was read and Windows
+gave its process ID to another program, Start game mode changes nothing and says the game had already closed,
+and neither raising, restoring nor waiting for the game reaches that program.
+
+### Fixed
+
+- **Gaming Profile's game mode could raise, restore and wait for a program other than the game you picked.** Like
+  File Lock Detector and CPU Core Affinity before 1.114.52, it acted on the game's process ID alone, taken from a
+  list that can be minutes old, and Windows gives a closed process's ID to the next one started.
+  - Start game mode checks that the game is still the process that was listed before it changes anything. If it
+    has closed, nothing changes, the tab says so, and the list is refreshed.
+  - Raising the priority, pinning the cores and putting both back when game mode ends pass the game's start
+    time with its ID, so a program that has since been given the ID is left alone. A session can last hours, and
+    by the time it ends the ID may belong to another program.
+  - Auto-revert watches the process only while it is still the game. Watching whatever had the ID could end game
+    mode when an unrelated program exited. A game Windows will not let SysManager check is not watched, and game
+    mode stays on until Stop.
+  - A refresh keeps the selected game only if it is the same process.
+  - Present since v1.52.38, when Gaming Profile was added.
+
 ## [1.114.52] - 2026-09-30
 
 **File Lock Detector and CPU Core Affinity now act only on the process you picked.** If it has closed and

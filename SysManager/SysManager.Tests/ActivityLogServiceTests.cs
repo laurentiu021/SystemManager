@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -245,14 +248,49 @@ public sealed class ActivityLogServiceTests : IDisposable
         var a = new ActivityLogService(_dir, lockWait: StartLine.Bound);
         var b = new ActivityLogService(_dir, lockWait: StartLine.Bound);
         const int each = 25;
+        var took = new LogTimings();
 
-        await StartLine.RaceAsync(
-            () => { for (var i = 0; i < each; i++) a.Log("A", $"{i}"); },
-            () => { for (var i = 0; i < each; i++) b.Log("B", $"{i}"); });
+        try
+        {
+            await StartLine.RaceAsync(
+                () => { for (var i = 0; i < each; i++) took.Time("A", () => a.Log("A", $"{i}")); },
+                () => { for (var i = 0; i < each; i++) took.Time("B", () => b.Log("B", $"{i}")); });
+        }
+        finally
+        {
+            // On a workstation this race takes about a third of a second; on the CI runner it has twice run out of its
+            // 30 (#2548). What each Log took says where the time goes, pass or fail, in the test's output.
+            TestContext.Current.TestOutputHelper?.WriteLine(took.Report());
+        }
 
         var all = new ActivityLogService(_dir).GetRecent(int.MaxValue);
         Assert.Equal(2 * each, all.Count);
         Assert.Equal(each, all.Count(e => e.Action == "A"));
+    }
+
+    /// <summary>How long each Log in a race took, per writer, in the order they finished.</summary>
+    private sealed class LogTimings
+    {
+        private readonly ConcurrentQueue<(string Writer, double Ms)> _took = new();
+
+        public void Time(string writer, Action log)
+        {
+            var started = Stopwatch.GetTimestamp();
+            log();
+            _took.Enqueue((writer, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+        }
+
+        public string Report() => string.Join(Environment.NewLine, _took
+            .GroupBy(t => t.Writer)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var ms = g.Select(t => t.Ms).ToArray();
+                var sorted = ms.Order().ToArray();
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{g.Key}: {ms.Length} logs, median {sorted[sorted.Length / 2]:F0} ms, max {sorted[^1]:F0} ms, "
+                    + $"total {ms.Sum():F0} ms: {string.Join(" ", ms.Select(m => m.ToString("F0", CultureInfo.InvariantCulture)))}");
+            }));
     }
 
     [Fact]

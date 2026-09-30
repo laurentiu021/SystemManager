@@ -94,12 +94,14 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshProcessesAsync()
     {
-        var current = SelectedGame?.ProcessId;
+        var current = SelectedGame;
         var procs = await System.Threading.Tasks.Task.Run(_cpu.GetProcesses).ConfigureAwait(true);
         Processes.ReplaceWith(procs);
-        // Preserve the selection across a refresh if that process is still running.
-        if (current is { } pid)
-            SelectedGame = Processes.FirstOrDefault(p => p.ProcessId == pid);
+        // Preserve the selection across a refresh if that process is still running. The start time is what tells it
+        // from a new process Windows has given the same ID (#2559).
+        if (current is not null)
+            SelectedGame = Processes.FirstOrDefault(
+                p => p.ProcessId == current.ProcessId && p.StartTime == current.StartTime);
     }
 
     /// <summary>True when nothing is applied yet and at least one optimization is ticked.</summary>
@@ -157,7 +159,7 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
             return;
         }
 
-        var game = SelectedGame is { } g ? new GameTarget(g.ProcessId, g.Name) : null;
+        var game = SelectedGame is { } g ? new GameTarget(g.ProcessId, g.Name, g.StartTime) : null;
         var targetLine = game is null
             ? "No game selected — CPU affinity/priority are skipped and changes revert when you press Stop."
             : $"Optimizations apply to {game.Name} and revert automatically when it exits.";
@@ -190,6 +192,16 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 // when SysManager closes during a game, so it must not be written over (#2521).
                 StatusMessage = "Cannot start — SysManager could not read the record it keeps to undo game mode "
                     + "if it closes during a game. Try again in a moment.";
+                return;
+            }
+
+            if (result.GameClosed && game is not null)
+            {
+                // Nothing was applied: the game closed after the list was read, and its ID may belong to another
+                // program by now (#2559). The refresh takes it off the list, and the selection with it.
+                await RefreshProcessesAsync();
+                StatusMessage = $"{game.Name} had already closed, so game mode did not start. "
+                    + "Pick the game again from the refreshed list.";
                 return;
             }
 

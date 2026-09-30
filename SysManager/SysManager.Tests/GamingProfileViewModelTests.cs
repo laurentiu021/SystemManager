@@ -112,13 +112,15 @@ public class GamingProfileViewModelTests
 
     // ── Start forwards the built profile + selected game ───────────────────
 
+    private static readonly DateTime Started = new(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);
+
     [Fact]
     public async Task Start_ForwardsProfileAndGame_ToService()
     {
         var service = ServiceWith(new GamingProfile());
         service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
                .Returns(new GamingApplyResult([], false));
-        var cpu = CpuWith(new RunningProcess(4242, "doom.exe", 0));
+        var cpu = CpuWith(new RunningProcess(4242, "doom.exe", 0, Started));
         var vm = NewVm(service, cpu);
 
         vm.FinestTimerResolution = true;
@@ -129,9 +131,51 @@ public class GamingProfileViewModelTests
 
         service.Received(1).SaveLastConfig(
             Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority));
+        // The start time goes with the ID, so the service can tell the game from a new program with its ID (#2559).
         await service.Received(1).ApplyAsync(
             Arg.Is<GamingProfile>(p => p != null && p.FinestTimerResolution && p.HighGameCpuPriority),
-            Arg.Is<GameTarget?>(g => g != null && g.ProcessId == 4242 && g.Name == "doom.exe"));
+            Arg.Is<GameTarget?>(g => g != null && g.ProcessId == 4242 && g.Name == "doom.exe" && g.StartTime == Started));
+    }
+
+    [Fact]
+    public async Task Start_WhenTheGameHadClosed_SaysSo_AndTakesItOffTheList()
+    {
+        // #2559. The list can be minutes old; the service refused before changing anything.
+        var service = ServiceWith(new GamingProfile());
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult([], false, GameClosed: true));
+        var cpu = Substitute.For<ICpuAffinityService>();
+        cpu.GetProcesses().Returns(
+            new List<RunningProcess> { new(4242, "doom.exe", 0, Started) },   // at load
+            new List<RunningProcess>());                                       // the refresh after the refusal
+        var vm = NewVm(service, cpu);
+        vm.HighGameCpuPriority = true;
+        vm.SelectedGame = vm.Processes.Single();
+
+        await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.Equal("doom.exe had already closed, so game mode did not start. Pick the game again from the refreshed list.",
+            vm.StatusMessage);
+        Assert.Null(vm.SelectedGame);
+        Assert.Empty(vm.Processes);
+        Assert.False(vm.IsSessionActive);
+    }
+
+    [Fact]
+    public async Task Refresh_DoesNotCarryTheSelectionToANewProcessWithTheSameId()
+    {
+        // A restarted game can come back with the same name and, by chance, the same ID. It is not the process that
+        // was picked, so nothing is selected rather than it (#2559).
+        var cpu = Substitute.For<ICpuAffinityService>();
+        cpu.GetProcesses().Returns(
+            new List<RunningProcess> { new(4242, "doom.exe", 0, Started) },
+            new List<RunningProcess> { new(4242, "doom.exe", 0, Started.AddMinutes(7)) });
+        var vm = NewVm(ServiceWith(), cpu);
+        vm.SelectedGame = vm.Processes.Single();
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.SelectedGame);
     }
 
     [Fact]
@@ -287,7 +331,7 @@ public class GamingProfileViewModelTests
              new GamingStepOutcome("b", GamingStepStatus.Applied)],
             RestorePointCreated: false);
 
-        var text = GamingProfileViewModel.DescribeResult(result, new GameTarget(1, "doom.exe"));
+        var text = GamingProfileViewModel.DescribeResult(result, new GameTarget(1, "doom.exe", StartTime: null));
 
         Assert.Contains("2 optimization(s) applied", text);
         Assert.Contains("doom.exe", text);

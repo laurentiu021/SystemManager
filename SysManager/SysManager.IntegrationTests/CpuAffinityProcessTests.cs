@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -75,10 +76,41 @@ public sealed class CpuAffinityProcessTests
         Assert.True(service.HasExited(id, started));
     }
 
+    /// <summary>
+    /// The priority Gaming Profile raises a game to, changed only at the game's start time (#2559).
+    /// </summary>
+    /// <remarks>
+    /// The child starts at the test host's class, which on the CI runner is Below Normal, so the target is whichever of
+    /// High and Above Normal it is not already at. Neither needs a privilege for a process's own child; only Realtime
+    /// does.
+    /// </remarks>
+    [Fact]
+    public async Task TrySetPriority_AtTheListedStartTime_ChangesTheChild_AndAtAnotherLeavesItAsItWas()
+    {
+        using var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var child = await RunningChild.StartAsync(heldFile: null, bounded.Token);
+        var service = new CpuAffinityService();
+        var before = PriorityOf(child);
+        var target = before == ProcessPriorityClass.High ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.High;
+
+        Assert.False(service.TrySetPriority(child.Id, child.StartTime.AddSeconds(-1), target, out var refused));
+        Assert.Equal("That process is no longer running.", refused);
+        Assert.Equal(before, PriorityOf(child));
+
+        Assert.True(service.TrySetPriority(child.Id, child.StartTime, target, out var error), error);
+        Assert.Equal(target, PriorityOf(child));
+    }
+
     private static long MaskOf(RunningChild child)
     {
         child.Process.Refresh();
         return (long)child.Process.ProcessorAffinity;
+    }
+
+    private static ProcessPriorityClass PriorityOf(RunningChild child)
+    {
+        child.Process.Refresh();
+        return child.Process.PriorityClass;
     }
 
     private static void SkipOnASingleCpu()

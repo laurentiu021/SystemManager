@@ -179,6 +179,16 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             return new GamingApplyResult([], RestorePointCreated: false, StoreUnreadable: true);
         }
 
+        // The game was picked from a list that can be minutes old, and Windows gives a closed process's ID to the next
+        // one started. Game mode for a game that has closed would raise that program and wait for it to exit, so
+        // nothing is changed (#2559). The per-game steps and the auto-revert binding check again, since the game can
+        // close at any point from here.
+        if (game is not null && _cpu.HasExited(game.ProcessId, game.StartTime))
+        {
+            Log.Information("Gaming Profile apply refused: {Game} ({Pid}) had already closed", game.Name, game.ProcessId);
+            return new GamingApplyResult([], RestorePointCreated: false, GameClosed: true);
+        }
+
         if (IsActive) await RevertAsync(ct).ConfigureAwait(false); // never stack sessions
 
         // Acquired BEFORE the snapshot, not merely around the writes, because the snapshot IS the
@@ -226,8 +236,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // what would let Dispose's blocking _gate.Wait() deadlock at shutdown.
             outcomes = await RunApplyAsync(steps, _isElevated, appliedThisRun, ct).ConfigureAwait(false);
             _appliedSteps.AddRange(appliedThisRun);
-            BoundGamePid = game?.ProcessId;
             BindAutoRevert(game);
+            // What the session is actually watching: a game that could not be bound is not (#2559).
+            BoundGamePid = _boundGame is null ? null : game?.ProcessId;
 
             // Persist the crash-recovery marker ONLY when machine-wide changes actually went live,
             // and record the EFFECTIVE machine-wide profile (only the steps that applied) so the
@@ -377,17 +388,18 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         var steps = new List<IGamingTweak>();
         if (game is not { } g) return steps;
 
+        // Every read and every change passes the game's start time, so an ID that has passed to another program
+        // reads as nothing and changes nothing (#2559).
         if (profile.PinGameToPerformanceCores)
         {
             long target = PerformanceCoreMask(_cpu.GetCores());
-            // A GameTarget keeps no start time, so the game's ID is not checked against it (#2559).
-            long? original = _cpu.GetAffinity(g.ProcessId, startTime: null);
-            steps.Add(new GameAffinityTweak(_cpu, g.ProcessId, target, original));
+            long? original = _cpu.GetAffinity(g.ProcessId, g.StartTime);
+            steps.Add(new GameAffinityTweak(_cpu, g, target, original));
         }
         if (profile.HighGameCpuPriority)
         {
-            var original = _cpu.GetPriority(g.ProcessId);
-            steps.Add(new GamePriorityTweak(_cpu, g.ProcessId, original));
+            var original = _cpu.GetPriority(g.ProcessId, g.StartTime);
+            steps.Add(new GamePriorityTweak(_cpu, g, original));
         }
         return steps;
     }
@@ -459,9 +471,18 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     private void BindAutoRevert(GameTarget? game)
     {
         if (game is null) return;
+        Process? proc = null;
         try
         {
-            var proc = Process.GetProcessById(game.ProcessId);
+            proc = Process.GetProcessById(game.ProcessId);
+            // The game can close after ApplyAsync checked it and its ID pass to another program. Watching that program
+            // would end game mode when it exits, so a start time that does not match is a game that has gone (#2559).
+            if (game.StartTime is { } started && proc.StartTime != started)
+            {
+                Log.Debug("Gaming Profile did not bind auto-revert: process {Pid} is no longer {Game}", game.ProcessId, game.Name);
+                return;
+            }
+
             // Subscribe BEFORE enabling events: if the process exits in the gap between the two,
             // the reverse order latches the one-shot Exited with no subscriber and it never fires.
             proc.Exited += OnGameExited;
@@ -476,10 +497,16 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                 _ = OnGameExitedAsync();
             }
         }
-        // The game may have already exited between selection and bind, or be inaccessible —
-        // leave the session unbound (manual revert still works) rather than crash.
+        // The game may have already exited between selection and bind, or be inaccessible, or Windows may not say when
+        // it started — leave the session unbound (manual revert still works) rather than crash.
         catch (ArgumentException ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
         catch (InvalidOperationException ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
+        catch (System.ComponentModel.Win32Exception ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
+        finally
+        {
+            // Only the bound game is kept, until the session ends; any other lookup is let go here.
+            if (!ReferenceEquals(proc, _boundGame)) proc?.Dispose();
+        }
     }
 
     // Must be called while holding _gate (from RevertAsync / Dispose).

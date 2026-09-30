@@ -134,4 +134,40 @@ public class CpuAffinityServiceTests
         Assert.False(service.HasExited(Environment.ProcessId, null));
         Assert.True(service.HasExited(int.MaxValue, null));
     }
+
+    // ── The same check for the priority Gaming Profile raises (#2559) ──
+    // The one write passes the priority this process already has, for the reason the affinity write above does.
+
+    private static (int Id, DateTime StartTime, ProcessPriorityClass Priority) SelfPriority()
+    {
+        using var self = Process.GetCurrentProcess();
+        return (self.Id, self.StartTime, self.PriorityClass);
+    }
+
+    [Fact]
+    public void GetPriority_AtTheListedStartTime_ReadsTheClass()
+    {
+        var (id, startTime, priority) = SelfPriority();
+
+        Assert.Equal(priority, new CpuAffinityService().GetPriority(id, startTime));
+    }
+
+    [Fact]
+    public void GetPriority_ForAProcessThatStartedAtAnotherTime_IsNull()
+    {
+        var (id, startTime, _) = SelfPriority();
+
+        Assert.Null(new CpuAffinityService().GetPriority(id, startTime.AddSeconds(-1)));
+    }
+
+    [Fact]
+    public void TrySetPriority_ForAProcessThatStartedAtAnotherTime_ChangesNothing()
+    {
+        var (id, startTime, priority) = SelfPriority();
+
+        var changed = new CpuAffinityService().TrySetPriority(id, startTime.AddSeconds(-1), priority, out var error);
+
+        Assert.False(changed);
+        Assert.Equal("That process is no longer running.", error);
+    }
 }

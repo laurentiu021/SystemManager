@@ -270,7 +270,8 @@ public class GamingProfileServiceTests
     // invoked in these tests (only LoadLastConfig/SaveLastConfig, which touch the file only),
     // so their construction is inert — no power/timer/registry call fires.
     private static GamingProfileService StoreOnlyService(
-        string path, Func<string, CancellationToken, Task<bool>>? createRestorePoint = null)
+        string path, Func<string, CancellationToken, Task<bool>>? createRestorePoint = null,
+        ICpuAffinityService? cpu = null)
     {
         var runner = new PowerShellRunner();
         var restore = new RestorePointService(runner);
@@ -280,7 +281,7 @@ public class GamingProfileServiceTests
             new PerformanceService(runner, restore,
                 Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
             new TimerResolutionService(),
-            new CpuAffinityService(),
+            cpu ?? new CpuAffinityService(),
             new StandbyMemoryService(),
             // Never creates a point: these tests are about the engine, and a real System Restore
             // call needs admin, takes seconds and is rate-limited.
@@ -544,10 +545,11 @@ public class GamingProfileServiceTests
     {
         var requested = new GamingProfile { HighGameCpuPriority = true, PinGameToPerformanceCores = true };
         var cpu = Substitute.For<ICpuAffinityService>();
+        var game = new GameTarget(1234, "game.exe", StartTime: null);
         var applied = new IGamingTweak[]
         {
-            new GamePriorityTweak(cpu, 1234, System.Diagnostics.ProcessPriorityClass.Normal),
-            new GameAffinityTweak(cpu, 1234, 0b11L, 0b01L),
+            new GamePriorityTweak(cpu, game, System.Diagnostics.ProcessPriorityClass.Normal),
+            new GameAffinityTweak(cpu, game, 0b11L, 0b01L),
         };
 
         var effective = GamingProfileService.EffectiveMachineWideProfile(requested, applied);
@@ -794,5 +796,131 @@ public class GamingProfileServiceTests
             Assert.False(svc.IsActive);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── The chosen game is the process that was listed (#2559) ──────────────────
+    // Game mode acted on the game's ID alone. The list it was picked from can be minutes old, Windows gives a closed
+    // process's ID to the next one started, and a session can last hours. Every per-game call now passes the game's
+    // start time, and the auto-revert binding checks it. The CPU calls go to a substitute, so a missing check would
+    // still change no real process.
+
+    private static readonly DateTime GameStarted = new(2026, 9, 30, 8, 15, 42, DateTimeKind.Local);
+
+    private static string NewStorePath() => Path.Combine(Path.GetTempPath(), $"sm-gaming-game-{Guid.NewGuid():N}.json");
+
+    private static ICpuAffinityService CpuThatChangesAnything()
+    {
+        var cpu = Substitute.For<ICpuAffinityService>();
+        cpu.TrySetPriority(Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<System.Diagnostics.ProcessPriorityClass>(),
+                out Arg.Any<string>())
+           .Returns(true);
+        cpu.TrySetAffinity(Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<long>(), out Arg.Any<string>()).Returns(true);
+        return cpu;
+    }
+
+    [Fact]
+    public async Task GamePriorityTweak_PassesTheGamesStartTime_WhenItRaisesAndWhenItRestores()
+    {
+        var cpu = CpuThatChangesAnything();
+        var tweak = new GamePriorityTweak(cpu, new GameTarget(4242, "doom.exe", GameStarted),
+            System.Diagnostics.ProcessPriorityClass.Normal);
+
+        await tweak.ApplyAsync(CancellationToken.None);
+        await tweak.RevertAsync(CancellationToken.None);
+
+        cpu.Received(1).TrySetPriority(4242, GameStarted, System.Diagnostics.ProcessPriorityClass.High, out Arg.Any<string>());
+        cpu.Received(1).TrySetPriority(4242, GameStarted, System.Diagnostics.ProcessPriorityClass.Normal, out Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task GameAffinityTweak_PassesTheGamesStartTime_WhenItPinsAndWhenItRestores()
+    {
+        var cpu = CpuThatChangesAnything();
+        var tweak = new GameAffinityTweak(cpu, new GameTarget(4242, "doom.exe", GameStarted), 0b11L, 0b01L);
+
+        await tweak.ApplyAsync(CancellationToken.None);
+        await tweak.RevertAsync(CancellationToken.None);
+
+        cpu.Received(1).TrySetAffinity(4242, GameStarted, 0b11L, out Arg.Any<string>());
+        cpu.Received(1).TrySetAffinity(4242, GameStarted, 0b01L, out Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ForAGameThatHadClosed_ChangesNothing()
+    {
+        var path = NewStorePath();
+        try
+        {
+            var cpu = CpuThatChangesAnything();
+            cpu.HasExited(4242, GameStarted).Returns(true);
+            var restorePointAttempts = 0;
+            var svc = StoreOnlyService(path, (_, _) =>
+            {
+                restorePointAttempts++;
+                return Task.FromResult(false);
+            }, cpu);
+
+            // A per-game step, which goes to the substitute, and one that needs administrator, which this service is
+            // not: were the refusal missing, the batch would still change nothing on this machine.
+            var result = await svc.ApplyAsync(
+                new GamingProfile { HighGameCpuPriority = true, PurgeStandbyMemory = true },
+                new GameTarget(4242, "doom.exe", GameStarted));
+
+            Assert.True(result.GameClosed);
+            Assert.Empty(result.Steps);
+            Assert.Equal(0, restorePointAttempts);
+            Assert.False(svc.IsActive);
+            cpu.DidNotReceiveWithAnyArgs().TrySetPriority(default, default, default, out _);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ReadsRaisesAndRestoresTheGameAtItsStartTime()
+    {
+        // int.MaxValue names no process, so the auto-revert binding finds nothing to watch.
+        var path = NewStorePath();
+        try
+        {
+            var cpu = CpuThatChangesAnything();
+            cpu.GetPriority(int.MaxValue, GameStarted).Returns(System.Diagnostics.ProcessPriorityClass.Normal);
+            var svc = StoreOnlyService(path, cpu: cpu);
+
+            var result = await svc.ApplyAsync(new GamingProfile { HighGameCpuPriority = true },
+                new GameTarget(int.MaxValue, "doom.exe", GameStarted));
+            await svc.RevertAsync();
+
+            Assert.Equal(1, result.AppliedCount);
+            cpu.Received(1).GetPriority(int.MaxValue, GameStarted);
+            cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.High,
+                out Arg.Any<string>());
+            cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.Normal,
+                out Arg.Any<string>());
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WatchesTheGame_OnlyWhileItIsTheProcessThatWasListed()
+    {
+        // This test process stands in for the game: with its own start time it is the game, and with another it is a
+        // program that has since been given the game's ID. Watching it changes nothing, and the revert lets it go.
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = NewStorePath();
+        try
+        {
+            var svc = StoreOnlyService(path, cpu: CpuThatChangesAnything());
+            var profile = new GamingProfile { HighGameCpuPriority = true };
+
+            await svc.ApplyAsync(profile, new GameTarget(self.Id, "game", self.StartTime.AddSeconds(-1)));
+            Assert.Null(svc.BoundGamePid);
+            await svc.RevertAsync();
+
+            await svc.ApplyAsync(profile, new GameTarget(self.Id, "game", self.StartTime));
+            Assert.Equal(self.Id, svc.BoundGamePid);
+            await svc.RevertAsync();
+            Assert.Null(svc.BoundGamePid);
+        }
+        finally { DeleteStore(path); }
     }
 }

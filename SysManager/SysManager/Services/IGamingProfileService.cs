@@ -76,7 +76,14 @@ public interface IGamingProfileService
 }
 
 /// <summary>A running process chosen as the game target for affinity/priority + auto-revert.</summary>
-public sealed record GameTarget(int ProcessId, string Name);
+/// <param name="ProcessId">The game's process ID.</param>
+/// <param name="Name">The game's process name, for the prompt and the status line.</param>
+/// <param name="StartTime">
+/// When the game started, as listed, or null when Windows would not say. With the ID it names the game: Windows gives
+/// a closed process's ID to the next one started, and game mode can stay on for hours, so every per-game change,
+/// restore and the auto-revert binding check it (#2559).
+/// </param>
+public sealed record GameTarget(int ProcessId, string Name, DateTime? StartTime);
 
 /// <summary>The outcome of one step in an apply batch.</summary>
 public enum GamingStepStatus
@@ -119,11 +126,16 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// record is written into that store, and it could not have been without writing over whatever the store held,
 /// a leftover session's record among it (#2521).
 /// </param>
+/// <param name="GameClosed">
+/// True when the chosen game had closed before anything changed, so NOTHING was changed. Its ID may belong to another
+/// program by now, and game mode would have raised that program and waited for it to exit (#2559).
+/// </param>
 public sealed record GamingApplyResult(
     IReadOnlyList<GamingStepOutcome> Steps,
     bool RestorePointCreated,
     string? BlockedBy = null,
-    bool StoreUnreadable = false)
+    bool StoreUnreadable = false,
+    bool GameClosed = false)
 {
     /// <summary>Count of steps that applied successfully.</summary>
     public int AppliedCount => Steps.Count(s => s.Status == GamingStepStatus.Applied);

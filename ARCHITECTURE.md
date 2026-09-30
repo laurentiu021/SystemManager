@@ -238,7 +238,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back. The reconcile writes its app count through `ViewModelBase.ShowRefreshStatus`, so it never replaces an outcome on the status line.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. Built at startup, so a saved auto-purge watches from launch without the tab being opened.
-- `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
+- `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). The game target carries the listed start time, the selection survives a refresh only for the same process, and a game that had closed is refused with a refresh of the list (#2559). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's own config as a portable JSON profile with selective sections and version checking. The sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session.
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
@@ -880,9 +880,9 @@ Key services:
   and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
   (variable-length buffer walked by each record's `Size`). The mask helpers
   (build/test/all-cores) are pure, unit-tested static methods. Each process it lists
-  carries its start time, and `GetAffinity`, `TrySetAffinity` and `HasExited` take it
-  with the ID: a process with that ID that started at another time is not the one listed
-  (#2514). Gaming Profile does not pass one yet (#2559).
+  carries its start time, and `GetAffinity`, `TrySetAffinity`, `GetPriority`,
+  `TrySetPriority` and `HasExited` take it with the ID: a process with that ID that started
+  at another time is not the one listed (#2514, #2559).
 - `AudioMixerService` (`IAudioMixerService`) — per-app volume/mute/peak on the default
   render endpoint via Windows Core Audio, using raw `[ComImport]` interop for the six
   documented interfaces (`IMMDeviceEnumerator` → `IAudioSessionManager2` →
@@ -991,7 +991,11 @@ Key services:
   apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is an internal
   static method exercised by unit tests with fake steps — no real system call.
   `CpuAffinityService` gained a small `Get`/`TrySetPriority` capability (behind
-  `ICpuAffinityService`) for the game's priority.
+  `ICpuAffinityService`) for the game's priority. The game is a `GameTarget` that carries its
+  start time: Apply refuses a game that has closed before changing anything
+  (`GamingApplyResult.GameClosed`), every per-game read, change and restore passes the start time
+  with the ID, and the auto-revert binding watches the process only if it is still that game, so
+  `BoundGamePid` is set only when the binding held (#2559).
 - `DefenderService` — Microsoft Defender via the Defender PowerShell module
   (`Get-MpPreference` / `Set-MpPreference` / `Add`/`Remove-MpPreference`) through
   `IPowerShellRunner`. Normalizes the inverted `Disable*` booleans; exclusion paths are

@@ -2,6 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -244,15 +247,60 @@ public sealed class ActivityLogServiceTests : IDisposable
         // two. The long wait keeps a stalled runner from turning contention into an unlocked write.
         var a = new ActivityLogService(_dir, lockWait: StartLine.Bound);
         var b = new ActivityLogService(_dir, lockWait: StartLine.Bound);
-        const int each = 25;
+        // Ten each, down from 25 (#2548). The store lock makes the writes take turns, so the race lasts as long as all of
+        // them together: 1.3 to 2.6 seconds for 50 on a normal CI run, and more than the 30-second bound on the two runs
+        // that failed. Twenty writes fit in the bound on a runner nearly 30 times slower than the slowest normal run, and
+        // a missing store lock still loses entries in every run: 20 of 20 at 5, 10 and 25 each alike.
+        const int each = 10;
+        var took = new LogTimings();
 
-        await StartLine.RaceAsync(
-            () => { for (var i = 0; i < each; i++) a.Log("A", $"{i}"); },
-            () => { for (var i = 0; i < each; i++) b.Log("B", $"{i}"); });
+        try
+        {
+            await StartLine.RaceAsync(
+                () => { for (var i = 0; i < each; i++) took.Time("A", () => a.Log("A", $"{i}")); },
+                () => { for (var i = 0; i < each; i++) took.Time("B", () => b.Log("B", $"{i}")); });
+        }
+        finally
+        {
+            // What each Log took, and when, pass or fail, in the test's output: the report a slow run needs.
+            TestContext.Current.TestOutputHelper?.WriteLine(took.Report());
+        }
 
         var all = new ActivityLogService(_dir).GetRecent(int.MaxValue);
         Assert.Equal(2 * each, all.Count);
         Assert.Equal(each, all.Count(e => e.Action == "A"));
+    }
+
+    /// <summary>When each Log in a race started and how long it took, per writer.</summary>
+    private sealed class LogTimings
+    {
+        private readonly long _origin = Stopwatch.GetTimestamp();
+        private readonly ConcurrentQueue<(string Writer, double At, double Took)> _calls = new();
+
+        public void Time(string writer, Action log)
+        {
+            var started = Stopwatch.GetTimestamp();
+            log();
+            var ended = Stopwatch.GetTimestamp();
+            _calls.Enqueue((writer, Stopwatch.GetElapsedTime(_origin, started).TotalMilliseconds,
+                            Stopwatch.GetElapsedTime(started, ended).TotalMilliseconds));
+        }
+
+        /// <summary>
+        /// Per writer: how many calls, the median and the longest, then every call as start+duration in milliseconds
+        /// since the timings began, so the two writers can be laid side by side: one waiting while the other writes
+        /// looks different from both being slow.
+        /// </summary>
+        public string Report() => string.Join(Environment.NewLine, _calls
+            .GroupBy(c => c.Writer)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                var sorted = g.Select(c => c.Took).Order().ToArray();
+                var calls = string.Join(" ", g.Select(c => string.Create(CultureInfo.InvariantCulture, $"{c.At:F0}+{c.Took:F0}")));
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{g.Key}: {sorted.Length} logs, median {sorted[sorted.Length / 2]:F0} ms, max {sorted[^1]:F0} ms: {calls}");
+            }));
     }
 
     [Fact]

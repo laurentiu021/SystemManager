@@ -28,17 +28,38 @@ namespace SysManager.Tests;
 internal static class StartLine
 {
     /// <summary>
-    /// Generous enough never to trip on a loaded CI runner, and short enough to fail rather than hang. Shared
-    /// with a race that has a rendezvous of its own inside the writers.
+    /// Generous for the races as they are sized, and short enough to fail rather than hang. Shared with a race
+    /// that has a rendezvous of its own inside the writers.
     /// </summary>
+    /// <remarks>
+    /// Not "never trips": the activity-log race ran out of it twice, on CI runners many times slower than usual. That
+    /// race was cut down to fit rather than the bound raised for every race (#2548).
+    /// </remarks>
     internal static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Starts every writer and releases them together once all have reached the line, then waits for all of
     /// them. A fault in a writer is rethrown here. A writer that has not returned within <see cref="Bound"/>
-    /// fails the race with a <see cref="TimeoutException"/>.
+    /// fails the race with a <see cref="TimeoutException"/>, after up to one more <see cref="Bound"/> for the
+    /// writers to stop.
     /// </summary>
-    internal static async Task RaceAsync(params Action[] writers)
+    internal static Task RaceAsync(params Action[] writers) => RaceAsync(Bound, Bound, onTimedOut: null, writers);
+
+    /// <summary>
+    /// The race with its two waits and a hook for the moment the first runs out, so a test can drive that moment.
+    /// The start line always waits <see cref="Bound"/>.
+    /// </summary>
+    /// <param name="toFinish">How long the writers have to return.</param>
+    /// <param name="toStop">How much longer the race waits for them after that, before it fails.</param>
+    /// <param name="onTimedOut">Called when <paramref name="toFinish"/> runs out, before the second wait.</param>
+    /// <param name="writers">The racing writers, two or more.</param>
+    /// <remarks>
+    /// When the first wait runs out the writers are still running, and the test's cleanup comes next. A folder
+    /// deleted under a writer made the cleanup throw a second exception on top of the timeout, which read as a
+    /// second fault (#2548). So the race waits for its writers again before it fails with the timeout. A writer
+    /// that never returns still fails the run instead of hanging it, <paramref name="toStop"/> later.
+    /// </remarks>
+    internal static async Task RaceAsync(TimeSpan toFinish, TimeSpan toStop, Action? onTimedOut, params Action[] writers)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(writers.Length, 2);
 
@@ -62,6 +83,18 @@ internal static class StartLine
 
         // WaitAsync throws TimeoutException on the bound and rethrows any writer fault. Neither a hang nor an
         // exception inside a writer is swallowed.
-        await Task.WhenAll(running).WaitAsync(Bound);
+        var all = Task.WhenAll(running);
+        try
+        {
+            await all.WaitAsync(toFinish);
+        }
+        catch (TimeoutException)
+        {
+            onTimedOut?.Invoke();
+            // The timeout is what failed. A writer that faults after it is observed here, not rethrown in its place.
+            if (await Task.WhenAny(all, Task.Delay(toStop)) == all)
+                _ = all.Exception;
+            throw;
+        }
     }
 }

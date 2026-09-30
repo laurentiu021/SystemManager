@@ -268,28 +268,35 @@ public sealed class ActivityLogServiceTests : IDisposable
         Assert.Equal(each, all.Count(e => e.Action == "A"));
     }
 
-    /// <summary>How long each Log in a race took, per writer, in the order they finished.</summary>
+    /// <summary>When each Log in a race started and how long it took, per writer.</summary>
     private sealed class LogTimings
     {
-        private readonly ConcurrentQueue<(string Writer, double Ms)> _took = new();
+        private readonly long _origin = Stopwatch.GetTimestamp();
+        private readonly ConcurrentQueue<(string Writer, double At, double Took)> _calls = new();
 
         public void Time(string writer, Action log)
         {
             var started = Stopwatch.GetTimestamp();
             log();
-            _took.Enqueue((writer, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+            var ended = Stopwatch.GetTimestamp();
+            _calls.Enqueue((writer, Stopwatch.GetElapsedTime(_origin, started).TotalMilliseconds,
+                            Stopwatch.GetElapsedTime(started, ended).TotalMilliseconds));
         }
 
-        public string Report() => string.Join(Environment.NewLine, _took
-            .GroupBy(t => t.Writer)
+        /// <summary>
+        /// Per writer: how many calls, the median and the longest, then every call as start+duration in milliseconds
+        /// since the timings began, so the two writers can be laid side by side: one waiting while the other writes
+        /// looks different from both being slow.
+        /// </summary>
+        public string Report() => string.Join(Environment.NewLine, _calls
+            .GroupBy(c => c.Writer)
             .OrderBy(g => g.Key, StringComparer.Ordinal)
             .Select(g =>
             {
-                var ms = g.Select(t => t.Ms).ToArray();
-                var sorted = ms.Order().ToArray();
+                var sorted = g.Select(c => c.Took).Order().ToArray();
+                var calls = string.Join(" ", g.Select(c => string.Create(CultureInfo.InvariantCulture, $"{c.At:F0}+{c.Took:F0}")));
                 return string.Create(CultureInfo.InvariantCulture,
-                    $"{g.Key}: {ms.Length} logs, median {sorted[sorted.Length / 2]:F0} ms, max {sorted[^1]:F0} ms, "
-                    + $"total {ms.Sum():F0} ms: {string.Join(" ", ms.Select(m => m.ToString("F0", CultureInfo.InvariantCulture)))}");
+                    $"{g.Key}: {sorted.Length} logs, median {sorted[sorted.Length / 2]:F0} ms, max {sorted[^1]:F0} ms: {calls}");
             }));
     }
 

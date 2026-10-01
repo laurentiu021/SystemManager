@@ -271,7 +271,7 @@ public class GamingProfileServiceTests
     // so their construction is inert — no power/timer/registry call fires.
     private static GamingProfileService StoreOnlyService(
         string path, Func<string, CancellationToken, Task<bool>>? createRestorePoint = null,
-        ICpuAffinityService? cpu = null)
+        ICpuAffinityService? cpu = null, ITimerResolutionService? timer = null)
     {
         var runner = new PowerShellRunner();
         var restore = new RestorePointService(runner);
@@ -280,7 +280,7 @@ public class GamingProfileServiceTests
             // profile for its snapshot (#2555).
             new PerformanceService(runner, restore,
                 Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
-            new TimerResolutionService(),
+            timer ?? new TimerResolutionService(),
             cpu ?? new CpuAffinityService(),
             new StandbyMemoryService(),
             // Never creates a point: these tests are about the engine, and a real System Restore
@@ -878,23 +878,27 @@ public class GamingProfileServiceTests
     [Fact]
     public async Task ApplyAsync_ReadsRaisesAndRestoresTheGameAtItsStartTime()
     {
-        // int.MaxValue names no process, so the auto-revert binding finds nothing to watch.
+        // This test process stands in for the game, so the session stays on, watching it, until the revert. The
+        // priority calls go to the substitute, so the test host's own priority is never changed.
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
         var path = NewStorePath();
         try
         {
             var cpu = CpuThatChangesAnything();
-            cpu.GetPriority(int.MaxValue, GameStarted).Returns(System.Diagnostics.ProcessPriorityClass.Normal);
+            cpu.GetPriority(self.Id, self.StartTime).Returns(System.Diagnostics.ProcessPriorityClass.Normal);
             var svc = StoreOnlyService(path, cpu: cpu);
 
             var result = await svc.ApplyAsync(new GamingProfile { HighGameCpuPriority = true },
-                new GameTarget(int.MaxValue, "doom.exe", GameStarted));
+                new GameTarget(self.Id, "doom.exe", self.StartTime));
+            Assert.True(svc.IsActive, "precondition: the session is on until the revert");
             await svc.RevertAsync();
 
             Assert.Equal(1, result.AppliedCount);
-            cpu.Received(1).GetPriority(int.MaxValue, GameStarted);
-            cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.High,
+            Assert.Null(result.EndedAtStart);
+            cpu.Received(1).GetPriority(self.Id, self.StartTime);
+            cpu.Received(1).TrySetPriority(self.Id, self.StartTime, System.Diagnostics.ProcessPriorityClass.High,
                 out Arg.Any<string>());
-            cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.Normal,
+            cpu.Received(1).TrySetPriority(self.Id, self.StartTime, System.Diagnostics.ProcessPriorityClass.Normal,
                 out Arg.Any<string>());
         }
         finally { DeleteStore(path); }
@@ -919,6 +923,96 @@ public class GamingProfileServiceTests
             await svc.ApplyAsync(profile, new GameTarget(self.Id, "game", self.StartTime));
             Assert.Equal(self.Id, svc.BoundGamePid);
             await svc.RevertAsync();
+            Assert.Null(svc.BoundGamePid);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    // ── A game that closes while game mode is starting (#2563) ───────────────────
+    // The watch on the game is set up last, after the restore point, the snapshot and every step, which can take many
+    // seconds. A game that closed in that time left the session on, watching nothing, until Stop. The session now ends
+    // before ApplyAsync returns, as the game's exit would have ended it. The timer and the CPU calls go to substitutes,
+    // so neither the session nor its end changes anything on this machine.
+
+    private static ITimerResolutionService TimerThatAccepts()
+    {
+        var timer = Substitute.For<ITimerResolutionService>();
+        timer.Query().Returns(new TimerResolutionStatus(5000, 156250, 156250, EnabledByApp: false));
+        timer.Enable().Returns(new TimerResolutionStatus(5000, 156250, 5000, EnabledByApp: true));
+        return timer;
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenTheGameClosesAsGameModeStarts_EndsTheSessionAtOnce()
+    {
+        // The check for a closed game before any change passes, as the substitute says the game is running, and by the
+        // time the watch is set up its ID names no process: int.MaxValue never does.
+        var path = NewStorePath();
+        try
+        {
+            var cpu = CpuThatChangesAnything();
+            cpu.GetPriority(int.MaxValue, GameStarted).Returns(System.Diagnostics.ProcessPriorityClass.Normal);
+            var timer = TimerThatAccepts();
+            var svc = StoreOnlyService(path, cpu: cpu, timer: timer);
+
+            var result = await svc.ApplyAsync(
+                new GamingProfile { FinestTimerResolution = true, HighGameCpuPriority = true },
+                new GameTarget(int.MaxValue, "doom.exe", GameStarted));
+
+            Assert.Equal(2, result.AppliedCount);
+            Assert.NotNull(result.EndedAtStart);
+            Assert.True(result.EndedAtStart.FullyRestored);
+            Assert.False(svc.IsActive);
+            Assert.Null(svc.BoundGamePid);
+            Assert.False(svc.HasPendingRecovery);
+            timer.Received(1).Disable();
+            cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.Normal,
+                out Arg.Any<string>());
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WhenAnotherProcessHasTheGamesIdAsGameModeStarts_EndsTheSessionAtOnce()
+    {
+        // This test process stands in for a program that has been given the closed game's ID: it did not start at the
+        // listed time. It is not watched, and the session ends.
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = NewStorePath();
+        try
+        {
+            var timer = TimerThatAccepts();
+            var svc = StoreOnlyService(path, cpu: CpuThatChangesAnything(), timer: timer);
+
+            var result = await svc.ApplyAsync(new GamingProfile { FinestTimerResolution = true },
+                new GameTarget(self.Id, "game", self.StartTime.AddSeconds(-1)));
+
+            Assert.NotNull(result.EndedAtStart);
+            Assert.False(svc.IsActive);
+            Assert.Null(svc.BoundGamePid);
+            timer.Received(1).Disable();
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_ThatChangesNothing_WatchesNothing()
+    {
+        // The test process is the game, and the one step fails: the substitute refuses every change. No session is on,
+        // so nothing may watch the game. The next Start would not revert first, and its watch would replace this one
+        // without letting it go, so this game's exit would end that session (#2563).
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var path = NewStorePath();
+        try
+        {
+            var svc = StoreOnlyService(path, cpu: Substitute.For<ICpuAffinityService>());
+
+            var result = await svc.ApplyAsync(new GamingProfile { HighGameCpuPriority = true },
+                new GameTarget(self.Id, "game", self.StartTime));
+
+            Assert.Equal(1, result.FailedCount);
+            Assert.Null(result.EndedAtStart);
+            Assert.False(svc.IsActive);
             Assert.Null(svc.BoundGamePid);
         }
         finally { DeleteStore(path); }

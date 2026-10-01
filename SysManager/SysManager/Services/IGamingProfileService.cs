@@ -32,7 +32,8 @@ public interface IGamingProfileService
     /// affinity/priority and auto-revert-on-exit. Captures original state first (best-effort
     /// System Restore point too), then applies each enabled step in order. Steps that need
     /// admin while the app is not elevated are skipped and reported, not failed. Returns a
-    /// per-step outcome so the UI can report honestly.
+    /// per-step outcome so the UI can report honestly. A game that closed while all that ran
+    /// ends the session before this returns (<see cref="GamingApplyResult.EndedAtStart"/>).
     /// </summary>
     Task<GamingApplyResult> ApplyAsync(GamingProfile profile, GameTarget? game, CancellationToken ct = default);
 
@@ -130,12 +131,18 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// True when the chosen game had closed before anything changed, so NOTHING was changed. Its ID may belong to another
 /// program by now, and game mode would have raised that program and waited for it to exit (#2559).
 /// </param>
+/// <param name="EndedAtStart">
+/// Set when the game closed while game mode was starting, after the changes were made: the session was ended at once,
+/// as the game's exit would have ended it, and this is that revert's result. Null otherwise. The exit had already
+/// happened, so there was nothing left to wait for, and the session used to stay on until Stop (#2563).
+/// </param>
 public sealed record GamingApplyResult(
     IReadOnlyList<GamingStepOutcome> Steps,
     bool RestorePointCreated,
     string? BlockedBy = null,
     bool StoreUnreadable = false,
-    bool GameClosed = false)
+    bool GameClosed = false,
+    GamingRevertResult? EndedAtStart = null)
 {
     /// <summary>Count of steps that applied successfully.</summary>
     public int AppliedCount => Steps.Count(s => s.Status == GamingStepStatus.Applied);

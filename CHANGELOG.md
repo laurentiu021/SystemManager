@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.114.54] - 2026-10-01
+
+**Gaming Profile now ends game mode when the game closes while it is starting.** Start can take many seconds,
+and a game that closed in that time left game mode on until you pressed Stop. Game mode now ends at once and
+puts your settings back, as it does whenever the game exits, and the tab says so.
+
+### Fixed
+
+- **Game mode stayed on until Stop when the game closed while it was starting.** Start sets up the watch on the
+  game last, after the restore point, which can take many seconds, the snapshot and every change. A game that
+  closed in that time could not be found, or another program had been given its ID, and the session stayed on
+  with nothing watching for the game's exit.
+  - Start now ends game mode before it finishes, putting the settings back as the game's exit would have, and
+    says the game closed while game mode was starting. A setting that could not be put back is named, as after
+    Stop.
+  - A game that exits just as the watch is set up, the one case that was handled, now ends the same way. Its
+    session used to end after the tab had already announced that game mode was on.
+  - Present since v1.52.38, when Gaming Profile was added.
+- **A Start that changed nothing still watched the game.** Starting again replaced that watch without letting it
+  go, so the first game's exit could end the second session. A Start that changes nothing now watches nothing.
+  Present since v1.52.38.
+
 ## [1.114.53] - 2026-09-30
 
 **Gaming Profile now acts only on the game you picked.** If the game closed after the list was read and Windows

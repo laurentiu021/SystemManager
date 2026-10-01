@@ -228,6 +228,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
         List<GamingStepOutcome> outcomes;
         List<IGamingTweak> appliedThisRun = new();
+        GamingRevertResult? endedAtStart = null;
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -236,18 +237,30 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // what would let Dispose's blocking _gate.Wait() deadlock at shutdown.
             outcomes = await RunApplyAsync(steps, _isElevated, appliedThisRun, ct).ConfigureAwait(false);
             _appliedSteps.AddRange(appliedThisRun);
-            BindAutoRevert(game);
-            // What the session is actually watching: a game that could not be bound is not (#2559).
-            BoundGamePid = _boundGame is null ? null : game?.ProcessId;
 
-            // Persist the crash-recovery marker ONLY when machine-wide changes actually went live,
-            // and record the EFFECTIVE machine-wide profile (only the steps that applied) so the
-            // next-launch recovery sweep replays exactly those — never a step that was skipped for
-            // admin or was a no-op (which is how a WSearch we never stopped could get restarted).
-            var effective = EffectiveMachineWideProfile(profile, appliedThisRun);
-            if (effective.HasAnyEnabled
-                && !UpdateStore(store => store with { ActiveSession = new GamingSessionRecord(effective, snapshot) }))
-                Log.Warning("Gaming Profile is on without its crash-recovery record: the store could not be updated");
+            // A start that changed nothing has nothing to undo, so it watches nothing. A watch left behind would end the
+            // next session when this game exits (#2563).
+            if (IsActive && BindAutoRevert(game))
+            {
+                // The game closed while the restore point, the snapshot and the steps ran. Its exit has already
+                // happened and will not come to end the session, so the session ends now, as that exit would have
+                // ended it, instead of staying on until Stop (#2563).
+                endedAtStart = await RevertLockedAsync(ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // What the session is actually watching: a game that could not be bound is not (#2559).
+                BoundGamePid = _boundGame is null ? null : game?.ProcessId;
+
+                // Persist the crash-recovery marker ONLY when machine-wide changes actually went live,
+                // and record the EFFECTIVE machine-wide profile (only the steps that applied) so the
+                // next-launch recovery sweep replays exactly those — never a step that was skipped for
+                // admin or was a no-op (which is how a WSearch we never stopped could get restarted).
+                var effective = EffectiveMachineWideProfile(profile, appliedThisRun);
+                if (effective.HasAnyEnabled
+                    && !UpdateStore(store => store with { ActiveSession = new GamingSessionRecord(effective, snapshot) }))
+                    Log.Warning("Gaming Profile is on without its crash-recovery record: the store could not be updated");
+            }
         }
         finally { _gate.Release(); }
 
@@ -257,7 +270,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             outcomes.Count(o => o.Status == GamingStepStatus.SkippedNoChange),
             outcomes.Count(o => o.Status == GamingStepStatus.Failed));
 
-        return new GamingApplyResult(outcomes, restorePointCreated);
+        return new GamingApplyResult(outcomes, restorePointCreated, EndedAtStart: endedAtStart);
     }
 
     public async Task<GamingRevertResult> RevertAsync(CancellationToken ct = default)
@@ -281,29 +294,36 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            UnbindAutoRevertLocked();
-            BoundGamePid = null;
-
-            var result = GamingRevertResult.Complete;
-            if (_appliedSteps.Count > 0)
-            {
-                var applied = _appliedSteps.ToList();
-                _appliedSteps.Clear();
-                // ConfigureAwait(false): nothing under the gate touches the UI thread (the tweak
-                // reverts are off-thread powercfg/registry/service calls). Resuming on the UI
-                // context here would post the gate-releasing continuation back to the UI thread —
-                // which Dispose()'s blocking _gate.Wait() (also on the UI thread at shutdown) would
-                // deadlock against. Keeping the continuation off the UI thread breaks that cycle.
-                result = await RunRevertAsync(applied, ct).ConfigureAwait(false);
-                Log.Information("Gaming Profile reverted {Count} step(s), {Failed} could not be restored",
-                    applied.Count, result.NotRestored.Count);
-            }
-
-            // Clear the persisted active-session marker (whether or not steps were live).
-            ClearActiveSession();
-            return result;
+            return await RevertLockedAsync(ct).ConfigureAwait(false);
         }
         finally { _gate.Release(); }
+    }
+
+    // Must be called while holding _gate: from RevertAsync, and from ApplyAsync when the game closed while game mode
+    // was starting (#2563).
+    private async Task<GamingRevertResult> RevertLockedAsync(CancellationToken ct)
+    {
+        UnbindAutoRevertLocked();
+        BoundGamePid = null;
+
+        var result = GamingRevertResult.Complete;
+        if (_appliedSteps.Count > 0)
+        {
+            var applied = _appliedSteps.ToList();
+            _appliedSteps.Clear();
+            // ConfigureAwait(false): nothing under the gate touches the UI thread (the tweak
+            // reverts are off-thread powercfg/registry/service calls). Resuming on the UI
+            // context here would post the gate-releasing continuation back to the UI thread —
+            // which Dispose()'s blocking _gate.Wait() (also on the UI thread at shutdown) would
+            // deadlock against. Keeping the continuation off the UI thread breaks that cycle.
+            result = await RunRevertAsync(applied, ct).ConfigureAwait(false);
+            Log.Information("Gaming Profile reverted {Count} step(s), {Failed} could not be restored",
+                applied.Count, result.NotRestored.Count);
+        }
+
+        // Clear the persisted active-session marker (whether or not steps were live).
+        ClearActiveSession();
+        return result;
     }
 
     public GamingProfile LoadLastConfig() => LoadStore().LastConfig;
@@ -467,10 +487,11 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     // ── Auto-revert on game exit (Process.Exited, NOT a poll loop) ─────────────
 
-    // Called from ApplyAsync while holding _gate, so it mutates _boundGame safely.
-    private void BindAutoRevert(GameTarget? game)
+    // Called from ApplyAsync while holding _gate, so it mutates _boundGame safely. Returns true when the game has already
+    // exited: there is no exit left to wait for, so the caller ends the session now (#2563).
+    private bool BindAutoRevert(GameTarget? game)
     {
-        if (game is null) return;
+        if (game is null) return false;
         Process? proc = null;
         try
         {
@@ -479,8 +500,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // would end game mode when it exits, so a start time that does not match is a game that has gone (#2559).
             if (game.StartTime is { } started && proc.StartTime != started)
             {
-                Log.Debug("Gaming Profile did not bind auto-revert: process {Pid} is no longer {Game}", game.ProcessId, game.Name);
-                return;
+                Log.Information("Gaming Profile: {Game} ({Pid}) closed while game mode was starting, and another process "
+                    + "has its ID now", game.Name, game.ProcessId);
+                return true;
             }
 
             // Subscribe BEFORE enabling events: if the process exits in the gap between the two,
@@ -489,19 +511,38 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             proc.EnableRaisingEvents = true;
             _boundGame = proc;
 
-            // Closes the race where the game exits between GetProcessById and the subscription:
-            // if it's already gone, drive the revert ourselves (Exited may never fire).
+            // Closes the race where the game exits between GetProcessById and the subscription: Exited may never fire
+            // for it, so the session ends here instead.
             if (proc.HasExited)
             {
                 proc.Exited -= OnGameExited;
-                _ = OnGameExitedAsync();
+                _boundGame = null;
+                Log.Information("Gaming Profile: {Game} ({Pid}) closed while game mode was starting", game.Name, game.ProcessId);
+                return true;
             }
+            return false;
         }
-        // The game may have already exited between selection and bind, or be inaccessible, or Windows may not say when
-        // it started — leave the session unbound (manual revert still works) rather than crash.
-        catch (ArgumentException ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
-        catch (InvalidOperationException ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
-        catch (System.ComponentModel.Win32Exception ex) { Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message); }
+        // No process has the ID any more, or the one found exited before it could be read or watched: the game closed
+        // while game mode was starting (#2563).
+        catch (ArgumentException ex)
+        {
+            Log.Information("Gaming Profile: {Game} ({Pid}) closed while game mode was starting: {Error}",
+                game.Name, game.ProcessId, ex.Message);
+            return true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Information("Gaming Profile: {Game} ({Pid}) closed while game mode was starting: {Error}",
+                game.Name, game.ProcessId, ex.Message);
+            return true;
+        }
+        // Windows will not say when it started, or let it be watched. The game may still be running, so this is not an
+        // exit: leave the session unbound (manual revert still works) rather than crash.
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            Log.Debug("Gaming Profile could not bind auto-revert: {Error}", ex.Message);
+            return false;
+        }
         finally
         {
             // Only the bound game is kept, until the session ends; any other lookup is let go here.

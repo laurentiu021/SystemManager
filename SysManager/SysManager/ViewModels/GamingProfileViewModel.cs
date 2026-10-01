@@ -205,6 +205,18 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 return;
             }
 
+            if (result.EndedAtStart is { } undone && game is not null)
+            {
+                // The game closed while game mode was starting, and the service ended the session as the game's exit
+                // would have (#2563), so no session is on, as before Start. The refresh takes the game off the list,
+                // and the selection with it.
+                await RefreshProcessesAsync();
+                StatusMessage = DescribeRevert(undone,
+                    $"{game.Name} closed while game mode was starting, so game mode ended and original settings were restored.",
+                    $"{game.Name} closed while game mode was starting, so game mode ended");
+                return;
+            }
+
             IsSessionActive = _service.IsActive;
             StatusMessage = DescribeResult(result, game);
             ActivityLogService.Instance.Log("Gaming Profile",

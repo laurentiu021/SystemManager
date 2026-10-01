@@ -161,6 +161,41 @@ public class GamingProfileViewModelTests
         Assert.False(vm.IsSessionActive);
     }
 
+    /// <summary>
+    /// A service that made the changes, found the game gone, and ended the session before returning (#2563), and a
+    /// process list that has the game at load and not at the refresh after.
+    /// </summary>
+    private static (IGamingProfileService Service, ICpuAffinityService Cpu) EndsAtStart(GamingRevertResult undone)
+    {
+        var service = ServiceWith(new GamingProfile());
+        service.ApplyAsync(Arg.Any<GamingProfile>(), Arg.Any<GameTarget?>())
+               .Returns(new GamingApplyResult([new GamingStepOutcome("High game CPU priority", GamingStepStatus.Applied)],
+                   RestorePointCreated: false, EndedAtStart: undone));
+        var cpu = Substitute.For<ICpuAffinityService>();
+        cpu.GetProcesses().Returns(
+            new List<RunningProcess> { new(4242, "doom.exe", 0, Started) },
+            new List<RunningProcess>());
+        return (service, cpu);
+    }
+
+    [Fact]
+    public async Task Start_WhenTheGameClosesWhileGameModeStarts_SaysItEnded_AndTakesTheGameOffTheList()
+    {
+        var (service, cpu) = EndsAtStart(GamingRevertResult.Complete);
+        var vm = NewVm(service, cpu);
+        vm.HighGameCpuPriority = true;
+        vm.SelectedGame = vm.Processes.Single();
+
+        await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.Equal(
+            "doom.exe closed while game mode was starting, so game mode ended and original settings were restored.",
+            vm.StatusMessage);
+        Assert.False(vm.IsSessionActive);
+        Assert.Null(vm.SelectedGame);
+        Assert.Empty(vm.Processes);
+    }
+
     [Fact]
     public async Task Refresh_DoesNotCarryTheSelectionToANewProcessWithTheSameId()
     {
@@ -281,6 +316,23 @@ public class GamingProfileViewModelTests
 
         service.SessionAutoReverted += Raise.Event<EventHandler<GamingRevertResult>>(service, PowerPlanNotRestored);
 
+        Assert.DoesNotContain("original settings were restored", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GameClosedWhileStarting_WhenASettingCouldNotBeRestored_NamesIt()
+    {
+        // The fourth way a session ends (#2563) reports a partial restore as the other three do.
+        var (service, cpu) = EndsAtStart(PowerPlanNotRestored);
+        var vm = NewVm(service, cpu);
+        vm.HighGameCpuPriority = true;
+        vm.SelectedGame = vm.Processes.Single();
+
+        await WithConfirm(true, () => vm.StartCommand.ExecuteAsync(null));
+
+        Assert.StartsWith("doom.exe closed while game mode was starting, so game mode ended, but", vm.StatusMessage,
+            StringComparison.Ordinal);
         Assert.DoesNotContain("original settings were restored", vm.StatusMessage, StringComparison.Ordinal);
         Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm.StatusMessage, StringComparison.Ordinal);
     }

@@ -1312,7 +1312,8 @@ offers, "rate us" prompts:
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,
   then restore them automatically when the game exits (or with a single Stop)
 - **Optionally target a running game** — its CPU priority is raised to High and it's
-  pinned to the performance cores, and its exit is what triggers the automatic revert
+  pinned to the performance cores, and its exit is what triggers the automatic revert, even
+  when it closes while game mode is still starting
 - **Changes the game you picked, and no other** — if it closed after the list was read and
   Windows gave its process ID to another program, Start changes nothing and says the game had
   already closed, and neither raising, restoring nor waiting for the game ever reaches that program

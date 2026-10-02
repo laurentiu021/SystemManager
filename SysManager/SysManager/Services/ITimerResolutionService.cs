@@ -11,8 +11,8 @@ namespace SysManager.Services;
 /// multimedia timer resolution. Extracting this interface lets
 /// <c>TimerResolutionViewModel</c>'s mutating command paths (Enable / Disable) be
 /// unit-tested with a substituted service instead of issuing real
-/// <c>NtSetTimerResolution</c> calls against the host process (Gate-ARCH:
-/// system-mutating services are testable).
+/// <c>NtSetTimerResolution</c> calls against the host process (system-mutating
+/// services are testable).
 /// </summary>
 public interface ITimerResolutionService
 {

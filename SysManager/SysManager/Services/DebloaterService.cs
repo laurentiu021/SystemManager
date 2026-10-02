@@ -14,7 +14,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Lists and removes Windows Store (Appx) apps for the current user. All PowerShell
 /// runs through the <see cref="IPowerShellRunner"/> seam so listing/parsing can be
-/// unit-tested with a substituted runner (Gate-ARCH).
+/// unit-tested with a substituted runner.
 ///
 /// SAFETY: a hard-coded denylist of system-critical package families (Store, frameworks,
 /// security/shell components) is enforced in <see cref="IsProtected"/> — those packages

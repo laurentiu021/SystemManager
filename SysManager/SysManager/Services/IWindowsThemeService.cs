@@ -11,7 +11,7 @@ namespace SysManager.Services;
 /// light/dark theme and loads/saves the dark-mode schedule. Extracting this interface
 /// lets <c>DarkModeViewModel</c>'s mutating command paths (SwitchToDark / SwitchToLight
 /// and schedule persistence) be unit-tested with a substituted service instead of
-/// writing HKCU and flipping the real Windows theme (Gate-ARCH: system-mutating
+/// writing HKCU and flipping the real Windows theme (system-mutating
 /// services are testable).
 ///
 /// <para>Only the instance members are abstracted; the pure

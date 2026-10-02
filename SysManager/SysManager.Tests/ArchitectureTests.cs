@@ -1391,7 +1391,7 @@ public partial class ArchitectureTests
     /// <remarks>
     /// Sixteen cases across all three test projects opened with a variant of
     /// <c>if (AdminHelper.IsElevated()) return;</c>, added so an elevated host would not report a false
-    /// failure. The CI runner IS elevated and the main workstation cannot run the suite at all, so the
+    /// failure. The CI runner IS elevated and the development machine cannot run the suite at all, so the
     /// elevation gate on SFC, DISM, Windows Update, precise bandwidth mode and the nine privileged tabs
     /// asserted nothing anywhere. <c>EtwBandwidthSourceTests</c> even said so in a comment: "elevated CI
     /// runner: the negative path is moot".
@@ -5808,7 +5808,7 @@ public partial class ArchitectureTests
     /// Every "N tabs" the README claims is re-derived from the source, not trusted.
     /// </summary>
     /// <remarks>
-    /// Gate-DOCS asks for exactly this and nothing enforced it, so a claim went stale in the one place a
+    /// The docs review asks for exactly this and nothing enforced it, so a claim went stale in the one place a
     /// reader is least able to check it: "announced on all 52 tabs that have one" while the real number was
     /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
     /// the same sentence is what tells a screen-reader user whether this app is worth trying.
@@ -8870,7 +8870,7 @@ public partial class ArchitectureTests
         // the very next line, so Contains(@"…\CurrentVersion\Run") stayed satisfied by the RunOnce row even
         // with the Run row deleted — and RunOnce is explicitly undisableable (SetEnabledAsync refuses it),
         // so this guard would have passed while the only disableable 32-bit key was gone. Found by an
-        // adversarial audit of the guard itself; reasoning about the two 32-bit and 64-bit paths missed it,
+        // audit of the guard itself; reasoning about the two 32-bit and 64-bit paths missed it,
         // because the collision is with the neighbouring RunOnce row rather than the other bitness.
         Assert.Contains(
             @"(@""SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Run"", StartupSource.RegistryLocalMachine32)",
@@ -10285,7 +10285,7 @@ public partial class ArchitectureTests
     /// <remarks>
     /// That was how the Dashboard navigated: cast the live window's DataContext to the shell and walk its
     /// NavItems. It cannot be tested, it is silently inert whenever no window is up, and #1504 pointed out
-    /// that copying it to the next caller would deepen a locator anti-pattern Gate-ARCH forbids. It was
+    /// that copying it to the next caller would deepen a locator anti-pattern the architecture rules forbid. It was
     /// replaced by an injected <c>INavigationService</c>, and this is what stops it coming back — the
     /// replacement is invisible to the compiler, so nothing else would notice a second copy appearing.
     /// </remarks>
@@ -10734,7 +10734,7 @@ public partial class ArchitectureTests
         // Each Fetched string is matched against the SELECTION it appears in, not the bare field name. The
         // bare name was vacuous for "Author": every file in this project carries the mandatory
         // "// Author: laurentiu021 …" header, so service.Contains("Author") was satisfied by line 2 and
-        // could not fail however the query changed. Found by an adversarial audit of this guard. A
+        // could not fail however the query changed. Found by an audit of this guard. A
         // selection fragment cannot be supplied by a comment, and stripping comments is not enough here —
         // the field genuinely appears in prose too.
         (string ServiceFile, string ViewFile, string Fetched, string Bound)[] contract =
@@ -14351,7 +14351,7 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryStringMarshallingInterop_BindsTheWideEntryPoint()
     {
-        // TEST-PROTOCOL Phase 5 asked a human to check this. Nothing enforced it, and the two CodeQL
+        // A manual test step asked a human to check this. Nothing enforced it, and the two CodeQL
         // queries that appeared to cover interop only counted declarations — they never looked at which
         // export a declaration binds. The two styles fail differently:
         //

@@ -54,8 +54,8 @@ public class DashboardViewModelTests
             // a live window. An unbound real NavigationService would also be inert, but then "did it
             // navigate?" would be unanswerable rather than merely unasked.
             navigation ?? Substitute.For<INavigationService>(),
-            // A substitute by default: the real agent would search Microsoft's servers from any test that runs
-            // the Windows Update check.
+            // A substitute by default: the real Windows Update Agent would search Microsoft's servers from any
+            // test that runs the Windows Update check.
             windowsUpdate ?? Substitute.For<IWindowsUpdateService>(),
             // The real engine downloads from Cloudflare, and the real history is the user's own file. A folder
             // per construction, which nothing writes to unless a test runs the quick speed test.

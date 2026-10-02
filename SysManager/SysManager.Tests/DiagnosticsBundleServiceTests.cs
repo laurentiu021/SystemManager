@@ -137,7 +137,7 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
         // A second marker a few lines in, NOT on line one. The first version of this test put its only
         // early marker on line one — which the implementation drops anyway, to remove the partial line a
         // byte-offset read starts on — so a mutation that read the whole file and dropped just that line
-        // passed. The ritual caught it; this marker and the size assertion below are what closed it.
+        // passed. The mutation run caught it; this marker and the size assertion below are what closed it.
         filler.AppendLine("EARLY-MARKER-NOT-ON-LINE-ONE");
         while (filler.Length < DiagnosticsBundleService.MaxBytesPerLog * 2)
             filler.AppendLine("2026-09-18 06:00:00.000 [INF] a routine line of the kind a log is full of");

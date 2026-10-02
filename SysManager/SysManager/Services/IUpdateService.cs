@@ -8,7 +8,7 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Abstraction over <see cref="UpdateService"/> so ViewModels depend on a mockable seam
-/// (Gate-ARCH) instead of the concrete GitHub client. Without it, a test that needs the
+/// instead of the concrete GitHub client. Without it, a test that needs the
 /// startup update check to actually run has no choice but to let the unit suite call
 /// api.github.com for real — which is both a charter violation (SysManager.Tests takes no
 /// system dependencies) and a flake surface, since GitHub's anonymous limit is 60 requests

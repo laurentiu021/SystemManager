@@ -628,7 +628,7 @@ jobs:
           retention-days: 14
 
   # The integration suite was compile-checked and never EXECUTED anywhere in the pipeline, and the
-  # primary workstation cannot run `dotnet test` at all. So a stale expectation in it stayed invisible
+  # development machine cannot run `dotnet test` at all. So a stale expectation in it stayed invisible
   # indefinitely: nine assertions sat red through a whole rename because compiling them still worked,
   # and one asserted a sidebar tab that had stopped being last. Both were found by reading the file,
   # which is not a process.

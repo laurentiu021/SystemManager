@@ -33,7 +33,6 @@ what the rest of this checklist asks of you.
       copy it from the top of any existing `.cs` or `.xaml` file
 - [ ] Self-review completed (no debug code, no hardcoded values, no generic catch)
 - [ ] README updated (if features changed)
-- [ ] No AI/IDE tool references in code or comments
 
 ### Releasing changes only (`fix:` / `feat:`)
 

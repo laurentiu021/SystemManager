@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// Reads and toggles Windows Explorer shell-extension entries. Extracted as an interface so the view
 /// model's toggle path can be driven at all: without it a test could neither make a toggle FAIL on
 /// purpose nor let it succeed, because a real toggle writes shell keys on the machine running the suite
-/// — and on an elevated CI runner that write goes through (#2180, Gate-ARCH).
+/// — and on an elevated CI runner that write goes through (#2180).
 /// </summary>
 /// <remarks>
 /// What that blocked was not merely coverage. When a toggle fails, the view model explains it two

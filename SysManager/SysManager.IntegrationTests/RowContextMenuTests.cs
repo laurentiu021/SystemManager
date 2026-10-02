@@ -27,7 +27,7 @@ namespace SysManager.IntegrationTests;
 /// check each path against the view model and row types by reflection — which is what pins the defect this
 /// repo keeps producing: a control bound to a member that does not exist, or was renamed, and therefore
 /// does nothing. What they do NOT prove is that the popup renders and the click lands; that needs the app
-/// on screen, and it is a secondary-workstation check.</para>
+/// on screen, and it is checked by hand.</para>
 /// <para>Reflection against the real types rather than a hardcoded list of names on purpose: rename
 /// <c>KillProcessCommand</c> and this fails, which is the whole point of asserting it here rather than
 /// grepping the XAML for a string that would still match itself.</para>

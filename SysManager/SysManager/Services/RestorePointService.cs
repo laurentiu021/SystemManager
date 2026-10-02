@@ -14,7 +14,7 @@ namespace SysManager.Services;
 /// Lists, creates, and restores Windows System Restore points via PowerShell.
 ///
 /// All PowerShell goes through the <see cref="IPowerShellRunner"/> seam so the parsing
-/// and orchestration can be unit-tested with a substituted runner (Gate-ARCH). Creating
+/// and orchestration can be unit-tested with a substituted runner. Creating
 /// and restoring require administrator rights; restoring triggers a reboot and is gated
 /// behind an explicit confirmation in the ViewModel.
 ///

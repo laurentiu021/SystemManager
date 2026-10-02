@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// privileged utility, and until now not one of them was enforced by anything. A refactor that added a
 /// registry delete to the cleanup engine, or an <c>HttpClient</c> to a diagnostics path, would have shipped
 /// green while falsifying a published security promise. One of the seven was already a documented manual
-/// step — Gate-REVIEW says to grep the diff for network calls in any diagnostics or export path — which is
+/// step — the review checklist says to grep the diff for network calls in any diagnostics or export path — which is
 /// exactly the kind of rule that survives only as long as someone remembers it.
 /// <para><b>Every guard here carries a measured floor</b>, because every one is a "no match" assertion and
 /// a no-match assertion is what passes silently when its pattern rots. The floors are counts re-derived

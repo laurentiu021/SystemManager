@@ -95,7 +95,7 @@ query-filters:
   # alert easy to overlook. What these queries gesture at is real, but they do not check it:
   # neither reports whether an entry point is bound correctly, only that interop exists. The
   # check that matters — an A/W-variant function must name its EntryPoint explicitly, or the
-  # bare name binds to no export — is currently a manual TEST-PROTOCOL step plus Gate-REVIEW
+  # bare name binds to no export — is currently a manual test step plus a review rule
   # treating any P/Invoke diff as merge-blocking. A source-scanning architecture test for it
   # is the follow-up to this change, and is what actually replaces the coverage.
   - exclude:

@@ -12,7 +12,7 @@ namespace SysManager.Services;
 /// level via Windows Core Audio. Extracting this interface lets
 /// <c>AudioMixerViewModel</c>'s command and reconcile paths be unit-tested with a
 /// substituted service against a deterministic session list, so no real audio hardware
-/// or COM is touched in tests (Gate-ARCH: the mockable seam). All COM types stay inside
+/// or COM is touched in tests (the mockable seam). All COM types stay inside
 /// the concrete <see cref="AudioMixerService"/>; nothing here exposes them.
 /// </summary>
 public interface IAudioMixerService

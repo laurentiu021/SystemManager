@@ -217,7 +217,7 @@ collection definitions (all defined in `TestCollections.cs`, each with
 
 Never skip the assertion on an elevated host. Sixteen cases used to open with a variant of
 `if (AdminHelper.IsElevated()) return;`, added so an elevated machine would not report a false failure —
-but the CI runner *is* elevated and the primary workstation cannot run the suite at all, so the elevation
+but the CI runner *is* elevated and the development machine cannot run the suite at all, so the elevation
 gate on SFC, DISM, Windows Update, precise bandwidth mode and the nine privileged tabs asserted nothing
 anywhere. Pin the value with `ForceElevation` instead, and assert both sides: the negative test alone
 cannot tell a working gate from a command that refuses unconditionally.

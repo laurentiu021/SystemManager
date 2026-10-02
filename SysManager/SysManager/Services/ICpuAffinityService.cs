@@ -12,7 +12,7 @@ namespace SysManager.Services;
 /// per-process CPU affinity. Extracting this interface lets <c>CpuAffinityViewModel</c>'s
 /// mutating command paths (Apply / Restore) be unit-tested with a substituted service
 /// against a deterministic process+topology instead of touching a real process
-/// (Gate-ARCH: system-mutating services are testable).
+/// (system-mutating services are testable).
 ///
 /// <para>Only the instance members are abstracted; the pure bitmask helpers
 /// (<c>AllCoresMask</c> / <c>MaskFromIndices</c> / <c>IsCoreInMask</c>) remain static

@@ -152,8 +152,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// to hand (#1772).
     /// </param>
     /// <param name="windowsUpdate">
-    /// Required, for the quick action that checks Windows Update. A default would be the real agent, and any
-    /// test that ran the action would then search Microsoft's servers for real.
+    /// Required, for the quick action that checks Windows Update. A default would be the real Windows
+    /// Update Agent, and any test that ran the action would then search Microsoft's servers for real.
     /// </param>
     /// <param name="speedTest">Required for the same reason: the real engine downloads from Cloudflare.</param>
     /// <param name="speedHistory">

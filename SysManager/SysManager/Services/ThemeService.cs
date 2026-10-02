@@ -79,7 +79,7 @@ public sealed class ThemeService
     /// <param name="windowsPrefersDark">
     /// How <see cref="AutoMode"/> asks Windows which way it is set. Injected so a test can drive both answers:
     /// the real one reads HKCU, so a test without the seam would assert whatever the developer's own machine
-    /// happens to be on, and would report the opposite result on the other workstation.
+    /// happens to be on, and would report the opposite result on another machine.
     /// </param>
     internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null)
     {

@@ -11,7 +11,7 @@ namespace SysManager.Services;
 /// holding a lock on a file/folder via the Windows Restart Manager, and terminates a
 /// locker. Extracting this interface lets <c>FileLockViewModel</c>'s mutating command
 /// path (KillSelected) be unit-tested with a substituted service instead of terminating
-/// a real process (Gate-ARCH: system-mutating services are testable).
+/// a real process (system-mutating services are testable).
 /// </summary>
 public interface IFileLockService
 {

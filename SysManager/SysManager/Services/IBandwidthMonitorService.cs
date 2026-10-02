@@ -42,7 +42,7 @@ public sealed record BandwidthSnapshot(
 /// Samples network usage for the Bandwidth Monitor tab. Two implementations exist: a no-admin
 /// connection-attribution source (default) and an elevated ETW source (precise per-app rates).
 /// The seam lets the ViewModel and the pure aggregation logic be unit-tested with a substitute,
-/// and lets the tab switch modes at runtime without knowing the measurement details (Gate-ARCH).
+/// and lets the tab switch modes at runtime without knowing the measurement details.
 /// <para>
 /// All monitoring is strictly local: no capture leaves the machine, and nothing is written to
 /// the system — this is a read-only observer.

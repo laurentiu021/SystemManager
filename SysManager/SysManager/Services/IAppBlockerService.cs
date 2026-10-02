@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// Blocks/unblocks applications via the Image File Execution Options (IFEO)
 /// registry mechanism. Extracted as an interface so the registry-mutating logic
 /// can be unit-tested against a redirectable registry root instead of writing to
-/// the machine's real HKLM hive (Gate-ARCH: system-mutating services are testable).
+/// the machine's real HKLM hive (system-mutating services are testable).
 /// </summary>
 public interface IAppBlockerService
 {

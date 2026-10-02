@@ -8,7 +8,7 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Abstraction over <see cref="WingetService"/> so ViewModels depend on a mockable seam
-/// (Gate-ARCH) instead of shelling winget directly. Lets an upgrade path be unit-tested
+/// instead of shelling winget directly. Lets an upgrade path be unit-tested
 /// against a substituted service — no real winget process is spawned in tests — and keeps
 /// the whole app on ONE winget invocation instead of hand-rolled command lines that drift.
 /// </summary>

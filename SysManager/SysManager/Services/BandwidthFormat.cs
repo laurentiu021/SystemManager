@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// <summary>
 /// Pure domain helpers for the Bandwidth Monitor: per-second delta math, remote-port summary, and
 /// the threshold check. No WPF, no P/Invoke, no ETW — so every branch is unit-tested
-/// deterministically (Gate-ARCH: the logic is separated from the OS-touching sources). Human
+/// deterministically (the logic is separated from the OS-touching sources). Human
 /// rate/size formatting lives in <see cref="FormatHelper"/> (the single source of truth reachable
 /// from Models too); the thin wrappers here just forward to it for callers already using this type.
 /// </summary>

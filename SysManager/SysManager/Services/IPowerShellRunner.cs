@@ -13,7 +13,7 @@ namespace SysManager.Services;
 /// Abstraction over <see cref="PowerShellRunner"/> — the single seam through which
 /// services run PowerShell scripts and external processes. Extracting this interface
 /// lets system-mutating services (DNS, network repair, winget install) be unit-tested
-/// with a substituted runner instead of touching the live OS (Gate-ARCH: "external
+/// with a substituted runner instead of touching the live OS (the rule: "external
 /// process/PowerShell calls route through the single runner seam").
 ///
 /// <para>The same <b>SECURITY CONTRACT</b> as <see cref="PowerShellRunner"/> applies:

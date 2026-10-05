@@ -227,8 +227,8 @@ public partial class ArchitectureTests
     [InlineData("new AppIconService(null, otherDir)", false)]
     [InlineData("new PerformanceService(runner, restore)", true)]
     [InlineData("new PerformanceService(runner, restore, dir)", false)]
-    [InlineData("new ProfileService()", true)]
-    [InlineData("new ProfileService(local, roaming)", false)]
+    [InlineData("new ProfileService(privacy)", true)]
+    [InlineData("new ProfileService(privacy, local, roaming)", false)]
     public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
     {
         // Proves the guard above from both sides, against the real overloads reflection finds: a construction that
@@ -16497,7 +16497,8 @@ public partial class ArchitectureTests
 
         string[] spelled = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
                             "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-                            "seventeen", "eighteen", "nineteen", "twenty"];
+                            "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two",
+                            "twenty-three", "twenty-four", "twenty-five"];
         Assert.True(seams.Length < spelled.Length, $"{seams.Length} seams is past the spelled-out numbers here.");
 
         // Sliced to the one paragraph that makes the claim, so a name mentioned under a neighbouring heading

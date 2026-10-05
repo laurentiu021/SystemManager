@@ -22,7 +22,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Profile Export / Import" Style="{StaticResource Display}"/>
-            <TextBlock Text="Save your SysManager settings to a file and carry them to another PC. Only SysManager's own configuration is exported — never system settings — so importing just overwrites the app's config and can be undone by importing a different profile."
+            <TextBlock Text="Save your SysManager settings and privacy choices to a file and carry them to another PC. Importing overwrites only SysManager's own settings, and importing a different profile undoes it. Privacy choices are never applied here: they open on the Privacy &amp; Telemetry tab, and Windows changes only when you press Apply there."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
@@ -66,7 +66,7 @@
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="16">
             <StackPanel>
                 <TextBlock Text="Import" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock Text="Load a profile exported from another PC. You'll see what it contains and confirm before anything is overwritten. Restart SysManager afterwards for all changes to take effect."
+                <TextBlock Text="Load a profile exported from another PC. You'll see what it contains and confirm before anything is overwritten. Restart SysManager afterwards for all changes to take effect. Any privacy choices in it open on the Privacy &amp; Telemetry tab for you to check first."
                            Style="{StaticResource Subtle}" Margin="0,2,0,10" TextWrapping="Wrap"/>
                 <Button Content="Import profile…" Command="{Binding ImportCommand}"
                         AutomationProperties.Name="Import profile… — from a file"

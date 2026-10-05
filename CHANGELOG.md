@@ -10,6 +10,53 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.115.0] - 2026-10-05
+
+**Your Privacy & Telemetry choices can now travel to another PC in a profile, and they are never applied
+blind.** A profile exported with at least one privacy protection on records which protections are on and
+which are off. Importing it on another PC opens the Privacy & Telemetry tab with the profile's choices already
+on the switches, as pending changes: nothing in Windows changes until you press Apply there, and Discard keeps
+that PC as it is.
+
+### Added
+
+- **Privacy & Telemetry choices in Profile Export / Import (#1530).** The privacy toggles had no saved form, so
+  a privacy setup could not be carried to another PC and had to be redone one switch at a time.
+  - Export lists a **Privacy & Telemetry choices** section once at least one protection is on. It records every
+    toggle, on and off, as the registry reads at the moment you export.
+  - Import never writes them. It writes the profile's SysManager settings as before, then takes you to the
+    Privacy & Telemetry tab, where each switch the profile moves shows as a pending change and the counter says
+    how many. Apply writes them with the same confirmation and restore point as any other change, and Discard
+    puts this PC's own settings back.
+  - A switch the profile does not name keeps whatever you had, including a change you had not applied yet. The
+    category filter goes back to All, so no switch the profile moved is out of sight.
+  - When SysManager is not running as administrator, the tab says how many of the changes need administrator
+    rights, and that importing again after restarting as administrator is how to apply those: a pending change
+    is a switch position in the running app, and the restart starts a new one.
+  - Only the toggles this version knows are used. A choice for a toggle it does not know is left out, and the
+    log says so.
+  - The import confirmation says the privacy choices only open for review, and an import of privacy choices
+    alone asks for no restart.
+  - An import that arrives while Privacy & Telemetry is still taking its restore point for an Apply waits until
+    that Apply has written what you confirmed, then opens on top of it.
+
+### Changed
+
+- **Profile Export / Import no longer says it never touches system settings**, because a profile can now carry
+  privacy choices. The tab says what is true instead: an import writes only SysManager's own settings, and
+  privacy choices change Windows only through the Privacy & Telemetry tab's Apply.
+- **A profile with privacy choices is format 2.** An older SysManager refuses it with its "update SysManager"
+  message instead of importing the rest and leaving the privacy choices behind without a word. A profile
+  without them is still format 1, and older versions import it as before.
+
+### Fixed
+
+- **A damaged or hand-edited profile showed SysManager's error dialog instead of importing what it could.** An
+  empty entry in its section list, or a section with no name or no content, got past the file check. An empty
+  entry failed while the import confirmation was being built, and a known section with no content failed when
+  it was written; neither error is one the import handles. Such a section is now left out when the file is
+  read, and the rest of the profile imports. Present since v1.28.0, when Profile Export/Import was added.
+
 ## [1.114.54] - 2026-10-01
 
 **Gaming Profile now ends game mode when the game closes while it is starting.** Start can take many seconds,

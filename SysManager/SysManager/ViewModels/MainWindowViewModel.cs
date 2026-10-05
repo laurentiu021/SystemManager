@@ -587,8 +587,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     }
 
     // Every tab with a visibility-gated poll exposes an IsActive flag, and so does a tab that re-reads what it
-    // shows when it comes back on screen (Profile Export / Import). Toggle it generically so this doesn't
-    // depend on eager VM properties that no longer exist for lazy tabs.
+    // shows when it comes back on screen (Profile Export / Import) or picks up what another tab left for it
+    // (Privacy & Telemetry, which stages a profile's imported privacy choices). Toggle it generically so this
+    // doesn't depend on eager VM properties that no longer exist for lazy tabs.
     // internal (not private) so a test can pin the gate without constructing the whole shell,
     // exactly as UpdateSelectionState above is tested.
     //
@@ -606,6 +607,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             case BandwidthMonitorViewModel bw: bw.IsActive = active; break;
             case StandbyMemoryViewModel sm: sm.IsActive = active; break;
             case ProfileViewModel pr: pr.IsActive = active; break;
+            case PrivacyViewModel pv: pv.IsActive = active; break;
         }
     }
 
@@ -729,6 +731,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // One speed-test history, as under DI: the Dashboard's quick test records into the list the Speed Test
         // tab shows, which only works if both hold the same instance.
         var speedHistory = new SpeedTestHistoryService();
+        // One privacy service and one handoff, as under DI: Profile Export / Import leaves imported privacy
+        // choices in the handoff for the Privacy & Telemetry tab, which only works if both hold the same one.
+        var privacy = new PrivacyService();
+        var privacyChoices = new PrivacyChoicesHandoff();
 
         return new Dictionary<Type, object>
         {
@@ -762,7 +768,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(FileShredderViewModel)] = new FileShredderViewModel(new FileShredderService()),
             [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService()),
             [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), sessionRestorePoint),
-            [typeof(PrivacyViewModel)] = new PrivacyViewModel(new PrivacyService(), sessionRestorePoint),
+            [typeof(PrivacyViewModel)] = new PrivacyViewModel(privacy, sessionRestorePoint, privacyChoices),
             [typeof(ContextMenuViewModel)] = new ContextMenuViewModel(new ContextMenuService()),
             [typeof(SystemReportViewModel)] = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth)),
             [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(new EnvironmentVariableService()),
@@ -773,7 +779,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // Two runners, matching what DI hands it: IPowerShellRunner is Transient so the service's
             // stream and the one SFC/DISM drive directly cannot cross-contaminate each other.
             [typeof(SystemFixesViewModel)] = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()), new PowerShellRunner()),
-            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService()),
+            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService(privacy), privacyChoices, designerNavigation),
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
             [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer, designerNavigation),
@@ -790,7 +796,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(new SettingsWatchdogService()),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
-            [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(new PrivacyService(), sessionRestorePoint)),
+            [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(privacy, sessionRestorePoint)),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu),

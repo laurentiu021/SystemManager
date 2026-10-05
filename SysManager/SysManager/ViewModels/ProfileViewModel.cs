@@ -1,4 +1,4 @@
-// SysManager · ProfileViewModel — export/import SysManager's own configuration
+// SysManager · ProfileViewModel — export/import a portable SysManager profile
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
@@ -15,19 +15,25 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Profile Export/Import tab. Exports SysManager's own configuration
-/// (theme, speed-test history, …) to a portable JSON file and imports it on another PC,
-/// with selective per-section apply. Only SysManager's app config is touched — never the
-/// system — so importing is fully reversible.
+/// ViewModel for the Profile Export/Import tab. Exports SysManager's configuration (theme,
+/// speed-test history, …, and the Privacy &amp; Telemetry choices) to a portable JSON file and
+/// imports it on another PC, with selective per-section apply. An import writes only
+/// SysManager's own config files: the privacy choices go to the Privacy &amp; Telemetry tab as
+/// pending changes, so Windows changes only when the user presses Apply there (#1530).
 /// </summary>
 public sealed partial class ProfileViewModel : ViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
-    private readonly ProfileService _service;
+    /// <summary>The Privacy &amp; Telemetry tab, where an import's privacy choices wait to be reviewed.</summary>
+    private const string PrivacyTabId = "nav-privacy-settings";
 
-    /// <summary>Sections discovered for export (those whose config file exists).</summary>
+    private readonly ProfileService _service;
+    private readonly IPrivacyChoicesHandoff _privacyChoices;
+    private readonly INavigationService _navigation;
+
+    /// <summary>Sections discovered for export: see <see cref="ProfileService.AvailableSections"/>.</summary>
     public BulkObservableCollection<SelectableSection> Sections { get; } = new();
 
     [ObservableProperty] private bool _hasSections;
@@ -45,9 +51,11 @@ public sealed partial class ProfileViewModel : ViewModelBase
     /// <summary>The list refresh the tab started when it was last shown. Internal so a test can await it.</summary>
     internal Task ShownRefresh { get; private set; } = Task.CompletedTask;
 
-    public ProfileViewModel(ProfileService service)
+    public ProfileViewModel(ProfileService service, IPrivacyChoicesHandoff privacyChoices, INavigationService navigation)
     {
         _service = service;
+        _privacyChoices = privacyChoices;
+        _navigation = navigation;
         StatusMessage = "Export your SysManager settings to a file, or import a profile from another PC.";
         // Read the config files off the UI thread so the eagerly-built VM doesn't block
         // startup; the collection update runs back on the UI thread.
@@ -190,34 +198,7 @@ public sealed partial class ProfileViewModel : ViewModelBase
             try { profile = await _service.ImportFromFileAsync(dlg.FileName).ConfigureAwait(true); }
             catch (NotSupportedException ex) { StatusMessage = ex.Message; return; }
 
-            if (profile is null)
-            {
-                StatusMessage = "That file isn't a valid SysManager profile.";
-                return;
-            }
-            if (profile.Sections.Count == 0)
-            {
-                StatusMessage = "The profile contains no config sections.";
-                return;
-            }
-
-            var preview = string.Join("\n", profile.Sections.Select(s => $"  • {s.DisplayName}"));
-            if (!DialogService.Instance.Confirm(
-                    $"Import {profile.Sections.Count} section{(profile.Sections.Count == 1 ? "" : "s")} from this profile?\n\n{preview}\n\n" +
-                    $"Exported {profile.ExportedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} by SysManager v{profile.AppVersion}.\n\n" +
-                    "This overwrites the matching SysManager settings on this PC. Restart SysManager afterwards for all changes to take effect.",
-                    "Import profile"))
-            {
-                StatusMessage = "Import cancelled.";
-                return;
-            }
-
-            var applied = _service.ApplySections(profile.Sections);
-            RefreshSections();
-            StatusMessage = DescribeImport(applied, profile.Sections.Count);
-            // Only an import that changed something is announced (#2454).
-            if (applied > 0)
-                ToastService.Instance.Show("Profile imported", "Restart SysManager to apply all changes.");
+            Import(profile);
         }
         catch (IOException ex) { StatusMessage = $"Import failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Import failed (access denied): {ex.Message}"; }
@@ -225,19 +206,101 @@ public sealed partial class ProfileViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// What an import does once the file is read: confirm, write the config sections, and hand the privacy
+    /// choices to the Privacy &amp; Telemetry tab. Internal so a test can drive it without the file dialog.
+    /// </summary>
+    /// <remarks>
+    /// The privacy choices are never applied here, and that is the whole design (#1530). This tab only writes
+    /// SysManager's own files; the choices go to the tab that already shows privacy changes before making them,
+    /// which then lists every switch the profile would move. The user is taken there once the import is done.
+    /// <para>Two privacy sections in one file is a hand-edited profile. The last one is used, as the last of two
+    /// copies of a file section is the one <see cref="ProfileService.ApplySections"/> leaves on disk.</para>
+    /// </remarks>
+    internal void Import(ConfigProfile? profile)
+    {
+        if (profile is null)
+        {
+            StatusMessage = "That file isn't a valid SysManager profile.";
+            return;
+        }
+        if (profile.Sections.Count == 0)
+        {
+            StatusMessage = "The profile contains no config sections.";
+            return;
+        }
+
+        if (!DialogService.Instance.Confirm(DescribeImportConfirmation(profile), "Import profile"))
+        {
+            StatusMessage = "Import cancelled.";
+            return;
+        }
+
+        var applied = _service.ApplySections(profile.Sections.Where(s => !ProfileService.IsPrivacySection(s)));
+        var privacySection = profile.Sections.LastOrDefault(ProfileService.IsPrivacySection);
+        var privacy = privacySection is null ? null : _service.ReadPrivacyChoices(privacySection);
+        if (privacy is not null)
+            _privacyChoices.Offer(privacy);
+
+        RefreshSections();
+        StatusMessage = DescribeImport(applied + (privacy is null ? 0 : 1), profile.Sections.Count,
+            privacyHandedOver: privacy is not null);
+        // Only an import that changed something is announced (#2454), and privacy choices change nothing yet.
+        if (applied > 0)
+            ToastService.Instance.Show("Profile imported", "Restart SysManager to apply all changes.");
+        if (privacy is not null)
+            _navigation.GoTo(PrivacyTabId);
+    }
+
+    /// <summary>
+    /// The confirmation an import asks before it changes anything: what the profile holds, where it came from,
+    /// and what happens to each kind of section.
+    /// </summary>
+    internal static string DescribeImportConfirmation(ConfigProfile profile)
+    {
+        var count = profile.Sections.Count;
+        var preview = string.Join("\n", profile.Sections.Select(s => $"  • {s.DisplayName}"));
+        var text = $"Import {count} section{(count == 1 ? "" : "s")} from this profile?\n\n{preview}\n\n"
+            + $"Exported {profile.ExportedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} by SysManager v{profile.AppVersion}.";
+
+        if (profile.Sections.Any(s => !ProfileService.IsPrivacySection(s)))
+            text += "\n\nThis overwrites the matching SysManager settings on this PC. Restart SysManager afterwards for "
+                + "all changes to take effect.";
+        if (profile.Sections.Any(ProfileService.IsPrivacySection))
+            text += "\n\nThe privacy choices in this profile are not applied here. They open on the Privacy & Telemetry "
+                + "tab for you to check, and nothing changes in Windows until you press Apply there.";
+        return text;
+    }
+
+    /// <summary>
     /// The status after an import. <see cref="ProfileService.ApplySections"/> skips a section it does not
     /// know, one whose content fails the import check, and one it cannot write, and only logs each skip. The
     /// confirm dialog listed all of them, so the status says how many did not land (#2454).
     /// </summary>
-    internal static string DescribeImport(int applied, int total)
+    /// <param name="applied">The sections that landed, counting privacy choices that were handed over.</param>
+    /// <param name="total">Every section the profile held.</param>
+    /// <param name="privacyHandedOver">Whether privacy choices went to the Privacy &amp; Telemetry tab.</param>
+    /// <remarks>
+    /// Privacy choices are counted with the sections because the confirmation listed them with the rest, but
+    /// they need no restart: they are waiting for Apply on their own tab, and the status says so instead.
+    /// </remarks>
+    internal static string DescribeImport(int applied, int total, bool privacyHandedOver = false)
     {
         static string Sections(int n) => $"{n} section{(n == 1 ? "" : "s")}";
+        var filesApplied = applied - (privacyHandedOver ? 1 : 0);
+        var privacy = privacyHandedOver
+            ? " The profile's privacy choices are waiting on the Privacy & Telemetry tab, and nothing changes in "
+              + "Windows until you press Apply there."
+            : "";
         if (applied == 0)
             return $"Nothing was imported: none of the profile's {Sections(total)} could be applied. The log has the reason.";
         if (applied < total)
             return $"Imported {applied} of {Sections(total)} — {total - applied} could not be applied, and the log has "
-                + "the reason. Restart SysManager to apply the imported settings.";
-        return $"Imported {Sections(applied)}. Restart SysManager to apply everything.";
+                + "the reason."
+                + (filesApplied > 0 ? " Restart SysManager to apply the imported settings." : "")
+                + privacy;
+        return $"Imported {Sections(applied)}."
+            + (filesApplied > 0 ? " Restart SysManager to apply everything." : "")
+            + privacy;
     }
 
     [RelayCommand]

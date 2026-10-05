@@ -4,6 +4,8 @@
 
 using Microsoft.Win32;
 using NSubstitute;
+using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -11,8 +13,9 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="PrivacyViewModel"/>. Verifies toggle population,
-/// category filtering, pending-change tracking, and discard behavior
-/// without writing to the registry.
+/// category filtering, pending-change tracking, discard behavior, and the
+/// staging of privacy choices imported from a profile, without writing to
+/// the registry.
 /// </summary>
 [Collection("ProcessWideStatics")]
 public class PrivacyViewModelTests
@@ -24,7 +27,7 @@ public class PrivacyViewModelTests
 
     private static PrivacyViewModel NewVm(ISessionRestorePoint restorePoint)
     {
-        var vm = new PrivacyViewModel(new PrivacyService(), restorePoint);
+        var vm = new PrivacyViewModel(new PrivacyService(), restorePoint, new PrivacyChoicesHandoff());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
@@ -201,7 +204,8 @@ public class PrivacyViewModelTests
         {
             var restorePoint = NoRestorePoint();
             using var dialog = new DialogAnswer(confirm: true);
-            var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: root, hklmRoot: root), restorePoint);
+            var vm = new PrivacyViewModel(new PrivacyService(hkcuRoot: root, hklmRoot: root), restorePoint,
+                new PrivacyChoicesHandoff());
             await vm.InitializationComplete;
             vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
             var pendingBefore = vm.PendingChangeCount;
@@ -273,7 +277,7 @@ public class PrivacyViewModelTests
     [Fact]
     public async Task AfterConstruction_TheBusyFlagIsClear()
     {
-        var vm = new PrivacyViewModel(new PrivacyService(), NoRestorePoint());
+        var vm = new PrivacyViewModel(new PrivacyService(), NoRestorePoint(), new PrivacyChoicesHandoff());
 
         await vm.InitializationComplete;
 
@@ -308,5 +312,261 @@ public class PrivacyViewModelTests
         await vm.RefreshCommand.ExecuteAsync(null);
 
         Assert.Equal([true, false], seen);
+    }
+
+    // ---------- privacy choices imported from a profile (#1530) ----------
+    // A profile never writes the registry. Its choices arrive through the handoff and are staged the way a
+    // click is, so the switches move, the pending count says how many, and only Apply writes. These run over
+    // FakePrivacy, so which switches move does not depend on this PC's own privacy settings.
+
+    /// <summary>The tab over chosen toggles and a given handoff, its first load settled.</summary>
+    private static async Task<PrivacyViewModel> StagingVmAsync(
+        IPrivacyService privacy, IPrivacyChoicesHandoff handoff, ISessionRestorePoint? restorePoint = null)
+    {
+        var vm = new PrivacyViewModel(privacy, restorePoint ?? NoRestorePoint(), handoff);
+        await vm.InitializationComplete;
+        return vm;
+    }
+
+    /// <summary>One protection per case that matters: off, on and machine-wide, and off in a second category.</summary>
+    private static IPrivacyService ThisPc() => FakePrivacy.Returning(
+        FakePrivacy.Toggle("tips", on: false),
+        FakePrivacy.Toggle("widgets", on: true, hive: "HKLM", category: "Features"),
+        FakePrivacy.Toggle("web-search", on: false, category: "Features"));
+
+    private static PrivacyChoices Choices(params (string Key, bool On)[] choices) =>
+        new() { Protections = choices.ToDictionary(c => c.Key, c => c.On, StringComparer.Ordinal) };
+
+    private static PrivacyToggle Switch(PrivacyViewModel vm, string key) => vm.Toggles.Single(t => t.Key == key);
+
+    [Fact]
+    public async Task ImportedChoices_LeftBeforeTheTabWasBuilt_AreStagedWhenItsTogglesLoad()
+    {
+        // The import opens this tab, which may be its first visit: the view model is built after the offer.
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", true), ("widgets", true), ("web-search", false)));
+
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+
+        Assert.True(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(1, vm.PendingChangeCount);   // widgets and web-search were already as the profile has them
+        Assert.True(vm.HasPendingChanges);
+        Assert.Null(handoff.Take());              // taken, not left for the next visit
+    }
+
+    [Fact]
+    public async Task ImportedChoices_LeftAfterTheTabLoaded_AreStagedWhenItIsShown()
+    {
+        var handoff = new PrivacyChoicesHandoff();
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+        handoff.Offer(Choices(("tips", true)));
+        Assert.Equal(0, vm.PendingChangeCount);
+
+        vm.IsActive = true;
+
+        Assert.True(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(1, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_WriteNothingUntilApply_AndApplyWritesThem()
+    {
+        var privacy = ThisPc();
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", true)));
+        var vm = await StagingVmAsync(privacy, handoff);
+
+        privacy.DidNotReceiveWithAnyArgs().ApplyAll(default!);
+        privacy.DidNotReceiveWithAnyArgs().ApplyToggle(default!);
+
+        // Through the same confirmation as a click, and only the switch the profile moved.
+        List<(string Key, bool On)> written = [];
+        privacy.When(p => p.ApplyAll(Arg.Any<IEnumerable<PrivacyToggle>>()))
+            .Do(call => written.AddRange(call.Arg<IEnumerable<PrivacyToggle>>().Select(t => (t.Key, t.IsEnabled))));
+        using var dialog = new DialogAnswer(confirm: true);
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.Equal([("tips", true)], written);
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_AreStagedOnce()
+    {
+        // Taken when staged, so coming back to the tab after Discard does not put them back over that decision.
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", true)));
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+        vm.DiscardChangesCommand.Execute(null);
+
+        vm.IsActive = false;
+        vm.IsActive = true;
+
+        Assert.False(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_LeaveTheSwitchesTheProfileDoesNotName()
+    {
+        var handoff = new PrivacyChoicesHandoff();
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+        Switch(vm, "web-search").IsEnabled = true;   // the user's own click, not applied yet
+
+        handoff.Offer(Choices(("tips", true)));
+        vm.IsActive = true;
+
+        Assert.True(Switch(vm, "web-search").IsEnabled);
+        Assert.True(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(2, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_ShowEveryCategory()
+    {
+        // A switch the profile moved under a filtered-out category would be a pending change nobody can see.
+        var handoff = new PrivacyChoicesHandoff();
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+        vm.SelectedCategory = "Telemetry";
+        Assert.Single(vm.FilteredToggles);
+
+        handoff.Offer(Choices(("web-search", true)));
+        vm.IsActive = true;
+
+        Assert.Equal("All", vm.SelectedCategory);
+        Assert.Equal(3, vm.FilteredToggles.Count);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_ThatMatchThisPc_SayThereIsNothingToChange()
+    {
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", false), ("widgets", true)));
+
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+
+        Assert.Equal(0, vm.PendingChangeCount);
+        Assert.Equal("The imported privacy choices already match this PC, so there is nothing to change.", vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task ImportedChoices_ThatNeedAdmin_AreFlaggedOnlyWhenNotElevated(bool elevated, bool flagged)
+    {
+        // widgets is machine-wide: without elevation Apply cannot write it, and the staged switch does not survive
+        // the restart into administrator mode, so the tab says so before Apply rather than after.
+        using var probe = AdminHelper.ForceElevation(elevated);
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices(("tips", true), ("widgets", false)));
+
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+
+        Assert.Equal(2, vm.PendingChangeCount);
+        Assert.Equal(flagged, vm.StatusMessage.Contains("administrator", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(1, 0, false, "The imported profile changes 1 privacy setting on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is.")]
+    [InlineData(3, 1, false, "The imported profile changes 3 privacy settings on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is. 1 of them needs administrator "
+        + "rights. To apply that one too, run SysManager as administrator and import the profile again.")]
+    [InlineData(3, 2, false, "The imported profile changes 3 privacy settings on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is. 2 of them need administrator "
+        + "rights. To apply those too, run SysManager as administrator and import the profile again.")]
+    [InlineData(1, 1, false, "The imported profile changes 1 privacy setting on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is. It needs administrator rights, "
+        + "so run SysManager as administrator and import the profile again to apply it.")]
+    [InlineData(2, 2, false, "The imported profile changes 2 privacy settings on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is. They all need administrator "
+        + "rights, so run SysManager as administrator and import the profile again to apply them.")]
+    [InlineData(2, 2, true, "The imported profile changes 2 privacy settings on this PC. Nothing has changed yet: "
+        + "check the switches, then press Apply, or Discard to keep this PC as it is.")]
+    public void DescribeImportedChoices_SaysWhatChangesAndWhatNeedsAdmin(
+        int changes, int needAdmin, bool elevated, string expected)
+        => Assert.Equal(expected, PrivacyViewModel.DescribeImportedChoices(changes, needAdmin, elevated));
+
+    [Fact]
+    public async Task ImportedChoices_ArrivingDuringARefresh_AreStagedOnTheTogglesItLoads()
+    {
+        // A load replaces every toggle, so staging onto the old ones would lose the import when it lands.
+        using var secondLoad = new ManualResetEventSlim(initialState: false);
+        var loads = 0;
+        var privacy = Substitute.For<IPrivacyService>();
+        privacy.LoadToggles().Returns(_ =>
+        {
+            if (Interlocked.Increment(ref loads) > 1)
+                Assert.True(secondLoad.Wait(TimeSpan.FromSeconds(30)), "the refresh was never released");
+            return [FakePrivacy.Toggle("tips", on: false)];
+        });
+        var handoff = new PrivacyChoicesHandoff();
+        var vm = await StagingVmAsync(privacy, handoff);
+        var before = Switch(vm, "tips");
+
+        var refresh = vm.RefreshCommand.ExecuteAsync(null);
+        handoff.Offer(Choices(("tips", true)));
+        vm.IsActive = true;
+        Assert.False(before.IsEnabled);
+
+        secondLoad.Set();
+        await refresh;
+
+        Assert.NotSame(before, Switch(vm, "tips"));
+        Assert.True(Switch(vm, "tips").IsEnabled);
+        Assert.Equal(1, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task ImportedChoices_ArrivingWhileApplyWaitsForItsRestorePoint_AreStagedAfterTheWrite()
+    {
+        // The restore point can take long enough to open Profile Export / Import and import a profile. Staged
+        // then, the import would move a switch the apply was about to write and change what it wrote.
+        var privacy = ThisPc();
+        List<(string Key, bool On)> written = [];
+        privacy.When(p => p.ApplyAll(Arg.Any<IEnumerable<PrivacyToggle>>()))
+            .Do(call => written.AddRange(call.Arg<IEnumerable<PrivacyToggle>>().Select(t => (t.Key, t.IsEnabled))));
+        var restoring = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restorePoint = Substitute.For<ISessionRestorePoint>();
+        restorePoint.EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(restoring.Task);
+        var handoff = new PrivacyChoicesHandoff();
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await StagingVmAsync(privacy, handoff, restorePoint);
+        vm.IsActive = true;
+        Switch(vm, "tips").IsEnabled = true;
+
+        var apply = vm.ApplyChangesCommand.ExecuteAsync(null);
+        handoff.Offer(Choices(("tips", false), ("web-search", true)));
+        vm.IsActive = false;
+        vm.IsActive = true;
+        Assert.True(Switch(vm, "tips").IsEnabled);
+        Assert.False(Switch(vm, "web-search").IsEnabled);
+
+        restoring.SetResult(false);
+        await apply;
+
+        Assert.Equal([("tips", true)], written);              // what the user confirmed
+        Assert.False(Switch(vm, "tips").IsEnabled);           // then the import, staged on top of the write
+        Assert.True(Switch(vm, "web-search").IsEnabled);
+        Assert.Equal(2, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task TheShellMarksTheTabAsShown()
+    {
+        // The wiring: MainWindowViewModel.SetActive is what tells a tab it is on screen, and so what stages an
+        // import that arrived while another tab was showing.
+        var handoff = new PrivacyChoicesHandoff();
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+        handoff.Offer(Choices(("tips", true)));
+
+        MainWindowViewModel.SetActive(vm, active: true);
+
+        Assert.True(vm.IsActive);
+        Assert.True(Switch(vm, "tips").IsEnabled);
+
+        MainWindowViewModel.SetActive(vm, active: false);
+        Assert.False(vm.IsActive);
     }
 }

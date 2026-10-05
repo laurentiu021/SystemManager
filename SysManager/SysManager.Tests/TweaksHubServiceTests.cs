@@ -11,6 +11,7 @@ public class TweaksHubServiceTests
 {
     private static PrivacyToggle Toggle(string name, string path, bool enabled) => new()
     {
+        Key = name,
         Name = name,
         Description = "d",
         Category = "c",

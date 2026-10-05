@@ -18,6 +18,7 @@ public class PrivacyServiceTests
 {
     private static PrivacyToggle BadHiveToggle(string name = "bad") => new()
     {
+        Key = name,
         Name = name,
         Description = "unrecognized hive — write cannot succeed",
         Category = "Telemetry",
@@ -57,6 +58,27 @@ public class PrivacyServiceTests
         Assert.Throws<ArgumentNullException>(() => svc.ApplyToggle(null!));
     }
 
+    /// <summary>
+    /// Every toggle keeps the key a privacy profile names it by (#1530).
+    /// </summary>
+    /// <remarks>
+    /// A key is a promise to every profile already exported. Renamed, the profile's choice for that toggle is
+    /// dropped as unknown on import, and the user is told one choice could not be read instead of seeing the
+    /// switch move. So the list is pinned exactly: changing a key has to be a decision made here, and adding a
+    /// toggle means adding its key.
+    /// </remarks>
+    [Fact]
+    public void EveryToggle_KeepsTheKeyProfilesNameItBy()
+    {
+        var keys = new PrivacyService().LoadToggles().Select(t => t.Key);
+
+        Assert.Equal(
+            ["diagnostic-data", "activity-history", "advertising-id", "feedback-prompts",
+             "start-suggestions", "tips", "lock-screen-tips", "spotlight-ads",
+             "ai-assistant", "cortana", "web-search", "widgets"],
+            keys);
+    }
+
     // ── Revert behavior (F07 regression) ──────────────────────────────────
     // Turning a toggle OFF must REMOVE our value (so Windows falls back to its own
     // default), NOT write DisabledValue — which for policy toggles would materialise
@@ -71,6 +93,7 @@ public class PrivacyServiceTests
 
         public PrivacyToggle Toggle(bool isEnabled) => new()
         {
+            Key = "test",
             Name = "test",
             Description = "revert test",
             Category = "Telemetry",

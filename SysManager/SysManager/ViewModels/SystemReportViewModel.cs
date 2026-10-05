@@ -15,9 +15,10 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// System Report tab — gathers a full hardware/OS/network snapshot and exports it
-/// as plain text, HTML, or JSON. Read-only: it never modifies the system, and the
-/// report is written only to a file the user picks. Nothing leaves the machine.
+/// System Report tab — gathers a full hardware/OS/network snapshot, opening with a health
+/// verdict and recent problems, and exports it as plain text, HTML, or JSON. Read-only: it
+/// never modifies the system, and the report is written only to a file the user picks.
+/// Nothing leaves the machine.
 /// </summary>
 public sealed partial class SystemReportViewModel : ViewModelBase
 {

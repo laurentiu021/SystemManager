@@ -17,7 +17,50 @@ public sealed record SystemReportData(
     IReadOnlyList<GpuReportInfo> Gpus,
     string Motherboard,
     IReadOnlyList<DiskReportInfo> Disks,
-    IReadOnlyList<NetworkAdapterInfo> NetworkAdapters);
+    IReadOnlyList<NetworkAdapterInfo> NetworkAdapters)
+{
+    /// <summary>
+    /// The verdict the report opens with: the health score, what to do about it, and the recent problems
+    /// Windows logged (#1508). Null when the report was built without one.
+    /// </summary>
+    /// <remarks>
+    /// An init property rather than a tenth positional parameter, so every existing construction keeps
+    /// compiling and a payload without it still renders: each renderer skips the section when it is absent.
+    /// </remarks>
+    public ReportHealth? Health { get; init; }
+}
+
+/// <summary>
+/// The health part of the report: the same score and recommendations the Dashboard shows, with each
+/// component's score, and the recent critical and error events from the System log.
+/// </summary>
+public sealed record ReportHealth(
+    int Score,
+    string Label,
+    IReadOnlyList<ReportHealthComponent> Components,
+    IReadOnlyList<ReportRecommendation> Recommendations,
+    IReadOnlyList<ReportProblem> RecentProblems,
+    bool ProblemsRead);
+
+/// <summary>One part of the score. <see cref="Score"/> is null when Windows gave nothing to score it from.</summary>
+public sealed record ReportHealthComponent(string Name, int? Score);
+
+/// <summary>A recommendation as the Dashboard words it, with its severity: "warning" or "critical".</summary>
+public sealed record ReportRecommendation(string Message, string Severity);
+
+/// <summary>
+/// One kind of recent critical or error event: its source, its ID, how many times it was logged in the window
+/// and when last, and, when someone wrote it down, what it means and what to do. Never the event's own message,
+/// which can name paths and machines.
+/// </summary>
+public sealed record ReportProblem(
+    DateTime LastSeen,
+    string Source,
+    int EventId,
+    bool Critical,
+    int Count,
+    string? Explanation,
+    string? Recommendation);
 
 /// <summary>A GPU as reported by Win32_VideoController.</summary>
 public sealed record GpuReportInfo(

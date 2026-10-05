@@ -31,7 +31,13 @@ public static class ServiceRegistration
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();
         services.AddSingleton<TemperatureService>();
-        services.AddSingleton<SystemReportService>();
+        // Its own EventLogService rather than the Logs tab's: that service reports how a read went through
+        // LastOutcome, so two readers sharing one instance could each be told the other's answer.
+        services.AddSingleton<SystemReportService>(sp => new SystemReportService(
+            sp.GetRequiredService<SystemInfoService>(),
+            sp.GetRequiredService<DiskHealthService>(),
+            sp.GetRequiredService<BatteryService>(),
+            new EventLogService()));
         services.AddSingleton<BatteryService>();
         services.AddSingleton<ITuneUpService, TuneUpService>();
         services.AddSingleton<HealthScoreService>();

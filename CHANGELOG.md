@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.116.0] - 2026-10-05
+
+**The System Report now starts with what is wrong.** Before the list of hardware it shows the same health score
+and "what to do" list as the Dashboard, and the recent problems Windows logged, so whoever you send the report to
+can read the verdict in seconds.
+
+### Added
+
+- **A health section at the top of every System Report: on screen, and in the text, HTML and JSON exports
+  (#1508).** The report listed the hardware and said nothing about how the PC was doing, and the score and its
+  advice were only on the Dashboard, a screen the person helping you never sees.
+  - The overall score and its label, each part of the score (disk health, free space, memory, uptime, and battery
+    on a laptop), and the Dashboard's "what to do" list. A part Windows gave nothing for says "could not be read"
+    instead of showing the in-between score used for it.
+  - Up to five recent problems from the Windows System log: critical and error events from the last 7 days,
+    grouped by source and event ID with how many times each was logged, critical first, then newest. Where
+    SysManager has a plain-English explanation and advice for the event, they are included; otherwise the source
+    and ID are listed, which is what to search for.
+  - An event's own message is never included. It can name files, user names and computers, which the report
+    keeps out, and the HTML footer now says so.
+  - When the System log cannot be read the report says that, rather than reporting no problems. The read stops
+    after 15 seconds, and the report is then built without the list.
+  - Long explanations are wrapped, so the on-screen preview needs no scrolling sideways.
+
+### Changed
+
+- **The System Report shares the Dashboard's scoring** instead of computing anything of its own, using the
+  readings it already takes for its other sections, so the two can never disagree.
+
 ## [1.115.0] - 2026-10-05
 
 **Your Privacy & Telemetry choices can now travel to another PC in a profile, and they are never applied

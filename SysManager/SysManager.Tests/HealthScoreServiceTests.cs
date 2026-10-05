@@ -277,6 +277,39 @@ public class HealthScoreServiceTests
         Assert.Equal(StatusColors.Warning, rec.ColorHex);
     }
 
+    // ---------- Evaluate: the one scoring ComputeAsync and the System Report share (#1508) ----------
+
+    [Fact]
+    public void Evaluate_ScoresTheEvidenceItIsGiven()
+    {
+        // 23 days up, memory at half, a comfortable system drive, no battery, and disks that reported nothing.
+        var result = HealthScoreService.Evaluate(
+            MakeSnapshot(ramUsedPct: 50, uptimeDays: 23), disks: [], new BatteryInfo { HasBattery = false },
+            ReadableSystemDrive(), SystemDrive);
+
+        Assert.Equal(30, result.UptimeScore);
+        Assert.Equal(100, result.RamScore);
+        Assert.Equal(100, result.FreeSpaceScore);
+        Assert.Equal(HealthScoreService.UnknownComponentScore, result.DiskScore);
+        Assert.Equal(HealthScoreService.Combine(result.DiskScore, result.FreeSpaceScore, result.RamScore,
+            result.UptimeScore, result.BatteryScore, hasBattery: false), result.Score);
+        Assert.Equal(["Restart recommended — 23 days uptime"], result.Recommendations.Select(r => r.Message));
+        Assert.Equal([HealthScoreService.DiskComponent], result.UnavailableComponents);
+    }
+
+    [Fact]
+    public void Evaluate_WithNoEvidenceAtAll_ClaimsNoHealth()
+    {
+        var result = HealthScoreService.Evaluate(null, null, null, null, null);
+
+        Assert.Equal(
+            [HealthScoreService.DiskComponent, HealthScoreService.FreeSpaceComponent,
+             HealthScoreService.MemoryComponent, HealthScoreService.UptimeComponent],
+            result.UnavailableComponents);
+        Assert.True(result.Score < 90, $"nothing was measured, and the score read {result.Score} ({result.Label})");
+        Assert.Empty(result.Recommendations);
+    }
+
     // ---------- helpers ----------
 
     private static SystemSnapshot MakeSnapshot(double ramUsedPct = 50, int uptimeDays = 1)

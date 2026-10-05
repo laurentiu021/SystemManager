@@ -50,7 +50,7 @@ public class AboutViewModelTests
     /// <see cref="ConstructingTheViewModel_DoesNotTouchTheRealPreferenceFile"/>.
     /// </remarks>
     private static AboutViewModel NewVmNoAutoCheck() =>
-        new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+        new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
 
     [Fact]
@@ -69,7 +69,7 @@ public class AboutViewModelTests
     [Fact]
     public void Constructs_WithInjectedService()
     {
-        var vm = new AboutViewModel(Substitute.For<IUpdateService>(), new SystemReportService(new SystemInfoService(), new DiskHealthService()), ConfigDir);
+        var vm = new AboutViewModel(Substitute.For<IUpdateService>(), new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()), ConfigDir);
         Assert.NotNull(vm);
     }
 
@@ -247,7 +247,7 @@ public class AboutViewModelTests
     /// only call the substitute sees is the one a test makes and nothing can reach api.github.com.
     /// </summary>
     private static AboutViewModel NewVmWith(IUpdateService updates) =>
-        new(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+        new(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
 
     /// <summary>
@@ -599,7 +599,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     /// </summary>
     private AboutViewModel NewVm(UpdateCheckPreferenceService preferences, IUpdateService updates) =>
         new(updates,
-            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: true,
             preferences);
 
@@ -802,7 +802,7 @@ public sealed class AboutViewModelRollbackTests : IDisposable
     // autoCheck: false — these assert constructor state, so they must not race the network fetch.
     private AboutViewModel NewVm() =>
         new(new UpdateService(),
-            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false,
             preferences: new UpdateCheckPreferenceService(_dir),
             updatesDir: _dir);
@@ -1028,7 +1028,7 @@ public sealed class AboutViewModelReleaseHistoryTests : IDisposable
     // second one behind the test's back.
     private AboutViewModel NewVm(IUpdateService updates) =>
         new(updates,
-            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false,
             preferences: new UpdateCheckPreferenceService(_dir),
             updatesDir: _dir);

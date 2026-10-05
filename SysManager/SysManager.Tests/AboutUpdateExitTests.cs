@@ -53,7 +53,7 @@ public sealed class AboutUpdateExitTests : IDisposable
         updates.VerifyHashAsync(Release, Arg.Any<Stream>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<(bool, string?, string?)>((true, "hash", "hash")));
 
-        return new AboutViewModel(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+        return new AboutViewModel(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir,
             launch: _launched.Add, shutdown: () => _shutdowns++);
     }

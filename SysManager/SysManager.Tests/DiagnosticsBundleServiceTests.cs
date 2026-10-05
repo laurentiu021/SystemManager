@@ -58,7 +58,7 @@ public sealed class DiagnosticsBundleServiceTests : IDisposable
     /// depends on hardware.
     /// </remarks>
     private DiagnosticsBundleService NewService()
-        => new(new SystemReportService(new SystemInfoService(), new DiskHealthService()), _logDir);
+        => new(new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()), _logDir);
 
     private const string CannedReport = "SysManager System Report\n  Network\n  Adapter — 10.0.x.x\n";
 

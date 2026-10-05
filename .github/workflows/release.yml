@@ -583,12 +583,18 @@ jobs:
           expiry=$(printf '%s' "$headers" | grep -i '^github-authentication-token-expiration:' | cut -d' ' -f2- | tr -d '\r' || true)
           scopes=$(printf '%s' "$headers" | grep -i '^x-oauth-scopes:' | cut -d' ' -f2- | tr -d '\r' || true)
 
+          # winget-releaser takes a CLASSIC token only: its README says fine-grained tokens are not supported
+          # (its issue #172). The least it needs is public_repo for the manifest pull request, plus workflow so
+          # the fork sync can bring in upstream changes to winget-pkgs' own workflow files. A full repo scope
+          # also reaches every private repository on the account, which nothing here needs (#1676).
           if [ -n "$scopes" ]; then
             echo "Token kind: CLASSIC personal access token"
             echo "Scopes: $scopes"
-            echo "::warning::WINGET_TOKEN is a classic PAT with scopes [$scopes]. A classic repo scope grants read/write to every repository this account can reach, including private ones, in order to publish manifests to one fork. A fine-grained token limited to the winget-pkgs fork with contents:write is the least privilege this step needs (#1676)."
+            case ",$(printf '%s' "$scopes" | tr -d ' ')," in
+              *,repo,*) echo "::warning::WINGET_TOKEN has the full repo scope, which also reaches private repositories. public_repo and workflow are all the winget steps need (#1676)." ;;
+            esac
           else
-            echo "Token kind: fine-grained (no OAuth scope header), which is the intended shape."
+            echo "::warning::WINGET_TOKEN is not a classic personal access token. winget-releaser supports classic tokens only, so the winget publish below will probably fail."
           fi
 
           if [ -z "$expiry" ]; then

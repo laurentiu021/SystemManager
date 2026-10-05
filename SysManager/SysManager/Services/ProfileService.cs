@@ -13,22 +13,43 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Exports and imports SysManager's own configuration as a single portable JSON profile,
-/// so a user can replicate their setup on another PC. Only SysManager's own config files
-/// are included — never system state — so applying a profile just overwrites those app
-/// files and is fully reversible. Each config file is read from and written to the SAME
+/// Exports and imports SysManager's configuration as a single portable JSON profile, so a user
+/// can replicate their setup on another PC. Each config file is read from and written to the SAME
 /// folder its owning service uses: <c>theme.json</c> lives under Roaming AppData (matching
 /// <see cref="ThemeService"/>) while <c>speedtest-history.json</c> lives under Local AppData
 /// (matching <see cref="SpeedTestHistoryService"/>).
+/// <para>One section is not a file: the Privacy &amp; Telemetry choices, read from the registry when
+/// the profile is built (#1530). An import never writes them. <see cref="ReadPrivacyChoices"/> hands
+/// them back, and the Privacy &amp; Telemetry tab stages them as pending changes the user reviews and
+/// applies there. Everything this class itself writes is SysManager's own config, so applying a
+/// profile only overwrites those app files.</para>
 ///
 /// The base directories are constructor-injectable so the export/import logic can be unit
 /// tested against a temp directory without touching the real profile.
 /// </summary>
 public sealed class ProfileService
 {
-    /// <summary>Bump when the on-disk profile shape changes incompatibly.</summary>
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>
+    /// The newest profile format this build reads. Version 2 added the privacy section; a profile without
+    /// one is still written as version 1, see <see cref="BuildProfile"/>.
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
 
+    /// <summary>The format of a profile that carries config files only, which every build since profiles shipped reads.</summary>
+    private const int FilesOnlySchemaVersion = 1;
+
+    /// <summary>
+    /// The key of the privacy section. Deliberately not in <see cref="Catalog"/>: it is read from the registry
+    /// rather than from a file, and nothing here ever writes it.
+    /// </summary>
+    public const string PrivacySectionKey = "privacy";
+
+    private const string PrivacySectionName = "Privacy & Telemetry choices";
+
+    /// <summary>The file name the privacy section carries in a profile. No file of that name is ever written.</summary>
+    private const string PrivacySectionFileName = "privacy-profile.json";
+
+    private readonly IPrivacyService _privacy;
     private readonly string _localConfigDir;
     private readonly string _roamingConfigDir;
 
@@ -126,8 +147,11 @@ public sealed class ProfileService
     /// resolve to it so the temp tree holds every section. In production the bases are the
     /// real Roaming/Local <c>SysManager</c> folders.
     /// </summary>
-    public ProfileService(string? configDir = null)
+    /// <param name="privacy">Reads the privacy toggles the privacy section is built from and checked against.</param>
+    /// <param name="configDir">The folder both bases resolve to, for tests; null for the real ones.</param>
+    public ProfileService(IPrivacyService privacy, string? configDir = null)
     {
+        _privacy = privacy;
         _localConfigDir = configDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _roamingConfigDir = configDir ?? Path.Combine(
@@ -135,15 +159,19 @@ public sealed class ProfileService
     }
 
     /// <summary>Test seam: distinct Local/Roaming bases to verify each section lands in the right one.</summary>
-    internal ProfileService(string localConfigDir, string roamingConfigDir)
+    internal ProfileService(IPrivacyService privacy, string localConfigDir, string roamingConfigDir)
     {
+        _privacy = privacy;
         _localConfigDir = localConfigDir;
         _roamingConfigDir = roamingConfigDir;
     }
 
     private string DirFor(Base b) => b == Base.Roaming ? _roamingConfigDir : _localConfigDir;
 
-    /// <summary>The config sections available to export (those whose file exists on disk).</summary>
+    /// <summary>
+    /// The sections available to export: those whose config file exists on disk, and the privacy choices once
+    /// at least one protection is on.
+    /// </summary>
     public IReadOnlyList<ConfigSection> AvailableSections()
     {
         List<ConfigSection> sections = [];
@@ -159,8 +187,35 @@ public sealed class ProfileService
             catch (UnauthorizedAccessException ex) { Log.Debug("Profile: skipping {File} (access denied: {Error})", fileName, ex.Message); continue; }
             sections.Add(new ConfigSection(key, display, fileName, json));
         }
+        if (PrivacySection() is { } privacy) sections.Add(privacy);
         return sections;
     }
+
+    /// <summary>
+    /// The privacy section as the registry reads now, or null while no protection is on.
+    /// </summary>
+    /// <remarks>
+    /// Every toggle is carried, on or off, because the section is the whole privacy posture: imported on a PC
+    /// where a protection is on that the profile has off, the Privacy &amp; Telemetry tab shows that switch
+    /// turning off, and the user decides. With no protection on, this PC is on Windows' own defaults and there
+    /// is nothing to carry, the same way a file section is listed only once its file exists.
+    /// </remarks>
+    private ConfigSection? PrivacySection()
+    {
+        var toggles = _privacy.LoadToggles();
+        if (!toggles.Any(t => t.IsEnabled)) return null;
+
+        var choices = new PrivacyChoices
+        {
+            Protections = toggles.ToDictionary(t => t.Key, t => t.IsEnabled, StringComparer.Ordinal),
+        };
+        return new ConfigSection(PrivacySectionKey, PrivacySectionName, PrivacySectionFileName,
+            JsonSerializer.Serialize(choices, JsonOptions));
+    }
+
+    /// <summary>Whether a section is the privacy choices, which an import hands on instead of writing.</summary>
+    public static bool IsPrivacySection(ConfigSection section) =>
+        string.Equals(section.Key, PrivacySectionKey, StringComparison.Ordinal);
 
     /// <summary>
     /// Builds a profile from the config files as they are on disk now: every available section, or only those
@@ -171,13 +226,58 @@ public sealed class ProfileService
     /// sections when it opens and lives for the whole session, and export used to write what it read then, so
     /// a theme, preset or speed test changed since was missing from the file (#2477). A key whose file no
     /// longer exists is left out, and the caller can compare the counts to say so.
+    /// <para>A profile is written in the oldest format that can hold what it carries. Only the privacy section
+    /// needs version 2, so a profile of config files alone stays version 1 and an older SysManager still
+    /// imports it, while one carrying privacy choices is refused there with the "update SysManager" message
+    /// instead of being half-imported.</para>
     /// </remarks>
     public ConfigProfile BuildProfile(DateTime exportedAt, IReadOnlyCollection<string>? keys = null)
     {
         var sections = AvailableSections();
         if (keys is not null)
             sections = [.. sections.Where(section => keys.Contains(section.Key, StringComparer.Ordinal))];
-        return new(CurrentSchemaVersion, UpdateService.CurrentVersion.ToString(3), exportedAt) { Sections = sections };
+        var schema = sections.Any(IsPrivacySection) ? CurrentSchemaVersion : FilesOnlySchemaVersion;
+        return new(schema, UpdateService.CurrentVersion.ToString(3), exportedAt) { Sections = sections };
+    }
+
+    /// <summary>
+    /// The privacy choices an imported privacy section carries, keeping only the toggles this build knows.
+    /// Returns null when the content cannot be read or names none of them, so the caller reports that rather
+    /// than staging nothing.
+    /// </summary>
+    /// <remarks>
+    /// Checked against the toggles <see cref="IPrivacyService"/> defines, as <see cref="ApplySections"/> checks a
+    /// file section against <see cref="Catalog"/>: a key this build does not know is dropped and logged. Nothing
+    /// in the section reaches the registry from here. The choices only say which known switch goes which way,
+    /// and the registry path each switch writes comes from the toggle's own definition.
+    /// </remarks>
+    public PrivacyChoices? ReadPrivacyChoices(ConfigSection section)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+
+        PrivacyChoices? read;
+        try { read = JsonSerializer.Deserialize<PrivacyChoices>(section.Json, JsonOptions); }
+        catch (JsonException ex)
+        {
+            Log.Warning("Profile: the privacy section is not valid JSON, skipping it: {Error}", ex.Message);
+            return null;
+        }
+        if (read?.Protections is not { Count: > 0 } protections)
+        {
+            Log.Warning("Profile: the privacy section names no protections, skipping it");
+            return null;
+        }
+
+        var known = _privacy.LoadToggles().Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
+        var kept = protections
+            .Where(choice => known.Contains(choice.Key))
+            .ToDictionary(choice => choice.Key, choice => choice.Value, StringComparer.Ordinal);
+        if (kept.Count < protections.Count)
+            Log.Warning("Profile: skipping {Count} privacy choice(s) this version does not know",
+                protections.Count - kept.Count);
+        if (kept.Count == 0) return null;
+
+        return new PrivacyChoices { Protections = kept };
     }
 
     /// <summary>Serializes a profile to indented JSON.</summary>
@@ -189,6 +289,13 @@ public sealed class ProfileService
     /// this build understands (so the user gets a clear "update SysManager" message
     /// rather than a silently mis-applied config).
     /// </summary>
+    /// <remarks>
+    /// This is where a file someone else made enters, so a section nothing could act on is dropped here rather
+    /// than met later: a null in the list, or one with no key or no content. System.Text.Json fills neither in,
+    /// whatever the record declares. Left in, a null threw while the import confirmation was being built from
+    /// the sections' names, and a known key with no content threw in the write, and neither is an exception the
+    /// import catches.
+    /// </remarks>
     public static ConfigProfile? Deserialize(string json)
     {
         ConfigProfile? profile;
@@ -203,7 +310,11 @@ public sealed class ProfileService
         // The model default already covers this, but keep the guard so any future
         // construction path (or a change to the record shape) can't reintroduce the
         // NRE that ProfileViewModel.Import hit on profile.Sections.Count.
-        return profile is { Sections: null } ? profile with { Sections = [] } : profile;
+        var sections = profile.Sections ?? [];
+        List<ConfigSection> usable = [.. sections.Where(s => s is { Key: not null, Json: not null })];
+        if (usable.Count < sections.Count)
+            Log.Warning("Profile: dropping {Count} section(s) with no key or no content", sections.Count - usable.Count);
+        return profile with { Sections = usable };
     }
 
     /// <summary>Writes a profile to a file the user chose.</summary>

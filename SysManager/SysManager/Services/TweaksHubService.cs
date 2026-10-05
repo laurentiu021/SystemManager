@@ -17,13 +17,13 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class TweaksHubService : ITweaksHubService
 {
-    private readonly PrivacyService _privacy;
+    private readonly IPrivacyService _privacy;
     // The once-per-session restore point used to live here as a private method plus a bool. It is
     // now the shared ISessionRestorePoint, so the tabs that write the SAME settings get the same
     // snapshot instead of only this one having it.
     private readonly ISessionRestorePoint _restorePoint;
 
-    public TweaksHubService(PrivacyService privacy, ISessionRestorePoint restorePoint)
+    public TweaksHubService(IPrivacyService privacy, ISessionRestorePoint restorePoint)
     {
         _privacy = privacy;
         _restorePoint = restorePoint;

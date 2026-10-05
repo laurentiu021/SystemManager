@@ -995,7 +995,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Explicit apply — flip toggles to stage changes, press **Apply** to write to the
   registry, or **Discard** to revert pending changes. A live counter shows how
   many changes are queued, so accidental clicks never modify the system silently.
-- Category filter and search
+- **Privacy choices from another PC** — import a profile in Profile Export / Import and
+  it opens here with the profile's choices already on the switches, as pending changes.
+  Nothing is written until you press **Apply**, and **Discard** keeps this PC as it is.
+  When SysManager is not running as administrator, the tab says beforehand how many of
+  the changes need it
+- Category filter
 - Requires admin for HKLM-backed toggles
 - Fully reversible — re-enable any toggle with one click
 - **A Windows restore point is attempted before the first Apply of the session** — the same one
@@ -1624,7 +1629,13 @@ offers, "rate us" prompts:
 - Export your SysManager settings to a single portable JSON file and import them on
   another PC: **theme and appearance, dark-mode schedule, gaming profiles, volume
   presets, close-button behaviour, standby-memory preference, update-check preference,
-  app-icon fetching preference, and speed-test history**
+  app-icon fetching preference, and speed-test history**, plus your **Privacy &
+  Telemetry choices**
+- **Privacy choices are reviewed, never applied blind** — the profile records which
+  privacy protections are on and which are off. Importing it never writes them: they
+  open on the Privacy & Telemetry tab as pending changes, so you see every switch the
+  profile would move, and Windows changes only when you press Apply there. They are
+  offered for export once at least one protection is on
 - **Selective export** (tick which sections to include) and **selective import**
   (confirm what a profile contains before anything is overwritten). Your ticks survive a
   refresh, so a section you excluded cannot quietly reappear in the export. An import says
@@ -1632,14 +1643,17 @@ offers, "rate us" prompts:
 - **Exports what is saved now** — each ticked section is read from disk at the moment you
   export, and the list is re-read whenever you come back to the tab, so a theme, preset or
   speed test you changed since the tab first opened goes into the file
-- **Version-aware** — refuses profiles created by a newer, incompatible build
+- **Version-aware** — refuses profiles created by a newer, incompatible build. A profile
+  with privacy choices needs this version or newer; one without them still imports on
+  older builds
 - **What it deliberately leaves out** — anything that describes *this* PC rather than
   your choices: the undo baselines behind Performance Mode and Environment Variables,
   the Settings Watchdog's record of this machine's registry, the service-startup ledger,
   and the local activity log. Carrying those to another PC would restore it to settings
   it was never on, or report differences that are only "a different computer"
-- Only SysManager's own config is ever touched (never system settings), so an
-  import is fully reversible — just import a different profile
+- An import writes only SysManager's own config files, so it is fully reversible —
+  just import a different profile. A privacy change goes through the Privacy &
+  Telemetry tab's own Apply, with its confirmation and restore point
 
 ### CLI Interface
 - **Automate the safe actions from scripts, Task Scheduler, or deployment tools** —

@@ -198,6 +198,13 @@ collection definitions (all defined in `TestCollections.cs`, each with
   hand-written handler is still allowed where a subscription must be removed by hand, provided its
   collection is concurrent. One file, compiled into both test projects rather than copied — the two
   helpers that were copied instead have since drifted (#2183).
+- `FakePrivacy` — **`SysManager.Tests` only.** Privacy toggles the test chooses, behind
+  `IPrivacyService`: `FakePrivacy.Returning(FakePrivacy.Toggle("tips", on: true))` returns new
+  toggles in those states on every load, as the real service re-reads the registry, and reports every
+  write as done without touching anything. A toggle's hive decides whether its write needs
+  administrator rights, so `hive: "HKLM"` gives the machine-wide case. Use it wherever the answer
+  would otherwise depend on this PC's own privacy settings: a profile export carries the toggles as
+  read, so a test over the real service passes or fails with the machine running it.
 - `StaHelper` — **`SysManager.IntegrationTests` only**, since it exists for tests that instantiate
   views. It queues a delegate onto **one** background STA thread shared by the whole suite and waits
   for it, rethrowing whatever the delegate threw. One thread rather than one per call because the

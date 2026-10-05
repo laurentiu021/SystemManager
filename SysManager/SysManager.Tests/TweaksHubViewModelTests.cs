@@ -17,6 +17,7 @@ public class TweaksHubViewModelTests
     {
         var toggle = new PrivacyToggle
         {
+            Key = name,
             Name = name,
             Description = "d",
             Category = "c",

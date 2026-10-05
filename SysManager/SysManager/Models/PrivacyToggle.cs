@@ -15,6 +15,13 @@ public sealed partial class PrivacyToggle : ObservableObject
 {
     [ObservableProperty] private bool _isEnabled;
 
+    /// <summary>
+    /// The stable name a privacy profile gives this toggle (e.g. <c>diagnostic-data</c>). Unlike
+    /// <see cref="Name"/> it is never reworded: a profile exported by one version names its toggles by key, so
+    /// renaming a key would make every profile already sent to someone mean less than it says.
+    /// </summary>
+    public required string Key { get; init; }
+
     /// <summary>Short human-readable name shown in the toggle list.</summary>
     public required string Name { get; init; }
 

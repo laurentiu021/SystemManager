@@ -15,7 +15,7 @@ namespace SysManager.Services;
 /// state to the registry. HKCU writes always succeed; HKLM writes require
 /// elevation and failures are handled gracefully.
 /// </summary>
-public sealed class PrivacyService
+public sealed class PrivacyService : IPrivacyService
 {
     private readonly RegistryKey _hkcuRoot;
     private readonly RegistryKey _hklmRoot;
@@ -210,6 +210,7 @@ public sealed class PrivacyService
             // ── Telemetry ─────────────────────────────────────────────────
             new PrivacyToggle
             {
+                Key = "diagnostic-data",
                 Name = "Disable diagnostic data",
                 Description = "Prevents Windows from sending diagnostic and usage data to Microsoft.",
                 Category = "Telemetry",
@@ -220,6 +221,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "activity-history",
                 Name = "Disable activity history",
                 Description = "Stops Windows from collecting activity history and sending it to Microsoft.",
                 Category = "Telemetry",
@@ -230,6 +232,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "advertising-id",
                 Name = "Disable advertising ID",
                 Description = "Prevents apps from using your advertising ID for targeted ads.",
                 Category = "Telemetry",
@@ -240,6 +243,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "feedback-prompts",
                 Name = "Disable feedback",
                 Description = "Stops Windows from prompting for feedback surveys.",
                 Category = "Telemetry",
@@ -252,6 +256,7 @@ public sealed class PrivacyService
             // ── UI Declutter ──────────────────────────────────────────────
             new PrivacyToggle
             {
+                Key = "start-suggestions",
                 Name = "Disable Start suggestions",
                 Description = "Removes suggested apps and content from the Start menu.",
                 Category = "UI Declutter",
@@ -262,6 +267,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "tips",
                 Name = "Disable tips",
                 Description = "Turns off Windows tips and suggestions notifications.",
                 Category = "UI Declutter",
@@ -272,6 +278,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "lock-screen-tips",
                 Name = "Disable lock screen tips",
                 Description = "Removes tips and tricks from the lock screen.",
                 Category = "UI Declutter",
@@ -282,6 +289,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "spotlight-ads",
                 Name = "Disable Spotlight ads",
                 Description = "Removes promotional content from Windows Spotlight on the lock screen.",
                 Category = "UI Declutter",
@@ -294,6 +302,7 @@ public sealed class PrivacyService
             // ── Features ──────────────────────────────────────────────────
             new PrivacyToggle
             {
+                Key = "ai-assistant",
                 Name = "Disable Copilot",
                 Description = "Turns off Windows Copilot AI assistant integration.",
                 Category = "Features",
@@ -304,6 +313,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "cortana",
                 Name = "Disable Cortana",
                 Description = "Prevents Cortana from running and collecting voice/search data.",
                 Category = "Features",
@@ -314,6 +324,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "web-search",
                 Name = "Disable web search",
                 Description = "Removes Bing web results from Start menu and taskbar search.",
                 Category = "Features",
@@ -324,6 +335,7 @@ public sealed class PrivacyService
             },
             new PrivacyToggle
             {
+                Key = "widgets",
                 Name = "Disable widgets",
                 Description = "Turns off the Widgets board (news and interests) on the taskbar.",
                 Category = "Features",

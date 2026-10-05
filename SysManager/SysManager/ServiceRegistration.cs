@@ -62,7 +62,10 @@ public static class ServiceRegistration
         services.AddSingleton<BulkInstallerService>();
         services.AddSingleton<AppIconService>();
         services.AddSingleton<FileShredderService>();
-        services.AddSingleton<PrivacyService>();
+        services.AddSingleton<IPrivacyService, PrivacyService>();
+        // One slot for the whole app: Profile Export / Import leaves imported privacy choices in it and the
+        // Privacy & Telemetry tab takes them, so two instances would lose every import between the tabs.
+        services.AddSingleton<IPrivacyChoicesHandoff, PrivacyChoicesHandoff>();
         services.AddSingleton<DnsService>();
         services.AddSingleton<HostsFileService>();
         services.AddSingleton<IContextMenuService, ContextMenuService>();

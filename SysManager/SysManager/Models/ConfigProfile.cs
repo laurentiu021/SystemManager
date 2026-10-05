@@ -5,10 +5,11 @@
 namespace SysManager.Models;
 
 /// <summary>
-/// A portable export of SysManager's own configuration — a versioned bundle of the
-/// app's settings files (theme, speed-test history, …) that can be carried to another
-/// PC and selectively re-applied. Contains only SysManager's own JSON config, never
-/// system state, so importing it is fully reversible (it overwrites app config files).
+/// A portable export of SysManager's configuration — a versioned bundle of the app's
+/// settings files (theme, speed-test history, …) that can be carried to another PC and
+/// selectively re-applied, plus the Privacy &amp; Telemetry choices as one more section.
+/// Importing it writes only SysManager's own config files. The privacy choices are a
+/// desired state the Privacy &amp; Telemetry tab stages for review, never a write.
 /// </summary>
 public sealed record ConfigProfile(
     int SchemaVersion,

@@ -5,6 +5,7 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -24,7 +25,7 @@ public class ProfileServiceTests : IDisposable
     {
         _dir = Path.Combine(Path.GetTempPath(), "SysManagerProfileTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
-        _svc = new ProfileService(_dir);
+        _svc = new ProfileService(FakePrivacy.AllOff(), _dir);
     }
 
     public void Dispose()
@@ -61,7 +62,8 @@ public class ProfileServiceTests : IDisposable
         var restored = ProfileService.Deserialize(json);
 
         Assert.NotNull(restored);
-        Assert.Equal(ProfileService.CurrentSchemaVersion, restored!.SchemaVersion);
+        // Config files alone are written as version 1, the format every build since profiles shipped reads.
+        Assert.Equal(1, restored!.SchemaVersion);
         Assert.Equal(2, restored.Sections.Count);
         Assert.Contains(restored.Sections, s => s.Key == "theme" && s.Json.Contains("deep-ocean"));
     }
@@ -183,7 +185,7 @@ public class ProfileServiceTests : IDisposable
         var roaming = Path.Combine(_dir, "Roaming");
         Directory.CreateDirectory(local);
         Directory.CreateDirectory(roaming);
-        var svc = new ProfileService(local, roaming);
+        var svc = new ProfileService(FakePrivacy.AllOff(), local, roaming);
 
         // Apply both sections.
         svc.ApplySections(
@@ -327,6 +329,14 @@ public class ProfileServiceTests : IDisposable
             fileNames.Add(Assert.IsType<string>(tuple[2]));
         }
 
+        // The privacy section lives outside the catalog but shares its key and file-name space: a catalog entry
+        // keyed "privacy" would be handed to the Privacy & Telemetry tab instead of written. Its real values,
+        // read off a built section rather than restated here.
+        var privacy = Assert.Single(new ProfileService(FakePrivacy.Returning(FakePrivacy.Toggle("tips", on: true)), _dir)
+            .AvailableSections());
+        keys.Add(privacy.Key);
+        fileNames.Add(privacy.FileName);
+
         // Through the same helper the carry itself uses, and the same comparer ProfileViewModel passes.
         Assert.Empty(SelectionCarry.DuplicateKeys(keys, k => k, StringComparer.Ordinal));
 
@@ -396,5 +406,175 @@ public class ProfileServiceTests : IDisposable
         Assert.Equal(0, applied);
         Assert.Contains("Mine", File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json")),
             StringComparison.Ordinal);
+    }
+
+    // ---------- A profile file someone else made (the import's trust boundary) ----------
+
+    /// <summary>
+    /// A section with no key or no content, or a null in the list, is dropped when the file is read.
+    /// </summary>
+    /// <remarks>
+    /// Each used to get further than it should and then throw something the import does not catch. A null in
+    /// the list threw while the confirmation was being built from the sections' names. A known key with no
+    /// content was confirmed and then handed to the atomic write, which refuses null. Either took the tab down
+    /// over a bad file instead of saying so. Present since v1.28.0, when Profile Export/Import was added.
+    /// </remarks>
+    [Fact]
+    public void Deserialize_DropsASectionItCannotUse()
+    {
+        var json = $"{{\"SchemaVersion\":1,\"AppVersion\":\"1.0.0\",\"ExportedAt\":\"2026-01-01T00:00:00\",\"Sections\":["
+            + "null,"
+            + "{\"DisplayName\":\"No key\",\"FileName\":\"theme.json\",\"Json\":\"{}\"},"
+            + "{\"Key\":\"theme\",\"DisplayName\":\"No content\",\"FileName\":\"theme.json\"},"
+            + "{\"Key\":\"volume\",\"DisplayName\":\"Volume presets\",\"FileName\":\"volume-presets.json\",\"Json\":\"[]\"}"
+            + "]}";
+
+        var profile = ProfileService.Deserialize(json);
+
+        Assert.NotNull(profile);
+        var section = Assert.Single(profile!.Sections);
+        Assert.Equal("volume", section.Key);
+    }
+
+    // ---------- The privacy section (#1530) ----------
+    // The one section that is not a file: the Privacy & Telemetry toggles, read from the registry when the
+    // profile is built and never written by an import. These run over FakePrivacy, so the answer does not
+    // depend on the privacy settings of the machine running the suite.
+
+    private static readonly DateTime ExportedAt = new(2026, 10, 5, 9, 0, 0, DateTimeKind.Local);
+
+    private ProfileService WithPrivacy(params PrivacyToggle[] toggles) => new(FakePrivacy.Returning(toggles), _dir);
+
+    [Fact]
+    public void AvailableSections_ListsThePrivacyChoices_OnlyOnceAProtectionIsOn()
+    {
+        // Every protection off is Windows' own default, so there is nothing to carry.
+        Assert.DoesNotContain(_svc.AvailableSections(), ProfileService.IsPrivacySection);
+
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: true), FakePrivacy.Toggle("widgets", on: false));
+
+        var privacy = Assert.Single(svc.AvailableSections());
+        Assert.Equal(ProfileService.PrivacySectionKey, privacy.Key);
+        Assert.Equal("Privacy & Telemetry choices", privacy.DisplayName);
+    }
+
+    [Fact]
+    public void ThePrivacySection_CarriesEveryToggle_OnAndOff()
+    {
+        // The whole posture: an off switch is as much a choice to carry as an on one.
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: true), FakePrivacy.Toggle("widgets", on: false));
+        var section = Assert.Single(svc.BuildProfile(ExportedAt).Sections);
+
+        var choices = svc.ReadPrivacyChoices(section);
+
+        Assert.NotNull(choices);
+        Assert.Equal([("tips", true), ("widgets", false)],
+            choices!.Protections.OrderBy(c => c.Key, StringComparer.Ordinal).Select(c => (c.Key, c.Value)));
+    }
+
+    [Fact]
+    public void BuildProfile_ReadsThePrivacyTogglesAsTheyAreWhenCalled()
+    {
+        // The same rule as the files (#2477): what is exported is what this PC has now, not what it had when
+        // the tab opened.
+        var tipsOn = true;
+        var privacy = Substitute.For<IPrivacyService>();
+        privacy.LoadToggles().Returns(_ => [FakePrivacy.Toggle("tips", tipsOn), FakePrivacy.Toggle("widgets", on: true)]);
+        var svc = new ProfileService(privacy, _dir);
+        Assert.Single(svc.BuildProfile(ExportedAt).Sections);
+
+        tipsOn = false;
+        var section = Assert.Single(svc.BuildProfile(ExportedAt).Sections);
+
+        Assert.False(svc.ReadPrivacyChoices(section)!.Protections["tips"]);
+    }
+
+    [Fact]
+    public void BuildProfile_WritesVersionTwoOnlyWhenItCarriesPrivacyChoices()
+    {
+        WriteConfig("theme.json", "{\"preset\":\"midnight\"}");
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: true));
+
+        // Version 2 is what makes an older SysManager refuse the profile with "update SysManager" rather than
+        // import its files and silently leave the privacy choices behind.
+        Assert.Equal(ProfileService.CurrentSchemaVersion, svc.BuildProfile(ExportedAt).SchemaVersion);
+        Assert.Equal(2, ProfileService.CurrentSchemaVersion);
+
+        // Without them the profile is one every build can import, so it says version 1.
+        Assert.Equal(1, svc.BuildProfile(ExportedAt, ["theme"]).SchemaVersion);
+    }
+
+    [Fact]
+    public void Deserialize_AVersionOneProfile_StillImports()
+    {
+        // Every profile exported before the privacy section existed says version 1.
+        var json = "{\"SchemaVersion\":1,\"AppVersion\":\"1.114.54\",\"ExportedAt\":\"2026-10-01T00:00:00\","
+            + "\"Sections\":[{\"Key\":\"theme\",\"DisplayName\":\"Theme & appearance\",\"FileName\":\"theme.json\","
+            + "\"Json\":\"{}\"}]}";
+
+        var profile = ProfileService.Deserialize(json);
+
+        Assert.Equal("theme", Assert.Single(profile!.Sections).Key);
+    }
+
+    [Fact]
+    public void ApplySections_NeverWritesThePrivacySection()
+    {
+        // Import hands the privacy choices to the Privacy & Telemetry tab. Even passed here, they are not a file.
+        var section = Assert.Single(WithPrivacy(FakePrivacy.Toggle("tips", on: true)).AvailableSections());
+
+        var applied = _svc.ApplySections([section]);
+
+        Assert.Equal(0, applied);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void ReadPrivacyChoices_KeepsOnlyTheTogglesThisBuildKnows()
+    {
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: false), FakePrivacy.Toggle("widgets", on: false));
+        var section = new ConfigSection(ProfileService.PrivacySectionKey, "Privacy & Telemetry choices",
+            "privacy-profile.json", "{\"Protections\":{\"tips\":true,\"a-toggle-from-a-newer-build\":true}}");
+
+        var choices = svc.ReadPrivacyChoices(section);
+
+        Assert.NotNull(choices);
+        Assert.Equal(["tips"], choices!.Protections.Keys);
+        Assert.True(choices.Protections["tips"]);
+    }
+
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("{}")]
+    [InlineData("{\"Protections\":null}")]
+    [InlineData("{\"Protections\":{}}")]
+    [InlineData("{\"Protections\":{\"tips\":\"yes\"}}")]
+    [InlineData("{\"Protections\":{\"tips\":null}}")]
+    [InlineData("{\"Protections\":{\"only-unknown-toggles\":true}}")]
+    public void ReadPrivacyChoices_RefusesContentItCannotUse(string json)
+    {
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: false));
+        var section = new ConfigSection(ProfileService.PrivacySectionKey, "Privacy & Telemetry choices",
+            "privacy-profile.json", json);
+
+        Assert.Null(svc.ReadPrivacyChoices(section));
+    }
+
+    [Fact]
+    public void ReadPrivacyChoices_ARepeatedToggle_IsReadRatherThanThrown()
+    {
+        // A hand-edited file can name a toggle twice. Whatever the parser makes of it, the import must not throw
+        // something it does not catch.
+        var svc = WithPrivacy(FakePrivacy.Toggle("tips", on: false));
+        var section = new ConfigSection(ProfileService.PrivacySectionKey, "Privacy & Telemetry choices",
+            "privacy-profile.json", "{\"Protections\":{\"tips\":true,\"tips\":false}}");
+
+        var choices = svc.ReadPrivacyChoices(section);
+
+        Assert.NotNull(choices);
+        Assert.Equal(["tips"], choices!.Protections.Keys);
     }
 }

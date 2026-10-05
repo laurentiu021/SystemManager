@@ -218,7 +218,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
   `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing — which
-  is the same point Tweaks Hub takes for the identical writes.
+  is the same point Tweaks Hub takes for the identical writes. Privacy choices imported from a profile
+  arrive through `IPrivacyChoicesHandoff` and are staged as pending changes, never written: when the
+  tab is shown (`IsActive`, set by `MainWindowViewModel.SetActive`) or when a load of its toggles
+  finishes, but not while a load is running or while Apply waits for its restore point, which stages
+  them once its write is done. A switch the profile does not name keeps what the user had, the filter
+  goes back to All, and the status says how many switches moved and how many of those need
+  administrator rights that this session does not have.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
@@ -239,7 +245,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back. The reconcile writes its app count through `ViewModelBase.ShowRefreshStatus`, so it never replaces an outcome on the status line.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. Built at startup, so a saved auto-purge watches from launch without the tab being opened.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). The game target carries the listed start time, the selection survives a refresh only for the same process, and a game that had closed is refused with a refresh of the list (#2559). A game that closed while game mode was starting is reported, with anything that could not be restored, and the list is refreshed (#2563). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
-- `ProfileViewModel` — export/import SysManager's own config as a portable JSON profile with selective sections and version checking. The sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session.
+- `ProfileViewModel` — export/import SysManager's config as a portable JSON profile with selective sections and version checking. The file sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. A tenth section, the Privacy & Telemetry choices, is listed once a protection is on. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files and the toggles at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session. Import writes the file sections only; the privacy choices are read by `ProfileService.ReadPrivacyChoices`, left in `IPrivacyChoicesHandoff`, and the user is taken to the Privacy & Telemetry tab through `INavigationService` to review them (#1530).
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
@@ -254,7 +260,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-two are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
@@ -263,7 +269,9 @@ constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (
 `ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
 Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
-(NavigationService), `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
+(NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry, Tweaks Hub and the
+profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IGamingProfileService`, and
+`ISessionRestorePoint` (the last two via a factory).
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
 something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and
@@ -711,8 +719,14 @@ Key services:
   per-item progress and error reporting.
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
   style) and deletion.
-- `PrivacyService` — reads and writes Windows privacy and telemetry
-  registry toggles (activity history, advertising ID, diagnostics, etc.).
+- `PrivacyService` (`IPrivacyService`) — reads and writes Windows privacy and telemetry
+  registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
+  stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a
+  key would make every profile already exported drop that choice.
+- `PrivacyChoicesHandoff` (`IPrivacyChoicesHandoff`) — the one slot the profile import and the
+  Privacy & Telemetry tab share: the import offers the choices it read, and the tab takes them once,
+  when it is next shown or finishes loading. A slot rather than a call, because that tab's view model
+  is built the first time it is opened, which may be after the import.
 - `DnsService` — manages DNS server configuration via PowerShell
   `Set-DnsClientServerAddress` with preset support (plain resolvers plus
   ad/malware/family-blocking variants), IPv4 + IPv6, and reversible snapshots.
@@ -1037,11 +1051,16 @@ Key services:
   `SystemFixResult`. Auto-logon is delegated to the built-in netplwiz dialog, never
   a plaintext credential write.
 - `ProfileService` — bundles SysManager's own config files (theme, speed-test
-  history) into a versioned, portable JSON profile and applies it back; only
+  history, …) into a versioned, portable JSON profile and applies it back; only
   catalog-known sections are written (a tampered profile can't drop arbitrary
   files), and the config directory is injectable for tests. `BuildProfile` takes
   section keys, not contents, and reads the files when it is called, so an export
-  cannot write what a caller read earlier.
+  cannot write what a caller read earlier. The privacy section is built from
+  `IPrivacyService` and is never written: `ReadPrivacyChoices` returns it,
+  checked against the known toggle keys, for the Privacy & Telemetry tab to stage.
+  A profile carrying it is format 2, one without it stays format 1 so an older
+  build still imports it, and `Deserialize` drops a section with no key or no
+  content, where the import used to throw.
 - `AppIconService` — downloads and caches application favicons for UI display.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time

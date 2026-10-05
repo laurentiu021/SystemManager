@@ -18,11 +18,28 @@ namespace SysManager.Services;
 /// Disks, SMART) with additional WMI queries (GPU, Motherboard, Network adapters).
 /// The data is gathered once into a <see cref="SystemReportData"/> and rendered to
 /// plain text, HTML, or JSON so all three formats share a single source of truth.
+/// It opens with a health verdict — the Dashboard's score and recommendations, and the
+/// recent problems Windows logged — so a reader learns what is wrong before the
+/// inventory (#1508).
 /// </summary>
 public sealed class SystemReportService
 {
+    /// <summary>How far back the report looks for problems in the System log.</summary>
+    internal static readonly TimeSpan RecentProblemsWindow = TimeSpan.FromDays(7);
+
+    /// <summary>How many kinds of problem the report lists at most.</summary>
+    internal const int MaxRecentProblems = 5;
+
+    /// <summary>
+    /// The longest the report waits on the System log. A read walks every record in the window, thousands on a
+    /// busy machine, and the report is worth more without its problems list than not at all.
+    /// </summary>
+    internal static readonly TimeSpan RecentProblemsBudget = TimeSpan.FromSeconds(15);
+
     private readonly SystemInfoService _sysInfo;
     private readonly DiskHealthService _diskHealth;
+    private readonly BatteryService _battery;
+    private readonly EventLogService _events;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -32,28 +49,143 @@ public sealed class SystemReportService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public SystemReportService(SystemInfoService sysInfo, DiskHealthService diskHealth)
+    public SystemReportService(
+        SystemInfoService sysInfo, DiskHealthService diskHealth, BatteryService battery, EventLogService events)
     {
         _sysInfo = sysInfo;
         _diskHealth = diskHealth;
+        _battery = battery;
+        _events = events;
     }
 
     /// <summary>
-    /// Gathers the full report payload (OS/CPU/RAM/GPU/motherboard/disks/network) once.
+    /// Gathers the full report payload (health, OS/CPU/RAM/GPU/motherboard/disks/network) once.
     /// </summary>
     /// <remarks>
     /// <para><b>The machine identifiers are removed here, at the one point every format passes through.</b>
     /// Redacting in each renderer instead would mean three places to remember and a fourth format shipping
     /// unprotected — and the report already had exactly that shape: the sharable text variant was redacted
     /// while the text, HTML and JSON exports were not (#2352).</para>
+    /// <para>The health score is computed from the snapshot and disks gathered here, through
+    /// <see cref="HealthScoreService.Evaluate"/>, rather than by asking Windows for both again. The recent
+    /// problems carry no event message (<see cref="SummarizeProblems"/>), so the health section adds nothing
+    /// the redaction has not seen.</para>
     /// </remarks>
     public async Task<SystemReportData> GenerateDataAsync(CancellationToken ct = default)
     {
         var snapshot = await _sysInfo.CaptureAsync(ct).ConfigureAwait(false);
         var diskHealth = await _diskHealth.CollectAsync(ct).ConfigureAwait(false);
+        var battery = await ReadBatteryAsync(ct).ConfigureAwait(false);
+        var problems = await ReadRecentProblemsAsync(ct).ConfigureAwait(false);
 
         var data = await Task.Run(() => BuildData(snapshot, diskHealth), ct).ConfigureAwait(false);
-        return WithoutMachineIdentifiers(data);
+        var score = HealthScoreService.Evaluate(snapshot, diskHealth, battery,
+            FixedDriveService.Enumerate(), HealthScoreService.SystemDriveLetter());
+        return WithoutMachineIdentifiers(data with { Health = BuildHealth(score, problems) });
+    }
+
+    /// <summary>The battery for the score, or null when Windows would not say; the score then leaves it out.</summary>
+    private async Task<BatteryInfo?> ReadBatteryAsync(CancellationToken ct)
+    {
+        try { return await _battery.GetBatteryInfoAsync(ct).ConfigureAwait(false); }
+        catch (ManagementException ex) { Log.Debug("Report: battery unavailable: {Error}", ex.Message); }
+        catch (System.Runtime.InteropServices.COMException ex) { Log.Debug("Report: battery WMI COM error: 0x{HResult:X8}", ex.HResult); }
+        catch (InvalidOperationException ex) { Log.Debug("Report: battery unavailable: {Error}", ex.Message); }
+        return null;
+    }
+
+    /// <summary>
+    /// The recent critical and error events from the System log, summarized; null when the log could not be
+    /// read in full, so the report says that instead of claiming there were none.
+    /// </summary>
+    private async Task<IReadOnlyList<ReportProblem>?> ReadRecentProblemsAsync(CancellationToken ct)
+    {
+        var options = new EventLogQueryOptions
+        {
+            LogName = "System",
+            Severities = [EventSeverity.Critical, EventSeverity.Error],
+            Since = DateTime.Now - RecentProblemsWindow,
+            MaxResults = 500,
+        };
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(RecentProblemsBudget);
+
+        List<FriendlyEventEntry> entries = [];
+        try
+        {
+            await foreach (var entry in _events.ReadAsync(options, budget.Token).ConfigureAwait(false))
+                entries.Add(entry);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            Log.Warning("Report: the System log took longer than {Budget} to read, so the report lists no problems",
+                RecentProblemsBudget);
+            return null;
+        }
+
+        if (_events.LastOutcome != EventLogService.ReadOutcome.Ok)
+        {
+            Log.Debug("Report: the System log could not be read: {Outcome}", _events.LastOutcome);
+            return null;
+        }
+        return SummarizeProblems(entries);
+    }
+
+    /// <summary>
+    /// The events grouped by source and ID: how many times each was logged and when last, critical first, then
+    /// newest first, at most <see cref="MaxRecentProblems"/>.
+    /// </summary>
+    /// <remarks>
+    /// Grouped because one noisy source can log the same error hundreds of times a week, and a list of the five
+    /// newest events would then be that one error five times. Only the written explanation and advice travel:
+    /// an event's message can name files, users and machines, which the report keeps out (#2352), and the
+    /// fallback wording for an unknown event points at that message. An event nobody wrote an explanation for
+    /// is listed by its source and ID alone, which is what to search for.
+    /// </remarks>
+    internal static IReadOnlyList<ReportProblem> SummarizeProblems(IEnumerable<FriendlyEventEntry> entries) =>
+    [
+        .. entries
+            .GroupBy(e => (e.ProviderName, e.EventId))
+            .Select(g =>
+            {
+                var latest = g.MaxBy(e => e.Timestamp)!;
+                var written = EventExplainer.TryExplain(latest.ProviderName, latest.EventId, out var known);
+                return new ReportProblem(latest.Timestamp, latest.ProviderName, latest.EventId,
+                    Critical: g.Any(e => e.Severity == EventSeverity.Critical), Count: g.Count(),
+                    written ? known.Explanation : null, written ? known.Recommendation : null);
+            })
+            .OrderByDescending(p => p.Critical)
+            .ThenByDescending(p => p.LastSeen)
+            .Take(MaxRecentProblems),
+    ];
+
+    /// <summary>
+    /// The health section from the score and the problems: the components in the Dashboard's order, with a
+    /// component Windows gave nothing for marked as unread rather than scored at the fallback.
+    /// </summary>
+    internal static ReportHealth BuildHealth(HealthScoreResult score, IReadOnlyList<ReportProblem>? problems)
+    {
+        int? Read(string component, int value) => score.IsUnavailable(component) ? null : value;
+
+        List<ReportHealthComponent> components =
+        [
+            new("Disk health", Read(HealthScoreService.DiskComponent, score.DiskScore)),
+            new("Free space", Read(HealthScoreService.FreeSpaceComponent, score.FreeSpaceScore)),
+            new("Memory", Read(HealthScoreService.MemoryComponent, score.RamScore)),
+            new("Uptime", Read(HealthScoreService.UptimeComponent, score.UptimeScore)),
+        ];
+        // A PC with no battery has nothing to list; one Windows would not measure is listed as unread.
+        if (score.HasBattery)
+            components.Add(new("Battery", Read(HealthScoreService.BatteryComponent, score.BatteryScore)));
+
+        return new ReportHealth(
+            score.Score,
+            score.Label,
+            components,
+            [.. score.Recommendations.Select(r => new ReportRecommendation(r.Message, r.Severity))],
+            problems ?? [],
+            ProblemsRead: problems is not null);
     }
 
     /// <summary>Generates a formatted plain-text system report.</summary>
@@ -247,6 +379,9 @@ public sealed class SystemReportService
         sb.AppendLine("═══════════════════════════════════════════");
         sb.AppendLine();
 
+        // First, because it is what the person reading the report needs before any of the inventory below.
+        if (d.Health is { } health) AppendHealth(sb, health);
+
         AppendSection(sb, "Operating System");
         sb.AppendLine($"  {d.Os.Caption}");
         if (!string.IsNullOrWhiteSpace(d.Os.Version)) sb.AppendLine($"  Version: {d.Os.Version}");
@@ -340,6 +475,86 @@ public sealed class SystemReportService
         return sb.ToString();
     }
 
+    /// <summary>The health verdict and the recent problems, as the two sections the text report opens with.</summary>
+    private static void AppendHealth(StringBuilder sb, ReportHealth health)
+    {
+        AppendSection(sb, "Health");
+        sb.AppendLine($"  Overall: {health.Score}/100 ({health.Label})");
+        foreach (var component in health.Components)
+            sb.AppendLine($"  {component.Name}: {ComponentScore(component)}");
+        if (health.Recommendations.Count == 0)
+        {
+            sb.AppendLine("  What to do: nothing needs attention.");
+        }
+        else
+        {
+            sb.AppendLine("  What to do:");
+            for (var i = 0; i < health.Recommendations.Count; i++)
+                sb.AppendLine($"    {i + 1}. {health.Recommendations[i].Message}");
+        }
+        sb.AppendLine();
+
+        AppendSection(sb, ProblemsTitle);
+        if (!health.ProblemsRead)
+            sb.AppendLine("  (The System log could not be read.)");
+        else if (health.RecentProblems.Count == 0)
+            sb.AppendLine("  None.");
+        foreach (var p in health.RecentProblems)
+        {
+            sb.AppendLine($"  {ProblemLine(p)}");
+            if (!string.IsNullOrWhiteSpace(p.Explanation)) AppendWrapped(sb, "    ", p.Explanation);
+            if (!string.IsNullOrWhiteSpace(p.Recommendation)) AppendWrapped(sb, "    ", $"What to do: {p.Recommendation}");
+        }
+        if (health.RecentProblems.Any(p => string.IsNullOrWhiteSpace(p.Explanation)))
+            AppendWrapped(sb, "  ", UnexplainedNote);
+        sb.AppendLine();
+    }
+
+    /// <summary>The widest a wrapped line of the text report gets.</summary>
+    internal const int TextWidth = 100;
+
+    /// <summary>
+    /// Writes <paramref name="text"/> indented and wrapped between words at <see cref="TextWidth"/>. An event's
+    /// explanation and advice run to 150 characters, and the tab's preview does not wrap, so unwrapped they
+    /// could only be read by scrolling sideways.
+    /// </summary>
+    private static void AppendWrapped(StringBuilder sb, string indent, string text)
+    {
+        var line = new StringBuilder(indent);
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.Length > indent.Length && line.Length + 1 + word.Length > TextWidth)
+            {
+                sb.AppendLine(line.ToString());
+                line.Clear().Append(indent);
+            }
+            if (line.Length > indent.Length) line.Append(' ');
+            line.Append(word);
+        }
+        if (line.Length > indent.Length) sb.AppendLine(line.ToString());
+    }
+
+    /// <summary>The title both renderers give the problems list, with the window it covers.</summary>
+    private static string ProblemsTitle => $"System log problems (last {(int)RecentProblemsWindow.TotalDays} days)";
+
+    /// <summary>
+    /// Said once under the list rather than on every line, so five unexplained events do not read as the same
+    /// apology five times.
+    /// </summary>
+    private const string UnexplainedNote =
+        "A line with no explanation is an error SysManager has no plain-English note for yet; its source and "
+        + "event ID are what to search for.";
+
+    /// <summary>A component's score out of 100, or that Windows gave nothing to score it from.</summary>
+    private static string ComponentScore(ReportHealthComponent component) =>
+        component.Score is { } score ? $"{score}/100" : "could not be read";
+
+    /// <summary>When a problem was last logged, by what, and how often.</summary>
+    private static string ProblemLine(ReportProblem p) =>
+        $"{p.LastSeen.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} · {p.Source} {p.EventId}"
+        + (p.Critical ? " · critical" : "")
+        + (p.Count == 1 ? "" : $" · {p.Count} times");
+
     private static void AppendSection(StringBuilder sb, string title)
     {
         sb.Append("── ");
@@ -375,6 +590,37 @@ public sealed class SystemReportService
 
         sb.AppendLine($"<h1>SysManager System Report</h1>");
         sb.AppendLine($"<div class=\"sub\">Generated {H(d.GeneratedAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))} · SysManager v{H(d.AppVersion)}</div>");
+
+        // Health first, in the same section and table as everything else, for the reason the text report gives.
+        if (d.Health is { } health)
+        {
+            OpenSection(sb, "Health");
+            Row(sb, "Overall", $"{health.Score}/100 · {health.Label}");
+            foreach (var component in health.Components)
+                Row(sb, component.Name, ComponentScore(component));
+            if (health.Recommendations.Count == 0)
+                Row(sb, "What to do", "Nothing needs attention.");
+            for (var i = 0; i < health.Recommendations.Count; i++)
+                Row(sb, i == 0 ? "What to do" : "", $"{i + 1}. {health.Recommendations[i].Message}");
+            CloseSection(sb);
+
+            OpenSection(sb, ProblemsTitle);
+            if (!health.ProblemsRead)
+                Row(sb, "Problems", "The System log could not be read.");
+            else if (health.RecentProblems.Count == 0)
+                Row(sb, "Problems", "None.");
+            foreach (var p in health.RecentProblems)
+            {
+                var v = $"{p.Source} {p.EventId}" + (p.Critical ? " · critical" : "")
+                    + (p.Count == 1 ? "" : $" · {p.Count} times");
+                if (!string.IsNullOrWhiteSpace(p.Explanation)) v += $" · {p.Explanation}";
+                if (!string.IsNullOrWhiteSpace(p.Recommendation)) v += $" What to do: {p.Recommendation}";
+                Row(sb, p.LastSeen.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture), v);
+            }
+            if (health.RecentProblems.Any(p => string.IsNullOrWhiteSpace(p.Explanation)))
+                Row(sb, "", UnexplainedNote);
+            CloseSection(sb);
+        }
 
         // OS
         OpenSection(sb, "Operating System");
@@ -460,8 +706,8 @@ public sealed class SystemReportService
         // beside the point printed at the bottom of a file whose whole purpose is to be sent to somebody —
         // it reassured about the wrong thing (#2352). The footer now says what is true of the FILE.
         sb.AppendLine("<div class=\"foot\">Generated locally by SysManager. This report is safe to share: it "
-                    + "lists your hardware, not you — no user name, no computer name, and network addresses "
-                    + "are shortened so they cannot identify your machine.</div>");
+                    + "lists your hardware and its health, not you — no user name, no computer name, no event "
+                    + "messages, and network addresses are shortened so they cannot identify your machine.</div>");
         sb.AppendLine("</div></body></html>");
         return sb.ToString();
     }

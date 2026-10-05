@@ -73,7 +73,7 @@ public sealed class DiagnosticsBundleRedactionTests : IDisposable
         var ips = LocalIPv4Addresses();
 
         var service = new DiagnosticsBundleService(
-            new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+            new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             Path.Combine(_root, "logs"));
         var zipPath = Path.Combine(_root, "bundle.zip");
 
@@ -133,7 +133,7 @@ public sealed class DiagnosticsBundleRedactionTests : IDisposable
             "no adapter on this machine reports a hardware address, so this test cannot establish that the "
             + "redaction removes anything.");
 
-        var report = await new SystemReportService(new SystemInfoService(), new DiskHealthService())
+        var report = await new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService())
             .GenerateReportAsync();
 
         Assert.Contains("Network", report, StringComparison.Ordinal);

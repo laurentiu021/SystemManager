@@ -226,7 +226,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   goes back to All, and the status says how many switches moved and how many of those need
   administrator rights that this session does not have.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
-- `SystemReportViewModel` — generate a read-only full-system snapshot and export it as text, HTML, or JSON.
+- `SystemReportViewModel` — generate a read-only full-system snapshot, opening with a health verdict and recent problems, and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
 - `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup or standby trim) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched.
@@ -353,7 +353,10 @@ Key services:
   `LogNotFound` / `Unavailable`) alongside the streamed entries, because a refused
   log and an empty log are otherwise indistinguishable to the caller — the Security
   log needs elevation, and swallowing that made the UI report "0 events". Reset at
-  the start of every query so a past refusal cannot outlive it.
+  the start of every query so a past refusal cannot outlive it. Because the outcome is instance
+  state, the System Report gets its own `EventLogService` (a factory registration) rather than
+  the Logs tab's, so neither can be told the other's answer. `EventExplainer.TryExplain` returns
+  the written explanation for a known (source, ID) only, which is what the report uses.
 - `HealthAnalyzer` — raw SMART / ping data into verdict pills.
 - `SpeedVerdictAnalyzer` — a speed-test result into a plain-English verdict
   ("Fast connection", what that allows) plus a comparison against the previous
@@ -379,7 +382,9 @@ Key services:
 - `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
   wear into a single 0–100 score with color-coded verdict and recommendations. `OverallScore` weights the
   battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
-  desktop's, and named in `UnavailableComponents`.
+  desktop's, and named in `UnavailableComponents`. `ComputeAsync` gathers and then calls the static
+  `Evaluate`, which scores evidence already in hand; the System Report calls `Evaluate` with the snapshot and
+  disks it read itself, so the report and the Dashboard share one copy of the scoring.
 - `TrayIconService` — system tray icon with background monitoring (60s),
   tooltip updates, context menu, and Windows toast notifications. The menu's status header
   is refreshed from the 60s poll on `Opened` rather than rebuilt per tick, so a menu nobody
@@ -761,6 +766,12 @@ Key services:
   (OS, CPU, memory, GPU, motherboard, storage health, network) into a
   `SystemReportData` payload, then renders it to plain text, self-contained
   HTML, or JSON so all three exports share a single source of truth.
+  Every format opens with `SystemReportData.Health` (#1508): the health score and
+  recommendations from `HealthScoreService.Evaluate`, each component's score or "could not
+  be read", and up to five recent System-log problems from `SummarizeProblems` — critical and
+  error events of the last 7 days grouped by source and ID, critical first, with the written
+  explanation where `EventExplainer` has one and never the event's own message. The log read
+  has a 15-second budget; a log that could not be read is said so, never reported as clean.
   `GenerateDataAsync` applies `WithoutMachineIdentifiers` before returning, so **every**
   format — text, HTML, JSON, the on-screen report and the diagnostics bundle — drops each
   adapter's MAC and masks its IPv4 host part. That choke point is the design: redaction used

@@ -21,7 +21,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="System Report" Style="{StaticResource Display}"/>
-            <TextBlock Text="Generate a full snapshot of this PC — OS, CPU, memory, GPU, motherboard, storage health, and network — then export it as text, HTML, or JSON. Read-only: nothing is changed and nothing leaves this machine."
+            <TextBlock Text="Generate a full snapshot of this PC — a health verdict with what to do and recent problems first, then OS, CPU, memory, GPU, motherboard, storage health, and network — and export it as text, HTML, or JSON. Read-only: nothing is changed and nothing leaves this machine."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 

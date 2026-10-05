@@ -133,7 +133,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// </remarks>
     public AboutViewModel(string? configDir = null)
         : this(new UpdateService(),
-               new SystemReportService(new SystemInfoService(), new DiskHealthService()),
+               new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
                autoCheck: true,
                preferences: configDir is null ? null : new UpdateCheckPreferenceService(configDir),
                updatesDir: configDir)

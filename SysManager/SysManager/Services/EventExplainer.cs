@@ -159,9 +159,20 @@ public static class EventExplainer
     }
 
     private static bool TryLookup(FriendlyEventEntry e, out (string Explanation, string Recommendation) info)
+        => TryExplain(e.ProviderName, e.EventId, out info);
+
+    /// <summary>
+    /// The written explanation and advice for a known event, by source and ID. False for an event nobody wrote
+    /// one for, where <see cref="Enrich"/> would fall back to a sentence built from the severity and source.
+    /// </summary>
+    /// <remarks>
+    /// Public for the System Report (#1508), which keeps the written advice and leaves out the fallback's: that
+    /// one tells the reader to look at the message below, and the report never carries an event's message.
+    /// </remarks>
+    public static bool TryExplain(string providerName, int eventId, out (string Explanation, string Recommendation) info)
     {
-        if (Known.TryGetValue(new Key(e.ProviderName, e.EventId), out info)) return true;
-        if (KnownById.TryGetValue(e.EventId, out info)) return true;
+        if (Known.TryGetValue(new Key(providerName, eventId), out info)) return true;
+        if (KnownById.TryGetValue(eventId, out info)) return true;
         info = default;
         return false;
     }

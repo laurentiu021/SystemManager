@@ -9,10 +9,11 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="SystemReportService"/>'s pure formatters (text / HTML / JSON).
-/// These render a deterministic <see cref="SystemReportData"/> fixture, so they need no
-/// WMI access and run identically on CI. The data-gathering path (GenerateDataAsync) hits
-/// live WMI and is intentionally not unit-tested here.
+/// Tests for <see cref="SystemReportService"/>'s pure formatters (text / HTML / JSON) and the pure steps that
+/// build its health section from a score and from event-log entries. These render a deterministic
+/// <see cref="SystemReportData"/> fixture, so they need no WMI access and run identically on CI. The
+/// data-gathering path (GenerateDataAsync) hits live WMI and the event log and is intentionally not
+/// unit-tested here.
 /// </summary>
 public class SystemReportServiceTests
 {
@@ -186,5 +187,280 @@ public class SystemReportServiceTests
         Assert.Empty(restored!.Gpus);
         Assert.Empty(restored.Disks);
         Assert.Empty(restored.NetworkAdapters);
+    }
+
+    // ---------- the health verdict the report opens with (#1508) ----------
+    // The inventory alone answered nothing the person receiving the report asks first. The report now opens
+    // with the Dashboard's score, what to do about it, and the recent problems Windows logged.
+
+    private static readonly DateTime Monday = new(2026, 1, 5, 9, 12, 0, DateTimeKind.Local);
+
+    private static ReportHealth SampleHealth(
+        IReadOnlyList<ReportRecommendation>? recommendations = null,
+        IReadOnlyList<ReportProblem>? problems = null,
+        bool problemsRead = true) => new(
+            Score: 62,
+            Label: "Fair",
+            Components: [new("Disk health", 100), new("Free space", 55), new("Memory", 100), new("Uptime", 30), new("Battery", null)],
+            Recommendations: recommendations ?? [new("Restart recommended — 23 days uptime", "critical")],
+            RecentProblems: problems ??
+            [
+                new(Monday, "Microsoft-Windows-Kernel-Power", 41, Critical: true, Count: 3,
+                    "Your PC rebooted unexpectedly.", "Check Reliability Monitor."),
+                new(Monday.AddHours(-5), "Microsoft-Windows-DistributedCOM", 10010, Critical: false, Count: 1,
+                    Explanation: null, Recommendation: null),
+            ],
+            ProblemsRead: problemsRead);
+
+    private static SystemReportData WithHealth(ReportHealth? health = null) => Sample() with { Health = health ?? SampleHealth() };
+
+    [Fact]
+    public void BuildText_OpensWithTheHealthVerdict_BeforeTheInventory()
+    {
+        var text = SystemReportService.BuildText(WithHealth());
+
+        var health = text.IndexOf("── Health", StringComparison.Ordinal);
+        Assert.True(health > 0, "the text report has no Health section");
+        Assert.True(health < text.IndexOf("── Operating System", StringComparison.Ordinal),
+            "the Health section must come before the inventory");
+        Assert.Contains("  Overall: 62/100 (Fair)", text, StringComparison.Ordinal);
+        Assert.Contains("  What to do:", text, StringComparison.Ordinal);
+        Assert.Contains("    1. Restart recommended — 23 days uptime", text, StringComparison.Ordinal);
+        Assert.Contains("  Free space: 55/100", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildText_AComponentWindowsGaveNothingFor_SaysItCouldNotBeRead()
+    {
+        // Scored at the fallback 80, an unread battery would read as a battery in decent shape.
+        var text = SystemReportService.BuildText(WithHealth());
+
+        Assert.Contains("  Battery: could not be read", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildText_WithNothingToDo_SaysSo()
+    {
+        var text = SystemReportService.BuildText(WithHealth(SampleHealth(recommendations: [])));
+
+        Assert.Contains("  What to do: nothing needs attention.", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildText_ListsEachProblem_WithItsCountAndExplanation_AndAdviceOnlyWhereWritten()
+    {
+        var text = SystemReportService.BuildText(WithHealth());
+
+        Assert.Contains("── System log problems (last 7 days)", text, StringComparison.Ordinal);
+        Assert.Contains("  2026-01-05 09:12 · Microsoft-Windows-Kernel-Power 41 · critical · 3 times", text, StringComparison.Ordinal);
+        Assert.Contains("    Your PC rebooted unexpectedly.", text, StringComparison.Ordinal);
+        Assert.Contains("    What to do: Check Reliability Monitor.", text, StringComparison.Ordinal);
+        // Logged once, not critical, and nobody wrote anything for it: no count, no flag, no explanation, no
+        // "What to do". One note under the list says what such a line means, instead of one per line.
+        Assert.Contains("  2026-01-05 04:12 · Microsoft-Windows-DistributedCOM 10010\r\n", text.ReplaceLineEndings("\r\n"), StringComparison.Ordinal);
+        Assert.Single(text.Split('\n'), line => line.Contains("What to do: ", StringComparison.Ordinal));
+        Assert.Single(text.Split('\n'), line => line.Contains("what to search for", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BuildText_WrapsALongExplanation_SoThePreviewNeedsNoSidewaysScroll()
+    {
+        // The preview does not wrap, and a written explanation runs to 150 characters.
+        var words = string.Join(' ', Enumerable.Repeat("word", 60));
+        var text = SystemReportService.BuildText(WithHealth(SampleHealth(problems:
+            [new(Monday, "Src", 1, Critical: false, Count: 1, words, words)])));
+
+        var lines = text.ReplaceLineEndings("\n").Split('\n').Where(l => l.Contains("word", StringComparison.Ordinal)).ToList();
+        Assert.True(lines.Count > 2, "nothing was wrapped");
+        Assert.All(lines, l => Assert.True(l.Length <= SystemReportService.TextWidth, $"{l.Length} characters: {l}"));
+        Assert.Equal(120, lines.Sum(l => l.Split(' ').Count(w => w == "word")));   // no word lost
+    }
+
+    [Fact]
+    public void BuildText_SaysWhetherThereWereNoProblemsOrTheLogCouldNotBeRead()
+    {
+        // "None" and "could not be read" are different answers, and only one of them is good news.
+        var none = SystemReportService.BuildText(WithHealth(SampleHealth(problems: [])));
+        var unread = SystemReportService.BuildText(WithHealth(SampleHealth(problems: [], problemsRead: false)));
+
+        Assert.Contains("  None.", none, StringComparison.Ordinal);
+        Assert.DoesNotContain("(The System log could not be read.)", none, StringComparison.Ordinal);
+        Assert.Contains("  (The System log could not be read.)", unread, StringComparison.Ordinal);
+        Assert.DoesNotContain("  None.", unread, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildText_WithoutHealth_IsTheInventoryAlone()
+    {
+        // A payload built without the verdict still renders, with no empty section standing in for it.
+        var text = SystemReportService.BuildText(Sample());
+
+        Assert.DoesNotContain("── Health", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("System log problems", text, StringComparison.Ordinal);
+        Assert.Contains("── Operating System", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildHtml_OpensWithTheHealthSections_AndEncodesWhatTheyCarry()
+    {
+        var html = SystemReportService.BuildHtml(WithHealth(SampleHealth(problems:
+        [
+            new(Monday, "<script>Provider</script>", 7, Critical: false, Count: 2, "A & B", null),
+        ])));
+
+        var health = html.IndexOf("<h2>Health</h2>", StringComparison.Ordinal);
+        Assert.True(health > 0, "the HTML report has no Health section");
+        Assert.True(health < html.IndexOf("<h2>Operating System</h2>", StringComparison.Ordinal));
+        // Read decoded: the encoder writes the middle dot as an entity, as it does in every other section.
+        var shown = System.Net.WebUtility.HtmlDecode(html);
+        Assert.Contains("62/100 · Fair", shown, StringComparison.Ordinal);
+        Assert.Contains("System log problems (last 7 days)", shown, StringComparison.Ordinal);
+        Assert.DoesNotContain("<script>", html, StringComparison.Ordinal);
+        Assert.Contains("&lt;script&gt;Provider&lt;/script&gt;", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildJson_CarriesTheHealthSection()
+    {
+        var json = SystemReportService.BuildJson(WithHealth());
+
+        var restored = JsonSerializer.Deserialize<SystemReportData>(json);
+        Assert.NotNull(restored!.Health);
+        Assert.Equal(62, restored.Health!.Score);
+        Assert.Equal("Fair", restored.Health.Label);
+        Assert.Null(restored.Health.Components.Single(c => c.Name == "Battery").Score);
+        Assert.Equal(3, restored.Health.RecentProblems[0].Count);
+        Assert.True(restored.Health.ProblemsRead);
+    }
+
+    // ---------- BuildHealth ----------
+
+    [Fact]
+    public void BuildHealth_MarksAComponentWindowsGaveNothingFor_RatherThanScoringIt()
+    {
+        var score = new HealthScoreResult
+        {
+            Score = 70,
+            DiskScore = 80,
+            FreeSpaceScore = 55,
+            RamScore = 100,
+            UptimeScore = 90,
+            UnavailableComponents = [HealthScoreService.DiskComponent],
+        };
+
+        var health = SystemReportService.BuildHealth(score, problems: []);
+
+        Assert.Equal(
+            [("Disk health", (int?)null), ("Free space", 55), ("Memory", 100), ("Uptime", 90)],
+            health.Components.Select(c => (c.Name, c.Score)));
+    }
+
+    [Fact]
+    public void BuildHealth_ListsTheBatteryOnlyOnAPcThatHasOne()
+    {
+        var desktop = SystemReportService.BuildHealth(new HealthScoreResult { HasBattery = false }, problems: []);
+        var laptop = SystemReportService.BuildHealth(new HealthScoreResult { HasBattery = true, BatteryScore = 55 }, problems: []);
+
+        Assert.DoesNotContain(desktop.Components, c => c.Name == "Battery");
+        Assert.Equal(55, laptop.Components.Single(c => c.Name == "Battery").Score);
+    }
+
+    [Fact]
+    public void BuildHealth_KeepsTheDashboardsScoreAndRecommendations()
+    {
+        var score = new HealthScoreResult
+        {
+            Score = 62,
+            Recommendations = [new HealthRecommendation { Message = "Restart recommended — 23 days uptime", Severity = "critical" }],
+        };
+
+        var health = SystemReportService.BuildHealth(score, problems: null);
+
+        Assert.Equal(62, health.Score);
+        Assert.Equal(score.Label, health.Label);
+        Assert.Equal([new ReportRecommendation("Restart recommended — 23 days uptime", "critical")], health.Recommendations);
+        Assert.False(health.ProblemsRead);   // null problems is a log that could not be read
+        Assert.Empty(health.RecentProblems);
+    }
+
+    // ---------- SummarizeProblems ----------
+
+    private static FriendlyEventEntry Event(string provider, int id, DateTime when,
+        EventSeverity severity = EventSeverity.Error, string message = "") => new()
+        {
+            ProviderName = provider,
+            EventId = id,
+            Timestamp = when,
+            Severity = severity,
+            Message = message,
+            FullMessage = message,
+        };
+
+    [Fact]
+    public void SummarizeProblems_GroupsBySourceAndId_CountingThemAndKeepingTheLatest()
+    {
+        var problems = SystemReportService.SummarizeProblems(
+        [
+            Event("Service Control Manager", 7031, Monday.AddHours(-3)),
+            Event("Service Control Manager", 7031, Monday),
+            Event("Service Control Manager", 7031, Monday.AddHours(-1)),
+        ]);
+
+        var p = Assert.Single(problems);
+        Assert.Equal(3, p.Count);
+        Assert.Equal(Monday, p.LastSeen);
+    }
+
+    [Fact]
+    public void SummarizeProblems_PutsCriticalFirst_ThenNewest_AtMostFive()
+    {
+        List<FriendlyEventEntry> entries = [Event("Microsoft-Windows-Kernel-Power", 41, Monday.AddDays(-3), EventSeverity.Critical)];
+        for (var i = 0; i < 7; i++)
+            entries.Add(Event($"Source{i}", 100 + i, Monday.AddHours(-i)));
+
+        var problems = SystemReportService.SummarizeProblems(entries);
+
+        Assert.Equal(SystemReportService.MaxRecentProblems, problems.Count);
+        Assert.Equal("Microsoft-Windows-Kernel-Power", problems[0].Source);   // older, but critical
+        Assert.True(problems[0].Critical);
+        Assert.Equal(["Source0", "Source1", "Source2", "Source3"], problems.Skip(1).Select(p => p.Source));
+    }
+
+    [Fact]
+    public void SummarizeProblems_UsesTheWrittenExplanation_AndAnUnknownEventGetsNoAdvice()
+    {
+        var problems = SystemReportService.SummarizeProblems(
+        [
+            Event("Microsoft-Windows-Kernel-Power", 41, Monday, EventSeverity.Critical),
+            Event("Some-Vendor-Driver", 9001, Monday.AddHours(-1)),
+        ]);
+
+        Assert.True(EventExplainer.TryExplain("Microsoft-Windows-Kernel-Power", 41, out var written));
+        Assert.Equal(written.Explanation, problems[0].Explanation);
+        Assert.Equal(written.Recommendation, problems[0].Recommendation);
+
+        // The fallback wording would tell the reader to look at a message the report does not carry, so an
+        // event nobody wrote anything for travels as its source and ID alone.
+        Assert.Equal("Some-Vendor-Driver", problems[1].Source);
+        Assert.Null(problems[1].Explanation);
+        Assert.Null(problems[1].Recommendation);
+    }
+
+    [Fact]
+    public void SummarizeProblems_NeverCarriesTheEventsOwnMessage()
+    {
+        // An event's message can name files, users and machines; the report keeps all three out (#2352).
+        const string message = @"Access to C:\Users\alice\Documents\taxes.pdf by PC-OF-ALICE failed.";
+        var problems = SystemReportService.SummarizeProblems([Event("Some-Vendor-Driver", 9001, Monday, message: message)]);
+
+        var text = SystemReportService.BuildText(WithHealth(SampleHealth(problems: problems)));
+        var html = SystemReportService.BuildHtml(WithHealth(SampleHealth(problems: problems)));
+        var json = SystemReportService.BuildJson(WithHealth(SampleHealth(problems: problems)));
+
+        foreach (var rendered in new[] { text, html, json })
+        {
+            Assert.DoesNotContain("alice", rendered, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("taxes", rendered, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

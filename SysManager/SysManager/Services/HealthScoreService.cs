@@ -80,11 +80,25 @@ public sealed class HealthScoreService
         // needs no admin — the same shape as the other sources, and ComputeFreeSpaceScore below is pure so
         // the bands stay testable without touching a real disk. It never throws: it skips a drive it cannot
         // read and returns what it got.
-        IReadOnlyList<FixedDriveService.FixedDrive> drives = FixedDriveService.Enumerate();
+        return Evaluate(snapshot, disks, battery, FixedDriveService.Enumerate(), SystemDriveLetter());
+    }
 
+    /// <summary>
+    /// The score from evidence already gathered: the snapshot, the disks, the battery and the fixed drives, any
+    /// of which may be missing.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ComputeAsync"/> gathers and then calls this, and so does the System Report, which reads the
+    /// snapshot and the disks for its own sections and would otherwise query Windows for both a second time to
+    /// score them (#1508). One copy of the scoring, so the report and the Dashboard cannot disagree.
+    /// </remarks>
+    public static HealthScoreResult Evaluate(
+        SystemSnapshot? snapshot, IReadOnlyList<DiskHealthReport>? disks, BatteryInfo? battery,
+        IReadOnlyList<FixedDriveService.FixedDrive>? drives, string? systemDrive)
+    {
         // Compute component scores
         int diskScore = ComputeDiskScore(disks);
-        int freeSpaceScore = ComputeFreeSpaceScore(drives, SystemDriveLetter());
+        int freeSpaceScore = ComputeFreeSpaceScore(drives, systemDrive);
         int ramScore = ComputeRamScore(snapshot);
         int uptimeScore = ComputeUptimeScore(snapshot);
         int batteryScore = ComputeBatteryScore(battery);
@@ -96,12 +110,12 @@ public sealed class HealthScoreService
         // Build recommendations
         var recommendations = BuildRecommendations(
             diskScore, freeSpaceScore, ramScore, uptimeScore, batteryScore, batteryMeasured,
-            snapshot, disks, battery, drives, SystemDriveLetter());
+            snapshot, disks, battery, drives, systemDrive);
 
         // Recorded so a consumer can say "could not read this" instead of reading a verdict out of a
         // fallback number. The scores above already refuse to claim health; this is what makes the reason
         // visible.
-        var unavailable = UnavailableComponents(disks, snapshot, drives, SystemDriveLetter(), battery);
+        var unavailable = UnavailableComponents(disks, snapshot, drives, systemDrive, battery);
 
         return new HealthScoreResult
         {

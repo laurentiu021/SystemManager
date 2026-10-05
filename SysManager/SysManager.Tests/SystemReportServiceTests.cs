@@ -340,7 +340,11 @@ public class SystemReportServiceTests
     {
         var score = new HealthScoreResult
         {
-            Score = 70, DiskScore = 80, FreeSpaceScore = 55, RamScore = 100, UptimeScore = 90,
+            Score = 70,
+            DiskScore = 80,
+            FreeSpaceScore = 55,
+            RamScore = 100,
+            UptimeScore = 90,
             UnavailableComponents = [HealthScoreService.DiskComponent],
         };
 

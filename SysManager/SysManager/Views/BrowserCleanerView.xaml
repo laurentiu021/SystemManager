@@ -23,8 +23,8 @@
             </Style.Triggers>
         </Style>
 
-        <!-- What an extension can do, in plain words: amber for what changes what she sees or reaches every
-             website, neutral for the rest. -->
+        <!-- What an extension can do, in plain words: amber for what changes what she sees, reaches every
+             website or can control the browser, neutral for the rest. -->
         <DataTemplate x:Key="PermissionChip">
             <Border x:Name="Chip" CornerRadius="{StaticResource RadiusPill}" Padding="8,1" Margin="0,4,6,0"
                     BorderThickness="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border2}">
@@ -116,7 +116,7 @@
                             AutomationProperties.Name="Look for extensions in every browser"
                             Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}"
-                            AutomationProperties.Name="Cancel looking for extensions"
+                            AutomationProperties.Name="Cancel current operation"
                             Style="{StaticResource GhostButton}" Margin="0,0,16,0"
                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
                     <TextBlock VerticalAlignment="Center" Style="{StaticResource Subtle}" Margin="8,0,0,0"

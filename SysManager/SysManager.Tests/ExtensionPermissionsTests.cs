@@ -46,7 +46,7 @@ public class ExtensionPermissionsTests
     }
 
     [Fact]
-    public void WhatChangesWhatSheSees_OrReachesEverySite_IsAmber_AndTheRestIsNot()
+    public void WhatChangesWhatSheSees_ReachesEverySite_OrControlsTheBrowser_IsAmber_AndTheRestIsNot()
     {
         var (lines, _) = Describe(permissions: ["debugger", "tabs", "storage"], sites: ["*://*/*"], search: true, newTab: true);
 

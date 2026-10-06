@@ -120,6 +120,107 @@ public sealed class BrowserExtensionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AUserDataFolderThatIsALink_IsShownAsUnreadable_NotAsNone()
+    {
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Chromium(Path.Combine(elsewhere, "Default"), IdA, "Behind the link");
+        Directory.CreateDirectory(Path.Combine(_local, "Google", "Chrome"));
+        Symlinks.RequireJunction(Path.Combine(_local, @"Google\Chrome\User Data"), elsewhere);
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Equal("Google Chrome", profile.Browser);
+        Assert.True(profile.CouldNotRead);
+        Assert.Empty(profile.Extensions);
+    }
+
+    [Fact]
+    public async Task AProfileFolderThatIsALink_IsShownAsUnreadable_NotAsNone()
+    {
+        // Moving a browser's profile to another drive with a junction is a common tip; the list must say it could
+        // not read the profile rather than that the browser has nothing.
+        Chromium(Path.Combine(_local, @"Google\Chrome\User Data\Default"), IdB, "Real");
+        var chrome = Path.Combine(_root, "chrome-elsewhere");
+        Chromium(chrome, IdA, "Behind the link");
+        Symlinks.RequireJunction(Path.Combine(_local, @"Google\Chrome\User Data\Profile 1"), chrome);
+        var opera = Path.Combine(_root, "opera-elsewhere");
+        Chromium(opera, IdA, "Behind the link");
+        Directory.CreateDirectory(Path.Combine(_roaming, "Opera Software"));
+        Symlinks.RequireJunction(Path.Combine(_roaming, @"Opera Software\Opera Stable"), opera);
+        var firefox = Path.Combine(_root, "firefox-elsewhere");
+        Directory.CreateDirectory(firefox);
+        Directory.CreateDirectory(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles"));
+        Symlinks.RequireJunction(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\abcd1234.default-release"), firefox);
+
+        var profiles = await Service().ScanAsync();
+
+        Assert.Equal<(string, bool, int)>(
+            [("Google Chrome", false, 1), ("Google Chrome — Profile 1", true, 0), ("Opera", true, 0), ("Firefox", true, 0)],
+            profiles.Select(p => (p.Browser, p.CouldNotRead, p.Extensions.Count)));
+    }
+
+    [Fact]
+    public async Task AFirefoxProfilesFolderThatIsALink_IsShownAsUnreadable_NotAsNone()
+    {
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(Path.Combine(elsewhere, "abcd1234.default-release"));
+        Directory.CreateDirectory(Path.Combine(_roaming, "Mozilla", "Firefox"));
+        Symlinks.RequireJunction(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles"), elsewhere);
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Equal("Firefox", profile.Browser);
+        Assert.True(profile.CouldNotRead);
+    }
+
+    [Fact]
+    public async Task AFirefoxProfileOtherThanTheDefault_IsNotStarted_SinceFirefoxWouldOpenAnother()
+    {
+        foreach (var folder in new[] { "abcd1234.default-release", "efgh5678.dev-edition" })
+        {
+            var dir = Path.Combine(_roaming, @"Mozilla\Firefox\Profiles", folder);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "extensions.json"), """
+                { "addons": [ { "id": "f@x", "type": "extension", "version": "1", "location": "app-profile", "active": true,
+                                "defaultLocale": { "name": "Four" } } ] }
+                """);
+        }
+
+        var profiles = await Service().ScanAsync();
+
+        Assert.Equal<(string, string?)>([("Firefox", BrowserExtensionService.FirefoxExecutable), ("Firefox — dev-edition", null)],
+            profiles.Select(p => (p.Browser, p.Executable)));
+    }
+
+    [Theory]
+    // Firefox 67 and later: each install names its default. Older Firefox marked one profile default; newer ones leave
+    // that mark behind on another profile, as this PC's own file does, and the install's default wins.
+    [InlineData("[Install4F96D1932A9F858E]\nDefault=Profiles/efgh5678.default-esr\nLocked=1\n\n[Profile0]\nPath=Profiles/abcd1234.default-release\nDefault=1\n", false, true)]
+    [InlineData("[Profile0]\nName=default\nIsRelative=1\nPath=Profiles/efgh5678.default-esr\nDefault=1\n\n[Profile1]\nPath=Profiles/abcd1234.default-release\n", false, true)]
+    [InlineData("[Install1]\nDefault=Profiles/abcd1234.default-release\n\n[Install2]\nDefault=Profiles/efgh5678.default-esr\n", false, false)]
+    [InlineData("[General]\nStartWithLastProfile=1\n", false, false)]
+    public async Task FirefoxIsStarted_OnlyForTheProfileItsOwnListSaysItOpens(string profilesIni, bool releaseStarted, bool esrStarted)
+    {
+        foreach (var folder in new[] { "abcd1234.default-release", "efgh5678.default-esr" })
+        {
+            var dir = Path.Combine(_roaming, @"Mozilla\Firefox\Profiles", folder);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "extensions.json"), """
+                { "addons": [ { "id": "f@x", "type": "extension", "version": "1", "location": "app-profile", "active": true,
+                                "defaultLocale": { "name": "Four" } } ] }
+                """);
+        }
+        File.WriteAllText(Path.Combine(_roaming, @"Mozilla\Firefox\profiles.ini"), profilesIni.Replace("\n", "\r\n", StringComparison.Ordinal));
+
+        var profiles = await Service().ScanAsync();
+
+        Assert.Equal<(string, string?)>(
+            [("Firefox", releaseStarted ? BrowserExtensionService.FirefoxExecutable : null),
+             ("Firefox — default-esr", esrStarted ? BrowserExtensionService.FirefoxExecutable : null)],
+            profiles.Select(p => (p.Browser, p.Executable)));
+    }
+
+    [Fact]
     public async Task ACancelledLook_StopsWithoutAnAnswer()
     {
         Chromium(Path.Combine(_local, @"Google\Chrome\User Data\Default"), IdA, "One");

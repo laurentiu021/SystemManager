@@ -23,6 +23,10 @@ namespace SysManager.Services;
 /// manifest, with nothing claimed about its origin. Extensions built into the browser (the component ones) have no
 /// folder in the profile and are not listed, as the browser's own extensions page does not list them either; one
 /// loaded from a folder elsewhere on the PC is found through the settings, which record its path.
+/// <para>Nothing is left out for being unreadable. An extension whose manifest cannot be read, or whose folder is a
+/// link, is listed as <see cref="UnreadableName"/> with whatever its settings say, and an <c>Extensions</c> folder
+/// that cannot be listed makes the profile one that could not be read. Links are never followed, and a path the
+/// settings give off this PC's drives is never opened.</para>
 /// </remarks>
 internal static class ChromiumExtensionReader
 {
@@ -42,40 +46,71 @@ internal static class ChromiumExtensionReader
     {
         var settings = ReadSettings(profileDir);
         List<BrowserExtension> found = [];
+        var couldNotRead = false;
 
         var extensionsDir = System.IO.Path.Combine(profileDir, "Extensions");
-        if (Directory.Exists(extensionsDir) && !SafeFileWalk.IsReparsePoint(extensionsDir))
+        switch (ExtensionFiles.KindOf(extensionsDir))
         {
-            string[] folders;
-            try { folders = Directory.GetDirectories(extensionsDir); }
-            catch (IOException) { return ([], true); }
-            catch (UnauthorizedAccessException) { return ([], true); }
+            case ExtensionFiles.EntryKind.Folder:
+                string[] folders;
+                try { folders = Directory.GetDirectories(extensionsDir); }
+                catch (IOException) { return ([], true); }
+                catch (UnauthorizedAccessException) { return ([], true); }
 
-            foreach (var folder in folders)
-            {
-                var id = System.IO.Path.GetFileName(folder);
-                if (!IsExtensionId(id) || SafeFileWalk.IsReparsePoint(folder)) continue;
-                if (NewestVersionFolder(folder) is not { } versionDir) continue;
-                settings.TryGetValue(id, out var own);
-                if (FromManifest(versionDir, own, culture) is { } extension) found.Add(extension);
-            }
-        }
-        else if (File.Exists(extensionsDir))
-        {
-            // Something that is not a folder where the list should be: the browser could not use it either.
-            return ([], true);
+                foreach (var folder in folders)
+                {
+                    var id = System.IO.Path.GetFileName(folder);
+                    if (!IsExtensionId(id)) continue;
+                    settings.TryGetValue(id, out var own);
+                    // A link is not followed, and an extension that cannot be read is still listed: leaving either out
+                    // would hide exactly what the list is for.
+                    if (SafeFileWalk.IsReparsePoint(folder))
+                    {
+                        found.Add(Unreadable(own));
+                        continue;
+                    }
+                    var (versionDir, unreadable) = NewestVersionFolder(folder);
+                    if (unreadable) found.Add(Unreadable(own));
+                    else if (versionDir is not null) found.Add(FromManifest(versionDir, own, culture) ?? Unreadable(own));
+                }
+                break;
+
+            case ExtensionFiles.EntryKind.Missing:
+                // A new profile, or one that never had an extension: not a failure.
+                break;
+
+            default:
+                // A file, a link or something unreadable where the list should be: the browser could not use it, or
+                // reads it from somewhere SysManager does not follow.
+                couldNotRead = true;
+                break;
         }
 
         // An extension loaded from a folder elsewhere on the PC is not under Extensions; its settings name the folder.
         foreach (var own in settings.Values)
         {
             if (own.Location is not (LocationUnpacked or LocationCommandLine)) continue;
-            if (own.Path is not { Length: > 0 } path || !System.IO.Path.IsPathRooted(path)) continue;
-            if (!Directory.Exists(path) || SafeFileWalk.IsReparsePoint(path)) continue;
-            if (FromManifest(path, own, culture) is { } extension) found.Add(extension);
+            if (own.Path is not { Length: > 0 } path) continue;
+            if (!ExtensionFiles.IsOnALocalDrive(path))
+            {
+                found.Add(Unreadable(own));
+                continue;
+            }
+            switch (ExtensionFiles.KindOf(path))
+            {
+                case ExtensionFiles.EntryKind.Folder:
+                    found.Add(FromManifest(path, own, culture) ?? Unreadable(own));
+                    break;
+                case ExtensionFiles.EntryKind.Missing:
+                    // Removed since it was loaded: the browser shows it as gone too.
+                    break;
+                default:
+                    found.Add(Unreadable(own));
+                    break;
+            }
         }
 
-        return (found, false);
+        return (found, couldNotRead);
     }
 
     // Chromium's ManifestLocation values (extensions/common/mojom/manifest.mojom), as Secure Preferences stores them.
@@ -111,19 +146,23 @@ internal static class ChromiumExtensionReader
 
     /// <summary>
     /// The newest of an extension's version folders, compared number by number (<c>10.0_0</c> is newer than
-    /// <c>9.1_0</c>), among those that hold a manifest. Null when none does.
+    /// <c>9.1_0</c>), among those that hold a manifest; no folder when none does, which is a leftover rather than an
+    /// extension. Unreadable when the folder cannot be listed, or when the newest is a link: it is not followed, and
+    /// the browser loads the newest, so showing an older one in its place would show the wrong version and rights.
     /// </summary>
-    internal static string? NewestVersionFolder(string extensionFolder)
+    internal static (string? Folder, bool Unreadable) NewestVersionFolder(string extensionFolder)
     {
         string[] versions;
         try { versions = Directory.GetDirectories(extensionFolder); }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException) { return (null, true); }
+        catch (UnauthorizedAccessException) { return (null, true); }
 
-        return versions
-            .Where(v => !SafeFileWalk.IsReparsePoint(v) && File.Exists(System.IO.Path.Combine(v, "manifest.json")))
+        // A link counts by its name alone: looking for the manifest inside it would already be following it.
+        var newest = versions
+            .Where(v => SafeFileWalk.IsReparsePoint(v) || File.Exists(System.IO.Path.Combine(v, "manifest.json")))
             .OrderByDescending(v => VersionParts(System.IO.Path.GetFileName(v)), VersionComparer.Instance)
             .FirstOrDefault();
+        return newest is not null && SafeFileWalk.IsReparsePoint(newest) ? (null, true) : (newest, false);
     }
 
     private static long[] VersionParts(string name) =>
@@ -175,14 +214,11 @@ internal static class ChromiumExtensionReader
             ? ExtensionFiles.Read(iconFile, ExtensionFiles.MaxIconBytes)
             : null;
 
-        var origin = settings is null
-            ? ExtensionOrigin.Unknown
-            : OriginOf(settings.Location, settings.FromWebstore, settings.CameWithBrowser);
         var fromStore = settings?.FromWebstore ?? false;
         return new BrowserExtension(
             Name: name.Trim(),
             Version: version,
-            Origin: origin,
+            Origin: OriginOf(settings),
             IsOff: settings?.IsOff ?? false,
             InstalledOn: settings?.InstalledOn,
             Store: fromStore ? StoreOf(ExtensionFiles.String(root, "update_url")) : "",
@@ -190,6 +226,25 @@ internal static class ChromiumExtensionReader
             CanReadEverySite: everySite,
             IconBytes: icon);
     }
+
+    private static ExtensionOrigin OriginOf(Settings? settings) => settings is null
+        ? ExtensionOrigin.Unknown
+        : OriginOf(settings.Location, settings.FromWebstore, settings.CameWithBrowser);
+
+    /// <summary>
+    /// An extension whose files could not be read, or are not read because they sit behind a link or off this PC's
+    /// drives: listed as <see cref="UnreadableName"/>, with whatever its settings say about where it came from.
+    /// </summary>
+    private static BrowserExtension Unreadable(Settings? settings) => new(
+        Name: UnreadableName,
+        Version: "",
+        Origin: OriginOf(settings),
+        IsOff: settings?.IsOff ?? false,
+        InstalledOn: settings?.InstalledOn,
+        Store: "",
+        Permissions: [],
+        CanReadEverySite: false,
+        IconBytes: null);
 
     private static bool Has(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
@@ -213,9 +268,9 @@ internal static class ChromiumExtensionReader
     {
         if (!Uri.TryCreate(updateUrl, UriKind.Absolute, out var uri)) return "an extension store";
         var host = uri.Host;
-        if (host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase)) return "the Chrome Web Store";
-        if (host.EndsWith("microsoft.com", StringComparison.OrdinalIgnoreCase)) return "Microsoft Edge Add-ons";
-        if (host.EndsWith("opera.com", StringComparison.OrdinalIgnoreCase)) return "Opera add-ons";
+        if (ExtensionFiles.IsHostOf(host, "google.com")) return "the Chrome Web Store";
+        if (ExtensionFiles.IsHostOf(host, "microsoft.com")) return "Microsoft Edge Add-ons";
+        if (ExtensionFiles.IsHostOf(host, "opera.com")) return "Opera add-ons";
         return "an extension store";
     }
 
@@ -241,7 +296,7 @@ internal static class ChromiumExtensionReader
             if (messages?.RootElement is not { ValueKind: JsonValueKind.Object } table) continue;
             foreach (var entry in table.EnumerateObject())
             {
-                if (string.Equals(entry.Name, key, StringComparison.OrdinalIgnoreCase)
+                if (string.Equals(ExtensionFiles.Name(entry), key, StringComparison.OrdinalIgnoreCase)
                     && ExtensionFiles.String(entry.Value, "message") is { Length: > 0 } message)
                 {
                     return message;
@@ -273,10 +328,10 @@ internal static class ChromiumExtensionReader
             var byId = new Dictionary<string, Settings>(StringComparer.Ordinal);
             foreach (var entry in settings.EnumerateObject())
             {
-                if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                if (entry.Value.ValueKind != JsonValueKind.Object || ExtensionFiles.Name(entry) is not { } id) continue;
                 var s = entry.Value;
-                byId[entry.Name] = new Settings(
-                    Location: s.TryGetProperty("location", out var l) && l.TryGetInt32(out var location) ? location : null,
+                byId[id] = new Settings(
+                    Location: ExtensionFiles.Int(s, "location"),
                     FromWebstore: ExtensionFiles.Bool(s, "from_webstore") ?? false,
                     CameWithBrowser: (ExtensionFiles.Bool(s, "was_installed_by_default") ?? false)
                                      || (ExtensionFiles.Bool(s, "was_installed_by_oem") ?? false),
@@ -300,7 +355,7 @@ internal static class ChromiumExtensionReader
             if (reasons.ValueKind == JsonValueKind.Array) return reasons.GetArrayLength() > 0;
             if (reasons.ValueKind == JsonValueKind.Number && reasons.TryGetInt64(out var mask)) return mask != 0;
         }
-        return settings.TryGetProperty("state", out var state) && state.TryGetInt32(out var value) && value == 0;
+        return ExtensionFiles.Int(settings, "state") == 0;
     }
 
     /// <summary>

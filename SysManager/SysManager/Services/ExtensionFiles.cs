@@ -64,13 +64,42 @@ internal static class ExtensionFiles
         catch (JsonException) { return null; }
     }
 
-    /// <summary>The string at <paramref name="name"/> on an object, or null.</summary>
+    /// <summary>The string at <paramref name="name"/> on an object, or null — also when it is not valid text.</summary>
     internal static string? String(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? Text(value) : null;
+
+    /// <summary>
+    /// The element as a string, or null when it is not one or is not valid text. The parser accepts bytes that are
+    /// not UTF-8 inside a string and only reading it refuses them, with an exception that would end the whole look,
+    /// and another program can write anything into these files.
+    /// </summary>
+    internal static string? Text(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.String) return null;
+        try { return value.GetString(); }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>A property's name, or null when it is not valid text (see <see cref="Text"/>).</summary>
+    internal static string? Name(JsonProperty property)
+    {
+        try { return property.Name; }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>
+    /// The whole number at <paramref name="name"/> on an object, or null when it is absent, not a number, or does
+    /// not fit: reading a number from anything else throws.
+    /// </summary>
+    internal static long? Number(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
+            ? number
             : null;
+
+    /// <summary>The number at <paramref name="name"/> as an <see cref="int"/>, or null (see <see cref="Number"/>).</summary>
+    internal static int? Int(JsonElement element, string name) =>
+        Number(element, name) is { } number && number is >= int.MinValue and <= int.MaxValue ? (int)number : null;
 
     /// <summary>The boolean at <paramref name="name"/> on an object, or null when it is absent or not a boolean.</summary>
     internal static bool? Bool(JsonElement element, string name) =>
@@ -89,7 +118,7 @@ internal static class ExtensionFiles
         }
         foreach (var item in array.EnumerateArray())
         {
-            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } text) yield return text;
+            if (Text(item) is { Length: > 0 } text) yield return text;
         }
     }
 
@@ -103,12 +132,8 @@ internal static class ExtensionFiles
         List<(int Size, string Path)> candidates = [];
         foreach (var property in icons.EnumerateObject())
         {
-            if (int.TryParse(property.Name, out var size) && size > 0
-                && property.Value.ValueKind == JsonValueKind.String
-                && property.Value.GetString() is { Length: > 0 } path)
-            {
+            if (int.TryParse(Name(property), out var size) && size > 0 && Text(property.Value) is { Length: > 0 } path)
                 candidates.Add((size, path));
-            }
         }
         if (candidates.Count == 0) return null;
         var bigEnough = candidates.Where(c => c.Size >= 32).OrderBy(c => c.Size).ToList();
@@ -136,4 +161,60 @@ internal static class ExtensionFiles
         catch (NotSupportedException) { return null; }
         catch (PathTooLongException) { return null; }
     }
+
+    /// <summary>What is at a path, as <see cref="KindOf"/> sees it.</summary>
+    internal enum EntryKind
+    {
+        /// <summary>Nothing: the path, or a folder above it, does not exist.</summary>
+        Missing,
+
+        /// <summary>A folder.</summary>
+        Folder,
+
+        /// <summary>A file.</summary>
+        File,
+
+        /// <summary>A junction or a symbolic link, which is never followed.</summary>
+        Link,
+
+        /// <summary>Something whose attributes could not be read.</summary>
+        Unreadable,
+    }
+
+    /// <summary>
+    /// What is at <paramref name="path"/>, looked at without following it: a link is reported as a link, even one
+    /// whose target is gone, so a caller can say it was not followed rather than that nothing is there.
+    /// </summary>
+    internal static EntryKind KindOf(string path)
+    {
+        try
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReparsePoint) != 0) return EntryKind.Link;
+            return (attributes & FileAttributes.Directory) != 0 ? EntryKind.Folder : EntryKind.File;
+        }
+        catch (FileNotFoundException) { return EntryKind.Missing; }
+        catch (DirectoryNotFoundException) { return EntryKind.Missing; }
+        catch (IOException) { return EntryKind.Unreadable; }
+        catch (UnauthorizedAccessException) { return EntryKind.Unreadable; }
+        catch (ArgumentException) { return EntryKind.Unreadable; }
+        catch (NotSupportedException) { return EntryKind.Unreadable; }
+    }
+
+    /// <summary>
+    /// True for a full path on one of this PC's own drives (<c>C:\…</c>). A browser's files can name a network share,
+    /// a mapped network drive or a device path (<c>\\server\share</c>, <c>\\?\…</c>); such a path is never opened,
+    /// since reading it would reach another machine, with the user's credentials, during what is only a look.
+    /// </summary>
+    internal static bool IsOnALocalDrive(string path)
+    {
+        if (path.Length < 3 || !char.IsAsciiLetter(path[0]) || path[1] != ':' || path[2] is not ('\\' or '/')) return false;
+        try { return new DriveInfo(path[..1]).DriveType != DriveType.Network; }
+        catch (ArgumentException) { return false; }
+    }
+
+    /// <summary>True when <paramref name="host"/> is <paramref name="domain"/> itself or one of its subdomains.</summary>
+    internal static bool IsHostOf(string host, string domain) =>
+        host.Equals(domain, StringComparison.OrdinalIgnoreCase)
+        || host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase);
 }

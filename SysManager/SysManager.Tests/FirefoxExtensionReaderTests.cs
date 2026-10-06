@@ -144,6 +144,7 @@ public sealed class FirefoxExtensionReaderTests : IDisposable
     [InlineData("app-profile", false, "amo", null, ExtensionOrigin.Store)]
     [InlineData("app-profile", false, null, "https://addons.mozilla.org/firefox/downloads/file/1/x.xpi", ExtensionOrigin.Store)]
     [InlineData("app-profile", false, "file-url", "file:///C:/Downloads/x.xpi", ExtensionOrigin.File)]
+    [InlineData("app-profile", false, null, "https://notaddons.mozilla.org/x.xpi", ExtensionOrigin.File)]
     [InlineData("app-profile", true, "sideload", null, ExtensionOrigin.AnotherProgram)]
     [InlineData("winreg-app-user", false, null, null, ExtensionOrigin.AnotherProgram)]
     [InlineData("app-system-share", false, null, null, ExtensionOrigin.AnotherProgram)]
@@ -212,6 +213,33 @@ public sealed class FirefoxExtensionReaderTests : IDisposable
         Write(Addon(extra: $$""", "path": "{{Json(path)}}", "icons": { "48": "i.png" } """));
 
         Assert.Null(Single().IconBytes);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"1759147200000\"")]
+    public void AnInstallDateOfTheWrongKind_IsNoDate_AndTheListCarriesOn(string value)
+    {
+        Write(Addon(extra: $", \"installDate\": {value}"), Addon("Second"));
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.False(couldNotRead);
+        Assert.Equal(2, extensions.Count);
+        Assert.All(extensions, e => Assert.Null(e.InstalledOn));
+    }
+
+    [Fact]
+    public void APackageNotOnALocalDrive_IsNotOpened()
+    {
+        // The same package, written the way a network share or a device path is: such a path is never opened.
+        var package = Package("""{ "manifest_version": 2, "name": "Far" }""", "icon.png", [5]);
+        Write(Addon(extra: $$""", "path": "{{Json(@"\\?\" + package)}}", "icons": { "48": "icon.png" } """));
+
+        var extension = Single();
+
+        Assert.Null(extension.IconBytes);
+        Assert.Equal("Video Speed Controller", extension.Name);
     }
 
     [Fact]

@@ -4,8 +4,10 @@
 
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.ViewModels;
@@ -28,9 +30,10 @@ internal static class ExtensionPresenter
     /// <summary>
     /// The line under the name: when it was installed and where from, or why only someone else can remove it.
     /// </summary>
-    internal static string Meta(BrowserExtension extension)
+    /// <param name="zone">The time zone the day is given in: the user's own unless a test passes one.</param>
+    internal static string Meta(BrowserExtension extension, TimeZoneInfo? zone = null)
     {
-        var installed = extension.InstalledOn is { } on ? $"Installed {Date(on)}" : null;
+        var installed = extension.InstalledOn is { } on ? $"Installed {Date(on, zone)}" : null;
         return extension.Origin switch
         {
             ExtensionOrigin.Browser => "Came with the browser",
@@ -51,9 +54,13 @@ internal static class ExtensionPresenter
         : extension.Origin is ExtensionOrigin.File or ExtensionOrigin.AnotherProgram ? "not from an extension store"
         : null;
 
-    /// <summary>The day, as "29 Sep 2026", in the user's own time zone.</summary>
-    internal static string Date(DateTime utc) =>
-        utc.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+    /// <summary>The day, as "29 Sep 2026", in the user's own time zone unless a test passes another.</summary>
+    /// <remarks>
+    /// The zone is a parameter so a test's day does not depend on the machine it runs on: no instant falls on the
+    /// same calendar day in every zone, since they span 26 hours.
+    /// </remarks>
+    internal static string Date(DateTime utc, TimeZoneInfo? zone = null) =>
+        TimeZoneInfo.ConvertTimeFromUtc(utc, zone ?? TimeZoneInfo.Local).ToString("d MMM yyyy", CultureInfo.InvariantCulture);
 
     /// <summary>The marks next to the name: who added it, when that was not the user, and whether it is off.</summary>
     internal static IReadOnlyList<ExtensionFlag> Flags(BrowserExtension extension)
@@ -86,17 +93,31 @@ internal static class ExtensionPresenter
     /// <summary>
     /// The status line after "Manage in …". Whether the browser opened on the page cannot be seen from here, so the
     /// address is put on the clipboard too, and the line says what to do with it. When nothing was started because
-    /// SysManager runs as administrator, it says so: otherwise the button would look broken.
+    /// SysManager runs as administrator, it says so: otherwise the button would look broken. For a profile the tab
+    /// names, such as "Google Chrome — Profile 2", it names the profile, since the page shows the extensions of the
+    /// profile it is opened in.
     /// </summary>
-    internal static string ManageStatus(ExtensionProfile profile, ExtensionsPageOpening opening, bool copied) => (opening, copied) switch
+    internal static string ManageStatus(ExtensionProfile profile, ExtensionsPageOpening opening, bool copied)
     {
-        (ExtensionsPageOpening.Opened, true) => $"Opened {profile.Product}. If its extensions page did not open, paste {profile.Page} into the address bar — it is on your clipboard.",
-        (ExtensionsPageOpening.Opened, false) => $"Opened {profile.Product}. If its extensions page did not open, type {profile.Page} into the address bar.",
-        (ExtensionsPageOpening.NotWhileElevated, true) => $"Open {profile.Product} yourself and paste {profile.Page} into its address bar — it is on your clipboard. SysManager is running as administrator, so a browser it opened would run as administrator too.",
-        (ExtensionsPageOpening.NotWhileElevated, false) => $"Open {profile.Product} yourself and type {profile.Page} into its address bar. SysManager is running as administrator, so a browser it opened would run as administrator too.",
-        (_, true) => $"Paste {profile.Page} into {profile.Product}'s address bar to see its extensions — it is on your clipboard.",
-        (_, false) => $"Type {profile.Page} into {profile.Product}'s address bar to see its extensions.",
-    };
+        var named = profile.Browser.StartsWith(profile.Product + " — ", StringComparison.Ordinal)
+            ? profile.Browser[(profile.Product.Length + 3)..]
+            : null;
+        var where = named is null ? profile.Product : $"{profile.Product}'s \"{named}\" profile";
+        const string elevated = " SysManager is running as administrator, so a browser it opened would run as administrator too.";
+        return (opening, copied) switch
+        {
+            (ExtensionsPageOpening.Opened, true) => $"Opened {profile.Product}. If its extensions page did not open, paste {profile.Page} into the address bar — it is on your clipboard.",
+            (ExtensionsPageOpening.Opened, false) => $"Opened {profile.Product}. If its extensions page did not open, type {profile.Page} into the address bar.",
+            (ExtensionsPageOpening.NotWhileElevated, true) => $"Open {where} yourself and paste {profile.Page} into its address bar — it is on your clipboard." + elevated,
+            (ExtensionsPageOpening.NotWhileElevated, false) => $"Open {where} yourself and type {profile.Page} into its address bar." + elevated,
+            (_, true) => named is null
+                ? $"Paste {profile.Page} into {profile.Product}'s address bar to see its extensions — it is on your clipboard."
+                : $"Paste {profile.Page} into the address bar of {where} to see its extensions — it is on your clipboard.",
+            (_, false) => named is null
+                ? $"Type {profile.Page} into {profile.Product}'s address bar to see its extensions."
+                : $"Type {profile.Page} into the address bar of {where} to see its extensions.",
+        };
+    }
 
     /// <summary>
     /// The icon decoded and frozen, so it can be built off the UI thread; null when there is none or it is not an
@@ -111,16 +132,21 @@ internal static class ExtensionPresenter
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
+            // Both sides, as AppIconService does: by width alone an icon one pixel wide keeps its shape, and a few
+            // hundred bytes decode to an image hundreds of times the size the row draws, kept with the row.
             image.DecodePixelWidth = 56;
+            image.DecodePixelHeight = 56;
             image.StreamSource = stream;
             image.EndInit();
             image.Freeze();
             return image;
         }
-        catch (NotSupportedException) { return null; }
-        catch (FileFormatException) { return null; }
-        catch (InvalidOperationException) { return null; }
-        catch (ArgumentException) { return null; }
-        catch (IOException) { return null; }
+        catch (Exception ex) when (ex is NotSupportedException or FileFormatException or InvalidOperationException
+                                      or ArgumentException or IOException or ExternalException or OverflowException)
+        {
+            // Not an image WPF can read, or one its codec refused: the row shows the puzzle glyph instead.
+            Log.Debug(ex, "An extension's icon could not be decoded");
+            return null;
+        }
     }
 }

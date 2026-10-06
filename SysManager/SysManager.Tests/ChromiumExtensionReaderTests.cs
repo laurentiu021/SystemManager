@@ -349,10 +349,150 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
 
     [Theory]
     [InlineData("https://clients2.google.com/service/update2/crx", "the Chrome Web Store")]
+    [InlineData("https://clients2.notgoogle.com/service/update2/crx", "an extension store")]
     [InlineData("https://edge.microsoft.com/extensionwebstorebase/v1/crx", "Microsoft Edge Add-ons")]
     [InlineData("https://extension-updates.opera.com/api/omaha/update/", "Opera add-ons")]
     [InlineData("https://updates.example.com/crx", "an extension store")]
     [InlineData(null, "an extension store")]
     public void TheStore_IsNamedByWhereUpdatesComeFrom(string? updateUrl, string expected) =>
         Assert.Equal(expected, ChromiumExtensionReader.StoreOf(updateUrl));
+
+    // ── What cannot be read is still listed, or said ────────────────────────
+
+    [Theory]
+    [InlineData("\"location\": \"1\"")]
+    [InlineData("\"location\": null")]
+    [InlineData("\"state\": null")]
+    [InlineData("\"state\": \"0\"")]
+    [InlineData("\"disable_reasons\": \"1\"")]
+    [InlineData("\"first_install_time\": 13300000000000000")]
+    public void ASettingOfTheWrongKind_IsReadAsUnset_AndTheListCarriesOn(string field)
+    {
+        // Another program can write anything into these files, for an extension that has no folder too; one odd
+        // value must not cost the whole look.
+        Install(IdA, "1.0_0", Manifest());
+        Settings((IdA, $"{{ {field} }}"), (IdB, $"{{ {field} }}"));
+
+        var extension = Single();
+
+        Assert.Equal(ExtensionOrigin.Unknown, extension.Origin);
+        Assert.False(extension.IsOff);
+        Assert.Null(extension.InstalledOn);
+    }
+
+    [Fact]
+    public void ANameThatIsNotValidText_IsListedAsUnreadable_AndTheListCarriesOn()
+    {
+        var dir = Install(IdA, "1.0_0", "{}");
+        File.WriteAllBytes(Path.Combine(dir, "manifest.json"),
+            [.. Encoding.UTF8.GetBytes("{ \"name\": \""), 0xC3, 0x28, .. Encoding.UTF8.GetBytes("\", \"version\": \"1.0\" }")]);
+        Install(IdB, "1.0_0", Manifest("Second"));
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.False(couldNotRead);
+        Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ASettingsIdThatIsNotValidText_DoesNotStopTheList()
+    {
+        Install(IdA, "1.0_0", Manifest());
+        File.WriteAllBytes(Path.Combine(_profile, "Secure Preferences"),
+            [.. Encoding.UTF8.GetBytes("{ \"extensions\": { \"settings\": { \""), 0xC3, 0x28,
+             .. Encoding.UTF8.GetBytes($"\": {{ \"location\": 6 }}, \"{IdA}\": {{ \"location\": 1 }} }} }} }}")]);
+
+        Assert.Equal("Example", Single().Name);
+    }
+
+    [Fact]
+    public void AManifestThatCannotBeRead_StillListsTheExtension_WithWhatTheSettingsSay()
+    {
+        Install(IdA, "1.0_0", "{ not json");
+        Settings((IdA, """{ "location": 6 }"""));
+
+        var extension = Single();
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal("", extension.Version);
+        Assert.Equal(ExtensionOrigin.AnotherProgram, extension.Origin);
+    }
+
+    [Fact]
+    public void AManifestPastItsBound_StillListsTheExtension()
+    {
+        Install(IdA, "1.0_0", Manifest(extra: $", \"description\": \"{new string('x', ExtensionFiles.MaxManifestBytes)}\""));
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, Single().Name);
+    }
+
+    [Fact]
+    public void AnExtensionFolderThatIsALink_IsListed_WithoutBeingFollowed()
+    {
+        // The browser follows the link; SysManager does not, but must not act as if the extension were not there.
+        var elsewhere = Path.Combine(_root, "elsewhere", "1.0_0");
+        Directory.CreateDirectory(elsewhere);
+        File.WriteAllText(Path.Combine(elsewhere, "manifest.json"), Manifest("Read through the link"));
+        Directory.CreateDirectory(Path.Combine(_profile, "Extensions"));
+        Symlinks.RequireJunction(Path.Combine(_profile, "Extensions", IdA), Path.Combine(_root, "elsewhere"));
+        Settings((IdA, """{ "location": 6 }"""));
+
+        var extension = Single();
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal(ExtensionOrigin.AnotherProgram, extension.Origin);
+    }
+
+    [Theory]
+    [InlineData("2.0_0", ChromiumExtensionReader.UnreadableName)]
+    [InlineData("0.9_0", "Real")]
+    public void AVersionFolderThatIsALink_IsNotFollowed_AndMakesTheExtensionUnreadableWhenItIsTheNewest(
+        string linkedVersion, string expected)
+    {
+        Install(IdA, "1.0_0", Manifest("Real", "1.0"));
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        File.WriteAllText(Path.Combine(elsewhere, "manifest.json"), Manifest("Read through the link", "9.9"));
+        Symlinks.RequireJunction(Path.Combine(_profile, "Extensions", IdA, linkedVersion), elsewhere);
+
+        Assert.Equal(expected, Single().Name);
+    }
+
+    [Fact]
+    public void AnExtensionsFolderThatIsALink_CouldNotBeRead()
+    {
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        Symlinks.RequireJunction(Path.Combine(_profile, "Extensions"), elsewhere);
+
+        Assert.True(Read().CouldNotRead);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnUnpackedFolderThatIsALink_OrNotOnALocalDrive_IsListed_WithoutBeingRead(bool link)
+    {
+        var real = Path.Combine(_root, "my-extension");
+        Directory.CreateDirectory(real);
+        File.WriteAllText(Path.Combine(real, "manifest.json"), Manifest("Read through it"));
+        string path;
+        if (link)
+        {
+            path = Path.Combine(_root, "linked-extension");
+            Symlinks.RequireJunction(path, real);
+        }
+        else
+        {
+            // The same folder, written the way a network share or a device path is: such a path is never opened.
+            path = @"\\?\" + real;
+        }
+        Settings(("cccccccccccccccccccccccccccccccc",
+            $$"""{ "location": 4, "path": "{{path.Replace("\\", "\\\\", StringComparison.Ordinal)}}" }"""));
+
+        var extension = Single();
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal(ExtensionOrigin.Folder, extension.Origin);
+    }
 }

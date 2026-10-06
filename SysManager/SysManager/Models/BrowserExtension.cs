@@ -33,7 +33,11 @@ public enum ExtensionOrigin
 }
 
 /// <summary>One plain-language line about what an extension can do, and whether it deserves attention.</summary>
-public sealed record ExtensionPermission(string Text, bool IsWarning);
+public sealed record ExtensionPermission(string Text, bool IsWarning)
+{
+    /// <summary>The line's words, which is what a screen reader announces for it.</summary>
+    public override string ToString() => Text;
+}
 
 /// <summary>
 /// One extension installed in one browser profile, as Browser Cleaner's Extensions view lists it (#1526). Read from

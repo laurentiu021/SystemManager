@@ -69,13 +69,25 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             foreach (var (browser, userDataRel) in BrowserProfiles.Chromium)
             {
                 var (executable, page) = ChromiumLaunch[browser];
-                foreach (var (dir, display, _) in _profiles.ChromiumProfiles(browser, userDataRel))
+                // The browser's whole data folder behind a link: not followed, and said rather than left out.
+                if (ExtensionFiles.KindOf(Path.Combine(_localAppData, userDataRel)) is ExtensionFiles.EntryKind.Link
+                    or ExtensionFiles.EntryKind.Unreadable)
+                {
+                    profiles.Add(new ExtensionProfile(browser, browser, page, executable, null, [], CouldNotRead: true));
+                    continue;
+                }
+                foreach (var (dir, display, _, isLink) in _profiles.ChromiumProfileFolders(browser, userDataRel))
                 {
                     ct.ThrowIfCancellationRequested();
+                    var directory = string.Equals(dir, "Default", StringComparison.OrdinalIgnoreCase) ? null : dir;
+                    if (isLink)
+                    {
+                        profiles.Add(new ExtensionProfile(display, browser, page, executable, directory, [], CouldNotRead: true));
+                        continue;
+                    }
                     var (extensions, couldNotRead) =
                         ChromiumExtensionReader.Read(Path.Combine(_localAppData, userDataRel, dir), culture);
-                    Add(profiles, new ExtensionProfile(display, browser, page, executable,
-                        string.Equals(dir, "Default", StringComparison.OrdinalIgnoreCase) ? null : dir,
+                    Add(profiles, new ExtensionProfile(display, browser, page, executable, directory,
                         Ordered(extensions), couldNotRead));
                 }
             }
@@ -84,19 +96,51 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             {
                 ct.ThrowIfCancellationRequested();
                 var profileDir = Path.Combine(_roamingAppData, "Opera Software", folder);
-                if (!Directory.Exists(profileDir) || SafeFileWalk.IsReparsePoint(profileDir)) continue;
-                var (extensions, couldNotRead) = ChromiumExtensionReader.Read(profileDir, culture);
-                Add(profiles, new ExtensionProfile(browser, browser, OperaPage, null, null, Ordered(extensions), couldNotRead));
+                switch (ExtensionFiles.KindOf(profileDir))
+                {
+                    case ExtensionFiles.EntryKind.Folder:
+                        var (extensions, couldNotRead) = ChromiumExtensionReader.Read(profileDir, culture);
+                        Add(profiles, new ExtensionProfile(browser, browser, OperaPage, null, null, Ordered(extensions), couldNotRead));
+                        break;
+                    case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
+                        profiles.Add(new ExtensionProfile(browser, browser, OperaPage, null, null, [], CouldNotRead: true));
+                        break;
+                }
             }
 
-            foreach (var (folder, display, _) in _profiles.FirefoxProfiles())
+            // Firefox's profiles all sit under one folder: behind a link, none of them is read through it.
+            var firefoxProfiles = Path.Combine(_roamingAppData, BrowserProfiles.FirefoxProfilesRel);
+            switch (ExtensionFiles.KindOf(firefoxProfiles))
             {
-                ct.ThrowIfCancellationRequested();
-                var profileDir = Path.Combine(_roamingAppData, BrowserProfiles.FirefoxProfilesRel, folder);
-                if (!Directory.Exists(profileDir) || SafeFileWalk.IsReparsePoint(profileDir)) continue;
-                var (extensions, couldNotRead) = FirefoxExtensionReader.Read(profileDir);
-                Add(profiles, new ExtensionProfile(display, "Firefox", FirefoxPage, FirefoxExecutable, null,
-                    Ordered(extensions), couldNotRead));
+                case ExtensionFiles.EntryKind.Folder:
+                    var (toldDefault, defaultFolder) = _profiles.FirefoxDefaultFolder();
+                    foreach (var (folder, display, label) in _profiles.FirefoxProfiles())
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        // Firefox starts in its default profile, so only that one is started from here: started for
+                        // another, it would show the wrong profile's add-ons. Its profiles.ini says which; without
+                        // one, the profile the tab shows by the bare name is taken for it.
+                        var isDefault = toldDefault
+                            ? string.Equals(folder, defaultFolder, StringComparison.OrdinalIgnoreCase)
+                            : label.Length == 0;
+                        var executable = isDefault ? FirefoxExecutable : null;
+                        var profileDir = Path.Combine(firefoxProfiles, folder);
+                        switch (ExtensionFiles.KindOf(profileDir))
+                        {
+                            case ExtensionFiles.EntryKind.Folder:
+                                var (extensions, couldNotRead) = FirefoxExtensionReader.Read(profileDir);
+                                Add(profiles, new ExtensionProfile(display, "Firefox", FirefoxPage, executable, null,
+                                    Ordered(extensions), couldNotRead));
+                                break;
+                            case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
+                                profiles.Add(new ExtensionProfile(display, "Firefox", FirefoxPage, executable, null, [], CouldNotRead: true));
+                                break;
+                        }
+                    }
+                    break;
+                case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
+                    profiles.Add(new ExtensionProfile("Firefox", "Firefox", FirefoxPage, FirefoxExecutable, null, [], CouldNotRead: true));
+                    break;
             }
 
             return profiles;

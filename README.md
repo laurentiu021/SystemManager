@@ -1244,7 +1244,8 @@ Reclaim space and clear browsing traces, per browser:
   profile above, says in plain words what each one can do ("Changes your search engine", "Can read and
   change everything on every website"), when it was installed and where it came from, and marks the ones
   **another program put there**, the ones your organisation manages, and the ones that are turned off.
-  Those added by another program come first. **Read-only**: SysManager never changes a browser —
+  Those added by another program come first, and one whose files cannot be read is still listed rather
+  than left out. **Read-only**: SysManager never changes a browser —
   "Manage in …" opens the browser's own extensions page, where it asks you itself. While SysManager runs
   as administrator it opens no browser, so the browser never gets those rights: it puts the page's address
   on your clipboard for you to paste instead. Searching the sidebar for "extensions", "add-ons" or

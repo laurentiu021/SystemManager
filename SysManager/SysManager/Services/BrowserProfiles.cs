@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Text;
 using SysManager.Helpers;
 
 namespace SysManager.Services;
@@ -73,7 +74,16 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
     /// When the browser is not installed this yields nothing, so no rows appear.
     /// </para>
     /// </summary>
-    internal IEnumerable<(string Dir, string Display, string Label)> ChromiumProfiles(string browser, string userDataRel)
+    internal IEnumerable<(string Dir, string Display, string Label)> ChromiumProfiles(string browser, string userDataRel) =>
+        ChromiumProfileFolders(browser, userDataRel).Where(p => !p.IsLink).Select(p => (p.Dir, p.Display, p.Label));
+
+    /// <summary>
+    /// Every profile folder <see cref="ChromiumProfiles"/> considers, named the same way, with the links among them
+    /// included and marked: the cleaner never goes through one, and the extension list says it could not read one
+    /// rather than leaving it out (#1526).
+    /// </summary>
+    internal IEnumerable<(string Dir, string Display, string Label, bool IsLink)> ChromiumProfileFolders(
+        string browser, string userDataRel)
     {
         var userDataAbs = Path.Combine(localAppData, userDataRel);
         if (!Directory.Exists(userDataAbs) || SafeFileWalk.IsReparsePoint(userDataAbs)) yield break;
@@ -91,14 +101,14 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
                      .OrderBy(name => IsDefaultProfile(name!) ? 0 : 1)
                      .ThenBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
-            if (SafeFileWalk.IsReparsePoint(Path.Combine(userDataAbs, dir!))) continue;
+            var isLink = SafeFileWalk.IsReparsePoint(Path.Combine(userDataAbs, dir!));
 
             // Name the profile in the Browser column so the user can see WHICH Chrome is being
             // cleaned — the thing a flat "Google Chrome" checkbox in other cleaners never tells her.
             // The default profile stays unlabelled, so the common single-profile case reads exactly
             // as it did before and no existing row text changes.
             var isDefault = IsDefaultProfile(dir!);
-            yield return (dir!, isDefault ? browser : $"{browser} — {dir}", isDefault ? string.Empty : $" in {dir}");
+            yield return (dir!, isDefault ? browser : $"{browser} — {dir}", isDefault ? string.Empty : $" in {dir}", isLink);
         }
     }
 
@@ -170,6 +180,66 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
             var shown = shared.Contains(label) ? folder : label;
             return (folder, $"{browser} — {shown}", $" in {shown}");
         }
+    }
+
+    /// <summary>
+    /// The folder of the profile Firefox opens when it is started without being told one, as its own
+    /// <c>profiles.ini</c> records it: the default each install names (Firefox 67 and later), or else the profile
+    /// marked default, which older versions used and newer ones leave behind. <c>Told</c> is false when there is no
+    /// such file to ask. The folder is null when the file names none, or names different ones for different
+    /// installs, since which of them <c>firefox.exe</c> opens cannot then be known.
+    /// </summary>
+    internal (bool Told, string? Folder) FirefoxDefaultFolder()
+    {
+        var bytes = ExtensionFiles.Read(Path.Combine(roamingAppData, @"Mozilla\Firefox\profiles.ini"), ExtensionFiles.MaxManifestBytes);
+        if (bytes is null) return (false, null);
+
+        List<string> installDefaults = [];
+        List<string> markedDefaults = [];
+        var section = "";
+        string? path = null;
+        var marked = false;
+
+        void EndOfSection()
+        {
+            if (section.StartsWith("Profile", StringComparison.OrdinalIgnoreCase) && marked && path is not null)
+                markedDefaults.Add(path);
+            path = null;
+            marked = false;
+        }
+
+        foreach (var raw in Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF').Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                EndOfSection();
+                section = line[1..^1];
+                continue;
+            }
+            var equals = line.IndexOf('=');
+            if (equals <= 0) continue;
+            var key = line[..equals].Trim();
+            var value = line[(equals + 1)..].Trim();
+            if (section.StartsWith("Install", StringComparison.OrdinalIgnoreCase))
+            {
+                if (key.Equals("Default", StringComparison.OrdinalIgnoreCase)) installDefaults.Add(value);
+            }
+            else if (section.StartsWith("Profile", StringComparison.OrdinalIgnoreCase))
+            {
+                if (key.Equals("Path", StringComparison.OrdinalIgnoreCase)) path = value;
+                else if (key.Equals("Default", StringComparison.OrdinalIgnoreCase)) marked = value == "1";
+            }
+        }
+        EndOfSection();
+
+        var folders = (installDefaults.Count > 0 ? installDefaults : markedDefaults)
+            .Select(p => p.Replace('\\', '/').TrimEnd('/'))
+            .Select(p => p[(p.LastIndexOf('/') + 1)..])
+            .Where(f => f.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return (true, folders.Count == 1 ? folders[0] : null);
     }
 
     private static bool IsSameFolder(string folder, string? other) =>

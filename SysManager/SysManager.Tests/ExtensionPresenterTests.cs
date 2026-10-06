@@ -39,7 +39,7 @@ public class ExtensionPresenterTests
     [InlineData(ExtensionOrigin.Unknown, "", false, "")]
     [InlineData(ExtensionOrigin.File, "", false, "Not from an extension store")]
     public void TheLineUnderTheName_SaysWhenAndWhereFrom(ExtensionOrigin origin, string store, bool dated, string expected) =>
-        Assert.Equal(expected, ExtensionPresenter.Meta(Extension(origin, dated ? Midday : null, store)));
+        Assert.Equal(expected, ExtensionPresenter.Meta(Extension(origin, dated ? Midday : null, store), TimeZoneInfo.Utc));
 
     [Fact]
     public void AnExtensionAnotherProgramAdded_AndTurnedOff_CarriesBothMarks()
@@ -124,8 +124,36 @@ public class ExtensionPresenterTests
     [Fact]
     public void TheDate_IsTheDayInWords()
     {
-        Assert.Equal("29 Sep 2026", ExtensionPresenter.Date(Midday));
+        Assert.Equal("29 Sep 2026", ExtensionPresenter.Date(Midday, TimeZoneInfo.Utc));
     }
+
+    [Fact]
+    public void TheDay_IsTheOneInTheUsersOwnTimeZone()
+    {
+        // 18:30 UTC is already the next day at five hours forty-five ahead, and still the same day in UTC and in
+        // every zone up to five hours thirty ahead.
+        var aheadOfMost = TimeZoneInfo.CreateCustomTimeZone("UTC+05:45", new TimeSpan(5, 45, 0), "UTC+05:45", "UTC+05:45");
+
+        Assert.Equal("30 Sep 2026",
+            ExtensionPresenter.Date(new DateTime(2026, 9, 29, 18, 30, 0, DateTimeKind.Utc), aheadOfMost));
+    }
+
+    [Fact]
+    public void TheLatestDayThereIs_IsStillADay_InAZoneAheadOfUtc()
+    {
+        var aheadOfAll = TimeZoneInfo.CreateCustomTimeZone("UTC+14", TimeSpan.FromHours(14), "UTC+14", "UTC+14");
+
+        Assert.Equal("31 Dec 9999", ExtensionPresenter.Date(DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc), aheadOfAll));
+    }
+
+    [Theory]
+    [InlineData(ExtensionsPageOpening.NotOpened, true, "Paste chrome://extensions into the address bar of Google Chrome's \"Profile 2\" profile to see its extensions — it is on your clipboard.")]
+    [InlineData(ExtensionsPageOpening.NotOpened, false, "Type chrome://extensions into the address bar of Google Chrome's \"Profile 2\" profile to see its extensions.")]
+    [InlineData(ExtensionsPageOpening.NotWhileElevated, true, "Open Google Chrome's \"Profile 2\" profile yourself and paste chrome://extensions into its address bar — it is on your clipboard. SysManager is running as administrator, so a browser it opened would run as administrator too.")]
+    [InlineData(ExtensionsPageOpening.NotWhileElevated, false, "Open Google Chrome's \"Profile 2\" profile yourself and type chrome://extensions into its address bar. SysManager is running as administrator, so a browser it opened would run as administrator too.")]
+    public void ManageIn_ForANamedProfile_SaysWhichProfile(ExtensionsPageOpening opening, bool copied, string expected) =>
+        Assert.Equal(expected, ExtensionPresenter.ManageStatus(
+            new("Google Chrome — Profile 2", "Google Chrome", "chrome://extensions", "chrome.exe", "Profile 2", [], false), opening, copied));
 
     [Fact]
     public void AnIcon_IsDecodedOffTheUiThread_AndFrozen()
@@ -134,6 +162,16 @@ public class ExtensionPresenterTests
 
         Assert.NotNull(icon);
         Assert.True(icon.IsFrozen);
+    }
+
+    [Fact]
+    public void AVeryTallIcon_IsDecodedAtTheSizeTheRowDrawsIt()
+    {
+        // One pixel wide and 600 tall is a few hundred bytes as a PNG. Scaled by width alone it would decode to
+        // 56 by 33,600 pixels and stay in memory with the row.
+        var icon = Assert.IsAssignableFrom<BitmapSource>(ExtensionPresenter.Icon(Png(1, 600)));
+
+        Assert.True(icon.PixelWidth <= 56 && icon.PixelHeight <= 56, $"decoded at {icon.PixelWidth} by {icon.PixelHeight}");
     }
 
     [Theory]
@@ -151,12 +189,12 @@ public class ExtensionPresenterTests
         Assert.Equal("Video Speed Controller, version 1.0", row.SpokenName);
     }
 
-    /// <summary>A real two-by-two PNG, encoded here so no binary fixture has to be kept.</summary>
-    internal static byte[] Png()
+    /// <summary>A real PNG, two by two unless asked otherwise, encoded here so no binary fixture has to be kept.</summary>
+    internal static byte[] Png(int width = 2, int height = 2)
     {
-        var pixels = new byte[2 * 2 * 4];
+        var pixels = new byte[width * height * 4];
         Array.Fill(pixels, (byte)0x80);
-        var source = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null, pixels, 2 * 4);
+        var source = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgra32, null, pixels, width * 4);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(source));
         using var stream = new MemoryStream();

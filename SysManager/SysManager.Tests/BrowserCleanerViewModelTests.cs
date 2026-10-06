@@ -166,8 +166,10 @@ public class BrowserCleanerViewModelTests
 
         var group = Assert.Single(vm.ExtensionGroups);
         Assert.Equal(
-            "Microsoft Edge — Profile 2: its extension list could not be read (it may be in use). Close Microsoft Edge and look again.",
+            "Microsoft Edge — Profile 2: its extension list could not be read. If Microsoft Edge is open, close it and look again.",
             group.UnreadableNote);
+        // Nothing was counted, so the header does not claim "0 extensions".
+        Assert.Equal("", group.CountText);
         Assert.True(vm.HasExtensions);
         Assert.False(vm.ShowNoExtensions);
         Assert.Equal("No extensions could be listed: a browser's list could not be read.", vm.StatusMessage);

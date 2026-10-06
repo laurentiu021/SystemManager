@@ -24,17 +24,21 @@ clear the cache but not show it. Nothing in a browser is changed: "Manage in …
   - Each extension shows its own icon, name and version, when it was installed and where it came from (a store, a
     file, the browser itself, or a folder on the PC), and in plain words what it can do: "Changes your search
     engine", "Replaces your new tab page", "Can read and change everything on every website", "Can see your open
-    tabs". Those that change what you see or reach every website are amber. A permission the list does not know is
-    shown by its own name rather than left out.
+    tabs". Those that change what you see, reach every website or can control the browser are amber. A permission
+    the list does not know is shown by its own name rather than left out.
   - Marks say which ones **another program put there**, which ones your organisation manages (only it can remove
     those), and which ones are turned off. Those added by another program come first, then those that can read every
     website.
   - The toolbar counts them: "12 extensions in 3 browsers · 1 was put there by another program". A profile whose list
     could not be read says so and asks you to close that browser and look again, instead of showing as empty.
+  - Nothing is left out for being hard to read. An extension whose files cannot be read, or sit behind a link, is
+    listed as "An extension whose name could not be read" with what the browser recorded about it, and a profile kept
+    behind a link (a common way to move it to another drive) is shown as one that could not be read. Links are never
+    followed, and a path a browser's files give to a network share is never opened.
   - **Read-only.** "Manage in …" opens the browser on its own extensions page, where it asks you itself, and puts the
     page's address on the clipboard in case the browser opens somewhere else. While SysManager runs as administrator
     it opens no browser — one opened from it would run as administrator too — and says to open the browser and paste
-    the address yourself.
+    the address yourself. For a second profile it says which profile to open.
   - Searching the sidebar for "extensions", "add-ons", "search changed" or "browser ads" opens Browser Cleaner on this
     view, and F5 refreshes whichever view is shown.
 

@@ -22,7 +22,11 @@ public enum ExtensionFlagKind
 }
 
 /// <summary>A mark next to an extension's name, such as "Off".</summary>
-public sealed record ExtensionFlag(string Text, ExtensionFlagKind Kind);
+public sealed record ExtensionFlag(string Text, ExtensionFlagKind Kind)
+{
+    /// <summary>The mark's words, which is what a screen reader announces for it.</summary>
+    public override string ToString() => Text;
+}
 
 /// <summary>One extension as its row shows it: every line already worded, and its icon ready to draw.</summary>
 public sealed record ExtensionRow(
@@ -35,6 +39,12 @@ public sealed record ExtensionRow(
 {
     /// <summary>The extension's name and version together, for a screen reader.</summary>
     public string SpokenName => Version.Length > 0 ? $"{Name}, version {Version}" : Name;
+
+    /// <summary>
+    /// <see cref="SpokenName"/>: a screen reader announces a list's item by it, and a record's own would read out
+    /// every field.
+    /// </summary>
+    public override string ToString() => SpokenName;
 }
 
 /// <summary>
@@ -63,8 +73,10 @@ public sealed partial class ExtensionGroupViewModel
     /// <summary>The name the tab shows for the profile, e.g. "Microsoft Edge — Profile 1".</summary>
     public string Title => Profile.Browser;
 
-    /// <summary>"5 extensions".</summary>
-    public string CountText => $"{Rows.Count} extension{(Rows.Count == 1 ? "" : "s")}";
+    /// <summary>"5 extensions", or nothing for a profile that could not be read and has none listed.</summary>
+    public string CountText => Rows.Count == 0 && Profile.CouldNotRead
+        ? ""
+        : $"{Rows.Count} extension{(Rows.Count == 1 ? "" : "s")}";
 
     /// <summary>"Manage in Microsoft Edge".</summary>
     public string ManageText => $"Manage in {Profile.Product}";
@@ -74,8 +86,11 @@ public sealed partial class ExtensionGroupViewModel
     /// Empty when it was read.
     /// </summary>
     public string UnreadableNote => Profile.CouldNotRead
-        ? $"{Profile.Browser}: its extension list could not be read (it may be in use). Close {Profile.Product} and look again."
+        ? $"{Profile.Browser}: its extension list could not be read. If {Profile.Product} is open, close it and look again."
         : "";
+
+    /// <summary>The group's title, which is what a screen reader announces for it.</summary>
+    public override string ToString() => Title;
 
     [RelayCommand]
     private void Manage() => _manage(Profile);

@@ -112,8 +112,7 @@ internal static class FirefoxExtensionReader
         if (location == "app-profile")
         {
             var fromStore = source == "amo"
-                || (Uri.TryCreate(sourceUri, UriKind.Absolute, out var uri)
-                    && uri.Host.EndsWith("addons.mozilla.org", StringComparison.OrdinalIgnoreCase));
+                || (Uri.TryCreate(sourceUri, UriKind.Absolute, out var uri) && ExtensionFiles.IsHostOf(uri.Host, "addons.mozilla.org"));
             return fromStore ? ExtensionOrigin.Store : ExtensionOrigin.File;
         }
         return ExtensionOrigin.Unknown;
@@ -121,8 +120,7 @@ internal static class FirefoxExtensionReader
 
     /// <summary>When the add-on was installed: Firefox writes milliseconds since 1970.</summary>
     internal static DateTime? InstallDate(JsonElement addon) =>
-        addon.TryGetProperty("installDate", out var value) && value.TryGetInt64(out var ms)
-        && ms is > 0 and < MaxUnixMilliseconds
+        ExtensionFiles.Number(addon, "installDate") is { } ms && ms is > 0 and < MaxUnixMilliseconds
             ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime
             : null;
 
@@ -137,17 +135,19 @@ internal static class FirefoxExtensionReader
 
     /// <summary>
     /// Reads the icon at <paramref name="iconEntry"/> and the manifest from the package at <paramref name="path"/>.
-    /// Only a <c>.xpi</c> file is opened, and nothing in it is extracted: the two entries are read into memory,
-    /// each within its bound. A package that cannot be read yields nothing, and the extension is still listed.
+    /// Only a <c>.xpi</c> file on one of this PC's drives is opened, and nothing in it is extracted: the two entries
+    /// are read into memory, each within its bound, and the package's own size is checked once it is open, so it
+    /// cannot change in between. A package that cannot be read yields nothing, and the extension is still listed.
     /// </summary>
     private static Package ReadPackage(string? path, string? iconEntry)
     {
-        if (path is null || !path.EndsWith(".xpi", StringComparison.OrdinalIgnoreCase)) return NoPackage;
+        if (path is null || !path.EndsWith(".xpi", StringComparison.OrdinalIgnoreCase) || !ExtensionFiles.IsOnALocalDrive(path))
+            return NoPackage;
         try
         {
-            if (!File.Exists(path) || SafeFileWalk.IsReparsePoint(path) || new FileInfo(path).Length > MaxPackageBytes)
-                return NoPackage;
+            if (!File.Exists(path) || SafeFileWalk.IsReparsePoint(path)) return NoPackage;
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (stream.Length > MaxPackageBytes) return NoPackage;
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
 
             using var manifest = ExtensionFiles.Parse(Entry(zip, "manifest.json", ExtensionFiles.MaxManifestBytes));

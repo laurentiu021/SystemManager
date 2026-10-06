@@ -5,6 +5,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -129,7 +130,8 @@ public sealed class BrowserCleanerViewUiTests : IDisposable
             Assert.Contains("2.4.1", shown);
             Assert.Contains("Added by another program", shown);
             Assert.Contains("Off", shown);
-            Assert.Contains("Installed 29 Sep 2026 · not from an extension store", shown);
+            // The day as the presenter words it in this machine's time zone: the words are its own tests' concern.
+            Assert.Contains($"Installed {ExtensionPresenter.Date(Midday)} · not from an extension store", shown);
             Assert.Contains("Changes your search engine", shown);
             Assert.Contains("Can see your open tabs", shown);
             Assert.Contains("Came with the browser", shown);
@@ -197,7 +199,7 @@ public sealed class BrowserCleanerViewUiTests : IDisposable
         {
             var shown = ShownTexts(Laid(vm));
 
-            Assert.Contains("Google Chrome: its extension list could not be read (it may be in use). Close Google Chrome and look again.", shown);
+            Assert.Contains("Google Chrome: its extension list could not be read. If Google Chrome is open, close it and look again.", shown);
             Assert.DoesNotContain("No extensions found", shown);
         });
     }
@@ -228,6 +230,27 @@ public sealed class BrowserCleanerViewUiTests : IDisposable
                 ShownTexts(Laid(vm)));
         });
     }
+
+    [Fact]
+    public async Task AScreenReader_HearsEachGroupRowMarkAndChipByItsWords()
+    {
+        var vm = await VmAsync(new FakeExtensions(Chrome(false, SearchPro)), look: true);
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+
+            Assert.Equal(["Google Chrome"], Names(Named<ItemsControl>(view, "Browser extensions")));
+            Assert.Equal(["Search Pro New Tab, version 2.4.1"], Names(Single<ItemsControl>(view, c => c.ItemsSource is IReadOnlyList<ExtensionRow>)));
+            Assert.Equal(["Added by another program", "Off"], Names(Single<ItemsControl>(view, c => c.ItemsSource is IReadOnlyList<ExtensionFlag>)));
+            Assert.Equal(["Changes your search engine", "Can see your open tabs"],
+                Names(Single<ItemsControl>(view, c => c.ItemsSource is IReadOnlyList<ExtensionPermission>)));
+        });
+    }
+
+    /// <summary>What a screen reader is told each item of <paramref name="list"/> is called.</summary>
+    private static List<string> Names(ItemsControl list) =>
+        [.. (UIElementAutomationPeer.CreatePeerForElement(list).GetChildren() ?? []).Select(p => p.GetName())];
 
     private static TextBlock Text(DependencyObject root, string text) =>
         Assert.Single(Descendants<TextBlock>(root), t => t.Text == text);

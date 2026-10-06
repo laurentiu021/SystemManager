@@ -71,6 +71,9 @@ public class SidebarSearchTests(NavSurfaceFixture fixture) : IClassFixture<NavSu
     [InlineData("no internet", "nav-network-repair")]
     [InlineData("speakers", "nav-volume-control")]
     [InlineData("headphones", "nav-volume-control")]
+    [InlineData("extensions", "nav-browser-cleaner")]
+    [InlineData("add-ons", "nav-browser-cleaner")]
+    [InlineData("browser ads", "nav-browser-cleaner")]
     public void SearchingByPlainWords_FindsTheJargonNamedTab(string typed, string expectedNavId)
     {
         var results = Search(typed);
@@ -120,6 +123,52 @@ public class SidebarSearchTests(NavSurfaceFixture fixture) : IClassFixture<NavSu
             _nav.SelectedNav = Assert.Single(_nav.NavResults, r => r.Id == "nav-privacy-settings");
 
             Assert.Equal(Models.PrivacyGrouping.ByTopic, privacy.Grouping);
+        }
+        finally
+        {
+            _nav.NavFilter = "";
+            _nav.SelectedNav = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData("extensions")]
+    [InlineData("browser ads")]
+    public void ASearchForAnExtension_OpensBrowserCleanerOnItsExtensions(string typed)
+    {
+        // "My searches go to some other site" is an extension far more often than it is the cache (#1526).
+        var cleaner = (BrowserCleanerViewModel)_nav.NavItems.First(n => n.Id == "nav-browser-cleaner").Content;
+        var previous = _nav.SelectedNav;
+        try
+        {
+            cleaner.Section = BrowserCleanerSection.BrowsingData;
+            _nav.NavFilter = typed;
+
+            _nav.SelectedNav = Assert.Single(_nav.NavResults, r => r.Id == "nav-browser-cleaner");
+
+            Assert.Equal(BrowserCleanerSection.Extensions, cleaner.Section);
+        }
+        finally
+        {
+            _nav.NavFilter = "";
+            _nav.SelectedNav = previous;
+            cleaner.Section = BrowserCleanerSection.BrowsingData;
+        }
+    }
+
+    [Fact]
+    public void OpeningBrowserCleanerFromAnyOtherSearch_StaysOnTheBrowsingData()
+    {
+        var cleaner = (BrowserCleanerViewModel)_nav.NavItems.First(n => n.Id == "nav-browser-cleaner").Content;
+        var previous = _nav.SelectedNav;
+        try
+        {
+            cleaner.Section = BrowserCleanerSection.BrowsingData;
+            _nav.NavFilter = "cookies";
+
+            _nav.SelectedNav = Assert.Single(_nav.NavResults, r => r.Id == "nav-browser-cleaner");
+
+            Assert.Equal(BrowserCleanerSection.BrowsingData, cleaner.Section);
         }
         finally
         {

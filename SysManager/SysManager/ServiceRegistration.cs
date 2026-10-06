@@ -91,6 +91,7 @@ public static class ServiceRegistration
         services.AddSingleton<BiosService>();
         services.AddSingleton<WindowsUpdatePolicyService>();
         services.AddSingleton<BrowserCleanerService>();
+        services.AddSingleton<IBrowserExtensionService, BrowserExtensionService>();
         services.AddSingleton<PrivacyMonitorService>();
         services.AddSingleton<BootAnalyzerService>();
         services.AddSingleton<IWindowsUpdateService, WindowsUpdateService>();

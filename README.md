@@ -1239,6 +1239,16 @@ Reclaim space and clear browsing traces, per browser:
 - Per-user (no admin); locked files (browser open) are skipped, not forced, and
   symlinks/junctions are never followed. When a browser held every file, the result says
   nothing was removed and suggests closing the browser, rather than "Browser data cleaned"
+- **Extensions: see what each browser has added — and who added it.** "Since last week my searches go to
+  some other site" is usually an extension. The Extensions view lists every extension in every browser and
+  profile above, says in plain words what each one can do ("Changes your search engine", "Can read and
+  change everything on every website"), when it was installed and where it came from, and marks the ones
+  **another program put there**, the ones your organisation manages, and the ones that are turned off.
+  Those added by another program come first. **Read-only**: SysManager never changes a browser —
+  "Manage in …" opens the browser's own extensions page, where it asks you itself. While SysManager runs
+  as administrator it opens no browser, so the browser never gets those rights: it puts the page's address
+  on your clipboard for you to paste instead. Searching the sidebar for "extensions", "add-ons" or
+  "browser ads" opens this view
 
 ### Edge/OneDrive Remover
 Get Microsoft Edge and OneDrive out of your way — reversibly:

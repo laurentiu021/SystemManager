@@ -1,0 +1,326 @@
+// SysManager · ChromiumExtensionReader
+// Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
+// License: MIT
+
+using System.Globalization;
+using System.IO;
+using System.Text.Json;
+using SysManager.Helpers;
+using SysManager.Models;
+
+namespace SysManager.Services;
+
+/// <summary>
+/// Reads one Chromium profile's extensions (Chrome, Edge, Brave, Vivaldi, Opera) for Browser Cleaner's Extensions
+/// view (#1526). Read-only: nothing in the profile is changed.
+/// </summary>
+/// <remarks>
+/// Two sources, as the browser keeps them. Each extension has a folder under the profile's <c>Extensions</c>, with
+/// one subfolder per version holding its <c>manifest.json</c>: its name, version, icon and what it asks for. The
+/// profile's <c>Secure Preferences</c> adds what the manifest cannot say: whether it is turned off, when it was
+/// first installed, and where it came from — a store, the organisation's policy, the browser itself, or another
+/// program on the PC. The settings are optional: when they cannot be read, each extension is still listed from its
+/// manifest, with nothing claimed about its origin. Extensions built into the browser (the component ones) have no
+/// folder in the profile and are not listed, as the browser's own extensions page does not list them either; one
+/// loaded from a folder elsewhere on the PC is found through the settings, which record its path.
+/// </remarks>
+internal static class ChromiumExtensionReader
+{
+    /// <summary>What the list calls an extension whose name could not be read from its files.</summary>
+    internal const string UnreadableName = "An extension whose name could not be read";
+
+    /// <summary>The settings Chromium keeps per extension, as far as the list uses them.</summary>
+    private sealed record Settings(int? Location, bool FromWebstore, bool CameWithBrowser, bool IsOff,
+        DateTime? InstalledOn, string? Path);
+
+    /// <summary>
+    /// The profile's extensions, and whether the list could not be read. A profile with no <c>Extensions</c> folder
+    /// has none, which is not a failure.
+    /// </summary>
+    /// <param name="culture">The language names are looked up in first; the extension's own default after that.</param>
+    internal static (IReadOnlyList<BrowserExtension> Extensions, bool CouldNotRead) Read(string profileDir, CultureInfo culture)
+    {
+        var settings = ReadSettings(profileDir);
+        List<BrowserExtension> found = [];
+
+        var extensionsDir = System.IO.Path.Combine(profileDir, "Extensions");
+        if (Directory.Exists(extensionsDir) && !SafeFileWalk.IsReparsePoint(extensionsDir))
+        {
+            string[] folders;
+            try { folders = Directory.GetDirectories(extensionsDir); }
+            catch (IOException) { return ([], true); }
+            catch (UnauthorizedAccessException) { return ([], true); }
+
+            foreach (var folder in folders)
+            {
+                var id = System.IO.Path.GetFileName(folder);
+                if (!IsExtensionId(id) || SafeFileWalk.IsReparsePoint(folder)) continue;
+                if (NewestVersionFolder(folder) is not { } versionDir) continue;
+                settings.TryGetValue(id, out var own);
+                if (FromManifest(versionDir, own, culture) is { } extension) found.Add(extension);
+            }
+        }
+        else if (File.Exists(extensionsDir))
+        {
+            // Something that is not a folder where the list should be: the browser could not use it either.
+            return ([], true);
+        }
+
+        // An extension loaded from a folder elsewhere on the PC is not under Extensions; its settings name the folder.
+        foreach (var own in settings.Values)
+        {
+            if (own.Location is not (LocationUnpacked or LocationCommandLine)) continue;
+            if (own.Path is not { Length: > 0 } path || !System.IO.Path.IsPathRooted(path)) continue;
+            if (!Directory.Exists(path) || SafeFileWalk.IsReparsePoint(path)) continue;
+            if (FromManifest(path, own, culture) is { } extension) found.Add(extension);
+        }
+
+        return (found, false);
+    }
+
+    // Chromium's ManifestLocation values (extensions/common/mojom/manifest.mojom), as Secure Preferences stores them.
+    private const int LocationInternal = 1;
+    private const int LocationExternalPref = 2;
+    private const int LocationExternalRegistry = 3;
+    private const int LocationUnpacked = 4;
+    private const int LocationComponent = 5;
+    private const int LocationExternalPrefDownload = 6;
+    private const int LocationExternalPolicyDownload = 7;
+    private const int LocationCommandLine = 8;
+    private const int LocationExternalPolicy = 9;
+    private const int LocationExternalComponent = 10;
+
+    /// <summary>
+    /// Where an extension came from, from what the browser recorded. Pure and internal so each location is
+    /// unit-tested without a profile.
+    /// </summary>
+    internal static ExtensionOrigin OriginOf(int? location, bool fromWebstore, bool cameWithBrowser) =>
+        cameWithBrowser ? ExtensionOrigin.Browser : location switch
+        {
+            LocationInternal => fromWebstore ? ExtensionOrigin.Store : ExtensionOrigin.File,
+            LocationExternalPref or LocationExternalRegistry or LocationExternalPrefDownload => ExtensionOrigin.AnotherProgram,
+            LocationExternalPolicyDownload or LocationExternalPolicy => ExtensionOrigin.Organisation,
+            LocationComponent or LocationExternalComponent => ExtensionOrigin.Browser,
+            LocationUnpacked or LocationCommandLine => ExtensionOrigin.Folder,
+            _ => ExtensionOrigin.Unknown,
+        };
+
+    /// <summary>The 32 letters a to p Chromium names an extension's folder with; anything else there is not one.</summary>
+    internal static bool IsExtensionId(string name) =>
+        name.Length == 32 && name.All(c => c is >= 'a' and <= 'p');
+
+    /// <summary>
+    /// The newest of an extension's version folders, compared number by number (<c>10.0_0</c> is newer than
+    /// <c>9.1_0</c>), among those that hold a manifest. Null when none does.
+    /// </summary>
+    internal static string? NewestVersionFolder(string extensionFolder)
+    {
+        string[] versions;
+        try { versions = Directory.GetDirectories(extensionFolder); }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+
+        return versions
+            .Where(v => !SafeFileWalk.IsReparsePoint(v) && File.Exists(System.IO.Path.Combine(v, "manifest.json")))
+            .OrderByDescending(v => VersionParts(System.IO.Path.GetFileName(v)), VersionComparer.Instance)
+            .FirstOrDefault();
+    }
+
+    private static long[] VersionParts(string name) =>
+        [.. name.Split('.', '_').Select(p => long.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : -1)];
+
+    private sealed class VersionComparer : IComparer<long[]>
+    {
+        internal static readonly VersionComparer Instance = new();
+
+        public int Compare(long[]? x, long[]? y)
+        {
+            x ??= []; y ??= [];
+            for (var i = 0; i < Math.Max(x.Length, y.Length); i++)
+            {
+                var a = i < x.Length ? x[i] : 0;
+                var b = i < y.Length ? y[i] : 0;
+                if (a != b) return a.CompareTo(b);
+            }
+            return 0;
+        }
+    }
+
+    /// <summary>One extension from the manifest in <paramref name="folder"/>, with its settings when they were read.</summary>
+    private static BrowserExtension? FromManifest(string folder, Settings? settings, CultureInfo culture)
+    {
+        using var manifest = ExtensionFiles.Parse(
+            ExtensionFiles.Read(System.IO.Path.Combine(folder, "manifest.json"), ExtensionFiles.MaxManifestBytes));
+        if (manifest?.RootElement is not { ValueKind: JsonValueKind.Object } root) return null;
+
+        // A name that cannot be looked up still lists the extension: leaving it out would hide exactly what the list
+        // is for.
+        var name = Localised(folder, root, ExtensionFiles.String(root, "name"), culture)
+                   ?? Localised(folder, root, ExtensionFiles.String(root, "short_name"), culture);
+        if (string.IsNullOrWhiteSpace(name)) name = UnreadableName;
+        var version = ExtensionFiles.String(root, "version_name") ?? ExtensionFiles.String(root, "version") ?? "";
+
+        var overrides = root.TryGetProperty("chrome_settings_overrides", out var o) ? o : default;
+        var urlOverrides = root.TryGetProperty("chrome_url_overrides", out var u) ? u : default;
+        var (lines, everySite) = ExtensionPermissions.Describe(new(
+            Permissions: ExtensionFiles.Strings(root, "permissions"),
+            Sites: ExtensionFiles.Strings(root, "host_permissions").Concat(ContentScriptMatches(root)),
+            ChangesSearch: Has(overrides, "search_provider"),
+            ReplacesHomePage: Has(overrides, "homepage"),
+            ReplacesNewTab: Has(urlOverrides, "newtab"),
+            ChangesStartupPages: Has(overrides, "startup_pages")));
+
+        var icon = root.TryGetProperty("icons", out var icons) && ExtensionFiles.PickIcon(icons) is { } iconPath
+                   && ExtensionFiles.Inside(folder, iconPath) is { } iconFile
+            ? ExtensionFiles.Read(iconFile, ExtensionFiles.MaxIconBytes)
+            : null;
+
+        var origin = settings is null
+            ? ExtensionOrigin.Unknown
+            : OriginOf(settings.Location, settings.FromWebstore, settings.CameWithBrowser);
+        var fromStore = settings?.FromWebstore ?? false;
+        return new BrowserExtension(
+            Name: name.Trim(),
+            Version: version,
+            Origin: origin,
+            IsOff: settings?.IsOff ?? false,
+            InstalledOn: settings?.InstalledOn,
+            Store: fromStore ? StoreOf(ExtensionFiles.String(root, "update_url")) : "",
+            Permissions: lines,
+            CanReadEverySite: everySite,
+            IconBytes: icon);
+    }
+
+    private static bool Has(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
+        && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
+
+    private static IEnumerable<string> ContentScriptMatches(JsonElement root)
+    {
+        if (!root.TryGetProperty("content_scripts", out var scripts) || scripts.ValueKind != JsonValueKind.Array)
+            yield break;
+        foreach (var script in scripts.EnumerateArray())
+        {
+            foreach (var match in ExtensionFiles.Strings(script, "matches")) yield return match;
+        }
+    }
+
+    /// <summary>
+    /// The store an extension's updates come from, by its update address: the Chrome Web Store, Microsoft Edge
+    /// Add-ons or Opera's. An address the list does not know is "an extension store".
+    /// </summary>
+    internal static string StoreOf(string? updateUrl)
+    {
+        if (!Uri.TryCreate(updateUrl, UriKind.Absolute, out var uri)) return "an extension store";
+        var host = uri.Host;
+        if (host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase)) return "the Chrome Web Store";
+        if (host.EndsWith("microsoft.com", StringComparison.OrdinalIgnoreCase)) return "Microsoft Edge Add-ons";
+        if (host.EndsWith("opera.com", StringComparison.OrdinalIgnoreCase)) return "Opera add-ons";
+        return "an extension store";
+    }
+
+    /// <summary>
+    /// The name to show: the manifest's own, or, for one written as <c>__MSG_key__</c>, the message from the
+    /// extension's translation files — the user's language first, then its language without the region, then the
+    /// extension's default. Keys are matched without regard to case, as the browser does.
+    /// </summary>
+    internal static string? Localised(string folder, JsonElement root, string? name, CultureInfo culture)
+    {
+        if (name is null || !name.StartsWith("__MSG_", StringComparison.Ordinal) || !name.EndsWith("__", StringComparison.Ordinal)
+            || name.Length <= 8)
+        {
+            return name;
+        }
+        var key = name[6..^2];
+        var defaultLocale = ExtensionFiles.String(root, "default_locale");
+        string[] locales = [culture.Name.Replace('-', '_'), culture.TwoLetterISOLanguageName, defaultLocale ?? ""];
+        foreach (var locale in locales.Where(l => l.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (ExtensionFiles.Inside(folder, $"_locales/{locale}/messages.json") is not { } file) continue;
+            using var messages = ExtensionFiles.Parse(ExtensionFiles.Read(file, ExtensionFiles.MaxManifestBytes));
+            if (messages?.RootElement is not { ValueKind: JsonValueKind.Object } table) continue;
+            foreach (var entry in table.EnumerateObject())
+            {
+                if (string.Equals(entry.Name, key, StringComparison.OrdinalIgnoreCase)
+                    && ExtensionFiles.String(entry.Value, "message") is { Length: > 0 } message)
+                {
+                    return message;
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The profile's per-extension settings by id, from <c>Secure Preferences</c> (or <c>Preferences</c>, where
+    /// older and other Chromium builds keep them). Empty when neither can be read.
+    /// </summary>
+    private static Dictionary<string, Settings> ReadSettings(string profileDir)
+    {
+        foreach (var file in new[] { "Secure Preferences", "Preferences" })
+        {
+            using var document = ExtensionFiles.Parse(
+                ExtensionFiles.Read(System.IO.Path.Combine(profileDir, file), ExtensionFiles.MaxSettingsBytes));
+            if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
+                || !root.TryGetProperty("extensions", out var extensions)
+                || extensions.ValueKind != JsonValueKind.Object
+                || !extensions.TryGetProperty("settings", out var settings)
+                || settings.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var byId = new Dictionary<string, Settings>(StringComparer.Ordinal);
+            foreach (var entry in settings.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                var s = entry.Value;
+                byId[entry.Name] = new Settings(
+                    Location: s.TryGetProperty("location", out var l) && l.TryGetInt32(out var location) ? location : null,
+                    FromWebstore: ExtensionFiles.Bool(s, "from_webstore") ?? false,
+                    CameWithBrowser: (ExtensionFiles.Bool(s, "was_installed_by_default") ?? false)
+                                     || (ExtensionFiles.Bool(s, "was_installed_by_oem") ?? false),
+                    IsOff: IsOff(s),
+                    InstalledOn: InstallTime(s),
+                    Path: ExtensionFiles.String(s, "path"));
+            }
+            if (byId.Count > 0) return byId;
+        }
+        return [];
+    }
+
+    /// <summary>
+    /// Whether the browser keeps an extension turned off: any reason to disable it, as a list (current builds) or a
+    /// bit mask (older ones), or the old <c>state</c> of 0.
+    /// </summary>
+    private static bool IsOff(JsonElement settings)
+    {
+        if (settings.TryGetProperty("disable_reasons", out var reasons))
+        {
+            if (reasons.ValueKind == JsonValueKind.Array) return reasons.GetArrayLength() > 0;
+            if (reasons.ValueKind == JsonValueKind.Number && reasons.TryGetInt64(out var mask)) return mask != 0;
+        }
+        return settings.TryGetProperty("state", out var state) && state.TryGetInt32(out var value) && value == 0;
+    }
+
+    /// <summary>
+    /// When the extension was first installed. Chromium writes the time as a string of microseconds since 1601 (the
+    /// Windows file-time origin), so it converts exactly.
+    /// </summary>
+    internal static DateTime? InstallTime(JsonElement settings)
+    {
+        foreach (var name in new[] { "first_install_time", "install_time" })
+        {
+            if (ExtensionFiles.String(settings, name) is { } text
+                && long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var microseconds)
+                && microseconds is > 0 and < MaxFileTimeMicroseconds)
+            {
+                return DateTime.FromFileTimeUtc(microseconds * 10);
+            }
+        }
+        return null;
+    }
+
+    // DateTime.MaxValue as a file time, in microseconds: anything past it is not a time.
+    private const long MaxFileTimeMicroseconds = 2_650_467_743_999_999_999 / 10;
+}

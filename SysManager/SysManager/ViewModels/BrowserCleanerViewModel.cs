@@ -12,22 +12,37 @@ using SysManager.Services;
 
 namespace SysManager.ViewModels;
 
+/// <summary>Which half of Browser Cleaner is on screen (#1526).</summary>
+public enum BrowserCleanerSection
+{
+    /// <summary>The cache, history, cookies and sessions the tab cleans.</summary>
+    BrowsingData = 0,
+
+    /// <summary>The extensions each browser has, listed and never changed.</summary>
+    Extensions,
+}
+
 /// <summary>
 /// ViewModel for the Browser Cleaner tab. Scans installed browsers for cleanable data
 /// (cache, history, cookies, sessions), shows the size of each, and removes the selected
 /// items after confirmation. Cookies/sessions are flagged and unselected by default so a
 /// clean never signs the user out by accident. Operates on per-user data — no admin needed.
+/// <para>Its second half, <see cref="BrowserCleanerSection.Extensions"/>, lists the extensions in every browser
+/// and profile the cleaner reads, says in plain words what each can do and where it came from, and hands the user
+/// to the browser's own page to remove one (#1526). It only reads: nothing in a browser is changed.</para>
 /// </summary>
-public sealed partial class BrowserCleanerViewModel : ViewModelBase
+public sealed partial class BrowserCleanerViewModel : ViewModelBase, ISearchDestination
 {
     /// <inheritdoc/>
-    protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
+    protected internal override IRelayCommand? RefreshOnF5 => IsExtensions ? ScanExtensionsCommand : ScanCommand;
 
     /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
         IsBusy ? CancelCommand : null;
 
     private readonly BrowserCleanerService _service;
+    private readonly IBrowserExtensionService _extensions;
+    private readonly Func<string, bool> _copyText;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<BrowserCleanupItem> Items { get; } = new();
@@ -35,9 +50,58 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
     [ObservableProperty] private bool _hasItems;
     [ObservableProperty] private string _totalSelectedDisplay = "";
 
-    public BrowserCleanerViewModel(BrowserCleanerService service)
+    /// <summary>The extensions, one group per browser profile that has any or could not be read.</summary>
+    public BulkObservableCollection<ExtensionGroupViewModel> ExtensionGroups { get; } = new();
+
+    /// <summary>Which half of the tab is on screen; the pills set it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBrowsingData), nameof(IsExtensions))]
+    private BrowserCleanerSection _section;
+
+    /// <summary>True once the user has looked for extensions, so "none found" is said only after looking.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNoExtensions), nameof(ShowExtensionsPrompt))]
+    private bool _hasLookedForExtensions;
+
+    /// <summary>
+    /// True when the last look has something to show: an extension, or a profile whose list could not be read.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNoExtensions))]
+    private bool _hasExtensions;
+
+    /// <summary>The toolbar's count, e.g. "12 extensions in 3 browsers · 1 was put there by another program".</summary>
+    [ObservableProperty] private string _extensionsSummary = "";
+
+    /// <summary>The "Browsing data" pill; checking it shows that half. Unchecking it leaves the section to the other pill.</summary>
+    public bool IsBrowsingData
+    {
+        get => Section == BrowserCleanerSection.BrowsingData;
+        set { if (value) Section = BrowserCleanerSection.BrowsingData; }
+    }
+
+    /// <summary>The "Extensions" pill.</summary>
+    public bool IsExtensions
+    {
+        get => Section == BrowserCleanerSection.Extensions;
+        set { if (value) Section = BrowserCleanerSection.Extensions; }
+    }
+
+    /// <summary>After a look that found nothing to list: the empty state says so.</summary>
+    public bool ShowNoExtensions => HasLookedForExtensions && !HasExtensions;
+
+    /// <summary>Before the first look: the empty state says what the button does.</summary>
+    public bool ShowExtensionsPrompt => !HasLookedForExtensions;
+
+    /// <summary>Builds the tab over the cleaner, the extension list and the clipboard, and starts the first scan.</summary>
+    /// <param name="extensions">Lists the extensions and opens a browser on its extensions page.</param>
+    /// <param name="copyText">Puts text on the clipboard and says whether it could; the real clipboard unless a test passes its own.</param>
+    public BrowserCleanerViewModel(BrowserCleanerService service, IBrowserExtensionService extensions,
+        Func<string, bool>? copyText = null)
     {
         _service = service;
+        _extensions = extensions;
+        _copyText = copyText ?? CopyToClipboard;
         StatusMessage = "Scanning installed browsers…";
         PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(ScanAsync);
@@ -51,7 +115,85 @@ public sealed partial class BrowserCleanerViewModel : ViewModelBase
         {
             ScanCommand.NotifyCanExecuteChanged();
             CleanCommand.NotifyCanExecuteChanged();
+            ScanExtensionsCommand.NotifyCanExecuteChanged();
         }
+    }
+
+    /// <summary>
+    /// The words that, typed into the sidebar search, mean the user is after an extension rather than her browsing
+    /// data — the ones the tab's search keywords carry for that reason.
+    /// </summary>
+    internal static readonly string[] ExtensionSearchWords = ["extension", "add-on", "addon", "search changed", "browser ads"];
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// "My searches go to some other site" is an extension far more often than it is the cache, so a search in the
+    /// user's own words opens the half that can show it.
+    /// </remarks>
+    public void ArriveFromSearch(string query)
+    {
+        if (ExtensionSearchWords.Any(w => query.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            Section = BrowserCleanerSection.Extensions;
+    }
+
+    /// <summary>
+    /// Lists every extension in every browser profile. Reading only: the browsers' own files are opened for
+    /// reading, shared, and nothing is written.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(NotBusy))]
+    private async Task ScanExtensionsAsync()
+    {
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = "Looking for extensions in every browser…";
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        try
+        {
+            var profiles = await _extensions.ScanAsync(_cts.Token).ConfigureAwait(true);
+            // The rows decode their icons, so they are built off this thread; each image is frozen for it.
+            var groups = await Task.Run(() => profiles
+                .Select(p => new ExtensionGroupViewModel(p, [.. p.Extensions.Select(ExtensionPresenter.Row)], Manage))
+                .ToList()).ConfigureAwait(true);
+
+            ExtensionGroups.ReplaceWith(groups);
+            // A group whose list could not be read still shows, with its note: an empty list is not "none".
+            HasExtensions = groups.Count > 0;
+            HasLookedForExtensions = true;
+            ExtensionsSummary = ExtensionPresenter.Summary(profiles);
+            StatusMessage = ExtensionsSummary.Length > 0
+                ? $"Found {ExtensionsSummary}."
+                : groups.Count > 0
+                    ? "No extensions could be listed: a browser's list could not be read."
+                    : "No extensions found in any browser on this PC.";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
+    }
+
+    /// <summary>
+    /// "Manage in …": starts the profile's browser on its extensions page and puts the page's address on the
+    /// clipboard, because whether the browser opened that page cannot be seen from here.
+    /// </summary>
+    private void Manage(ExtensionProfile profile)
+    {
+        var opening = _extensions.OpenExtensionsPage(profile);
+        var copied = _copyText(profile.Page);
+        StatusMessage = ExtensionPresenter.ManageStatus(profile, opening, copied);
+    }
+
+    private static bool CopyToClipboard(string text)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            return true;
+        }
+        catch (System.Runtime.InteropServices.ExternalException) { return false; }
     }
 
     /// <summary>

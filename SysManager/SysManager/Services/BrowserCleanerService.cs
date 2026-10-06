@@ -22,11 +22,13 @@ public sealed class BrowserCleanerService
 {
     private readonly string _localAppData;
     private readonly string _roamingAppData;
+    private readonly BrowserProfiles _profiles;
 
     public BrowserCleanerService(string? localAppData = null, string? roamingAppData = null)
     {
         _localAppData = localAppData ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         _roamingAppData = roamingAppData ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        _profiles = new BrowserProfiles(_localAppData, _roamingAppData);
     }
 
     private sealed record Def(string Browser, string Category, string Description, bool Sensitive, string[] RelativePaths, bool Roaming = false);
@@ -37,7 +39,7 @@ public sealed class BrowserCleanerService
     // (personal + work, or one per family member) was never scanned, never sized and never cleaned —
     // the tab reported a total that understated the real reclaimable space, and someone clearing
     // "browsing traces" kept every trace in their other profile. Profiles are now enumerated at scan
-    // time, exactly as Firefox's already were (see FirefoxProfileFolders).
+    // time, exactly as Firefox's already were (see BrowserProfiles).
     private static Def[] ChromiumDefs(string browser, string userDataRel, string profileRel, string profileLabel) =>
     [
         new(browser, "Cache", $"Cached images and files{profileLabel}.", false,
@@ -51,89 +53,16 @@ public sealed class BrowserCleanerService
     ];
 
     /// <summary>
-    /// One <see cref="Def"/> set per Chromium profile that actually exists on disk.
-    /// <para>
-    /// Only "Default" and "Profile N" directories are considered — Chromium keeps plenty of other
-    /// folders under <c>User Data</c> (<c>Crashpad</c>, <c>ShaderCache</c>, <c>System Profile</c>, …)
-    /// and none of them are user profiles, so matching every subdirectory would point a delete at
-    /// paths this tab never advertised. Reparse points are skipped and enumeration failures are
-    /// swallowed, matching <see cref="FirefoxProfileFolders"/>.
-    /// </para>
-    /// <para>
-    /// When the browser is not installed this yields nothing, so no rows appear — the same outcome as
-    /// before, since ScanAsync already omits paths that do not exist.
-    /// </para>
+    /// One <see cref="Def"/> set per Chromium profile that actually exists on disk, found by
+    /// <see cref="BrowserProfiles.ChromiumProfiles"/> — the same walk the extension list uses (#1526). When the
+    /// browser is not installed this yields nothing, so no rows appear.
     /// </summary>
     private IEnumerable<Def> ExpandChromiumDefs(string browser, string userDataRel)
     {
-        var userDataAbs = Path.Combine(_localAppData, userDataRel);
-        if (!Directory.Exists(userDataAbs) || SafeFileWalk.IsReparsePoint(userDataAbs)) yield break;
-
-        string[] candidates;
-        try { candidates = Directory.GetDirectories(userDataAbs); }
-        catch (IOException) { yield break; }
-        catch (UnauthorizedAccessException) { yield break; }
-
-        // "Default" first, then Profile 1, Profile 2, … so the grid reads in a stable, predictable
-        // order instead of whatever order the filesystem returned.
-        foreach (var dir in candidates
-                     .Select(Path.GetFileName)
-                     .Where(name => !string.IsNullOrEmpty(name) && IsProfileFolder(name!))
-                     .OrderBy(name => IsDefaultProfile(name!) ? 0 : 1)
-                     .ThenBy(name => name, StringComparer.OrdinalIgnoreCase))
-        {
-            if (SafeFileWalk.IsReparsePoint(Path.Combine(userDataAbs, dir!))) continue;
-
-            // Name the profile in the Browser column so the user can see WHICH Chrome is being
-            // cleaned — the thing a flat "Google Chrome" checkbox in other cleaners never tells her.
-            // The default profile stays unlabelled, so the common single-profile case reads exactly
-            // as it did before and no existing row text changes.
-            var isDefault = IsDefaultProfile(dir!);
-            var displayName = isDefault ? browser : $"{browser} — {dir}";
-            var label = isDefault ? string.Empty : $" in {dir}";
-            foreach (var def in ChromiumDefs(displayName, userDataRel, $@"{userDataRel}\{dir}", label))
+        foreach (var (dir, display, label) in _profiles.ChromiumProfiles(browser, userDataRel))
+            foreach (var def in ChromiumDefs(display, userDataRel, $@"{userDataRel}\{dir}", label))
                 yield return def;
-        }
     }
-
-    private static bool IsDefaultProfile(string name) =>
-        string.Equals(name, "Default", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// True for "Default" and "Profile N" (N a positive integer) — the only directory names Chromium
-    /// uses for user profiles.
-    /// </summary>
-    private static bool IsProfileFolder(string name)
-    {
-        if (IsDefaultProfile(name)) return true;
-        if (!name.StartsWith("Profile ", StringComparison.OrdinalIgnoreCase)) return false;
-
-        var suffix = name["Profile ".Length..];
-        return suffix.Length > 0 && suffix.All(char.IsAsciiDigit);
-    }
-
-    /// <summary>
-    /// Every Opera channel, as the folder it keeps its profile in and the name the Browser column shows.
-    /// </summary>
-    /// <remarks>
-    /// Opera installs its channels side by side under one <c>Opera Software</c> parent, and each is a
-    /// separate product with its own profile — not a profile of another, which is why each gets its own
-    /// Browser name rather than the "— <c>profile</c>" suffix a second Chromium profile gets.
-    /// <para>Opera GX is the reason this is a list at all: it is the build made for gamers, so it is the
-    /// likeliest Opera on the machine of the user this tab's Ping-preset audience describes, and the
-    /// channel folder was hard-coded to Stable — so a GX user's cache was invisible to the tab. Beta and
-    /// Developer are the same shape and included for completeness; a channel that is not installed costs
-    /// nothing, since <see cref="ScanAsync"/> already drops paths that do not exist.</para>
-    /// <para>Stable keeps the bare name "Opera" so every row an existing user already sees reads exactly
-    /// as it did before.</para>
-    /// </remarks>
-    private static readonly (string Folder, string Browser)[] OperaChannels =
-    [
-        ("Opera Stable", "Opera"),
-        ("Opera GX Stable", "Opera GX"),
-        ("Opera Beta", "Opera Beta"),
-        ("Opera Developer", "Opera Developer"),
-    ];
 
     // Opera is Chromium-based but does NOT use a "\Default\" profile segment: the profile lives
     // directly under "Opera Software\<channel>". It also splits its data across two roots — the
@@ -165,25 +94,21 @@ public sealed class BrowserCleanerService
         List<Def> defs = [];
         // Each Chromium browser can hold several profiles; every one that exists on disk is expanded
         // at scan time so a second profile's data is no longer invisible to this tab.
-        defs.AddRange(ExpandChromiumDefs("Google Chrome", @"Google\Chrome\User Data"));
-        defs.AddRange(ExpandChromiumDefs("Microsoft Edge", @"Microsoft\Edge\User Data"));
-        defs.AddRange(ExpandChromiumDefs("Brave", @"BraveSoftware\Brave-Browser\User Data"));
-        // Vivaldi is plain Chromium with the standard "User Data\<profile>" layout, so it needs no
-        // special case of its own — the same expansion that finds a second Chrome profile finds it.
-        defs.AddRange(ExpandChromiumDefs("Vivaldi", @"Vivaldi\User Data"));
+        foreach (var (browser, userDataRel) in BrowserProfiles.Chromium)
+            defs.AddRange(ExpandChromiumDefs(browser, userDataRel));
         // Opera is the exception in the family (no "\Default\" segment, two roots), and it ships
         // several channels side by side — Opera GX among them. One Def set per channel.
-        foreach (var (folder, browser) in OperaChannels)
+        foreach (var (folder, browser) in BrowserProfiles.OperaChannels)
             defs.AddRange(OperaDefs(folder, browser));
         // Firefox keeps profiles in roaming AppData, but the cache lives under LocalAppData
         // in per-profile "<profile>\cache2" folders. We target the cache2 subfolders only —
         // never the Profiles root, which holds prefs.js, logins.json, key4.db and bookmarks.
         // The exact profile folder name is machine-specific, so the profiles are resolved at
-        // scan time (see FirefoxProfiles), which also decides the name each one's rows carry.
-        var firefoxProfiles = FirefoxProfiles();
+        // scan time (see BrowserProfiles.FirefoxProfiles), which also decides the name each one's rows carry.
+        var firefoxProfiles = _profiles.FirefoxProfiles();
         foreach (var (folder, display, label) in firefoxProfiles)
             defs.Add(new(display, "Cache", $"Cached images and files{label}.", false,
-                [Path.Combine(FirefoxProfilesRel, folder, "cache2")]));
+                [Path.Combine(BrowserProfiles.FirefoxProfilesRel, folder, "cache2")]));
         // Cookies and Sessions live under the ROAMING profile. Until now Firefox got a Cache row and
         // nothing else, so a Firefox user clearing "browsing traces" cleared none of them, while the
         // tab's header promised parity with the Chromium browsers. History is deliberately NOT offered:
@@ -198,7 +123,7 @@ public sealed class BrowserCleanerService
     /// One Cookies def and one Sessions def per Firefox profile, targeting SPECIFIC named files under
     /// the roaming profile — never the profile root, which holds <c>logins.json</c>, <c>key4.db</c>,
     /// <c>prefs.js</c> and <c>places.sqlite</c> (history AND bookmarks). Same safety invariant as
-    /// <see cref="FirefoxProfileFolders"/>, and the same roaming split Opera already uses.
+    /// <see cref="BrowserProfiles.FirefoxProfiles"/>, and the same roaming split Opera already uses.
     /// <para>Sensitive on both, so they are unticked by default and carry the "signs you out" badge, the
     /// same treatment the Chromium Cookies/Sessions rows get. History is intentionally absent — see
     /// <see cref="BuildDefs"/>.</para>
@@ -207,7 +132,7 @@ public sealed class BrowserCleanerService
     {
         foreach (var (folder, display, label) in profiles)
         {
-            var profileRel = Path.Combine(FirefoxProfilesRel, folder);
+            var profileRel = Path.Combine(BrowserProfiles.FirefoxProfilesRel, folder);
 
             // Cookies: the sqlite database and its write-ahead/shared-memory sidecars. Named files
             // only — the profile root is never a target.
@@ -223,123 +148,6 @@ public sealed class BrowserCleanerService
                 [Path.Combine(profileRel, "sessionstore.jsonlz4"),
                  Path.Combine(profileRel, "sessionstore-backups")], Roaming: true);
         }
-    }
-
-    private const string FirefoxProfilesRel = @"Mozilla\Firefox\Profiles";
-
-    /// <summary>
-    /// Every Firefox profile on disk: the folder it lives in, the name the Browser column shows for it,
-    /// and the suffix its descriptions carry — the same three pieces <see cref="ExpandChromiumDefs"/>
-    /// builds for a Chromium profile, so the two families read alike in the grid.
-    /// </summary>
-    /// <remarks>
-    /// Firefox salts its profile folders (<c>8char.default-release</c>) and the salt means nothing to the
-    /// user, so the readable half is what the row shows: <c>Firefox — dev-edition</c>. The release default
-    /// keeps the bare name "Firefox", so the single-profile case — every existing user — reads exactly as
-    /// it did before.
-    /// <para>The name is the row's IDENTITY, not decoration: <c>BrowserCleanerViewModel</c> carries ticks
-    /// across a rescan keyed on (Browser, Category), so two rows sharing a name means one profile's choice
-    /// is applied to the other (see <c>SelectionCarry</c>). Every case that could produce a duplicate is
-    /// therefore resolved here rather than left to chance — a legacy <c>.default</c> sitting beside a
-    /// <c>.default-release</c> does not also claim the bare name, and two profiles sharing a readable half
-    /// keep their salt to stay apart.</para>
-    /// </remarks>
-    private (string Folder, string Display, string Label)[] FirefoxProfiles()
-    {
-        const string browser = "Firefox";
-        var folders = FirefoxProfileFolders();
-        if (folders.Length == 0) return [];
-
-        // One profile may own the bare name: the release default, or a legacy ".default" when that is all
-        // there is. If two folders tie for it, neither takes it — an ambiguous bare name would be the very
-        // collision this naming exists to prevent.
-        var bestRank = folders.Min(f => FirefoxDefaultRank(FirefoxProfileLabel(f)));
-        var contenders = folders.Where(f => FirefoxDefaultRank(FirefoxProfileLabel(f)) == bestRank).ToArray();
-        var defaultFolder = bestRank < NotADefaultProfile && contenders.Length == 1 ? contenders[0] : null;
-
-        // A readable half only survives as the name while it is unique among the rest.
-        var shared = folders
-            .Where(f => !IsSameFolder(f, defaultFolder))
-            .GroupBy(FirefoxProfileLabel, StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // Default first, then alphabetical, so the grid reads in a stable order however the filesystem
-        // returned the folders — the ordering ExpandChromiumDefs already applies.
-        return [.. folders
-            .OrderBy(f => IsSameFolder(f, defaultFolder) ? 0 : 1)
-            .ThenBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .Select(Resolve)];
-
-        (string, string, string) Resolve(string folder)
-        {
-            if (IsSameFolder(folder, defaultFolder)) return (folder, browser, string.Empty);
-            var label = FirefoxProfileLabel(folder);
-            var shown = shared.Contains(label) ? folder : label;
-            return (folder, $"{browser} — {shown}", $" in {shown}");
-        }
-    }
-
-    private static bool IsSameFolder(string folder, string? other) =>
-        string.Equals(folder, other, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// The readable half of a salted Firefox profile folder: <c>8char.dev-edition</c> → <c>dev-edition</c>.
-    /// A folder with no salt (or nothing after the dot) is its own label.
-    /// </summary>
-    private static string FirefoxProfileLabel(string folder)
-    {
-        var dot = folder.IndexOf('.');
-        return dot >= 0 && dot < folder.Length - 1 ? folder[(dot + 1)..] : folder;
-    }
-
-    private const int NotADefaultProfile = 2;
-
-    /// <summary>
-    /// How strong a claim a profile has on the bare name "Firefox". Modern Firefox uses
-    /// <c>.default-release</c>; <c>.default</c> is the pre-67 name and often survives as a leftover
-    /// beside it, so it ranks below rather than tying with it.
-    /// </summary>
-    private static int FirefoxDefaultRank(string label) =>
-        string.Equals(label, "default-release", StringComparison.OrdinalIgnoreCase) ? 0
-        : string.Equals(label, "default", StringComparison.OrdinalIgnoreCase) ? 1
-        : NotADefaultProfile;
-
-    /// <summary>
-    /// Every Firefox profile folder NAME found under either root, de-duplicated. Reparse points are
-    /// skipped and enumeration failures are swallowed, matching <see cref="ExpandChromiumDefs"/>. Empty
-    /// when Firefox isn't installed, so no rows appear. Never returns the Profiles root itself, so a
-    /// clean can only ever touch the named targets, never saved logins/bookmarks/prefs.
-    /// </summary>
-    /// <remarks>
-    /// BOTH roots are read because Firefox splits one profile across them — <c>cache2</c> under
-    /// LocalAppData, cookies and sessions under Roaming — and the name a profile shows must not depend on
-    /// which root it happened to turn up in, or a single profile's rows would split across two names.
-    /// A folder that exists in only one root still yields defs for both; <see cref="ScanAsync"/> drops the
-    /// paths that do not exist, exactly as it does for a browser that is not installed.
-    /// </remarks>
-    private string[] FirefoxProfileFolders()
-    {
-        List<string> folders = [];
-        string[] roots = [_localAppData, _roamingAppData];
-        foreach (var root in roots)
-        {
-            var profilesAbs = Path.Combine(root, FirefoxProfilesRel);
-            if (!Directory.Exists(profilesAbs) || SafeFileWalk.IsReparsePoint(profilesAbs)) continue;
-
-            string[] profileDirs;
-            try { profileDirs = Directory.GetDirectories(profilesAbs); }
-            catch (IOException) { continue; }
-            catch (UnauthorizedAccessException) { continue; }
-
-            folders.AddRange(profileDirs
-                .Select(Path.GetFileName)
-                .Where(name => !string.IsNullOrEmpty(name))
-                .Select(name => name!));
-        }
-
-        return [.. folders.Distinct(StringComparer.OrdinalIgnoreCase)];
     }
 
     private string Root(bool roaming) => roaming ? _roamingAppData : _localAppData;

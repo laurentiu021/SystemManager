@@ -266,7 +266,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). The game target carries the listed start time, the selection survives a refresh only for the same process, and a game that had closed is refused with a refresh of the list (#2559). A game that closed while game mode was starting is reported, with anything that could not be restored, and the list is refreshed (#2563). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's config as a portable JSON profile with selective sections and version checking. The file sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. A tenth section, the Privacy & Telemetry choices, is listed once a protection is on. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files and the toggles at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session. Import writes the file sections only; the privacy choices are read by `ProfileService.ReadPrivacyChoices`, left in `IPrivacyChoicesHandoff`, and the user is taken to the Privacy & Telemetry tab through `INavigationService` to review them (#1530).
 - `DebloaterViewModel` — list and remove preinstalled Store apps with a curated bloat preset; system-critical packages are denylisted; removal is per-user and reversible via the Store. Takes the shared `ISessionRestorePoint` snapshot before the first removal, and words it honestly: System Restore does not bring Appx packages back, so the Store reinstall leads and the point is described as covering the rest of the system.
-- `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked.
+- `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked. Its second half, switched with the same pills as Privacy & Telemetry's grouping, is the Extensions view (#1526): "Look for extensions" runs `IBrowserExtensionService.ScanAsync`, builds one `ExtensionGroupViewModel` per profile (rows worded by `ExtensionPresenter`, icons decoded and frozen off the UI thread) and counts them in the toolbar; "Manage in …" opens the browser on its own extensions page and puts the page on the clipboard, since whether it opened cannot be seen, and while SysManager runs as administrator it starts nothing and says why. It never changes a browser. A sidebar search for "extensions", "add-ons" or "browser ads" opens this half (`ISearchDestination`), and F5 runs whichever half is shown.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions. `Describe` and `DescribeEmpty` name only the capabilities that were read; a read that got nothing keeps the previous list.
 - `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. A stored range is loaded through a function its internal constructor takes, so a test decides when the load finishes; a load that finishes after `Dispose` changes nothing, like a poll that does. The poll writes its app count through `ViewModelBase.ShowRefreshStatus`, so an export, a refusal or a loaded range stays on the status line. Read-only.
@@ -279,11 +279,12 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-two are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-three are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
-history), `ICleanupPreScanService`, `IContextMenuService`,
+history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
+`ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
@@ -302,7 +303,8 @@ narrowed to the service that slowed boot. This replaced a
 `Application.Current.MainWindow.DataContext as MainWindowViewModel` lookup in `DashboardViewModel`;
 `NoViewModelReachesTheShellThroughTheLiveWindow` stops that returning.
 A tab opened from the sidebar search that implements `ISearchDestination` is told what was searched for,
-which is how a search for "tweaks" opens Privacy & Telemetry grouped by reach (#1517).
+which is how a search for "tweaks" opens Privacy & Telemetry grouped by reach (#1517), and one for
+"extensions" or "browser ads" opens Browser Cleaner on its Extensions view (#1526).
 
 Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
@@ -900,6 +902,26 @@ Key services:
   suffix. A tie for the default yields no bare name at all. Uniqueness of `(Browser,
   Category)` is a contract, not a nicety — `BrowserCleanerViewModel` keys tick carry-forward
   on that pair, so two rows sharing it would apply one row's decision to the other.
+  Profile discovery lives in `BrowserProfiles`, shared with the extension list so both name a profile alike.
+- `BrowserProfiles` — every browser profile Browser Cleaner reads: each Chromium browser's `Default` and
+  `Profile N`, every Opera channel, each Firefox profile, and the name the tab shows for each.
+- `BrowserExtensionService` (`IBrowserExtensionService`) — the extensions in every profile `BrowserProfiles`
+  finds, ordered as the list shows them (added by another program, then those that can read every website,
+  then by name), and the command that opens a browser on its extensions page. Read-only. The data roots, the
+  launcher and the elevation check are injectable, and only a known browser, a known page and a real profile
+  folder name reach the command line. Nothing is started while SysManager runs as administrator: the browser
+  would run elevated too, and what `chrome.exe` resolves to is a per-user setting. Opera's channels share one
+  program name, so the list names their page instead.
+- `ChromiumExtensionReader` — one Chromium profile's extensions: each id folder's newest version's
+  `manifest.json` (name, with the translation lookup; version; icon; what it asks for) and the profile's
+  `Secure Preferences` (on or off, install date, and where it came from, from Chromium's install location).
+  Without the settings an extension is still listed, claiming nothing about its origin; one loaded from a
+  folder elsewhere is found through them. Built-in component extensions have no folder and are not listed.
+- `FirefoxExtensionReader` — one Firefox profile's extensions from `extensions.json`, with each `.xpi`
+  package read in memory for its icon and the pages it replaces. Themes, dictionaries, language packs and
+  hidden add-ons are left out; a profile without the file has none, one with an unreadable file says so.
+- `ExtensionFiles` — the bounded, fully shared reads and tolerant JSON parsing both readers use, and the
+  check that an extension's own path stays inside its folder.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
   per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is
@@ -1315,6 +1337,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
 - Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`,
   `ValueConverters` (boolean/visibility/inverse helpers).
+- `ExtensionPermissions` — turns what a browser extension asks for into the plain-language lines the
+  Extensions view shows, in a fixed order, amber for what changes what the user sees or reaches every
+  website. A permission it does not know is shown by its own name, never dropped (#1526).
 
 ## Dependency Injection
 
@@ -1367,8 +1392,9 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
   agree on a name: 12 distinct spellings bind to a refresh-shaped button, and two views bind
   two candidates each, so a convention-matching shell would have to guess. 41 tabs override
-  it, and the named command must begin with Refresh/Rescan/Reload/Scan/Load — which
-  mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
+  it — Browser Cleaner's returns the read of whichever half is on screen — and every command
+  it can return must begin with Refresh/Rescan/Reload/Scan/Load, which mechanically keeps
+  Clean, Delete, Apply and Uninstall off a bare keypress.
 
 `Ctrl+F` is the third, and takes no seam at all: `Helpers/FilterBoxes` walks the visual tree under
 `ContentHost` — the element the shell binds the live tab into — for the first `TextBox` whose `Text`

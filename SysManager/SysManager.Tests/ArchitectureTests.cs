@@ -650,9 +650,9 @@ public partial class ArchitectureTests
         Assert.NotEmpty(callLines);
 
         var f5Targets = F5Targets(appDir);
-        // 41 view models name an F5 command today. A parse that found almost none would report the commands it
-        // missed as unreachable, which reads as a broken tab rather than a broken check.
-        Assert.True(f5Targets.Count >= 38, $"only {f5Targets.Count} RefreshOnF5 overrides were parsed, out of 41 measured");
+        // 41 view models name an F5 command today, 42 commands between them. A parse that found almost none would
+        // report the commands it missed as unreachable, which reads as a broken tab rather than a broken check.
+        Assert.True(f5Targets.Count >= 38, $"only {f5Targets.Count} F5 commands were parsed, out of 42 measured");
 
         var unreachable = new List<string>();
 
@@ -2271,10 +2271,14 @@ public partial class ArchitectureTests
     private static partial Regex DeclarationLine();
 
     /// <summary>
-    /// <c>"AppAlertsViewModel.ScanForNewAppsCommand"</c> for each view model whose <c>RefreshOnF5</c> names a
-    /// command, the file name standing for the type, as the view models are laid out one per file. A type that
+    /// <c>"AppAlertsViewModel.ScanForNewAppsCommand"</c> for each command a view model's <c>RefreshOnF5</c> can
+    /// return, the file name standing for the type, as the view models are laid out one per file. A type that
     /// broke that layout would simply not be found, which makes the check stricter, not looser.
     /// </summary>
+    /// <remarks>
+    /// Every command in the expression, not only a lone one: Browser Cleaner's F5 returns the read of whichever
+    /// half is on screen, and reading only a single command dropped that tab from the set without a word.
+    /// </remarks>
     private static HashSet<string> F5Targets(string appDir)
     {
         var targets = new HashSet<string>(StringComparer.Ordinal);
@@ -2284,19 +2288,29 @@ public partial class ArchitectureTests
             foreach (var line in File.ReadLines(file))
             {
                 var m = F5Override().Match(line);
-                if (m.Success) targets.Add($"{viewModel}.{m.Groups["command"].Value}");
+                if (!m.Success) continue;
+                foreach (Match command in CommandName().Matches(m.Groups["expression"].Value))
+                    targets.Add($"{viewModel}.{command.Value}");
             }
         }
         return targets;
     }
 
     /// <summary>
-    /// A <c>RefreshOnF5</c> override that returns a command, every one of the 41 written on a single line. Anchored
-    /// at the start of the line, so a comment that quotes one is not mistaken for it.
+    /// A <c>RefreshOnF5</c> override, every one of the 41 written on a single line: a command, or a conditional
+    /// choosing between commands. Anchored at the start of the line, so a comment that quotes one is not
+    /// mistaken for it.
     /// </summary>
-    [GeneratedRegex(@"^\s*protected internal override IRelayCommand\? RefreshOnF5 => (?<command>\w+Command);",
+    [GeneratedRegex(@"^\s*protected internal override IRelayCommand\? RefreshOnF5 => (?<expression>[^;]+);",
         RegexOptions.CultureInvariant)]
     private static partial Regex F5Override();
+
+    /// <summary>
+    /// A whole <c>…Command</c> identifier. Delimited at both ends, so a longer name is never read as a shorter
+    /// one inside it.
+    /// </summary>
+    [GeneratedRegex(@"\b\w+Command\b", RegexOptions.CultureInvariant)]
+    private static partial Regex CommandName();
 
     /// <summary>Collapses the line breaks XAML allows inside an attribute value.</summary>
     [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
@@ -2669,6 +2683,11 @@ public partial class ArchitectureTests
         {
             ["ProcessDescriptions.json"] =
                 "an embedded resource read through GetManifestResourceStream — shipped data, never written",
+            // The extension list (#1526) reads the browsers' own files and writes none of them.
+            ["manifest.json"] =
+                "a browser extension's own manifest, read by the extension list and never written",
+            ["extensions.json"] =
+                "Firefox's own list of a profile's add-ons, read by the extension list and never written",
         };
 
         var services = Path.Combine(TestPaths.AppProject(), "Services");
@@ -2849,26 +2868,36 @@ public partial class ArchitectureTests
     /// is a sub-feature of the tab, and System Health's <c>RefreshDrivesAsync</c> only repopulates the
     /// chkdsk drive picker while <c>ScanAsync</c> is the "Collecting system info…" pass the tab exists for.
     /// Recording the choice here keeps it a decision rather than a gap.</para>
-    /// <para><b>Read-only only.</b> The named command must begin with Refresh, Rescan, Reload, Scan or Load,
-    /// which mechanically keeps Clean, Delete, Apply, Uninstall and Kill off a bare keypress. An accelerator
-    /// with no confirmation behind it is only acceptable while that holds.</para>
+    /// <para><b>One view's F5 follows what is on screen.</b> Browser Cleaner shows its browsing data or its
+    /// extensions, each with its own read — <c>ScanCommand</c> and <c>ScanExtensionsCommand</c> — and its
+    /// <c>RefreshOnF5</c> returns the one on screen. The table names both, and the override must name each.</para>
+    /// <para><b>Read-only only.</b> Every command the override names must begin with Refresh, Rescan, Reload,
+    /// Scan or Load, which mechanically keeps Clean, Delete, Apply, Uninstall and Kill off a bare keypress. An
+    /// accelerator with no confirmation behind it is only acceptable while that holds. EVERY command, not the
+    /// one looked for: this guard once checked only that the override contained the toolbar's command, so a
+    /// conditional's other branch could have run anything and passed.</para>
     /// </remarks>
     [Fact]
     public void EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand()
     {
         var app = TestPaths.AppProject();
-        var binding = new Regex(@"Command=""\{Binding ((?:Refresh|Rescan|Reload|Scan|Load)[A-Za-z]*Command)",
-            RegexOptions.CultureInvariant);
+        // One vocabulary for what the toolbar binds and for what F5 may run, so the two cannot drift.
+        const string read = "(?:Refresh|Rescan|Reload|Scan|Load)[A-Za-z]*Command";
+        var binding = new Regex(@"Command=""\{Binding (" + read + ")", RegexOptions.CultureInvariant);
+        var readOnly = new Regex("^" + read + "$", RegexOptions.CultureInvariant);
 
-        // Where a view offers more than one refresh-shaped command, which one F5 means. See the remarks.
-        var resolved = new Dictionary<string, string>(StringComparer.Ordinal)
+        // Where a view offers more than one refresh-shaped command, which F5 means — each of them, where F5
+        // follows what is on screen. See the remarks.
+        var resolved = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["DeepCleanupView"] = "ScanCommand",
-            ["SystemHealthView"] = "ScanCommand",
+            ["DeepCleanupView"] = ["ScanCommand"],
+            ["SystemHealthView"] = ["ScanCommand"],
+            ["BrowserCleanerView"] = ["ScanCommand", "ScanExtensionsCommand"],
         };
 
         var offenders = new List<string>();
         var wired = 0;
+        var named = 0;
 
         foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
                      .OrderBy(p => p, StringComparer.Ordinal))
@@ -2885,18 +2914,19 @@ public partial class ArchitectureTests
 
             var viewName = Path.GetFileNameWithoutExtension(view);
 
-            string command;
+            string[] commands;
             if (candidates.Count == 1)
             {
-                command = candidates[0];
+                commands = [candidates[0]];
             }
             else if (resolved.TryGetValue(viewName, out var chosen))
             {
-                command = chosen;
-                if (!candidates.Contains(chosen, StringComparer.Ordinal))
+                commands = chosen;
+                var gone = chosen.Where(c => !candidates.Contains(c, StringComparer.Ordinal)).ToList();
+                if (gone.Count > 0)
                 {
-                    offenders.Add($"{viewName}.xaml no longer binds {chosen}, which this guard names as its "
-                                  + $"F5 target — it binds {string.Join(", ", candidates)}");
+                    offenders.Add($"{viewName}.xaml no longer binds {string.Join(", ", gone)}, which this guard "
+                                  + $"names as its F5 target — it binds {string.Join(", ", candidates)}");
                     continue;
                 }
             }
@@ -2911,7 +2941,7 @@ public partial class ArchitectureTests
             var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
             if (!File.Exists(vmPath))
             {
-                offenders.Add($"{viewName}.xaml binds {command} but {viewName}Model.cs does not exist");
+                offenders.Add($"{viewName}.xaml binds {string.Join(", ", commands)} but {viewName}Model.cs does not exist");
                 continue;
             }
 
@@ -2922,19 +2952,29 @@ public partial class ArchitectureTests
             if (overrideAt < 0)
             {
                 offenders.Add($"{viewName}Model has no RefreshOnF5 override, so F5 does nothing on a tab "
-                              + $"whose own toolbar offers {command}");
+                              + $"whose own toolbar offers {string.Join(", ", commands)}");
                 continue;
             }
 
-            // The override's own expression: another member could mention the command and make this pass
-            // while F5 ran something else entirely.
+            // The override's own expression, after its arrow: another member could mention the command and make
+            // this pass while F5 ran something else entirely, and the declaration itself names IRelayCommand.
             var end = vm.IndexOf(';', overrideAt);
             var expression = end > overrideAt ? vm[overrideAt..end] : vm[overrideAt..];
+            var arrow = expression.IndexOf("=>", StringComparison.Ordinal);
+            var returned = CommandName().Matches(arrow >= 0 ? expression[(arrow + 2)..] : expression)
+                .Select(m => m.Value)
+                .ToList();
             wired++;
+            named += returned.Count;
 
-            if (!expression.Contains(command, StringComparison.Ordinal))
+            foreach (var command in commands.Where(c => !returned.Contains(c, StringComparer.Ordinal)))
                 offenders.Add($"{viewName}Model points F5 at something other than {command}, which is the "
                               + "command its own refresh button runs");
+
+            // Every command the override can return, not only the one looked for.
+            foreach (var other in returned.Where(c => !readOnly.IsMatch(c)))
+                offenders.Add($"{viewName}Model's F5 can run {other}, which is not named as a read — F5 may only "
+                              + "run a command that begins with Refresh, Rescan, Reload, Scan or Load");
         }
 
         // Vacuity floor: 40 tabs bind a refresh-shaped command today. A parse that stopped finding them
@@ -2942,6 +2982,11 @@ public partial class ArchitectureTests
         Assert.True(wired >= 38,
             $"only {wired} tabs were found wiring F5, out of 40 measured — the parse is broken, not the "
             + "views, and every check above ran over a short list.");
+        // And every one of them names at least the command it was checked for, so the read-only check ran over
+        // as many commands as there are tabs, at least.
+        Assert.True(named >= wired,
+            $"only {named} commands were read out of {wired} F5 overrides — the command parse is broken, so the "
+            + "read-only check above looked at nothing.");
 
         Assert.True(offenders.Count == 0,
             "F5 must re-read the tab the user is looking at, using the command its own refresh button "

@@ -223,6 +223,8 @@ public sealed class DiskTreemapTests
     [InlineData(0, 240)]
     [InlineData(39, 240)]
     [InlineData(940, 23)]
+    [InlineData(double.NaN, 240)]
+    [InlineData(940, double.PositiveInfinity)]
     public void BeforeTheMapHasRoomForOneName_ThereAreNoBlocks(double width, double height)
         => Assert.Empty(Build(Profile(), width, height));
 

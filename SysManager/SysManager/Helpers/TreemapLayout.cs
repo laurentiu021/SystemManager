@@ -40,8 +40,8 @@ internal static class TreemapLayout
 
         var rects = new Rect[weights.Count];
         for (var i = 0; i < rects.Length; i++) rects[i] = new Rect(bounds.X, bounds.Y, 0, 0);
-        if (total <= 0 || bounds.IsEmpty || !(bounds.Width > 0) || !(bounds.Height > 0)
-            || !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height)) return rects;
+        if (total <= 0 || bounds.IsEmpty || !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height)
+            || bounds.Width <= 0 || bounds.Height <= 0) return rects;
 
         // Weights become areas in the bounds' own units, so a row's thickness is its area over the side it runs along.
         var scale = bounds.Width * bounds.Height / total;

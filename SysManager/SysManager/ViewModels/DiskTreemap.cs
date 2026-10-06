@@ -87,7 +87,8 @@ public sealed partial class DiskTreemap : ObservableObject, IDisposable
         IReadOnlyList<DiskUsageEntry> entries, double width, double height, Color accent)
     {
         ArgumentNullException.ThrowIfNull(entries);
-        if (!(width >= MinBlockWidth) || !(height >= MinBlockHeight)) return [];
+        if (!double.IsFinite(width) || !double.IsFinite(height) || width < MinBlockWidth || height < MinBlockHeight)
+            return [];
 
         List<DiskUsageEntry> folders = [.. entries.Where(e => !IsLooseFiles(e) && e.SizeBytes > 0)
                                                   .OrderByDescending(e => e.SizeBytes)];
@@ -190,7 +191,7 @@ public sealed partial class DiskTreemap : ObservableObject, IDisposable
 
     /// <summary>A share of the folder as a whole percent, the way the list's bars are read.</summary>
     private static string Share(long size, double total) =>
-        Math.Round(size * 100 / total, MidpointRounding.AwayFromZero).ToString("F0", CultureInfo.InvariantCulture);
+        Math.Round(size * 100.0 / total, MidpointRounding.AwayFromZero).ToString("F0", CultureInfo.InvariantCulture);
 
     private static string Hex(Color c) => string.Create(CultureInfo.InvariantCulture, $"#{c.R:X2}{c.G:X2}{c.B:X2}");
 

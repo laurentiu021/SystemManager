@@ -361,6 +361,7 @@ public class ProfileServiceTests : IDisposable
     [InlineData("last-crash.json")]
     [InlineData("activity.json")]
     [InlineData("resource-history-config.json")]
+    [InlineData("disk-analyzer-preference.json")]   // one yes or no for the map; not worth a section of its own
     [InlineData("disk-scan-history.json")]   // folder paths + sizes on THIS disk; meaningless on another PC
     // A count of how many times the master toggle was written on THIS machine, used to decide whether a
     // restore point is still needed. Carried over, it would claim work had been done here that was not.

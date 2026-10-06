@@ -28,10 +28,23 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
     private readonly DiskAnalyzerService _service;
     private readonly DiskScanHistoryService _history;
+    private readonly DiskAnalyzerPreferenceService _preferences;
+    private readonly bool _loadingPreferences;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<DiskUsageEntry> Entries { get; } = new();
     public ObservableCollection<string> PresetPaths { get; } = new();
+
+    /// <summary>The map above the list: the same entries, drawn as blocks sized by space (#1592).</summary>
+    public DiskTreemap Map { get; } = new();
+
+    /// <summary>Whether the map is shown. Remembered between visits, so "Hide map" on a small screen stays hidden.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MapToggleText))]
+    private bool _showMap = true;
+
+    /// <summary>The map's show/hide button.</summary>
+    public string MapToggleText => ShowMap ? "Hide map" : "Show map";
 
     [ObservableProperty] private string _selectedPath = "";
     [ObservableProperty] private string _scanSummary = "Select a drive or folder and click Analyze.";
@@ -138,10 +151,17 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         ", plus any junction or symbolic link (following one would double-count, or lead outside the " +
         "folder you asked about).";
 
-    public DiskAnalyzerViewModel(DiskAnalyzerService service, DiskScanHistoryService history)
+    public DiskAnalyzerViewModel(
+        DiskAnalyzerService service, DiskScanHistoryService history, DiskAnalyzerPreferenceService? preferences = null)
     {
         _service = service;
         _history = history;
+        _preferences = preferences ?? new DiskAnalyzerPreferenceService();
+
+        _loadingPreferences = true;
+        ShowMap = _preferences.Load().ShowMap;
+        _loadingPreferences = false;
+
         // Probe drives off the UI thread: DriveInfo.IsReady can stall on a disconnected
         // mapped/removable volume. This tab is LAZY — NavItem.ContentFactory builds it on first open,
         // not at startup (the eager set is Dashboard, DarkMode and About; see the list above
@@ -201,6 +221,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
         TrendSummary = "";
         LastFailure = DiskAnalyzerService.AnalysisFailure.None;
         Entries.Clear();
+        Map.Update([]);
         TotalSize = 0;
         TotalFiles = 0;
         EntryCount = 0;
@@ -227,6 +248,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
             }
 
             Entries.ReplaceWith(analysis.Entries);
+            Map.Update(analysis.Entries);
 
             EntryCount = Entries.Count;
             TotalSize = Entries.Sum(e => e.SizeBytes);
@@ -359,12 +381,23 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private void CancelAnalysis() => _cts?.Cancel();
 
+    [RelayCommand]
+    private void ToggleMap() => ShowMap = !ShowMap;
+
+    partial void OnShowMapChanged(bool value)
+    {
+        if (_loadingPreferences) return;
+        if (!_preferences.Save(new DiskAnalyzerPreference(value)))
+            StatusMessage = ChangeNotSavedStatus;
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            Map.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -389,7 +422,7 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private async Task DrillDown(DiskUsageEntry? entry)
     {
-        if (entry is null || entry.Name == "(files in root)") return;
+        if (entry is null || entry.Name == DiskAnalyzerService.LooseFilesName) return;
         SelectedPath = entry.FullPath;
         if (!PresetPaths.Contains(entry.FullPath))
             PresetPaths.Add(entry.FullPath);

@@ -185,6 +185,11 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `StartupViewModel` — startup program management (enable/disable via registry). Also attributes Windows' own boot-delay measurements to entries, reading them from the same `BootAnalyzerService` the Boot Analyzer tab uses (one shared singleton) and only when elevated, since those events cannot be read otherwise. Attribution is whole-string on the entry name or its executable file name and fails closed, because a near-match would blame the wrong program on the one tab whose action is to disable it. `DescribeScan` says when other programs' scheduled tasks are missing from the list, and why.
 - `DuplicateFileViewModel` — duplicate file finder with partial-hash pre-filter.
 - `DiskAnalyzerViewModel` — disk space breakdown by folder with drill-down. Remembers the last scan of each root via `DiskScanHistoryService` and shows a "since last scan" delta; the read-and-remember is best-effort, so a history failure degrades to no delta rather than breaking a completed scan. A folder that could not be measured sets `LastFailure`, says why, and is not remembered as a scan.
+  `Map` draws the same entries as blocks; `ShowMap` is remembered through `DiskAnalyzerPreferenceService`.
+- `DiskTreemap` — the Disk Analyzer's map: the list's entries as `TreemapTile` blocks, laid out by
+  `Helpers/TreemapLayout` for the size the view reports through `Helpers/SizeObserver`. Folders too small for their
+  name, and the loose files, merge into one "Other" block. Blocks are the theme's accent, lighter for smaller ones,
+  with `ThemeService.OnColor` choosing the text, and are rebuilt on a theme change.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
   tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
   refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
@@ -523,6 +528,10 @@ Key services:
   value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
   file format rather than console output. Nothing is trimmed or substituted — a lossy export of
   a path is worse than a quoted one.
+- `Helpers/TreemapLayout` — squarified treemap layout (Bruls, Huizing and van Wijk): one rectangle per
+  weight, areas in proportion, as square as the order allows, tiling the bounds without a gap. Pure.
+- `Helpers/SizeObserver` — attached properties that push an element's laid-out size into a binding,
+  because `ActualWidth` cannot be bound back to the source. The Disk Analyzer map lays itself out with it.
 - `Helpers/ChartAxisLabels` — the time-axis tick text for the charts that plot saved samples
   (Resource History, the Speed Test trend, the battery's capacity history), defined once with the
   guard that prints nothing for a value that cannot be a sample time, so an axis with no data never
@@ -583,7 +592,8 @@ Key services:
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
   or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),
-  so a failure is never an empty scan.
+  so a failure is never an empty scan. `LooseFilesName` names the entry for files loose in the
+  folder, which the drill-in and the map both treat as not a folder.
 - `ProcessManagerService` — enumerate running processes, kill by PID,
   open file location. `KillProcess(pid, startTime)` ends that process alone, never its tree, and
   returns a `KillOutcome` (`Ended`, `NotRunning`, `Refused`) so the tab can tell a process that had
@@ -990,6 +1000,10 @@ Key services:
   export/import. `RecordCheck` writes nothing over a file it could not read, since that file may
   hold "off"; `SetCheckOnStartup` writes the user's choice regardless, losing at most the last-run
   time. A file that does not parse is set aside first.
+- `DiskAnalyzerPreferenceService` — whether the Disk Analyzer map is shown, as JSON under
+  `%LocalAppData%\SysManager\disk-analyzer-preference.json`, in the same shape as
+  `StandbyPreferenceService` below. Anything unreadable shows the map. Deliberately absent from
+  `ProfileService.Catalog`: one yes or no is not worth a section of a profile.
 - `StandbyPreferenceService` — persists the Standby List Cleaner's auto-purge toggle and
   threshold as JSON under `%LocalAppData%\SysManager\standby-preference.json`. Auto-purge is a
   set-and-forget setting, so losing it on every restart made it effectively unusable. Same shape

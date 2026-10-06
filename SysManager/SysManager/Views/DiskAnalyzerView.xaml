@@ -4,11 +4,78 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
+             xmlns:models="clr-namespace:SysManager.Models"
              d:DataContext="{d:DesignInstance vm:DiskAnalyzerViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
+
+    <UserControl.Resources>
+        <!-- One block of the map (#1592). A button, so a block is reached with Tab in size order and opened with
+             Enter, and says its name, size and share to a screen reader. The fill and the text colour come from the
+             view model, which derives them from the theme's accent; the merged "Other" block takes the theme's grey
+             instead and opens nothing, so it is not a tab stop. The text colours are set on each TextBlock: the
+             app's keyless TextBlock style would otherwise paint them TextPrimary over the fill. -->
+        <Style x:Key="MapTile" TargetType="Button">
+            <Setter Property="Background" Value="{Binding FillHex, Converter={StaticResource HexBrush}}"/>
+            <Setter Property="Foreground" Value="{Binding TextHex, Converter={StaticResource HexBrush}}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+            <Setter Property="ToolTip" Value="{Binding ToolTipText}"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding SpokenName}"/>
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <!-- The same command as the list's folder button. Tag carries the view model, because a
+                         context menu is not in the view's tree and cannot find it by ancestor. -->
+                    <ContextMenu>
+                        <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Show {0} in Explorer'}"
+                                  Command="{Binding PlacementTarget.Tag.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext.Entry, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <!-- The transparent 2px edge is the gap between blocks, and the outline on hover. Keyboard
+                             focus is the app's shared ring, drawn just outside. -->
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="2" CornerRadius="{StaticResource RadiusSm}" Padding="6,4" ClipToBounds="True">
+                            <StackPanel Visibility="{Binding ShowName, Converter={StaticResource FlexVis}}">
+                                <DockPanel LastChildFill="True">
+                                    <!-- The list row's mark for a folder that could not all be read, in the block's
+                                         own text colour so it reads on every shade. -->
+                                    <TextBlock DockPanel.Dock="Right" Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets"
+                                               FontSize="11" Margin="4,2,0,0" Foreground="{TemplateBinding Foreground}"
+                                               Visibility="{Binding IsPartlyUnreadable, Converter={StaticResource FlexVis}}"/>
+                                    <TextBlock Text="{Binding Name}" Style="{StaticResource Body}" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" Foreground="{TemplateBinding Foreground}"/>
+                                </DockPanel>
+                                <TextBlock Text="{Binding Detail}" Style="{StaticResource Subtle}" Opacity="0.85"
+                                           TextTrimming="CharacterEllipsis" Foreground="{TemplateBinding Foreground}"
+                                           Visibility="{Binding ShowDetail, Converter={StaticResource FlexVis}}"/>
+                            </StackPanel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource TextSecondary}"/>
+                </Trigger>
+                <DataTrigger Binding="{Binding IsOther}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                    <Setter Property="ContextMenu" Value="{x:Null}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
 
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
@@ -88,9 +155,59 @@
             </StackPanel>
         </Border>
 
-        <!-- Folder list -->
+        <!-- Folder map and list -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- The map (#1592): the list's own entries as blocks sized by space, so "which folder is eating the
+                 disk" is answered at a glance. One level, the folder the list shows, so Up works for both. Shown
+                 only when there is a subfolder to draw; with nothing, the list's empty state speaks for both. The
+                 list stays the full keyboard and screen-reader path. -->
+            <StackPanel Grid.Row="0" Margin="12,12,12,4"
+                        Visibility="{Binding Map.HasMap, Converter={StaticResource FlexVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="{Binding MapToggleText}"
+                            AutomationProperties.Name="{Binding MapToggleText}"
+                            Command="{Binding ToggleMapCommand}"
+                            Style="{StaticResource GhostButton}" Padding="12,4" FontSize="12"/>
+                    <TextBlock Text="Click a block to open that folder" Style="{StaticResource Subtle}"
+                               VerticalAlignment="Center"
+                               Visibility="{Binding ShowMap, Converter={StaticResource FlexVis}}"/>
+                </DockPanel>
+                <ItemsControl ItemsSource="{Binding Map.Tiles}" Height="240" Margin="0,8,0,0"
+                              Focusable="False" UseLayoutRounding="True"
+                              AutomationProperties.Name="{Binding SelectedPath, StringFormat='Map of folder sizes in {0}'}"
+                              helpers:SizeObserver.Observe="True"
+                              helpers:SizeObserver.ObservedWidth="{Binding Map.Width, Mode=OneWayToSource}"
+                              helpers:SizeObserver.ObservedHeight="{Binding Map.Height, Mode=OneWayToSource}"
+                              Visibility="{Binding ShowMap, Converter={StaticResource FlexVis}}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding X}"/>
+                            <Setter Property="Canvas.Top" Value="{Binding Y}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type models:TreemapTile}">
+                            <Button Width="{Binding Width}" Height="{Binding Height}" Style="{StaticResource MapTile}"
+                                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    Command="{Binding DataContext.DrillDownCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding Entry}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <Grid Grid.Row="1">
             <ListView AutomationProperties.Name="Folder size list" ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       HorizontalContentAlignment="Stretch">
@@ -185,6 +302,7 @@
                           Title="{Binding EmptyTitle}"
                           Message="{Binding EmptyMessage}"
                           Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
             </Grid>
         </Border>
 

@@ -797,7 +797,11 @@ public sealed class ThemeService
             (byte)(a.B + (b.B - a.B) * t));
     }
 
-    private static Color Lighten(Color c, double amount)
+    /// <summary>
+    /// <paramref name="c"/> moved toward white by <paramref name="amount"/> (0 to 1), alpha kept. Internal because the
+    /// Disk Analyzer map shades its blocks with it, the same way <c>AccentHover</c> is derived here.
+    /// </summary>
+    internal static Color Lighten(Color c, double amount)
     {
         return Color.FromArgb(c.A,
             (byte)Math.Min(255, c.R + (255 - c.R) * amount),

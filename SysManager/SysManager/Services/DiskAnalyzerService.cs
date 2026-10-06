@@ -17,6 +17,12 @@ namespace SysManager.Services;
 /// </summary>
 public sealed class DiskAnalyzerService
 {
+    /// <summary>
+    /// The name of the entry for files loose in the analysed folder. It is not a folder, so it cannot be opened, and
+    /// the Disk Analyzer map puts it in its "Other" block (#1592).
+    /// </summary>
+    internal const string LooseFilesName = "(files in root)";
+
     /// <summary>How far the walk has got, reported once per top-level subfolder as it is reached.</summary>
     /// <param name="FoldersScanned">Top-level subfolders started so far. Not a fraction: the total is not
     /// known until the walk ends, which is why the tab shows an indeterminate bar rather than a
@@ -198,7 +204,7 @@ public sealed class DiskAnalyzerService
         {
             results.Add(new DiskUsageEntry
             {
-                Name = "(files in root)",
+                Name = LooseFilesName,
                 FullPath = rootPath,
                 SizeBytes = rootFilesSize,
                 FileCount = rootFileCount,

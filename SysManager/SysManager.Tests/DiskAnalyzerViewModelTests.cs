@@ -25,10 +25,15 @@ public class DiskAnalyzerViewModelTests
     {
         var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(),
             new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
-                "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))));
+                "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))),
+            TempPreferences());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return vm;
     }
+
+    /// <summary>A preference store in a folder of its own, so no test reads or writes the real one.</summary>
+    private static DiskAnalyzerPreferenceService TempPreferences(string? dir = null) =>
+        new(dir ?? Path.Combine(Path.GetTempPath(), "SysManagerDiskPrefVm_" + Guid.NewGuid().ToString("N")));
 
     [Fact]
     public void Constructor_InitialState_IsCorrect()
@@ -198,7 +203,7 @@ public class DiskAnalyzerViewModelTests
     {
         var history = new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
             "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N")));
-        var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history);
+        var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history, TempPreferences());
         vm.InitializationComplete.GetAwaiter().GetResult();
         return (vm, history);
     }
@@ -240,7 +245,7 @@ public class DiskAnalyzerViewModelTests
                 CapturedAt = new DateTime(2026, 1, 1),
                 TopFolders = [],
             }));
-            var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history);
+            var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(), history, TempPreferences());
             await vm.InitializationComplete;
             vm.SelectedPath = dir;
 
@@ -556,4 +561,138 @@ public class DiskAnalyzerViewModelTests
         Assert.DoesNotContain(root!.Descendants(), e => e.Name.LocalName == "StatusFooter");
     }
 
+    // ---------- the map (#1592) ----------
+
+    private static DiskAnalyzerViewModel NewVmWith(DiskAnalyzerPreferenceService preferences)
+    {
+        var vm = new DiskAnalyzerViewModel(new DiskAnalyzerService(),
+            new DiskScanHistoryService(Path.Combine(Path.GetTempPath(),
+                "SysManagerDiskHistVm_" + Guid.NewGuid().ToString("N"))),
+            preferences);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    /// <summary>A folder with three subfolders of 40, 20 and 10 KB and one loose file, for scans that need content.</summary>
+    private static string FolderWithThreeSubfolders()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        foreach (var (name, bytes) in new[] { ("big", 40_000), ("middle", 20_000), ("small", 10_000) })
+        {
+            Directory.CreateDirectory(Path.Combine(dir, name));
+            File.WriteAllBytes(Path.Combine(dir, name, "data.bin"), new byte[bytes]);
+        }
+        File.WriteAllBytes(Path.Combine(dir, "loose.bin"), new byte[1_000]);
+        return dir;
+    }
+
+    [Fact]
+    public void TheMap_IsShownUntilHidden_AndHidingIsRemembered()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerDiskPrefVm_" + Guid.NewGuid().ToString("N"));
+        var vm = NewVmWith(TempPreferences(dir));
+        Assert.True(vm.ShowMap);
+        Assert.Equal("Hide map", vm.MapToggleText);
+
+        vm.ToggleMapCommand.Execute(null);
+
+        Assert.False(vm.ShowMap);
+        Assert.Equal("Show map", vm.MapToggleText);
+        // The next visit, as after a restart.
+        Assert.False(NewVmWith(TempPreferences(dir)).ShowMap);
+    }
+
+    [Fact]
+    public void AHiddenMap_ThatCannotBeRemembered_SaysSo()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerDiskPrefVm_" + Guid.NewGuid().ToString("N"));
+        Assert.True(TempPreferences(dir).Save(new DiskAnalyzerPreference(true)));
+
+        DiskAnalyzerViewModel vm;
+        // Held with delete sharing only while the tab loads, so its preference cannot be read and must not be
+        // written over.
+        using (new FileStream(Path.Combine(dir, DiskAnalyzerPreferenceService.FileName),
+                   FileMode.Open, FileAccess.Read, FileShare.Delete))
+            vm = NewVmWith(TempPreferences(dir));
+
+        vm.ToggleMapCommand.Execute(null);
+
+        Assert.False(vm.ShowMap);
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AScan_DrawsTheMap_FromTheListsOwnEntries()
+    {
+        var dir = FolderWithThreeSubfolders();
+        try
+        {
+            var vm = NewVmWith(TempPreferences());
+            vm.SelectedPath = dir;
+            Assert.False(vm.Map.HasMap);
+
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            vm.Map.Width = 940;
+            vm.Map.Height = 240;
+
+            Assert.True(vm.Map.HasMap);
+            var folders = vm.Map.Tiles.Where(t => !t.IsOther).ToList();
+            Assert.Equal(new[] { "big", "middle", "small" }, folders.Select(t => t.Name));
+            // The very objects the list shows, so a block opens exactly what the list's row would.
+            Assert.All(folders, t => Assert.Contains(vm.Entries, e => ReferenceEquals(e, t.Entry)));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AScanThatCannotMeasureTheFolder_TakesTheMapAway()
+    {
+        var dir = FolderWithThreeSubfolders();
+        try
+        {
+            var vm = NewVmWith(TempPreferences());
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            Assert.True(vm.Map.HasMap);
+
+            vm.SelectedPath = Path.Combine(dir, "gone");
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+
+            Assert.False(vm.Map.HasMap);
+            Assert.Empty(vm.Map.Tiles);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task OpeningABlock_OpensItsFolder_AsTheListsRowDoes()
+    {
+        var dir = FolderWithThreeSubfolders();
+        Directory.CreateDirectory(Path.Combine(dir, "big", "inner"));
+        File.WriteAllBytes(Path.Combine(dir, "big", "inner", "more.bin"), new byte[5_000]);
+        try
+        {
+            var vm = NewVmWith(TempPreferences());
+            vm.SelectedPath = dir;
+            await vm.AnalyzeCommand.ExecuteAsync(null);
+            vm.Map.Width = 940;
+            vm.Map.Height = 240;
+            var big = vm.Map.Tiles.First(t => t.Name == "big");
+
+            await vm.DrillDownCommand.ExecuteAsync(big.Entry);
+
+            Assert.Equal(Path.Combine(dir, "big"), vm.SelectedPath);
+            Assert.Equal("inner", Assert.Single(vm.Map.Tiles, t => !t.IsOther).Name);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -81,6 +81,8 @@ public sealed class ProfileService
     /// <item><c>ProcessDescriptions.json</c>, <c>icon-fetch.json</c> — bundled data and a cache.</item>
     /// <item><c>resource-history-config.json</c> — a single retention number; a whole section and a
     ///   checkbox for one integer costs the user more attention than it saves.</item>
+    /// <item><c>disk-analyzer-preference.json</c> — whether the Disk Analyzer map is shown, one yes or no, for the
+    ///   same reason.</item>
     /// </list>
     /// </summary>
     private static readonly (string Key, string DisplayName, string FileName, Base Base,

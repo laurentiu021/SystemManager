@@ -10,6 +10,58 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
+    <UserControl.Resources>
+        <!-- One extension's row: the accent tint under the pointer, as the list rows elsewhere in the app. -->
+        <Style x:Key="ExtensionRowBorder" TargetType="Border">
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
+            <Setter Property="Padding" Value="6,8"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- What an extension can do, in plain words: amber for what changes what she sees, reaches every
+             website or can control the browser, neutral for the rest. -->
+        <DataTemplate x:Key="PermissionChip">
+            <Border x:Name="Chip" CornerRadius="{StaticResource RadiusPill}" Padding="8,1" Margin="0,4,6,0"
+                    BorderThickness="1" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border2}">
+                <TextBlock x:Name="ChipText" Text="{Binding Text}" Style="{StaticResource Subtle}"/>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                    <Setter TargetName="Chip" Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                    <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource WarningBg}"/>
+                    <Setter TargetName="ChipText" Property="Foreground" Value="{DynamicResource WarningText}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A mark next to the name: who added it when that was not the user, and whether it is off. The same
+             shape as Deep Cleanup's "Irreversible" mark, in the warning and info colours. -->
+        <DataTemplate x:Key="FlagChip">
+            <Border x:Name="Flag" CornerRadius="{StaticResource RadiusPill}" Padding="7,0" Margin="6,0,0,0"
+                    VerticalAlignment="Center" BorderThickness="1"
+                    Background="Transparent" BorderBrush="{DynamicResource Border2}">
+                <TextBlock x:Name="FlagText" Text="{Binding Text}" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="AnotherProgram">
+                    <Setter TargetName="Flag" Property="Background" Value="{DynamicResource WarningBgSubtle}"/>
+                    <Setter TargetName="Flag" Property="BorderBrush" Value="{DynamicResource WarningBg}"/>
+                    <Setter TargetName="FlagText" Property="Foreground" Value="{DynamicResource WarningText}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Organisation">
+                    <Setter TargetName="Flag" Property="Background" Value="{DynamicResource InfoBgSubtle}"/>
+                    <Setter TargetName="Flag" Property="BorderBrush" Value="{DynamicResource InfoBorder}"/>
+                    <Setter TargetName="FlagText" Property="Foreground" Value="{DynamicResource InfoText}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -21,31 +73,62 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="Browser Cleaner" Style="{StaticResource Display}"/>
-            <TextBlock Text="Reclaim space and clear browsing traces across Chrome, Edge, Brave, Vivaldi, Opera (including Opera GX) and Firefox. Scan first to see the size of each category; cookies and sessions are left unticked so cleaning doesn't sign you out. Close the browser first so its files aren't locked."
+            <TextBlock Text="Reclaim space and clear browsing traces across Chrome, Edge, Brave, Vivaldi, Opera (including Opera GX) and Firefox, and see which extensions each one has. Scan first to see the size of each category; cookies and sessions are left unticked so cleaning doesn't sign you out. Close the browser first so its files aren't locked."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
-        <!-- Toolbar -->
+        <!-- Toolbar: which half is shown, then that half's own buttons. -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
-                <Button Content="Scan" Command="{Binding ScanCommand}"
-                        AutomationProperties.Name="Scan browsers"
-                        Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
-                <Button Content="Clean selected" Command="{Binding CleanCommand}"
-                        AutomationProperties.Name="Clean selected browser data"
-                        Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
-                <Button Content="Cancel" Command="{Binding CancelCommand}"
-                        AutomationProperties.Name="Cancel current operation"
-                        Style="{StaticResource GhostButton}" Margin="0,0,16,0"
-                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
-                <TextBlock VerticalAlignment="Center" Style="{StaticResource Subtle}"
-                           Text="{Binding TotalSelectedDisplay, StringFormat='Selected: {0}'}"
-                           Visibility="{Binding HasItems, Converter={StaticResource FlexVis}}"/>
+                <!-- The same pills as Privacy & Telemetry's "Show" (#1526). -->
+                <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}" Padding="3"
+                        BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,12,0">
+                    <UniformGrid Columns="2">
+                        <RadioButton Content="Browsing data" GroupName="BrowserCleanerSection"
+                                     AutomationProperties.Name="Show the browsing data to clean"
+                                     IsChecked="{Binding IsBrowsingData}" Style="{StaticResource ModePill}"/>
+                        <RadioButton Content="Extensions" GroupName="BrowserCleanerSection"
+                                     AutomationProperties.Name="Show the extensions each browser has"
+                                     IsChecked="{Binding IsExtensions}" Style="{StaticResource ModePill}"/>
+                    </UniformGrid>
+                </Border>
+
+                <StackPanel Orientation="Horizontal"
+                            Visibility="{Binding IsBrowsingData, Converter={StaticResource FlexVis}}">
+                    <Button Content="Scan" Command="{Binding ScanCommand}"
+                            AutomationProperties.Name="Scan browsers"
+                            Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
+                    <Button Content="Clean selected" Command="{Binding CleanCommand}"
+                            AutomationProperties.Name="Clean selected browser data"
+                            Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
+                    <Button Content="Cancel" Command="{Binding CancelCommand}"
+                            AutomationProperties.Name="Cancel current operation"
+                            Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource Subtle}"
+                               Text="{Binding TotalSelectedDisplay, StringFormat='Selected: {0}'}"
+                               Visibility="{Binding HasItems, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            Visibility="{Binding IsExtensions, Converter={StaticResource FlexVis}}">
+                    <Button Content="Look for extensions" Command="{Binding ScanExtensionsCommand}"
+                            AutomationProperties.Name="Look for extensions in every browser"
+                            Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                    <Button Content="Cancel" Command="{Binding CancelCommand}"
+                            AutomationProperties.Name="Cancel current operation"
+                            Style="{StaticResource GhostButton}" Margin="0,0,16,0"
+                            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource Subtle}" Margin="8,0,0,0"
+                               Text="{Binding ExtensionsSummary}"
+                               Visibility="{Binding ExtensionsSummary, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
             </WrapPanel>
         </Border>
 
         <!-- Items grid -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0"
+                Visibility="{Binding IsBrowsingData, Converter={StaticResource FlexVis}}">
             <Grid>
                 <DataGrid ItemsSource="{Binding Items}"
                           AutomationProperties.Name="Browser data categories"
@@ -94,6 +177,108 @@
                               Title="No browser data found"
                               Message="Press Scan to look for cleanable cache, history, and cookies."
                               Visibility="{Binding HasItems, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            </Grid>
+        </Border>
+
+        <!-- Extensions (#1526): one group per browser profile, read-only. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0"
+                Visibility="{Binding IsExtensions, Converter={StaticResource FlexVis}}">
+            <Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,4,12,12"
+                              Visibility="{Binding HasExtensions, Converter={StaticResource FlexVis}}">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding ExtensionGroups}" AutomationProperties.Name="Browser extensions">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="6,10,6,4">
+                                        <DockPanel Margin="0,0,0,4">
+                                            <Button DockPanel.Dock="Right" Content="{Binding ManageText}"
+                                                    Command="{Binding ManageCommand}"
+                                                    Style="{StaticResource GhostButton}" Padding="10,4"
+                                                    AutomationProperties.Name="{Binding ManageText}"
+                                                    ToolTip="Opens the browser's own extensions page, where it can turn an extension off or remove it."/>
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding CountText}" Style="{StaticResource Caption}"
+                                                       Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding UnreadableNote}" Style="{StaticResource Subtle}"
+                                                   TextWrapping="Wrap" Margin="6,0,0,4"
+                                                   Visibility="{Binding UnreadableNote, Converter={StaticResource FlexVis}}"/>
+                                        <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource ExtensionRowBorder}"
+                                                            AutomationProperties.Name="{Binding SpokenName}">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <!-- The extension's own icon, or the puzzle glyph when it has none. -->
+                                                            <Grid Width="28" Height="28" Margin="0,2,12,0" VerticalAlignment="Top">
+                                                                <Border CornerRadius="{StaticResource RadiusSm}" Background="{DynamicResource Surface3}"
+                                                                        Visibility="{Binding Icon, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+                                                                    <TextBlock Text="&#xEA86;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                               Foreground="{DynamicResource TextSecondary}"/>
+                                                                </Border>
+                                                                <Image Source="{Binding Icon}" Width="28" Height="28"
+                                                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                                                       Visibility="{Binding Icon, Converter={StaticResource FlexVis}}"/>
+                                                            </Grid>
+
+                                                            <StackPanel Grid.Column="1">
+                                                                <WrapPanel>
+                                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                                                               VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="{Binding Version}" Style="{StaticResource Caption}"
+                                                                               Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                                                    <ItemsControl ItemsSource="{Binding Flags}" ItemTemplate="{StaticResource FlagChip}"
+                                                                                  Focusable="False" VerticalAlignment="Center">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Horizontal"/>
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                    </ItemsControl>
+                                                                </WrapPanel>
+                                                                <TextBlock Text="{Binding Meta}" Style="{StaticResource Caption}" Margin="0,2,0,0"
+                                                                           TextWrapping="Wrap"
+                                                                           Visibility="{Binding Meta, Converter={StaticResource FlexVis}}"/>
+                                                                <ItemsControl ItemsSource="{Binding Permissions}" ItemTemplate="{StaticResource PermissionChip}"
+                                                                              Focusable="False">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <WrapPanel/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                </ItemsControl>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Caption}" Margin="6,10,6,0" TextWrapping="Wrap"
+                                   Text="SysManager only reads this list. To turn an extension off or remove it, use &quot;Manage in …&quot; — the browser asks you itself."/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- Before the first look, and after a look that found nothing. -->
+                <v:EmptyState Glyph="&#xEA86;"
+                              Title="See what each browser has added"
+                              Message="Press Look for extensions to list every extension in every browser on this PC. SysManager only reads the list; nothing in your browsers changes."
+                              Visibility="{Binding ShowExtensionsPrompt, Converter={StaticResource FlexVis}}"/>
+                <v:EmptyState Glyph="&#xEA86;"
+                              Title="No extensions found"
+                              Message="None of the browsers on this PC has an extension installed."
+                              Visibility="{Binding ShowNoExtensions, Converter={StaticResource FlexVis}}"/>
             </Grid>
         </Border>
 

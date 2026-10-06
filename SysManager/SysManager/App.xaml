@@ -971,12 +971,16 @@
                                                  SelectionBrush="{DynamicResource Accent}"
                                                  IsReadOnly="{TemplateBinding IsReadOnly}"
                                                  Visibility="Hidden"/>
-                                        <!-- Selected item (shown when NOT editable) -->
+                                        <!-- Selected item (shown when NOT editable). The selector binding is
+                                             what carries DisplayMemberPath here: WPF implements it as the
+                                             ItemTemplateSelector, and without it a closed box showed the item's
+                                             ToString(), e.g. "VolumePreset { Name = Evening, … }" (#1588). -->
                                         <ContentPresenter x:Name="ContentSite" Grid.Column="0"
                                                           Margin="{TemplateBinding Padding}"
                                                           VerticalAlignment="Center"
                                                           Content="{TemplateBinding SelectionBoxItem}"
                                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                                           IsHitTestVisible="False"/>
 
                                         <ToggleButton x:Name="ToggleChevron" Grid.Column="1"

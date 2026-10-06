@@ -9,7 +9,8 @@ namespace SysManager.Services;
 /// <summary>
 /// Abstraction over <see cref="AudioMixerService"/> — enumerates per-application audio
 /// sessions on the default render endpoint and gets/sets their volume, mute, and peak
-/// level via Windows Core Audio. Extracting this interface lets
+/// level via Windows Core Audio, along with the whole PC's volume and the device all sound
+/// plays through. Extracting this interface lets
 /// <c>AudioMixerViewModel</c>'s command and reconcile paths be unit-tested with a
 /// substituted service against a deterministic session list, so no real audio hardware
 /// or COM is touched in tests (the mockable seam). All COM types stay inside
@@ -55,11 +56,52 @@ public interface IAudioMixerService
     IReadOnlyDictionary<string, float> GetPeaks(IEnumerable<string> sessionIds);
 
     /// <summary>
+    /// The whole PC's volume and mute: those of the default output device, which apply to every app on top of
+    /// its own level — what the Windows taskbar slider moves. Null when there is no output device or it could
+    /// not be read. Never throws.
+    /// </summary>
+    PcVolumeInfo? GetPcVolume();
+
+    /// <summary>
+    /// Set the whole PC's volume (clamped to 0.0–1.0). Returns true if Windows applied it; false when the
+    /// output device has not been read yet or is gone.
+    /// </summary>
+    bool SetPcVolume(float level);
+
+    /// <summary>
+    /// Mute or unmute the whole PC. Returns true if Windows applied it; false when the output device has not
+    /// been read yet or is gone.
+    /// </summary>
+    bool SetPcMute(bool muted);
+
+    /// <summary>
+    /// The default output device's current peak (0.0–1.0) for the whole-PC level meter, or 0 when it cannot be
+    /// read. Only reads a device <see cref="GetPcVolume"/> has already opened, so the 50&#160;ms meter loop never
+    /// opens one itself.
+    /// </summary>
+    float GetPcPeak();
+
+    /// <summary>
     /// Enumerate the active render (output) devices via the documented Core Audio device API.
     /// Never throws — returns an empty list on a transient device fault. The one flagged
     /// <see cref="Models.AudioDevice.IsDefault"/> is the current system default.
     /// </summary>
     IReadOnlyList<Models.AudioDevice> GetRenderDevices();
+
+    /// <summary>
+    /// True when SysManager can switch the device all sound plays through on this Windows build — i.e. the
+    /// (undocumented) <c>IPolicyConfig</c> interface bound. When false, the UI names the current device and
+    /// guides the user to Windows' sound settings, and <see cref="SetDefaultOutputDevice"/> will no-op.
+    /// </summary>
+    bool IsDefaultOutputSwitchSupported { get; }
+
+    /// <summary>
+    /// Make <paramref name="deviceId"/> the device all sound plays through, for each of the three defaults
+    /// Windows keeps (everyday, multimedia and calls), as the Windows sound flyout does. Apps routed to a device
+    /// of their own keep it. Returns true only when Windows applied all three; false (a no-op) when switching is
+    /// not supported. Never throws.
+    /// </summary>
+    bool SetDefaultOutputDevice(string deviceId);
 
     /// <summary>
     /// True when true in-app per-app output-device routing is available on this Windows build —

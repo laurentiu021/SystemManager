@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.121.0] - 2026-10-06
+
+**Volume Control now has a This PC card above the apps: one slider for all sound, and a picker for the speakers or
+headphones it plays through.** "Everything is too loud" and "the sound is coming out of the wrong speakers" no longer
+mean leaving SysManager for the taskbar.
+
+### Added
+
+- **This PC on Volume Control (#1588).** A card of its own above the app list, tinted so it does not read as one more
+  app.
+  - **All sound**: the PC's volume, mute and live level, with the same controls an app row has. It is Windows' own
+    volume, the one the taskbar slider moves, and it applies on top of each app's level.
+  - **Sound plays through**: picks the device all sound goes to, for everyday sound, media and calls at once, as the
+    Windows sound flyout does. The open list says what kind of device each one is (headphones, speakers, a monitor or
+    TV over HDMI or DisplayPort) and which one is in use now. Apps you sent to a device of their own keep it. Where
+    Windows does not let SysManager switch, the card names the device in use and offers Windows' sound settings
+    instead.
+  - Volume presets still keep each app's level and nothing more, so applying one never changes the PC's volume or
+    moves the sound to other speakers.
+  - The status line names the device too ("3 apps playing audio · output: Headphones").
+  - Searching the sidebar for "speakers", "headphones" or "output device" opens Volume Control.
+
+### Fixed
+
+- **Volume Control stayed on the device that was in use when it first opened (#1588).** It opened the default output
+  device once and kept it, so after headphones were plugged in or the device was changed from the taskbar, the app
+  list went on showing the first device's apps, and their sliders moved sound that no longer played there, until
+  SysManager restarted. The tab now follows the change within about ten seconds, and at once when the device is
+  changed from the card. This dates from the first Volume Control, in 1.52.38.
+- **A closed drop-down showed a programmer's description instead of what you picked.** After picking a preset, the
+  Presets box on Volume Control read "VolumePreset { Name = Evening, Entries = … }", and Gaming Profile's game box read
+  "RunningProcess { ProcessId = … }". The drop-down style added in 1.52.24 (#1243) left out the part that shows an
+  item by its name. It shows the name now.
+
 ## [1.120.0] - 2026-10-06
 
 **Privacy & Telemetry can now list its switches by who they affect, and Tweaks Hub, which showed the same switches

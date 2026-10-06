@@ -19,7 +19,7 @@ namespace SysManager.ViewModels;
 /// service reports an external change during a refresh, <see cref="ApplyUpdate"/> writes
 /// the new values under a re-entrancy guard so they are NOT echoed back to the service.
 /// </summary>
-public sealed partial class AudioSessionRowViewModel : ObservableObject
+public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjustableVolume
 {
     private readonly IAudioMixerService _service;
 
@@ -103,7 +103,7 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject
     /// <summary>
     /// True while the user is actively dragging the volume slider. A background refresh must NOT
     /// overwrite <see cref="Volume"/> during a drag, or a stale snapshot value would fight the
-    /// thumb. Set by the view on Thumb.DragStarted/DragCompleted.
+    /// thumb. Set by the view on Thumb.DragStarted/DragCompleted, through <see cref="IAdjustableVolume"/>.
     /// </summary>
     [ObservableProperty] private bool _isUserAdjusting;
 

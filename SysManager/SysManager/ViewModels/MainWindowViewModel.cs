@@ -370,7 +370,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
             EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>(),
                       keywords: "dark mode, light mode, night, theme"),
-            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView), keywords: "volume, sound, mixer, per app audio, mute"),
+            Tab<AudioMixerViewModel>("nav-volume-control",  "Volume Control",        typeof(Views.AudioMixerView), keywords: "volume, sound, mixer, per app audio, mute, speakers, headphones, output device"),
             // Muting an app that nags is the same wish as the rest of this group — make Windows behave
             // the way I want — and the same risk level: per-app Windows switches, no administrator, one
             // flip to undo. Under "Privacy & Security" it both overstated the stakes and hid the tab

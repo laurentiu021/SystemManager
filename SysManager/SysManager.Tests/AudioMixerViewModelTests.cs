@@ -1212,7 +1212,318 @@ public class AudioMixerViewModelTests
         Assert.Single(Loaded(presets));
     }
 
+    // ── The This PC card (#1588) ────────────────────────────────────────────
+
+    [Fact]
+    public async Task EachPass_ShowsThePcVolume_OnTheCard_WithoutWritingItBack()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.38f, IsMuted: false));
+        using var vm = NewVm(service);
+        Assert.True(vm.Pc.IsAvailable);
+        Assert.Equal(0.38f, vm.Pc.Volume);
+
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.6f, IsMuted: true));
+        await vm.ReconcileAsync();
+
+        Assert.Equal(0.6f, vm.Pc.Volume);
+        Assert.True(vm.Pc.IsMuted);
+        service.DidNotReceive().SetPcVolume(Arg.Any<float>());
+        service.DidNotReceive().SetPcMute(Arg.Any<bool>());
+    }
+
+    [Fact]
+    public void TheDeviceList_PutsTheDeviceInUse_OnTheCardsPicker()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        using var vm = NewVm(service);
+
+        Assert.Equal(Speakers, vm.Pc.SelectedOutput);
+        Assert.Equal("Speakers", vm.Pc.OutputName);
+        Assert.Same(vm.OutputDevices, vm.Pc.OutputDevices);
+        service.DidNotReceive().SetDefaultOutputDevice(Arg.Any<string>());
+    }
+
+    [Theory]
+    [InlineData(2, "Speakers", "2 apps playing audio · output: Speakers")]
+    [InlineData(1, "Speakers", "1 app playing audio · output: Speakers")]
+    [InlineData(0, "Speakers", "No apps are playing audio right now · output: Speakers")]
+    [InlineData(2, "", "2 apps playing audio.")]
+    [InlineData(0, "", "No apps are playing audio right now.")]
+    public void TheStatusLine_SaysHowManyAppsPlay_AndWhereTheSoundGoes(int apps, string output, string expected)
+        => Assert.Equal(expected, AudioMixerViewModel.DescribeRefresh(apps, output));
+
+    [Fact]
+    public void ThePass_NamesTheDeviceOnTheStatusLine()
+    {
+        var service = ServiceWith(Session("s1"), Session("s2"));
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+
+        using var vm = NewVm(service);
+
+        Assert.Equal("2 apps playing audio · output: Speakers", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void Opening_AsksWhetherTheSoundCanBeMoved()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsDefaultOutputSwitchSupported.Returns(true);
+
+        using var vm = NewVm(service);
+
+        Assert.True(vm.Pc.CanSwitchOutput);
+    }
+
+    /// <summary>
+    /// Moving the sound must re-read the device list and the apps at once, not ten passes later: the picker, the
+    /// "in use" flag and the app list would otherwise all show the old device for up to ten seconds. Counted in the
+    /// stubs, as <see cref="Reconcile_DoesNotReEnumerateDevicesOnEveryPass"/> does, with the loops parked.
+    /// </summary>
+    [Fact]
+    public async Task MovingTheSound_ReadsTheDevicesAndTheAppsAgain_StraightAway()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsDefaultOutputSwitchSupported.Returns(true);
+        service.SetDefaultOutputDevice(Arg.Any<string>()).Returns(true);
+        var inUse = "{spk}";
+        var enumerations = 0;
+        service.GetRenderDevices().Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref enumerations);
+            return new List<AudioDevice>
+            {
+                Speakers with { IsDefault = inUse == "{spk}" },
+                Headset with { IsDefault = inUse == "{hdst}" },
+            };
+        });
+        var passes = 0;
+        service.GetSessions().Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref passes);
+            return new List<AudioSessionInfo> { Session("s1") };
+        });
+        using var vm = NewVm(service);
+        Assert.Equal(1, enumerations);
+        var passesBefore = passes;
+
+        inUse = "{hdst}";
+        vm.Pc.SelectedOutput = vm.OutputDevices.Single(d => d.Id == "{hdst}");
+        Assert.NotNull(vm.Pc.OutputSwitch);
+        await vm.Pc.OutputSwitch;
+
+        service.Received(1).SetDefaultOutputDevice("{hdst}");
+        Assert.Equal(2, enumerations);
+        Assert.Equal(passesBefore + 1, passes);
+        Assert.Equal("{hdst}", vm.Pc.SelectedOutput?.Id);
+        Assert.Equal("USB Headset", vm.Pc.OutputName);
+        Assert.Equal("Sound now plays through USB Headset.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ThePeakTick_LightsTheCardsMeter_InTheSameHopAsTheRows()
+    {
+        var service = ServiceWith(Session("s1"));
+        Peaks(service, ("s1", 0.4f));
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.5f, IsMuted: false));
+        service.GetPcPeak().Returns(0.7f);
+        using var vm = NewVm(service);
+        vm.IsActive = true;
+
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+
+        Assert.Equal(0.7f, vm.Pc.PeakLevel);
+        Assert.Equal(0.4f, vm.Sessions.Single().PeakLevel);
+        vm.IsActive = false;
+    }
+
+    [Fact]
+    public async Task ThePeakTick_DoesNotAskForThePcLevel_WhileThePcVolumeCannotBeRead()
+    {
+        var service = ServiceWith(Session("s1"));
+        Peaks(service, ("s1", 0.4f));
+        var pcReads = 0;
+        service.GetPcPeak().Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref pcReads);
+            return 0.7f;
+        });
+        using var vm = NewVm(service);
+        Assert.False(vm.Pc.IsAvailable);
+        vm.IsActive = true;
+
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+        vm.IsActive = false;
+
+        Assert.Equal(0, pcReads);
+        Assert.Equal(0f, vm.Pc.PeakLevel);
+    }
+
+    [Fact]
+    public async Task ThePeakTick_LightsTheCardsMeter_EvenWithNoAppPlaying()
+    {
+        var service = ServiceWith();
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.5f, IsMuted: false));
+        service.GetPcPeak().Returns(0.3f);
+        using var vm = NewVm(service);
+        vm.IsActive = true;
+
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+
+        Assert.Equal(0.3f, vm.Pc.PeakLevel);
+        vm.IsActive = false;
+    }
+
+    [Fact]
+    public async Task HidingTheTab_DarkensTheCardsMeter()
+    {
+        var service = ServiceWith(Session("s1"));
+        Peaks(service, ("s1", 0.4f));
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.5f, IsMuted: false));
+        service.GetPcPeak().Returns(0.7f);
+        using var vm = NewVm(service);
+        vm.IsActive = true;
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+        Assert.Equal(0.7f, vm.Pc.PeakLevel);
+
+        vm.IsActive = false;
+
+        Assert.Equal(0f, vm.Pc.PeakLevel);
+    }
+
+    [Fact]
+    public async Task Dispose_DarkensTheCardsMeter()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.5f, IsMuted: false));
+        service.GetPcPeak().Returns(0.7f);
+        var vm = NewVm(service);
+        vm.IsActive = true;
+        await vm.UpdatePeaksAsync(CancellationToken.None);
+        Assert.Equal(0.7f, vm.Pc.PeakLevel);
+
+        vm.Dispose();
+
+        Assert.Equal(0f, vm.Pc.PeakLevel);
+    }
+
+    [Fact]
+    public void ApplyAdjustingState_HoldsTheCardsSliderToo()
+    {
+        using var vm = NewVm(ServiceWith(Session("s1")));
+
+        AudioMixerView.ApplyAdjustingState(vm.Pc, dragging: true, keyboardFocused: false);
+        Assert.True(vm.Pc.IsUserAdjusting);
+
+        AudioMixerView.ApplyAdjustingState(vm.Pc, dragging: false, keyboardFocused: false);
+        Assert.False(vm.Pc.IsUserAdjusting);
+    }
+
+    /// <summary>
+    /// Presets keep each app's level by program name. The PC's volume and the device the sound plays through are
+    /// deliberately not part of one, so applying "Evening" never moves the sound to other speakers (#1588).
+    /// </summary>
+    [Fact]
+    public void APreset_NeverTouchesThePcVolume_OrWhereTheSoundPlays()
+    {
+        var service = ServiceWith(SessionWithExe());
+        service.GetPcVolume().Returns(new PcVolumeInfo(0.5f, IsMuted: false));
+        service.SetVolume(Arg.Any<string>(), Arg.Any<float>()).Returns(true);
+        service.SetMute(Arg.Any<string>(), Arg.Any<bool>()).Returns(true);
+        using var vm = NewVm(service);
+
+        vm.NewPresetName = "Evening";
+        vm.SavePresetCommand.Execute(null);
+        vm.SelectedPreset = vm.Presets.Single();
+        vm.ApplyPresetCommand.Execute(null);
+
+        Assert.Equal("chrome.exe", Assert.Single(vm.Presets.Single().Entries).ExecutableName);
+        service.DidNotReceive().SetPcVolume(Arg.Any<float>());
+        service.DidNotReceive().SetPcMute(Arg.Any<bool>());
+        service.DidNotReceive().SetDefaultOutputDevice(Arg.Any<string>());
+    }
+
     // ── Input validation at the trust boundary (real service, no COM) ──────
+
+    [Fact]
+    public void Service_ThePc_IsNotWrittenBeforeItHasBeenRead()
+    {
+        // A write that arrives before any read is refused rather than opening the endpoint itself: the endpoint
+        // is opened only by the worker-thread read. Nothing is opened, so nothing on this machine changes.
+        using var service = new AudioMixerService();
+        Assert.False(service.SetPcVolume(0.5f));
+        Assert.False(service.SetPcMute(true));
+        Assert.Equal(0f, service.GetPcPeak());
+    }
+
+    [Fact]
+    public void Service_AnEmptyDeviceId_IsRefused()
+    {
+        using var service = new AudioMixerService();
+        Assert.False(service.SetDefaultOutputDevice(""));
+    }
+
+    /// <summary>
+    /// The decision behind following the Windows default (#1588): the endpoint held open is dropped when Windows
+    /// plays through another one, or through none at all, and kept while it is still the one in use.
+    /// </summary>
+    [Theory]
+    [InlineData("{0.0.0.00000000}.{a}", "{0.0.0.00000000}.{b}", true)]   // another device is the default now
+    [InlineData("{0.0.0.00000000}.{a}", "", true)]                       // no default at all: the last one went
+    [InlineData("{0.0.0.00000000}.{a}", "{0.0.0.00000000}.{a}", false)]  // still the one in use
+    [InlineData("{0.0.0.00000000}.{a}", "{0.0.0.00000000}.{A}", false)]  // ids compare without case, as IsDefault's do
+    [InlineData(null, "{0.0.0.00000000}.{b}", false)]                    // nothing held open, nothing to drop
+    [InlineData("", "{0.0.0.00000000}.{b}", false)]                      // an id that could not be read
+    public void Service_TheHeldEndpoint_IsDropped_OnlyWhenTheDefaultMoved(string? held, string inUse, bool moved)
+        => Assert.Equal(moved, AudioMixerService.DefaultMoved(held, inUse));
+
+    [Fact]
+    public void Service_AfterDispose_ThePcIsNeitherReadNorWritten_NorTheSoundMoved()
+    {
+        var service = new AudioMixerService();
+        service.Dispose();
+
+        Assert.Null(service.GetPcVolume());
+        Assert.False(service.SetPcVolume(0.5f));
+        Assert.False(service.SetPcMute(true));
+        Assert.Equal(0f, service.GetPcPeak());
+        Assert.False(service.IsDefaultOutputSwitchSupported);
+        Assert.False(service.SetDefaultOutputDevice("{0.0.0.00000000}.{any}"));
+    }
+
+    [Theory]
+    [InlineData(0u, AudioDeviceKind.Network)]          // RemoteNetworkDevice
+    [InlineData(1u, AudioDeviceKind.Speakers)]         // Speakers
+    [InlineData(2u, AudioDeviceKind.LineOut)]          // LineLevel
+    [InlineData(3u, AudioDeviceKind.Headphones)]       // Headphones
+    [InlineData(4u, AudioDeviceKind.Unknown)]          // Microphone: not an output
+    [InlineData(5u, AudioDeviceKind.Headset)]          // Headset
+    [InlineData(6u, AudioDeviceKind.Headset)]          // Handset
+    [InlineData(7u, AudioDeviceKind.DigitalOutput)]    // UnknownDigitalPassthrough
+    [InlineData(8u, AudioDeviceKind.DigitalOutput)]    // SPDIF
+    [InlineData(9u, AudioDeviceKind.DisplayAudio)]     // DigitalAudioDisplayDevice
+    [InlineData(10u, AudioDeviceKind.Unknown)]         // UnknownFormFactor
+    [InlineData(11u, AudioDeviceKind.Unknown)]         // anything newer
+    [InlineData(null, AudioDeviceKind.Unknown)]        // none reported
+    public void Service_EachFormFactor_NamesItsKind(uint? formFactor, AudioDeviceKind expected)
+        => Assert.Equal(expected, AudioMixerService.KindOf(formFactor));
+
+    /// <summary>
+    /// The endpoint-volume declaration matches the documented vtable (endpointvolume.h). A method declared one
+    /// slot out of place calls its neighbour — the level setter would set the level in decibels, the mute getter
+    /// would read a channel — and no test without a real device could tell.
+    /// </summary>
+    [Theory]
+    [InlineData("SetMasterVolumeLevelScalar", 7)]
+    [InlineData("GetMasterVolumeLevelScalar", 9)]
+    [InlineData("SetMute", 14)]
+    [InlineData("GetMute", 15)]
+    public void Service_TheEndpointVolumeMethods_SitInTheirDocumentedSlots(string method, int slot)
+    {
+        var endpointVolume = typeof(AudioMixerService).GetNestedType("IAudioEndpointVolume", BindingFlags.NonPublic)!;
+        Assert.Equal(slot, ComVtable.SlotOf(endpointVolume, method));
+    }
 
     [Fact]
     public void Service_SetVolume_UnknownSession_IsRejected()

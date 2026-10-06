@@ -14,11 +14,11 @@ namespace SysManager.Services;
 /// Reads and controls per-application audio via Windows Core Audio (WASAPI) on the
 /// <b>default render endpoint</b>. Enumerates the render sessions, groups them by owning
 /// process (the Windows Volume Mixer mental model — one row per app), and gets/sets each
-/// group's volume, mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the six
+/// group's volume, mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the seven
 /// documented interfaces (<c>IMMDeviceEnumerator</c> → <c>IAudioSessionManager2</c> →
 /// <c>IAudioSessionEnumerator</c> → <c>IAudioSessionControl(2)</c> /
-/// <c>ISimpleAudioVolume</c> / <c>IAudioMeterInformation</c>) so nothing but the .NET
-/// runtime is added to the single portable .exe.
+/// <c>ISimpleAudioVolume</c> / <c>IAudioMeterInformation</c>, and <c>IAudioEndpointVolume</c>) so
+/// nothing but the .NET runtime is added to the single portable .exe.
 ///
 /// <para>Scope: enumerates sessions on the default render endpoint. Output devices are listed via
 /// the documented device API (<see cref="GetRenderDevices"/>). Per-app output-device routing uses
@@ -26,6 +26,13 @@ namespace SysManager.Services;
 /// and is feature-detected at runtime: if it can't bind on this Windows build,
 /// <see cref="IsRoutingSupported"/> is false and the UI falls back to guiding the user to Windows'
 /// per-app sound settings. Volume presets live in a separate pure service.</para>
+///
+/// <para>The whole PC (#1588): its volume and mute come from the documented <c>IAudioEndpointVolume</c>, and
+/// its level from <c>IAudioMeterInformation</c>, both activated on the same default endpoint the sessions are
+/// read from. Switching the device all sound plays through uses the UNDOCUMENTED <c>IPolicyConfig</c> (see
+/// <see cref="PolicyConfigClient"/>), feature-detected the same way as routing. The endpoint held open follows
+/// the Windows default: a switch made here drops it at once, and one made elsewhere (headphones plugged in, the
+/// taskbar flyout) is noticed on the next device enumeration, so the apps and the PC volume move with it.</para>
 ///
 /// <para>Thread-safety: every COM access is guarded by <see cref="_gate"/>. The manager /
 /// device / enumerator handle is held open across polls; the per-app session interfaces
@@ -43,6 +50,9 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private object? _enumerator;   // IMMDeviceEnumerator
     private object? _device;       // IMMDevice (default render endpoint)
     private object? _manager;      // IAudioSessionManager2
+    private object? _endpointVolume; // IAudioEndpointVolume — the whole PC's volume, on _device
+    private object? _endpointMeter;  // IAudioMeterInformation — the whole PC's level, on _device
+    private string? _deviceId;     // _device's endpoint id, to notice Windows moving the default elsewhere
     private bool _disposed;
 
     // Per-app cached session interfaces, keyed by the group key (PID string, or the
@@ -339,6 +349,115 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     // Reset by ReleaseGroups, so it is per session-handle generation rather than per process.
     private bool _peakFailureLogged;
 
+    // ── The whole PC: volume, mute and level of the default endpoint (documented API) ──
+
+    /// <inheritdoc/>
+    public PcVolumeInfo? GetPcVolume()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return null;
+            try
+            {
+                if (!EnsureManager() || !EnsureEndpointLocked()) return null;
+
+                var volume = (IAudioEndpointVolume)_endpointVolume!;
+                if (volume.GetMasterVolumeLevelScalar(out float level) == 0 && volume.GetMute(out bool muted) == 0)
+                    return new PcVolumeInfo(level, muted);
+
+                // The device stopped answering (unplugged, disabled): drop it, so the next pass opens whatever
+                // Windows plays through now instead of reading a dead endpoint for the rest of the session.
+                ResetManager();
+                return null;
+            }
+            catch (COMException ex)
+            {
+                Log.Debug("PC volume read failed: {Error}", ex.Message);
+                ResetManager();
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens the whole-PC volume and meter on the endpoint <see cref="EnsureManager"/> holds, once per endpoint.
+    /// Caller holds <see cref="_gate"/> and has bound the manager. Reached only from <see cref="GetPcVolume"/>,
+    /// which the tab calls on a worker thread, so these objects are created where the session objects are: the
+    /// writes below run on the UI thread and only ever use what a read already opened.
+    /// </summary>
+    private bool EnsureEndpointLocked()
+    {
+        if (_endpointVolume is not null) return true;
+
+        var device = (IMMDevice)_device!;
+        var iid = typeof(IAudioEndpointVolume).GUID;
+        if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var volume) != 0 || volume is not IAudioEndpointVolume)
+        {
+            Release(volume);
+            return false;
+        }
+        _endpointVolume = volume;
+
+        // The meter is a nicety: without it the PC's level bar stays dark and the volume still works.
+        var meterIid = typeof(IAudioMeterInformation).GUID;
+        if (device.Activate(ref meterIid, CLSCTX_ALL, IntPtr.Zero, out var meter) == 0 && meter is IAudioMeterInformation)
+            _endpointMeter = meter;
+        else
+            Release(meter);
+        return true;
+    }
+
+    /// <inheritdoc/>
+    public bool SetPcVolume(float level)
+    {
+        float clamped = Math.Clamp(level, 0f, 1f);
+        lock (_gate)
+        {
+            if (_disposed || _endpointVolume is not IAudioEndpointVolume volume) return false;
+            var ctx = EventContext;
+            try { return volume.SetMasterVolumeLevelScalar(clamped, ref ctx) == 0; }
+            catch (COMException ex) { Log.Debug("SetPcVolume failed: {Error}", ex.Message); return false; }
+        }
+    }
+
+    /// <inheritdoc/>
+    public bool SetPcMute(bool muted)
+    {
+        lock (_gate)
+        {
+            if (_disposed || _endpointVolume is not IAudioEndpointVolume volume) return false;
+            var ctx = EventContext;
+            try { return volume.SetMute(muted, ref ctx) == 0; }
+            catch (COMException ex) { Log.Debug("SetPcMute failed: {Error}", ex.Message); return false; }
+        }
+    }
+
+    /// <inheritdoc/>
+    public float GetPcPeak()
+    {
+        lock (_gate)
+        {
+            if (_disposed || _endpointMeter is not IAudioMeterInformation meter) return 0f;
+            try
+            {
+                return meter.GetPeakValue(out float peak) == 0 ? peak : 0f;
+            }
+            catch (COMException ex)
+            {
+                // Once per endpoint, for the reason PeakLocked gives: the meter loop asks 20 times a second.
+                if (!_pcPeakFailureLogged)
+                {
+                    _pcPeakFailureLogged = true;
+                    Log.Debug("GetPcPeak failed: {Error}", ex.Message);
+                }
+                return 0f;
+            }
+        }
+    }
+
+    // Reset by ResetManager, which releases the meter it describes.
+    private bool _pcPeakFailureLogged;
+
     // ── Output-device enumeration (documented API) ─────────────────────────
 
     /// <inheritdoc/>
@@ -356,11 +475,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                 string defaultId = "";
                 if (devEnum.GetDefaultAudioEndpoint(EDataFlow.Render, ERole.Multimedia, out var def) == 0 && def is not null)
                 {
-                    if (def.GetId(out var dp) == 0 && dp != IntPtr.Zero)
-                    {
-                        defaultId = Marshal.PtrToStringUni(dp) ?? "";
-                        Marshal.FreeCoTaskMem(dp);
-                    }
+                    defaultId = EndpointIdOf(def);
                     Release(def);
                 }
 
@@ -377,15 +492,11 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                         if (collection.Item(i, out var dev) != 0 || dev is null) continue;
                         try
                         {
-                            string id = "";
-                            if (dev.GetId(out var idPtr) == 0 && idPtr != IntPtr.Zero)
-                            {
-                                id = Marshal.PtrToStringUni(idPtr) ?? "";
-                                Marshal.FreeCoTaskMem(idPtr);
-                            }
+                            string id = EndpointIdOf(dev);
                             if (id.Length == 0) continue;
-                            var name = ReadFriendlyName(dev) ?? id;
-                            devices.Add(new Models.AudioDevice(id, name, string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase)));
+                            var (name, formFactor) = ReadEndpointProperties(dev);
+                            devices.Add(new Models.AudioDevice(id, name ?? id,
+                                string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase), KindOf(formFactor)));
                         }
                         finally { Release(dev); }
                     }
@@ -395,6 +506,12 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                         if (a.IsDefault != b.IsDefault) return a.IsDefault ? -1 : 1;
                         return string.Compare(a.FriendlyName, b.FriendlyName, StringComparison.OrdinalIgnoreCase);
                     });
+
+                    // Windows moved the default since the endpoint was opened (headphones plugged in or pulled out,
+                    // the taskbar flyout): drop the old one, so the next pass reads the apps and the PC volume from
+                    // the device the sound really goes to. Before, the endpoint was opened once and kept, and the tab
+                    // went on listing the first default's apps for the rest of the session (#1588).
+                    if (DefaultMoved(_deviceId, defaultId)) ResetManager();
                     return devices;
                 }
                 finally { Release(collection); Marshal.Release(collPtr); }
@@ -408,21 +525,68 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
     }
 
-    /// <summary>Reads a device's friendly name from its property store (PKEY_Device_FriendlyName).</summary>
-    private static string? ReadFriendlyName(IMMDevice device)
+    /// <summary>
+    /// Reads a device's friendly name (PKEY_Device_FriendlyName) and form factor (PKEY_AudioEndpoint_FormFactor)
+    /// from one opening of its property store. Either is null when the store does not hold it.
+    /// </summary>
+    private static (string? Name, uint? FormFactor) ReadEndpointProperties(IMMDevice device)
     {
         // STGM_READ = 0.
-        if (device.OpenPropertyStore(0, out var store) != 0 || store is null) return null;
+        if (device.OpenPropertyStore(0, out var store) != 0 || store is null) return (null, null);
         try
         {
-            var key = PKEY_Device_FriendlyName;
-            if (store.GetValue(ref key, out var pv) != 0) return null;
-            try { return pv.GetString(); }
-            finally { PropVariantClear(ref pv); }
+            var nameKey = PKEY_Device_FriendlyName;
+            string? name = null;
+            if (store.GetValue(ref nameKey, out var namePv) == 0)
+            {
+                try { name = namePv.GetString(); }
+                finally { PropVariantClear(ref namePv); }
+            }
+
+            var formKey = PKEY_AudioEndpoint_FormFactor;
+            uint? formFactor = null;
+            if (store.GetValue(ref formKey, out var formPv) == 0)
+            {
+                try { formFactor = formPv.GetUInt32(); }
+                finally { PropVariantClear(ref formPv); }
+            }
+            return (name, formFactor);
         }
-        catch (COMException) { return null; }
+        catch (COMException) { return (null, null); }
         finally { Release(store); }
     }
+
+    /// <summary>
+    /// The kind of device an <c>EndpointFormFactor</c> value (mmdeviceapi.h) names. Pure and internal so the
+    /// mapping is unit-tested without a device.
+    /// </summary>
+    internal static AudioDeviceKind KindOf(uint? formFactor) => formFactor switch
+    {
+        0 => AudioDeviceKind.Network,           // RemoteNetworkDevice
+        1 => AudioDeviceKind.Speakers,          // Speakers
+        2 => AudioDeviceKind.LineOut,           // LineLevel
+        3 => AudioDeviceKind.Headphones,        // Headphones
+        5 or 6 => AudioDeviceKind.Headset,      // Headset, Handset
+        7 or 8 => AudioDeviceKind.DigitalOutput, // UnknownDigitalPassthrough, SPDIF
+        9 => AudioDeviceKind.DisplayAudio,      // DigitalAudioDisplayDevice (HDMI, DisplayPort)
+        _ => AudioDeviceKind.Unknown,           // Microphone, UnknownFormFactor, or none reported
+    };
+
+    /// <summary>The endpoint id of <paramref name="device"/>, or empty when it cannot be read.</summary>
+    private static string EndpointIdOf(IMMDevice device)
+    {
+        if (device.GetId(out var ptr) != 0 || ptr == IntPtr.Zero) return "";
+        try { return Marshal.PtrToStringUni(ptr) ?? ""; }
+        finally { Marshal.FreeCoTaskMem(ptr); }
+    }
+
+    /// <summary>
+    /// Whether the endpoint held open (<paramref name="heldId"/>) is no longer the one Windows plays through. An
+    /// empty <paramref name="defaultId"/> — no default at all, the last device unplugged — counts as moved too;
+    /// nothing held open means nothing to move. Pure and internal so the decision is unit-tested without a device.
+    /// </summary>
+    internal static bool DefaultMoved(string? heldId, string defaultId) =>
+        heldId is { Length: > 0 } && !string.Equals(heldId, defaultId, StringComparison.OrdinalIgnoreCase);
 
     // ── Per-app output routing (UNDOCUMENTED IAudioPolicyConfig — guarded) ──
 
@@ -492,6 +656,50 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         }
     }
 
+    // ── The device all sound plays through (UNDOCUMENTED IPolicyConfig — guarded) ──
+
+    private bool _switchProbed;
+    private object? _policyClient; // IPolicyConfig (undocumented)
+
+    /// <inheritdoc/>
+    public bool IsDefaultOutputSwitchSupported
+    {
+        get { lock (_gate) { return !_disposed && ProbeSwitchLocked(); } }
+    }
+
+    /// <summary>
+    /// Lazily creates the policy-config client once and caches whether it answers, as
+    /// <see cref="ProbeRoutingLocked"/> does for routing. When it does not, the This PC card names the current
+    /// device and offers Windows' sound settings instead of a picker that would do nothing.
+    /// </summary>
+    private bool ProbeSwitchLocked()
+    {
+        if (_switchProbed) return _policyClient is not null;
+        _switchProbed = true;
+        _policyClient = PolicyConfigClient.TryCreate();
+        if (_policyClient is null)
+            Log.Information("Default output switch: IPolicyConfig unavailable on this build — using guided fallback");
+        return _policyClient is not null;
+    }
+
+    /// <inheritdoc/>
+    public bool SetDefaultOutputDevice(string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId)) return false;
+        lock (_gate)
+        {
+            if (_disposed || !ProbeSwitchLocked()) return false;
+            var switched = PolicyConfigClient.SetDefaultEndpoint(_policyClient!, deviceId);
+
+            // The endpoint held open is the old default now, or may be: one role can move before another is
+            // refused. Drop it either way, so the next read opens the device the sound really goes to and nothing
+            // in the meantime moves the old one. Only releasing happens on this (UI) thread; the worker-thread read
+            // re-opens.
+            ResetManager();
+            return switched;
+        }
+    }
+
     // ── COM lifetime ──────────────────────────────────────────────────────
 
     private bool EnsureManager()
@@ -512,6 +720,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             return false;
         }
         _device = device;
+        _deviceId = EndpointIdOf(device);
 
         var iid = IID_IAudioSessionManager2;
         if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var mgrObj) != 0
@@ -527,11 +736,15 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private void ResetManager()
     {
         ReleaseGroups();
+        Release(_endpointMeter); _endpointMeter = null;
+        Release(_endpointVolume); _endpointVolume = null;
+        _pcPeakFailureLogged = false;
         Release(_manager); _manager = null;
         Release(_device); _device = null;
+        _deviceId = null;
         Release(_enumerator); _enumerator = null;
-        // Routing keys reference the (now-stale) enumeration; drop them. The policy-config RCW is
-        // independent of the endpoint handle, so it survives a manager reset (re-probed lazily).
+        // Routing keys reference the (now-stale) enumeration; drop them. The two policy-config RCWs (routing and
+        // the default switch) are independent of the endpoint handle, so they survive a manager reset.
         _routingKeys.Clear();
     }
 
@@ -561,6 +774,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             _disposed = true;
             ResetManager();
             Release(_policyConfig); _policyConfig = null;
+            Release(_policyClient); _policyClient = null;
         }
     }
 
@@ -702,8 +916,16 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         Pid = 14
     };
 
-    // Minimal PROPVARIANT: we only ever read a VT_LPWSTR (string) friendly name. The union is
-    // represented by the pointer-sized field at offset 8 (x64); we read it as a wide string.
+    // PKEY_AudioEndpoint_FormFactor = {1da5d803-d492-4edd-8c23-e0c0ffee7f0e}, 0 — a VT_UI4 EndpointFormFactor.
+    private static PropertyKey PKEY_AudioEndpoint_FormFactor => new()
+    {
+        FmtId = new Guid("1da5d803-d492-4edd-8c23-e0c0ffee7f0e"),
+        Pid = 0
+    };
+
+    // Minimal PROPVARIANT: we only ever read a VT_LPWSTR (the friendly name) or a VT_UI4 (the form factor). The
+    // union is represented by the pointer-sized field at offset 8 (x64): a wide-string pointer for VT_LPWSTR, and
+    // a 32-bit value in its low half for VT_UI4.
     [StructLayout(LayoutKind.Sequential)]
     private struct PropVariant
     {
@@ -713,6 +935,8 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         public IntPtr p2;
 
         public readonly string? GetString() => vt == 31 /* VT_LPWSTR */ ? Marshal.PtrToStringUni(p) : null;
+
+        public readonly uint? GetUInt32() => vt == 19 /* VT_UI4 */ ? unchecked((uint)p.ToInt64()) : null;
     }
 
     [DllImport("ole32.dll")]
@@ -770,5 +994,26 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     {
         [PreserveSig] int GetPeakValue(out float peak);
         // Channel-count / channel-peaks / hardware-support members are unused — not declared.
+    }
+
+    // The default endpoint's own volume (endpointvolume.h), in vtable order. The PC volume reads and writes the
+    // scalar level and the mute; the members between them are declared only to keep the order.
+    [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioEndpointVolume
+    {
+        [PreserveSig] int RegisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int UnregisterControlChangeNotify(IntPtr notify);
+        [PreserveSig] int GetChannelCount(out uint channelCount);
+        [PreserveSig] int SetMasterVolumeLevel(float levelDb, ref Guid eventContext);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid eventContext);
+        [PreserveSig] int GetMasterVolumeLevel(out float levelDb);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        [PreserveSig] int SetChannelVolumeLevel(uint channel, float levelDb, ref Guid eventContext);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint channel, float level, ref Guid eventContext);
+        [PreserveSig] int GetChannelVolumeLevel(uint channel, out float levelDb);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint channel, out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid eventContext);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+        // Step, hardware-support and range members are unused — not declared.
     }
 }

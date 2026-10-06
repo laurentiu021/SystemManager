@@ -29,14 +29,15 @@ public partial class AudioMixerView : UserControl
     // so a test can drive the exact event orderings the four handlers produce — in particular the
     // Audit-3 regression: drag ends (dragging=false) while the slider still holds keyboard focus,
     // which must leave the row STILL adjusting. This is the wiring that actually held the bug, so
-    // it is what needs coverage — not just the terminal OR.
-    internal static void ApplyAdjustingState(AudioSessionRowViewModel? row, bool dragging, bool keyboardFocused)
+    // it is what needs coverage — not just the terminal OR. Typed on IAdjustableVolume so the This
+    // PC card's slider (#1588) goes through the same handlers as the rows'.
+    internal static void ApplyAdjustingState(IAdjustableVolume? target, bool dragging, bool keyboardFocused)
     {
-        if (row is not null) row.IsUserAdjusting = ComputeAdjusting(dragging, keyboardFocused);
+        if (target is not null) target.IsUserAdjusting = ComputeAdjusting(dragging, keyboardFocused);
     }
 
     private static void Recompute(Slider slider) =>
-        ApplyAdjustingState(slider.DataContext as AudioSessionRowViewModel,
+        ApplyAdjustingState(slider.DataContext as IAdjustableVolume,
             slider.Tag is true, slider.IsKeyboardFocusWithin);
 
     private void VolumeSlider_DragStarted(object sender, DragStartedEventArgs e)

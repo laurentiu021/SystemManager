@@ -12223,8 +12223,9 @@ public partial class ArchitectureTests
         var contract = File.ReadAllText(Path.Combine(appDir, "Services", "IAudioMixerService.cs"));
         var writes = BoolReturningMember().Matches(contract).Select(m => m.Groups["name"].Value).ToList();
 
-        // Vacuity floor from an enumerated population: SetVolume, SetMute, SetSessionOutputDevice.
-        Assert.True(writes.Count >= 3,
+        // Vacuity floor from an enumerated population: SetVolume, SetMute, SetSessionOutputDevice, and the This PC
+        // card's SetPcVolume, SetPcMute and SetDefaultOutputDevice (#1588).
+        Assert.True(writes.Count >= 6,
             $"only {writes.Count} bool-returning writes found on IAudioMixerService — the member regex has "
           + "stopped matching, so this guard is measuring nothing.");
 
@@ -13235,12 +13236,14 @@ public partial class ArchitectureTests
     [Fact]
     public void EveryViewModelThatTracksRunningState_ForwardsItToIsBusy()
     {
-        // Not a tab: a row inside the Volume Control list, with no sidebar entry to draw a bar under. Its
-        // flag means "the user is dragging this slider", which is not background work.
+        // Not tabs: a row inside the Volume Control list and the This PC card above it, with no sidebar entry to
+        // draw a bar under. Their flag means "the user is dragging this slider", which is not background work.
         var notTabs = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["AudioSessionRowViewModel.cs"] = "a row inside Volume Control, not a tab; IsUserAdjusting is a "
                                               + "drag gesture rather than work in progress",
+            ["PcVolumeViewModel.cs"] = "the This PC card inside Volume Control, not a tab; IsUserAdjusting is a "
+                                       + "drag gesture rather than work in progress",
         };
 
         var vmDir = Path.Combine(TestPaths.AppProject(), "ViewModels");

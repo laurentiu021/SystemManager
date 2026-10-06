@@ -9,8 +9,42 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d">
 
+    <UserControl.Resources>
+        <!-- The mute button's glyph, shared by the This PC card and the app rows: a speaker, or a struck-through
+             one in Danger red while muted. -->
+        <Style x:Key="MuteGlyph" TargetType="TextBlock">
+            <Setter Property="Text" Value="&#xE767;"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                    <Setter Property="Text" Value="&#xE74F;"/>
+                    <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- The This PC picker's open list (#1588): each device's name, and under it what kind of device it is,
+             with "in use now" on the one the sound plays through. Set as the items' ContentTemplate rather than
+             the box's ItemTemplate on purpose: DisplayMemberPath keeps drawing the closed box, so it stays one
+             line, and only the open list shows two. -->
+        <Style x:Key="OutputDeviceItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <StackPanel>
+                            <TextBlock Text="{Binding FriendlyName}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Caption}" Margin="0,2,0,0"
+                                       Visibility="{Binding Detail, Converter={StaticResource FlexVis}}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid Background="{DynamicResource Surface0}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -20,7 +54,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Volume Control" Style="{StaticResource Display}"/>
-            <TextBlock Text="Set the volume and mute for each app playing sound, with a live level meter. Route an app to a specific output device (headset, speakers), and save volume presets you can re-apply in one click."
+            <TextBlock Text="Set the volume for the whole PC and for each app playing sound, with a live level meter. Choose which device the PC plays through, route an app to a different one, and save volume presets you can re-apply in one click."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"
                        MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
@@ -53,8 +87,116 @@
             </WrapPanel>
         </Border>
 
+        <!-- This PC (#1588): the whole PC's volume and the device all sound plays through. A card of its own
+             above the apps, tinted the way Deep Cleanup's highlighted card is, so dragging it is not mistaken
+             for dragging one app's volume. Laid out like an app row inside, so the two read as the same control
+             at two reaches. -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="8"
+                DataContext="{Binding Pc}">
+            <Border Style="{StaticResource CardInner}" Margin="8,6" Padding="14,12"
+                    Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Accent}"
+                    AutomationProperties.Name="This PC">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="Applies to everything, on top of each app's own level"
+                                   Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="This PC" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <!-- The PC's volume: the same slider, meter and mute as an app row. The slider shares the
+                         rows' drag handlers, which flag the card through IAdjustableVolume, so a refresh does
+                         not move it under the user's hand. -->
+                    <Grid Margin="0,10,0,0" Visibility="{Binding IsAvailable, Converter={StaticResource FlexVis}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Width="32" Height="32" Margin="0,0,14,0" VerticalAlignment="Center"
+                                CornerRadius="{StaticResource RadiusSm}" Background="{DynamicResource Surface3}">
+                            <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="16"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextSecondary}"/>
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <DockPanel Margin="0,0,0,4">
+                                <TextBlock DockPanel.Dock="Right"
+                                           Text="{Binding VolumeDisplay}" Style="{StaticResource Subtle}"
+                                           FontWeight="SemiBold" MinWidth="40"
+                                           TextAlignment="Right"
+                                           Foreground="{DynamicResource TextSecondary}"/>
+                                <TextBlock Text="All sound" FontWeight="SemiBold" Style="{StaticResource Body}"/>
+                            </DockPanel>
+                            <Slider Minimum="0" Maximum="1" Value="{Binding Volume}"
+                                    VerticalAlignment="Center" IsMoveToPointEnabled="True"
+                                    Thumb.DragStarted="VolumeSlider_DragStarted"
+                                    Thumb.DragCompleted="VolumeSlider_DragCompleted"
+                                    GotKeyboardFocus="VolumeSlider_GotKeyboardFocus"
+                                    LostKeyboardFocus="VolumeSlider_LostKeyboardFocus"
+                                    AutomationProperties.Name="Volume for all sound on this PC"/>
+                            <ProgressBar AutomationProperties.Name="Audio level for this PC"
+                                         Height="3" Margin="0,4,0,0" Minimum="0" Maximum="1"
+                                         Value="{Binding PeakLevel, Mode=OneWay}"
+                                         Foreground="{DynamicResource Accent}"
+                                         Background="Transparent" BorderThickness="0"
+                                         IsHitTestVisible="False"/>
+                        </StackPanel>
+
+                        <Button Grid.Column="2" Style="{StaticResource GhostButton}"
+                                Margin="14,0,0,0" Padding="10,6" VerticalAlignment="Center"
+                                Command="{Binding ToggleMuteCommand}"
+                                AutomationProperties.Name="Mute all sound on this PC">
+                            <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15"
+                                       Style="{StaticResource MuteGlyph}"/>
+                        </Button>
+                    </Grid>
+
+                    <TextBlock Margin="0,10,0,0" Style="{StaticResource Subtle}" TextWrapping="Wrap"
+                               Text="No speakers or headphones were found. Connect some and they appear here."
+                               Visibility="{Binding IsUnavailable, Converter={StaticResource FlexVis}}"/>
+
+                    <!-- Where all sound goes. A picker where Windows lets SysManager switch the device; elsewhere the
+                         device is still named, because reading it is documented, and Windows' own setting is one
+                         click away. -->
+                    <WrapPanel Margin="0,12,0,0" Visibility="{Binding ShowOutputPicker, Converter={StaticResource FlexVis}}">
+                        <TextBlock Text="Sound plays through" Style="{StaticResource Subtle}"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <ComboBox ItemsSource="{Binding OutputDevices}"
+                                  SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
+                                  DisplayMemberPath="FriendlyName" MinWidth="300" Margin="0,0,10,0"
+                                  VerticalContentAlignment="Center"
+                                  ItemContainerStyle="{StaticResource OutputDeviceItem}"
+                                  AutomationProperties.Name="Sound plays through"/>
+                        <TextBlock Text="Apps you sent elsewhere below keep their own device."
+                                   Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                    </WrapPanel>
+                    <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowOutputSettings, Converter={StaticResource FlexVis}}">
+                        <WrapPanel>
+                            <TextBlock Text="Sound plays through" Style="{StaticResource Subtle}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="{Binding OutputName}" Style="{StaticResource Body}" FontWeight="SemiBold"
+                                       VerticalAlignment="Center"/>
+                        </WrapPanel>
+                        <Button Margin="0,8,0,0" HorizontalAlignment="Left"
+                                Style="{StaticResource GhostButton}" Padding="8,4"
+                                Command="{Binding OpenOutputSettingsCommand}"
+                                AutomationProperties.Name="Change the device this PC plays sound through, in Windows sound settings">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
+                                           FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock Text="Change in Windows sound settings…" FontSize="12" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+
         <!-- App mixer list -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="28,16,28,0" Padding="0">
             <Grid>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8"
                               Visibility="{Binding HasSessions, Converter={StaticResource FlexVis}}">
@@ -164,21 +306,8 @@
                                                 Margin="14,0,0,0" Padding="10,6" VerticalAlignment="Center"
                                                 Command="{Binding ToggleMuteCommand}"
                                                 AutomationProperties.Name="{Binding DisplayName, StringFormat='Mute {0}'}">
-                                            <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <!-- Speaker glyph; switches to muted-speaker when muted. -->
-                                                        <Setter Property="Text" Value="&#xE767;"/>
-                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsMuted}" Value="True">
-                                                                <Setter Property="Text" Value="&#xE74F;"/>
-                                                                <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="15"
+                                                       Style="{StaticResource MuteGlyph}"/>
                                         </Button>
                                     </Grid>
                                 </Border>
@@ -196,6 +325,6 @@
         </Border>
 
         <!-- Status bar -->
-        <v:StatusFooter Grid.Row="3" Margin="28,12,28,24" ProgressName="Audio device refresh progress"/>
+        <v:StatusFooter Grid.Row="4" Margin="28,12,28,24" ProgressName="Audio device refresh progress"/>
     </Grid>
 </UserControl>

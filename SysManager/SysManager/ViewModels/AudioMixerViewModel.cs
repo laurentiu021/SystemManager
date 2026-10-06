@@ -22,8 +22,9 @@ namespace SysManager.ViewModels;
 /// so dragging a slider survives a refresh (a wholesale replace would raise a Reset and
 /// drop the drag).
 ///
-/// <para>Preview scope: default render device only; per-app output-device routing and
-/// volume presets are intentionally not part of this preview (see the view's banner).</para>
+/// <para>Above the rows, <see cref="Pc"/> is the This PC card (#1588): the whole PC's volume, read on the same
+/// one-second pass as the rows and metered on the same 50&#160;ms tick, and the device all sound plays through,
+/// read with the device list.</para>
 /// </summary>
 public sealed partial class AudioMixerViewModel : ViewModelBase
 {
@@ -61,6 +62,9 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     /// <summary>Saved volume presets the user can apply or delete.</summary>
     public BulkObservableCollection<VolumePreset> Presets { get; } = new();
 
+    /// <summary>The This PC card: the whole PC's volume and the device all sound plays through.</summary>
+    public PcVolumeViewModel Pc { get; }
+
     [ObservableProperty] private bool _isActive;
     [ObservableProperty] private bool _hasSessions;
 
@@ -77,6 +81,9 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     {
         _service = service;
         _presets = presets;
+        Pc = new PcVolumeViewModel(service, OutputDevices,
+            report: message => StatusMessage = message,
+            refresh: RefreshAfterOutputSwitchAsync);
         StatusMessage = "Reading audio sessions…";
         LetRefreshReplaceStatus();
         InitializeAsync(InitAsync);
@@ -100,6 +107,8 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         try
         {
             RoutingSupported = _service.IsRoutingSupported;
+            // Read here, on the UI thread, as routing is: the client it creates is then used from this thread.
+            Pc.CanSwitchOutput = _service.IsDefaultOutputSwitchSupported;
             // A presets file that could not be read shows no presets; Save and Delete then refuse to write over it,
             // and say so (#2521).
             Presets.ReplaceWith(_presets.Load() ?? []);
@@ -173,8 +182,10 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     [RelayCommand]
     internal async Task ReconcileAsync()
     {
-        var snapshot = await Task.Run(_service.GetSessions).ConfigureAwait(true);
+        // The PC's volume rides the same worker hop: it is one more read on the endpoint the sessions come from.
+        var (snapshot, pc) = await Task.Run(() => (_service.GetSessions(), _service.GetPcVolume())).ConfigureAwait(true);
         MergeInto(snapshot);
+        Pc.ApplyUpdate(pc);
 
         // Re-read the device list on a slower cadence than the sessions. Before this it was read ONCE, in
         // InitAsync, so a headset plugged in after the tab opened never appeared in any picker for the rest
@@ -188,9 +199,31 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         HasSessions = Sessions.Count > 0;
         // Through ShowRefreshStatus: this runs every second, and a saved preset, an applied one or a change
         // Windows refused must stay on the line until the user does something else (#2532).
-        ShowRefreshStatus(Sessions.Count > 0
-            ? $"{Sessions.Count} app{(Sessions.Count == 1 ? "" : "s")} playing audio."
-            : "No apps are playing audio right now.");
+        ShowRefreshStatus(DescribeRefresh(Sessions.Count, Pc.OutputName));
+    }
+
+    /// <summary>
+    /// The status line a refresh writes: how many apps are playing, and the device all sound plays through when
+    /// there is one (#1588).
+    /// </summary>
+    internal static string DescribeRefresh(int apps, string output)
+    {
+        var playing = apps > 0
+            ? $"{apps} app{(apps == 1 ? "" : "s")} playing audio"
+            : "No apps are playing audio right now";
+        return output.Length > 0 ? $"{playing} · output: {output}" : $"{playing}.";
+    }
+
+    /// <summary>
+    /// After the user moved all sound to another device: read the devices and the apps again straight away rather
+    /// than on the next cadence, so the picker, the device list's "in use" flag and the app list show where Windows
+    /// really sends the sound. The service has already dropped the old endpoint, so this pass opens the new one.
+    /// </summary>
+    private async Task RefreshAfterOutputSwitchAsync()
+    {
+        _passesSinceDeviceRefresh = 0;
+        await RefreshDevicesAsync().ConfigureAwait(true);
+        await ReconcileAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -252,14 +285,19 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
     /// <summary>
     /// One peak-meter pass: read every visible row's level in a SINGLE service call made on a worker
     /// thread, then write the numbers back here. One call for all rows (not one per row) is what keeps
-    /// the service lock taken once per tick instead of once per app.
+    /// the service lock taken once per tick instead of once per app. The This PC meter is the one other
+    /// read, in the same worker hop, and only while the PC's volume could be read.
     /// </summary>
     internal async Task UpdatePeaksAsync(CancellationToken ct)
     {
         var ids = Sessions.Select(r => r.SessionId).ToArray();
-        if (ids.Length == 0) return;
+        var readPc = Pc.IsAvailable;
+        if (ids.Length == 0 && !readPc) return;
 
-        var peaks = await Task.Run(() => _service.GetPeaks(ids), ct).ConfigureAwait(true);
+        // Still one hop to a worker per tick: the rows in one batched call, and the PC's own meter beside it.
+        var (peaks, pcPeak) = await Task.Run(() => (
+            ids.Length > 0 ? _service.GetPeaks(ids) : NoPeaks,
+            readPc ? _service.GetPcPeak() : 0f), ct).ConfigureAwait(true);
 
         // Dispose can land while the sample is in flight; the rows have already been zeroed by then,
         // so writing these levels back would re-light meters on a torn-down tab.
@@ -271,10 +309,13 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         // on re-show the user sees a lit meter from minutes ago until the next sample lands.
         if (_reconcileCts is null || ct.IsCancellationRequested || !IsActive) return;
 
+        Pc.PeakLevel = pcPeak;
         foreach (var row in Sessions)
             if (peaks.TryGetValue(row.SessionId, out var peak))
                 row.PeakLevel = peak;
     }
+
+    private static readonly IReadOnlyDictionary<string, float> NoPeaks = new Dictionary<string, float>();
 
     /// <summary>
     /// Re-enumerate output devices (off the UI thread) into the shared picker list, preserving each row's
@@ -307,6 +348,10 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         foreach (var row in Sessions)
             if (row.RoutingSupported && chosen.TryGetValue(row.SessionId, out var id))
                 row.SetOutputDeviceFromService(id);
+
+        // The This PC picker shows the device the fresh list flags as in use, so a switch made outside SysManager
+        // reaches it here too.
+        Pc.SetOutputFromService();
     }
 
     /// <summary>
@@ -435,6 +480,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
 
         if (_activated.Task.IsCompleted)
             _activated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Pc.PeakLevel = 0f;
         foreach (var row in Sessions) row.PeakLevel = 0f;
     }
 
@@ -447,6 +493,7 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
             _reconcileCts?.Cancel();
             _reconcileCts?.Dispose();
             _reconcileCts = null; // idempotent: a second Dispose() must not re-Cancel a disposed CTS
+            Pc.PeakLevel = 0f;
             foreach (var row in Sessions) row.PeakLevel = 0f; // don't leave stale lit meters
         }
         base.Dispose(disposing);

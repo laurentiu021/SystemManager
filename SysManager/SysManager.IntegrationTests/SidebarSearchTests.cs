@@ -69,6 +69,8 @@ public class SidebarSearchTests(NavSurfaceFixture fixture) : IClassFixture<NavSu
     [InlineData("task manager", "nav-processes")]
     [InlineData("cannot delete", "nav-file-lock")]
     [InlineData("no internet", "nav-network-repair")]
+    [InlineData("speakers", "nav-volume-control")]
+    [InlineData("headphones", "nav-volume-control")]
     public void SearchingByPlainWords_FindsTheJargonNamedTab(string typed, string expectedNavId)
     {
         var results = Search(typed);

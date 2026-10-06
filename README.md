@@ -321,6 +321,14 @@ Edit Windows environment variables without the cramped built-in dialog:
   is not saved over it, and the status line says so
 
 ### Volume Control
+- **This PC** — a card above the apps sets the volume for all sound at once, with its own
+  mute and level meter, and picks the device all sound plays through: speakers, headphones,
+  a monitor's speakers. The list under the picker says what kind of device each one is and
+  which is in use now. Where Windows does not let SysManager switch, the card still names the
+  device and opens Windows' sound settings instead. Apps you sent to a device of their own keep
+  it, and neither the PC's volume nor its device is saved in a preset, so applying one never
+  moves the sound to other speakers. Plug in headphones or switch from the taskbar and the
+  card, and the app list under it, follow within about ten seconds
 - **Per-app volume mixer** — lists every app currently playing on your default
   playback device, each with its own volume slider, mute toggle, and a live peak meter
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters

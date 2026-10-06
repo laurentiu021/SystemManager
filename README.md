@@ -708,6 +708,11 @@ System → System Fixes, where the tab name matches what they do.
 
 ### Disk Analyzer
 - Space breakdown by top-level folders with drill-down navigation
+- **A map of the folder you are in**, above the list: each subfolder is a block sized by the
+  space it uses, so the one eating the disk is the biggest block. Click a block to open that
+  folder, right-click for Show in Explorer. Folders too small to label share one grey "Other"
+  block, and a wider window shows more of them. Every block is a button with its name, size and
+  share for a screen reader, and "Hide map" (remembered) gives the list its full height back
 - Drive usage bar with total/used/free
 - Preset paths (fixed drives, user profile, Program Files) or custom browse
 - Show in Explorer for each folder

@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.119.0] - 2026-10-06
+
+**Disk Analyzer now draws the folder you are looking at as a map, so the folder eating your disk is the biggest
+block.** Click a block to open that folder, the same as the list's arrow.
+
+### Added
+
+- **A map above the Disk Analyzer list (#1592).** The tab answered with a sorted list of sizes, which takes reading to
+  see that one folder is almost half of everything.
+  - Each subfolder is a block sized by the space it uses, drawn from the entries the list already has, so nothing new
+    is scanned and the map and the list always show the same folder. One level at a time: Up works for both.
+  - Every folder big enough for its name gets a block of its own, decided on the real size of the map, so a wider
+    window shows more. The rest, and the files loose in the folder, share one grey "Other" block whose tooltip says
+    what it holds.
+  - One colour, the theme's accent, lighter for smaller blocks, with the text colour chosen per block so it reads on
+    every preset.
+  - Clicking a block opens that folder; right-clicking offers Show in Explorer, as the list does. Hovering shows the
+    name, size and share. Each block is a button in size order with its name, size and share for a screen reader,
+    and Enter opens it. A folder that could not all be read carries the list's warning mark.
+  - "Hide map" gives the list its full height back on a small screen, and is remembered. With no subfolder to draw,
+    there is no map and the list's own message speaks.
+
 ## [1.118.0] - 2026-10-06
 
 **Battery Health now shows how the battery has worn over time, and whether that is normal.** A new card draws how

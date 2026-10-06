@@ -48,6 +48,7 @@ public static class ServiceRegistration
         services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();
         services.AddSingleton<DiskAnalyzerService>();
         services.AddSingleton<DiskScanHistoryService>();
+        services.AddSingleton<DiskAnalyzerPreferenceService>();
         services.AddSingleton<DuplicateFileService>();
         services.AddSingleton<EventLogService>();
         services.AddSingleton<FixedDriveService>();

@@ -70,7 +70,7 @@ public sealed class BrowserExtensionServiceTests : IDisposable
         Assert.Equal<(string, string?, string)>(
             [("Google Chrome", "Default", "One"), ("Google Chrome — Profile 1", "Profile 1", "Two"), ("Opera GX", null, "Three"), ("Firefox", null, "Four")],
             profiles.Select(p => (p.Browser, p.ProfileDirectory, Assert.Single(p.Extensions).Name)));
-        // A browser listed more than once names each profile in its status; one listed once needs no name.
+        // A browser with more than one profile names each in its status; one with a single profile needs no name.
         Assert.Equal<string?>(["Default", "Profile 1", null, null], profiles.Select(p => p.ProfileName));
         Assert.Equal(["chrome://extensions", "chrome://extensions", BrowserExtensionService.OperaPage, BrowserExtensionService.FirefoxPage],
             profiles.Select(p => p.Page));

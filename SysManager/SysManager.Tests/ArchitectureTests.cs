@@ -3019,11 +3019,21 @@ public partial class ArchitectureTests
     [Fact]
     public void TheExtensionReaders_ReadTheirJsonOnlyThroughExtensionFiles()
     {
-        string[] readers = ["ChromiumExtensionReader.cs", "FirefoxExtensionReader.cs"];
+        // Every extension reader, so one split out of these two is checked too.
+        var readers = Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "Services"), "*ExtensionReader*.cs")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .ToList();
+        Assert.True(readers.Count >= 2, $"only {readers.Count} extension readers were found, out of 2 measured");
+        // Each accessor of the parser's that can throw on what a file holds: on a value of the wrong kind, on a string
+        // that is not valid text, or on a key it cannot unescape. Walking an array is allowed, after its kind is
+        // checked, which the readers do.
         string[] accessors =
         [
             ".TryGetProperty(", ".GetProperty(", ".GetString(", ".GetBoolean(", ".GetInt32(", ".GetInt64(",
-            ".TryGetInt32(", ".TryGetInt64(", ".GetDouble(", ".EnumerateObject(", ".GetRawText(",
+            ".TryGetInt32(", ".TryGetInt64(", ".GetDouble(", ".TryGetDouble(", ".GetDecimal(", ".TryGetDecimal(",
+            ".EnumerateObject(", ".GetRawText(", ".ValueEquals(", ".GetDateTime(", ".TryGetDateTime(", ".GetGuid(",
+            ".TryGetGuid(", ".GetBytesFromBase64(", ".TryGetBytesFromBase64(", ".GetPropertyCount(", ".ToString(",
         ];
         var helper = new Regex(@"\bExtensionFiles\.(String|Number|Int|Bool|Has|Strings|TryGet|Properties|Text)\(",
             RegexOptions.CultureInvariant);

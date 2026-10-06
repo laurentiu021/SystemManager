@@ -36,7 +36,7 @@ clear the cache but not show it. Nothing in a browser is changed: "Manage in …
     behind a link (a common way to move it to another drive) is shown as one that could not be read, and says why. A
     link where a profile, an extension or one of its folders should be is never followed, and a browser's files cannot
     send SysManager to a network share outside the profile it is reading. One odd value in those files costs only
-    itself, never the list.
+    itself, and a file that is not JSON at all costs only that file — never the list.
   - **Read-only.** "Manage in …" opens the browser on its own extensions page, where it asks you itself, and puts the
     page's address on the clipboard in case the browser opens somewhere else. While SysManager runs as administrator
     it opens no browser — one opened from it would run as administrator too — and says to open the browser and paste

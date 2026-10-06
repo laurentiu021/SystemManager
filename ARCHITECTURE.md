@@ -931,7 +931,8 @@ Key services:
   A package off this PC's drives is opened only when it sits inside the profile being read, which folder
   redirection can put on a share.
 - `ExtensionFiles` — the bounded, fully shared reads and tolerant JSON parsing both readers use, and the
-  only way they take a value from that JSON: each value read by its kind and each key's name read by itself,
+  only way they read a value or a key from that JSON (arrays are walked once their kind is checked): each value
+  read by its kind and each key's name read by itself,
   so a number written as text, bytes that are not UTF-8, or a key the parser accepts but its own lookup
   throws on are simply absent and cost nothing else, a rule
   `ArchitectureTests.TheExtensionReaders_ReadTheirJsonOnlyThroughExtensionFiles` keeps; the check that an

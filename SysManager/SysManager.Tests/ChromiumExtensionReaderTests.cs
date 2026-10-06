@@ -456,6 +456,28 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
         Assert.Equal(["Can see your open tabs"], extension.Permissions.Select(p => p.Text));
     }
 
+    [Theory]
+    [InlineData("img /i48.png")]
+    [InlineData("img./i48.png")]
+    [InlineData("img/i48.png ")]
+    public void AnIconPathWithAPartWindowsWouldRename_IsNotRead(string relative)
+    {
+        // Windows drops a trailing space or dot from the last part of a path only, so "img " would be looked at as
+        // "img" and read through as "img ": the two could be different folders, one of them a link.
+        Assert.Null(ExtensionFiles.Inside(_profile, relative));
+    }
+
+    [Fact]
+    public void AnUnpackedFolderWithAPartWindowsWouldRename_IsListed_WithoutBeingRead()
+    {
+        Settings(("cccccccccccccccccccccccccccccccc", $$"""{ "location": 4, "path": "{{(_root + @"\ext \").Replace("\\", "\\\\", StringComparison.Ordinal)}}" }"""));
+
+        var extension = Single();
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal(ExtensionOrigin.Folder, extension.Origin);
+    }
+
     [Fact]
     public void AnIconInAFolderThatIsALink_IsNotRead()
     {

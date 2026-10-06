@@ -66,7 +66,7 @@ public sealed record BrowserExtension(
 /// <param name="Executable">What starts the browser, e.g. "msedge.exe", or null when it cannot be started reliably.</param>
 /// <param name="ProfileDirectory">
 /// The profile folder to open it in, such as "Default" or "Profile 2", or null for a browser that is not opened in one
-/// (Opera, Firefox).
+/// (Opera, Firefox) or whose profiles could not be read.
 /// </param>
 /// <param name="CouldNotRead">True when the profile's extension list could not be read, so an empty list is not "none".</param>
 /// <param name="ProfileName">

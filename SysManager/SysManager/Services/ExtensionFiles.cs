@@ -52,7 +52,8 @@ internal static class ExtensionFiles
 
     /// <summary>
     /// Parses <paramref name="bytes"/> as JSON the way browsers write and accept it: an optional byte-order mark,
-    /// comments (Chromium allows them in a manifest) and trailing commas. Null when it is not JSON.
+    /// comments (Chromium allows them in a manifest), trailing commas, and nesting as deep as Chromium's own reader
+    /// takes. Null when it is not JSON.
     /// </summary>
     internal static JsonDocument? Parse(byte[]? bytes)
     {
@@ -65,7 +66,7 @@ internal static class ExtensionFiles
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip,
-                MaxDepth = 128,
+                MaxDepth = 200,
             });
         }
         catch (JsonException) { return null; }
@@ -190,8 +191,11 @@ internal static class ExtensionFiles
     internal static string? Inside(string folder, string relative)
     {
         var trimmed = (relative ?? "").Replace('\\', '/').TrimStart('/');
-        if (trimmed.Length == 0 || trimmed.Contains(':', StringComparison.Ordinal) || Path.IsPathRooted(trimmed))
+        if (trimmed.Length == 0 || trimmed.Contains(':', StringComparison.Ordinal) || Path.IsPathRooted(trimmed)
+            || HasAPartWindowsRenames(trimmed))
+        {
             return null;
+        }
         try
         {
             var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
@@ -216,6 +220,14 @@ internal static class ExtensionFiles
         catch (NotSupportedException) { return null; }
         catch (PathTooLongException) { return null; }
     }
+
+    /// <summary>
+    /// True when a part of the path ends in a space or a dot. Windows drops those from the last part of a path but not
+    /// from one in the middle, so such a folder is looked at under one name and read through under another: a check
+    /// would pass on a plain <c>img</c> while the read goes through a link named <c>img </c>.
+    /// </summary>
+    internal static bool HasAPartWindowsRenames(string path) =>
+        path.Split('\\', '/').Any(part => part.Length > 0 && part != "." && part != ".." && part[^1] is ' ' or '.');
 
     /// <summary>What is at a path, as <see cref="KindOf"/> sees it.</summary>
     internal enum EntryKind

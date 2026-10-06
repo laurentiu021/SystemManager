@@ -99,7 +99,7 @@ internal static class ChromiumExtensionReader
         {
             if (own.Location is not (LocationUnpacked or LocationCommandLine)) continue;
             if (own.Path is not { Length: > 0 } path) continue;
-            if (!ExtensionFiles.IsOnALocalDrive(path))
+            if (!ExtensionFiles.IsOnALocalDrive(path) || ExtensionFiles.HasAPartWindowsRenames(path))
             {
                 found.Add(Unreadable(own));
                 continue;

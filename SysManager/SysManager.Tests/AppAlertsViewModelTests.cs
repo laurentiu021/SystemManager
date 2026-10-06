@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using CommunityToolkit.Mvvm.Input;
 using SysManager.Models;
 using SysManager.ViewModels;
 using Xunit;
@@ -86,32 +87,64 @@ public class AppAlertsViewModelTests
     }
 
     [Fact]
-    public async Task RefreshInstalledApps_WhenNotMonitoring_LeavesBusyOff()
+    public async Task F5_NeverReplacesTheAlertHistory()
     {
+        // Regression: F5 ran "Show Installed", which swapped the recorded detections for every program on
+        // the PC, stamped each with the time of the keypress and asked nothing — while Clear History, the
+        // deliberate way to lose the same list, asks first because the list is the only record of what
+        // installed itself. F5 now checks for new installs, which can only add to the list.
         using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+        var detected = new AppInstallEntry { Name = "Detected earlier", Source = "Registry" };
+        vm.Alerts.Add(detected);
+        vm.AlertCount = 1;
+        vm.UnacknowledgedCount = 1;
 
-        await vm.RefreshInstalledAppsCommand.ExecuteAsync(null);
+        await Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5).ExecuteAsync(null);
 
-        Assert.False(vm.IsMonitoring);
-        Assert.False(vm.IsBusy);
+        Assert.Same(detected, Assert.Single(vm.Alerts));
+        Assert.Equal(1, vm.AlertCount);
+        Assert.Equal(1, vm.UnacknowledgedCount);
+        Assert.False(detected.IsAcknowledged);
     }
 
     [Fact]
-    public async Task RefreshInstalledApps_WhileMonitoring_KeepsBusyInSyncWithMonitoring()
+    public void F5_BeforeMonitoringStarts_HasNothingToRun()
     {
-        // Regression (idx 235): a manual refresh must not switch off the busy/monitoring
-        // affordance while monitoring is active — IsBusy has to track IsMonitoring.
+        // A check for new installs compares against the list taken when monitoring started. Before that
+        // there is no list, so there is nothing for F5 to do.
         using var vm = new AppAlertsViewModel(new Services.AppAlertService());
-        // StartMonitoring is now async (the baseline scan is offloaded off the UI thread);
-        // await it so IsMonitoring/IsBusy are set before asserting.
+
+        var f5 = Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5);
+        Assert.False(f5.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task F5_AfterMonitoringStops_HasNothingToRun()
+    {
+        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
         await vm.StartMonitoringCommand.ExecuteAsync(null);
+        vm.StopMonitoringCommand.Execute(null);
+
+        var f5 = Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5);
+        Assert.False(f5.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task F5_WhileMonitoring_ChecksAndKeepsMonitoring()
+    {
+        // Carries the idx-235 regression over to the new F5: it must not switch off the busy/monitoring
+        // affordance, and it says what it did.
+        using var vm = new AppAlertsViewModel(new Services.AppAlertService());
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+
+        var f5 = Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.RefreshOnF5);
+        Assert.True(f5.CanExecute(null));
+        await f5.ExecuteAsync(null);
+
         Assert.True(vm.IsMonitoring);
         Assert.True(vm.IsBusy);
-
-        await vm.RefreshInstalledAppsCommand.ExecuteAsync(null);
-
-        Assert.True(vm.IsMonitoring);
-        Assert.True(vm.IsBusy); // was incorrectly forced to false before the fix
+        Assert.Contains("Checked", vm.MonitorStatus, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -123,7 +156,7 @@ public class AppAlertsViewModelTests
         // The generated command must expose IAsyncRelayCommand and, once awaited, leave the
         // VM monitoring.
         using var vm = new AppAlertsViewModel(new Services.AppAlertService());
-        Assert.IsAssignableFrom<CommunityToolkit.Mvvm.Input.IAsyncRelayCommand>(vm.StartMonitoringCommand);
+        Assert.IsAssignableFrom<IAsyncRelayCommand>(vm.StartMonitoringCommand);
 
         await vm.StartMonitoringCommand.ExecuteAsync(null);
 

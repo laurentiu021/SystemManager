@@ -1148,8 +1148,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   detection source
 - **Export CSV** saves the history to a file you choose the location for. Worth doing before
   **Clear History**, which erases it — the button sits to the left of it for that reason
-- Start/stop monitoring, acknowledge alerts, show all currently installed
-  apps, clear history
+- Start/stop monitoring, acknowledge alerts, clear history. While it is monitoring, **F5**
+  checks for new installs straight away instead of waiting for the next 30-second pass. To
+  see every program that is installed, use the Uninstaller
 - Notifies you when a new install is detected, so you find out even when you are
   on another tab or the window is in the notification area
 

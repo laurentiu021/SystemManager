@@ -24,6 +24,7 @@ public sealed class AppAlertService : IDisposable
     private readonly ConcurrentDictionary<string, bool> _knownFolders = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;
+    private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
     private Timer? _registryTimer;
     private bool _disposed;
 
@@ -36,9 +37,16 @@ public sealed class AppAlertService : IDisposable
     /// Creates a new instance, capturing the current <see cref="SynchronizationContext"/>
     /// so that events are raised on the UI thread.
     /// </summary>
-    public AppAlertService()
+    public AppAlertService() : this(GetRegistryApps) { }
+
+    /// <summary>
+    /// Reads the installed-programs list from <paramref name="readRegistryApps"/> instead of the registry, so a
+    /// test decides what is installed before and after the baseline.
+    /// </summary>
+    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps)
     {
         _syncContext = SynchronizationContext.Current;
+        _readRegistryApps = readRegistryApps;
     }
 
     /// <summary>
@@ -58,7 +66,7 @@ public sealed class AppAlertService : IDisposable
             catch (UnauthorizedAccessException) { /* best-effort */ }
         }
 
-        foreach (var app in GetRegistryApps())
+        foreach (var app in _readRegistryApps())
             _knownRegistryApps[app.Name] = true;
     }
 
@@ -192,11 +200,33 @@ public sealed class AppAlertService : IDisposable
         RaiseNewAppDetected(entry);
     }
 
-    private void CheckRegistry(object? state)
+    /// <summary>
+    /// Checks the registry for new installations now, instead of waiting for the next 30-second pass.
+    /// </summary>
+    /// <remarks>
+    /// Does nothing until <see cref="Start"/> has run. The check reports what is missing from the list
+    /// <see cref="TakeBaseline"/> recorded when monitoring began; with no such list, every program on the
+    /// PC would be announced as newly installed. A run that overlaps the timer's own pass is harmless:
+    /// each new name is claimed once, so it is announced once.
+    /// </remarks>
+    /// <returns>How many new installations were found and announced.</returns>
+    public int CheckNow()
     {
+        lock (_watcherLock)
+        {
+            if (_registryTimer is null) return 0;
+        }
+        return CheckRegistryForNewApps();
+    }
+
+    private void CheckRegistry(object? state) => CheckRegistryForNewApps();
+
+    private int CheckRegistryForNewApps()
+    {
+        var found = 0;
         try
         {
-            var current = GetRegistryApps();
+            var current = _readRegistryApps();
             foreach (var app in current
                          .Where(a => !_knownRegistryApps.ContainsKey(a.Name))
                          .Where(a => _knownRegistryApps.TryAdd(a.Name, true)))
@@ -204,11 +234,13 @@ public sealed class AppAlertService : IDisposable
                 app.DetectedAt = DateTime.Now;
                 Log.Information("New app detected in registry: {Name}", app.Name);
                 RaiseNewAppDetected(app);
+                found++;
             }
         }
         catch (IOException) { /* registry read failed — retry next cycle */ }
         catch (UnauthorizedAccessException) { /* registry read failed — retry next cycle */ }
         catch (System.Security.SecurityException) { /* registry read failed — retry next cycle */ }
+        return found;
     }
 
     /// <summary>

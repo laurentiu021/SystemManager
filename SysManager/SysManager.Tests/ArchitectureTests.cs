@@ -622,6 +622,10 @@ public partial class ArchitectureTests
     /// list of things that MUST be reachable is derivable, and a newly added command joins the check
     /// automatically. A command invoked only from C# (chained by another ViewModel) is legitimate and
     /// counts as reachable.</para>
+    /// <para>So does a command a view model names as its <c>RefreshOnF5</c>: <c>MainWindowViewModel</c> sends F5
+    /// to it, which is a path from the UI that needs no button. New App Alerts is the case — its F5 checks for
+    /// new installs, and the toolbar button F5 used to share replaced the whole list without asking. Keyed by
+    /// the view model that names it, so one tab's F5 cannot vouch for another tab's command of the same name.</para>
     /// </remarks>
     [Fact]
     public void EveryViewModelCommand_IsReachableFromTheUi()
@@ -644,6 +648,11 @@ public partial class ArchitectureTests
             .Where(l => !DeclarationLine().IsMatch(l))
             .ToList();
         Assert.NotEmpty(callLines);
+
+        var f5Targets = F5Targets(appDir);
+        // 41 view models name an F5 command today. A parse that found almost none would report the commands it
+        // missed as unreachable, which reads as a broken tab rather than a broken check.
+        Assert.True(f5Targets.Count >= 38, $"only {f5Targets.Count} RefreshOnF5 overrides were parsed, out of 41 measured");
 
         var unreachable = new List<string>();
 
@@ -668,6 +677,9 @@ public partial class ArchitectureTests
                 var method = prop.Name[..^"Command".Length];
                 if (callLines.Any(l => l.Contains($"{method}(", StringComparison.Ordinal)
                                     || l.Contains($"{method}Async(", StringComparison.Ordinal))) continue;
+
+                // …or F5 on its own tab runs it.
+                if (f5Targets.Contains($"{type.Name}.{prop.Name}")) continue;
 
                 unreachable.Add($"{type.Name}.{prop.Name}");
             }
@@ -2257,6 +2269,34 @@ public partial class ArchitectureTests
     /// </summary>
     [GeneratedRegex(@"^\s*(private|internal|public|protected)\b.*\b\w+\s*\(", RegexOptions.Compiled)]
     private static partial Regex DeclarationLine();
+
+    /// <summary>
+    /// <c>"AppAlertsViewModel.ScanForNewAppsCommand"</c> for each view model whose <c>RefreshOnF5</c> names a
+    /// command, the file name standing for the type, as the view models are laid out one per file. A type that
+    /// broke that layout would simply not be found, which makes the check stricter, not looser.
+    /// </summary>
+    private static HashSet<string> F5Targets(string appDir)
+    {
+        var targets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "ViewModels"), "*.cs"))
+        {
+            var viewModel = Path.GetFileNameWithoutExtension(file);
+            foreach (var line in File.ReadLines(file))
+            {
+                var m = F5Override().Match(line);
+                if (m.Success) targets.Add($"{viewModel}.{m.Groups["command"].Value}");
+            }
+        }
+        return targets;
+    }
+
+    /// <summary>
+    /// A <c>RefreshOnF5</c> override that returns a command, every one of the 41 written on a single line. Anchored
+    /// at the start of the line, so a comment that quotes one is not mistaken for it.
+    /// </summary>
+    [GeneratedRegex(@"^\s*protected internal override IRelayCommand\? RefreshOnF5 => (?<command>\w+Command);",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex F5Override();
 
     /// <summary>Collapses the line breaks XAML allows inside an attribute value.</summary>
     [GeneratedRegex(@"\s+", RegexOptions.Compiled)]

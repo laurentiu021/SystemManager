@@ -3531,14 +3531,12 @@ public partial class ArchitectureTests
         // view -> why its collections cannot reach an empty state a user would see.
         var cannotBeEmpty = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["TweaksHubView.xaml"] =
-                "Essential and Advanced are LoadTweaks() — the static privacy toggles — partitioned by "
-                + "TweakItem.ClassifyTier, so both sides are non-empty by construction. Pinned by "
-                + "TweaksHubViewModelTests.BothTiers_AreNonEmpty rather than left as an assertion here",
             ["PrivacyView.xaml"] =
                 "FilteredToggles is filtered only by category, and Categories is built FROM the toggles "
                 + "(['All'] + Toggles.Select(t => t.Category).Distinct()), so every selectable category has "
-                + "at least one row and Toggles itself is static",
+                + "at least one row and Toggles itself is static. ReachGroups is the same rows split by reach, "
+                + "and GroupByReach leaves out a section with no rows, so it holds at least one section with "
+                + "a row whenever FilteredToggles does",
             ["CliInterfaceView.xaml"] =
                 "Commands is CliRunner.Commands, a static collection-expression list of flag/description "
                 + "tuples compiled into the binary — it is the CLI's own help text, not data read at runtime",
@@ -10298,7 +10296,7 @@ public partial class ArchitectureTests
         [
             "nav-standby-cleaner", "nav-timer-resolution", "nav-cpu-affinity", "nav-debloater",
             "nav-legacy-panels", "nav-privacy-monitor", "nav-duplicates", "nav-boot-analyzer",
-            "nav-env-variables", "nav-tweaks-hub", "nav-notification-blocker", "nav-context-menu",
+            "nav-env-variables", "nav-notification-blocker", "nav-context-menu",
             "nav-settings-watchdog", "nav-file-lock", "nav-dns-hosts", "nav-privacy-settings",
         ];
 

@@ -1,11 +1,11 @@
 # SysManager for Windows
 
-One portable app for keeping a Windows PC healthy — 59 tabs of network diagnostics, cleanup, privacy
+One portable app for keeping a Windows PC healthy — 58 tabs of network diagnostics, cleanup, privacy
 controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
-<img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
-<em>A quick tour: Dashboard, Tweaks Hub, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
+<img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
+<em>A quick tour: Dashboard, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
 </p>
 
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
@@ -32,7 +32,7 @@ winget install laurentiu021.SysManager
 
 - [What it is](#what-it-is)
 - [Why SysManager?](#why-sysmanager)
-- [Features](#features) — all 59 tabs, grouped
+- [Features](#features) — all 58 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
@@ -81,7 +81,7 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-Beyond those, the rest of the 59 tabs cover performance tuning, DNS and hosts editing, duplicate files,
+Beyond those, the rest of the 58 tabs cover performance tuning, DNS and hosts editing, duplicate files,
 battery health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
 new-install alerts and Windows optional features. [The full list is below](#features), grouped as the sidebar
 groups them.
@@ -126,17 +126,17 @@ Sponsorship goes toward that certificate — see [Support](#support).</sub>
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 59 feature tabs into 12 groups — 11 collapsible groups
+The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
 selected background, and stronger label while you move between groups. Every tab
 row and every group header is also keyboard-operable with a visible focus cue. All
-59 tabs are fully implemented:
+58 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes · Tweaks Hub 🔬 |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · Settings Watchdog 🔬 |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
@@ -153,7 +153,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 **Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
 actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
 Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
-finds Deep Cleanup. 55 of the 59 tabs carry keywords for this; typing clears the groups and shows a flat
+finds Deep Cleanup. 54 of the 58 tabs carry keywords for this; typing clears the groups and shows a flat
 list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
@@ -205,7 +205,7 @@ cycles the themes inside it, and `Escape` closes it and puts focus back on the b
 16 tabs that can be cancelled. It only acts while something is running, and only after the control you are
 on has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 40 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
@@ -241,7 +241,7 @@ and because 28 is already the size of the small round buttons at the bottom of t
 The six controls that do something you cannot take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin." The same goes for Uninstall selected, Kill
-process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 31
+process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 30
 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
@@ -251,7 +251,7 @@ someone who tabbed to it, and it is not reliably handed to assistive software. I
 deliberately. An explanation on every button in the app would make it slower to navigate, not clearer.
 
 Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
-"Removed 1,204 files", "Scan complete." — is announced on all 53 tabs that have one, as are the SFC and DISM
+"Removed 1,204 files", "Scan complete." — is announced on all 52 tabs that have one, as are the SFC and DISM
 results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
 so they wait their turn rather than cutting across whatever you are reading.
 
@@ -408,7 +408,7 @@ Edit Windows environment variables without the cramped built-in dialog:
   Protection back on for the Windows drive if it is off, because Windows cannot make one
   otherwise, and protection then keeps some disk space for restore points. The confirmation
   says so here and on Performance Mode, and on the tabs that try a point before their first
-  change of a session: Windows Features, Tweaks Hub, Gaming Profile, Privacy & Telemetry,
+  change of a session: Windows Features, Gaming Profile, Privacy & Telemetry,
   Preinstalled Apps, Edge/OneDrive Remover and Defender Tweaks. Those say it only while that
   attempt is still to come and SysManager is running as administrator, since otherwise
   nothing is changed
@@ -470,22 +470,6 @@ need administrator rights:
   you are trying to achieve rather than by which Windows tool does it: SFC and
   `DISM /RestoreHealth` repair a broken Windows and are here, while
   `DISM /AnalyzeComponentStore` and `/StartComponentCleanup` reclaim space and are there.*
-
-### Tweaks Hub
-- **One place for safe, reversible optimizations** that are otherwise spread across
-  tabs — review them all in a single list, tick the ones you want, and apply or
-  undo in bulk
-- **Essential** group — low-risk, per-user tweaks that apply without administrator
-- **Advanced** group — higher-impact, machine-wide tweaks behind a caution banner
-  (need administrator)
-- **Apply Selected / Undo Selected** with a live count of pending changes — nothing
-  is written until you click, and each tweak is individually reversible
-- SysManager **tries to create a System Restore point** before the first change in a
-  session (best-effort — needs administrator and Windows' once-per-24h limit); the
-  status line tells you when one was actually created. Every tweak is also
-  individually reversible regardless
-- Each row shows whether it's currently **Applied** or at the Windows **Default**;
-  it's a front-end over the same reversible operations as the Privacy & Telemetry tab
 
 ### Boot Analyzer
 - Shows how long your PC takes to boot — total, core (main path), and
@@ -928,7 +912,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Files, Duplicate Finder, Speed Test, Traceroute, Network Repair, DNS & Hosts, Shortcut Cleaner,
   File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
   Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
-  Installer, Uninstaller, Preinstalled Apps, Tweaks Hub, Privacy & Telemetry, Defender Tweaks,
+  Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender Tweaks,
   Edge/OneDrive Remover, Services, and the Dashboard's quick actions)
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
   Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
@@ -1005,8 +989,13 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **UI Declutter**: disable Start suggestions, tips, lock screen tips, Spotlight ads
 - **Features**: disable Copilot, Cortana, web search in Start, widgets
 - Explicit apply — flip toggles to stage changes, press **Apply** to write to the
-  registry, or **Discard** to revert pending changes. A live counter shows how
-  many changes are queued, so accidental clicks never modify the system silently.
+  registry, or **Discard** to revert pending changes. The button says how many changes
+  it will make ("Apply 2 changes") and each switch you moved says "changes when you
+  apply", so accidental clicks never modify the system silently.
+- **Group the switches by topic or by reach** — "Just you" for the ones that change only
+  your account (no administrator needed) and "Everyone on this PC" for the ones that
+  change Windows for every account. Searching the sidebar for "tweaks" opens the tab
+  grouped this way
 - **Privacy choices from another PC** — import a profile in Profile Export / Import and
   it opens here with the profile's choices already on the switches, as pending changes.
   Nothing is written until you press **Apply**, and **Discard** keeps this PC as it is.
@@ -1016,9 +1005,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Requires admin for HKLM-backed toggles
 - Fully reversible — re-enable any toggle with one click
 - **A Windows restore point is attempted before the first Apply of the session** — the same one
-  Tweaks Hub takes, so the protection no longer depends on which tab you reached the toggles
-  through. It is attempted after you confirm, so declining costs you nothing, and it is mentioned
-  only when one was really created
+  every tab that changes the system shares. It is attempted after you confirm, so declining
+  costs you nothing, and it is mentioned only when one was really created
 
 ### File Shredder
 - Secure multi-pass file and folder deletion beyond recovery
@@ -1729,7 +1717,7 @@ offers, "rate us" prompts:
 </details>
 
 <details>
-<summary><strong>🔧 System</strong> — Health · Windows Update · Performance · Windows Features · Restore Points · Boot Analyzer · System Fixes · Tweaks Hub</summary>
+<summary><strong>🔧 System</strong> — Health · Windows Update · Performance · Windows Features · Restore Points · Boot Analyzer · System Fixes</summary>
 <br>
 <p>
 <a href="docs/screenshots/system-health.png"><img src="docs/screenshots/system-health.png" width="280" alt="System Health"></a>&nbsp;
@@ -1742,8 +1730,7 @@ offers, "rate us" prompts:
 <a href="docs/screenshots/boot-analyzer.png"><img src="docs/screenshots/boot-analyzer.png" width="280" alt="Boot Analyzer"></a>
 </p>
 <p>
-<a href="docs/screenshots/system-fixes.png"><img src="docs/screenshots/system-fixes.png" width="280" alt="System Fixes"></a>&nbsp;
-<a href="docs/screenshots/tweaks-hub.png"><img src="docs/screenshots/tweaks-hub.png" width="280" alt="Tweaks Hub"></a>
+<a href="docs/screenshots/system-fixes.png"><img src="docs/screenshots/system-fixes.png" width="280" alt="System Fixes"></a>
 </p>
 </details>
 

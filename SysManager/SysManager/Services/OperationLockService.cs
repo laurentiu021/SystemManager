@@ -35,7 +35,7 @@ public enum OperationCategory
     /// System modification: the repairs that service the running Windows image (SFC, DISM, the component-store
     /// cleanup), Windows feature changes, Windows Update installs and resets, creating or restoring a restore point,
     /// and the tabs that change Windows settings or services: Performance Mode, Gaming Profile, Environment Variables,
-    /// Preinstalled Apps, Tweaks Hub, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services.
+    /// Preinstalled Apps, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services.
     /// Deep Cleanup takes it too while it deletes one of its Windows Update caches.
     /// </summary>
     /// <remarks>

@@ -10,7 +10,7 @@ namespace SysManager.Services;
 /// Seam over <see cref="GamingProfileService"/> so <c>GamingProfileViewModel</c> can be
 /// unit-tested with a substituted implementation (no real power/timer/registry/service
 /// mutations). Mirrors the established interface-seam pattern
-/// (<see cref="IAudioMixerService"/>, <see cref="ITweaksHubService"/>).
+/// (<see cref="IAudioMixerService"/>, <see cref="IPrivacyService"/>).
 ///
 /// <para>The service is a pure ORCHESTRATOR: it composes already-audited SysManager services
 /// into an ordered set of reversible steps and applies/reverts them as a unit. It never

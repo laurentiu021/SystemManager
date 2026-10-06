@@ -125,7 +125,7 @@ and the guard's condition below is what tells the two apart, so no allowlist is 
 sit in, and it had to move: `BasedOn` is a `StaticResource` reference, and a `StaticResource` cannot resolve a
 key defined later in the same dictionary. Left where it was it would have thrown while `App.xaml` parsed.
 
-`Display` stays out. #1634 proposed including it because the 59 tab titles would move from
+`Display` stays out. #1634 proposed including it because the tab titles would move from
 `TextFormattingMode=Display` to `Ideal`; measured on a real TextBlock, that premise is wrong — `Ideal` is
 WPF's default, so they already render that way, and the only difference `BasedOn` would make is
 `TextRenderingMode`, `Auto` to `ClearType`. Left out because the decision was taken on the larger claim and
@@ -154,7 +154,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` · `TweaksHubViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
 | Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
 | Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `SettingsWatchdogViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
@@ -233,8 +233,12 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade.
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
-  `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing — which
-  is the same point Tweaks Hub takes for the identical writes. Privacy choices imported from a profile
+  `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing.
+  `Grouping` lists the switches by topic or by reach (`PrivacyToggle.Reach`, from the hive), with
+  `GroupByReach` building the "Just you" and "Everyone on this PC" sections: the grouping the Tweaks Hub
+  tab added over this one, which listed exactly these switches and was merged in (#1517). As an
+  `ISearchDestination` it opens by reach when the sidebar search that found it said "tweaks". Each moved
+  switch is `IsPending`, and `ApplyText` carries the count. Privacy choices imported from a profile
   arrive through `IPrivacyChoicesHandoff` and are staged as pending changes, never written: when the
   tab is shown (`IsActive`, set by `MainWindowViewModel.SetActive`) or when a load of its toggles
   finishes, but not while a load is running or while Apply waits for its restore point, which stages
@@ -249,7 +253,6 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
-- `TweaksHubViewModel` — unified front-end over the reversible privacy/UX tweaks, grouped Essential (per-user) / Advanced (machine-wide, needs admin), with selective Apply/Undo, a pending-change count, and an auto restore-point before the first change. Delegates to `TweaksHubService` (no parallel tweak implementation).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.
@@ -276,17 +279,17 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-three are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-two are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
 history), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
-`ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
+`IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
 Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
-(NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry, Tweaks Hub and the
+(NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry and the
 profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IGamingProfileService`, and
 `ISessionRestorePoint` (the last two via a factory).
 
@@ -298,6 +301,8 @@ implements `IFilterable` can be arrived at pre-filtered, which is how Boot Analy
 narrowed to the service that slowed boot. This replaced a
 `Application.Current.MainWindow.DataContext as MainWindowViewModel` lookup in `DashboardViewModel`;
 `NoViewModelReachesTheShellThroughTheLiveWindow` stops that returning.
+A tab opened from the sidebar search that implements `ISearchDestination` is told what was searched for,
+which is how a search for "tweaks" opens Privacy & Telemetry grouped by reach (#1517).
 
 Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
@@ -731,7 +736,7 @@ Key services:
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
   Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
   registry value or changes a Windows service (Performance Mode, Gaming Profile, Environment Variables,
-  Preinstalled Apps, Tweaks Hub, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services).
+  Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services).
   Feature changes, update installs, Reset Windows Update and the Restore Points tab took no lock until
   #2484; the last five joined at #2510, mainly so closing SysManager mid-change can name them — overlap
   between any two of them is not itself dangerous the way an SFC repair racing a feature change is.
@@ -862,13 +867,13 @@ Key services:
   second reported "no snapshot" while a good one existed. Takes `RestorePointService.CreateAsync` as
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
-  Windows refused. Consumed by `TweaksHubService`, `GamingProfileService`, `EdgeOneDriveViewModel`,
+  Windows refused. Consumed by `GamingProfileService`, `EdgeOneDriveViewModel`,
   `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`.
   `ConfirmationNotice` is what each of their confirmations appends: the attempt turns System
   Protection back on when it is off, and `RestorePointService.ProtectionNotice` is the one sentence
   that says so, shared with the Restore Points tab and Performance Mode. It is empty once the
   session's attempt has been made and when not elevated, because nothing can change then.
-  `TweaksHubService` and `GamingProfileService` pass it on as `RestorePointNotice`.
+  `GamingProfileService` passes it on as `RestorePointNotice`.
 - `DebloaterService` — lists (`Get-AppxPackage`) and removes (`Remove-AppxPackage`,
   per-user) Windows Store apps through the `IPowerShellRunner` seam. A hard-coded
   denylist of system-critical package families is enforced in code; the parser and
@@ -1204,11 +1209,6 @@ Key services:
   the settings block now opts in unless the user unticks it. The status read also selects
   `NumberOfMissedRuns`, because Windows expresses "the conditions blocked this run" by simply not
   running: there is no result code for it, so the count is the only honest explanation available.
-- `TweaksHubService` — thin orchestrator behind the Tweaks Hub tab: loads `PrivacyService`
-  toggles as tier-classified `TweakItem`s, applies/reverts a selected set via the same
-  reversible `PrivacyService.ApplyToggle`, and takes the shared `ISessionRestorePoint` snapshot
-  before the first change of a session (best-effort; since 1.68.0 it no longer owns that logic). It reimplements no tweak; `PendingApplyCount` /
-  `PendingUndoCount` / `TweakItem.ClassifyTier` are pure, unit-tested helpers.
 - `SafetyDatabase` — curated safety ratings for Windows services.
 - `ThemeService` — runtime theme switching with 12 presets and persistence. Two corrections run inside `Shade`, on the already-shifted colours so nothing downstream can undo them: `PanelThatAdmitsReadableText` nudges a Surface toward the Background until this mode's most extreme text clears AA on it, and `Legible` then fits the text to per-surface floors (AAA on the Background, AA on the panels). Both are no-ops for the shipped presets. `ResetToDefault` restores the shipped preset and shade — the only undo Custom mode has, since the four typed colours are persisted and reloaded on every launch. A fourth mode, `AutoMode`, follows the Windows light/dark setting: it resolves through the same `GetCompanionPreset` pairing the Dark/Light pills use, so the colour family survives the switch, and it deliberately does NOT go through `SetPreset` — that would take the mode from the resolved preset and overwrite "auto" the moment it was chosen. `Initialize` re-resolves rather than restoring the saved arm, and one process-lifetime `SystemEvents.UserPreferenceChanged` subscription keeps it live, marshalled to the dispatcher and released by `Shutdown` from `App.OnExit`. The OS read is a `Func<bool>` seam, because the real one reads HKCU and a test without it would assert whatever the developer's machine is set to. Hover is two derived brushes, not one: `RowHover` lifts the surface toward the text colour by `RowHoverLerp(isDark)` — 0.15 on dark presets, 0.25 on light, because darkening a light surface by the same fraction buys about a third less contrast ratio — and `RowHoverMark` is the 3px bar on a hovered sidebar row, `RowHoverMarkColor(theme)` = `TextMuted`. The bar is the part that clears WCAG 1.4.11's 3:1 (6.05:1 or better on all twelve presets); a background tint on a dark theme cannot reach it at all. Both are exposed as `internal static` methods so `ThemeTextContrastTests` asserts the floors against the service rather than against a copy of the numbers, and the mark is deliberately NOT the accent — the selected row draws an Accent bar in the same 3px, so reusing it would make hover indistinguishable from selection. `Save` writes nothing after a `Load` that could not read `theme.json`, and a file that is not a theme it can use is set aside before the first write; the broad catch in `Load` stays, because every failure there means the file is not a usable theme.
 - `ToastService` — global glass-style toast notifications.
@@ -1315,7 +1315,7 @@ transient registrations at the top of `ServiceRegistration.cs`).
 
 `MainWindowViewModel` resolves child VMs from the container **lazily**: each tab's
 `NavItem` holds a `ContentFactory` and builds its view-model from DI only when the tab
-is first opened (`NavItem.Content`). This avoids constructing all 55 lazily-registered tab
+is first opened (`NavItem.Content`). This avoids constructing all 54 lazily-registered tab
 VMs at startup — most kick off a background scan/timer in their constructor, so eager
 construction ran that work up front for tabs the user might never open.
 

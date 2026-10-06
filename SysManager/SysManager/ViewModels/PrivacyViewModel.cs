@@ -12,16 +12,17 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles
-/// and groups them by category. Toggle flips update local state only;
-/// the user must explicitly press "Apply" to write changes to the registry.
-/// Apply takes the shared session restore point first, so the protection no longer depends on
-/// whether the user reached these toggles here or through Tweaks Hub.
+/// ViewModel for the Privacy Toggles tab. Loads registry-backed toggles and lists them by topic, or by reach:
+/// the switches that change only your account, then those that change Windows for everyone on the PC. Toggle
+/// flips update local state only; the user must explicitly press "Apply" to write changes to the registry.
+/// Apply takes the shared session restore point first.
+/// <para>The grouping by reach is what the Tweaks Hub tab added over this one, and the hub listed exactly these
+/// switches through the same writes, so it went and its grouping came here (#1517).</para>
 /// <para>Privacy choices imported from a profile arrive through <see cref="IPrivacyChoicesHandoff"/> and are
 /// staged the same way a click is: the switches move, the pending count says how many, and nothing is
 /// written until Apply (#1530).</para>
 /// </summary>
-public sealed partial class PrivacyViewModel : ViewModelBase
+public sealed partial class PrivacyViewModel : ViewModelBase, ISearchDestination
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -41,9 +42,47 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     [ObservableProperty] private bool _isElevated;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingChanges))]
+    [NotifyPropertyChangedFor(nameof(ApplyText))]
     private int _pendingChangeCount;
 
     public bool HasPendingChanges => PendingChangeCount > 0;
+
+    /// <summary>The Apply button, with the count, so pressing it is never a surprise: "Apply 2 changes".</summary>
+    public string ApplyText => PendingChangeCount switch
+    {
+        0 => "Apply",
+        1 => "Apply 1 change",
+        var n => $"Apply {n} changes",
+    };
+
+    /// <summary>Whether the switches are listed by topic or by reach.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsByTopic))]
+    [NotifyPropertyChangedFor(nameof(IsByReach))]
+    private PrivacyGrouping _grouping = PrivacyGrouping.ByTopic;
+
+    /// <summary>The "By topic" pill. Setting it false does nothing: the other pill being chosen is what moves it.</summary>
+    public bool IsByTopic
+    {
+        get => Grouping == PrivacyGrouping.ByTopic;
+        set { if (value) Grouping = PrivacyGrouping.ByTopic; }
+    }
+
+    /// <summary>The "By reach" pill. Setting it false does nothing: the other pill being chosen is what moves it.</summary>
+    public bool IsByReach
+    {
+        get => Grouping == PrivacyGrouping.ByReach;
+        set { if (value) Grouping = PrivacyGrouping.ByReach; }
+    }
+
+    /// <summary>
+    /// The switches by reach, for "By reach": "Just you", then "Everyone on this PC", each narrowed by the topic
+    /// filter like the flat list. A section the filter leaves empty is not listed.
+    /// </summary>
+    public BulkObservableCollection<PrivacyReachGroup> ReachGroups { get; } = new();
+
+    /// <summary>The searches that used to find Tweaks Hub. They open the switches by reach, where its grouping went.</summary>
+    internal static readonly string[] ReachSearchWords = ["tweak", "tune windows"];
 
     /// <summary>
     /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>.
@@ -142,7 +181,7 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             toggle.IsEnabled = on;
             if (!_baselineStates.TryGetValue(toggle, out var baseline) || baseline == on) continue;
             changes++;
-            if (TweakItem.ClassifyTier(toggle.RegistryPath) == TweakTier.Advanced) needAdmin++;
+            if (toggle.Reach == PrivacyReach.EveryoneOnThisPc) needAdmin++;
         }
 
         StatusMessage = DescribeImportedChoices(changes, needAdmin, IsElevated);
@@ -179,6 +218,14 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
     partial void OnSelectedCategoryChanged(string value) => ApplyFilter();
 
+    /// <inheritdoc/>
+    public void ArriveFromSearch(string query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        if (ReachSearchWords.Any(w => query.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            Grouping = PrivacyGrouping.ByReach;
+    }
+
     private void ApplyFilter()
     {
         IEnumerable<PrivacyToggle> source = Toggles;
@@ -186,7 +233,32 @@ public sealed partial class PrivacyViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(SelectedCategory) && SelectedCategory != "All")
             source = source.Where(t => t.Category == SelectedCategory);
 
-        FilteredToggles.ReplaceWith(source);
+        List<PrivacyToggle> shown = [.. source];
+        FilteredToggles.ReplaceWith(shown);
+        ReachGroups.ReplaceWith(GroupByReach(shown));
+    }
+
+    /// <summary>
+    /// The "By reach" sections for <paramref name="toggles"/>, in their order: the switches that change only this
+    /// account first, then those that change Windows for everyone on the PC. Pure, so the words and counts are
+    /// testable without the registry.
+    /// </summary>
+    internal static List<PrivacyReachGroup> GroupByReach(IReadOnlyList<PrivacyToggle> toggles)
+    {
+        List<PrivacyReachGroup> groups = [];
+        Add(PrivacyReach.JustYou, "Just you",
+            "Change only your own account. No administrator needed.");
+        Add(PrivacyReach.EveryoneOnThisPc, "Everyone on this PC",
+            "Change Windows for every account on this PC, so they need administrator. Still fully reversible.");
+        return groups;
+
+        void Add(PrivacyReach reach, string name, string description)
+        {
+            List<PrivacyToggle> members = [.. toggles.Where(t => t.Reach == reach)];
+            if (members.Count == 0) return;
+            groups.Add(new PrivacyReachGroup(reach,
+                $"{name} — {members.Count} switch{(members.Count == 1 ? "" : "es")}", description, members));
+        }
     }
 
     private void OnTogglePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -200,8 +272,10 @@ public sealed partial class PrivacyViewModel : ViewModelBase
     {
         var pending = 0;
         foreach (var t in Toggles)
-            if (_baselineStates.TryGetValue(t, out var baseline) && baseline != t.IsEnabled)
-                pending++;
+        {
+            t.IsPending = _baselineStates.TryGetValue(t, out var baseline) && baseline != t.IsEnabled;
+            if (t.IsPending) pending++;
+        }
         PendingChangeCount = pending;
     }
 
@@ -246,7 +320,7 @@ public sealed partial class PrivacyViewModel : ViewModelBase
 
         // Before the write, never after: a snapshot taken afterwards would record the state the
         // user is trying to be able to get back FROM. Taken after the confirmation, so declining
-        // costs nothing, and it is the same seam Tweaks Hub uses rather than a second copy.
+        // costs nothing, and it is the session-wide seam every tab that changes the system shares.
         // The point can take long enough to open another tab and come back, so an import that arrives
         // meanwhile must not move switches this apply is about to write: it is staged at the end instead.
         bool snapshotTaken;
@@ -269,9 +343,9 @@ public sealed partial class PrivacyViewModel : ViewModelBase
             _baselineStates[t] = t.IsEnabled;
         RecomputePendingChanges();
 
-        // Mentioned only when a point was actually created — Tweaks Hub's rule, verbatim. System
-        // Restore is disabled by default on many consumer machines, and implying a safety net that
-        // is not there would make this tab less safe than saying nothing.
+        // Mentioned only when a point was actually created. System Restore is disabled by default on many
+        // consumer machines, and implying a safety net that is not there would make this tab less safe than
+        // saying nothing.
         var rp = snapshotTaken ? " Restore point created." : "";
 
         if (failed.Count == 0)

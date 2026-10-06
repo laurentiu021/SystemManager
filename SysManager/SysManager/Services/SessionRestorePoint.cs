@@ -47,7 +47,7 @@ public sealed class SessionRestorePoint(
     public async Task<bool> EnsureAsync(string description, CancellationToken ct = default)
     {
         // Claim the single attempt BEFORE awaiting, so a slow or failing snapshot is not retried
-        // ahead of every subsequent batch — the behaviour TweaksHubService established.
+        // ahead of every subsequent batch — the behaviour of the first tab that took one.
         if (Interlocked.Exchange(ref _attempted, 1) == 1) return false;
 
         try
@@ -55,7 +55,7 @@ public sealed class SessionRestorePoint(
             // ConfigureAwait(true): callers are UI-thread commands whose post-await code mutates
             // bound state. RestorePointService.CreateAsync hops to the thread pool internally, so
             // without this the continuation would resume off the UI thread — a real cross-thread
-            // defect, and the reason the original TweaksHub call was written this way.
+            // defect, and the reason the first tab's call was written this way.
             var created = await createAsync(description, ct).ConfigureAwait(true);
             _created = created;
             Log.Information("Session restore point for {Description}: created={Created}", description, created);

@@ -209,7 +209,7 @@ public class PrivacyViewModelTests
             await vm.InitializationComplete;
             vm.Toggles[0].IsEnabled = !vm.Toggles[0].IsEnabled;
             var pendingBefore = vm.PendingChangeCount;
-            using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Tweaks Hub");
+            using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Gaming Profile");
             Assert.NotNull(held);
 
             await vm.ApplyChangesCommand.ExecuteAsync(null);
@@ -217,7 +217,7 @@ public class PrivacyViewModelTests
             await restorePoint.DidNotReceive().EnsureAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
             Assert.Empty(root.GetSubKeyNames());   // reading creates nothing; any write would have
             Assert.Equal(pendingBefore, vm.PendingChangeCount);
-            Assert.Equal("Cannot start — Tweaks Hub is already running.", vm.StatusMessage);
+            Assert.Equal("Cannot start — Gaming Profile is already running.", vm.StatusMessage);
         }
         finally
         {
@@ -468,6 +468,22 @@ public class PrivacyViewModelTests
     }
 
     [Theory]
+    [InlineData("tips", true, false)]       // per-user: Apply writes it as you are
+    [InlineData("widgets", false, true)]    // machine-wide: needs administrator
+    public async Task OnlyAChangeForTheWholePc_IsSaidToNeedAdministrator(string key, bool on, bool flagged)
+    {
+        // One switch at a time, so the count cannot come out right by counting the other one instead.
+        using var probe = AdminHelper.ForceElevation(false);
+        var handoff = new PrivacyChoicesHandoff();
+        handoff.Offer(Choices((key, on)));
+
+        var vm = await StagingVmAsync(ThisPc(), handoff);
+
+        Assert.Equal(1, vm.PendingChangeCount);
+        Assert.Equal(flagged, vm.StatusMessage.Contains("administrator", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData(1, 0, false, "The imported profile changes 1 privacy setting on this PC. Nothing has changed yet: "
         + "check the switches, then press Apply, or Discard to keep this PC as it is.")]
     [InlineData(3, 1, false, "The imported profile changes 3 privacy settings on this PC. Nothing has changed yet: "
@@ -568,5 +584,147 @@ public class PrivacyViewModelTests
 
         MainWindowViewModel.SetActive(vm, active: false);
         Assert.False(vm.IsActive);
+    }
+
+    // ---------- by reach: the grouping Tweaks Hub added, now here (#1517) ----------
+
+    [Theory]
+    [InlineData(@"HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection", PrivacyReach.EveryoneOnThisPc)]
+    [InlineData(@"HKEY_LOCAL_MACHINE\SOFTWARE\Foo", PrivacyReach.EveryoneOnThisPc)]
+    [InlineData(@"hklm\software\foo", PrivacyReach.EveryoneOnThisPc)]
+    [InlineData(@"HKCU\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", PrivacyReach.JustYou)]
+    [InlineData(@"HKEY_CURRENT_USER\Software\Foo", PrivacyReach.JustYou)]
+    public void ASwitchesReach_IsReadFromItsRegistryHive(string path, PrivacyReach expected)
+        => Assert.Equal(expected, PrivacyToggle.ReachOf(path));
+
+    /// <summary>
+    /// The real switches fill both reaches, so "By reach" never shows a single section by construction.
+    /// </summary>
+    /// <remarks>
+    /// Against the real definitions rather than a substitute, because a substitute would be asserting the fixture.
+    /// </remarks>
+    [Fact]
+    public void TheRealSwitches_FillBothReaches()
+    {
+        var toggles = new PrivacyService().LoadToggles();
+        Assert.True(toggles.Count >= 10,
+            $"only {toggles.Count} switch definitions, so this would pass over a short list");
+
+        var reaches = toggles.Select(t => t.Reach).ToList();
+
+        // Eight of the twelve change only your account and four the whole PC, as the tab and the changelog say.
+        Assert.Equal(8, reaches.Count(r => r == PrivacyReach.JustYou));
+        Assert.Equal(4, reaches.Count(r => r == PrivacyReach.EveryoneOnThisPc));
+    }
+
+    [Fact]
+    public void ByReach_ListsJustYouFirst_ThenEveryone_WithTheirCountsAndWhatTheyMean()
+    {
+        var groups = PrivacyViewModel.GroupByReach([
+            FakePrivacy.Toggle("diagnostic-data", on: false, hive: "HKLM"),
+            FakePrivacy.Toggle("tips", on: false),
+            FakePrivacy.Toggle("advertising-id", on: true),
+        ]);
+
+        Assert.Equal(2, groups.Count);
+        Assert.Equal(PrivacyReach.JustYou, groups[0].Reach);
+        Assert.Equal("Just you — 2 switches", groups[0].Title);
+        Assert.Equal("Change only your own account. No administrator needed.", groups[0].Description);
+        Assert.Equal(new[] { "tips", "advertising-id" }, groups[0].Toggles.Select(t => t.Key));
+        Assert.Equal("Everyone on this PC — 1 switch", groups[1].Title);
+        Assert.Equal("Change Windows for every account on this PC, so they need administrator. Still fully reversible.",
+            groups[1].Description);
+    }
+
+    [Fact]
+    public void ByReach_LeavesOutASectionWithNothingInIt()
+    {
+        var group = Assert.Single(PrivacyViewModel.GroupByReach([FakePrivacy.Toggle("tips", on: false)]));
+
+        Assert.Equal(PrivacyReach.JustYou, group.Reach);
+        Assert.Empty(PrivacyViewModel.GroupByReach([]));
+    }
+
+    [Fact]
+    public async Task ByReach_FollowsTheTopicFilter()
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        Assert.Equal(2, vm.ReachGroups.Count);
+
+        vm.SelectedCategory = "Features";
+
+        Assert.Equal(new[] { "Just you — 1 switch", "Everyone on this PC — 1 switch" }, vm.ReachGroups.Select(g => g.Title));
+        Assert.All(vm.ReachGroups.SelectMany(g => g.Toggles), t => Assert.Equal("Features", t.Category));
+    }
+
+    [Fact]
+    public async Task ThePills_SwitchBetweenTopicAndReach()
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        Assert.True(vm.IsByTopic);
+        Assert.False(vm.IsByReach);
+
+        vm.IsByReach = true;
+        Assert.Equal(PrivacyGrouping.ByReach, vm.Grouping);
+        Assert.False(vm.IsByTopic);
+
+        // The pill that is no longer chosen is told so; that alone must not move the grouping back.
+        vm.IsByReach = false;
+        Assert.Equal(PrivacyGrouping.ByReach, vm.Grouping);
+
+        vm.IsByTopic = true;
+        Assert.Equal(PrivacyGrouping.ByTopic, vm.Grouping);
+    }
+
+    [Theory]
+    [InlineData("tweaks", PrivacyGrouping.ByReach)]
+    [InlineData("Tweak", PrivacyGrouping.ByReach)]
+    [InlineData("tune windows", PrivacyGrouping.ByReach)]
+    [InlineData("telemetry", PrivacyGrouping.ByTopic)]
+    [InlineData("", PrivacyGrouping.ByTopic)]
+    public async Task ASearchThatUsedToFindTweaksHub_OpensTheSwitchesByReach(string query, PrivacyGrouping expected)
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+
+        vm.ArriveFromSearch(query);
+
+        Assert.Equal(expected, vm.Grouping);
+    }
+
+    [Fact]
+    public async Task TheApplyButton_SaysHowManyChangesItWillMake()
+    {
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        Assert.Equal("Apply", vm.ApplyText);
+
+        Switch(vm, "tips").IsEnabled = true;
+        Assert.Equal("Apply 1 change", vm.ApplyText);
+
+        Switch(vm, "web-search").IsEnabled = true;
+        Assert.Equal("Apply 2 changes", vm.ApplyText);
+    }
+
+    [Fact]
+    public async Task AMovedSwitch_IsMarkedPending_UntilItIsAppliedOrPutBack()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = await StagingVmAsync(ThisPc(), new PrivacyChoicesHandoff());
+        var tips = Switch(vm, "tips");
+        var webSearch = Switch(vm, "web-search");
+
+        tips.IsEnabled = true;
+        webSearch.IsEnabled = true;
+        Assert.True(tips.IsPending && webSearch.IsPending);
+        Assert.False(Switch(vm, "widgets").IsPending);
+
+        webSearch.IsEnabled = false;   // put back by hand
+        Assert.False(webSearch.IsPending);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+        Assert.False(tips.IsPending);
+
+        tips.IsEnabled = false;
+        vm.DiscardChangesCommand.Execute(null);
+        Assert.False(tips.IsPending);
     }
 }

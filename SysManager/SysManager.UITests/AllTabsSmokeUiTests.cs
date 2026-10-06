@@ -5,7 +5,7 @@
 namespace SysManager.UITests;
 
 /// <summary>
-/// Breadth smoke coverage for EVERY navigable tab (all 58). For each tab this
+/// Breadth smoke coverage for EVERY navigable tab (all 57). For each tab this
 /// asserts the app can navigate to it and the content area renders the tab's
 /// expected page header — i.e. the view loaded rather than crashing or showing
 /// a blank/wrong page. This is the regression net that catches a tab that stops
@@ -38,10 +38,6 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-restore-points", "Restore Points" },
         new object[] { "nav-task-scheduler", "Task Scheduler" },
         new object[] { "nav-boot-analyzer", "Boot Analyzer" },
-        // Tweaks Hub was the one nav id in the sidebar with no row here — 57 of 58 tabs covered, and the
-        // missing one is flagged inDevelopment, so it is the tab most likely to regress. Nothing detected the
-        // gap either; ArchitectureTests.EverySidebarTab_HasASmokeRow does now.
-        new object[] { "nav-tweaks-hub", "Tweaks Hub" },
         new object[] { "nav-system-fixes", "System Fixes" },
         // ── Gaming & Profiles ──
         new object[] { "nav-gaming-profile", "Gaming Profile" },

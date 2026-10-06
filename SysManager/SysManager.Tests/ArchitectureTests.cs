@@ -16298,6 +16298,12 @@ public partial class ArchitectureTests
         Assert.Contains("github-authentication-token-expiration", body, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("x-oauth-scopes", body, StringComparison.OrdinalIgnoreCase);
 
+        // A classic token without workflow passes everything above, then fails all three publish attempts with
+        // HTTP 422 once upstream has touched its own workflow files — which is how 1.115.0 to 1.116.1 missed
+        // winget while this step printed "Scopes: public_repo" and nothing else. The check has to name it.
+        Assert.Contains("*,workflow,*) ;;", body, StringComparison.Ordinal);
+        Assert.Contains("has no workflow scope", body, StringComparison.Ordinal);
+
         // Non-fatal, or a token expiring next month stops a release that is otherwise fine.
         Assert.Contains("continue-on-error: true",
             string.Join('\n', lines.Skip(check).Take(4)), StringComparison.Ordinal);

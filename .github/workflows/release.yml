@@ -593,6 +593,13 @@ jobs:
             case ",$(printf '%s' "$scopes" | tr -d ' ')," in
               *,repo,*) echo "::warning::WINGET_TOKEN has the full repo scope, which also reaches private repositories. public_repo and workflow are all the winget steps need (#1676)." ;;
             esac
+            # A token without workflow passes every other check here and then fails all three publish attempts
+            # with HTTP 422 the first time upstream has touched its own workflow files, which reads as a winget
+            # outage rather than a missing box (1.115.0 to 1.116.1 never reached winget that way). Name it here.
+            case ",$(printf '%s' "$scopes" | tr -d ' ')," in
+              *,workflow,*) ;;
+              *) echo "::warning::WINGET_TOKEN has no workflow scope. The winget-pkgs fork sync needs it whenever upstream changes its own workflow files, and without it every publish attempt below fails with HTTP 422. Tick workflow on the token; its value does not change, so the secret stays as it is (#1676)." ;;
+            esac
           else
             echo "::warning::WINGET_TOKEN is not a classic personal access token. winget-releaser supports classic tokens only, so the winget publish below will probably fail."
           fi

@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
+using System.Text.RegularExpressions;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
@@ -75,6 +77,17 @@ public class ChartThemeTests
     }
 
     /// <summary>
+    /// The designed series palette, as the chart view models declare it.
+    /// <see cref="EveryChartColour_IsOneTheContrastTestChecks"/> holds this list to their sources.
+    /// </summary>
+    private static readonly string[] Palette =
+    [
+        "#60A5FA", "#A78BFA", "#34D399", "#F59E0B", "#EF4444",   // ResourceHistory + Bandwidth + Speed Test trend
+        "#4CC9F0", "#80FFDB", "#F72585", "#FFD166",              // ping palette 1-4
+        "#B388FF", "#06D6A0", "#FF6B6B", "#F8961E",              // ping palette 5-8
+    ];
+
+    /// <summary>
     /// Every chart series colour must clear 3:1 against every preset's card surface.
     /// <para>The series palette was tuned for the six dark presets, where all 13 literals across the
     /// three charts clear 4:1. On the six LIGHT presets the same tints wash out against a near-white
@@ -89,13 +102,7 @@ public class ChartThemeTests
     [Fact]
     public void EverySeriesColour_ClearsThreeToOne_OnEveryPreset()
     {
-        // The designed palette, exactly as the three chart view models declare it.
-        string[] palette =
-        [
-            "#60A5FA", "#A78BFA", "#34D399", "#F59E0B", "#EF4444",   // ResourceHistory + Bandwidth
-            "#4CC9F0", "#80FFDB", "#F72585", "#FFD166",              // ping palette 1-4
-            "#B388FF", "#06D6A0", "#FF6B6B", "#F8961E",              // ping palette 5-8
-        ];
+        var palette = Palette;
 
         Assert.Equal(12, ThemePreset.Defaults.Count);
 
@@ -123,6 +130,41 @@ public class ChartThemeTests
         Assert.True(offenders.Count == 0,
             "these chart series colours are below 3:1 against their preset's card surface, so the line "
             + $"is not distinguishable from the background (WCAG 1.4.11):\n  {string.Join("\n  ", offenders)}");
+    }
+
+    /// <summary>
+    /// Every colour a chart view model declares is one the contrast test above checks.
+    /// </summary>
+    /// <remarks>
+    /// The palette is a copied list, so a chart that brought a colour of its own would draw it unchecked on all
+    /// twelve presets while the contrast test stayed green. Read from the sources of the view models that build a
+    /// series, so the next chart joins the check the moment it compiles.
+    /// </remarks>
+    [Fact]
+    public void EveryChartColour_IsOneTheContrastTestChecks()
+    {
+        var viewModels = Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "ViewModels"), "*.cs")
+            .Where(f => File.ReadAllText(f).Contains("LineSeries<", StringComparison.Ordinal))
+            .ToList();
+
+        var declared = viewModels
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), "\"(#[0-9A-Fa-f]{6})\"")
+                .Select(m => (File: Path.GetFileName(f), Hex: m.Groups[1].Value.ToUpperInvariant())))
+            .Distinct()
+            .ToList();
+
+        // Vacuity floor: four chart view models and the 13 colours between them, measured when this was written.
+        Assert.True(viewModels.Count >= 4 && declared.Select(d => d.Hex).Distinct().Count() >= 13,
+            $"only {viewModels.Count} chart view models and {declared.Count} colours were found, so the comparison "
+            + "below would run over a short list.");
+
+        var missing = declared.Where(d => !Palette.Contains(d.Hex, StringComparer.OrdinalIgnoreCase))
+            .Select(d => $"{d.File}: {d.Hex}")
+            .ToList();
+
+        Assert.True(missing.Count == 0,
+            "these chart colours are not in the palette EverySeriesColour_ClearsThreeToOne_OnEveryPreset checks, so "
+            + $"nothing proves they are readable on a light preset:\n  {string.Join("\n  ", missing)}");
     }
 
     /// <summary>

@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Views.SpeedTestView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
 
     <UserControl.Resources>
@@ -162,6 +163,31 @@
                                     AutomationProperties.Name="Clear Ookla history"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
+                        <!-- The table below drawn as a line (#1499): "is it worse than it used to be, or just today?"
+                             is a shape question a column of numbers does not answer. Shown from two measured runs, so
+                             one result is never drawn as a line; with none, the card's empty state still speaks. -->
+                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Padding="10,8"
+                                Visibility="{Binding OoklaTrend.HasTrend, Converter={StaticResource FlexVis}}">
+                            <StackPanel>
+                                <lvc:CartesianChart Height="150" Background="Transparent"
+                                                    AutomationProperties.Name="Ookla download and upload over time"
+                                                    Series="{Binding OoklaTrend.Series}"
+                                                    XAxes="{Binding OoklaTrend.XAxes}" YAxes="{Binding OoklaTrend.YAxes}"
+                                                    LegendPosition="Top"
+                                                    LegendTextPaint="{Binding OoklaTrend.LegendTextPaint}"
+                                                    LegendBackgroundPaint="{Binding OoklaTrend.LegendBackgroundPaint}"
+                                                    TooltipTextPaint="{Binding OoklaTrend.TooltipTextPaint}"
+                                                    TooltipBackgroundPaint="{Binding OoklaTrend.TooltipBackgroundPaint}"/>
+                                <!-- The same reading in words, which is also what a screen reader gets. -->
+                                <TextBlock Text="{Binding OoklaTrend.Summary}" Style="{StaticResource Subtle}"
+                                           TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Padding="0"
+                                Visibility="{Binding OoklaTrend.HasSingleRun, Converter={StaticResource FlexVis}}">
+                            <v:EmptyState Glyph="&#xE9D9;" Title="One test so far"
+                                          Message="The trend appears after the second test, so one result is never drawn as a line."/>
+                        </Border>
                         <DataGrid ItemsSource="{Binding OoklaHistory}" AutoGenerateColumns="False"
                                   IsReadOnly="True" HeadersVisibility="Column" CanUserReorderColumns="False"
                                   CanUserResizeColumns="True" CanUserResizeRows="False" GridLinesVisibility="None"
@@ -196,6 +222,29 @@
                                     AutomationProperties.Name="Clear HTTP history"
                                     HorizontalAlignment="Right" DockPanel.Dock="Right" Padding="12,4" FontSize="12"/>
                         </DockPanel>
+                        <!-- Same trend as the Ookla card, from this engine's own history: the two are never drawn
+                             together, because they measure differently. -->
+                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Padding="10,8"
+                                Visibility="{Binding HttpTrend.HasTrend, Converter={StaticResource FlexVis}}">
+                            <StackPanel>
+                                <lvc:CartesianChart Height="150" Background="Transparent"
+                                                    AutomationProperties.Name="HTTP download and upload over time"
+                                                    Series="{Binding HttpTrend.Series}"
+                                                    XAxes="{Binding HttpTrend.XAxes}" YAxes="{Binding HttpTrend.YAxes}"
+                                                    LegendPosition="Top"
+                                                    LegendTextPaint="{Binding HttpTrend.LegendTextPaint}"
+                                                    LegendBackgroundPaint="{Binding HttpTrend.LegendBackgroundPaint}"
+                                                    TooltipTextPaint="{Binding HttpTrend.TooltipTextPaint}"
+                                                    TooltipBackgroundPaint="{Binding HttpTrend.TooltipBackgroundPaint}"/>
+                                <TextBlock Text="{Binding HttpTrend.Summary}" Style="{StaticResource Subtle}"
+                                           TextWrapping="Wrap" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource CardInner}" Margin="0,8,0,0" Padding="0"
+                                Visibility="{Binding HttpTrend.HasSingleRun, Converter={StaticResource FlexVis}}">
+                            <v:EmptyState Glyph="&#xE9D9;" Title="One test so far"
+                                          Message="The trend appears after the second test, so one result is never drawn as a line."/>
+                        </Border>
                         <DataGrid ItemsSource="{Binding HttpHistory}" AutoGenerateColumns="False"
                                   IsReadOnly="True" HeadersVisibility="Column" CanUserReorderColumns="False"
                                   CanUserResizeColumns="True" CanUserResizeRows="False" GridLinesVisibility="None"

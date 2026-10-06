@@ -193,6 +193,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   not by the description database's `safety` field — that field is provenance, and treating it as
   criticality is what made the app refuse to end Notepad while claiming a BSOD.
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI. A failed read sets `ReadFailed` and says so rather than "no battery"; a failed refresh keeps the last reading.
+  After the battery read, and only when there is a battery, it reads the capacity history through
+  `IBatteryReportService` into `CapacityChart`, `WearVerdict` and the card's messages; a failed history read after
+  a good one keeps what was shown. Its internal constructor takes both reads, so a test needs neither WMI nor
+  `powercfg`.
+- `BatteryCapacityChart` — the battery's capacity history as a line in percent of new, with a dashed 100% line, on
+  a scale from 70% (or lower) to just above 100%, so a small loss is not drawn as a cliff. The same paint lifecycle
+  as `SpeedTrendChart`.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
@@ -264,10 +271,11 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-two are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-three are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
-`IAppBlockerService` (AppBlockerService), `ICleanupPreScanService`, `IContextMenuService`,
+`IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
+history), `ICleanupPreScanService`, `IContextMenuService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `ITweaksHubService`, `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
@@ -516,8 +524,9 @@ Key services:
   file format rather than console output. Nothing is trimmed or substituted — a lossy export of
   a path is worse than a quoted one.
 - `Helpers/ChartAxisLabels` — the time-axis tick text for the charts that plot saved samples
-  (Resource History, the Speed Test trend), defined once with the guard that prints nothing for a
-  value that cannot be a sample time, so an axis with no data never shows dates in the year 1 (#2371).
+  (Resource History, the Speed Test trend, the battery's capacity history), defined once with the
+  guard that prints nothing for a value that cannot be a sample time, so an axis with no data never
+  shows dates in the year 1 (#2371).
 - `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).
@@ -678,6 +687,16 @@ Key services:
   when the `Win32_Battery` query fails, so a failed read is never reported as no battery.
   The capacity classes answer only an elevated process, and without them health is left
   unmeasured rather than claimed.
+- `BatteryReportService` (`IBatteryReportService`) — runs `powercfg /batteryreport /xml` through
+  `IPowerShellRunner` into a new, randomly named file in the temp folder, reads it and deletes it, with a
+  30-second timeout on an injectable `TimeProvider`. Reports `Read`, `NoHistory` (a desktop's entries all carry
+  0 capacity) or `Failed`, and never one as another. Needs no administrator rights.
+- `BatteryReportParser` — pure reader of the report's `History` section: elements matched by local name, no
+  DTD, entries without a capacity dropped, and everything before the newest `BatteryChanged` entry dropped so a
+  replacement is not drawn as a recovery.
+- `BatteryWearAnalyzer` — pure: the loss over the last six months, each end the median of up to three entries,
+  against what ordinary use costs, as four verdicts that never use the failure colour. `DescribeTooShort` writes
+  the card's message for less than a month of history.
 - `DialogService` — centralized confirmation/message dialogs (replaces
   direct MessageBox calls for testability).
 - `IconExtractorService` — extracts application icons from executables

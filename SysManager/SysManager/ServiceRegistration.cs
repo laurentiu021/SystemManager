@@ -39,6 +39,7 @@ public static class ServiceRegistration
             sp.GetRequiredService<BatteryService>(),
             new EventLogService()));
         services.AddSingleton<BatteryService>();
+        services.AddSingleton<IBatteryReportService, BatteryReportService>();
         services.AddSingleton<ITuneUpService, TuneUpService>();
         services.AddSingleton<HealthScoreService>();
         services.AddSingleton<AppAlertService>();

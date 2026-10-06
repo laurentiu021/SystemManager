@@ -1308,9 +1308,18 @@ offers, "rate us" prompts:
 - If Windows does not answer the battery query, the tab says the battery could not be
   read rather than that there is none, and a failed Refresh keeps the last reading on
   screen, saying it is from then
-- Health and wear need administrator rights (Windows only reports capacity to an
-  elevated process). Without it they read "Not available" and the page explains
-  why, instead of showing a number that isn't a measurement.
+- Health and wear need administrator rights (SysManager reads them from a part of
+  Windows that answers only an elevated process). Without it they read "Not available"
+  and the page explains why, instead of showing a number that isn't a measurement.
+- **Capacity over time** — how much charge the battery holds when full, as a percentage
+  of what it held when new, drawn from the history Windows keeps of it, so it shows
+  months on the first visit. No administrator rights needed
+- One plain verdict under it: normal wear, a little faster than usual, or faster than
+  usual, judged on the last six months against what ordinary use costs, with what helps.
+  It never says the battery is dying, and under three months of history a faster loss
+  is called too early to tell
+- A replaced battery starts a new line instead of drawing as a recovery. With less than
+  a month of history the card says how much Windows has recorded so far
 
 ### Uninstaller
 - Lists all installed applications via winget with size from registry. If winget cannot

@@ -924,16 +924,18 @@ Key services:
   Without the settings an extension is still listed, claiming nothing about its origin; one loaded from a
   folder elsewhere is found through them. Built-in component extensions have no folder and are not listed.
   One whose manifest cannot be read, whose folder (or newest version) is a link, or whose folder is off this
-  PC's drives is listed as "An extension whose name could not be read" with what its settings say. A key the
-  parser accepts but a lookup cannot read costs only the manifest, translation file or settings entry it is in.
+  PC's drives is listed as "An extension whose name could not be read" with what its settings say.
 - `FirefoxExtensionReader` — one Firefox profile's extensions from `extensions.json`, with each `.xpi`
   package read in memory for its icon and the pages it replaces. Themes, dictionaries, language packs and
   hidden add-ons are left out; a profile without the file has none, one with an unreadable file says so.
   A package off this PC's drives is opened only when it sits inside the profile being read, which folder
-  redirection can put on a share; an add-on record that cannot be read is listed as unreadable.
-- `ExtensionFiles` — the bounded, fully shared reads and tolerant JSON parsing both readers use: every value
-  read by its kind, so a number written as text or bytes that are not UTF-8 read as absent instead of
-  throwing; the check that an extension's own path stays inside its folder and passes through no link; what is
+  redirection can put on a share.
+- `ExtensionFiles` — the bounded, fully shared reads and tolerant JSON parsing both readers use, and the
+  only way they take a value from that JSON: each value read by its kind and each key's name read by itself,
+  so a number written as text, bytes that are not UTF-8, or a key the parser accepts but its own lookup
+  throws on are simply absent and cost nothing else, a rule
+  `ArchitectureTests.TheExtensionReaders_ReadTheirJsonOnlyThroughExtensionFiles` keeps; the check that an
+  extension's own path stays inside its folder and passes through no link; what is
   at a path, seen without following a link; and whether a path is on one of this PC's drives or inside a folder.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed

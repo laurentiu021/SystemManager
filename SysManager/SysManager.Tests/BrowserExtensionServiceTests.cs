@@ -134,6 +134,7 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         Assert.Equal("Google Chrome", profile.Browser);
         Assert.True(profile.CouldNotRead);
+        Assert.True(profile.BehindALink);
         Assert.Empty(profile.Extensions);
     }
 
@@ -175,6 +176,7 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         Assert.Equal("Firefox", profile.Browser);
         Assert.True(profile.CouldNotRead);
+        Assert.True(profile.BehindALink);
     }
 
     [Fact]
@@ -208,7 +210,8 @@ public sealed class BrowserExtensionServiceTests : IDisposable
             { "addons": [ { "id": "f@x", "type": "extension", "version": "1", "location": "app-profile", "active": true,
                             "defaultLocale": { "name": "Four" } } ] }
             """);
-        Directory.CreateDirectory(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\efgh5678.default-esr"));
+        // The profile Firefox opens is not even in the Profiles folder here: only the listed one is, so it is named
+        // because Firefox would open another, not because there are several.
         File.WriteAllText(Path.Combine(_roaming, @"Mozilla\Firefox\profiles.ini"),
             "[Install1]\r\nDefault=Profiles/efgh5678.default-esr\r\n");
 
@@ -216,6 +219,18 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         Assert.Null(profile.Executable);
         Assert.Equal("default-release", profile.ProfileName);
+    }
+
+    [Fact]
+    public async Task AProfileListedAlone_IsStillNamed_WhenTheBrowserHasAnother()
+    {
+        // Default has no extensions and is left out, but Chrome may open on it: the status must say which profile.
+        Directory.CreateDirectory(Path.Combine(_local, @"Google\Chrome\User Data\Default"));
+        Chromium(Path.Combine(_local, @"Google\Chrome\User Data\Profile 2"), IdA, "One");
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Equal("Profile 2", profile.ProfileName);
     }
 
     [Fact]

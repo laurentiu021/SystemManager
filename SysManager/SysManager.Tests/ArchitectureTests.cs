@@ -3005,6 +3005,47 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The extension readers take every value from a browser's JSON through <c>ExtensionFiles</c>, never from the
+    /// parser's own accessors (#1526).
+    /// </summary>
+    /// <remarks>
+    /// The parser accepts what its accessors then refuse with an exception: bytes that are not UTF-8 in a string, and
+    /// an escaped half of a surrogate pair in a key, which makes even <c>TryGetProperty</c> for another key in that
+    /// object throw. Another program can write anything into these files, and one such value used to end the whole
+    /// look. <c>ExtensionFiles</c> reads each value by its kind and each key's name itself, so such a value is simply
+    /// absent; a single direct accessor in a reader brings the failure back, and no other test would notice until a
+    /// browser's file had such a value in that very place.
+    /// </remarks>
+    [Fact]
+    public void TheExtensionReaders_ReadTheirJsonOnlyThroughExtensionFiles()
+    {
+        string[] readers = ["ChromiumExtensionReader.cs", "FirefoxExtensionReader.cs"];
+        string[] accessors =
+        [
+            ".TryGetProperty(", ".GetProperty(", ".GetString(", ".GetBoolean(", ".GetInt32(", ".GetInt64(",
+            ".TryGetInt32(", ".TryGetInt64(", ".GetDouble(", ".EnumerateObject(", ".GetRawText(",
+        ];
+        var helper = new Regex(@"\bExtensionFiles\.(String|Number|Int|Bool|Has|Strings|TryGet|Properties|Text)\(",
+            RegexOptions.CultureInvariant);
+
+        var offenders = new List<string>();
+        var helperReads = 0;
+        foreach (var name in readers)
+        {
+            var source = WithoutComments(File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", name)));
+            helperReads += helper.Matches(source).Count;
+            offenders.AddRange(accessors.Where(a => source.Contains(a, StringComparison.Ordinal)).Select(a => $"{name}: {a}"));
+        }
+
+        // Vacuity floor: the two readers make 57 such reads today. A file that moved or was renamed would otherwise
+        // leave this checking nothing.
+        Assert.True(helperReads >= 45, $"only {helperReads} ExtensionFiles reads were found in the readers, out of 57 measured");
+        Assert.True(offenders.Count == 0,
+            "These readers take a value straight from the parser, which throws on what another program can write into a "
+            + "browser's files; read it through ExtensionFiles instead: " + string.Join(", ", offenders));
+    }
+
+    /// <summary>
     /// Every filter or search box binds a property name Ctrl+F recognises.
     /// </summary>
     /// <remarks>

@@ -64,7 +64,9 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
         Task.Run<IReadOnlyList<ExtensionProfile>>(() =>
         {
             var culture = CultureInfo.CurrentUICulture;
-            // Each group with the name its profile goes by, for the status of a browser listed more than once.
+            // Each group with the name its profile goes by in "Manage in …"'s status, when it needs one: for a browser
+            // with more than one profile — counted on disk, since an empty one is not listed and could still be the
+            // one the browser opens — and for a Firefox profile Firefox does not open by itself.
             List<(ExtensionProfile Profile, string? Name)> found = [];
 
             foreach (var (browser, userDataRel) in BrowserProfiles.Chromium)
@@ -77,19 +79,22 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
                     found.Add((Unread(browser, browser, page, executable, null, userData), null));
                     continue;
                 }
-                foreach (var (dir, display, _, isLink) in _profiles.ChromiumProfileFolders(browser, userDataRel))
+                var folders = _profiles.ChromiumProfileFolders(browser, userDataRel).ToList();
+                foreach (var (dir, display, _, kind) in folders)
                 {
                     ct.ThrowIfCancellationRequested();
+                    var name = folders.Count > 1 ? dir : null;
                     // Every profile is opened as itself, Default too: without a folder the browser opens on whichever
                     // profile was used last.
-                    if (isLink)
+                    if (kind is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
                     {
-                        found.Add((Unread(display, browser, page, executable, dir, ExtensionFiles.EntryKind.Link), dir));
+                        found.Add((Unread(display, browser, page, executable, dir, kind), name));
                         continue;
                     }
+                    if (kind is not ExtensionFiles.EntryKind.Folder) continue;
                     var (extensions, couldNotRead) =
                         ChromiumExtensionReader.Read(Path.Combine(_localAppData, userDataRel, dir), culture);
-                    Keep(new ExtensionProfile(display, browser, page, executable, dir, Ordered(extensions), couldNotRead), dir);
+                    Keep(new ExtensionProfile(display, browser, page, executable, dir, Ordered(extensions), couldNotRead), name);
                 }
             }
 
@@ -119,7 +124,8 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             else if (firefoxRoot is ExtensionFiles.EntryKind.Folder)
             {
                 var (toldDefault, defaultFolder) = _profiles.FirefoxDefaultFolder();
-                foreach (var (folder, display, label) in _profiles.FirefoxProfiles())
+                var firefoxFolders = _profiles.FirefoxProfiles();
+                foreach (var (folder, display, label) in firefoxFolders)
                 {
                     ct.ThrowIfCancellationRequested();
                     // Firefox starts in its default profile, so only that one is started from here: started for
@@ -129,7 +135,7 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
                         ? string.Equals(folder, defaultFolder, StringComparison.OrdinalIgnoreCase)
                         : label.Length == 0;
                     var executable = isDefault ? FirefoxExecutable : null;
-                    var name = BrowserProfiles.FirefoxProfileName(folder, display);
+                    var name = firefoxFolders.Length > 1 || !isDefault ? BrowserProfiles.FirefoxProfileName(folder, display) : null;
                     var profileDir = Path.Combine(firefoxProfiles, folder);
                     var kind = ExtensionFiles.KindOf(profileDir);
                     if (kind is ExtensionFiles.EntryKind.Folder)
@@ -144,17 +150,8 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
                 }
             }
 
-            // A browser listed more than once is named in "Manage in …"'s status, and so is a Firefox profile Firefox
-            // does not open by itself: the page shows the extensions of whichever profile it is opened in.
-            var shared = found
-                .GroupBy(f => f.Profile.Product, StringComparer.Ordinal)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToHashSet(StringComparer.Ordinal);
-            return [.. found.Select(f =>
-                shared.Contains(f.Profile.Product) || (f.Profile.Product == "Firefox" && f.Profile.Executable is null)
-                    ? f.Profile with { ProfileName = f.Name }
-                    : f.Profile)];
+            // The page shows the extensions of whichever profile it is opened in, so the status names it.
+            return [.. found.Select(f => f.Name is null ? f.Profile : f.Profile with { ProfileName = f.Name })];
 
             // A profile with nothing in it says nothing, unless what it says is that it could not be read.
             void Keep(ExtensionProfile profile, string? name)

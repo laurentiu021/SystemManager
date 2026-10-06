@@ -231,48 +231,60 @@ public sealed class FirefoxExtensionReaderTests : IDisposable
     }
 
     [Fact]
-    public void APackageNotOnALocalDrive_IsNotOpened()
+    public void APackageNotOnALocalDrive_AndOutsideTheProfile_IsNotOpened()
     {
-        // The same package, written the way a network share or a device path is: such a path is never opened.
-        var package = Package("""{ "manifest_version": 2, "name": "Far" }""", "icon.png", [5]);
-        Write(Addon(extra: $$""", "path": "{{Json(@"\\?\" + package)}}", "icons": { "48": "icon.png" } """));
+        // A package outside the profile, written the way a network share or a device path is: never opened.
+        var outside = _profile + "-elsewhere";
+        try
+        {
+            Directory.CreateDirectory(outside);
+            var package = Path.Combine(outside, "far@example.xpi");
+            File.Move(Package("""{ "manifest_version": 2, "name": "Far" }""", "icon.png", [5]), package);
+            Write(Addon(extra: $$""", "path": "{{Json(@"\\?\" + package)}}", "icons": { "48": "icon.png" } """));
 
-        var extension = Single();
+            var extension = Single();
 
-        Assert.Null(extension.IconBytes);
-        Assert.Equal("Video Speed Controller", extension.Name);
+            Assert.Null(extension.IconBytes);
+            Assert.Equal("Video Speed Controller", extension.Name);
+        }
+        finally
+        {
+            Directory.Delete(outside, recursive: true);
+        }
     }
 
     [Fact]
-    public void AnAddOnWithABrokenEscape_IsListedAsUnreadable_AndTheRestAreListed()
+    public void AnAddOnWithABrokenEscape_IsStillRead()
     {
         Write(Addon(extra: ", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0"), Addon("Second"));
 
         var (extensions, couldNotRead) = Read();
 
         Assert.False(couldNotRead);
-        Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(["Second", "Video Speed Controller"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]
-    public void AListWithABrokenEscapeInItsOutline_CouldNotBeRead()
+    public void AListWithABrokenEscapeInItsOutline_IsStillRead()
     {
         File.WriteAllText(Path.Combine(_profile, "extensions.json"),
             "{ \"addons\": [ " + Addon() + " ], \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }");
 
-        var (extensions, couldNotRead) = Read();
-
-        Assert.True(couldNotRead);
-        Assert.Empty(extensions);
+        Assert.Equal("Video Speed Controller", Single().Name);
     }
 
     [Fact]
-    public void APackageWithABrokenEscape_LeavesTheExtensionListed()
+    public void APackageWithABrokenEscape_IsStillRead()
     {
-        var package = Package("{ \"manifest_version\": 2, \"name\": \"Odd\", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }", "icon.png", [5]);
+        var package = Package(
+            "{ \"manifest_version\": 2, \"name\": \"Odd\", \"chrome_settings_overrides\": { \"homepage\": \"https://example.com\" }, "
+            + "\"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }", "icon.png", [5]);
         Write(Addon(extra: $$""", "path": "{{Json(package)}}", "icons": { "48": "icon.png" } """));
 
-        Assert.Equal("Video Speed Controller", Single().Name);
+        var extension = Single();
+
+        Assert.Equal([5], extension.IconBytes);
+        Assert.Equal(["Replaces your home page"], extension.Permissions.Select(p => p.Text));
     }
 
     [Fact]

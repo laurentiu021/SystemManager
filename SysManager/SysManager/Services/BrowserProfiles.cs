@@ -75,14 +75,16 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
     /// </para>
     /// </summary>
     internal IEnumerable<(string Dir, string Display, string Label)> ChromiumProfiles(string browser, string userDataRel) =>
-        ChromiumProfileFolders(browser, userDataRel).Where(p => !p.IsLink).Select(p => (p.Dir, p.Display, p.Label));
+        ChromiumProfileFolders(browser, userDataRel)
+            .Where(p => p.Kind is ExtensionFiles.EntryKind.Folder)
+            .Select(p => (p.Dir, p.Display, p.Label));
 
     /// <summary>
-    /// Every profile folder <see cref="ChromiumProfiles"/> considers, named the same way, with the links among them
-    /// included and marked: the cleaner never goes through one, and the extension list says it could not read one
-    /// rather than leaving it out (#1526).
+    /// Every profile folder <see cref="ChromiumProfiles"/> considers, named the same way, with what each one is: a
+    /// plain folder, or a link or something unreadable, which the cleaner never goes through and the extension list
+    /// says it could not read rather than leaving out (#1526).
     /// </summary>
-    internal IEnumerable<(string Dir, string Display, string Label, bool IsLink)> ChromiumProfileFolders(
+    internal IEnumerable<(string Dir, string Display, string Label, ExtensionFiles.EntryKind Kind)> ChromiumProfileFolders(
         string browser, string userDataRel)
     {
         var userDataAbs = Path.Combine(localAppData, userDataRel);
@@ -101,14 +103,14 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
                      .OrderBy(name => IsDefaultProfile(name!) ? 0 : 1)
                      .ThenBy(name => name, StringComparer.OrdinalIgnoreCase))
         {
-            var isLink = SafeFileWalk.IsReparsePoint(Path.Combine(userDataAbs, dir!));
+            var kind = ExtensionFiles.KindOf(Path.Combine(userDataAbs, dir!));
 
             // Name the profile in the Browser column so the user can see WHICH Chrome is being
             // cleaned — the thing a flat "Google Chrome" checkbox in other cleaners never tells her.
             // The default profile stays unlabelled, so the common single-profile case reads exactly
             // as it did before and no existing row text changes.
             var isDefault = IsDefaultProfile(dir!);
-            yield return (dir!, isDefault ? browser : $"{browser} — {dir}", isDefault ? string.Empty : $" in {dir}", isLink);
+            yield return (dir!, isDefault ? browser : $"{browser} — {dir}", isDefault ? string.Empty : $" in {dir}", kind);
         }
     }
 

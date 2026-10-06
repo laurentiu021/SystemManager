@@ -64,11 +64,14 @@ public sealed record BrowserExtension(
 /// <param name="Product">The browser alone, e.g. "Microsoft Edge", for "Manage in …" and "Close … and look again".</param>
 /// <param name="Page">The browser's own extensions page, e.g. "edge://extensions".</param>
 /// <param name="Executable">What starts the browser, e.g. "msedge.exe", or null when it cannot be started reliably.</param>
-/// <param name="ProfileDirectory">The profile folder to open it in, or null for the browser's default.</param>
+/// <param name="ProfileDirectory">
+/// The profile folder to open it in, such as "Default" or "Profile 2", or null for a browser that is not opened in one
+/// (Opera, Firefox).
+/// </param>
 /// <param name="CouldNotRead">True when the profile's extension list could not be read, so an empty list is not "none".</param>
 /// <param name="ProfileName">
-/// The profile's own name when "Manage in …" must say which profile to open — a browser listed more than once, or a
-/// Firefox profile Firefox does not open by itself — and null otherwise.
+/// The profile's own name when "Manage in …" must say which profile to open — a browser with more than one profile,
+/// or a Firefox profile Firefox does not open by itself — and null otherwise.
 /// </param>
 /// <param name="BehindALink">True when the profile was not read because it sits behind a link, which is not followed.</param>
 public sealed record ExtensionProfile(

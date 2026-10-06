@@ -172,6 +172,14 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
     }
 
     [Fact]
+    public void AKeyWrittenTwice_IsReadAsTheLastOne_AsTheParserItselfDoes()
+    {
+        Install(IdA, "1.0_0", """{ "manifest_version": 3, "name": "First", "version": "1.0", "name": "Second" }""");
+
+        Assert.Equal("Second", Single().Name);
+    }
+
+    [Fact]
     public void TheVersionName_IsShownWhenThereIsOne()
     {
         Install(IdA, "1.2.3.4_0", Manifest(version: "1.2.3.4", extra: """, "version_name": "1.2 beta" """));
@@ -212,11 +220,17 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
         Assert.Null(Single().IconBytes);
     }
 
-    [Fact]
-    public void AnIconPathThatLeavesTheExtensionsFolder_IsNotRead()
+    [Theory]
+    [InlineData("")]
+    // A path out of the folder that is longer than the folder's own, so nothing about its length gives it away.
+    [InlineData("a-sibling-folder-with-a-name-long-enough-to-outrun-the-extension-folders-own-path")]
+    public void AnIconPathThatLeavesTheExtensionsFolder_IsNotRead(string sibling)
     {
-        File.WriteAllBytes(Path.Combine(_root, "outside.png"), [9]);
-        Install(IdA, "1.0_0", Manifest(extra: """, "icons": { "48": "../../../../outside.png" } """));
+        var outside = Path.Combine(_root, sibling);
+        Directory.CreateDirectory(outside);
+        File.WriteAllBytes(Path.Combine(outside, "outside.png"), [9]);
+        var relative = sibling.Length == 0 ? "../../../../outside.png" : $"../../../../{sibling}/outside.png";
+        Install(IdA, "1.0_0", Manifest(extra: $$""", "icons": { "48": "{{relative}}" } """));
 
         Assert.Null(Single().IconBytes);
     }
@@ -404,10 +418,10 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
     }
 
     [Fact]
-    public void AKeyWithABrokenEscape_InAManifestOrTheSettings_EndsNothing()
+    public void AKeyWithABrokenEscape_CostsOnlyItself_InAManifestOrTheSettings()
     {
-        // The parser accepts an escaped half of a surrogate pair as a key; looking up any other key in that object
-        // then throws. It costs that one manifest or that one settings entry, never the look.
+        // The parser accepts an escaped half of a surrogate pair as a key, and its own lookup of any other key in
+        // that object then throws. Read through ExtensionFiles, such a key is just not the one asked for.
         Install(IdA, "1.0_0", Manifest(extra: ", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0"));
         Install(IdB, "1.0_0", Manifest("Second"));
         Settings((IdA, "{ \"location\": 6 }"), (IdB, "{ \"location\": 1, \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }"));
@@ -415,32 +429,30 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
         var (extensions, couldNotRead) = Read();
 
         Assert.False(couldNotRead);
-        Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
-        // The unreadable manifest still carries what its own, readable settings entry says.
-        Assert.Equal(ExtensionOrigin.AnotherProgram, Assert.Single(extensions, e => e.Name == ChromiumExtensionReader.UnreadableName).Origin);
-        Assert.Equal(ExtensionOrigin.Unknown, Assert.Single(extensions, e => e.Name == "Second").Origin);
+        Assert.Equal<(string, ExtensionOrigin)>([("Example", ExtensionOrigin.AnotherProgram), ("Second", ExtensionOrigin.File)],
+            extensions.Select(e => (e.Name, e.Origin)).OrderBy(e => e.Name, StringComparer.Ordinal));
     }
 
     [Fact]
-    public void ASettingsFileWithABrokenEscapeInItsOutline_IsPassedOver_ForTheOtherOne()
+    public void ASettingsFileWithABrokenEscapeInItsOutline_IsStillRead()
     {
         Install(IdA, "1.0_0", Manifest());
         File.WriteAllText(Path.Combine(_profile, "Secure Preferences"),
             "{ \"extensions\": { \"settings\": { \"" + IdA + "\": { \"location\": 6 } }, \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 } }");
         WriteSettings("Preferences", (IdA, """{ "location": 7 }"""));
 
-        Assert.Equal(ExtensionOrigin.Organisation, Single().Origin);
+        Assert.Equal(ExtensionOrigin.AnotherProgram, Single().Origin);
     }
 
     [Fact]
-    public void ATranslationWithABrokenEscape_LeavesOnlyTheNameUnread()
+    public void ATranslationWithABrokenEscape_StillGivesTheName()
     {
         Install(IdA, "1.0_0", Manifest("__MSG_name__", extra: """, "default_locale": "en", "permissions": ["tabs"] """),
             ("_locales/en/messages.json", Encoding.UTF8.GetBytes("{ \"name\": { \"message\": \"Video\", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 } }")));
 
         var extension = Single();
 
-        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal("Video", extension.Name);
         Assert.Equal(["Can see your open tabs"], extension.Permissions.Select(p => p.Text));
     }
 
@@ -458,7 +470,7 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
     }
 
     [Fact]
-    public void AnExtensionsFolderThatCannotBeListed_StillKeepsTheUnpackedOnes()
+    public void AnExtensionsFolderThatIsALink_StillKeepsTheUnpackedOnes()
     {
         var unpacked = Path.Combine(_root, "my-extension");
         Directory.CreateDirectory(unpacked);

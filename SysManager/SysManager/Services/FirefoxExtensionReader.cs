@@ -5,7 +5,6 @@
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
-using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -21,7 +20,8 @@ namespace SysManager.Services;
 /// extension's own package (an <c>.xpi</c>, which is a zip) adds its icon and any search engine or home page it
 /// replaces. Themes, dictionaries and language packs are add-ons too and are left out, and so are the add-ons
 /// Firefox hides because they are part of the browser. A profile without the file has no extensions — a new
-/// profile, or one never opened — which is not a failure; a file that exists and cannot be read is.
+/// profile, or one never opened — which is not a failure; a file that exists and cannot be read is. Every value is
+/// read through <see cref="ExtensionFiles"/>, so one the parser let through but cannot be read is simply absent.
 /// </remarks>
 internal static class FirefoxExtensionReader
 {
@@ -35,19 +35,10 @@ internal static class FirefoxExtensionReader
         if (!File.Exists(file)) return ([], false);
 
         using var document = ExtensionFiles.Parse(ExtensionFiles.Read(file, ExtensionFiles.MaxSettingsBytes));
-        JsonElement addons;
-        try
+        if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
+            || !ExtensionFiles.TryGet(root, "addons", out var addons)
+            || addons.ValueKind != JsonValueKind.Array)
         {
-            if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
-                || !root.TryGetProperty("addons", out addons)
-                || addons.ValueKind != JsonValueKind.Array)
-            {
-                return ([], true);
-            }
-        }
-        catch (InvalidOperationException ex)
-        {
-            Log.Debug(ex, "Firefox's extension list could not be read");
             return ([], true);
         }
 
@@ -55,36 +46,25 @@ internal static class FirefoxExtensionReader
         foreach (var addon in addons.EnumerateArray())
         {
             if (addon.ValueKind != JsonValueKind.Object) continue;
-            try
-            {
-                if (ExtensionFiles.String(addon, "type") != "extension") continue;
-                if (ExtensionFiles.Bool(addon, "hidden") == true || ExtensionFiles.Bool(addon, "visible") == false) continue;
-                found.Add(FromAddon(addon, profileDir));
-            }
-            catch (InvalidOperationException ex)
-            {
-                // An add-on whose record holds a key a lookup cannot read: whether it is even an extension is not
-                // known, and it is listed rather than hidden.
-                Log.Debug(ex, "A Firefox add-on's record could not be read");
-                found.Add(new BrowserExtension(ChromiumExtensionReader.UnreadableName, "", ExtensionOrigin.Unknown,
-                    IsOff: false, InstalledOn: null, Store: "", Permissions: [], CanReadEverySite: false, IconBytes: null));
-            }
+            if (ExtensionFiles.String(addon, "type") != "extension") continue;
+            if (ExtensionFiles.Bool(addon, "hidden") == true || ExtensionFiles.Bool(addon, "visible") == false) continue;
+            found.Add(FromAddon(addon, profileDir));
         }
         return (found, false);
     }
 
     private static BrowserExtension FromAddon(JsonElement addon, string profileDir)
     {
-        var name = addon.TryGetProperty("defaultLocale", out var locale) ? ExtensionFiles.String(locale, "name") : null;
+        var name = ExtensionFiles.TryGet(addon, "defaultLocale", out var locale) ? ExtensionFiles.String(locale, "name") : null;
         var origin = OriginOf(
             ExtensionFiles.String(addon, "location"),
             ExtensionFiles.Bool(addon, "foreignInstall") ?? false,
-            addon.TryGetProperty("installTelemetryInfo", out var telemetry) ? ExtensionFiles.String(telemetry, "source") : null,
+            ExtensionFiles.TryGet(addon, "installTelemetryInfo", out var telemetry) ? ExtensionFiles.String(telemetry, "source") : null,
             ExtensionFiles.String(addon, "sourceURI"));
 
-        var granted = addon.TryGetProperty("userPermissions", out var g) ? g : default;
+        var granted = ExtensionFiles.TryGet(addon, "userPermissions", out var g) ? g : default;
         var package = ReadPackage(ExtensionFiles.String(addon, "path"),
-            addon.TryGetProperty("icons", out var icons) ? ExtensionFiles.PickIcon(icons) : null, profileDir);
+            ExtensionFiles.TryGet(addon, "icons", out var icons) ? ExtensionFiles.PickIcon(icons) : null, profileDir);
         var (lines, everySite) = ExtensionPermissions.Describe(new(
             Permissions: ExtensionFiles.Strings(granted, "permissions"),
             Sites: ExtensionFiles.Strings(granted, "origins"),
@@ -177,29 +157,19 @@ internal static class FirefoxExtensionReader
 
             using var manifest = ExtensionFiles.Parse(Entry(zip, "manifest.json", ExtensionFiles.MaxManifestBytes));
             var root = manifest?.RootElement ?? default;
-            var overrides = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("chrome_settings_overrides", out var o) ? o : default;
-            var urlOverrides = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("chrome_url_overrides", out var u) ? u : default;
+            var overrides = ExtensionFiles.TryGet(root, "chrome_settings_overrides", out var o) ? o : default;
+            var urlOverrides = ExtensionFiles.TryGet(root, "chrome_url_overrides", out var u) ? u : default;
             return new Package(
                 Icon: iconEntry is null ? null : Entry(zip, iconEntry, ExtensionFiles.MaxIconBytes),
-                ChangesSearch: Has(overrides, "search_provider"),
-                ReplacesHomePage: Has(overrides, "homepage"),
-                ReplacesNewTab: Has(urlOverrides, "newtab"),
-                ChangesStartupPages: Has(overrides, "startup_pages"));
+                ChangesSearch: ExtensionFiles.Has(overrides, "search_provider"),
+                ReplacesHomePage: ExtensionFiles.Has(overrides, "homepage"),
+                ReplacesNewTab: ExtensionFiles.Has(urlOverrides, "newtab"),
+                ChangesStartupPages: ExtensionFiles.Has(overrides, "startup_pages"));
         }
         catch (IOException) { return NoPackage; }
         catch (UnauthorizedAccessException) { return NoPackage; }
         catch (InvalidDataException) { return NoPackage; }
-        catch (InvalidOperationException ex)
-        {
-            // A manifest key the parser let through and a lookup cannot read: the package adds nothing.
-            Log.Debug(ex, "A Firefox extension's package could not be read");
-            return NoPackage;
-        }
     }
-
-    private static bool Has(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
-        && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
 
     /// <summary>One entry's bytes, or null when it is missing or larger than <paramref name="maxBytes"/>.</summary>
     private static byte[]? Entry(ZipArchive zip, string name, int maxBytes)

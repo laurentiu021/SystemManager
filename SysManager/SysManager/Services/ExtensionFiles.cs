@@ -12,6 +12,13 @@ namespace SysManager.Services;
 /// The two ways the extension readers touch a browser's files (#1526): a bounded, shared read of one file, and a
 /// tolerant parse of the JSON in it. Read-only throughout, and shared so a running browser keeps its files.
 /// </summary>
+/// <remarks>
+/// Every value the readers take from that JSON comes through here, read by its kind. The parser accepts things a
+/// read then refuses with an exception — bytes that are not UTF-8 inside a string, an escaped half of a surrogate
+/// pair in a key, which makes even a lookup of another key in the same object throw — and another program can
+/// write anything into these files. Read here, each such value is simply absent, and costs nothing else.
+/// <c>ArchitectureTests.TheExtensionReaders_ReadTheirJsonOnlyThroughExtensionFiles</c> keeps the readers to that.
+/// </remarks>
 internal static class ExtensionFiles
 {
     /// <summary>A manifest or a translation file. Real ones are a few kilobytes.</summary>
@@ -64,26 +71,50 @@ internal static class ExtensionFiles
         catch (JsonException) { return null; }
     }
 
-    /// <summary>The string at <paramref name="name"/> on an object, or null — also when it is not valid text.</summary>
-    internal static string? String(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? Text(value) : null;
+    /// <summary>
+    /// The value of the property <paramref name="name"/> on an object, found by reading each property's name in turn,
+    /// the last of several winning, as the parser's own lookup does. Unlike that lookup it never throws: a key that
+    /// cannot be read is just not the one asked for.
+    /// </summary>
+    internal static bool TryGet(JsonElement element, string name, out JsonElement value)
+    {
+        value = default;
+        var found = false;
+        foreach (var (key, item) in Properties(element))
+        {
+            if (!string.Equals(key, name, StringComparison.Ordinal)) continue;
+            value = item;
+            found = true;
+        }
+        return found;
+    }
 
     /// <summary>
-    /// The element as a string, or null when it is not one or is not valid text. The parser accepts bytes that are
-    /// not UTF-8 inside a string and only reading it refuses them, with an exception that would end the whole look,
-    /// and another program can write anything into these files.
+    /// An object's properties, each with its name, or a null name when the name cannot be read; nothing for anything
+    /// but an object.
     /// </summary>
+    internal static IEnumerable<(string? Name, JsonElement Value)> Properties(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object) yield break;
+        foreach (var property in element.EnumerateObject())
+            yield return (NameOf(property), property.Value);
+    }
+
+    private static string? NameOf(JsonProperty property)
+    {
+        try { return property.Name; }
+        catch (InvalidOperationException) { return null; }
+    }
+
+    /// <summary>The string at <paramref name="name"/> on an object, or null — also when it is not valid text.</summary>
+    internal static string? String(JsonElement element, string name) =>
+        TryGet(element, name, out var value) ? Text(value) : null;
+
+    /// <summary>The element as a string, or null when it is not one or is not valid text.</summary>
     internal static string? Text(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.String) return null;
         try { return value.GetString(); }
-        catch (InvalidOperationException) { return null; }
-    }
-
-    /// <summary>A property's name, or null when it is not valid text (see <see cref="Text"/>).</summary>
-    internal static string? Name(JsonProperty property)
-    {
-        try { return property.Name; }
         catch (InvalidOperationException) { return null; }
     }
 
@@ -92,8 +123,7 @@ internal static class ExtensionFiles
     /// not fit: reading a number from anything else throws.
     /// </summary>
     internal static long? Number(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
+        TryGet(element, name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
             ? number
             : null;
 
@@ -103,19 +133,18 @@ internal static class ExtensionFiles
 
     /// <summary>The boolean at <paramref name="name"/> on an object, or null when it is absent or not a boolean.</summary>
     internal static bool? Bool(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
+        TryGet(element, name, out var value)
             ? value.ValueKind switch { JsonValueKind.True => true, JsonValueKind.False => false, _ => null }
             : null;
+
+    /// <summary>True when the object has a property <paramref name="name"/> whose value is anything but null.</summary>
+    internal static bool Has(JsonElement element, string name) =>
+        TryGet(element, name, out var value) && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined);
 
     /// <summary>The strings in the array at <paramref name="name"/> on an object; empty when there is none.</summary>
     internal static IEnumerable<string> Strings(JsonElement element, string name)
     {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(name, out var array)
-            || array.ValueKind != JsonValueKind.Array)
-        {
-            yield break;
-        }
+        if (!TryGet(element, name, out var array) || array.ValueKind != JsonValueKind.Array) yield break;
         foreach (var item in array.EnumerateArray())
         {
             if (Text(item) is { Length: > 0 } text) yield return text;
@@ -128,11 +157,10 @@ internal static class ExtensionFiles
     /// </summary>
     internal static string? PickIcon(JsonElement icons)
     {
-        if (icons.ValueKind != JsonValueKind.Object) return null;
         List<(int Size, string Path)> candidates = [];
-        foreach (var property in icons.EnumerateObject())
+        foreach (var (key, value) in Properties(icons))
         {
-            if (int.TryParse(Name(property), out var size) && size > 0 && Text(property.Value) is { Length: > 0 } path)
+            if (int.TryParse(key, out var size) && size > 0 && Text(value) is { Length: > 0 } path)
                 candidates.Add((size, path));
         }
         if (candidates.Count == 0) return null;
@@ -155,9 +183,9 @@ internal static class ExtensionFiles
 
     /// <summary>
     /// <paramref name="relative"/> resolved under <paramref name="folder"/>, or null when it would leave it — a
-    /// drive or other root, a path that climbs out with <c>..</c>, or one that passes through a folder that is a link,
-    /// which could lead anywhere. An extension names its own files, and nothing outside its folder is read on its
-    /// say-so. A leading slash is allowed, as browsers read it from the extension's own root.
+    /// drive or other root, a path that climbs out with <c>..</c>, or one that passes through anything but a plain
+    /// folder, such as a link, which could lead anywhere. An extension names its own files, and nothing outside its
+    /// folder is read on its say-so. A leading slash is allowed, as browsers read it from the extension's own root.
     /// </summary>
     internal static string? Inside(string folder, string relative)
     {
@@ -169,10 +197,18 @@ internal static class ExtensionFiles
             var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             var full = Path.GetFullPath(Path.Combine(root, trimmed));
             if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return null;
-            // Every folder between the extension's own and the file, each looked at without following it.
-            for (var dir = Path.GetDirectoryName(full); dir is not null && dir.Length >= root.Length; dir = Path.GetDirectoryName(dir))
+
+            // Each folder between the extension's own and the file, from the top, looked at without following it. The
+            // first one that does not exist ends the walk: nothing below it exists either, and a long made-up path
+            // then costs one look rather than one per level.
+            var parts = full[root.Length..].Split(Path.DirectorySeparatorChar);
+            var current = root;
+            for (var i = 0; i < parts.Length - 1; i++)
             {
-                if (Directory.Exists(dir) && SafeFileWalk.IsReparsePoint(dir)) return null;
+                current = Path.Combine(current, parts[i]);
+                var kind = KindOf(current);
+                if (kind is EntryKind.Missing) break;
+                if (kind is not EntryKind.Folder) return null;
             }
             return full;
         }

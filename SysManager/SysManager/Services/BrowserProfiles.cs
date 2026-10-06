@@ -246,6 +246,13 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
         string.Equals(folder, other, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The name a Firefox profile goes by in the tab: what its title shows after "Firefox — ", or, for the one shown
+    /// by the bare name, the readable half of its folder ("default-release").
+    /// </summary>
+    internal static string FirefoxProfileName(string folder, string display) =>
+        display.StartsWith("Firefox — ", StringComparison.Ordinal) ? display["Firefox — ".Length..] : FirefoxProfileLabel(folder);
+
+    /// <summary>
     /// The readable half of a salted Firefox profile folder: <c>8char.dev-edition</c> → <c>dev-edition</c>.
     /// A folder with no salt (or nothing after the dot) is its own label.
     /// </summary>

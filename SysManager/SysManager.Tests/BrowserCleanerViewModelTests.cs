@@ -186,6 +186,20 @@ public class BrowserCleanerViewModelTests
     }
 
     [Fact]
+    public async Task AProfileBehindALink_SaysWhyItWasNotRead()
+    {
+        // Closing the browser would not help here, so the note does not suggest it.
+        var vm = NewVm(Finding(new ExtensionProfile("Google Chrome — Profile 1", "Google Chrome", "chrome://extensions",
+            "chrome.exe", "Profile 1", [], CouldNotRead: true, BehindALink: true)));
+
+        await vm.ScanExtensionsCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "Google Chrome — Profile 1: its profile is kept in another folder through a link, which SysManager does not follow, so its extensions could not be listed.",
+            Assert.Single(vm.ExtensionGroups).UnreadableNote);
+    }
+
+    [Fact]
     public async Task AProfileThatWasRead_HasNoNote()
     {
         var vm = NewVm(Finding(Profile("Firefox", "Firefox", false, Extension("Speed"))));

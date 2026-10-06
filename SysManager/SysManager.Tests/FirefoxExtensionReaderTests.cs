@@ -225,7 +225,8 @@ public sealed class FirefoxExtensionReaderTests : IDisposable
         var (extensions, couldNotRead) = Read();
 
         Assert.False(couldNotRead);
-        Assert.Equal(2, extensions.Count);
+        // The odd date is the only thing lost: the add-on is still read by its name.
+        Assert.Equal(["Second", "Video Speed Controller"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
         Assert.All(extensions, e => Assert.Null(e.InstalledOn));
     }
 
@@ -240,6 +241,51 @@ public sealed class FirefoxExtensionReaderTests : IDisposable
 
         Assert.Null(extension.IconBytes);
         Assert.Equal("Video Speed Controller", extension.Name);
+    }
+
+    [Fact]
+    public void AnAddOnWithABrokenEscape_IsListedAsUnreadable_AndTheRestAreListed()
+    {
+        Write(Addon(extra: ", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0"), Addon("Second"));
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.False(couldNotRead);
+        Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void AListWithABrokenEscapeInItsOutline_CouldNotBeRead()
+    {
+        File.WriteAllText(Path.Combine(_profile, "extensions.json"),
+            "{ \"addons\": [ " + Addon() + " ], \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }");
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.True(couldNotRead);
+        Assert.Empty(extensions);
+    }
+
+    [Fact]
+    public void APackageWithABrokenEscape_LeavesTheExtensionListed()
+    {
+        var package = Package("{ \"manifest_version\": 2, \"name\": \"Odd\", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }", "icon.png", [5]);
+        Write(Addon(extra: $$""", "path": "{{Json(package)}}", "icons": { "48": "icon.png" } """));
+
+        Assert.Equal("Video Speed Controller", Single().Name);
+    }
+
+    [Fact]
+    public void APackageInsideTheProfile_IsOpened_WhereverTheProfileIs()
+    {
+        // With Windows' folder redirection the whole profile can sit on a share (\\server\…): a package inside the
+        // very profile being read is opened all the same. Written here as \\?\, the same folder off a drive letter.
+        var package = Package("""{ "manifest_version": 2, "name": "Here" }""", "icon.png", [5]);
+        Write(Addon(extra: $$""", "path": "{{Json(@"\\?\" + package)}}", "icons": { "48": "icon.png" } """));
+
+        var (extensions, _) = FirefoxExtensionReader.Read(@"\\?\" + _profile);
+
+        Assert.Equal([5], Assert.Single(extensions).IconBytes);
     }
 
     [Fact]

@@ -37,7 +37,7 @@ internal static class ExtensionPresenter
         return extension.Origin switch
         {
             ExtensionOrigin.Browser => "Came with the browser",
-            ExtensionOrigin.Folder => "Loaded from a folder on this PC",
+            ExtensionOrigin.Folder => "Loaded from a folder, not from an extension store",
             ExtensionOrigin.Organisation => installed is null
                 ? "Your organisation manages this one, so only it can remove it"
                 : $"{installed} · your organisation manages this one, so only it can remove it",
@@ -93,15 +93,13 @@ internal static class ExtensionPresenter
     /// <summary>
     /// The status line after "Manage in …". Whether the browser opened on the page cannot be seen from here, so the
     /// address is put on the clipboard too, and the line says what to do with it. When nothing was started because
-    /// SysManager runs as administrator, it says so: otherwise the button would look broken. For a profile the tab
-    /// names, such as "Google Chrome — Profile 2", it names the profile, since the page shows the extensions of the
+    /// SysManager runs as administrator, it says so: otherwise the button would look broken. When the profile has a
+    /// <see cref="ExtensionProfile.ProfileName"/>, it names the profile, since the page shows the extensions of the
     /// profile it is opened in.
     /// </summary>
     internal static string ManageStatus(ExtensionProfile profile, ExtensionsPageOpening opening, bool copied)
     {
-        var named = profile.Browser.StartsWith(profile.Product + " — ", StringComparison.Ordinal)
-            ? profile.Browser[(profile.Product.Length + 3)..]
-            : null;
+        var named = profile.ProfileName;
         var where = named is null ? profile.Product : $"{profile.Product}'s \"{named}\" profile";
         const string elevated = " SysManager is running as administrator, so a browser it opened would run as administrator too.";
         return (opening, copied) switch

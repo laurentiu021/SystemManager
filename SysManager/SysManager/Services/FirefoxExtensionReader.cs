@@ -5,6 +5,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -34,10 +35,19 @@ internal static class FirefoxExtensionReader
         if (!File.Exists(file)) return ([], false);
 
         using var document = ExtensionFiles.Parse(ExtensionFiles.Read(file, ExtensionFiles.MaxSettingsBytes));
-        if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
-            || !root.TryGetProperty("addons", out var addons)
-            || addons.ValueKind != JsonValueKind.Array)
+        JsonElement addons;
+        try
         {
+            if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
+                || !root.TryGetProperty("addons", out addons)
+                || addons.ValueKind != JsonValueKind.Array)
+            {
+                return ([], true);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Debug(ex, "Firefox's extension list could not be read");
             return ([], true);
         }
 
@@ -45,14 +55,25 @@ internal static class FirefoxExtensionReader
         foreach (var addon in addons.EnumerateArray())
         {
             if (addon.ValueKind != JsonValueKind.Object) continue;
-            if (ExtensionFiles.String(addon, "type") != "extension") continue;
-            if (ExtensionFiles.Bool(addon, "hidden") == true || ExtensionFiles.Bool(addon, "visible") == false) continue;
-            found.Add(FromAddon(addon));
+            try
+            {
+                if (ExtensionFiles.String(addon, "type") != "extension") continue;
+                if (ExtensionFiles.Bool(addon, "hidden") == true || ExtensionFiles.Bool(addon, "visible") == false) continue;
+                found.Add(FromAddon(addon, profileDir));
+            }
+            catch (InvalidOperationException ex)
+            {
+                // An add-on whose record holds a key a lookup cannot read: whether it is even an extension is not
+                // known, and it is listed rather than hidden.
+                Log.Debug(ex, "A Firefox add-on's record could not be read");
+                found.Add(new BrowserExtension(ChromiumExtensionReader.UnreadableName, "", ExtensionOrigin.Unknown,
+                    IsOff: false, InstalledOn: null, Store: "", Permissions: [], CanReadEverySite: false, IconBytes: null));
+            }
         }
         return (found, false);
     }
 
-    private static BrowserExtension FromAddon(JsonElement addon)
+    private static BrowserExtension FromAddon(JsonElement addon, string profileDir)
     {
         var name = addon.TryGetProperty("defaultLocale", out var locale) ? ExtensionFiles.String(locale, "name") : null;
         var origin = OriginOf(
@@ -63,7 +84,7 @@ internal static class FirefoxExtensionReader
 
         var granted = addon.TryGetProperty("userPermissions", out var g) ? g : default;
         var package = ReadPackage(ExtensionFiles.String(addon, "path"),
-            addon.TryGetProperty("icons", out var icons) ? ExtensionFiles.PickIcon(icons) : null);
+            addon.TryGetProperty("icons", out var icons) ? ExtensionFiles.PickIcon(icons) : null, profileDir);
         var (lines, everySite) = ExtensionPermissions.Describe(new(
             Permissions: ExtensionFiles.Strings(granted, "permissions"),
             Sites: ExtensionFiles.Strings(granted, "origins"),
@@ -135,14 +156,18 @@ internal static class FirefoxExtensionReader
 
     /// <summary>
     /// Reads the icon at <paramref name="iconEntry"/> and the manifest from the package at <paramref name="path"/>.
-    /// Only a <c>.xpi</c> file on one of this PC's drives is opened, and nothing in it is extracted: the two entries
-    /// are read into memory, each within its bound, and the package's own size is checked once it is open, so it
-    /// cannot change in between. A package that cannot be read yields nothing, and the extension is still listed.
+    /// Only a <c>.xpi</c> file is opened, on one of this PC's drives or inside the profile being read — which, with
+    /// Windows' folder redirection, can itself sit on a share — and nothing in it is extracted: the two entries are
+    /// read into memory, each within its bound, and the package's own size is checked once it is open, so it cannot
+    /// change in between. A package that cannot be read yields nothing, and the extension is still listed.
     /// </summary>
-    private static Package ReadPackage(string? path, string? iconEntry)
+    private static Package ReadPackage(string? path, string? iconEntry, string profileDir)
     {
-        if (path is null || !path.EndsWith(".xpi", StringComparison.OrdinalIgnoreCase) || !ExtensionFiles.IsOnALocalDrive(path))
+        if (path is null || !path.EndsWith(".xpi", StringComparison.OrdinalIgnoreCase)
+            || !(ExtensionFiles.IsOnALocalDrive(path) || ExtensionFiles.IsUnder(path, profileDir)))
+        {
             return NoPackage;
+        }
         try
         {
             if (!File.Exists(path) || SafeFileWalk.IsReparsePoint(path)) return NoPackage;
@@ -164,6 +189,12 @@ internal static class FirefoxExtensionReader
         catch (IOException) { return NoPackage; }
         catch (UnauthorizedAccessException) { return NoPackage; }
         catch (InvalidDataException) { return NoPackage; }
+        catch (InvalidOperationException ex)
+        {
+            // A manifest key the parser let through and a lookup cannot read: the package adds nothing.
+            Log.Debug(ex, "A Firefox extension's package could not be read");
+            return NoPackage;
+        }
     }
 
     private static bool Has(JsonElement element, string name) =>

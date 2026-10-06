@@ -66,6 +66,11 @@ public sealed record BrowserExtension(
 /// <param name="Executable">What starts the browser, e.g. "msedge.exe", or null when it cannot be started reliably.</param>
 /// <param name="ProfileDirectory">The profile folder to open it in, or null for the browser's default.</param>
 /// <param name="CouldNotRead">True when the profile's extension list could not be read, so an empty list is not "none".</param>
+/// <param name="ProfileName">
+/// The profile's own name when "Manage in …" must say which profile to open — a browser listed more than once, or a
+/// Firefox profile Firefox does not open by itself — and null otherwise.
+/// </param>
+/// <param name="BehindALink">True when the profile was not read because it sits behind a link, which is not followed.</param>
 public sealed record ExtensionProfile(
     string Browser,
     string Product,
@@ -73,7 +78,9 @@ public sealed record ExtensionProfile(
     string? Executable,
     string? ProfileDirectory,
     IReadOnlyList<BrowserExtension> Extensions,
-    bool CouldNotRead);
+    bool CouldNotRead,
+    string? ProfileName = null,
+    bool BehindALink = false);
 
 /// <summary>What "Manage in …" did when asked to open a browser on its extensions page (#1526).</summary>
 public enum ExtensionsPageOpening

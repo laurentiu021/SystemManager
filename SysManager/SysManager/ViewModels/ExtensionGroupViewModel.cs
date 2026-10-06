@@ -85,9 +85,14 @@ public sealed partial class ExtensionGroupViewModel
     /// What to say when the profile's list could not be read, so an empty group is never taken for "no extensions".
     /// Empty when it was read.
     /// </summary>
-    public string UnreadableNote => Profile.CouldNotRead
-        ? $"{Profile.Browser}: its extension list could not be read. If {Profile.Product} is open, close it and look again."
-        : "";
+    public string UnreadableNote => Profile switch
+    {
+        { BehindALink: true } =>
+            $"{Profile.Browser}: its profile is kept in another folder through a link, which SysManager does not follow, so its extensions could not be listed.",
+        { CouldNotRead: true } =>
+            $"{Profile.Browser}: its extension list could not be read. If {Profile.Product} is open, close it and look again.",
+        _ => "",
+    };
 
     /// <summary>The group's title, which is what a screen reader announces for it.</summary>
     public override string ToString() => Title;

@@ -360,38 +360,119 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
     // ── What cannot be read is still listed, or said ────────────────────────
 
     [Theory]
-    [InlineData("\"location\": \"1\"")]
-    [InlineData("\"location\": null")]
-    [InlineData("\"state\": null")]
-    [InlineData("\"state\": \"0\"")]
-    [InlineData("\"disable_reasons\": \"1\"")]
-    [InlineData("\"first_install_time\": 13300000000000000")]
-    public void ASettingOfTheWrongKind_IsReadAsUnset_AndTheListCarriesOn(string field)
+    [InlineData("\"location\": \"1\"", Dated, false, true)]
+    [InlineData("\"location\": null", Dated, false, true)]
+    [InlineData("\"state\": null", Dated, false, true)]
+    [InlineData("\"state\": \"0\"", Dated, false, true)]
+    [InlineData("\"disable_reasons\": \"1\"", Dated, false, true)]
+    [InlineData("\"first_install_time\": 13300000000000000", "\"disable_reasons\": [1]", true, false)]
+    public void ASettingOfTheWrongKind_IsReadAsUnset_AndTheListCarriesOn(string field, string beside, bool off, bool dated)
     {
         // Another program can write anything into these files, for an extension that has no folder too; one odd
-        // value must not cost the whole look.
+        // value must not cost the whole look, nor the other values in its entry.
         Install(IdA, "1.0_0", Manifest());
-        Settings((IdA, $"{{ {field} }}"), (IdB, $"{{ {field} }}"));
+        var entry = $"{{ {field}, {beside.Replace("{midday}", MiddayMicroseconds, StringComparison.Ordinal)} }}";
+        Settings((IdA, entry), (IdB, entry));
 
         var extension = Single();
 
         Assert.Equal(ExtensionOrigin.Unknown, extension.Origin);
-        Assert.False(extension.IsOff);
-        Assert.Null(extension.InstalledOn);
+        Assert.Equal(off, extension.IsOff);
+        Assert.Equal(dated ? Midday : (DateTime?)null, extension.InstalledOn);
     }
+
+    /// <summary>A value beside the odd one that must still be read: the install time, written as Chromium writes it.</summary>
+    private const string Dated = "\"first_install_time\": \"{midday}\"";
 
     [Fact]
     public void ANameThatIsNotValidText_IsListedAsUnreadable_AndTheListCarriesOn()
     {
         var dir = Install(IdA, "1.0_0", "{}");
         File.WriteAllBytes(Path.Combine(dir, "manifest.json"),
-            [.. Encoding.UTF8.GetBytes("{ \"name\": \""), 0xC3, 0x28, .. Encoding.UTF8.GetBytes("\", \"version\": \"1.0\" }")]);
+            [.. Encoding.UTF8.GetBytes("{ \"name\": \""), 0xC3, 0x28,
+             .. Encoding.UTF8.GetBytes("\", \"version\": \"1.0\", \"permissions\": [\"tabs\"] }")]);
         Install(IdB, "1.0_0", Manifest("Second"));
 
         var (extensions, couldNotRead) = Read();
 
         Assert.False(couldNotRead);
         Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
+        // Only the name is lost: the rest of the manifest is still read.
+        var unnamed = Assert.Single(extensions, e => e.Name == ChromiumExtensionReader.UnreadableName);
+        Assert.Equal("1.0", unnamed.Version);
+        Assert.Equal(["Can see your open tabs"], unnamed.Permissions.Select(p => p.Text));
+    }
+
+    [Fact]
+    public void AKeyWithABrokenEscape_InAManifestOrTheSettings_EndsNothing()
+    {
+        // The parser accepts an escaped half of a surrogate pair as a key; looking up any other key in that object
+        // then throws. It costs that one manifest or that one settings entry, never the look.
+        Install(IdA, "1.0_0", Manifest(extra: ", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0"));
+        Install(IdB, "1.0_0", Manifest("Second"));
+        Settings((IdA, "{ \"location\": 6 }"), (IdB, "{ \"location\": 1, \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 }"));
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.False(couldNotRead);
+        Assert.Equal([ChromiumExtensionReader.UnreadableName, "Second"], extensions.Select(e => e.Name).Order(StringComparer.Ordinal));
+        // The unreadable manifest still carries what its own, readable settings entry says.
+        Assert.Equal(ExtensionOrigin.AnotherProgram, Assert.Single(extensions, e => e.Name == ChromiumExtensionReader.UnreadableName).Origin);
+        Assert.Equal(ExtensionOrigin.Unknown, Assert.Single(extensions, e => e.Name == "Second").Origin);
+    }
+
+    [Fact]
+    public void ASettingsFileWithABrokenEscapeInItsOutline_IsPassedOver_ForTheOtherOne()
+    {
+        Install(IdA, "1.0_0", Manifest());
+        File.WriteAllText(Path.Combine(_profile, "Secure Preferences"),
+            "{ \"extensions\": { \"settings\": { \"" + IdA + "\": { \"location\": 6 } }, \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 } }");
+        WriteSettings("Preferences", (IdA, """{ "location": 7 }"""));
+
+        Assert.Equal(ExtensionOrigin.Organisation, Single().Origin);
+    }
+
+    [Fact]
+    public void ATranslationWithABrokenEscape_LeavesOnlyTheNameUnread()
+    {
+        Install(IdA, "1.0_0", Manifest("__MSG_name__", extra: """, "default_locale": "en", "permissions": ["tabs"] """),
+            ("_locales/en/messages.json", Encoding.UTF8.GetBytes("{ \"name\": { \"message\": \"Video\", \"\\udc00\\udc00\\udc00\\udc00\\udc00\": 0 } }")));
+
+        var extension = Single();
+
+        Assert.Equal(ChromiumExtensionReader.UnreadableName, extension.Name);
+        Assert.Equal(["Can see your open tabs"], extension.Permissions.Select(p => p.Text));
+    }
+
+    [Fact]
+    public void AnIconInAFolderThatIsALink_IsNotRead()
+    {
+        // Inside the extension's own folder too: a link there would let it name a file anywhere.
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        File.WriteAllBytes(Path.Combine(elsewhere, "i48.png"), [9]);
+        var dir = Install(IdA, "1.0_0", Manifest(extra: """, "icons": { "48": "images/i48.png" } """));
+        Symlinks.RequireJunction(Path.Combine(dir, "images"), elsewhere);
+
+        Assert.Null(Single().IconBytes);
+    }
+
+    [Fact]
+    public void AnExtensionsFolderThatCannotBeListed_StillKeepsTheUnpackedOnes()
+    {
+        var unpacked = Path.Combine(_root, "my-extension");
+        Directory.CreateDirectory(unpacked);
+        File.WriteAllText(Path.Combine(unpacked, "manifest.json"), Manifest("Work in progress"));
+        Settings(("cccccccccccccccccccccccccccccccc",
+            $$"""{ "location": 4, "path": "{{unpacked.Replace("\\", "\\\\", StringComparison.Ordinal)}}" }"""));
+        var elsewhere = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        Symlinks.RequireJunction(Path.Combine(_profile, "Extensions"), elsewhere);
+
+        var (extensions, couldNotRead) = Read();
+
+        Assert.True(couldNotRead);
+        Assert.Equal("Work in progress", Assert.Single(extensions).Name);
     }
 
     [Fact]
@@ -402,7 +483,11 @@ public sealed class ChromiumExtensionReaderTests : IDisposable
             [.. Encoding.UTF8.GetBytes("{ \"extensions\": { \"settings\": { \""), 0xC3, 0x28,
              .. Encoding.UTF8.GetBytes($"\": {{ \"location\": 6 }}, \"{IdA}\": {{ \"location\": 1 }} }} }} }}")]);
 
-        Assert.Equal("Example", Single().Name);
+        var extension = Single();
+
+        Assert.Equal("Example", extension.Name);
+        // Only the entry under the unreadable id is lost: this extension's own settings are still read.
+        Assert.Equal(ExtensionOrigin.File, extension.Origin);
     }
 
     [Fact]

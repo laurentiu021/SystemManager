@@ -905,8 +905,8 @@ Key services:
   Profile discovery lives in `BrowserProfiles`, shared with the extension list so both name a profile alike.
 - `BrowserProfiles` — every browser profile Browser Cleaner reads: each Chromium browser's `Default` and
   `Profile N`, every Opera channel, each Firefox profile, and the name the tab shows for each. The cleaner
-  never goes through a profile folder that is a link; the extension list is told which ones are, and which
-  Firefox profile Firefox opens, from its own `profiles.ini`.
+  never goes through a Chromium profile folder that is a link; the extension list is told which ones are, and
+  which Firefox profile Firefox opens, from its own `profiles.ini`.
 - `BrowserExtensionService` (`IBrowserExtensionService`) — the extensions in every profile `BrowserProfiles`
   finds, ordered as the list shows them (added by another program, then those that can read every website,
   then by name), and the command that opens a browser on its extensions page. Read-only. The data roots, the
@@ -914,23 +914,27 @@ Key services:
   folder name reach the command line. Nothing is started while SysManager runs as administrator: the browser
   would run elevated too, and what `chrome.exe` resolves to is a per-user setting. Opera's channels share one
   program name, so the list names their page instead, and Firefox is started only for the profile it opens,
-  as its `profiles.ini` says. A profile, data folder or Firefox profiles folder that is a link is not followed:
-  it is listed as one whose extensions could not be read, never left out.
+  as its `profiles.ini` says. Every Chromium profile, `Default` included, is opened with its own folder, and a
+  browser listed more than once names the profile in the status. A profile, data folder or Firefox profiles
+  folder that is a link is not followed: it is listed as one whose extensions could not be read, and says it
+  sits behind a link.
 - `ChromiumExtensionReader` — one Chromium profile's extensions: each id folder's newest version's
   `manifest.json` (name, with the translation lookup; version; icon; what it asks for) and the profile's
   `Secure Preferences` (on or off, install date, and where it came from, from Chromium's install location).
   Without the settings an extension is still listed, claiming nothing about its origin; one loaded from a
   folder elsewhere is found through them. Built-in component extensions have no folder and are not listed.
   One whose manifest cannot be read, whose folder (or newest version) is a link, or whose folder is off this
-  PC's drives is listed as "An extension whose name could not be read" with what its settings say.
+  PC's drives is listed as "An extension whose name could not be read" with what its settings say. A key the
+  parser accepts but a lookup cannot read costs only the manifest, translation file or settings entry it is in.
 - `FirefoxExtensionReader` — one Firefox profile's extensions from `extensions.json`, with each `.xpi`
   package read in memory for its icon and the pages it replaces. Themes, dictionaries, language packs and
   hidden add-ons are left out; a profile without the file has none, one with an unreadable file says so.
-  A package off this PC's drives is never opened.
+  A package off this PC's drives is opened only when it sits inside the profile being read, which folder
+  redirection can put on a share; an add-on record that cannot be read is listed as unreadable.
 - `ExtensionFiles` — the bounded, fully shared reads and tolerant JSON parsing both readers use: every value
   read by its kind, so a number written as text or bytes that are not UTF-8 read as absent instead of
-  throwing; the check that an extension's own path stays inside its folder; what is at a path, seen without
-  following a link; and whether a path is on one of this PC's drives (never a share or a device path).
+  throwing; the check that an extension's own path stays inside its folder and passes through no link; what is
+  at a path, seen without following a link; and whether a path is on one of this PC's drives or inside a folder.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
   per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is

@@ -5,6 +5,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -25,8 +26,10 @@ namespace SysManager.Services;
 /// loaded from a folder elsewhere on the PC is found through the settings, which record its path.
 /// <para>Nothing is left out for being unreadable. An extension whose manifest cannot be read, or whose folder is a
 /// link, is listed as <see cref="UnreadableName"/> with whatever its settings say, and an <c>Extensions</c> folder
-/// that cannot be listed makes the profile one that could not be read. Links are never followed, and a path the
-/// settings give off this PC's drives is never opened.</para>
+/// that cannot be listed makes the profile one that could not be read. A link where an extension or one of its
+/// folders should be is never followed, and a path the settings give off this PC's drives is never opened.</para>
+/// <para>The parser lets through some keys a lookup then cannot read (an escaped half of a surrogate pair, for one).
+/// Such a key costs the one file or settings entry it is in, never the look.</para>
 /// </remarks>
 internal static class ChromiumExtensionReader
 {
@@ -54,8 +57,13 @@ internal static class ChromiumExtensionReader
             case ExtensionFiles.EntryKind.Folder:
                 string[] folders;
                 try { folders = Directory.GetDirectories(extensionsDir); }
-                catch (IOException) { return ([], true); }
-                catch (UnauthorizedAccessException) { return ([], true); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The folder is there and cannot be listed: say so, and still look for the unpacked ones below.
+                    Log.Debug(ex, "A browser's extension folder could not be listed");
+                    couldNotRead = true;
+                    break;
+                }
 
                 foreach (var folder in folders)
                 {
@@ -188,6 +196,20 @@ internal static class ChromiumExtensionReader
     /// <summary>One extension from the manifest in <paramref name="folder"/>, with its settings when they were read.</summary>
     private static BrowserExtension? FromManifest(string folder, Settings? settings, CultureInfo culture)
     {
+        try
+        {
+            return ReadManifest(folder, settings, culture);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // A key the parser let through and a lookup cannot read: the extension is listed as unreadable.
+            Log.Debug(ex, "An extension's manifest could not be read");
+            return null;
+        }
+    }
+
+    private static BrowserExtension? ReadManifest(string folder, Settings? settings, CultureInfo culture)
+    {
         using var manifest = ExtensionFiles.Parse(
             ExtensionFiles.Read(System.IO.Path.Combine(folder, "manifest.json"), ExtensionFiles.MaxManifestBytes));
         if (manifest?.RootElement is not { ValueKind: JsonValueKind.Object } root) return null;
@@ -294,13 +316,21 @@ internal static class ChromiumExtensionReader
             if (ExtensionFiles.Inside(folder, $"_locales/{locale}/messages.json") is not { } file) continue;
             using var messages = ExtensionFiles.Parse(ExtensionFiles.Read(file, ExtensionFiles.MaxManifestBytes));
             if (messages?.RootElement is not { ValueKind: JsonValueKind.Object } table) continue;
-            foreach (var entry in table.EnumerateObject())
+            try
             {
-                if (string.Equals(ExtensionFiles.Name(entry), key, StringComparison.OrdinalIgnoreCase)
-                    && ExtensionFiles.String(entry.Value, "message") is { Length: > 0 } message)
+                foreach (var entry in table.EnumerateObject())
                 {
-                    return message;
+                    if (string.Equals(ExtensionFiles.Name(entry), key, StringComparison.OrdinalIgnoreCase)
+                        && ExtensionFiles.String(entry.Value, "message") is { Length: > 0 } message)
+                    {
+                        return message;
+                    }
                 }
+            }
+            catch (InvalidOperationException ex)
+            {
+                // A translation file with a key a lookup cannot read costs the name, not the rest of the manifest.
+                Log.Debug(ex, "An extension's translation file could not be read");
             }
         }
         return null;
@@ -316,32 +346,56 @@ internal static class ChromiumExtensionReader
         {
             using var document = ExtensionFiles.Parse(
                 ExtensionFiles.Read(System.IO.Path.Combine(profileDir, file), ExtensionFiles.MaxSettingsBytes));
-            if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
-                || !root.TryGetProperty("extensions", out var extensions)
-                || extensions.ValueKind != JsonValueKind.Object
-                || !extensions.TryGetProperty("settings", out var settings)
-                || settings.ValueKind != JsonValueKind.Object)
+            try
             {
-                continue;
-            }
+                if (document?.RootElement is not { ValueKind: JsonValueKind.Object } root
+                    || !root.TryGetProperty("extensions", out var extensions)
+                    || extensions.ValueKind != JsonValueKind.Object
+                    || !extensions.TryGetProperty("settings", out var settings)
+                    || settings.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
 
-            var byId = new Dictionary<string, Settings>(StringComparer.Ordinal);
-            foreach (var entry in settings.EnumerateObject())
-            {
-                if (entry.Value.ValueKind != JsonValueKind.Object || ExtensionFiles.Name(entry) is not { } id) continue;
-                var s = entry.Value;
-                byId[id] = new Settings(
-                    Location: ExtensionFiles.Int(s, "location"),
-                    FromWebstore: ExtensionFiles.Bool(s, "from_webstore") ?? false,
-                    CameWithBrowser: (ExtensionFiles.Bool(s, "was_installed_by_default") ?? false)
-                                     || (ExtensionFiles.Bool(s, "was_installed_by_oem") ?? false),
-                    IsOff: IsOff(s),
-                    InstalledOn: InstallTime(s),
-                    Path: ExtensionFiles.String(s, "path"));
+                var byId = new Dictionary<string, Settings>(StringComparer.Ordinal);
+                foreach (var entry in settings.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != JsonValueKind.Object || ExtensionFiles.Name(entry) is not { } id) continue;
+                    if (ReadEntry(entry.Value) is { } read) byId[id] = read;
+                }
+                if (byId.Count > 0) return byId;
             }
-            if (byId.Count > 0) return byId;
+            catch (InvalidOperationException ex)
+            {
+                // A key a lookup cannot read in the file's own outline: this file is passed over.
+                Log.Debug(ex, "A browser's settings file could not be read");
+            }
         }
         return [];
+    }
+
+    /// <summary>
+    /// One extension's settings, or null when they hold a key a lookup cannot read: that costs the one entry, and
+    /// its extension is still listed, claiming nothing.
+    /// </summary>
+    private static Settings? ReadEntry(JsonElement s)
+    {
+        try
+        {
+            return new Settings(
+                Location: ExtensionFiles.Int(s, "location"),
+                FromWebstore: ExtensionFiles.Bool(s, "from_webstore") ?? false,
+                CameWithBrowser: (ExtensionFiles.Bool(s, "was_installed_by_default") ?? false)
+                                 || (ExtensionFiles.Bool(s, "was_installed_by_oem") ?? false),
+                IsOff: IsOff(s),
+                InstalledOn: InstallTime(s),
+                Path: ExtensionFiles.String(s, "path"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Debug(ex, "An extension's settings could not be read");
+            return null;
+        }
     }
 
     /// <summary>

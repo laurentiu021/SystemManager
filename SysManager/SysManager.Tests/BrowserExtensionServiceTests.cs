@@ -66,9 +66,12 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         var profiles = await Service().ScanAsync();
 
+        // Default is opened as itself too: without a folder the browser opens on whichever profile was used last.
         Assert.Equal<(string, string?, string)>(
-            [("Google Chrome", null, "One"), ("Google Chrome — Profile 1", "Profile 1", "Two"), ("Opera GX", null, "Three"), ("Firefox", null, "Four")],
+            [("Google Chrome", "Default", "One"), ("Google Chrome — Profile 1", "Profile 1", "Two"), ("Opera GX", null, "Three"), ("Firefox", null, "Four")],
             profiles.Select(p => (p.Browser, p.ProfileDirectory, Assert.Single(p.Extensions).Name)));
+        // A browser listed more than once names each profile in its status; one listed once needs no name.
+        Assert.Equal<string?>(["Default", "Profile 1", null, null], profiles.Select(p => p.ProfileName));
         Assert.Equal(["chrome://extensions", "chrome://extensions", BrowserExtensionService.OperaPage, BrowserExtensionService.FirefoxPage],
             profiles.Select(p => p.Page));
         Assert.Equal<string?>(["chrome.exe", "chrome.exe", null, BrowserExtensionService.FirefoxExecutable], profiles.Select(p => p.Executable));
@@ -154,9 +157,10 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         var profiles = await Service().ScanAsync();
 
-        Assert.Equal<(string, bool, int)>(
-            [("Google Chrome", false, 1), ("Google Chrome — Profile 1", true, 0), ("Opera", true, 0), ("Firefox", true, 0)],
-            profiles.Select(p => (p.Browser, p.CouldNotRead, p.Extensions.Count)));
+        Assert.Equal<(string, bool, bool, int)>(
+            [("Google Chrome", false, false, 1), ("Google Chrome — Profile 1", true, true, 0), ("Opera", true, true, 0),
+             ("Firefox", true, true, 0)],
+            profiles.Select(p => (p.Browser, p.CouldNotRead, p.BehindALink, p.Extensions.Count)));
     }
 
     [Fact]
@@ -190,6 +194,39 @@ public sealed class BrowserExtensionServiceTests : IDisposable
 
         Assert.Equal<(string, string?)>([("Firefox", BrowserExtensionService.FirefoxExecutable), ("Firefox — dev-edition", null)],
             profiles.Select(p => (p.Browser, p.Executable)));
+        Assert.Equal<string?>(["default-release", "dev-edition"], profiles.Select(p => p.ProfileName));
+    }
+
+    [Fact]
+    public async Task AFirefoxProfileFirefoxDoesNotOpen_IsNamed_EvenWhenItIsTheOnlyOneListed()
+    {
+        // The profile Firefox opens has no extension list yet, so only the other one is listed: pasting the page into
+        // the Firefox that opens would show the wrong profile, so the status must name this one.
+        var listed = Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\abcd1234.default-release");
+        Directory.CreateDirectory(listed);
+        File.WriteAllText(Path.Combine(listed, "extensions.json"), """
+            { "addons": [ { "id": "f@x", "type": "extension", "version": "1", "location": "app-profile", "active": true,
+                            "defaultLocale": { "name": "Four" } } ] }
+            """);
+        Directory.CreateDirectory(Path.Combine(_roaming, @"Mozilla\Firefox\Profiles\efgh5678.default-esr"));
+        File.WriteAllText(Path.Combine(_roaming, @"Mozilla\Firefox\profiles.ini"),
+            "[Install1]\r\nDefault=Profiles/efgh5678.default-esr\r\n");
+
+        var profile = Assert.Single(await Service().ScanAsync());
+
+        Assert.Null(profile.Executable);
+        Assert.Equal("default-release", profile.ProfileName);
+    }
+
+    [Fact]
+    public async Task TheDefaultProfile_IsOpenedAsItself_NotAsWhicheverWasUsedLast()
+    {
+        Chromium(Path.Combine(_local, @"Google\Chrome\User Data\Default"), IdA, "One");
+        var service = Service();
+
+        service.OpenExtensionsPage(Assert.Single(await service.ScanAsync()));
+
+        Assert.Equal("--profile-directory=\"Default\" chrome://extensions", Assert.Single(_started).Arguments);
     }
 
     [Theory]

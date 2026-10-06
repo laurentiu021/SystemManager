@@ -54,7 +54,7 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
     };
 
     // Opera's channels share one name for their program, so starting "opera.exe" could open the wrong one: the list
-    // names the page instead. Firefox has one program and starts in its last-used profile.
+    // names the page instead. Firefox has one program and starts in its default profile, which its profiles.ini names.
     internal const string OperaPage = "opera://extensions";
     internal const string FirefoxExecutable = "firefox.exe";
     internal const string FirefoxPage = "about:addons";
@@ -64,31 +64,32 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
         Task.Run<IReadOnlyList<ExtensionProfile>>(() =>
         {
             var culture = CultureInfo.CurrentUICulture;
-            List<ExtensionProfile> profiles = [];
+            // Each group with the name its profile goes by, for the status of a browser listed more than once.
+            List<(ExtensionProfile Profile, string? Name)> found = [];
 
             foreach (var (browser, userDataRel) in BrowserProfiles.Chromium)
             {
                 var (executable, page) = ChromiumLaunch[browser];
                 // The browser's whole data folder behind a link: not followed, and said rather than left out.
-                if (ExtensionFiles.KindOf(Path.Combine(_localAppData, userDataRel)) is ExtensionFiles.EntryKind.Link
-                    or ExtensionFiles.EntryKind.Unreadable)
+                var userData = ExtensionFiles.KindOf(Path.Combine(_localAppData, userDataRel));
+                if (userData is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
                 {
-                    profiles.Add(new ExtensionProfile(browser, browser, page, executable, null, [], CouldNotRead: true));
+                    found.Add((Unread(browser, browser, page, executable, null, userData), null));
                     continue;
                 }
                 foreach (var (dir, display, _, isLink) in _profiles.ChromiumProfileFolders(browser, userDataRel))
                 {
                     ct.ThrowIfCancellationRequested();
-                    var directory = string.Equals(dir, "Default", StringComparison.OrdinalIgnoreCase) ? null : dir;
+                    // Every profile is opened as itself, Default too: without a folder the browser opens on whichever
+                    // profile was used last.
                     if (isLink)
                     {
-                        profiles.Add(new ExtensionProfile(display, browser, page, executable, directory, [], CouldNotRead: true));
+                        found.Add((Unread(display, browser, page, executable, dir, ExtensionFiles.EntryKind.Link), dir));
                         continue;
                     }
                     var (extensions, couldNotRead) =
                         ChromiumExtensionReader.Read(Path.Combine(_localAppData, userDataRel, dir), culture);
-                    Add(profiles, new ExtensionProfile(display, browser, page, executable, directory,
-                        Ordered(extensions), couldNotRead));
+                    Keep(new ExtensionProfile(display, browser, page, executable, dir, Ordered(extensions), couldNotRead), dir);
                 }
             }
 
@@ -96,61 +97,77 @@ public sealed class BrowserExtensionService : IBrowserExtensionService
             {
                 ct.ThrowIfCancellationRequested();
                 var profileDir = Path.Combine(_roamingAppData, "Opera Software", folder);
-                switch (ExtensionFiles.KindOf(profileDir))
+                var kind = ExtensionFiles.KindOf(profileDir);
+                if (kind is ExtensionFiles.EntryKind.Folder)
                 {
-                    case ExtensionFiles.EntryKind.Folder:
-                        var (extensions, couldNotRead) = ChromiumExtensionReader.Read(profileDir, culture);
-                        Add(profiles, new ExtensionProfile(browser, browser, OperaPage, null, null, Ordered(extensions), couldNotRead));
-                        break;
-                    case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
-                        profiles.Add(new ExtensionProfile(browser, browser, OperaPage, null, null, [], CouldNotRead: true));
-                        break;
+                    var (extensions, couldNotRead) = ChromiumExtensionReader.Read(profileDir, culture);
+                    Keep(new ExtensionProfile(browser, browser, OperaPage, null, null, Ordered(extensions), couldNotRead), null);
+                }
+                else if (kind is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
+                {
+                    found.Add((Unread(browser, browser, OperaPage, null, null, kind), null));
                 }
             }
 
             // Firefox's profiles all sit under one folder: behind a link, none of them is read through it.
             var firefoxProfiles = Path.Combine(_roamingAppData, BrowserProfiles.FirefoxProfilesRel);
-            switch (ExtensionFiles.KindOf(firefoxProfiles))
+            var firefoxRoot = ExtensionFiles.KindOf(firefoxProfiles);
+            if (firefoxRoot is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
             {
-                case ExtensionFiles.EntryKind.Folder:
-                    var (toldDefault, defaultFolder) = _profiles.FirefoxDefaultFolder();
-                    foreach (var (folder, display, label) in _profiles.FirefoxProfiles())
+                found.Add((Unread("Firefox", "Firefox", FirefoxPage, FirefoxExecutable, null, firefoxRoot), null));
+            }
+            else if (firefoxRoot is ExtensionFiles.EntryKind.Folder)
+            {
+                var (toldDefault, defaultFolder) = _profiles.FirefoxDefaultFolder();
+                foreach (var (folder, display, label) in _profiles.FirefoxProfiles())
+                {
+                    ct.ThrowIfCancellationRequested();
+                    // Firefox starts in its default profile, so only that one is started from here: started for
+                    // another, it would show the wrong profile's add-ons. Its profiles.ini says which; without one,
+                    // the profile the tab shows by the bare name is taken for it.
+                    var isDefault = toldDefault
+                        ? string.Equals(folder, defaultFolder, StringComparison.OrdinalIgnoreCase)
+                        : label.Length == 0;
+                    var executable = isDefault ? FirefoxExecutable : null;
+                    var name = BrowserProfiles.FirefoxProfileName(folder, display);
+                    var profileDir = Path.Combine(firefoxProfiles, folder);
+                    var kind = ExtensionFiles.KindOf(profileDir);
+                    if (kind is ExtensionFiles.EntryKind.Folder)
                     {
-                        ct.ThrowIfCancellationRequested();
-                        // Firefox starts in its default profile, so only that one is started from here: started for
-                        // another, it would show the wrong profile's add-ons. Its profiles.ini says which; without
-                        // one, the profile the tab shows by the bare name is taken for it.
-                        var isDefault = toldDefault
-                            ? string.Equals(folder, defaultFolder, StringComparison.OrdinalIgnoreCase)
-                            : label.Length == 0;
-                        var executable = isDefault ? FirefoxExecutable : null;
-                        var profileDir = Path.Combine(firefoxProfiles, folder);
-                        switch (ExtensionFiles.KindOf(profileDir))
-                        {
-                            case ExtensionFiles.EntryKind.Folder:
-                                var (extensions, couldNotRead) = FirefoxExtensionReader.Read(profileDir);
-                                Add(profiles, new ExtensionProfile(display, "Firefox", FirefoxPage, executable, null,
-                                    Ordered(extensions), couldNotRead));
-                                break;
-                            case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
-                                profiles.Add(new ExtensionProfile(display, "Firefox", FirefoxPage, executable, null, [], CouldNotRead: true));
-                                break;
-                        }
+                        var (extensions, couldNotRead) = FirefoxExtensionReader.Read(profileDir);
+                        Keep(new ExtensionProfile(display, "Firefox", FirefoxPage, executable, null, Ordered(extensions), couldNotRead), name);
                     }
-                    break;
-                case ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable:
-                    profiles.Add(new ExtensionProfile("Firefox", "Firefox", FirefoxPage, FirefoxExecutable, null, [], CouldNotRead: true));
-                    break;
+                    else if (kind is ExtensionFiles.EntryKind.Link or ExtensionFiles.EntryKind.Unreadable)
+                    {
+                        found.Add((Unread(display, "Firefox", FirefoxPage, executable, null, kind), name));
+                    }
+                }
             }
 
-            return profiles;
+            // A browser listed more than once is named in "Manage in …"'s status, and so is a Firefox profile Firefox
+            // does not open by itself: the page shows the extensions of whichever profile it is opened in.
+            var shared = found
+                .GroupBy(f => f.Profile.Product, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            return [.. found.Select(f =>
+                shared.Contains(f.Profile.Product) || (f.Profile.Product == "Firefox" && f.Profile.Executable is null)
+                    ? f.Profile with { ProfileName = f.Name }
+                    : f.Profile)];
+
+            // A profile with nothing in it says nothing, unless what it says is that it could not be read.
+            void Keep(ExtensionProfile profile, string? name)
+            {
+                if (profile.Extensions.Count > 0 || profile.CouldNotRead) found.Add((profile, name));
+            }
         }, ct);
 
-    // A profile with nothing in it says nothing, unless what it says is that it could not be read.
-    private static void Add(List<ExtensionProfile> profiles, ExtensionProfile profile)
-    {
-        if (profile.Extensions.Count > 0 || profile.CouldNotRead) profiles.Add(profile);
-    }
+    /// <summary>A profile that was not read: it sits behind a link, which is not followed, or could not be looked at.</summary>
+    private static ExtensionProfile Unread(string display, string product, string page, string? executable, string? directory,
+        ExtensionFiles.EntryKind kind) =>
+        new(display, product, page, executable, directory, [], CouldNotRead: true,
+            BehindALink: kind is ExtensionFiles.EntryKind.Link);
 
     /// <summary>
     /// The order the list shows: an extension another program added first — the likeliest answer to "it installed

@@ -140,11 +140,24 @@ internal static class ExtensionFiles
         return bigEnough.Count > 0 ? bigEnough[0].Path : candidates.MaxBy(c => c.Size).Path;
     }
 
+    /// <summary>True when <paramref name="path"/> is inside <paramref name="folder"/>, compared as full paths.</summary>
+    internal static bool IsUnder(string path, string folder)
+    {
+        try
+        {
+            var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException) { return false; }
+        catch (NotSupportedException) { return false; }
+        catch (PathTooLongException) { return false; }
+    }
+
     /// <summary>
     /// <paramref name="relative"/> resolved under <paramref name="folder"/>, or null when it would leave it — a
-    /// drive or other root, or a path that climbs out with <c>..</c>. An extension names its own files, and nothing
-    /// outside its folder is read on its say-so. A leading slash is allowed, as browsers read it from the
-    /// extension's own root.
+    /// drive or other root, a path that climbs out with <c>..</c>, or one that passes through a folder that is a link,
+    /// which could lead anywhere. An extension names its own files, and nothing outside its folder is read on its
+    /// say-so. A leading slash is allowed, as browsers read it from the extension's own root.
     /// </summary>
     internal static string? Inside(string folder, string relative)
     {
@@ -155,7 +168,13 @@ internal static class ExtensionFiles
         {
             var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             var full = Path.GetFullPath(Path.Combine(root, trimmed));
-            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase) ? full : null;
+            if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return null;
+            // Every folder between the extension's own and the file, each looked at without following it.
+            for (var dir = Path.GetDirectoryName(full); dir is not null && dir.Length >= root.Length; dir = Path.GetDirectoryName(dir))
+            {
+                if (Directory.Exists(dir) && SafeFileWalk.IsReparsePoint(dir)) return null;
+            }
+            return full;
         }
         catch (ArgumentException) { return null; }
         catch (NotSupportedException) { return null; }
@@ -174,7 +193,9 @@ internal static class ExtensionFiles
         /// <summary>A file.</summary>
         File,
 
-        /// <summary>A junction or a symbolic link, which is never followed.</summary>
+        /// <summary>
+        /// A junction, a symbolic link or another reparse point, such as a cloud-storage placeholder: never followed.
+        /// </summary>
         Link,
 
         /// <summary>Something whose attributes could not be read.</summary>

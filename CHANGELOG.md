@@ -33,12 +33,15 @@ clear the cache but not show it. Nothing in a browser is changed: "Manage in …
     could not be read says so and asks you to close that browser and look again, instead of showing as empty.
   - Nothing is left out for being hard to read. An extension whose files cannot be read, or sit behind a link, is
     listed as "An extension whose name could not be read" with what the browser recorded about it, and a profile kept
-    behind a link (a common way to move it to another drive) is shown as one that could not be read. Links are never
-    followed, and a path a browser's files give to a network share is never opened.
+    behind a link (a common way to move it to another drive) is shown as one that could not be read, and says why. A
+    link where a profile, an extension or one of its folders should be is never followed, and a browser's files cannot
+    send SysManager to a network share outside the profile it is reading. One odd value in those files costs that file
+    at most, never the list.
   - **Read-only.** "Manage in …" opens the browser on its own extensions page, where it asks you itself, and puts the
     page's address on the clipboard in case the browser opens somewhere else. While SysManager runs as administrator
     it opens no browser — one opened from it would run as administrator too — and says to open the browser and paste
-    the address yourself. For a second profile it says which profile to open.
+    the address yourself. Each profile is opened as itself, and where a browser has more than one, the status says
+    which profile to open.
   - Searching the sidebar for "extensions", "add-ons", "search changed" or "browser ads" opens Browser Cleaner on this
     view, and F5 refreshes whichever view is shown.
 

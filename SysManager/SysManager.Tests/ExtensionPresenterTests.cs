@@ -34,7 +34,7 @@ public class ExtensionPresenterTests
     [InlineData(ExtensionOrigin.Organisation, "", true, "Installed 29 Sep 2026 · your organisation manages this one, so only it can remove it")]
     [InlineData(ExtensionOrigin.Organisation, "", false, "Your organisation manages this one, so only it can remove it")]
     [InlineData(ExtensionOrigin.Browser, "", true, "Came with the browser")]
-    [InlineData(ExtensionOrigin.Folder, "", true, "Loaded from a folder on this PC")]
+    [InlineData(ExtensionOrigin.Folder, "", true, "Loaded from a folder, not from an extension store")]
     [InlineData(ExtensionOrigin.Unknown, "", true, "Installed 29 Sep 2026")]
     [InlineData(ExtensionOrigin.Unknown, "", false, "")]
     [InlineData(ExtensionOrigin.File, "", false, "Not from an extension store")]
@@ -153,7 +153,18 @@ public class ExtensionPresenterTests
     [InlineData(ExtensionsPageOpening.NotWhileElevated, false, "Open Google Chrome's \"Profile 2\" profile yourself and type chrome://extensions into its address bar. SysManager is running as administrator, so a browser it opened would run as administrator too.")]
     public void ManageIn_ForANamedProfile_SaysWhichProfile(ExtensionsPageOpening opening, bool copied, string expected) =>
         Assert.Equal(expected, ExtensionPresenter.ManageStatus(
-            new("Google Chrome — Profile 2", "Google Chrome", "chrome://extensions", "chrome.exe", "Profile 2", [], false), opening, copied));
+            new("Google Chrome — Profile 2", "Google Chrome", "chrome://extensions", "chrome.exe", "Profile 2", [], false,
+                ProfileName: "Profile 2"), opening, copied));
+
+    [Fact]
+    public void ManageIn_ForTheProfileShownByTheBareName_NamesItToo_WhenFirefoxOpensAnother()
+    {
+        var profile = new ExtensionProfile("Firefox", "Firefox", "about:addons", null, null, [], false, ProfileName: "default-release");
+
+        Assert.Equal(
+            "Paste about:addons into the address bar of Firefox's \"default-release\" profile to see its extensions — it is on your clipboard.",
+            ExtensionPresenter.ManageStatus(profile, ExtensionsPageOpening.NotOpened, copied: true));
+    }
 
     [Fact]
     public void AnIcon_IsDecodedOffTheUiThread_AndFrozen()

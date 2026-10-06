@@ -16,6 +16,12 @@ public sealed partial class PrivacyToggle : ObservableObject
     [ObservableProperty] private bool _isEnabled;
 
     /// <summary>
+    /// True while the switch differs from what is applied, so its row can say it changes when Apply is pressed
+    /// (#1517). Set by the view model that owns the baseline.
+    /// </summary>
+    [ObservableProperty] private bool _isPending;
+
+    /// <summary>
     /// The stable name a privacy profile gives this toggle (e.g. <c>diagnostic-data</c>). Unlike
     /// <see cref="Name"/> it is never reworded: a profile exported by one version names its toggles by key, so
     /// renaming a key would make every profile already sent to someone mean less than it says.
@@ -42,4 +48,17 @@ public sealed partial class PrivacyToggle : ObservableObject
 
     /// <summary>Value written when privacy protection is OFF (default Windows state).</summary>
     public required int DisabledValue { get; init; }
+
+    /// <summary>Whose settings this switch changes, read from <see cref="RegistryPath"/>.</summary>
+    public PrivacyReach Reach => ReachOf(RegistryPath);
+
+    /// <summary>
+    /// Pure: a machine-wide key (HKLM) changes Windows for everyone on the PC and needs administrator; anything else
+    /// (HKCU) changes only the signed-in account. Unit-testable without the registry.
+    /// </summary>
+    public static PrivacyReach ReachOf(string registryPath) =>
+        registryPath.StartsWith("HKLM", StringComparison.OrdinalIgnoreCase) ||
+        registryPath.StartsWith("HKEY_LOCAL_MACHINE", StringComparison.OrdinalIgnoreCase)
+            ? PrivacyReach.EveryoneOnThisPc
+            : PrivacyReach.JustYou;
 }

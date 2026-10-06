@@ -7,7 +7,7 @@ using SysManager.ViewModels;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Search over the 59 tabs, and the keywords that make it work for someone who does not know the
+/// Search over the 58 tabs, and the keywords that make it work for someone who does not know the
 /// vocabulary (#1498, #1505).
 /// </summary>
 /// <remarks>
@@ -77,6 +77,53 @@ public class SidebarSearchTests(NavSurfaceFixture fixture) : IClassFixture<NavSu
         // The phrase must not be in the label, or this would pass without any keyword at all.
         var label = _nav.NavItems.First(n => n.Id == expectedNavId).Label;
         Assert.DoesNotContain(typed, label, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("tweaks")]
+    [InlineData("tune windows")]
+    public void ASearchThatUsedToFindTweaksHub_OpensPrivacyByReach(string typed)
+    {
+        // Tweaks Hub listed exactly Privacy & Telemetry's switches, grouped by reach, and that grouping moved there
+        // with its search words (#1517).
+        var privacy = (PrivacyViewModel)_nav.NavItems.First(n => n.Id == "nav-privacy-settings").Content;
+        var previous = _nav.SelectedNav;
+        try
+        {
+            privacy.Grouping = Models.PrivacyGrouping.ByTopic;
+            _nav.NavFilter = typed;
+
+            _nav.SelectedNav = Assert.Single(_nav.NavResults, r => r.Id == "nav-privacy-settings");
+
+            Assert.Equal(Models.PrivacyGrouping.ByReach, privacy.Grouping);
+        }
+        finally
+        {
+            _nav.NavFilter = "";
+            _nav.SelectedNav = previous;
+            privacy.Grouping = Models.PrivacyGrouping.ByTopic;
+        }
+    }
+
+    [Fact]
+    public void OpeningPrivacyFromAnyOtherSearch_KeepsItsGrouping()
+    {
+        var privacy = (PrivacyViewModel)_nav.NavItems.First(n => n.Id == "nav-privacy-settings").Content;
+        var previous = _nav.SelectedNav;
+        try
+        {
+            privacy.Grouping = Models.PrivacyGrouping.ByTopic;
+            _nav.NavFilter = "telemetry";
+
+            _nav.SelectedNav = Assert.Single(_nav.NavResults, r => r.Id == "nav-privacy-settings");
+
+            Assert.Equal(Models.PrivacyGrouping.ByTopic, privacy.Grouping);
+        }
+        finally
+        {
+            _nav.NavFilter = "";
+            _nav.SelectedNav = previous;
+        }
     }
 
     [Fact]

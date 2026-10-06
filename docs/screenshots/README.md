@@ -24,7 +24,7 @@ deliberate rather than tolerated: a renamed tab almost always means the header i
 the image now says the old name too, so the file needs recapturing and not just moving.
 The guard tells you which files, by name.
 
-43 of the 59 tabs have a shot. The 16 without one are Bandwidth Monitor,
+42 of the 58 tabs have a shot. The 16 without one are Bandwidth Monitor,
 Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
 Remover, Environment Variables, Large Files, Legacy Panels, Notification Blocker,
 Process Manager, Services, Startup Manager, Task Scheduler, Uninstaller and Volume

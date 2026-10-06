@@ -109,7 +109,6 @@ public static class ServiceRegistration
         services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();
-        services.AddSingleton<ITweaksHubService, TweaksHubService>();
         services.AddSingleton<IAudioMixerService, AudioMixerService>();
         services.AddSingleton<VolumePresetService>();
         services.AddSingleton<INotificationBlockerService, NotificationBlockerService>();
@@ -187,7 +186,6 @@ public static class ServiceRegistration
         services.AddSingleton<SettingsWatchdogViewModel>();
         services.AddSingleton<CliInterfaceViewModel>();
         services.AddSingleton<ScheduledMaintenanceViewModel>();
-        services.AddSingleton<TweaksHubViewModel>();
         services.AddSingleton<AudioMixerViewModel>();
         services.AddSingleton<GamingProfileViewModel>();
         services.AddSingleton<NotificationBlockerViewModel>();

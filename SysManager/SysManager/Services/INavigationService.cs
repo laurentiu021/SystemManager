@@ -49,6 +49,20 @@ public interface IFilterable
 }
 
 /// <summary>
+/// A tab that can open in a particular view when the sidebar search found it by a word that view answers (#1517).
+/// </summary>
+/// <remarks>
+/// Opt-in, like <see cref="IFilterable"/>: the shell hands over what was searched for and the tab decides whether it
+/// means anything. Privacy &amp; Telemetry uses it so a search for "tweaks" lands on its switches grouped by reach,
+/// where the retired Tweaks Hub's grouping went.
+/// </remarks>
+public interface ISearchDestination
+{
+    /// <summary>Called when the user opens this tab from the sidebar search, with the text they searched for.</summary>
+    void ArriveFromSearch(string query);
+}
+
+/// <summary>
 /// The shell, from navigation's point of view. Implemented by <c>MainWindowViewModel</c>.
 /// </summary>
 public interface INavigationTarget

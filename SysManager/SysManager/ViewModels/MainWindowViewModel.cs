@@ -306,8 +306,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<RestorePointsViewModel>("nav-restore-points",  "Restore Points",   typeof(Views.RestorePointsView), keywords: "system restore, undo changes, rollback"),
             Tab<TaskSchedulerViewModel>("nav-task-scheduler",  "Task Scheduler",   typeof(Views.TaskSchedulerView), keywords: "scheduled tasks, automatic tasks"),
             Tab<BootAnalyzerViewModel>("nav-boot-analyzer",    "Boot Analyzer",    typeof(Views.BootAnalyzerView), keywords: "slow startup, boot time, takes forever to start, slow to boot"),
-            Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(Views.SystemFixesView), keywords: "repair windows, sfc, dism, fix errors, broken"),
-            Tab<TweaksHubViewModel>("nav-tweaks-hub",          "Tweaks Hub",       typeof(Views.TweaksHubView), inDevelopment: true, keywords: "tweaks, settings, tune windows")),
+            Tab<SystemFixesViewModel>("nav-system-fixes",      "System Fixes",     typeof(Views.SystemFixesView), keywords: "repair windows, sfc, dism, fix errors, broken")),
 
         Group("grp-gaming", "Gaming & Profiles", "\uE7FC", "Make games run smoother",  // Game
             Tab<GamingProfileViewModel>("nav-gaming-profile",   "Gaming Profile",       typeof(Views.GamingProfileView), inDevelopment: true, keywords: "games, gaming, fps, performance for games"),
@@ -358,7 +357,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<UninstallerViewModel>("nav-uninstaller",   "Uninstaller",    typeof(Views.UninstallerView), keywords: "remove program, uninstall, get rid of")),
 
         Group("grp-privacy", "Privacy & Security", "\uE72E", "Tracking, ads and preinstalled apps",  // Lock
-            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id, ads, adverts, suggestions, tips, spotlight"),
+            Tab<PrivacyViewModel>("nav-privacy-settings",  "Privacy & Telemetry",   typeof(Views.PrivacyView), keywords: "telemetry, tracking, stop microsoft watching, advertising id, ads, adverts, suggestions, tips, spotlight, tweaks, settings, tune windows"),
             Tab<FileShredderViewModel>("nav-file-shredder", "File Shredder",         typeof(Views.FileShredderView), keywords: "delete for good, wipe, unrecoverable, erase"),
             Tab<AppBlockerViewModel>("nav-app-blocker",     "App Blocker",           typeof(Views.AppBlockerView), keywords: "block program, stop app running, prevent"),
             Tab<DebloaterViewModel>("nav-debloater",        "Preinstalled Apps",     typeof(Views.DebloaterView), keywords: "debloat, debloater, bloatware, preinstalled, came with the laptop, remove apps, junk, games"),
@@ -456,6 +455,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // Gate on visibility as well: the tray menu can navigate while the window is hidden (see
         // NavigateTo), and starting a loop nothing can see is the very cost this gate exists to avoid.
         SetActive(newValue.Content, IsWindowVisible); // accessing Content materialises the entered tab's VM
+
+        // Opened from the sidebar search: a tab may answer the word that found it with a particular view.
+        if (IsSearchingNav && newValue.Content is ISearchDestination destination)
+            destination.ArriveFromSearch(NavFilter.Trim());
     }
 
     /// <summary>
@@ -796,7 +799,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(new SettingsWatchdogService()),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
-            [typeof(TweaksHubViewModel)] = new TweaksHubViewModel(new TweaksHubService(privacy, sessionRestorePoint)),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
             [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu),

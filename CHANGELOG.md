@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.120.0] - 2026-10-06
+
+**Privacy & Telemetry can now list its switches by who they affect, and Tweaks Hub, which showed the same switches
+under other names, is gone.** "Just you" holds the ones that change only your account; "Everyone on this PC" holds the
+ones that change Windows for every account and need administrator.
+
+### Changed
+
+- **Privacy & Telemetry takes in Tweaks Hub (#1517).** The hub listed exactly the twelve switches this tab has and wrote
+  them through the same code, from another sidebar group and under other labels, so one switch could be seen in two
+  places that did not mention each other.
+  - **Show: By topic or By reach.** By reach lists "Just you — 8 switches" (your own account, no administrator needed)
+    and then "Everyone on this PC" (Windows for every account, so administrator; still fully reversible). The topic
+    filter narrows both. These are the hub's "Essential" and "Advanced", named for what the split is.
+  - The Apply button says how many changes it will make ("Apply 2 changes"), and each switch you moved says "changes
+    when you apply".
+  - Searching the sidebar for "tweaks" or "tune windows" opens Privacy & Telemetry grouped by reach.
+  - Apply still takes the session's restore point before the first change, as the hub did.
+
+### Removed
+
+- **The Tweaks Hub tab**, its view, view model and service, its screenshot, and its option in the issue forms. Everything
+  it did, Privacy & Telemetry does: the same switches, the same restore point, and now the same grouping.
+
 ## [1.119.0] - 2026-10-06
 
 **Disk Analyzer now draws the folder you are looking at as a map, so the folder eating your disk is the biggest

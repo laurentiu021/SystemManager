@@ -1399,12 +1399,12 @@ public class ServicesViewModelTests
         using var vm = await CreateWithLedgerAsync([entry], temp.NewLedger(), runner);
         runner.ClearReceivedCalls();
         using var dialog = new DialogScope(answer: true);
-        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Tweaks Hub");
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Gaming Profile");
         Assert.NotNull(held);
 
         await ExecuteAsync(vm, verb, entry);
 
-        Assert.Equal("Cannot start — Tweaks Hub is already running.", vm.StatusMessage);
+        Assert.Equal("Cannot start — Gaming Profile is already running.", vm.StatusMessage);
         await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
     }
 

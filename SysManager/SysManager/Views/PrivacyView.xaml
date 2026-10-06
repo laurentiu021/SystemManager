@@ -10,6 +10,59 @@
              mc:Ignorable="d"
              Background="{DynamicResource Surface0}">
 
+    <UserControl.Resources>
+        <!-- One switch: its name, what it does, its topic and the toggle. Shared by the list by topic and the
+             sections by reach, so a switch looks the same in both. A switch moved but not yet applied says so
+             beside its name, so Apply is never a surprise (#1517). -->
+        <DataTemplate x:Key="PrivacyToggleRow">
+            <Border Margin="0,2" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
+                    BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource Border2}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <WrapPanel>
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                       VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource BadgeAccent}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Visibility="{Binding IsPending, Converter={StaticResource FlexVis}}">
+                                <TextBlock Text="changes when you apply" Foreground="{DynamicResource TextOnAccent}"
+                                           Style="{StaticResource Caption}" FontWeight="SemiBold"/>
+                            </Border>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   TextWrapping="Wrap" Margin="0,2,16,0"/>
+                        <TextBlock Text="{Binding Category}" FontSize="10"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Margin="0,2,0,0" Opacity="0.6"/>
+                    </StackPanel>
+
+                    <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IsEnabled}"
+                                  AutomationProperties.Name="{Binding Name, StringFormat='Toggle privacy protection: {0}'}"
+                                  VerticalAlignment="Center" Margin="8,0,0,0"
+                                  ToolTip="Toggle privacy protection on/off"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <Grid Margin="28,24,28,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -34,9 +87,9 @@
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">
             <WrapPanel>
-                <Button Content="Apply" Command="{Binding ApplyChangesCommand}"
+                <Button Content="{Binding ApplyText}" Command="{Binding ApplyChangesCommand}"
                         IsEnabled="{Binding HasPendingChanges}"
-                        AutomationProperties.Name="Apply pending privacy changes"
+                        AutomationProperties.Name="{Binding ApplyText}"
                         Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
                         ToolTip="Write pending toggle changes to the registry."/>
                 <Button Content="Discard" Command="{Binding DiscardChangesCommand}"
@@ -49,6 +102,22 @@
                         Style="{StaticResource GhostButton}" Margin="0,0,16,0"
                         ToolTip="Re-read all toggle states from the registry."/>
 
+                <!-- By reach is the grouping the Tweaks Hub tab added over this one: whose settings a switch
+                     changes, and so whether it needs administrator (#1517). Same pills as the theme's mode. -->
+                <TextBlock Text="Show:" VerticalAlignment="Center" Margin="8,0,8,0"
+                           Style="{StaticResource Subtle}"/>
+                <Border Background="{DynamicResource Surface0}" CornerRadius="{StaticResource RadiusLg}" Padding="3"
+                        BorderBrush="{DynamicResource Border1}" BorderThickness="1" Margin="0,0,12,0">
+                    <UniformGrid Columns="2">
+                        <RadioButton Content="By topic" GroupName="PrivacyGrouping"
+                                     AutomationProperties.Name="Show the switches by topic"
+                                     IsChecked="{Binding IsByTopic}" Style="{StaticResource ModePill}"/>
+                        <RadioButton Content="By reach" GroupName="PrivacyGrouping"
+                                     AutomationProperties.Name="Show the switches by reach: just you, or everyone on this PC"
+                                     IsChecked="{Binding IsByReach}" Style="{StaticResource ModePill}"/>
+                    </UniformGrid>
+                </Border>
+
                 <TextBlock Text="Category:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <ComboBox ItemsSource="{Binding Categories}"
@@ -58,52 +127,30 @@
             </WrapPanel>
         </Border>
 
-        <!-- Toggle list (each row shows its own category label; the list is flat, not view-grouped) -->
+        <!-- Toggle list: by topic, one list where each row shows its own category label; by reach, a section for
+             the switches that change only your account and one for those that change the whole PC. -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
-                <ItemsControl ItemsSource="{Binding FilteredToggles}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,2" Padding="12,10" CornerRadius="{StaticResource RadiusMd}"
-                                    BorderThickness="1">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource Surface3}"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource Border2}"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
-                                        <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   TextWrapping="Wrap" Margin="0,2,16,0"/>
-                                        <TextBlock Text="{Binding Category}" FontSize="10"
-                                                   Foreground="{DynamicResource TextMuted}"
-                                                   Margin="0,2,0,0" Opacity="0.6"/>
-                                    </StackPanel>
-
-                                    <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
-                                                  IsChecked="{Binding IsEnabled}"
-                                                  AutomationProperties.Name="{Binding Name, StringFormat='Toggle privacy protection: {0}'}"
-                                                  VerticalAlignment="Center" Margin="8,0,0,0"
-                                                  ToolTip="Toggle privacy protection on/off"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <Grid>
+                    <ItemsControl ItemsSource="{Binding FilteredToggles}" ItemTemplate="{StaticResource PrivacyToggleRow}"
+                                  AutomationProperties.Name="Privacy switches"
+                                  Visibility="{Binding IsByReach, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                    <ItemsControl ItemsSource="{Binding ReachGroups}"
+                                  AutomationProperties.Name="Privacy switches by reach"
+                                  Visibility="{Binding IsByReach, Converter={StaticResource FlexVis}}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="{Binding Title}" Style="{StaticResource SectionLabel}" Margin="0,4,0,2"/>
+                                    <TextBlock Text="{Binding Description}" Style="{StaticResource Subtle}"
+                                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+                                    <ItemsControl ItemsSource="{Binding Toggles}" ItemTemplate="{StaticResource PrivacyToggleRow}"
+                                                  AutomationProperties.Name="{Binding Title}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
             </ScrollViewer>
         </Border>
 

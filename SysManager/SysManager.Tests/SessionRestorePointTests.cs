@@ -8,7 +8,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for the shared once-per-session restore point. The logic used to live privately inside
-/// <c>TweaksHubService</c>, where nothing exercised it directly and no other tab could reach it; the
+/// the Tweaks Hub tab's service, where nothing exercised it directly and no other tab could reach it; the
 /// point of lifting it out was that every tab writing system state gets the same safety net, so the
 /// semantics now need pinning rather than assuming.
 /// <para>Driven through the injected create-delegate, so no test ever asks Windows for a real System

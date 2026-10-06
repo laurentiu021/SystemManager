@@ -199,7 +199,11 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `TracerouteViewModel` — auto-traceroute + manual trace with own Start/Stop.
 - `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests. `DescribeFinished` writes the line under a
   finished run, naming an upload or ping that was not measured. Its internal constructor takes the engine, so a
-  test runs it without a network.
+  test runs it without a network. `OoklaTrend` and `HttpTrend` are redrawn from their history list on every
+  change to it, so a trend can never show a run its table does not.
+- `SpeedTrendChart` — one engine's history as a chart: download, upload and a dashed usual-download line, plus
+  the sentence `SpeedTrendAnalyzer` writes. Builds its SkiaSharp paints once, repaints them through
+  `ChartTheme` on a theme change, and releases them and the theme subscription in `Dispose`.
 - `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
@@ -363,6 +367,9 @@ Key services:
   run on the same engine. Pure and static like `HealthAnalyzer`, so the
   judgement is unit-testable without a network; deliberately never emits the
   failure colour, because a slow plan is not a fault.
+- `SpeedTrendAnalyzer` — one engine's saved runs read as a trend: the median download as "usual", and one
+  sentence about runs under half of it (only the latest, several in a row, or one earlier). Pure and static
+  like `SpeedVerdictAnalyzer`; a run that measured no download is not counted.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot. Static hardware (OS caption,
   CPU model, disk models, DIMM inventory) is queried once via WMI and cached; the three
   DYNAMIC values are syscalls, because the Landing tab polls this every 300 ms —
@@ -508,6 +515,9 @@ Key services:
   value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
   file format rather than console output. Nothing is trimmed or substituted — a lossy export of
   a path is worse than a quoted one.
+- `Helpers/ChartAxisLabels` — the time-axis tick text for the charts that plot saved samples
+  (Resource History, the Speed Test trend), defined once with the guard that prints nothing for a
+  value that cannot be a sample time, so an axis with no data never shows dates in the year 1 (#2371).
 - `Helpers/Authenticode` — the two Authenticode operations, defined once: `ReadSigner`
   (three-way `Signed`/`Unsigned`/`Unreadable`, never throws) and `ValidateChain` (one strict
   policy — `ExcludeRoot`, `NoFlag`, fail-closed — with the revocation mode as a parameter).

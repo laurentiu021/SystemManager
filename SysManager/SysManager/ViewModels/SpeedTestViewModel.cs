@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -59,6 +60,15 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     /// <summary>Persisted history of Ookla speed test results (newest first).</summary>
     public BulkObservableCollection<SpeedTestResult> OoklaHistory { get; } = new();
 
+    /// <summary>
+    /// The Ookla history as a trend, above its table. Redrawn whenever <see cref="OoklaHistory"/> changes, so it
+    /// can never show a run the table does not, or miss one it does.
+    /// </summary>
+    public SpeedTrendChart OoklaTrend { get; } = new();
+
+    /// <summary>The HTTP history as a trend, above its table. Same contract as <see cref="OoklaTrend"/>.</summary>
+    public SpeedTrendChart HttpTrend { get; } = new();
+
     public SpeedTestViewModel(NetworkSharedState shared, SpeedTestHistoryService history)
         : this(shared, history, shared.Speed)
     {
@@ -74,8 +84,14 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         _history = history;
         _engine = engine;
         _history.Saved += OnHistorySaved;
+        OoklaHistory.CollectionChanged += OnOoklaHistoryChanged;
+        HttpHistory.CollectionChanged += OnHttpHistoryChanged;
         InitializeAsync(LoadHistoryAsync);
     }
+
+    private void OnOoklaHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e) => OoklaTrend.Update(OoklaHistory);
+
+    private void OnHttpHistoryChanged(object? sender, NotifyCollectionChangedEventArgs e) => HttpTrend.Update(HttpHistory);
 
     // A result saved anywhere, the Dashboard's quick test included, belongs in the list on screen. The event comes
     // from whichever thread saved it, so the list is only touched on the UI thread.
@@ -314,6 +330,10 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
         if (disposing)
         {
             _history.Saved -= OnHistorySaved;
+            OoklaHistory.CollectionChanged -= OnOoklaHistoryChanged;
+            HttpHistory.CollectionChanged -= OnHttpHistoryChanged;
+            OoklaTrend.Dispose();
+            HttpTrend.Dispose();
             _speedCts?.Cancel();
             _speedCts?.Dispose();
         }

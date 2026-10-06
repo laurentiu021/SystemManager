@@ -195,6 +195,73 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Empty(vm.HttpHistory);
     }
 
+    // ---------- the trend above each history table (#1499) ----------
+
+    [Fact]
+    public async Task TheTrend_FollowsItsOwnEnginesHistory()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        await vm.InitializationComplete;
+
+        vm.AddToHistory(At("Ookla", 1));
+        Assert.True(vm.OoklaTrend.HasSingleRun);
+        Assert.False(vm.OoklaTrend.HasTrend);
+
+        vm.AddToHistory(At("Ookla", 2));
+        vm.AddToHistory(At("Ookla", 3));
+
+        Assert.True(vm.OoklaTrend.HasTrend);
+        Assert.Equal("Usually about 102 Mbps.", vm.OoklaTrend.Summary);
+        // Never drawn together: an HTTP chart showing Ookla runs would compare things measured differently.
+        Assert.False(vm.HttpTrend.HasTrend);
+        Assert.False(vm.HttpTrend.HasSingleRun);
+    }
+
+    [Fact]
+    public async Task TheTrend_IsDrawnFromTheSavedHistory_WhenTheTabLoads()
+    {
+        var history = NewHistory();
+        Assert.True(await history.SaveAsync(At("HTTP", 1)));
+        Assert.True(await history.SaveAsync(At("HTTP", 2)));
+        Assert.True(await history.SaveAsync(At("HTTP", 3)));
+
+        var vm = new SpeedTestViewModel(NewShared(), history);
+        await vm.InitializationComplete;
+
+        Assert.True(vm.HttpTrend.HasTrend);
+        Assert.Equal("Usually about 102 Mbps.", vm.HttpTrend.Summary);
+    }
+
+    [Fact]
+    public async Task ClearingAHistory_TakesItsTrendAway()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        await vm.InitializationComplete;
+        vm.AddToHistory(At("Ookla", 1));
+        vm.AddToHistory(At("Ookla", 2));
+        Assert.True(vm.OoklaTrend.HasTrend);
+
+        using (new DialogAnswer(true))
+            await vm.ClearOoklaHistoryCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.OoklaHistory);
+        Assert.False(vm.OoklaTrend.HasTrend);
+        Assert.Equal("", vm.OoklaTrend.Summary);
+    }
+
+    [Fact]
+    public async Task ADisposedTab_StopsRedrawingItsTrend()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        await vm.InitializationComplete;
+
+        vm.Dispose();
+        vm.AddToHistory(At("HTTP", 1));
+        vm.AddToHistory(At("HTTP", 2));
+
+        Assert.False(vm.HttpTrend.HasTrend);
+    }
+
     // ---------- saved results that cannot be read (#2521) ----------
 
     [Fact]

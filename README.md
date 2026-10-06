@@ -1076,6 +1076,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
   even while this tab is open. If the saved results cannot be read, the tab says so rather
   than showing none, and a new result is never saved over them
+- **A trend above each history**, drawn from the same results, so "is my internet worse than
+  it used to be, or is it just today?" is answered at a glance: download and upload over time,
+  a dashed line at your usual download, and one sentence — "Usually about 480 Mbps", plus a
+  note when the latest test was well below that, or the last few in a row were. "Usual" is the
+  median, so one bad evening does not move it. It appears from the second test, and each engine
+  has its own, because the two measure differently
 - **A reading it could not take says so.** When no ping gets an answer, which is common on
   networks that block ping, or the server refuses the upload, the card shows "—" and the line
   under it says why. The history records it as not measured, never as a perfect 0 ms ping

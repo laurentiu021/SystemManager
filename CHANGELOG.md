@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.117.0] - 2026-10-06
+
+**Speed Test now shows how your connection has been doing, not only how it is right now.** Above each history
+table is a small chart of your past results with a line at your usual speed, and one sentence saying whether a
+recent test was far below it.
+
+### Added
+
+- **A trend above each Speed Test history (#1499).** The tab kept the last 20 results per engine as a table, which
+  holds the answer to "is my internet worse than it used to be, or is it just today?" but does not show it.
+  - Download and upload over time, drawn from the same results the table lists, with a dashed line at your usual
+    download. "Usual" is the median, so one slow evening does not move it.
+  - One sentence under it: "Usually about 480 Mbps", and, when a run was under half of that, whether it was only
+    the latest test (run another to see whether it lasts), the last few in a row (this looks like a change), or
+    one earlier test with the latest back to normal (one slow moment, not a trend).
+  - It appears from the second test, so one result is never drawn as a line; until then the card says a trend
+    needs a second test. A run that measured no download is left out, and an upload that was not measured leaves
+    a gap instead of a drop to zero.
+  - Ookla and HTTP each have their own chart, never a shared one, because the two measure differently.
+
 ## [1.116.1] - 2026-10-06
 
 **Pressing F5 on New App Alerts no longer wipes the list of programs it caught installing.** F5, and the Show

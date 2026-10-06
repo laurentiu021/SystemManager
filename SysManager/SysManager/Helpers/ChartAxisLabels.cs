@@ -11,7 +11,8 @@ namespace SysManager.Helpers;
 /// </summary>
 /// <remarks>
 /// <para>One place for the guard below, because every such chart needs it and the defect it prevents only shows
-/// when a chart has nothing to plot. Resource History and the Speed Test trend both go through it.</para>
+/// when a chart has nothing to plot. Resource History, the Speed Test trend and the battery's capacity history
+/// go through it.</para>
 /// <para>The guard used to be <c>v &gt; 0</c>, which admits any positive tick count, and a handful of ticks is a
 /// date in the year 1, which formats as <c>01-01 00:00</c>. With no samples the axis has no range to work from,
 /// so it laid ticks down near zero and printed that same string across the whole axis (#2371). Hiding the empty

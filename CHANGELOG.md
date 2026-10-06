@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.118.0] - 2026-10-06
+
+**Battery Health now shows how the battery has worn over time, and whether that is normal.** A new card draws how
+much charge the battery holds when full, from the history Windows keeps of it, with one sentence saying whether it
+is wearing at the usual rate.
+
+### Added
+
+- **Capacity over time on Battery Health (#1513).** The tab showed one reading, "Health 87%", which cannot be read as
+  fine or failing without something to compare it to.
+  - The line is what the battery holds when full as a percentage of what it held when new, the same measure as the
+    Health figure, with a dashed line at 100%. It comes from the history Windows keeps in its battery report, a
+    point a week and a point a day for the last few days, so it shows months on the first visit. The report is
+    written to a temporary file, read and deleted, and needs no administrator rights.
+  - One verdict under it. Up to 8% lost in the last six months is normal wear, up to 15% a little faster than
+    usual, more than that faster than usual. A shorter history is scaled to six months, and under three months a
+    loss above the normal rate is called too early to tell. The verdict says what helps and never says the battery
+    is dying.
+  - Each end of the period is the median of up to three entries, because the full-charge figure moves a point or
+    two from week to week on a healthy battery.
+  - After a battery replacement the line starts at the new battery instead of drawing it as a recovery. With less
+    than a month of history the card says how much Windows has recorded so far; when Windows keeps none, or the
+    report cannot be read, it says so in one line. A failed read after a good one keeps what was shown.
+  - The card is not shown on a PC without a battery, and the report is not run there.
+
+### Changed
+
+- The note under Health and Wear no longer says that Windows reports capacity only to an elevated process. The two
+  figures still need administrator rights because of where SysManager reads them; the battery report does not.
+
 ## [1.117.0] - 2026-10-06
 
 **Speed Test now shows how your connection has been doing, not only how it is right now.** Above each history

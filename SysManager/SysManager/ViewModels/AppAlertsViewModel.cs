@@ -24,14 +24,16 @@ namespace SysManager.ViewModels;
 public sealed partial class AppAlertsViewModel : ViewModelBase
 {
     /// <inheritdoc/>
-    protected internal override IRelayCommand? RefreshOnF5 => RefreshInstalledAppsCommand;
+    protected internal override IRelayCommand? RefreshOnF5 => ScanForNewAppsCommand;
 
     private readonly AppAlertService _service;
     private readonly Dispatcher _dispatcher;
 
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
 
-    [ObservableProperty] private bool _isMonitoring;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ScanForNewAppsCommand))]
+    private bool _isMonitoring;
     [ObservableProperty] private string _monitorStatus = "Click Start to begin monitoring for new installations.";
     [ObservableProperty] private int _alertCount;
     [ObservableProperty] private int _unacknowledgedCount;
@@ -49,8 +51,8 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         if (IsMonitoring) return;
 
         // TakeBaseline() walks Program Files / LocalAppData\Programs AND enumerates both
-        // HKLM Uninstall trees (hundreds of subkeys) — the same heavy scan
-        // RefreshInstalledAppsAsync deliberately offloads. Running it synchronously in the
+        // HKLM Uninstall trees (hundreds of subkeys) — the same enumeration
+        // ScanForNewAppsAsync offloads. Running it synchronously in the
         // command froze the UI for the whole scan. Offload it (and Start(), whose
         // FileSystemWatcher creation is thread-agnostic and whose NewAppDetected event is
         // marshaled via the SynchronizationContext captured at service construction), then
@@ -108,46 +110,25 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
             : "History cleared.";
     }
 
-    [RelayCommand]
-    private async Task RefreshInstalledAppsAsync()
+    /// <summary>
+    /// Checks for new installations now rather than at the next 30-second pass. What F5 does on this tab.
+    /// </summary>
+    /// <remarks>
+    /// F5 used to run "Show Installed", which replaced the detected installs with every program on the PC,
+    /// stamped each with the time of the keypress as its detection time, and asked nothing — while Clear
+    /// History, the deliberate way to lose the same list, asks first because it is the only record. A check
+    /// can only add to the list. To see everything that is installed, the Uninstaller lists it.
+    /// <para>Runs only while monitoring: the check compares against the list taken when monitoring started.
+    /// A detection it finds arrives through <see cref="OnNewAppDetected"/> like any other, which rewrites the
+    /// status line after this one.</para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(IsMonitoring))]
+    private async Task ScanForNewAppsAsync()
     {
-        StatusMessage = "Loading installed applications...";
-        IsBusy = true;
-        IsProgressIndeterminate = true;
-
-        try
-        {
-            // The HKLM uninstall-tree enumeration is synchronous and walks the whole
-            // registry — run it off the UI thread so the window stays responsive.
-            var apps = await Task.Run(AppAlertService.GetRegistryApps).ConfigureAwait(true);
-            var sorted = apps.OrderBy(a => a.Name).ToList();
-            foreach (var app in sorted)
-            {
-                app.DetectedAt = DateTime.Now;
-                app.IsAcknowledged = true;
-            }
-            Alerts.ReplaceWith(sorted);
-            AlertCount = Alerts.Count;
-            UnacknowledgedCount = 0;
-            MonitorStatus = $"Loaded {AlertCount} currently installed applications.";
-            StatusMessage = "Done.";
-            ToastService.Instance.Show("Installed apps loaded", $"{AlertCount} applications found");
-        }
-        catch (System.Security.SecurityException ex)
-        {
-            MonitorStatus = $"Failed to read registry: {ex.Message}";
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            MonitorStatus = $"Access denied: {ex.Message}";
-        }
-        finally
-        {
-            // Keep the busy indicator in sync with the monitoring state: a manual
-            // refresh must not switch off the "monitoring active" affordance.
-            IsBusy = IsMonitoring;
-            IsProgressIndeterminate = false;
-        }
+        // The uninstall-tree enumeration walks hundreds of HKLM subkeys — off the UI thread, like the baseline.
+        var found = await Task.Run(_service.CheckNow).ConfigureAwait(true);
+        if (found == 0)
+            MonitorStatus = "Checked just now — no new installations. Monitoring active.";
     }
 
     private void OnNewAppDetected(AppInstallEntry entry)

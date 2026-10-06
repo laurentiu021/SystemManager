@@ -39,9 +39,9 @@
                     <Button Content="Stop" Command="{Binding StopMonitoringCommand}"
                             AutomationProperties.Name="Stop monitoring"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
-                    <Button Content="Show Installed" Command="{Binding RefreshInstalledAppsCommand}"
-                            AutomationProperties.Name="Show installed apps"
-                            Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>
+                    <!-- No "Show Installed" here: it replaced the detected installs below with every program on the
+                         PC, without asking, though this list is the only record of them. The Uninstaller lists what
+                         is installed; F5 on this tab checks for new installs instead. -->
                     <Button Content="Acknowledge All" Command="{Binding AcknowledgeAllCommand}"
                             AutomationProperties.Name="Acknowledge all alerts"
                             Style="{StaticResource SecondaryButton}" Padding="12,8" Margin="0,0,8,0"/>

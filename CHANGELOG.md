@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.116.1] - 2026-10-06
+
+**Pressing F5 on New App Alerts no longer wipes the list of programs it caught installing.** F5, and the Show
+Installed button it ran, replaced that list with every program on the PC without asking, and nothing else keeps it.
+
+### Fixed
+
+- **New App Alerts: F5 and Show Installed replaced the detected installs with every installed program, without
+  asking.** Clear History, the deliberate way to lose the same list, asks first, because the list is the only
+  record of what installed itself. Each program was also given the time of the click as its "Detected" time, so
+  the list and its CSV export showed all of them as detected at that moment. It has been there since the tab was
+  added in 0.33.0, behind the Show Installed button; since 1.86.0 a bare F5 did it too.
+  - F5 now checks for new installs straight away instead of waiting for the next 30-second pass. It works only
+    while the tab is monitoring, and it can only add to the list.
+
+### Removed
+
+- **The Show Installed button on New App Alerts.** It is what replaced the list. The Uninstaller lists every
+  installed program, with its size, version and publisher, and a search box.
+
 ## [1.116.0] - 2026-10-05
 
 **The System Report now starts with what is wrong.** Before the list of hardware it shows the same health score

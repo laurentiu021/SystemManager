@@ -292,7 +292,8 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         {
             IsBusy = false;
             IsProgressIndeterminate = false;
-            // The list above was read after the change, so it answers any look asked for meanwhile.
+            // A look asked for meanwhile is answered by the list read after the change. When that could not be read,
+            // the line below says what happened instead, and a look run now would write over it.
             _lookAgain = false;
             // Last, after the list writes its own count to the status line — and here, so a look that failed after the
             // put-back cannot lose what happened to the change.
@@ -322,7 +323,7 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         HasChanges = Changes.Count > 0;
         HasLooked = true;
         StatusMessage = Summarize(scan);
-        (EmptyTitle, EmptyMessage) = scan.Problems.Count == 0
+        (EmptyTitle, EmptyMessage) = scan.Problems.Count == 0 && !scan.PerformanceWaitsForGameMode
             ? ("Nothing to put back", "Nothing SysManager changed is waiting to be put back. The sections below still apply.")
             : ("Nothing found to put back", Summarize(scan));
         PutBackCommand.NotifyCanExecuteChanged();
@@ -333,9 +334,9 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
     {
         List<string> said = [];
 
-        // "Nothing to put back" only when nothing stood in the way of looking: a copy that could not be used is not
-        // "nothing", so then the sentences below speak alone.
-        if (scan.Changes.Count > 0 || scan.Problems.Count == 0)
+        // "Nothing to put back" only when nothing stood in the way of looking: a copy that could not be used, or Performance
+        // Mode held back for game mode, is not "nothing", so then the sentences below speak alone.
+        if (scan.Changes.Count > 0 || (scan.Problems.Count == 0 && !scan.PerformanceWaitsForGameMode))
         {
             said.Add(scan.Changes.Count switch
             {
@@ -346,7 +347,11 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         }
 
         if (scan.PerformanceWaitsForGameMode)
-            said.Add("Performance Mode can be put back once game mode is off.");
+        {
+            said.Add(scan.GameModeNotKnown
+                ? "Performance Mode can be put back once SysManager can read whether game mode was left on."
+                : "Performance Mode can be put back once game mode is off.");
+        }
 
         var unreadable = Named(UndoProblemKind.Unreadable);
         if (unreadable.Length > 0)
@@ -355,6 +360,10 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         var notCompared = Named(UndoProblemKind.CannotCompare);
         if (notCompared.Length > 0)
             said.Add($"SysManager could not compare {notCompared} with what it kept just now; look again in a moment.");
+
+        var unusable = Named(UndoProblemKind.Unusable);
+        if (unusable.Length > 0)
+            said.Add($"SysManager could not use what it kept for {unusable}.");
 
         var damaged = Named(UndoProblemKind.Damaged);
         if (damaged.Length > 0)
@@ -407,8 +416,19 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         if (disposing)
         {
             PropertyChanged -= OnVmPropertyChanged;
-            _cts.Cancel();
-            _cts.Dispose();
+            try
+            {
+                _cts.Cancel();
+            }
+            catch (AggregateException ex)
+            {
+                // Calling it off stops the PowerShell session asking, and a session that broke can throw doing so.
+                Log.Debug(ex, "Undo Changes: calling off the restore point question threw");
+            }
+            finally
+            {
+                _cts.Dispose();
+            }
         }
         base.Dispose(disposing);
     }

@@ -80,9 +80,12 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
     private const string ReadAgainAfterPutBack = "Settings read again after Undo Changes.";
 
-    // A read Undo Changes asked for while one of this tab's own reads or commands was running, done once that read
-    // ends rather than beside it.
+    // A read Undo Changes asked for while one of this tab's own reads was running, done once that read ends rather
+    // than beside it: what it read may be from before the settings went back.
     private bool _readAgain;
+
+    // How many reads of the settings are running — on their own, or at the end of a command.
+    private int _reading;
 
     // Undo Changes put the original settings back and deleted the record, or tried to (#1525). The record was the one
     // EnsureSnapshotAsync now reads from disk anyway; this is for what the tab SHOWS — Restore All and the toggles
@@ -126,11 +129,17 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         }
         finally { ReleaseSnapshotGate(); }
 
-        // Not beside one of this tab's own reads or commands, since a read here would turn Busy off while it ran. The
-        // read that is running may have started before the settings went back, so it reads them again when it ends.
-        if (IsBusy)
+        // Not beside a read that is running: it may have read the settings from before they went back, so it reads
+        // them again when it ends. Under one of the tab's own commands, they are read without touching its Busy or its
+        // status line — a command that ends without reading them would otherwise leave them as they were before.
+        if (_reading > 0)
         {
             _readAgain = true;
+            return;
+        }
+        if (IsBusy)
+        {
+            await ReadQuietlyAsync();
             return;
         }
         await ReadSettingsAsync(loaded: ReadAgainAfterPutBack);
@@ -294,6 +303,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     {
         // A read that starts now is after any put-back heard so far, so it answers that one.
         _readAgain = false;
+        _reading++;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Reading performance settings…";
@@ -301,10 +311,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         try
         {
-            Profile = await _service.ReadProfileAsync();
-            SyncTogglesFromProfile();
-            IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
-            UpdateSummary();
+            await ShowSettingsAsync();
             StatusMessage = loaded;
         }
         catch (InvalidOperationException ex)
@@ -324,12 +331,40 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         }
         finally
         {
+            _reading--;
             IsBusy = false;
             IsProgressIndeterminate = false;
         }
 
         // Undo Changes put Performance Mode back while this read ran, so what it read may be from before (#1525).
         if (_readAgain) await ReadSettingsAsync(loaded: ReadAgainAfterPutBack);
+    }
+
+    // The settings as the tab shows them: the profile, the toggles, hibernation and the summary.
+    private async Task ShowSettingsAsync()
+    {
+        Profile = await _service.ReadProfileAsync();
+        SyncTogglesFromProfile();
+        IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
+        UpdateSummary();
+    }
+
+    // The settings read under one of the tab's own commands, after Undo Changes put them back: the command keeps its
+    // Busy and its status line, so a read that fails is only logged.
+    private async Task ReadQuietlyAsync()
+    {
+        _readAgain = false;
+        _reading++;
+        try
+        {
+            await ShowSettingsAsync();
+        }
+        catch (InvalidOperationException ex) { Log.Warning("Performance settings read after Undo Changes failed: {Error}", ex.Message); }
+        catch (SecurityException ex) { Log.Warning("Performance settings read after Undo Changes failed: {Error}", ex.Message); }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Performance settings read after Undo Changes failed: {Error}", ex.Message); }
+        finally { _reading--; }
+
+        if (_readAgain) await ReadQuietlyAsync();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -852,8 +887,10 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var capturedAt = onDisk.CapturedAtUtc is DateTimeOffset timestamp
             ? timestamp.ToLocalTime().ToString("f")
             : "Unknown (snapshot created by an earlier SysManager version)";
+        // A plan the record could not read is one the restore leaves alone, so the question says so rather than
+        // promising "Unknown".
         var powerPlan = string.IsNullOrEmpty(onDisk.PowerPlanGuid)
-            ? onDisk.PowerPlanName
+            ? "unchanged (it could not be read when this was recorded)"
             : $"{onDisk.PowerPlanName} ({onDisk.PowerPlanGuid})";
         var gpuRestoreState = onDisk.GpuDynamicPstate
             ? "Dynamic P-state"
@@ -869,7 +906,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             + $"• Game DVR → {(onDisk.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
             + $"• Processor min state → {(onDisk.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
             + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
-            + (gpuLeftOut ? "• GPU → left as it is: the NVIDIA card this was recorded on is no longer in this PC\n" : "")
+            + (gpuLeftOut ? "• GPU → unchanged (SysManager no longer finds the NVIDIA card this was recorded on)\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;
 
@@ -894,7 +931,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             // would re-apply stale values.
             // The record the question described, held in a local: while the question was open, Undo Changes may have
             // put it back and this tab cleared its copy, and restoring it again only sets the same settings.
-            var snapshotDeleted = await _service.RestoreOriginalAsync(onDisk);
+            // And the card as the question found it, so the restore does what the question said.
+            var snapshotDeleted = await _service.RestoreOriginalAsync(onDisk, card);
             if (snapshotDeleted)
             {
                 _snapshot = null;

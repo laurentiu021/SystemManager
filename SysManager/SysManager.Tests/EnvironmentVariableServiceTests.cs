@@ -201,6 +201,46 @@ public class EnvironmentVariableServiceTests
     }
 
     [Fact]
+    public void ACopyThatCannotBeReadJustNow_IsRefused_ButNotCalledDamaged()
+    {
+        // Held open by another program it is fine: every restore still refuses it, and says why apart from damage.
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "changed");
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(() => env.Service.PreviewRestore());
+            var result = env.Service.RestoreFromBackup();
+            Assert.True(result.InvalidBackup);
+            Assert.True(result.UnreadableBackup);
+        }
+
+        Assert.Equal("changed", env.GetUser("SAFE_USER"));
+        env.WriteLegacyUserBackup("{ this is not valid json ");
+        Assert.Throws<InvalidDataException>(() => env.Service.PreviewRestore());
+        Assert.False(env.Service.RestoreFromBackup().UnreadableBackup);
+    }
+
+    [Fact]
+    public void TheSafetyCopyBeforeAChange_OverOneThatCannotBeReadJustNow_IsRefused_ButNotCalledDamaged()
+    {
+        // Apply takes its safety copy here first. One that is held open is not damaged, and the refusal says which.
+        using var env = new RedirectedEnvironment();
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+        var before = File.ReadAllBytes(env.Service.BackupPath);
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(
+                () => env.Service.EnsureBackup(includeUser: true, includeMachine: false));
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(env.Service.BackupPath));
+        Assert.Null(env.GetUserBackupRaw());
+    }
+
+    [Fact]
     public void SetVariable_PreservesExpandSz_AndReadsRawTokens_EndToEnd()
     {
         // End-to-end regression for the REG_EXPAND_SZ flattening bug: write an expandable

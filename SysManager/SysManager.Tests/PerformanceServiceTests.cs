@@ -489,6 +489,37 @@ public class PerformanceServiceTests
         Assert.False(PerformanceService.IsNvidiaSubKey(@"..\Other"));
     }
 
+    [Fact]
+    public void ARecordedCard_IsThere_OnlyWhileItsKeyStillNamesNvidia()
+    {
+        // The driver's name or its maker's will do; a key that now belongs to another card, or is not there, is gone.
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("NVIDIA GeForce RTX 4070", "")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("", "NVIDIA")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("AMD Radeon RX 7800 XT", "Advanced Micro Devices, Inc.")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone, PerformanceService.FindRecordedAdapter("0000", _ => null));
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("security")]
+    [InlineData("access")]
+    public void ARecordedCardWhoseKeyCannotBeRead_IsNotKnown_RatherThanGone(string failure)
+    {
+        // "Gone" leaves its setting out of the restore and lets the record be deleted, while the card may still be there.
+        Exception thrown = failure switch
+        {
+            "io" => new System.IO.IOException("The registry key is marked for deletion."),
+            "security" => new System.Security.SecurityException("Requested registry access is not allowed."),
+            _ => new UnauthorizedAccessException("Access to the registry key is denied."),
+        };
+
+        Assert.Equal(PerformanceService.RecordedAdapter.Unreadable,
+            PerformanceService.FindRecordedAdapter("0000", _ => throw thrown));
+    }
+
     // ── OriginalSnapshot ──
 
     [Fact]

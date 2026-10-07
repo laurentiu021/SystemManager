@@ -319,10 +319,14 @@ public class PerformanceViewModelTests
         // The plan switch fails, so a guard that stopped holding would throw at the first step of the restore —
         // before visual effects, Game Mode and the Game Bar, which are written to this PC's own registry. The seed
         // is a real record on disk, which the restore would otherwise carry out.
+        IPowerShellRunner? runner = null;
         var vm = NewVm(completeInitialization: true, ps =>
+        {
+            runner = ps;
             ps.RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
                                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
-              .Returns(5));
+              .Returns(5);
+        });
         await SeedSnapshotAsync(vm);
 
         var prevDialog = DialogService.Instance;
@@ -338,15 +342,13 @@ public class PerformanceViewModelTests
         {
             await vm.RestoreAllCommand.ExecuteAsync(null);
 
-            // Confirm was shown, but the lock was unavailable → the command reported the
-            // contention and did NOT run the restore body (which nulls _snapshot). The seeded
-            // snapshot survives, proving the guard short-circuited before the mutation.
+            // Confirm was shown, but the lock was unavailable → the command reported the contention and did NOT run
+            // the restore: its first step, switching the power plan, never ran.
             dialog.Received(1).Confirm(Arg.Any<string>(), Arg.Any<string>());
             Assert.Contains("already running", vm.StatusMessage);
-            var snapshotAfter = typeof(PerformanceViewModel)
-                .GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .GetValue(vm);
-            Assert.NotNull(snapshotAfter);
+            await runner!.DidNotReceive().RunProcessAsync("powercfg.exe",
+                Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
         }
         finally
         {

@@ -18,8 +18,15 @@ namespace SysManager.Tests;
 // Serialized: swaps DialogService.Instance, ActivityLogService.Instance and the elevation probe. Required by
 // ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
 [Collection("ProcessWideStatics")]
-public sealed class UndoChangesViewModelTests
+public sealed class UndoChangesViewModelTests : IDisposable
 {
+    // A standard user unless a test says otherwise, so that no test asks Windows for its restore points on a worker
+    // thread only because the machine running it is elevated. A test that needs administrator rights forces them inside
+    // this, and its own scope puts this one back.
+    private readonly IDisposable _standardUser = AdminHelper.ForceElevation(false);
+
+    public void Dispose() => _standardUser.Dispose();
+
     private static UndoChange Change(UndoChangeKind kind = UndoChangeKind.PerformanceMode, bool needsAdmin = false,
         string? opensTab = null) =>
         new(kind, kind.ToString(), $"{kind} detail", "First changed 5 Oct 2026, 19:40", needsAdmin, "Put back…",
@@ -107,13 +114,15 @@ public sealed class UndoChangesViewModelTests
             new UndoProblem(UndoChangeKind.Services, UndoProblemKind.Unreadable),
             new UndoProblem(UndoChangeKind.GamingProfile, UndoProblemKind.Unreadable),
             new UndoProblem(UndoChangeKind.HostsFile, UndoProblemKind.CannotCompare),
+            new UndoProblem(UndoChangeKind.SettingsWatchdog, UndoProblemKind.Unusable),
             new UndoProblem(UndoChangeKind.PerformanceMode, UndoProblemKind.Damaged),
         ]);
 
         // A copy that was read and had nothing to be compared with is not one SysManager "could not read".
         Assert.Equal("1 change can be put back. SysManager could not read what it kept for the services and game mode just "
             + "now; look again in a moment. SysManager could not compare the hosts file with what it kept just now; look "
-            + "again in a moment. What SysManager kept for Performance Mode is damaged, so it cannot be put back.",
+            + "again in a moment. SysManager could not use what it kept for Settings Watchdog. What SysManager kept for "
+            + "Performance Mode is damaged, so it cannot be put back.",
             UndoChangesViewModel.Summarize(scan));
     }
 
@@ -124,6 +133,29 @@ public sealed class UndoChangesViewModelTests
 
         Assert.Equal("1 change can be put back. Performance Mode can be put back once game mode is off.",
             UndoChangesViewModel.Summarize(scan));
+    }
+
+    [Fact]
+    public void TheStatusLine_DoesNotSayGameModeIsOn_WhenItsRecordCouldNotBeRead()
+    {
+        // It may well be off: only its record could not be read.
+        var scan = new UndoScan([], [new UndoProblem(UndoChangeKind.GamingProfile, UndoProblemKind.Unreadable)],
+            PerformanceWaitsForGameMode: true, GameModeNotKnown: true);
+
+        Assert.Equal("Performance Mode can be put back once SysManager can read whether game mode was left on. SysManager "
+            + "could not read what it kept for game mode just now; look again in a moment.", UndoChangesViewModel.Summarize(scan));
+    }
+
+    [Fact]
+    public void PerformanceModeHeldBack_IsNotCalledNothingToPutBack()
+    {
+        // Game mode can end between the reads of one look, so the scan can hold Performance Mode back with no game mode
+        // row beside it. That is not "nothing is waiting".
+        var (vm, _, _) = NewVm(new UndoScan([], [], PerformanceWaitsForGameMode: true));
+
+        Assert.Equal("Performance Mode can be put back once game mode is off.", vm.StatusMessage);
+        Assert.Equal("Nothing found to put back", vm.EmptyTitle);
+        Assert.Equal(vm.StatusMessage, vm.EmptyMessage);
     }
 
     [Fact]
@@ -146,6 +178,8 @@ public sealed class UndoChangesViewModelTests
         using var elevated = AdminHelper.ForceElevation(true);
         var (vm, service, _) = NewVm();
 
+        // On the task, not on the call: the question would be asked from a worker thread, after this line.
+        Assert.Same(Task.CompletedTask, vm.RestorePointLookup);
         await service.DidNotReceive().LookForRestorePointAsync(Arg.Any<CancellationToken>());
         Assert.Equal("Looking for the newest restore point…", vm.RestorePointText);
 
@@ -167,7 +201,8 @@ public sealed class UndoChangesViewModelTests
         var vm = new UndoChangesViewModel(service, Substitute.For<INavigationService>());
         await vm.InitializationComplete;
 
-        await vm.RefreshCommand.ExecuteAsync(null);
+        // Bounded, so a look that waited for the restore point fails here rather than hanging the run.
+        await vm.RefreshCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Single(vm.Changes);
         Assert.False(vm.IsBusy);
@@ -357,6 +392,8 @@ public sealed class UndoChangesViewModelTests
             var putBack = vm.PutBackCommand.ExecuteAsync(row);
 
             Assert.True(vm.IsBusy);
+            // Deterministic, unlike the count below: a put-back that went ahead writes its progress line at once.
+            Assert.Equal("Looking for changes SysManager can put back…", vm.StatusMessage);
             await service.DidNotReceive().PutBackAsync(Arg.Any<UndoChange>(), Arg.Any<CancellationToken>());
 
             look.SetResult(Scan(change));
@@ -414,7 +451,7 @@ public sealed class UndoChangesViewModelTests
         navigation.Received(1).GoTo("nav-settings-watchdog");
         Assert.Equal(0, dialog.Calls);
         await service.DidNotReceive().PutBackAsync(Arg.Any<UndoChange>(), Arg.Any<CancellationToken>());
-        Assert.Equal("Opens Settings Watchdog, where each setting is put back on its own.", vm.Changes[0].ButtonHint);
+        Assert.Equal("Opens Settings Watchdog, where Restore changed puts these settings back.", vm.Changes[0].ButtonHint);
     }
 
     [Theory]
@@ -551,6 +588,33 @@ public sealed class UndoChangesViewModelTests
         await vm.RestorePointLookup.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.True(asked.IsCancellationRequested);
+        Assert.Equal("Looking for the newest restore point…", vm.RestorePointText);
+    }
+
+    [Fact]
+    public async Task ClosingTheTab_WhenCallingOffTheQuestionThrows_StillCloses()
+    {
+        // Calling it off stops the PowerShell session asking, and a session that broke can throw doing so.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var (vm, service, _) = NewVm();
+        var answer = new TaskCompletionSource<RestorePointLook>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.LookForRestorePointAsync(Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            var asked = call.Arg<CancellationToken>();
+            asked.Register(() => answer.TrySetCanceled(asked));
+            asked.Register(() => throw new InvalidOperationException("The pipeline could not be stopped."));
+            listening.SetResult();
+            return answer.Task;
+        });
+        vm.IsActive = true;
+        // The question is asked on a worker thread: closed before it listens, there would be nothing to throw.
+        await listening.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var closing = Record.Exception(vm.Dispose);
+        await vm.RestorePointLookup.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Null(closing);
         Assert.Equal("Looking for the newest restore point…", vm.RestorePointText);
     }
 

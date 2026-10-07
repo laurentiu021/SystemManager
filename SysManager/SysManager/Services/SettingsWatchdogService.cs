@@ -139,7 +139,7 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     public bool Restore(SettingDrift drift)
     {
         ArgumentNullException.ThrowIfNull(drift);
-        if (!drift.CanRestore || drift.BaselineValue is null) return false;
+        if (!drift.CanWriteBack || drift.BaselineValue is not { } baseline) return false;
 
         // Allowlist guard: only ever write a setting that is part of our own curated
         // catalog (matched by exact hive+path AND value name). The catalog is the single
@@ -159,9 +159,9 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
         {
             using var key = OpenOrCreateKey(drift.Setting.RegistryPath, writable: true);
             if (key is null) return false;
-            key.SetValue(drift.Setting.ValueName, drift.BaselineValue.Value, RegistryValueKind.DWord);
+            key.SetValue(drift.Setting.ValueName, baseline, RegistryValueKind.DWord);
             Log.Information("Settings Watchdog restored {Name} to {Value}",
-                drift.Setting.Name, drift.BaselineValue.Value);
+                drift.Setting.Name, baseline);
             return true;
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or SecurityException or IOException or ArgumentException)

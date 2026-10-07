@@ -76,7 +76,11 @@ public sealed class ServiceStartupLedgerService
     public IReadOnlyDictionary<string, ServiceStartupRecord>? Load() => Read().Records;
 
     /// <summary>The records, null when the file could not be read, and whether it was there but did not parse.</summary>
-    private (IReadOnlyDictionary<string, ServiceStartupRecord>? Records, bool Unparsable) Read()
+    /// <remarks>
+    /// Internal for Undo Changes, which must not call a ledger that did not parse "nothing to put back" (#1525): the
+    /// services it recorded are still off.
+    /// </remarks>
+    internal (IReadOnlyDictionary<string, ServiceStartupRecord>? Records, bool Unparsable) Read()
     {
         var text = StoreFile.ReadText(_path);
         if (text is null) return (null, false);

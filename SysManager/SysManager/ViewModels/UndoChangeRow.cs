@@ -49,7 +49,7 @@ public sealed class UndoChangeRow
     public string ButtonHint => CanAct
         ? Change.OpensTab is null
             ? "Asks first, and says what it will change."
-            : "Opens Settings Watchdog, where each setting is put back on its own."
+            : "Opens Settings Watchdog, where Restore changed puts these settings back."
         : "Needs administrator rights. Use Run as administrator at the top of the page.";
 
     /// <summary>The row's icon: the icon of the sidebar group its tab is in.</summary>

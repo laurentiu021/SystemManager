@@ -5,6 +5,8 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Security;
 using Serilog;
 using SysManager.Helpers;
@@ -45,8 +47,9 @@ public sealed class UndoChangesService : IUndoChangesService
     internal const string GamingTitle = "Gaming Profile";
 
     /// <summary>
-    /// What the Settings Watchdog row is called. It does not say who changed them: Windows, another program, or the
-    /// user, which is why Settings Watchdog asks before each one.
+    /// What the Settings Watchdog row is called. It does not say who changed them — Windows, another program, or the
+    /// user — so they are reviewed in Settings Watchdog, which shows what each one was and is now before it writes them
+    /// back.
     /// </summary>
     internal const string WatchdogTitle = "Settings changed since you saved them";
 
@@ -83,7 +86,7 @@ public sealed class UndoChangesService : IUndoChangesService
     private readonly Func<string, ServiceEntry?> _readService;
     private readonly Func<CancellationToken, Task<PerformanceService.OriginalSnapshot>> _readPerformanceNow;
     private readonly Func<string, GraphicsNow> _readGraphics;
-    private readonly Func<PerformanceService.OriginalSnapshot, CancellationToken, Task<bool>> _restorePerformance;
+    private readonly Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, CancellationToken, Task<bool>> _restorePerformance;
     private readonly Func<EnvironmentVariableService.RestoreResult> _restoreEnvironment;
     private readonly Action _announceEnvironment;
     private readonly TimeZoneInfo _zone;
@@ -111,7 +114,8 @@ public sealed class UndoChangesService : IUndoChangesService
     /// </summary>
     /// <param name="readPerformanceNow">Reads the Performance Mode settings as they are now, in the shape of its record.</param>
     /// <param name="readGraphics">Reads the graphics setting on the adapter a Performance Mode record names, as it is now.</param>
-    /// <param name="restorePerformance">Puts the Performance Mode record back and deletes it.</param>
+    /// <param name="restorePerformance">Puts the Performance Mode record back and deletes it, with its NVIDIA card as the
+    /// list found it.</param>
     /// <param name="restoreEnvironment">Puts the kept copy of the variables back.</param>
     /// <param name="announceEnvironment">Tells every open program that the variables changed — a broadcast to every
     /// window on the desktop, which a test has no business sending.</param>
@@ -130,7 +134,7 @@ public sealed class UndoChangesService : IUndoChangesService
         Func<string, ServiceEntry?> readService,
         Func<CancellationToken, Task<PerformanceService.OriginalSnapshot>>? readPerformanceNow,
         Func<string, GraphicsNow>? readGraphics,
-        Func<PerformanceService.OriginalSnapshot, CancellationToken, Task<bool>>? restorePerformance,
+        Func<PerformanceService.OriginalSnapshot, PerformanceService.RecordedAdapter?, CancellationToken, Task<bool>>? restorePerformance,
         Func<EnvironmentVariableService.RestoreResult>? restoreEnvironment,
         Action? announceEnvironment,
         TimeZoneInfo? zone)
@@ -163,28 +167,38 @@ public sealed class UndoChangesService : IUndoChangesService
 
     private static Found Problem(UndoChangeKind kind, UndoProblemKind why) => new(kind, null, new UndoProblem(kind, why));
 
+    // Whether game mode is on in this run, and what a previous run left on disk. Read once for a look and handed to both
+    // rows it decides, so that Performance Mode and Gaming Profile never disagree about it: a game that exits between
+    // two reads would hold Performance Mode back with no game mode row to say why.
+    private readonly record struct GameMode(bool On, PendingRecovery LeftOn);
+
+    private GameMode ReadGameMode() => new(_gaming.IsActive, _gaming.ReadPendingRecovery());
+
     /// <inheritdoc/>
     public async Task<UndoScan> ScanAsync(CancellationToken ct = default)
     {
         List<UndoChange> changes = [];
         List<UndoProblem> problems = [];
         var waitsForGameMode = false;
+        var gameModeNotKnown = false;
 
         void Keep(Found found)
         {
             if (found.Change is { } change) changes.Add(change);
             if (found.Problem is { } problem) problems.Add(problem);
             waitsForGameMode |= found.WaitsForGameMode;
+            gameModeNotKnown |= found.GameModeNotKnown;
         }
 
-        Keep((await FindPerformanceAsync(ct).ConfigureAwait(false)).Found);
+        var game = ReadGameMode();
+        Keep((await FindPerformanceAsync(game, ct).ConfigureAwait(false)).Found);
         Keep(FindServices().Found);
         Keep(FindHosts());
         Keep(FindEnvironment().Found);
-        Keep(FindGaming());
+        Keep(FindGaming(game));
         Keep(FindWatchdog());
 
-        return new UndoScan(changes, problems, waitsForGameMode);
+        return new UndoScan(changes, problems, waitsForGameMode, gameModeNotKnown);
     }
 
     /// <inheritdoc/>
@@ -200,9 +214,11 @@ public sealed class UndoChangesService : IUndoChangesService
                 ? new RestorePointLook(null, Listed: false)
                 : new RestorePointLook(points.Count > 0 ? points[0] : null, Listed: true);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidRunspaceStateException
+                                       or InvalidPowerShellStateException)
         {
-            // The runner that would ask could not start. Said as a refusal is: Windows did not answer.
+            // The runner that would ask could not start, or the session it ran in broke under it. Said as a refusal is:
+            // Windows did not answer — rather than leaving the card on "Looking" with nothing looking.
             Log.Debug(ex, "Undo Changes could not ask Windows for its restore points");
             return new RestorePointLook(null, Listed: false);
         }
@@ -214,7 +230,7 @@ public sealed class UndoChangesService : IUndoChangesService
         ArgumentNullException.ThrowIfNull(change);
         if (change.OpensTab is not null)
             return new UndoOutcome(UndoOutcomeKind.Failed,
-                "Nothing was changed: these settings are put back in Settings Watchdog, one at a time.");
+                "Nothing was changed: these settings are put back in Settings Watchdog.");
 
         // The lock its own tab's restore takes, taken first and held from reading the copy again to the end, so what is
         // put back is what was compared, and a refusal costs nothing.
@@ -231,7 +247,8 @@ public sealed class UndoChangesService : IUndoChangesService
             UndoChangeKind.Services => await PutBackServicesAsync(change, ct).ConfigureAwait(false),
             UndoChangeKind.HostsFile => Refusal(change, FindHosts()) ?? PutBackHosts(),
             UndoChangeKind.EnvironmentVariables => PutBackEnvironment(change),
-            UndoChangeKind.GamingProfile => Refusal(change, FindGaming()) ?? await PutBackGamingAsync(ct).ConfigureAwait(false),
+            UndoChangeKind.GamingProfile => Refusal(change, FindGaming(ReadGameMode()))
+                                            ?? await PutBackGamingAsync(ct).ConfigureAwait(false),
             _ => new UndoOutcome(UndoOutcomeKind.Failed, $"Nothing was changed: {Name(change.Kind)} cannot be put back from here."),
         };
     }
@@ -254,6 +271,8 @@ public sealed class UndoChangesService : IUndoChangesService
                 UndoProblemKind.CannotCompare => new UndoOutcome(UndoOutcomeKind.Failed,
                     $"SysManager could not compare {name} with what it kept just now, so nothing was changed. Try again in "
                     + "a moment."),
+                UndoProblemKind.Unusable => new UndoOutcome(UndoOutcomeKind.Failed,
+                    $"SysManager could not use what it kept for {name}, so nothing was changed."),
                 _ => new UndoOutcome(UndoOutcomeKind.Failed,
                     $"SysManager could not read what it kept for {name} just now, so nothing was changed. Try again in a moment."),
             };
@@ -308,7 +327,8 @@ public sealed class UndoChangesService : IUndoChangesService
 
     // ── Performance Mode ───────────────────────────────────────────────────────
 
-    private async Task<(Found Found, PerformanceService.OriginalSnapshot? Original)> FindPerformanceAsync(CancellationToken ct)
+    private async Task<(Found Found, PerformanceService.OriginalSnapshot? Original, GraphicsNow? Graphics)> FindPerformanceAsync(
+        GameMode game, CancellationToken ct)
     {
         var original = _performance.LoadSnapshot(out var problem);
         if (original is null)
@@ -318,20 +338,17 @@ public sealed class UndoChangesService : IUndoChangesService
                 PerformanceService.SnapshotProblem.None => new Found(UndoChangeKind.PerformanceMode, null),
                 PerformanceService.SnapshotProblem.Invalid => Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.Damaged),
                 _ => Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.Unreadable),
-            }, null);
+            }, null, null);
         }
 
         // While game mode is on, or left on, the power plan and visual effects are its own, so what differs from the
         // record is partly its doing. And putting the record back now would not last: turning game mode off puts back
         // the settings it started from — Performance Mode's — with the record gone, and nothing left to undo them.
-        // When whether it was left on could not be read, it may have been.
-        var on = _gaming.IsActive;
-        var leftOn = _gaming.HasPendingRecovery;
-        if (on || leftOn is not false)
-        {
-            return (new Found(UndoChangeKind.PerformanceMode, null, WaitsForGameMode: true,
-                GameModeNotKnown: !on && leftOn is null), null);
-        }
+        // When whether it was left on could not be read, it may have been. A record this build cannot use holds no
+        // session it could recover.
+        var notKnown = !game.On && game.LeftOn.Kind == PendingRecoveryKind.Unreadable;
+        if (game.On || game.LeftOn.Kind == PendingRecoveryKind.LeftOn || notKnown)
+            return (new Found(UndoChangeKind.PerformanceMode, null, WaitsForGameMode: true, GameModeNotKnown: notKnown), null, null);
 
         IReadOnlyList<PerformanceDifference> differences;
         GraphicsNow? graphics;
@@ -346,11 +363,11 @@ public sealed class UndoChangesService : IUndoChangesService
         {
             // The record was read; what it would be compared with was not.
             Log.Debug(ex, "Undo Changes could not read the current Performance Mode settings");
-            return (Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.CannotCompare), null);
+            return (Problem(UndoChangeKind.PerformanceMode, UndoProblemKind.CannotCompare), null, null);
         }
 
         return (new Found(UndoChangeKind.PerformanceMode,
-            differences.Count == 0 ? null : PerformanceChange(original, differences, graphics)), original);
+            differences.Count == 0 ? null : PerformanceChange(original, differences, graphics)), original, graphics);
     }
 
     /// <summary>The graphics setting on the adapter a Performance Mode record names, as it is now.</summary>
@@ -466,20 +483,27 @@ public sealed class UndoChangesService : IUndoChangesService
             lines,
             "Put back Performance Mode?\n\nThese go back to how they were before Performance Mode was first used"
                 + (when is null ? ":" : $", on {when}:")
-                + $"\n\n{Bullets(lines)}\n\nYou can change any of them again in Performance Mode.",
+                + $"\n\n{Bullets(lines)}\n\n"
+                // The restore leaves the graphics setting of a card that is no longer found, and says so here.
+                + (graphics is { Adapter: PerformanceService.RecordedAdapter.Gone }
+                    ? "The NVIDIA graphics setting stays as it is: SysManager no longer finds the card it was recorded "
+                      + "on.\n\n"
+                    : "")
+                + "You can change any of them again in Performance Mode.",
             "Put back Performance Mode — Confirm");
     }
 
     private async Task<UndoOutcome> PutBackPerformanceAsync(UndoChange listed, CancellationToken ct)
     {
-        var (found, record) = await FindPerformanceAsync(ct).ConfigureAwait(false);
+        var (found, record, graphics) = await FindPerformanceAsync(ReadGameMode(), ct).ConfigureAwait(false);
         if (Refusal(listed, found) is { } refusal) return refusal;
         var now = found.Change!;
         var original = record!;
 
         try
         {
-            var cleared = await _restorePerformance(original, ct).ConfigureAwait(false);
+            // The card as this read found it, so the restore does what the list and the question said.
+            var cleared = await _restorePerformance(original, graphics?.Adapter, ct).ConfigureAwait(false);
             if (!cleared)
                 return new UndoOutcome(UndoOutcomeKind.PartlyPutBack,
                     "Your original settings are back, but SysManager could not delete its record of them. Restore All "
@@ -572,8 +596,10 @@ public sealed class UndoChangesService : IUndoChangesService
 
     private (Found Found, IReadOnlyList<TurnedOff> Off) FindServices()
     {
-        var ledger = _ledger.Load();
+        var (ledger, unparsable) = _ledger.Read();
         if (ledger is null) return (Problem(UndoChangeKind.Services, UndoProblemKind.Unreadable), []);
+        // It loads as no records at all, while the services SysManager turned off are still off.
+        if (unparsable) return (Problem(UndoChangeKind.Services, UndoProblemKind.Damaged), []);
 
         List<TurnedOff> off = [];
         foreach (var record in ledger.Values)
@@ -748,7 +774,8 @@ public sealed class UndoChangesService : IUndoChangesService
         }
         catch (Exception ex) when (ex is IOException or SecurityException or UnauthorizedAccessException)
         {
-            // The copy or the variables themselves: either way, the two were not compared.
+            // The copy, which could not be read just now, or the variables themselves: either way, the two were not
+            // compared.
             Log.Debug(ex, "Undo Changes could not compare the environment variables with their kept copy");
             return (Problem(UndoChangeKind.EnvironmentVariables, UndoProblemKind.CannotCompare), null);
         }
@@ -769,8 +796,9 @@ public sealed class UndoChangesService : IUndoChangesService
                 (false, true) => "Only the machine-wide variables were copied",
                 _ => "Only your own variables were copied",
             },
-            // The restore writes every machine-wide variable the copy holds, and only an administrator can.
-            NeedsAdmin: preview.CoversMachine,
+            // Only a machine-wide variable that differs needs an administrator. The restore writes every one the copy
+            // holds, but without the rights the ones that already match are refused and left as they are.
+            NeedsAdmin: preview.Differences.Any(d => d.Scope == EnvVarScope.Machine),
             "Restore the copy…",
             lines,
             $"Put your environment variables back to the copy SysManager kept?\n\n{Bullets(lines)}\n\nEvery variable "
@@ -831,8 +859,10 @@ public sealed class UndoChangesService : IUndoChangesService
             if (result.InvalidBackup)
             {
                 mayHaveWritten = false;
-                return new UndoOutcome(UndoOutcomeKind.Failed,
-                    "What SysManager kept for the environment variables is damaged, so nothing was changed.");
+                return new UndoOutcome(UndoOutcomeKind.Failed, result.UnreadableBackup
+                    ? "SysManager could not read what it kept for the environment variables just now, so nothing was "
+                      + "changed. Try again in a moment."
+                    : "What SysManager kept for the environment variables is damaged, so nothing was changed.");
             }
             if (!result.HadBackup)
             {
@@ -855,10 +885,13 @@ public sealed class UndoChangesService : IUndoChangesService
                     $"{differed - remaining} of {differed} variables {(differed - remaining == 1 ? "is" : "are")} back to "
                     + $"the copy SysManager kept; {remaining} could not be written. The log has the reason."),
                 { } => new UndoOutcome(UndoOutcomeKind.Failed, "Windows would not write the variables back. The log has the reason."),
-                null => result.Failed == 0
-                    ? new UndoOutcome(UndoOutcomeKind.PutBack, $"{lead}.")
-                    : new UndoOutcome(UndoOutcomeKind.PartlyPutBack,
-                        $"The variables are partly back: {result.Failed} could not be written. The log has the reason."),
+                // Not read again, so its own tally is all there is, and that counts every variable it was refused —
+                // the ones no line listed included — so it is not quoted.
+                null => result.Restored > 0 || result.Removed > 0
+                    ? new UndoOutcome(UndoOutcomeKind.PartlyPutBack,
+                        "The variables were written back, but SysManager could not read them again to check. Look again "
+                        + "in a moment to see what is still different.")
+                    : new UndoOutcome(UndoOutcomeKind.Failed, "Windows would not write the variables back. The log has the reason."),
             };
         }
         finally
@@ -886,9 +919,9 @@ public sealed class UndoChangesService : IUndoChangesService
 
     // ── Gaming Profile ─────────────────────────────────────────────────────────
 
-    private Found FindGaming()
+    private Found FindGaming(GameMode game)
     {
-        if (_gaming.IsActive)
+        if (game.On)
         {
             return new Found(UndoChangeKind.GamingProfile, new UndoChange(
                 UndoChangeKind.GamingProfile,
@@ -902,16 +935,20 @@ public sealed class UndoChangesService : IUndoChangesService
                 "Turn game mode off — Confirm"));
         }
 
-        var leftOn = _gaming.HasPendingRecovery;
-        if (leftOn is null) return Problem(UndoChangeKind.GamingProfile, UndoProblemKind.Unreadable);
-        if (leftOn == false) return new Found(UndoChangeKind.GamingProfile, null);
+        switch (game.LeftOn.Kind)
+        {
+            case PendingRecoveryKind.Unreadable: return Problem(UndoChangeKind.GamingProfile, UndoProblemKind.Unreadable);
+            case PendingRecoveryKind.Unusable: return Problem(UndoChangeKind.GamingProfile, UndoProblemKind.Unusable);
+            case PendingRecoveryKind.None: return new Found(UndoChangeKind.GamingProfile, null);
+        }
 
         return new Found(UndoChangeKind.GamingProfile, new UndoChange(
             UndoChangeKind.GamingProfile,
             GamingTitle,
             "Still on from a session that did not end cleanly: SysManager closed while game mode was on.",
             "Left on by an earlier run",
-            NeedsAdmin: false,
+            // Starting the search indexer it paused again needs an administrator, and the record is used up either way.
+            NeedsAdmin: game.LeftOn.NeedsAdmin,
             "Turn it off…",
             [],
             "SysManager closed while game mode was still on.\n\nPut back what it changed (power plan, visual effects, "
@@ -923,16 +960,28 @@ public sealed class UndoChangesService : IUndoChangesService
     {
         // No lock taken here: both reverts take the system-modification lock themselves when it is free, and never
         // refuse, because a refusal would leave a game's changes on with nothing left to undo them.
+        var active = _gaming.IsActive;
+        var unread = false;
         GamingRevertResult result;
         try
         {
-            result = _gaming.IsActive
+            result = active
                 ? await _gaming.RevertAsync(ct).ConfigureAwait(false)
                 : await _gaming.RecoverPendingAsync(ct).ConfigureAwait(false);
         }
+        catch (IOException ex) when (!active)
+        {
+            // The record of the session left on could not be read under its gate: nothing was reverted.
+            Log.Warning(ex, "Undo Changes could not read the game mode session left on");
+            unread = true;
+            return new UndoOutcome(UndoOutcomeKind.Failed,
+                "SysManager could not read what it kept for game mode just now, so nothing was changed. Try again in a "
+                + "moment.");
+        }
         finally
         {
-            _signal.Raise(UndoChangeKind.GamingProfile);
+            // Not for a record that could not be read: nothing changed, so the tab has nothing new to read.
+            if (!unread) _signal.Raise(UndoChangeKind.GamingProfile);
         }
 
         return result.FullyRestored
@@ -944,11 +993,18 @@ public sealed class UndoChangesService : IUndoChangesService
 
     private Found FindWatchdog()
     {
-        if (_watchdog.LoadBaseline() is not { } baseline) return new Found(UndoChangeKind.SettingsWatchdog, null);
+        if (_watchdog.LoadBaseline() is not { } baseline)
+        {
+            // Read or parse, it does not say which; Settings Watchdog says the same of it.
+            return _watchdog.BaselineFileExists
+                ? Problem(UndoChangeKind.SettingsWatchdog, UndoProblemKind.Unusable)
+                : new Found(UndoChangeKind.SettingsWatchdog, null);
+        }
 
-        // Only the ones Settings Watchdog can write back. The rest it shows for awareness, and listing them here would
-        // send someone to a tab that cannot put them back either.
-        var drifted = _watchdog.DetectDrift(baseline, _watchdog.ReadCurrent()).Where(d => d.CanRestore).ToList();
+        // Only the ones Settings Watchdog can write back: not a read-only value it shows for awareness, nor one that was
+        // not set when the baseline was saved, which it never deletes. Listing those here would send someone to a tab
+        // that cannot put them back either.
+        var drifted = _watchdog.DetectDrift(baseline, _watchdog.ReadCurrent()).Where(d => d.CanWriteBack).ToList();
         if (drifted.Count == 0) return new Found(UndoChangeKind.SettingsWatchdog, null);
 
         return new Found(UndoChangeKind.SettingsWatchdog, new UndoChange(

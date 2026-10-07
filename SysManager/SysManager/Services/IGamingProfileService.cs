@@ -58,20 +58,24 @@ public interface IGamingProfileService
     void SaveLastConfig(GamingProfile profile);
 
     /// <summary>
-    /// True if a previous run left a session applied on disk (closed/crashed mid-game). The
-    /// UI offers to revert it on startup — crash recovery for the machine-wide tweaks.
+    /// What a previous run left on disk: a session still applied (closed or crashed mid-game), which the UI offers to
+    /// revert on startup — crash recovery for the machine-wide tweaks — or none, or a record that could not be read or
+    /// used. None while game mode is on in this run.
     /// </summary>
     /// <remarks>
-    /// Null when the file that would record it is there and could not be read just now, so whether a session was left
-    /// on is not known. Undo Changes holds Performance Mode back then, as it does for one that was (#1525): putting
-    /// Performance Mode back under a session that is still to be recovered would be undone by that recovery.
+    /// A record that could not be read is not "none". Undo Changes holds Performance Mode back for it, as for a session
+    /// that was left on (#1525): Performance Mode put back under a session still to be recovered would be undone by that
+    /// recovery. One that was read and cannot be used holds nothing this build can recover.
     /// </remarks>
-    bool? HasPendingRecovery { get; }
+    PendingRecovery ReadPendingRecovery();
 
     /// <summary>
     /// Revert a leftover session found on disk from a previous run (crash recovery). Reports
     /// what could not be restored, as <see cref="RevertAsync"/> does.
     /// </summary>
+    /// <exception cref="System.IO.IOException">
+    /// The record of the session could not be read just now. Nothing was reverted, and the record is kept.
+    /// </exception>
     Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default);
 
     /// <summary>
@@ -80,6 +84,30 @@ public interface IGamingProfileService
     /// </summary>
     event EventHandler<GamingRevertResult>? SessionAutoReverted;
 }
+
+/// <summary>What a previous run's record of a game mode session says.</summary>
+public enum PendingRecoveryKind
+{
+    /// <summary>No session was left on, or game mode is on now, in this run. The default.</summary>
+    None,
+
+    /// <summary>A session was left on, and its changes are still to be put back.</summary>
+    LeftOn,
+
+    /// <summary>The record is there and could not be read just now.</summary>
+    Unreadable,
+
+    /// <summary>The record was read and this build cannot use it: it does not parse, or a newer SysManager wrote it.</summary>
+    Unusable,
+}
+
+/// <summary>A previous run's record of a game mode session, as <see cref="IGamingProfileService.ReadPendingRecovery"/> found it.</summary>
+/// <param name="Kind">What the record says.</param>
+/// <param name="NeedsAdmin">
+/// True when a session left on paused search indexing: putting it back starts the indexer again, which only an
+/// administrator can.
+/// </param>
+public readonly record struct PendingRecovery(PendingRecoveryKind Kind, bool NeedsAdmin = false);
 
 /// <summary>A running process chosen as the game target for affinity/priority + auto-revert.</summary>
 /// <param name="ProcessId">The game's process ID.</param>

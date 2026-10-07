@@ -24,6 +24,10 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
+    // What Apply and Restore backup both say of a copy that is there and could not be read just now (#1525).
+    private const string BackupUnreadable =
+        "The environment backup could not be read just now; no changes were made. Try again in a moment.";
+
     private readonly EnvironmentVariableService _service;
     private readonly IPutBackSignal? _putBack;
 
@@ -397,6 +401,13 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             Log.Warning(ex, "Environment: invalid safety backup; aborting apply");
             return;
         }
+        catch (EnvironmentVariableService.BackupUnreadableException ex)
+        {
+            // Held open by another program, not damaged: the copy is fine, and trying again may work (#1525).
+            StatusMessage = BackupUnreadable;
+            Log.Warning(ex, "Environment: the safety backup could not be read just now; aborting apply");
+            return;
+        }
         catch (IOException ex)
         {
             StatusMessage = "Could not write the safety backup — no changes were made.";
@@ -530,7 +541,9 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         var r = await Task.Run(_service.RestoreFromBackup);
         if (r.InvalidBackup)
         {
-            StatusMessage = "The available environment backup is invalid; no changes were made.";
+            StatusMessage = r.UnreadableBackup
+                ? BackupUnreadable
+                : "The available environment backup is invalid; no changes were made.";
             return;
         }
         if (!r.HadBackup)

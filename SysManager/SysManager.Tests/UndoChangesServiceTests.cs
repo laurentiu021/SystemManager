@@ -73,8 +73,6 @@ public sealed class UndoChangesServiceTests
                 Restored.Add(snapshot);
                 return Task.FromResult(Performance.DeleteSnapshot());
             };
-            // Not left on unless a test says so. A substitute's own answer would be null, which is "could not be read".
-            Gaming.HasPendingRecovery.Returns(false);
             // The card a record names is still there, set as Now() has it, unless a test says otherwise.
             Graphics = subKey => Now() is var now && now.NvidiaSubKey == subKey
                 ? new UndoChangesService.GraphicsNow(PerformanceService.RecordedAdapter.Present, now.GpuDynamicPstate)
@@ -103,6 +101,9 @@ public sealed class UndoChangesServiceTests
         /// <summary>What has become of the graphics card a record names, and how it is set now.</summary>
         public Func<string, UndoChangesService.GraphicsNow> Graphics { get; set; }
         public List<PerformanceService.OriginalSnapshot> Restored { get; } = [];
+
+        /// <summary>The NVIDIA card each restore was handed, as the list found it.</summary>
+        public List<PerformanceService.RecordedAdapter?> RestoredCards { get; } = [];
         public Func<PerformanceService.OriginalSnapshot, Task<bool>> RestorePerformance { get; set; }
 
         /// <summary>The environment restore, or null for the real one over the throwaway registry keys.</summary>
@@ -115,7 +116,11 @@ public sealed class UndoChangesServiceTests
             name => ServicesOnPc.TryGetValue(name, out var entry) ? entry : null,
             readPerformanceNow: _ => Task.FromResult(Now()),
             readGraphics: subKey => Graphics(subKey),
-            restorePerformance: (snapshot, _) => RestorePerformance(snapshot),
+            restorePerformance: (snapshot, card, _) =>
+            {
+                RestoredCards.Add(card);
+                return RestorePerformance(snapshot);
+            },
             restoreEnvironment: RestoreEnvironment,
             announceEnvironment: () => Announced++,
             zone: TimeZoneInfo.Utc);
@@ -274,7 +279,8 @@ public sealed class UndoChangesServiceTests
         Assert.True(rig.Performance.SaveSnapshot(Original()));
         rig.Now = Tweaked;
         rig.Gaming.IsActive.Returns(on);
-        rig.Gaming.HasPendingRecovery.Returns(leftOn);
+        rig.Gaming.ReadPendingRecovery()
+            .Returns(new PendingRecovery(leftOn ? PendingRecoveryKind.LeftOn : PendingRecoveryKind.None));
 
         var scan = await rig.Service.ScanAsync();
 
@@ -391,6 +397,13 @@ public sealed class UndoChangesServiceTests
 
         Assert.Equal(["Power plan: Ultimate Performance → Balanced", "Visual effects: reduced → normal"], change.Lines);
         Assert.False(change.NeedsAdmin);
+        Assert.Contains("The NVIDIA graphics setting stays as it is: SysManager no longer finds the card it was recorded on.",
+            change.Question, StringComparison.Ordinal);
+
+        await rig.Service.PutBackAsync(change);
+
+        // As the list found it, so the restore does what the question said.
+        Assert.Equal([PerformanceService.RecordedAdapter.Gone], rig.RestoredCards);
     }
 
     [Fact]
@@ -772,6 +785,19 @@ public sealed class UndoChangesServiceTests
     }
 
     [Fact]
+    public async Task AServicesRecordThatDoesNotParse_IsNamedAsDamaged()
+    {
+        // It loads as no records, while every service SysManager turned off is still off.
+        using var rig = new Rig();
+        File.WriteAllText(Path.Combine(rig.Dir, "service-startup-ledger.json"), "{ not json");
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.Empty(scan.Changes);
+        Assert.Equal([new UndoProblem(UndoChangeKind.Services, UndoProblemKind.Damaged)], scan.Problems);
+    }
+
+    [Fact]
     public async Task TurningServicesBackOn_SetsEachToItsRecordedType_ForgetsTheRecords_AndTellsTheTab()
     {
         using var rig = new Rig();
@@ -1124,20 +1150,83 @@ public sealed class UndoChangesServiceTests
     }
 
     [Fact]
-    public async Task EnvironmentVariables_WithAMachineWideCopy_NeedAdministratorRights()
+    public async Task EnvironmentVariables_NeedAdministratorRights_OnlyWhenAMachineWideOneDiffers()
     {
-        // The restore writes every machine-wide variable the copy holds, and only an administrator can.
+        // The restore writes every machine-wide variable the copy holds, and only an administrator can. One that already
+        // matches is refused without the rights and left as it is, so it asks for nothing.
         using var rig = new Rig();
         rig.Environment.SetUser("SAFE_USER", "original");
         rig.Environment.SetMachine("SAFE_MACHINE", "original");
         rig.Environment.Service.EnsureBackup(includeUser: true, includeMachine: true);
         rig.Environment.SetUser("SAFE_USER", "changed");
 
-        var change = await OnlyChangeAsync(rig, UndoChangeKind.EnvironmentVariables);
+        var yours = await OnlyChangeAsync(rig, UndoChangeKind.EnvironmentVariables);
 
-        Assert.True(change.NeedsAdmin);
-        Assert.Equal("Your variables and the machine-wide ones are restored together", change.Caption);
-        Assert.Equal(["SAFE_USER (yours): back to its earlier value"], change.Lines);
+        Assert.False(yours.NeedsAdmin);
+        Assert.Equal("Your variables and the machine-wide ones are restored together", yours.Caption);
+        Assert.Equal(["SAFE_USER (yours): back to its earlier value"], yours.Lines);
+
+        rig.Environment.SetMachine("SAFE_MACHINE", "changed");
+
+        Assert.True((await OnlyChangeAsync(rig, UndoChangeKind.EnvironmentVariables)).NeedsAdmin);
+    }
+
+    [Fact]
+    public async Task AnEnvironmentCopyThatCannotBeReadJustNow_IsNotCalledDamaged()
+    {
+        // Held open by another program, it is fine, and "damaged" says looking again will not help.
+        using var rig = new Rig();
+        rig.Environment.SetUser("SAFE_USER", "changed");
+        rig.Environment.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+
+        using (File.Open(rig.Environment.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var scan = await rig.Service.ScanAsync();
+
+            Assert.Empty(scan.Changes);
+            Assert.Equal([new UndoProblem(UndoChangeKind.EnvironmentVariables, UndoProblemKind.CannotCompare)], scan.Problems);
+        }
+
+        Assert.Single((await rig.Service.ScanAsync()).Changes, c => c.Kind == UndoChangeKind.EnvironmentVariables);
+    }
+
+    [Fact]
+    public async Task AnEnvironmentCopyTheRestoreCouldNotReadJustNow_IsNotCalledDamaged()
+    {
+        using var rig = new Rig();
+        rig.VariablesChangedSinceTheirCopy();
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.EnvironmentVariables);
+        rig.RestoreEnvironment = () =>
+            new EnvironmentVariableService.RestoreResult(true, 0, 0, 0) { InvalidBackup = true, UnreadableBackup = true };
+
+        var outcome = await rig.Service.PutBackAsync(change);
+
+        Assert.Equal(UndoOutcomeKind.Failed, outcome.Kind);
+        Assert.Equal("SysManager could not read what it kept for the environment variables just now, so nothing was "
+            + "changed. Try again in a moment.", outcome.Message);
+        Assert.Empty(rig.Raised);
+    }
+
+    [Fact]
+    public async Task AnEnvironmentRestoreThatCannotBeReadAgain_DoesNotQuoteItsOwnTally()
+    {
+        // The restore counts as refused every name it could not write — the ones no line listed included — so its count
+        // is not one to give when nothing could be read again to check it.
+        using var rig = new Rig();
+        rig.VariablesChangedSinceTheirCopy();
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.EnvironmentVariables);
+        rig.RestoreEnvironment = () =>
+        {
+            rig.Environment.SetUser("SAFE_USER", "original");
+            rig.Environment.WriteUserRegistryBackup("{ invalid json");
+            return new EnvironmentVariableService.RestoreResult(true, 1, 0, 1);
+        };
+
+        var outcome = await rig.Service.PutBackAsync(change);
+
+        Assert.Equal(UndoOutcomeKind.PartlyPutBack, outcome.Kind);
+        Assert.Equal("The variables were written back, but SysManager could not read them again to check. Look again in a "
+            + "moment to see what is still different.", outcome.Message);
     }
 
     [Fact]
@@ -1441,7 +1530,7 @@ public sealed class UndoChangesServiceTests
     public async Task GameModeLeftOnByAnEarlierRun_IsRecovered_AndWhatDidNotComeBackIsNamed()
     {
         using var rig = new Rig();
-        rig.Gaming.HasPendingRecovery.Returns(true);
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
         rig.Gaming.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(new GamingRevertResult(["Search indexing"]));
         var change = await OnlyChangeAsync(rig, UndoChangeKind.GamingProfile);
         Assert.Equal("Still on from a session that did not end cleanly: SysManager closed while game mode was on.", change.Detail);
@@ -1489,6 +1578,103 @@ public sealed class UndoChangesServiceTests
     }
 
     [Fact]
+    public async Task GameModeLeftOnByARunThatPausedSearchIndexing_NeedsAdministratorRights()
+    {
+        // Starting the indexer again needs them, and the record is used up whether it starts or not.
+        using var rig = new Rig();
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: true));
+
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.GamingProfile);
+        var outcome = await rig.Service.PutBackAsync(change);
+
+        Assert.True(change.NeedsAdmin);
+        Assert.Equal("Putting back game mode needs administrator rights. Use Run as administrator at the top of the page.",
+            outcome.Message);
+        await rig.Gaming.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AGameModeRecordThatCannotBeUsed_IsNamed_AndDoesNotHoldPerformanceModeBack()
+    {
+        // This build can recover nothing from it, so Performance Mode has no session to wait for.
+        using var rig = new Rig();
+        Assert.True(rig.Performance.SaveSnapshot(Original()));
+        rig.Now = Tweaked;
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.Unusable));
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.Equal([UndoChangeKind.PerformanceMode], scan.Changes.Select(c => c.Kind));
+        Assert.False(scan.PerformanceWaitsForGameMode);
+        Assert.Equal([new UndoProblem(UndoChangeKind.GamingProfile, UndoProblemKind.Unusable)], scan.Problems);
+    }
+
+    [Fact]
+    public async Task PuttingBackGameMode_WhoseRecordCannotBeReadUnderItsGate_ChangesNothing()
+    {
+        using var rig = new Rig();
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        rig.Gaming.RecoverPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<GamingRevertResult>(new IOException("The file is held by another program.")));
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.GamingProfile);
+
+        var outcome = await rig.Service.PutBackAsync(change);
+
+        Assert.Equal(UndoOutcomeKind.Failed, outcome.Kind);
+        Assert.Equal("SysManager could not read what it kept for game mode just now, so nothing was changed. Try again in "
+            + "a moment.", outcome.Message);
+        Assert.Empty(rig.Raised);
+    }
+
+    [Fact]
+    public async Task TurningOffGameModeThatIsOn_WhenItsRevertFails_IsNotSaidToHaveChangedNothing()
+    {
+        // Only the record of a session left on is read under the gate. A revert of one that is on may have put part of
+        // it back before it failed, so the failure reaches the tab as it is, and Gaming Profile is told to read again.
+        using var rig = new Rig();
+        rig.Gaming.IsActive.Returns(true);
+        rig.Gaming.RevertAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<GamingRevertResult>(new IOException("The record could not be written.")));
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.GamingProfile);
+
+        var thrown = await Assert.ThrowsAsync<IOException>(() => rig.Service.PutBackAsync(change));
+
+        Assert.Equal("The record could not be written.", thrown.Message);
+        Assert.Equal([UndoChangeKind.GamingProfile], rig.Raised);
+    }
+
+    [Fact]
+    public async Task PuttingBackGameMode_WhoseRecordCanNoLongerBeUsed_ChangesNothing()
+    {
+        // A newer SysManager wrote it again since the list was read, and this build can recover nothing from it.
+        using var rig = new Rig();
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        var change = await OnlyChangeAsync(rig, UndoChangeKind.GamingProfile);
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.Unusable));
+
+        var outcome = await rig.Service.PutBackAsync(change);
+
+        Assert.Equal(UndoOutcomeKind.Failed, outcome.Kind);
+        Assert.Equal("SysManager could not use what it kept for game mode, so nothing was changed.", outcome.Message);
+        await rig.Gaming.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
+        Assert.Empty(rig.Raised);
+    }
+
+    [Fact]
+    public async Task TheScan_ReadsGameModeOnce_ForBothOfTheRowsItDecides()
+    {
+        // Read twice, a game that exits between the two reads would hold Performance Mode back with no game mode row.
+        using var rig = new Rig();
+        Assert.True(rig.Performance.SaveSnapshot(Original()));
+        rig.Now = Tweaked;
+
+        await rig.Service.ScanAsync();
+
+        _ = rig.Gaming.Received(1).IsActive;
+        rig.Gaming.Received(1).ReadPendingRecovery();
+    }
+
+    [Fact]
     public async Task GameModeWhoseRecordCannotBeRead_IsNamedAsUnreadable_AndHoldsPerformanceModeBack()
     {
         // Whether a session was left on is not known, and if one was, recovering it later would undo a Performance Mode
@@ -1496,12 +1682,13 @@ public sealed class UndoChangesServiceTests
         using var rig = new Rig();
         Assert.True(rig.Performance.SaveSnapshot(Original()));
         rig.Now = Tweaked;
-        rig.Gaming.HasPendingRecovery.Returns((bool?)null);
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.Unreadable));
 
         var scan = await rig.Service.ScanAsync();
 
         Assert.Empty(scan.Changes);
         Assert.True(scan.PerformanceWaitsForGameMode);
+        Assert.True(scan.GameModeNotKnown);
         Assert.Equal([new UndoProblem(UndoChangeKind.GamingProfile, UndoProblemKind.Unreadable)], scan.Problems);
     }
 
@@ -1512,7 +1699,7 @@ public sealed class UndoChangesServiceTests
         Assert.True(rig.Performance.SaveSnapshot(Original()));
         rig.Now = Tweaked;
         var change = await OnlyChangeAsync(rig, UndoChangeKind.PerformanceMode);
-        rig.Gaming.HasPendingRecovery.Returns((bool?)null);
+        rig.Gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.Unreadable));
 
         var outcome = await rig.Service.PutBackAsync(change);
 
@@ -1548,8 +1735,21 @@ public sealed class UndoChangesServiceTests
 
         var outcome = await rig.Service.PutBackAsync(change);
         Assert.Equal(UndoOutcomeKind.Failed, outcome.Kind);
-        Assert.Equal("Nothing was changed: these settings are put back in Settings Watchdog, one at a time.", outcome.Message);
+        Assert.Equal("Nothing was changed: these settings are put back in Settings Watchdog.", outcome.Message);
         Assert.Empty(rig.Raised);
+    }
+
+    [Fact]
+    public async Task ASettingsWatchdogBaselineThatCannotBeUsed_IsNamed_NotCalledNothing()
+    {
+        using var rig = new Rig();
+        rig.Watchdog.LoadBaseline().Returns((BaselineSnapshot?)null);
+        rig.Watchdog.BaselineFileExists.Returns(true);
+
+        var scan = await rig.Service.ScanAsync();
+
+        Assert.Empty(scan.Changes);
+        Assert.Equal([new UndoProblem(UndoChangeKind.SettingsWatchdog, UndoProblemKind.Unusable)], scan.Problems);
     }
 
     [Fact]
@@ -1560,6 +1760,20 @@ public sealed class UndoChangesServiceTests
         rig.Watchdog.LoadBaseline().Returns(baseline);
         rig.Watchdog.DetectDrift(baseline, Arg.Any<IReadOnlyDictionary<string, int?>>())
             .Returns([Drift("Default browser", canRestore: false)]);
+
+        Assert.Empty((await rig.Service.ScanAsync()).Changes);
+    }
+
+    [Fact]
+    public async Task ASettingThatWasNotSetWhenTheBaselineWasSaved_IsNotListed()
+    {
+        // Settings Watchdog never deletes a value, so it cannot put back one that was not set then, and the row would
+        // send someone to a tab that cannot do it either.
+        using var rig = new Rig();
+        var baseline = new BaselineSnapshot(new DateTime(2026, 10, 1), []);
+        rig.Watchdog.LoadBaseline().Returns(baseline);
+        rig.Watchdog.DetectDrift(baseline, Arg.Any<IReadOnlyDictionary<string, int?>>())
+            .Returns([Drift("Diagnostic data (telemetry)") with { BaselineValue = null }]);
 
         Assert.Empty((await rig.Service.ScanAsync()).Changes);
     }
@@ -1623,6 +1837,25 @@ public sealed class UndoChangesServiceTests
 
         Assert.False(look.Listed);
         Assert.Null(look.Newest);
+    }
+
+    [Theory]
+    [InlineData("runspace")]
+    [InlineData("pipeline")]
+    public async Task ARestorePointQuestionWhoseSessionBroke_IsNotListed(string broke)
+    {
+        // The runner does not wrap these, and left alone they would leave the card on "Looking" with nothing looking.
+        using var rig = new Rig();
+        rig.Elevated = true;
+        Exception thrown = broke == "runspace"
+            ? new System.Management.Automation.Runspaces.InvalidRunspaceStateException("The runspace is closed.")
+            : new InvalidPowerShellStateException("The pipeline is not in a state to run.");
+        rig.Runner.RunAsync(RestorePointService.ListScript, Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Collection<PSObject>>(thrown));
+
+        var look = await rig.Service.LookForRestorePointAsync();
+
+        Assert.Equal(new RestorePointLook(null, Listed: false), look);
     }
 
     [Fact]

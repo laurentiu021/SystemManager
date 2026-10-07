@@ -39,6 +39,13 @@ public sealed record SettingDrift(
     int? CurrentValue,
     bool CanRestore = true)
 {
+    /// <summary>
+    /// True when Settings Watchdog's Restore can write the baseline back: the value is one it may write, and the
+    /// baseline holds a value. One that was not set when the baseline was saved cannot be put back, because the
+    /// watchdog never deletes a value.
+    /// </summary>
+    public bool CanWriteBack => CanRestore && BaselineValue is not null;
+
     public string BaselineLabel => Setting.Describe(BaselineValue);
     public string CurrentLabel => Setting.Describe(CurrentValue);
     public string Summary => $"{Setting.Name}: was \"{BaselineLabel}\", now \"{CurrentLabel}\"";

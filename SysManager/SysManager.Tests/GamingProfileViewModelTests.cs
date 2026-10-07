@@ -41,7 +41,7 @@ public class GamingProfileViewModelTests
         var svc = Substitute.For<IGamingProfileService>();
         svc.LoadLastConfig().Returns(lastConfig ?? new GamingProfile());
         svc.IsActive.Returns(active);
-        svc.HasPendingRecovery.Returns(false);
+        svc.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.None));
         svc.RevertAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
         svc.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
         return svc;
@@ -341,7 +341,7 @@ public class GamingProfileViewModelTests
     public async Task Recovery_WhenASettingCouldNotBeRestored_NamesIt()
     {
         var service = ServiceWith(GamingProfile.Default);
-        service.HasPendingRecovery.Returns(true);
+        service.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
         service.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(PowerPlanNotRestored);
         GamingProfileViewModel? vm = null;
 
@@ -357,12 +357,32 @@ public class GamingProfileViewModelTests
     }
 
     [Fact]
+    public async Task Recovery_ThatCannotReadItsRecord_SaysNothingWasReverted()
+    {
+        // The record could not be read once the question was answered, so nothing was reverted, and the record is kept.
+        var service = ServiceWith();
+        service.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        service.RecoverPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<GamingRevertResult>(new System.IO.IOException("The file is held by another program.")));
+        GamingProfileViewModel? vm = null;
+
+        await WithConfirm(true, async () =>
+        {
+            vm = new GamingProfileViewModel(service, CpuWith());
+            await vm.InitializationComplete;
+        });
+
+        Assert.Equal("SysManager could not read its record of the previous session just now, so nothing was reverted. It "
+            + "asks again the next time it starts.", vm!.StatusMessage);
+    }
+
+    [Fact]
     public async Task Recovery_IsNotOffered_WhenWhetherASessionWasLeftOnCannotBeRead()
     {
         // "Not known" is not "left on": offering to revert a session that may not exist would change settings for
         // nothing. The next launch asks again.
         var service = ServiceWith();
-        service.HasPendingRecovery.Returns((bool?)null);
+        service.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.Unreadable));
         var dialog = Substitute.For<IDialogService>();
         var previous = DialogService.Instance;
         DialogService.Instance = dialog;

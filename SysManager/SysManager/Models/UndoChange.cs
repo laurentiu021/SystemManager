@@ -68,9 +68,15 @@ public enum UndoProblemKind
 
     /// <summary>
     /// What is on the PC now could not be read, so there was nothing to compare the copy with — or, for the hosts
-    /// file, one of the two could not be read.
+    /// file and the environment variables, one of the two could not be read.
     /// </summary>
     CannotCompare,
+
+    /// <summary>
+    /// The copy is there and could not be read or used, without saying which — or a newer SysManager wrote it. Settings
+    /// Watchdog's saved settings and game mode's record of a session are the two read that way.
+    /// </summary>
+    Unusable,
 }
 
 /// <summary>A kept copy Undo Changes could not use when it last looked.</summary>
@@ -88,10 +94,14 @@ public sealed record UndoProblem(UndoChangeKind Kind, UndoProblemKind Why);
 /// True when Performance Mode has a record while game mode is on, was left on, or might have been — its own record
 /// could not be read. The settings are game mode's until it is off, so Performance Mode is listed only once it is.
 /// </param>
+/// <param name="GameModeNotKnown">
+/// True when Performance Mode waits only because game mode's record could not be read: game mode may well be off.
+/// </param>
 public sealed record UndoScan(
     IReadOnlyList<UndoChange> Changes,
     IReadOnlyList<UndoProblem> Problems,
-    bool PerformanceWaitsForGameMode = false);
+    bool PerformanceWaitsForGameMode = false,
+    bool GameModeNotKnown = false);
 
 /// <summary>What Windows said about its restore points when Undo Changes last asked.</summary>
 /// <param name="Newest">The newest System Restore point, or null when there is none or Windows would not list them.</param>

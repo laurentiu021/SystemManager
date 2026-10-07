@@ -753,24 +753,36 @@ public sealed partial class PerformanceService : IDisposable
     /// to write its setting back to, and a restore that stopped there could never finish. One whose key could not be
     /// read may still be there, and leaving it out would lose its setting for good.
     /// </remarks>
-    internal static RecordedAdapter FindRecordedAdapter(string subKey)
+    internal static RecordedAdapter FindRecordedAdapter(string subKey) => FindRecordedAdapter(subKey, ReadAdapterNames);
+
+    /// <summary>
+    /// <see cref="FindRecordedAdapter(string)"/>, with the read of the adapter's key a parameter, so that a test can
+    /// drive every answer — a read that fails among them — without the registry of the PC running it.
+    /// </summary>
+    internal static RecordedAdapter FindRecordedAdapter(string subKey, Func<string, (string DriverDesc, string Provider)?> readNames)
     {
         if (!NvidiaSubKeyRegex().IsMatch(subKey)) return RecordedAdapter.Gone;
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
-            if (key is null) return RecordedAdapter.Gone;
-            var driverDesc = key.GetValue("DriverDesc")?.ToString() ?? "";
-            var provider = key.GetValue("ProviderName")?.ToString() ?? "";
-            return driverDesc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
-                   || provider.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+            return readNames(subKey) is { } names
+                   && (names.DriverDesc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+                       || names.Provider.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
                 ? RecordedAdapter.Present
                 : RecordedAdapter.Gone;
         }
         catch (SecurityException) { return RecordedAdapter.Unreadable; }
         catch (UnauthorizedAccessException) { return RecordedAdapter.Unreadable; }
-        // The key is being deleted: the adapter is on its way out.
-        catch (IOException) { return RecordedAdapter.Gone; }
+        // Not read, so not known: "gone" would leave the setting out and let the record be deleted.
+        catch (IOException) { return RecordedAdapter.Unreadable; }
+    }
+
+    // The names the adapter's key gives its driver and its maker, or null when the key is not there.
+    private static (string DriverDesc, string Provider)? ReadAdapterNames(string subKey)
+    {
+        using var key = Registry.LocalMachine.OpenSubKey($@"{GpuClassRoot}\{subKey}");
+        return key is null
+            ? null
+            : (key.GetValue("DriverDesc")?.ToString() ?? "", key.GetValue("ProviderName")?.ToString() ?? "");
     }
 
     /// <summary>
@@ -991,7 +1003,11 @@ public sealed partial class PerformanceService : IDisposable
     /// Restore all settings to the exact state captured in the snapshot.
     /// This is the ONLY way to revert — we never guess defaults.
     /// </summary>
-    public async Task RestoreFromSnapshotAsync(OriginalSnapshot snapshot, CancellationToken ct = default)
+    /// <remarks>
+    /// The NVIDIA card the snapshot names is taken as <paramref name="card"/> found it — what the question asked before
+    /// the restore said — or looked for now when it is null.
+    /// </remarks>
+    internal async Task RestoreFromSnapshotAsync(OriginalSnapshot snapshot, RecordedAdapter? card, CancellationToken ct = default)
     {
         if (!TryValidateSnapshot(snapshot, out var reason))
             throw new InvalidOperationException($"The saved performance snapshot is invalid: {reason}.");
@@ -1010,8 +1026,8 @@ public sealed partial class PerformanceService : IDisposable
         // independent (Game Bar overlay vs per-game DVR) and must not be collapsed.
         SetXboxGameBar(snapshot.XboxGameBarEnabled, snapshot.XboxGameDvrEnabled);
 
-        // GPU
-        RestoreGraphics(snapshot, _findAdapter, SetGpuMaxPerformance);
+        // GPU — as the question found the card, so the restore does what it said; the write checks the card again.
+        RestoreGraphics(snapshot, card is { } found ? _ => found : _findAdapter, SetGpuMaxPerformance);
 
         // Processor state — only restore if we captured a real value. A null means the
         // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),
@@ -1038,7 +1054,7 @@ public sealed partial class PerformanceService : IDisposable
 
         if (findAdapter(subKey) == RecordedAdapter.Gone)
         {
-            Log.Warning("Performance restore: the NVIDIA adapter it recorded ({SubKey}) is no longer in this PC, so its "
+            Log.Warning("Performance restore: the NVIDIA adapter it recorded ({SubKey}) is no longer found, so its "
                         + "graphics setting is left out", subKey);
             return;
         }
@@ -1056,10 +1072,13 @@ public sealed partial class PerformanceService : IDisposable
     /// Restore All on Performance Mode and Undo Changes both put the original back through here (#1525), so the order
     /// — the settings first, the record only once they are back — is stated once. A restore that throws leaves the
     /// record where it is, which is what lets it be tried again.
+    /// <para>Both pass the NVIDIA card the snapshot names as <paramref name="card"/>, the way their question found it,
+    /// so the restore does what that question said: a card it left out is not written to after all, and one it promised
+    /// is. Null looks for the card now.</para>
     /// </remarks>
-    public async Task<bool> RestoreOriginalAsync(OriginalSnapshot snapshot, CancellationToken ct = default)
+    internal async Task<bool> RestoreOriginalAsync(OriginalSnapshot snapshot, RecordedAdapter? card, CancellationToken ct = default)
     {
-        await RestoreFromSnapshotAsync(snapshot, ct).ConfigureAwait(false);
+        await RestoreFromSnapshotAsync(snapshot, card, ct).ConfigureAwait(false);
         return DeleteSnapshot();
     }
 

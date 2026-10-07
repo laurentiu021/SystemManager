@@ -205,6 +205,11 @@ collection definitions (all defined in `TestCollections.cs`, each with
   administrator rights, so `hive: "HKLM"` gives the machine-wide case. Use it wherever the answer
   would otherwise depend on this PC's own privacy settings: a profile export carries the toggles as
   read, so a test over the real service passes or fails with the machine running it.
+- `RedirectedEnvironment` — **`SysManager.Tests` only.** An `EnvironmentVariableService` over two
+  throwaway keys under `HKCU\Software\SysManagerTests\Environment`, standing in for the user's and the
+  machine's environment, plus a temp folder for the legacy backup file; all deleted on dispose. Shared
+  by the environment tests and Undo Changes' (#1525), which compare and restore the same copies, so
+  neither touches the real environment of either scope.
 - `StaHelper` — **`SysManager.IntegrationTests` only**, since it exists for tests that instantiate
   views. It queues a delegate onto **one** background STA thread shared by the whole suite and waits
   for it, rethrowing whatever the delegate threw. One thread rather than one per call because the

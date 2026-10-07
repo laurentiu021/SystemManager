@@ -78,7 +78,7 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         // Crash recovery: a previous run may have closed/crashed with tweaks still applied.
         // Offer to revert the leftover machine-wide changes (per-game affinity/priority are
         // never persisted, so a recycled PID is never touched).
-        if (_service.HasPendingRecovery == true)
+        if (_service.ReadPendingRecovery().Kind == PendingRecoveryKind.LeftOn)
         {
             bool revert = DialogService.Instance.Confirm(
                 "SysManager closed while game mode was still active last time.\n\n" +
@@ -86,10 +86,21 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 "Gaming Profile — Restore");
             if (revert)
             {
-                var result = await _service.RecoverPendingAsync();
-                StatusMessage = DescribeRevert(result,
-                    "Reverted the leftover changes from the previous session.",
-                    "Reverted the leftover changes from the previous session");
+                try
+                {
+                    var result = await _service.RecoverPendingAsync();
+                    StatusMessage = DescribeRevert(result,
+                        "Reverted the leftover changes from the previous session.",
+                        "Reverted the leftover changes from the previous session");
+                }
+                catch (System.IO.IOException ex)
+                {
+                    // Its record could not be read once the question was answered: nothing was reverted, and the record
+                    // is kept, so the next launch asks again (#1525).
+                    Log.Warning(ex, "Gaming Profile could not read the session left on by the previous run");
+                    StatusMessage = "SysManager could not read its record of the previous session just now, so nothing "
+                        + "was reverted. It asks again the next time it starts.";
+                }
             }
         }
     }

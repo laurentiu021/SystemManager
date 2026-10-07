@@ -699,7 +699,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <c>EdgeOneDriveService</c> four, three services three each, and those arrive together. Twenty seconds
     /// covers a burst with room for a slow one in the middle.
     /// <para>Keeping it for the session instead would be the obvious reading of "one runspace per session"
-    /// and it is the wrong one. Nothing disposes most of these runners — nine are constructed directly in
+    /// and it is the wrong one. Nothing disposes most of these runners — eleven are constructed directly in
     /// <c>MainWindowViewModel</c>'s designer graph and live as long as the window — so a session-long cache
     /// would mean a dozen <c>powershell.exe</c> processes resident for the whole run, tens of MB each, in an
     /// app whose entire pitch is making a PC feel faster. Eviction is what makes reuse a latency win rather
@@ -852,7 +852,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// </summary>
     /// <remarks>
     /// Deterministic release for the consumers that are disposed. It is NOT the only release path and must
-    /// not be: nine runners are constructed directly in <c>MainWindowViewModel</c>'s designer graph and
+    /// not be: eleven runners are constructed directly in <c>MainWindowViewModel</c>'s designer graph and
     /// nothing ever disposes them, which is exactly why eviction is on a timer rather than on Dispose.
     /// </remarks>
     public void Dispose()

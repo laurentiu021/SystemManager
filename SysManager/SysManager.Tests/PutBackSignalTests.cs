@@ -68,10 +68,11 @@ public sealed class PutBackSignalTests
     }
 
     [Fact]
-    public async Task PerformanceMode_LeavesTheSettingsToACommandOfItsOwnThatIsRunning()
+    public async Task PerformanceMode_ReadsTheSettingsUnderACommandOfItsOwn_WithoutTakingItsBusyOrItsLine()
     {
-        // Each Apply reads the settings again when it ends, and a read under it would turn Busy off while it ran. The
-        // record is still read again: that part decides what Restore All offers.
+        // A read the usual way would turn Busy off while the command ran and write over its progress line. Not reading
+        // them at all would leave them as they were before for a command that ends without reading them itself. The
+        // record is read again too: that part decides what Restore All offers.
         var dir = Directory.CreateTempSubdirectory("PutBack_PerformanceBusy_");
         try
         {
@@ -86,12 +87,15 @@ public sealed class PutBackSignalTests
             vm.IsBusy = true;
             vm.StatusMessage = "Switching to High Performance…";
             Assert.True(service.DeleteSnapshot());
+            runner.ClearReceivedCalls();
             signal.Raise(UndoChangeKind.PerformanceMode);
             await vm.PutBackReload;
 
             Assert.True(vm.IsBusy);
             Assert.Equal("Switching to High Performance…", vm.StatusMessage);
             Assert.False(vm.HasSnapshot);
+            await runner.Received(1).RunProcessAsync("powercfg.exe", "/getactivescheme", Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>());
         }
         finally
         {
@@ -122,7 +126,8 @@ public sealed class PutBackSignalTests
             var refresh = vm.RefreshCommand.ExecuteAsync(null);
             Assert.True(vm.IsBusy);
             signal.Raise(UndoChangeKind.PerformanceMode);
-            await vm.PutBackReload;
+            // Bounded: a read run beside the one that is held would wait behind it, and fail here rather than hang.
+            await vm.PutBackReload.WaitAsync(TimeSpan.FromSeconds(30));
             Assert.Equal("Reading performance settings…", vm.StatusMessage);
 
             held.SetResult(0);
@@ -140,10 +145,9 @@ public sealed class PutBackSignalTests
     }
 
     [Fact]
-    public async Task PerformanceMode_LeavesTheSettingsToARead_ThatStartsAfterThePutBack()
+    public async Task PerformanceMode_UnderACommandOfItsOwn_KeepsTheCommandsLine_EvenWhenTheReadFails()
     {
-        // A command running when the settings went back reads them when it ends, and that read is after the put-back:
-        // it answers it, with no second read and no line about Undo Changes over the command's own.
+        // The command says how it went; a read under it that failed is only logged.
         var dir = Directory.CreateTempSubdirectory("PutBack_PerformanceCommandRunning_");
         try
         {
@@ -153,17 +157,16 @@ public sealed class PutBackSignalTests
             using var vm = new PerformanceViewModel(service, Substitute.For<IGamingProfileService>(), signal);
             await vm.InitializationComplete;
 
+            runner.RunProcessAsync("powercfg.exe", "/getactivescheme", Arg.Any<CancellationToken>(),
+                    Arg.Any<System.Text.Encoding?>())
+                .Returns(Task.FromException<int>(new InvalidOperationException("powercfg did not answer.")));
             vm.IsBusy = true;
+            vm.StatusMessage = "Switching to High Performance…";
             signal.Raise(UndoChangeKind.PerformanceMode);
             await vm.PutBackReload;
-            vm.IsBusy = false;
-            runner.ClearReceivedCalls();
 
-            await vm.RefreshCommand.ExecuteAsync(null);
-
-            Assert.Equal("Settings loaded.", vm.StatusMessage);
-            await runner.Received(1).RunProcessAsync("powercfg.exe", "/getactivescheme", Arg.Any<CancellationToken>(),
-                Arg.Any<System.Text.Encoding?>());
+            Assert.True(vm.IsBusy);
+            Assert.Equal("Switching to High Performance…", vm.StatusMessage);
         }
         finally
         {
@@ -390,7 +393,8 @@ public sealed class PutBackSignalTests
                     // the put-back.
                     if (Interlocked.Increment(ref reads) != 2) return TwoServices();
                     olderStarted.Set();
-                    older.Wait();
+                    // Bounded, so an assertion that throws before older.Set() cannot leave this thread parked.
+                    older.Wait(TimeSpan.FromSeconds(30));
                     return before;
                 });
             await vm.InitializationComplete;
@@ -398,7 +402,7 @@ public sealed class PutBackSignalTests
             var refresh = vm.RefreshCommand.ExecuteAsync(null);
             // Waited for rather than assumed: the two reads run on the thread pool, which may start them in either order,
             // and the put-back's must be the second one to start or it is the read that waits.
-            olderStarted.Wait();
+            Assert.True(olderStarted.Wait(TimeSpan.FromSeconds(30)), "the older read never started");
             signal.Raise(UndoChangeKind.Services);
             await vm.PutBackReload;
             older.Set();

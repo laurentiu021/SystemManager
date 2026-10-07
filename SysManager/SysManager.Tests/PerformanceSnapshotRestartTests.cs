@@ -159,9 +159,48 @@ public sealed class PerformanceSnapshotRestartTests
                 dialog.Received(1).Confirm(
                     Arg.Is<string>(message =>
                         message != null
-                        && message.Contains("• GPU → left as it is: the NVIDIA card this was recorded on is no longer in "
-                                            + "this PC", StringComparison.Ordinal)
+                        && message.Contains("• GPU → unchanged (SysManager no longer finds the NVIDIA card this was "
+                                            + "recorded on)", StringComparison.Ordinal)
                         && !message.Contains("reboot needed", StringComparison.Ordinal)),
+                    "Restore Original Settings — Confirm");
+            }
+            finally
+            {
+                DialogService.Instance = previousDialog;
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
+    {
+        // The restore leaves such a plan alone, so the question cannot promise one named "Unknown".
+        var dir = CreateTempDirectory();
+        try
+        {
+            var snapshot = ValidSnapshot() with { PowerPlanGuid = "", PowerPlanName = "Unknown" };
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(snapshot));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+            DialogService.Instance = dialog;
+            try
+            {
+                await vm.RestoreAllCommand.ExecuteAsync(null);
+
+                dialog.Received(1).Confirm(
+                    Arg.Is<string>(message =>
+                        message != null
+                        && message.Contains("• Power plan → unchanged (it could not be read when this was recorded)",
+                            StringComparison.Ordinal)),
                     "Restore Original Settings — Confirm");
             }
             finally

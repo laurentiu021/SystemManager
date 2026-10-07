@@ -3,34 +3,45 @@
 SysManager is a tabbed WPF desktop app on .NET 10, written in C# 14. It follows
 a standard MVVM layout with a thin service layer that wraps Windows APIs,
 PowerShell, and external CLIs (winget, Ookla `speedtest`). It's gamer-focused:
-network presets for CS2 / PUBG / Streaming and safe cleanup for Steam / Epic
-/ Battle.net / Riot / GOG / EA caches.
+network presets for CS2, PUBG, FACEIT and streaming plus a general one, and safe
+cleanup for Steam / Epic / Battle.net / Riot / GOG / EA caches.
 
 Built by [laurentiu021](https://github.com/laurentiu021) · MIT licensed.
 
 ## Solution layout
 
 ```
-SysManager/
-├── SysManager/                 # main WPF app
-│   ├── Data/                   # static data files (ProcessDescriptions.json)
-│   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
-│   ├── Services/               # Windows / PowerShell / CLI wrappers
-│   ├── ViewModels/             # one VM per tab + MainWindowViewModel
-│   ├── Views/                  # XAML views + code-behind, plus four shared controls:
-│   │                           #   AdminBanner (the elevation banner, 31 tabs)
-│   │                           #   EmptyState  (icon + title + message for an empty list)
-│   │                           #   DevelopmentBanner (the PREVIEW notice)
-│   │                           #   StatusFooter (progress bar + status line, 22 tabs)
-│   ├── Helpers/                # AdminHelper, converters, collections, parsers
-│   ├── Resources/              # icons and assets
-│   ├── App.xaml(.cs)
-│   ├── MainWindow.xaml(.cs)
-│   ├── ServiceRegistration.cs  # DI container configuration
-│   └── SysManager.csproj
-├── SysManager.Tests/           # xUnit unit tests (CI-safe, no system deps)
-├── SysManager.IntegrationTests/# xUnit integration tests (local only)
-└── SysManager.UITests/         # FlaUI UI-automation tests
+SystemManager/                      # the repository
+├── SysManager/                     # the solution: SysManager.sln, Directory.Build.props, and
+│   │                               #   Directory.Packages.props, which pins every package version
+│   ├── SysManager/                 # main WPF app
+│   │   ├── Data/                   # static data files (ProcessDescriptions.json)
+│   │   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
+│   │   ├── Services/               # Windows / PowerShell / CLI wrappers
+│   │   ├── ViewModels/             # one VM per tab, MainWindowViewModel, and the row and chart
+│   │   │                           #   view-models the tabs build (NavItem, UndoChangeRow, …)
+│   │   ├── Views/                  # XAML views + code-behind, plus six shared controls:
+│   │   │                           #   AdminBanner (the elevation banner, 31 tabs)
+│   │   │                           #   EmptyState  (icon + title + message for an empty list)
+│   │   │                           #   DevelopmentBanner (the PREVIEW notice)
+│   │   │                           #   StatusFooter (progress bar + status line, 22 tabs)
+│   │   │                           #   ConsoleView (the live output console, five tabs)
+│   │   │                           #   ThemePopup (the Appearance panel)
+│   │   ├── Helpers/                # AdminHelper, converters, collections, parsers, the signature
+│   │   │                           #   and path checks
+│   │   ├── Resources/              # icons and assets
+│   │   ├── App.xaml(.cs), MainWindow.xaml(.cs)
+│   │   ├── ServiceRegistration.cs  # DI container configuration
+│   │   ├── AssemblyInfo.cs         # InternalsVisibleTo for the two test projects that need it
+│   │   ├── app.manifest
+│   │   └── SysManager.csproj
+│   ├── SysManager.Tests/           # xUnit unit tests (CI-safe, no system deps)
+│   ├── SysManager.IntegrationTests/# xUnit integration tests (CI, non-blocking)
+│   └── SysManager.UITests/         # FlaUI UI-automation tests (CI, non-blocking)
+├── docs/                           # screenshots, GIFs, manual-smoke.ps1
+├── .github/                        # workflows, issue and PR templates, Dependabot
+├── global.json                     # SDK pin, and the Microsoft.Testing.Platform runner
+└── publish.ps1                     # the release build
 ```
 
 ## Tabs (view models)
@@ -44,34 +55,40 @@ leaves carry none, so the icon column belongs to the twelve headings rather than
 Collapsed groups show a child count badge, a written two-line subtitle passed to `Group()` and asserted to
 fit that budget, and a tooltip still generated from the child labels. Exactly one group starts expanded —
 `InitiallyExpandedGroupId` (`grp-cleanup`) — set in the same loop that adds the groups; `#1519`'s arithmetic
-is why it is one and not two, and `ExactlyOneSidebarGroup_OpensWithTheApp` asserts all three of "the
-mechanism goes through the constant", "the constant names a group that exists", and "nothing else expands a
-group at startup". It costs no view-model: the child rows bind only `NavItem`'s own properties, none of
-which touches `Content`.
+is why it is one and not two. `MainWindowViewModelTests.NavGroups_ExactlyTheCleanupGroupStartsExpanded`
+(integration) builds a real `MainWindowViewModel` and asserts that exactly one group opens and that it is the
+constant's, which also catches a constant naming a group that no longer exists;
+`ArchitectureTests.TheStartupExpansion_GoesThroughTheNamedConstant` checks that the source goes through the
+constant rather than a repeated literal. It costs no view-model: the child rows bind only `NavItem`'s own
+properties, none of which touches `Content`.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
 `NavItem` also mirrors the tab's `IsBusy`, `Progress` and `IsProgressIndeterminate` out of its view-model,
 and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's pair into the Windows taskbar
 button's `ProgressState`/`ProgressValue` (bound in `MainWindow.xaml`). Both progress signals are read,
-not one: 37 view-models set the indeterminate flag and 10 set a percentage, and Deep Cleanup, File
-Shredder and Speed Test — the three longest operations — are in the second group only. The mapping reads
+not one: 37 view-models set the indeterminate flag and 7 set a percentage. Deep Cleanup, File Shredder
+and Speed Test set neither — they report progress through properties of their own — so their work does
+not reach the taskbar yet. The mapping reads
 the MIRRORED values and never `NavItem.Content`, because touching Content materialises the view-model and
 would rebuild every lazy tab the shell asked about.
-The flat Dashboard row and grouped leaf rows are invokable `SidebarNavButton`
-controls. Their inner visuals consume selection through the shared `SidebarNavRow`,
+The flat Dashboard row and grouped leaf rows are invokable buttons styled
+`SidebarNavButton`. Their inner visuals consume selection through the shared `SidebarNavRow`,
 `SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes
 the same state to UI Automation. Group headers are keyboard-focusable toggles;
 collapsed content is disabled so visually hidden leaves cannot receive focus.
 
 Keyboard focus is drawn by ONE shared resource, `FocusRing` in `App.xaml`, applied through
-`FocusVisualStyle` on every style whose template replaces the default one — a custom template
-otherwise takes the framework's focus adorner with it. It is a two-`Rectangle` adorner (white inner
+`FocusVisualStyle` on the button, toggle and chip styles whose template replaces the default one — a
+custom template otherwise takes the framework's focus adorner with it. The ComboBox and its items, the
+DataGrid column headers and the sidebar's group headers do not set it. It is a two-`Rectangle` adorner (white inner
 stroke, near-black outer) rather than a themed border, because the ring must stay visible on
 `PrimaryButton`'s accent fill, `DangerButton`'s red, a raised grey and a card surface; any single
 colour, accent included, falls to 1.00:1 against at least one of those.
 `ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
-`ButtonBase` carries `MinWidth`/`MinHeight` of 28, and all five derived styles inherit it. Without a floor a
+`ButtonBase` carries `MinWidth`/`MinHeight` of 28, and the six styles derived from it in `App.xaml`
+(Primary, Secondary, Ghost, DangerGhost, Admin and Danger) inherit it, as does `SidebarNavButton` in
+`MainWindow.xaml`. Without a floor a
 button was exactly its padding plus its content, and many trim their padding to fit a compact row or toolbar.
 Every one of the 110 buttons in the views naming an explicit `Padding` was rendered on the STA thread with its
 own style, padding, font size and label: **30 measured under WCAG 2.5.8 AA's 24 × 24**, across 16 files — 26
@@ -81,9 +98,10 @@ at 20.2 × 19.3, which is the smallest destructive target in the app, and the si
 
 28 rather than 24 because a floor at the threshold leaves nothing for a fractional DPI scale, and because
 28 × 28 is already the size of the sidebar footer chips. The floor also **clamps an explicit size upward** —
-WPF resolves a size as `Max(MinWidth, Min(MaxWidth, Width))` — so the clear-search button's `Width="20"` no
-longer wins, and the reserved right padding on the TextBox it overlays had to grow from 22 to 32 with it. That
-is the one knock-on the change had, and it was found by measuring rather than on screen.
+WPF resolves a size as `Max(MinWidth, Min(MaxWidth, Width))` — so the clear-search button, which then carried
+`Width="20"`, came out 28 wide, and the reserved right padding on the TextBox it overlays had to grow from 22 to
+32 with it. That was the one knock-on the change had, found by measuring rather than on screen; the explicit
+width has since been removed.
 
 `SysManager.IntegrationTests.HitTargetSizeTests` **measures** rather than reading the setters — a test
 asserting `MinWidth` would pass while a derived style, a template or a call-site `Padding` made the rendered
@@ -91,16 +109,16 @@ box smaller, and the rendered box is what a user has to hit. Its floor is the WC
 28 the style sets, so a deliberate rise to 32 does not fail a guard meant to catch a regression. Two companion
 tests bound the cost: one asserts the ordinary buttons are still sized by their content, since a minimum is
 only free while it does not reshape what was already large enough; the other pins the `Max(MinWidth, Width)`
-resolution, because the intuitive belief is the opposite and one button in the shell depends on the answer.
+resolution, because the intuitive belief is the opposite one.
 
 The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
 `SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` (11). **Numbers**: `MetricHero` (30),
 `MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16). Every rung except `Display`
 was added for a size views were *already* rendering with raw `FontSize` attributes, so adopting one has
 never changed how anything looks — only where the number comes from. `Body` is the largest of those: 13 is
-what the app writes in, 54 TextBlocks set it by hand, and having no name for it is why a contributor
-reaches for the raw value (#1634). `Heading` was restored alongside its first real user — the sidebar
-wordmark — having been deleted once for having none (#1630).
+what the app writes in, 54 TextBlocks set it by hand before the rung existed, and having no name for it was
+why a contributor reached for the raw value (#1634). `Heading` was restored alongside its first real user —
+the sidebar wordmark — having been deleted once for having none (#1630).
 
 `Heading` and `MetricSmall` share a size and are deliberately separate: one is text, the other a number,
 and System Logs' severity counts take the metric one for that reason. Two 16/SemiBold headings on DNS &
@@ -155,16 +173,16 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
 | System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `UndoChangesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
-| Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
-| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `SettingsWatchdogViewModel` |
+| Gaming & Profiles | `GamingProfileViewModel` · `StandbyMemoryViewModel` · `TimerResolutionViewModel` · `CpuAffinityViewModel` · `DisplayProfileViewModel` |
+| Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `SettingsWatchdogViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
 | Storage & Files | `DiskAnalyzerViewModel` · `LargeFilesViewModel` · `DuplicateFileViewModel` · `FileLockViewModel` |
 | Network | `PingViewModel` · `TracerouteViewModel` · `SpeedTestViewModel` · `BandwidthMonitorViewModel` · `NetworkRepairViewModel` (shared: `NetworkSharedState`) · `DnsHostsViewModel` |
-| Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `UninstallerViewModel` |
+| Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `AppAlertsViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` |
 | Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `AudioMixerViewModel` · `NotificationBlockerViewModel` |
 | Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
-| Advanced | `ProfileViewModel` · `EnvironmentVariablesViewModel` · `CliInterfaceViewModel` |
+| Advanced | `ProfileViewModel` · `CliInterfaceViewModel` · `EnvironmentVariablesViewModel` |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
   temperatures (LibreHardwareMonitor + NvAPIWrapper), storage overview, system
@@ -173,7 +191,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   and recent activity log. IsActive pattern pauses polling when tab not visible.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
-- `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk.
+- `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
+  a link to the maker's support site.
 - `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list.
 - `LargeFilesViewModel` — read-only biggest-files listing for a chosen folder or drive. Split out of
@@ -188,15 +207,18 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   `Map` draws the same entries as blocks; `ShowMap` is remembered through `DiskAnalyzerPreferenceService`.
 - `DiskTreemap` — the Disk Analyzer's map: the list's entries as `TreemapTile` blocks, laid out by
   `Helpers/TreemapLayout` for the size the view reports through `Helpers/SizeObserver`. Folders too small for their
-  name, and the loose files, merge into one "Other" block. Blocks are the theme's accent, lighter for smaller ones,
-  with `ThemeService.OnColor` choosing the text, and are rebuilt on a theme change.
+  name, and the loose files, merge into one grey "Other" block. The other blocks are the theme's accent, lighter
+  for smaller ones, with `ThemeService.OnColor` choosing the text, and are rebuilt on a theme change.
 - `ProcessManagerViewModel` — running processes with kill, filter, sort. The kill path has three
   tiers, because one message cannot be true for all of them: `BootCriticalProcesses` (13 names) is
   refused outright, `HighConsequenceProcesses` (Defender's engine, Windows Installer and the servicing
   processes) is confirmed with a prompt naming the real damage, and any other Windows component gets
   the "a feature may look broken until you sign out" warning. Both sets are matched by process NAME,
   not by the description database's `safety` field — that field is provenance, and treating it as
-  criticality is what made the app refuse to end Notepad while claiming a BSOD.
+  criticality is what made the app refuse to end Notepad while claiming a BSOD. Kill passes the listed
+  start time with the PID, so a process that closed while the confirmation was open, and whose ID Windows
+  gave to another program, is reported as already closed and left alone; SysManager's own process is
+  refused.
 - `BatteryHealthViewModel` — charge %, health %, wear, cycle count via WMI. A failed read sets `ReadFailed` and says so rather than "no battery"; a failed refresh keeps the last reading.
   After the battery read, and only when there is a battery, it reads the capacity history through
   `IBatteryReportService` into `CapacityChart`, `WearVerdict` and the card's messages; a failed history read after
@@ -208,7 +230,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
-- `TracerouteViewModel` — auto-traceroute + manual trace with own Start/Stop.
+- `TracerouteViewModel` — auto-traceroute + manual trace. Its Start/Stop drive the auto-trace monitor in
+  `NetworkSharedState`, which traces the Ping tab's targets plus the host typed here.
 - `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests. `DescribeFinished` writes the line under a
   finished run, naming an upload or ping that was not measured. Its internal constructor takes the engine, so a
   test runs it without a network. `OoklaTrend` and `HttpTrend` are redrawn from their history list on every
@@ -217,7 +240,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   the sentence `SpeedTrendAnalyzer` writes. Builds its SkiaSharp paints once, repaints them through
   `ChartTheme` on a theme change, and releases them and the theme subscription in `Dispose`.
 - `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
-- `NetworkSharedState` — shared targets, buffers, pinger, tracer, health for all network VMs.
+- `NetworkSharedState` — shared targets, buffers, pinger, tracer and health verdict for the Ping, Traceroute,
+  Speed Test and Network Repair view-models.
 - `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory via Win32_PnPSignedDriver. `ReadScan` reads the exit code together with the output: a failed scan keeps the last list and says so (`ListFailed`), and an error part-way keeps what was listed, marked incomplete.
 - `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which
@@ -237,7 +261,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   `Grouping` lists the switches by topic or by reach (`PrivacyToggle.Reach`, from the hive), with
   `GroupByReach` building the "Just you" and "Everyone on this PC" sections: the grouping the Tweaks Hub
   tab added over this one, which listed exactly these switches and was merged in (#1517). As an
-  `ISearchDestination` it opens by reach when the sidebar search that found it said "tweaks". Each moved
+  `ISearchDestination` it opens by reach when the sidebar search that found it said "tweak" or "tune
+  windows", the searches that used to find Tweaks Hub. Each moved
   switch is `IsPending`, and `ApplyText` carries the count. Privacy choices imported from a profile
   arrive through `IPrivacyChoicesHandoff` and are staged as pending changes, never written: when the
   tab is shown (`IsActive`, set by `MainWindowViewModel.SetActive`) or when a load of its toggles
@@ -262,7 +287,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   everything".
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
-- `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
+- `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.
@@ -271,7 +296,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. Holds TWO cancellation sources: one for the task-list scan (driven by the Cancel button) and one for the per-selection run-info query, which each new selection supersedes so arrow-keying the grid cannot queue a PowerShell round-trip per row. Enable/disable is deliberately NOT cancellable — its script writes then reads back, so a cancel between the two would leave the task toggled while the grid showed the old state.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
-- `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` on the UI thread was the 1.65.11 stutter fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back. The reconcile writes its app count and the device all sound plays through via `ViewModelBase.ShowRefreshStatus`, so it never replaces an outcome on the status line. Above the rows, `PcVolumeViewModel` is the This PC card (#1588): the whole PC's volume, mute and level — read on the same one-second pass and metered on the same 50&#160;ms tick, with the row's echo guard and drag hold — and a picker that moves all sound to another device, followed at once by a fresh read of the devices and the apps. Where the switch cannot bind, the card names the device and offers Windows' sound settings. The view's slider handlers reach both through `IAdjustableVolume`. Neither the PC volume nor the device is part of a preset.
+- `AudioMixerViewModel` — per-app volume mixer (Volume Control tab): lists apps playing on the default render device with a volume slider, mute toggle, and a live peak meter. Two loops drive it, both idle while the tab is hidden (`IsActive`) and both sampling off the UI thread: membership reconciles on a ~1&#160;s cadence, and the meters refresh every 50&#160;ms via one batched `GetPeaks` call per tick. The peak loop *parks* on an activation gate while hidden rather than ticking and skipping — at 50&#160;ms a skip-check still queues 20 Dispatcher continuations a second. (Per-row `GetPeak` calls on the UI thread were the 1.65.11 stutter; one batched call off it was the fix.) Rows reconcile in place by session id (a wholesale replace would drop a slider mid-drag). Adds per-app output-device routing (via the guarded `AudioPolicyConfigFactory`; falls back to guiding the user to Windows sound settings when the OS lacks the interface) and named volume presets (persisted by `VolumePresetService`, keyed by exe name so they re-apply across restarts). Row VMs (`AudioSessionRowViewModel`) propagate volume/mute/route to the service, with a re-entrancy guard so an external change surfaced by a refresh is not echoed back. The reconcile writes its app count and the device all sound plays through via `ViewModelBase.ShowRefreshStatus`, so it never replaces an outcome on the status line. Above the rows, `PcVolumeViewModel` is the This PC card (#1588): the whole PC's volume, mute and level — read on the same one-second pass and metered on the same 50&#160;ms tick, with the row's echo guard and drag hold — and a picker that moves all sound to another device, followed at once by a fresh read of the devices and the apps. Where the switch cannot bind, the card names the device and offers Windows' sound settings. The view's slider handlers reach both through `IAdjustableVolume`. Neither the PC volume nor the device is part of a preset.
 - `StandbyMemoryViewModel` — live memory stats (2s poll) with on-demand and threshold-based auto-purge of the Windows standby list; purge needs admin. Built at startup, so a saved auto-purge watches from launch without the tab being opened.
 - `GamingProfileViewModel` — one-click game mode (Gaming Profile tab, Preview): gathers the desired reversible optimizations plus an optional running-game target and delegates to `IGamingProfileService` to apply/revert them as a unit. Reports the batch outcome honestly (applied / needs-admin / failed), seeds its toggles from the last-used config, and offers to restore a leftover session on startup (crash recovery). The game target carries the listed start time, the selection survives a refresh only for the same process, and a game that had closed is refused with a refresh of the list (#2559). A game that closed while game mode was starting is reported, with anything that could not be restored, and the list is refreshed (#2563). Fully reversible; killing background apps and named per-game profiles are intentionally out of scope for the preview.
 - `ProfileViewModel` — export/import SysManager's config as a portable JSON profile with selective sections and version checking. The file sections are whatever `ProfileService.Catalog` lists (nine today: theme, speed-test history, update-check preference, dark-mode schedule, gaming profiles, volume presets, close-button behaviour, standby-memory preference, app-icon fetching), and a section is skipped on export when its file does not exist yet. A tenth section, the Privacy & Telemetry choices, is listed once a protection is on. Export passes the ticked keys to `ProfileService.BuildProfile`, which reads the files and the toggles at that moment, and the list is re-read whenever the tab comes back on screen (`IsActive`, set by `MainWindowViewModel.SetActive`), so the tab never exports contents it read earlier in the session. Import writes the file sections only; the privacy choices are read by `ProfileService.ReadPrivacyChoices`, left in `IPrivacyChoicesHandoff`, and the user is taken to the Privacy & Telemetry tab through `INavigationService` to review them (#1530).
@@ -279,6 +304,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `BrowserCleanerViewModel` — scan per-browser cache/history/cookies/sessions with sizes and clean the selected categories; cookies/sessions default unticked. Its second half, switched with the same pills as Privacy & Telemetry's grouping, is the Extensions view (#1526): "Look for extensions" runs `IBrowserExtensionService.ScanAsync`, builds one `ExtensionGroupViewModel` per profile (rows worded by `ExtensionPresenter`, icons decoded and frozen off the UI thread) and counts them in the toolbar; "Manage in …" opens the browser on its own extensions page and puts the page on the clipboard, since whether it opened cannot be seen, and while SysManager runs as administrator it starts nothing and says why. It never changes a browser. A sidebar search for "extensions", "add-ons" or "browser ads" opens this half (`ISearchDestination`), and F5 runs whichever half is shown.
 - `EdgeOneDriveViewModel` — reversibly de-integrate Edge and OneDrive (Edge/OneDrive Remover tab): OneDrive is fully removed per-user (no admin) with restore; Edge is only disabled & de-integrated (background/startup-boost policy + auto-update tasks, admin-gated) with restore — never uninstalled; guides the user to Windows settings to change the default browser. Every action confirms first and reports its honest outcome (success / needs-admin / not-applicable).
 - `PrivacyMonitorViewModel` — read-only camera/mic/location access history from the consent store; hands off to Windows settings to change permissions. `Describe` and `DescribeEmpty` name only the capabilities that were read; a read that got nothing keeps the previous list.
+- `ResourceHistoryViewModel` — draws the samples the always-on `ResourceHistoryService` sampler records, for the
+  chosen range and downsampled for the chart; sets the retention and exports the visible range as CSV.
+- `SettingsWatchdogViewModel` — saves a baseline of the watched settings (asking first, and keeping the old file
+  aside, when the saved one cannot be read), lists what has drifted since, exports the drift as CSV, and restores
+  every drift `SettingDrift.CanWriteBack` allows after one confirmation. Undo Changes' row for it opens this tab.
+- `NotificationBlockerViewModel` — lists the apps that have shown notifications with a per-app mute and the master
+  switch; flips stay pending until Apply, which confirms and writes them, or Discard.
 - `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. A stored range is loaded through a function its internal constructor takes, so a test decides when the load finishes; a load that finishes after `Dispose` changes nothing, like a poll that does. The poll writes its app count through `ViewModelBase.ShowRefreshStatus`, so an export, a refusal or a loaded range stays on the status line. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
@@ -303,7 +335,8 @@ Dashboard's quick test; it forwards to the concrete singleton the network tabs t
 (NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry and the
 profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IUndoChangesService` (UndoChangesService, the Undo
 Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Changes put its change back),
-`IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
+`IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
+`ISpeedTestService`, forwards to the concrete singleton.
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
 something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and
@@ -314,14 +347,14 @@ narrowed to the service that slowed boot. This replaced a
 `Application.Current.MainWindow.DataContext as MainWindowViewModel` lookup in `DashboardViewModel`;
 `NoViewModelReachesTheShellThroughTheLiveWindow` stops that returning.
 A tab opened from the sidebar search that implements `ISearchDestination` is told what was searched for,
-which is how a search for "tweaks" opens Privacy & Telemetry grouped by reach (#1517), and one for
-"extensions" or "browser ads" opens Browser Cleaner on its Extensions view (#1526).
+which is how a search for "tweaks" or "tune windows" opens Privacy & Telemetry grouped by reach (#1517),
+and one for "extensions" or "browser ads" opens Browser Cleaner on its Extensions view (#1526).
 
 Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
 
 - `IDialogService` — consumed through the static `DialogService.Instance`, which tests swap for a
-  stub. That is why the swapping tests must sit in the serialized `DialogService` xUnit collection;
+  stub. That is why the swapping tests must sit in the serialized `ProcessWideStatics` xUnit collection;
   a fitness function in `ArchitectureTests` enforces it.
 - `IBandwidthMonitorService` — the one seam with two shipping implementations
   (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
@@ -392,7 +425,8 @@ Key services:
   state, the System Report gets its own `EventLogService` (a factory registration) rather than
   the Logs tab's, so neither can be told the other's answer. `EventExplainer.TryExplain` returns
   the written explanation for a known (source, ID) only, which is what the report uses.
-- `HealthAnalyzer` — raw SMART / ping data into verdict pills.
+- `HealthAnalyzer` — the Ping tab's per-target latency, jitter and loss into one network verdict: is it the PC,
+  the ISP or the server. Pure and static; `NetworkSharedState` calls it.
 - `SpeedVerdictAnalyzer` — a speed-test result into a plain-English verdict
   ("Fast connection", what that allows) plus a comparison against the previous
   run on the same engine. Pure and static like `HealthAnalyzer`, so the
@@ -412,14 +446,15 @@ Key services:
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by
   `SystemHealthViewModel`.
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
-  Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Non-destructive. Behind `ITuneUpService` for
+  Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Deletes the temp files outright and empties the
+  Recycle Bin, both behind the Dashboard's confirmation. Behind `ITuneUpService` for
   the Dashboard, whose tests run both quick actions against a substitute. The temp sweep itself is also a
   static method, shared with the Cleanup tab and the CLI. The shortcut, disk and vitals checks are internal
   static methods handed the call to make. Each returns null when it could not run, which the result lists in
   `TuneUpResult.NotChecked`, so a failed check is never counted as a passed one.
-- `HealthScoreService` — aggregates disk health, RAM, uptime, and battery
-  wear into a single 0–100 score with color-coded verdict and recommendations. `OverallScore` weights the
-  battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
+- `HealthScoreService` — aggregates disk health, free space on the system drive (a quarter of the score), RAM,
+  uptime, and battery wear into a single 0–100 score with color-coded verdict and recommendations.
+  `OverallScore` weights the battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
   desktop's, and named in `UnavailableComponents`. `ComputeAsync` gathers and then calls the static
   `Evaluate`, which scores evidence already in hand; the System Report calls `Evaluate` with the snapshot and
   disks it read itself, so the report and the Dashboard share one copy of the scoring.
@@ -447,9 +482,9 @@ Key services:
   interface because the work used to sit inline in `CleanupViewModel`, whose constructor fires it and
   forgets it: building the view-model started a recursive walk of both locations, 30 times over in one
   unit-test file, and one test then asserted the walk finished inside fifteen seconds.
-- `LargeFileScanner` — read-only biggest-files discovery; skips WinSxS and
-  System Volume Information as subtrees, and pagefile/hiberfil/swapfile by exact
-  file name. The two are separate lists because the subtree one is only ever
+- `LargeFileScanner` — read-only biggest-files discovery; skips `$Recycle.Bin`, System Volume Information,
+  `Windows\WinSxS`, `Windows\System32\config` and `Windows\CSC` as subtrees, and pagefile/hiberfil/swapfile by
+  exact file name. The two are separate lists because the subtree one is only ever
   asked about a directory, which is why the three file names sat in it unread.
 - `UpdateService` (`IUpdateService`) — GitHub Releases API client with explicit
   `SocketsHttpHandler`, retry, and surfaced error messages. The seam carries every
@@ -568,9 +603,10 @@ Key services:
   calls rather than one because both fail-closed callers compare the subject BEFORE building
   a chain, and a single "inspect" would add a revocation fetch on the path where the subject
   already failed.
-  **Its only remaining callers are those two gates.** The informational columns used it and
-  moved off it, because an offline managed chain cannot answer for an arbitrary file: measured
-  over 82 running process images it verified 1 and reported failure for 47, on
+  **Its chain validation has only those two gates as callers**, and `SignatureVerdict` calls
+  `ReadSigner` for the publisher's name alone. The informational columns used it for their
+  verdict and moved off it, because an offline managed chain cannot answer for an arbitrary
+  file: measured over 82 running process images it verified 1 and reported failure for 47, on
   `RevocationStatusUnknown` (46 of 48, no cached CRL) and `PartialChain` (29, intermediate not
   local). Loosening the flags enough to pass means `AllowUnknownCertificateAuthority`, which
   accepts any certificate authority and verifies nothing.
@@ -653,7 +689,7 @@ Key services:
   so failing to read one costs a phrase in a tooltip, while the verdict decides a colour. Every
   phrasing here has a form that works with no name, which is what lets the name be optional.
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
-  via `Get-WindowsOptionalFeature` / `Enable-WindowsOptionalFeature` PowerShell. All three
+  via `Get-`, `Enable-` and `Disable-WindowsOptionalFeature`, each in its own `powershell.exe`. All three
   need administrator rights, listing included, and every one of them checks the exit code:
   an unelevated list request fails rather than returning an empty list.
 - `UninstallerService` — winget-based uninstall + registry UninstallString
@@ -781,8 +817,9 @@ Key services:
   Deep Cleanup takes it in addition to `Disk` when one of its two Windows Update caches is ticked: both sit
   inside `SoftwareDistribution`, which an update install reads from and Reset Windows Update renames. It gives
   it back after the delete, before the read-only rescan (#2510).
-- `ProcessDescriptionService` — enriches process entries with friendly
-  descriptions from file version info and known-process database.
+- `ProcessDescriptionService` — the built-in process database (`ProcessDescriptions.json`, an embedded
+  resource) behind the static `Instance`: `Lookup` gives a process's plain-language description, category and
+  `ProcessSafety`, for Process Manager and Startup Manager.
 - `SpeedTestHistoryService` — persists speed test results to JSON for
   historical charting and trend analysis. One instance, shared by the Speed Test tab and the
   Dashboard's quick test; its `Saved` event is how a result recorded from the Dashboard reaches a
@@ -797,8 +834,8 @@ Key services:
   null, `FindAsync` says it is not `Readable` rather than "never scanned", and `SaveAsync` writes
   nothing over it. Machine-specific by nature (absolute paths + sizes on this disk), so it
   is deliberately absent from `ProfileService.Catalog` and pinned OUT by a test.
-- `ShortcutCleanerService` — scans Start Menu and Desktop for broken
-  shortcuts (dead targets) and offers safe removal.
+- `ShortcutCleanerService` — scans the Desktop and Public Desktop, both Start Menus, Quick Launch and Recent
+  Items for broken shortcuts (dead targets) and offers safe removal. A network target is never judged gone.
 - `BulkInstallerService` — installs apps via winget in batch with
   per-item progress and error reporting.
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
@@ -885,9 +922,10 @@ Key services:
   explanation where `EventExplainer` has one and never the event's own message. The log read
   has a 15-second budget; a log that could not be read is said so, never reported as clean.
   `GenerateDataAsync` applies `WithoutMachineIdentifiers` before returning, so **every**
-  format — text, HTML, JSON, the on-screen report and the diagnostics bundle — drops each
-  adapter's MAC and masks its IPv4 host part. That choke point is the design: redaction used
-  to live in a separate `GenerateSharableReportAsync` that only the bundle called, so the
+  format — text, HTML, JSON, the on-screen report and the diagnostics bundle — replaces each
+  adapter's MAC with "(not included)" and masks the last two parts of its IPv4 address. That
+  choke point is the design: redaction used to live in a separate `GenerateSharableReportAsync`
+  that only the bundle called, so the
   four export commands and the tab itself carried the full values (#2352). The separate
   method is gone — one path cannot disagree with itself, and a format added later inherits
   the protection instead of having to remember it.
@@ -906,9 +944,11 @@ Key services:
   internal seam that takes an already-gathered report, so the packaging is unit
   testable while the redaction decision stays on the one path a caller can reach.
   `SysManager.IntegrationTests.DiagnosticsBundleRedactionTests` asserts against
-  this machine's real adapters — and asserts the FULL report still carries them,
-  so "nothing found" cannot pass for "something was removed". Neither of its
-  failure messages prints a value, because they reach a public CI log.
+  this machine's real adapters that the bundled report carries none of their
+  hardware addresses or full IPv4 addresses, and that the report shows the redaction
+  markers — `(not included)` where a MAC would be, `.x.x` in a masked address — so
+  "nothing found" cannot pass for "something was removed". No failure message prints
+  a value, because they reach a public CI log.
 - `EnvironmentVariableService`: reads/writes User and Machine environment
   variables directly through HKCU/HKLM so `REG_EXPAND_SZ` values round-trip
   without flattening; `BroadcastSettingChange` sends `WM_SETTINGCHANGE` once,
@@ -994,7 +1034,8 @@ Key services:
   would run elevated too, and what `chrome.exe` resolves to is a per-user setting. Opera's channels share one
   program name, so the list names their page instead, and Firefox is started only for the profile it opens,
   as its `profiles.ini` says. Every Chromium profile, `Default` included, is opened with its own folder, and a
-  browser listed more than once names the profile in the status. A profile, data folder or Firefox profiles
+  browser listed more than once names the profile in the status, as does a Firefox profile other than the one
+  Firefox starts in. A profile, data folder or Firefox profiles
   folder that is a link is not followed: it is listed as one whose extensions could not be read, and says it
   sits behind a link.
 - `ChromiumExtensionReader` — one Chromium profile's extensions: each id folder's newest version's
@@ -1055,9 +1096,10 @@ Key services:
   not), so a folder is checked through its first `MaxFolderFiles` (1,000) files, found with
   `SafeFileWalk`, and the returned `FileLockScan` says how many were checked and whether
   that was all. A failed check is null rather than an empty list, and a path that does not
-  exist throws `FileNotFoundException`. The one place we use classic `[DllImport]`
-  (not `[LibraryImport]`): `RM_PROCESS_INFO` has inline `ByValTStr` buffers and
-  `RmStartSession` needs a `StringBuilder`, neither supported by the source generator.
+  exist throws `FileNotFoundException`. It uses classic `[DllImport]` (not `[LibraryImport]`):
+  `RM_PROCESS_INFO` has inline `ByValTStr` buffers and `RmStartSession` needs a `StringBuilder`,
+  neither supported by the source generator. Six other files use it too — 13 declarations in
+  all, against 48 `[LibraryImport]` elsewhere.
 - `DisplayProfileService` — `user32` display APIs (`EnumDisplayDevicesW` /
   `EnumDisplaySettingsW` / `ChangeDisplaySettingsExW`) to read and switch resolution +
   refresh rate. Session-only apply (reverts on reboot); validated with `CDS_TEST` first.
@@ -1070,17 +1112,18 @@ Key services:
   `TrySetPriority` and `HasExited` take it with the ID: a process with that ID that started
   at another time is not the one listed (#2514, #2559).
 - `AudioMixerService` (`IAudioMixerService`) — per-app volume/mute/peak on the default
-  render endpoint via Windows Core Audio, using raw `[ComImport]` interop for the seven
-  documented interfaces (`IMMDeviceEnumerator` → `IAudioSessionManager2` →
-  `IAudioSessionEnumerator` → `IAudioSessionControl2` / `ISimpleAudioVolume` /
-  `IAudioMeterInformation`, and `IAudioEndpointVolume`) — no NuGet audio dependency, keeping
-  the portable single .exe.
+  render endpoint via Windows Core Audio, using raw `[ComImport]` interop for ten documented
+  interfaces (`IMMDeviceEnumerator`, `IMMDevice`, `IMMDeviceCollection` and `IPropertyStore` for the
+  devices; `IAudioSessionManager2` → `IAudioSessionEnumerator` → `IAudioSessionControl2` /
+  `ISimpleAudioVolume` / `IAudioMeterInformation` for the apps; and `IAudioEndpointVolume`) — no
+  NuGet audio dependency, keeping the portable single .exe.
   Groups sessions by owning process (Volume Mixer mental model), resolves name/icon from
   the PID (fallback-safe for protected processes), drops expired sessions, and flags the
   system-sounds pseudo-session. Holds the manager/enumerator handle open across polls and
-  releases every COM RCW deterministically in `Dispose` (never finalizer-only, since the
-  tab is created/destroyed on navigation). All COM types stay inside the concrete class;
-  the interface exposes only plain models so the VM unit-tests with no audio hardware. Also
+  releases every COM RCW deterministically in `Dispose` (never finalizer-only). It is a
+  singleton, built when the Volume Control tab is first opened and disposed with the container.
+  All COM types stay inside the concrete class; the interface exposes only plain models so the VM
+  unit-tests with no audio hardware. Also
   enumerates render devices (documented device API, with each device's kind from its documented
   form factor) and performs per-app output routing via the UNDOCUMENTED `IAudioPolicyConfig`
   (see `AudioPolicyConfigFactory`), feature-detected so a build without it degrades to the
@@ -1120,7 +1163,8 @@ Key services:
   unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
   value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
   app the user wanted kept in the tray.
-- `UpdateCheckPreferenceService` — gates the app's only self-initiated network call. Persists
+- `UpdateCheckPreferenceService` — gates the startup version check, one of the two network calls the app
+  makes on its own (the other is the Dashboard's `winget upgrade` alert, which has no switch yet). Persists
   whether the startup version check may run, plus when it last ran, as JSON under
   `%AppData%\SysManager\update-check.json` (Roaming, like `theme.json`: a stated preference should
   follow the user between machines). The check used to be hardcoded on with no setting and no
@@ -1174,11 +1218,11 @@ Key services:
   read DELETES the marker, so `DashboardViewModel` takes it as a REQUIRED constructor argument
   rather than one defaulting to `new CrashMarkerService()` — the convenience default resolved the real
   profile, so every test that built the ViewModel consumed a genuine crash report before the user was
-  ever shown it. A destructive read is exactly where an optional dependency must not be optional. The
-  read DELETES the marker, so one crash notifies exactly once; markers older than 7 days, or
-  future-dated ones (clock change, file copied from another machine), are dropped. It carries no
-  stack trace and no paths — unlike the log, this file is not scrubbed of the user name, and it
-  exists to answer "did the last run crash?", not to duplicate the log. Never written from `OnUi`,
+  ever shown it. A destructive read is exactly where an optional dependency must not be optional. One
+  crash therefore notifies exactly once; markers older than 7 days, or future-dated ones (clock change,
+  file copied from another machine), are dropped. It carries no stack trace — only the exception's type
+  and message, the message as written, so a path inside it is not scrubbed of the user name the way the
+  log is. It exists to answer "did the last run crash?", not to duplicate the log. Never written from `OnUi`,
   which handles the exception and keeps running. Same shape as the persisted-preference services
   above: injectable directory, pure unit-tested `Parse`, file IO that never throws.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
@@ -1243,11 +1287,13 @@ Key services:
   Device Manager, …) via their `control`/`*.cpl`/`*.msc` commands. The catalog is
   hard-coded and `Launch` re-validates catalog membership, so no input reaches
   `Process.Start`; pure launchers, no system modification.
-- `SystemFixService` — one-click repairs (reset Windows Update, reset the network
-  stack, reinstall WinGet) via hard-coded PowerShell scripts through the
+- `SystemFixService` — one-click repairs (reset Windows Update, reinstall WinGet) via
+  hard-coded PowerShell scripts through the
   `IPowerShellRunner` seam; streams output and returns an honest success/failure
   `SystemFixResult`. Auto-logon is delegated to the built-in netplwiz dialog, never
-  a plaintext credential write.
+  a plaintext credential write. SFC and DISM run from the tab through the runner, the two
+  desktop fixes through `ExplorerShell`, and the network-stack resets are Network Repair's
+  (`NetworkRepairService`).
 - `ProfileService` — bundles SysManager's own config files (theme, speed-test
   history, …) into a versioned, portable JSON profile and applies it back; only
   catalog-known sections are written (a tampered profile can't drop arbitrary
@@ -1259,10 +1305,12 @@ Key services:
   A profile carrying it is format 2, one without it stays format 1 so an older
   build still imports it, and `Deserialize` drops a section with no key or no
   content, where the import used to throw.
-- `AppIconService` — downloads and caches application favicons for UI display.
+- `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
+  turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
-  LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time
-  polling with 2s interval.
+  LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
+  only the NVIDIA GPU and the disks' SMART temperatures. It does not poll: the Dashboard asks
+  every 2 s while it is visible, and the Resource History sampler every 10 s.
 - `ActivityLogService` — persists the last 60 user actions to a JSON file for the
   Dashboard's recent-activity card: 22 kinds of action, from 29 call sites. The six destructive
   operations (deep cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) are
@@ -1293,8 +1341,9 @@ Key services:
   currently active rather than everything the session has ever seen. Both sources are deliberately
   SYNCHRONOUS — `BandwidthMonitorViewModel.PollOnceAsync` owns the single off-UI-thread hop, so a new
   source cannot forget it (the per-source arrangement is what let precise mode keep sampling on the
-  render thread through 1.61.9-1.65.11; `ArchitectureTests.EveryBandwidthSource_LeavesTheOffloadToIts
-  Consumer` now pins it). `BandwidthHistoryService` persists total-throughput samples as NDJSON in
+  render thread through 1.61.9-1.65.11;
+  `ArchitectureTests.EveryBandwidthSource_LeavesTheOffloadToItsConsumer` now pins it).
+  `BandwidthHistoryService` persists total-throughput samples as NDJSON in
   `%LocalAppData%\SysManager\bandwidth-history.ndjson` (serialize/parse/prune/downsample are pure,
   unit-tested; the directory is injectable so tests never touch the user's own history), and the VM
   reads it back through a range picker — Live plus last hour/24 hours/7 days, capped at the service's
@@ -1336,20 +1385,22 @@ Key services:
   scheduled task (`\SysManager\Scheduled Maintenance`). `GetStatusAsync` returns null for a read that
   failed: `StatusScript` treats only `Get-ScheduledTask`'s `ObjectNotFound` as "not registered" and
   throws on any other error. The task launches the app's own exe with a
-  whitelisted CLI verb on a daily/weekly trigger, via the `ScheduledTasks` module through the
+  allowlisted CLI verb on a daily/weekly trigger, via the `ScheduledTasks` module through the
   `IPowerShellRunner` seam. Registered in the current-user context (no admin); only ever
   touches its own task — never enumerates or modifies others. The command is built from a
-  fixed argument whitelist (`MaintenanceSchedule.CliArguments`), so no free-form input reaches
+  fixed argument allowlist (`MaintenanceSchedule.CliArguments`), so no free-form input reaches
   the scheduler; result-code description is a pure, unit-tested helper. The task's power and idle
   policy is splatted into `New-ScheduledTaskSettingsSet` from typed `[bool]` parameters, so it is
-  still a whitelisted value rather than free-form text; `RegisterParameters` is a pure `internal`
+  still an allowlisted value rather than free-form text; `RegisterParameters` is a pure `internal`
   helper precisely so a test can assert the policy reaches the script without registering a real
   task on the machine running it. `AllowStartIfOnBatteries` defaults to `$false` in that cmdlet,
   and inheriting the default is what kept an unplugged laptop from ever running the schedule —
   the settings block now opts in unless the user unticks it. The status read also selects
   `NumberOfMissedRuns`, because Windows expresses "the conditions blocked this run" by simply not
   running: there is no result code for it, so the count is the only honest explanation available.
-- `SafetyDatabase` — curated safety ratings for Windows services.
+- `SafetyDatabase` — curated safety ratings for Windows services and optional features. A service it does
+  not know counts as Critical, so Services refuses to stop or disable it; a feature it does not know counts
+  as Caution.
 - `ThemeService` — runtime theme switching with 12 presets and persistence. Two corrections run inside `Shade`, on the already-shifted colours so nothing downstream can undo them: `PanelThatAdmitsReadableText` nudges a Surface toward the Background until this mode's most extreme text clears AA on it, and `Legible` then fits the text to per-surface floors (AAA on the Background, AA on the panels). Both are no-ops for the shipped presets. `ResetToDefault` restores the shipped preset and shade — the only undo Custom mode has, since the four typed colours are persisted and reloaded on every launch. A fourth mode, `AutoMode`, follows the Windows light/dark setting: it resolves through the same `GetCompanionPreset` pairing the Dark/Light pills use, so the colour family survives the switch, and it deliberately does NOT go through `SetPreset` — that would take the mode from the resolved preset and overwrite "auto" the moment it was chosen. `Initialize` re-resolves rather than restoring the saved arm, and one process-lifetime `SystemEvents.UserPreferenceChanged` subscription keeps it live, marshalled to the dispatcher and released by `Shutdown` from `App.OnExit`. The OS read is a `Func<bool>` seam, because the real one reads HKCU and a test without it would assert whatever the developer's machine is set to. Hover is two derived brushes, not one: `RowHover` lifts the surface toward the text colour by `RowHoverLerp(isDark)` — 0.15 on dark presets, 0.25 on light, because darkening a light surface by the same fraction buys about a third less contrast ratio — and `RowHoverMark` is the 3px bar on a hovered sidebar row, `RowHoverMarkColor(theme)` = `TextMuted`. The bar is the part that clears WCAG 1.4.11's 3:1 (6.05:1 or better on all twelve presets); a background tint on a dark theme cannot reach it at all. Both are exposed as `internal static` methods so `ThemeTextContrastTests` asserts the floors against the service rather than against a copy of the numbers, and the mark is deliberately NOT the accent — the selected row draws an Accent bar in the same 3px, so reusing it would make hover indistinguishable from selection. `Save` writes nothing after a `Load` that could not read `theme.json`, and a file that is not a theme it can use is set aside before the first write; the broad catch in `Load` stays, because every failure there means the file is not a usable theme.
 - `ToastService` — global glass-style toast notifications.
 
@@ -1358,7 +1409,8 @@ Key services:
 Key utility classes that don't fit neatly into Services or ViewModels (not an exhaustive list):
 
 - `AdminHelper` — elevation check (`IsElevated()`) and UAC relaunch.
-- `AtomicFile` — the single way every service persists user data. Writes a
+- `AtomicFile` — the single way every service writes a whole file of user data (the two NDJSON
+  histories append a line instead, and rewrite through it when they prune). Writes a
   uniquely-named temp file beside the destination, flushes it onto the device,
   then swaps it in with one filesystem operation, so an interrupted save leaves
   either the old file or the new one and never half of each. Load-bearing
@@ -1383,9 +1435,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   write would replace everything the file held with the one change. A cancelled async read throws
   rather than reading as unreadable. `SetAside` moves a file that does not parse to
   `<name>.unreadable` (then `-2`, `-3`) before a fresh one is written, keeping its bytes.
-- `BulkObservableCollection<T>` — `ObservableCollection` subclass that
-  suppresses change notifications during bulk add/remove for UI performance
-  (in `ObservableCollectionExtensions.cs`).
+- `BulkObservableCollection<T>` — `ObservableCollection` subclass whose `ReplaceWith` swaps the
+  whole contents with one `Reset` notification instead of one per item, and refuses to run from
+  inside a change handler (in `ObservableCollectionExtensions.cs`).
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects.
 - `WingetFailure` — the one translation of winget outcomes into plain language:
@@ -1400,20 +1452,23 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `WingetExitCodes` (in `Models`), each pinned by a test to the number
   winget-cli's header gives it, and a fitness function keeps those numbers out
   of every other file.
-- `FormatHelper` — byte-size formatting, duration humanization, and other
-  display helpers.
+- `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
+  "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs.
 - `EtaCalculator` — estimates time remaining for long-running operations.
 - `KnownFolders` — resolves Windows Known Folder paths via shell API.
-- `SystemPaths` — the one place Windows locations are resolved. Turns a bare tool
-  name into a full System32 path so nothing launches by name off the PATH, and
-  owns the two temp exclusions every wholesale %TEMP% sweep must honour:
+- `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool
+  name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), and winget
+  resolves to its admin-only-writable install rather than the per-user alias, so nothing
+  launches by name off the PATH. It also owns the two temp exclusions every wholesale %TEMP%
+  sweep must honour:
   `BundleExtractionRoot`, the shared folder single-file apps unpack into, and
   `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
   breaks a running program's later lazy loads, which no in-use check can
   prevent because nothing holds those files open yet.
-- `RecycleBinHelper` — empties the Recycle Bin via the shell API; shared by Deep
-  Cleanup and the One-Click Tune-Up so the interop has one source of truth.
+- `RecycleBinHelper` — empties the Recycle Bin via the shell API (`SHEmptyRecycleBin`); shared
+  by Quick Cleanup, Deep Cleanup and the Dashboard's Quick Tune-Up so the interop has one source
+  of truth.
 - `ExplorerShell` — stops, starts and restarts the Windows shell, and owns the
   `thumbcache_*.db` / `iconcache_*.db` pattern list that Deep Cleanup's cache category
   shares. Shared by Context Menu (applying a menu style) and System Fixes (a frozen
@@ -1439,11 +1494,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   blocked thread costs a thread. A fitness function asserts nothing marshals
   synchronously, including via a short local holding the dispatcher.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
-- Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`,
-  `ValueConverters` (boolean/visibility/inverse helpers).
+- Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`, and `ValueConverters` —
+  17 converters (among them visibility, inversion, hex to brush, and the colour, background and
+  text of the safety, process-safety and signature pills) plus the two palettes those pills share.
 - `ExtensionPermissions` — turns what a browser extension asks for into the plain-language lines the
-  Extensions view shows, in a fixed order, amber for what changes what the user sees or reaches every
-  website. A permission it does not know is shown by its own name, never dropped (#1526).
+  Extensions view shows, in a fixed order, amber for what changes what the user sees, reaches every
+  website or can control the browser like a developer tool. A permission it does not know is shown by
+  its own name, never dropped (#1526).
 
 ## Dependency Injection
 
@@ -1482,17 +1539,22 @@ Standby's tab is still registered lazily, and opening it resolves the same singl
 is not maintained by hand here — `ArchitectureTests.OnlyTheJustifiedTabs_AreBuiltAtStartup`
 guards the nav table, and `TheShellConstructor_ResolvesExactlyTheJustifiedViewModels` pins
 what the shell constructor resolves, both with the same reasons. The Network tabs were the last
-exception to go: they share one `NetworkSharedState`, which turned out not to require eager
-construction.
+exception to go: their view-models are lazy now, while the one `NetworkSharedState` they share is
+still resolved at startup, so the shell can dispose it explicitly — its constructor starts nothing.
 
 In tests/designer (no DI container) every VM is built eagerly via a manual dependency graph.
 
 ## Admin elevation
 
-Features that require admin (Windows Update, SFC/DISM, system-wide winget
-upgrades) check elevation via `AdminHelper.IsElevated()` and surface a banner
-when running unelevated. The banner calls `AdminHelper.RelaunchAsAdmin()`,
-which restarts the process with `runas` and the current command-line args.
+Features that require admin (Windows Update installs, SFC/DISM, system-wide winget
+upgrades, …) check elevation via `AdminHelper.IsElevated()` and surface a banner
+when running unelevated — `AdminBanner`, on 31 tabs. Its button calls
+`AdminHelper.RelaunchAsAdmin()`, which first asks through `QuitGuard` when something is
+still running, then starts a new copy with `runas` and the single argument
+`--relaunched-elevated` (the original command line is not passed on) and returns true;
+the caller then closes this instance with `App.RequestShutdown()`. The elevated copy
+waits up to 5 seconds for the single-instance mutex to be handed over instead of exiting
+as a duplicate.
 
 ## Keyboard accelerators
 
@@ -1505,7 +1567,7 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
   four tabs. 16 tabs override it.
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
-  agree on a name: 12 distinct spellings bind to a refresh-shaped button, and two views bind
+  agree on a name: 11 distinct spellings bind to a refresh-shaped button, and two views bind
   two candidates each, so a convention-matching shell would have to guess. 41 tabs override
   it — Browser Cleaner's returns the read of whichever half is on screen — and every command
   it can return must begin with Refresh/Rescan/Reload/Scan/Load, which mechanically keeps
@@ -1540,10 +1602,10 @@ after it would resolve F1 correctly and never be reached.
 
 `MainWindowViewModel.AcceleratorCommand(NavItem?, Key)` is the pure routing decision, extracted
 so it is testable without a `Window`; `MainWindow.xaml.cs`'s bubbling `KeyDown` handler executes
-what it returns. Two rules live in that handler: it never reads `NavItem.Content` unless
-`IsContentCreated` (a keypress must not build a lazy tab), and `CanExecute` is consulted for F5
-only — `EscapeCancel` already gates itself, and a second gate there would be a way for Escape to
-go quiet. `ArchitectureTests.EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand` and
+what it returns. Two rules live on that path: `AcceleratorCommand` never reads `NavItem.Content`
+unless `IsContentCreated` (a keypress must not build a lazy tab), and the handler consults
+`CanExecute` for F5 only — `EscapeCancel` already gates itself, and a second gate there would be a
+way for Escape to go quiet. `ArchitectureTests.EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand` and
 `EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand` derive both contracts from the views, so a
 tab cannot ship a refresh or cancel button the keyboard cannot reach.
 
@@ -1551,13 +1613,16 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
 
 - Long-running work (ping loops, PowerShell runs, winget scans, deep-clean
   scans) runs on background tasks.
-- View-model observable properties are updated on the UI thread via the
-  dispatcher captured in `ViewModelBase`.
+- View-model observable properties are updated on the UI thread through `UiThread.Post`, or an
+  awaited `Dispatcher.InvokeAsync` where the update must land first; nothing captures a dispatcher
+  in `ViewModelBase`. `NothingMarshalsToTheDispatcherSynchronously` and
+  `NothingComparesSynchronizationContextInstances` hold the rule.
 - SFC and DISM live on `SystemFixesViewModel` and each have their own `IsSfcRunning` /
   `IsDismRunning` flag for UI state, but they are **mutually exclusive**: every repair on
-  that tab streams into one console and drives one progress bar, so `CanRunFix` gates them
-  all on `!IsAnyRunning`, and a `SystemModification` `OperationLockService` lock additionally
-  excludes the system-repair operations on OTHER tabs. `CanExecute` is not treated as the
+  that tab streams into one console and drives one progress bar, so `CanRunFix` gates the four
+  elevated repairs, and `CanRunShellFix` the two desktop fixes, on `!IsAnyRunning`, and a
+  `SystemModification` `OperationLockService` lock additionally excludes the system-repair
+  operations on OTHER tabs. `CanExecute` is not treated as the
   guard — `ExecuteAsync` runs a command body regardless of it, so each repair re-checks
   elevation and its own running flag in the body.
 - Quick Cleanup's two component-store operations take the same lock, under one
@@ -1572,9 +1637,14 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
 ## Safety guardrails (Deep Cleanup)
 
 `DeepCleanupService` is intentionally conservative:
-- Scan first, clean second. Every category is opt-in and shows its size.
-- Never touches browsers, passwords, registry, active drivers, Program
-  Files, or actual game files in `steamapps\common`.
+- Scan first, clean second. Every category shows its size, and one with something in it starts
+  ticked unless it is tagged Irreversible (below).
+- Never touches browsers, passwords, the registry, active drivers, or actual game files in
+  `steamapps\common`. Inside Program Files it reaches only named launcher folders: Steam's
+  `appcache`, `htmlcache`, `depotcache`, `logs` and shader cache, and the League of Legends logs.
+- Every walk goes through `Helpers/SafeFileWalk`, so no link is followed and the folders single-file
+  apps unpack into under TEMP are left alone. The servicing-logs bucket takes only files older than
+  30 days, and the Recycle Bin is emptied through `RecycleBinHelper`, not by deleting its folders.
 - Windows.old is tagged **Irreversible** and never selected by default, as are the
   blue-screen memory dumps: they are the only record of why a machine crashed.
 - A bucket may restrict itself to files matching a wildcard (`FilePatterns`), and the
@@ -1584,13 +1654,15 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   (`*.dmp`, among `.etl` traces) and the Explorer thumbnail cache, whose folder also holds
   the jump lists that are the user's recent-files history. A filtered bucket also leaves
   its emptied folders in place, because it owns files and not the folder.
-- Large files finder has no delete action, even with admin rights.
+- The Large Files tab, split out of Deep Cleanup, has no delete action, even with admin rights.
 
 ## Logging
 
-Serilog writes to a rolling file sink at
-`%LOCALAPPDATA%\SysManager\logs\sysmanager-.log` (one file per day, 14 days
-retained). The in-app Console mirrors the same stream per tab.
+Serilog writes at Debug level to a rolling file sink at
+`%LOCALAPPDATA%\SysManager\logs\sysmanager-.log`: a new file each day, or sooner when a
+day's file reaches 10 MB, keeping the 14 newest files — about 140 MB at most. The in-app
+Console is not the log: it shows what the PowerShell and tools a tab runs print, per tab,
+on the five tabs that have one, capped at 5000 lines.
 
 ## Updates
 
@@ -1601,7 +1673,8 @@ regardless. Downloads land in
 `%LOCALAPPDATA%\SysManager\updates\SysManager-{version}.exe` with a companion
 `.sha256` so re-opening the app doesn't re-download a good copy. After a successful
 download, `PruneOldDownloads` deletes superseded binaries, their stale hashes, and
-orphaned `.tmp` files, keeping only the current pair — each build is ~85 MB and
+orphaned `.tmp` files, keeping the current pair and the previous build kept for going back,
+with its hash — each build is ~85 MB and
 nothing removed the old ones, so the cache grew by that much per update. It only
 matches the `SysManager-*.exe` names the service itself writes, never throws, and
 treats a file locked by a running instance as ordinary (it survives to the next
@@ -1610,14 +1683,15 @@ button verifies the download's SHA256 against the published `.sha256` — the ac
 integrity gate — and additionally inspects the file for an Authenticode signature.
 `VerifyAuthenticode` accepts a binary with no signature at all — SysManager ships
 unsigned, so that is the live path — and rejects a signature that cannot be parsed.
-When a signature IS present it is now a real publisher check: the signer must
-contain `ExpectedSignerSubject` and its certificate chain must build with online
-revocation, or the method returns false. That pin is a single `const`, empty until
-a code-signing certificate exists, so the check cannot quietly become a no-op the
-day signing is switched on — without it, merely *carrying* a signature would pass,
-and an attacker's self-issued certificate would be accepted like a legitimate
-build. The policy deliberately mirrors `SpeedTestService.VerifyOoklaSignature`,
-which already pinned subject + chain for a third-party download.
+When a signature is present and a publisher is pinned, it is a real publisher check:
+the signer must contain `ExpectedSignerSubject` and its certificate chain must build
+with online revocation, or the method returns false. That pin is a single `const`, and
+it is empty until a code-signing certificate exists, so today a signed build passes on
+the SHA256 comparison alone and its signer is only logged. Writing the check now is
+what stops it quietly becoming a no-op the day signing is switched on — without the
+pin, merely *carrying* a signature would pass, and an attacker's self-issued
+certificate would be accepted like a legitimate build. The policy deliberately mirrors
+`SpeedTestService.VerifyOoklaSignature`, which already pinned subject + chain for a third-party download.
 
 SHA256 remains the integrity gate rather than a fallback: `CreateFromSignedFile`
 reads the signer certificate without validating the file against it, so it cannot
@@ -1631,18 +1705,24 @@ interrupted copy can never leave a half-written binary), and relaunches —
 inheriting the original's elevation. No on-disk script is involved.
 
 Before that move, `PreserveCurrentBuild` copies the outgoing executable to
-`SysManager-previous.exe` in the same updates folder. The atomic move makes an
+`SysManager-previous.exe` in the same updates folder, and writes that copy's SHA256
+beside it. The atomic move makes an
 *interrupted* update safe; it does nothing for an update that *succeeds* into a
 build that will not start, and this project has shipped two such regressions. One
 generation is retained (each copy overwrites the last), `PruneOldDownloads`
-explicitly skips that name — it matches the `SysManager-*.exe` pattern and would
-otherwise be deleted by the next download — and retention is best-effort: if the
-folder cannot be written the update still proceeds. `AboutViewModel.CanRollBack`
-surfaces a "Go back to the previous version" button only when the copy exists, and
-the rollback reuses this same applier path rather than a second file-copy
-implementation.
+explicitly skips that name and its hash — both match the `SysManager-*.exe*` pattern
+and would otherwise be deleted by the next download — and retention is best-effort: if
+the folder cannot be written the update still proceeds. `AboutViewModel.CanRollBack`
+surfaces a "Go back to the previous version" button only when the copy and its hash
+both exist; the rollback opens the copy through `TryOpenVerifiedPreviousBuild`, which
+checks it against that hash and fails closed without one, and then reuses this same
+applier path rather than a second file-copy implementation. `IsValidApplyTarget` guards
+`--apply-update`'s target, which arrives straight from the command line: it must be an existing
+file carrying SysManager's own product resource, outside the system folders, or nothing is
+replaced.
 
 ## Testing
 
-See [TESTING.md](TESTING.md) for the xUnit unit / integration project and the
-FlaUI UI-automation project.
+See [TESTING.md](TESTING.md) for the three test projects: the xUnit v3 unit suite, which
+holds `ArchitectureTests` — the fitness functions this document cites — the integration suite
+against real Windows APIs, and the FlaUI UI-automation suite.

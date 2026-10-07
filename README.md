@@ -5,7 +5,7 @@ controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
 <img src="docs/gifs/feature-tour.gif" width="720" alt="Feature tour — Dashboard, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer"><br>
-<em>A quick tour: Dashboard, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer. More below ↓</em>
+<em>A quick tour: Dashboard, Resource History, Settings Watchdog, Scheduled Maintenance, CLI, Ping, Disk Analyzer (recorded on an earlier version; the sidebar has changed since). More below ↓</em>
 </p>
 
 [![Release](https://img.shields.io/github/v/release/laurentiu021/SystemManager?display_name=tag&sort=semver)](https://github.com/laurentiu021/SystemManager/releases/latest)
@@ -58,24 +58,33 @@ Event Log viewer into a single tabbed WPF app.
 
 Everything runs on the machine itself. No cloud, no telemetry, no account.
 
-> **When SysManager uses the network.** There is no background phone-home — the app
-> never sends usage data. Network access only happens for features you explicitly
-> use: the network diagnostics (ping / traceroute / speed test), and downloading an app
-> you chose to install via winget. App icons in the Bulk Installer are an **opt-in**
-> extra — off by default, and only when you tick "Load app icons from the web" does it
-> fetch them from Google's favicon service. Nothing else leaves your PC.
+> **When SysManager uses the network.** The app never sends usage data and has no
+> account to sign in to. Two checks run on their own when it starts:
 >
-> The one call SysManager makes on its own is the version check: at startup it asks
-> GitHub's public releases page which release is newest, so it can tell you when a fix
-> is available. Nothing about you or your PC is sent. It runs at most once a day, and
-> the About tab has a checkbox — "Check GitHub for a new version when SysManager
-> starts" — that switches it off entirely. The **Check for updates** button still works
-> on demand either way.
+> - **The version check** asks GitHub's public releases API which release is newest, so
+>   it can tell you when a fix is available, and fetches the notes of the last ten
+>   releases for the About tab. Nothing about you or your PC is sent. Once a check has
+>   succeeded it waits a day before the next one, and the About tab has a checkbox —
+>   "Check GitHub for a new version when SysManager starts" — that switches it off
+>   entirely. The **Check for updates** button still works on demand either way.
+> - **The Dashboard's app-updates alert** asks winget which of your installed apps have
+>   updates (`winget upgrade`), and winget answers from its package sources, which
+>   Microsoft runs. SysManager adds nothing about you to it. There is no switch for it yet.
 >
-> The local diagnostic log keeps 14 days of rolling files in
-> `%LocalAppData%\SysManager\logs`, and your Windows user name is replaced with `[user]`
-> in every line — including inside error messages — so a log you choose to share does
-> not carry your account name with it.
+> Everything else happens only when you use it: the network diagnostics (ping and
+> traceroute, and the speed test — Cloudflare's servers, or Ookla's through the Ookla
+> CLI it downloads the first time you use that engine), listing, searching for,
+> installing, updating and removing apps through winget, Windows Update, and the
+> PowerShell Gallery module Windows Update's history needs. App icons in the Bulk
+> Installer are an **opt-in** extra — off by default, and only when you tick "Load app
+> icons from the web" does it fetch them from Google's favicon service. Nothing else
+> leaves your PC.
+>
+> The local diagnostic log keeps its 14 most recent files — a new one each day, or
+> sooner when a day's file reaches 10 MB — in `%LocalAppData%\SysManager\logs`, and the
+> user-name folder in every path (`C:\Users\[user]\…`) is replaced with `[user]` on
+> every line — including inside error messages — so a log you choose to share does not
+> carry your account name in its paths.
 
 Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and streaming
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
@@ -158,16 +167,24 @@ list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
 used to start collapsed, so the first screen showed twelve category names and not one
-feature. Only one group opens, because the viewport has room for exactly one: at a
-820px window the twelve collapsed groups already fill almost all of it, so expanding a
-second pushes category headings out of sight. Collapsed groups show a child count
-badge, a written one-line summary of what the group covers, and a tooltip with the
-full list. Dashboard renders as a flat top-level entry without an expander arrow.
-Each tab shows a slim progress bar under its name when performing a
-long-running operation, so you always know which tab is working.
+feature. Only one group opens, because the viewport has room for exactly one: in the
+default 820px window the twelve collapsed headers fill 600 of the sidebar's 670px, so
+opening Cleanup already pushes Info and Advanced below the fold, and opening System as
+well would hide nine of the twelve. Every group header shows how many tabs it holds and,
+on hover, the full list; a collapsed group also shows a short written summary of what it
+covers, up to two lines. Dashboard renders as a flat top-level entry without an expander
+arrow. Each tab shows a slim progress bar under its name when performing a long-running
+operation, so you always know which tab is working; the flat Dashboard row is the
+exception.
+
+Pointing at a row draws a neutral bar on its left edge, a different colour from the accent
+bar of the open tab, so hovering never looks like opening. The foot of the sidebar shows
+whether SysManager runs as Administrator or as a standard user, its version, and the help
+and appearance buttons.
 
 ### Theme customization
-A palette button in the top-right corner opens an appearance popup with:
+The palette button at the bottom of the sidebar, beside the `?` chip, opens the Appearance panel above it,
+with:
 - **Dark mode** — 6 curated presets (Midnight Indigo, Deep Ocean, Dark Forest, Neon Rose, Violet Night, Warm Ember)
 - **Light mode** — 6 curated presets (Clean Indigo, Sky Breeze, Warm Sand, Mint Fresh, Soft Blossom, Lavender)
 - **Auto mode** — follow the Windows light/dark setting, and keep following it. It changes with Windows
@@ -180,18 +197,19 @@ A palette button in the top-right corner opens an appearance popup with:
 - Settings persist between sessions. If they cannot be read when SysManager starts, a change
   applies for that session but is not saved over them
 
-Custom colours cannot make the app unreadable. Text is adjusted to stay legible against every surface
-it lands on, and a panel colour that leaves no room for readable text at all — a near-white card on a
+Custom colours cannot make the app unreadable. Main, secondary and muted text are adjusted to stay
+legible against every surface they land on — coloured status text keeps its fixed light or dark palette —
+and a panel colour that leaves no room for readable text at all — a near-white card on a
 near-black background, say — is nudged toward the background until it does. The twelve built-in themes
 are unaffected by that correction; their surfaces already sit near their backgrounds. If a result is
 still not what you wanted, Reset to default theme puts the shipped theme back and survives a restart.
 
-Graph lines follow the theme rather than fighting it. The Ping, Bandwidth Monitor and Resource
-History charts each draw with a fixed set of colours — blue is CPU, purple is memory — and those
-colours were chosen against a dark card. Switching to a light theme darkens each line by exactly as
-much as it needs to stay at 3:1 against the card it is drawn on, so the line remains followable
-without a second palette to maintain and without changing which colour means what. Brightness moves,
-hue does not; on the six dark presets, where the original colours already clear the bar, nothing
+Graph lines follow the theme rather than fighting it. The Ping, Traceroute, Bandwidth Monitor, Resource
+History, Speed Test and Battery Health charts each draw with a fixed set of colours — blue is CPU, purple is
+memory — and those colours were chosen against a dark card. Switching to a light theme darkens each line
+by exactly as much as it needs to stay at 3:1 against the card it is drawn on, so the line remains
+followable without a second palette to maintain and without changing which colour means what. Brightness
+moves, hue does not; on the six dark presets, where the original colours already clear the bar, nothing
 changes at all.
 
 ### Keyboard navigation
@@ -201,15 +219,20 @@ within a table or a row of filter chips. In the sidebar, `Enter` also opens the 
 on, the way it opens a folder in File Explorer. Opening the appearance panel moves focus into it, `Tab`
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
-`Escape` also stops whatever the open tab is doing — a disk scan, a cleanup, a speed test — on all
-16 tabs that can be cancelled. It only acts while something is running, and only after the control you are
-on has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
+`Escape` also stops whatever the open tab is doing — a disk scan, a duplicate search, a speed test — on
+the 16 tabs that can be cancelled from the keyboard, the ones whose Cancel button appears only once
+something is running. It only acts while something is running, and only after the control you are on has
+had its own chance to use the key, so it still closes a drop-down or undoes a text edit first. The tabs
+that keep their Cancel button on screen all the time are not reached by Escape yet: Quick Cleanup, Deep
+Cleanup, App Updates, Windows Update, System Health, Drivers, System Logs, Traceroute and the Dashboard's
+Quick Tune-Up.
 
 **`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
-does nothing rather than starting a second one.
+does nothing rather than starting a second one. Drivers, Windows Update and Disk Analyzer are not on F5
+yet — use List drivers, List updates or Analyze.
 
 **`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
@@ -226,23 +249,25 @@ The focus outline is deliberately two thin lines of opposite shade — one light
 than a single accent-coloured ring. A single colour cannot be visible everywhere: it has to show up
 on a purple primary button, a red delete button, a grey secondary button and a plain card, and any
 one colour disappears against at least one of those. With two, one line always contrasts whatever is
-underneath. Measured across all 12 themes, the outline stays at 4.5:1 or better against every surface
-it is drawn on — above the 3:1 WCAG asks of a non-text indicator.
+underneath. Measured across all 12 themes and the six fills a control can sit on, the better of the two
+lines never drops below 4.47:1 — above the 3:1 WCAG asks of a non-text indicator.
 
 **Every button is at least 28 by 28 pixels**, however small its label. Every button in the app that sets its
 own padding — 110 of them — was rendered and measured, and **30 came out smaller than the 24 by 24 that WCAG
 2.5.8 asks for**, spread across 16 screens. The worst was the **X that removes an entry from your hosts
-file**, at 20 by 19: the smallest target in the app and one of the few that deletes something. There is now a
+file**, at 20 by 19: the smallest destructive target in the app. There is now a
 floor on the shared button style, so a cramped label makes a button narrow to look at and not to click. 28
 rather than 24, because a floor set exactly at the threshold leaves nothing for a fractional display scale,
-and because 28 is already the size of the small round buttons at the bottom of the sidebar.
+and because 28 is already the size of the small round buttons at the bottom of the sidebar. Disk
+Analyzer's map blocks are the exception: they are sized by their folders, and never drawn smaller than 40
+by 24.
 
 ### Screen readers
-The six controls that do something you cannot take back explain themselves, not just their label. Landing on
+The six controls whose effect is hardest to take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
-deletes it. This cannot be undone, not even from the Recycle Bin." The same goes for Uninstall selected, Kill
-process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 31
-pages needing elevation.
+deletes it. This cannot be undone, not even from the Recycle Bin. SysManager asks you to confirm first." The
+same goes for Uninstall selected, Kill process, Delete preset, Delete selected shortcuts, and the Run as
+administrator button that appears on the 31 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
@@ -255,7 +280,8 @@ clearer.
 Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
 "Removed 1,204 files", "Scan complete." — is announced on all 53 tabs that have one, as are the SFC and DISM
 results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
-so they wait their turn rather than cutting across whatever you are reading.
+so they wait their turn rather than cutting across whatever you are reading. The one exception is the pop-up
+notification in the corner, which is announced at once because it fades on its own.
 
 What is deliberately *not* announced matters just as much. Deep Cleanup's percentage changes several times a
 second and its current folder changes per directory; the repair ETAs tick continuously. Reading those aloud
@@ -271,14 +297,16 @@ anything a program registered, so both are undone by turning the switch back on:
 - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
 - The preset currently applied is marked with a tick, so you can see which style you are on without applying one
 - Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
-- **Win10/Win11 style toggle** — switch between classic and modern menu (restarts Explorer)
+- **Classic or modern menu** — Win10 Default switches to the classic full menu and Win11 Default to
+  the modern compact one, restarting Explorer when the style changes. There is no separate style
+  switch, so changing the style also resets the entries to clean defaults
 - **Visual preview on hover** — real screenshots of each menu style
 - **Entry explanations** — human-readable descriptions for common entries
 - **Add-ons listed too** — the COM shell extensions that programs like archivers, cloud sync
   clients and antivirus install are shown alongside the plain menu entries. These are the ones
   that make a right-click take a second to open, because Explorer loads each add-on's DLL and
-  waits for it before drawing the menu. A **"Type" column** says which kind each row is, and an
-  add-on's row names the program behind it instead of the raw class id
+  waits for it before drawing the menu. A **"Type" column** says which kind each row is — "Menu
+  entry" or "Handler" — and an add-on's row names the program behind it instead of the raw class id
 - **Add-ons can be switched off too** — hiding one adds its class id to the blocked-extensions list
   Windows checks before loading a shell add-on, which is the same reversible mechanism Autoruns
   writes. Nothing the program installed is deleted; switching the row back on removes the entry.
@@ -294,6 +322,9 @@ anything a program registered, so both are undone by turning the switch back on:
 - **"Applies to" column** — shows whether the entry affects Files, Folders, Files and folders,
   Desktop, or Directory Background
 - **HKCU fallback** — system-protected entries can be toggled via user-level registry override
+- Before each change, a copy of the affected registry key is saved to
+  `%LocalAppData%\SysManager\Backups\ContextMenu`, the three most recent per entry. The switch is
+  the undo; the copy is for someone who would rather restore the key by hand
 - Admin elevation banner with one-click restart as administrator
 
 ### Environment Variables
@@ -326,7 +357,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   theme follows automatically; handles the overnight switch correctly
 - Applies immediately with no sign-out, no admin needed, and is fully reversible
 - **Honest about its limits** — the schedule runs while SysManager (or its tray)
-  is open; it's not a background Windows service
+  is open, checked once a minute; it's not a background Windows service. Equal dark and
+  light times keep the light theme, and the schedule is kept in
+  `%AppData%\SysManager\darkmode-schedule.json`
 - If the saved schedule cannot be read when SysManager starts, a change still applies but
   is not saved over it, and the status line says so
 
@@ -362,15 +395,21 @@ Edit Windows environment variables without the cramped built-in dialog:
   just stopped playing, for example. A preset that could not be saved or deleted says so, and
   saved presets that cannot be read are never written over
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
-  to this tab, alongside shortcuts to Process Manager and Quick Cleanup
+  to this tab, alongside "What's using my PC" (Process Manager) and "Free up space" (Quick
+  Cleanup)
 
 ### System Logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
 - Each event gets a plain-English explanation and recommended next steps
-- Filter by severity and time range, plus full-text search
+- Nothing is read until you press **Refresh** (or F5). The log, the time range, the maximum
+  number of results and the severity boxes decide what Refresh reads. Unticking a severity or
+  typing in the search box filters what is loaded straight away, but a severity ticked after
+  the load — Information and Verbose start unticked — appears only after the next Refresh
 - Mark any event with the flag button to keep it findable while you keep scrolling or
-  change filters. "Clear marks" removes them all, including any a filter is hiding
-- Export to CSV, with a "search online" link for unknown events
+  change filters. "Clear marks" removes them all, including any a filter is hiding, and a
+  Refresh clears them too
+- Export to CSV — every event loaded, including any a filter is hiding — with a "search
+  online" link for unknown events
 - The Security log requires administrator rights. Without them the page says so
   outright rather than showing an empty list that looks like "no events"
 
@@ -401,19 +440,22 @@ Edit Windows environment variables without the cramped built-in dialog:
 
 ### System Health
 - OS / CPU / RAM / storage overview
-- SMART data per disk: temperature, wear %, power-on hours, read/write errors
+- SMART data per disk: temperature, life remaining, power-on hours, read/write errors —
+  fullest when SysManager runs as administrator
 - Colour-coded verdict per drive
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors. If the event log
   cannot be read, it says the check could not be done rather than reporting no errors
-- Schedule the Windows Memory Diagnostic at next boot
+- **Run MemTest (reboot)** opens the Windows Memory Diagnostic, where you choose to restart now
+  or test at the next boot
 - Read-only chkdsk with auto-discovered NTFS/ReFS drives and multi-select. C: is ticked
   to start with, and whatever you tick after that survives a refresh — so a rescan cannot
-  quietly point a long disk check at a drive you deselected
-- **BIOS & firmware** — BIOS version/date/vendor, motherboard model, boot mode
-  (UEFI/Legacy), and Secure Boot status, all read-only. A **Find BIOS update**
-  button opens the right manufacturer support page (ASUS, MSI, Gigabyte, ASRock,
-  Dell, HP, Lenovo, …) for the detected board, and **Copy info** grabs the model +
-  BIOS version for support searches. SysManager never flashes firmware itself.
+  quietly point a long disk check at a drive you deselected. chkdsk needs administrator
+  rights, and without them each drive you ticked says so
+- **BIOS & firmware** — BIOS version/date/vendor, motherboard model, boot mode (UEFI/Legacy), and Secure
+  Boot status, all read-only. A **Find BIOS update** button opens the board maker's support site (ASUS,
+  MSI, Gigabyte, ASRock, Acer, Biostar, Dell, HP, Lenovo, …), or a web search for the board when the
+  maker is not one of those, and **Copy info** grabs the model + BIOS version for support searches.
+  SysManager never flashes firmware itself.
 
 ### Undo Changes
 - **One place to put back what SysManager changed, one change at a time.** Five tabs each keep what they
@@ -469,8 +511,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   and type — newest first
 - **Create** a restore point with an optional custom description (enables System
   Restore on the system drive first if it's off). Windows makes at most one a day;
-  when it declines, SysManager says so rather than reporting a point that was
-  never made — here and on every tab that takes one automatically
+  when it declines, this tab says so rather than reporting a point that was
+  never made, and the tabs that take one automatically mention a restore point only
+  when Windows really made one
 - **It says so before turning System Protection back on.** Creating a point turns System
   Protection back on for the Windows drive if it is off, because Windows cannot make one
   otherwise, and protection then keeps some disk space for restore points. The confirmation
@@ -499,19 +542,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 
 ### System Fixes
 One-click repairs for common Windows breakages, each with a clear description and
-a confirmation before it runs. Split into two groups by whether the fix needs
-administrator rights, so it is obvious what you can do without elevating.
-
-**Fix the desktop and taskbar** — no administrator rights needed, and the quickest
-things to try first:
-- **Restart Windows Explorer** — for a taskbar that has stopped responding, a Start
-  menu that will not open, or a desktop with no icons. Every Explorer instance is
-  ended individually, so one unkillable process cannot leave you without a shell
-- **Rebuild icon & thumbnail cache** — for icons or previews that come up blank,
-  wrong, or as a plain white page. Explorer is stopped first, because it holds those
-  cache files open — a delete with the shell running clears only the files that are
-  *not* the problem. Explorer is brought back even if the delete fails, and Windows
-  rebuilds the cache as you browse
+a confirmation before it runs. Grouped by whether the fix needs administrator rights,
+so it is obvious what you can do without elevating.
 
 **Repair Windows itself** — these change system files, services or settings, so they
 need administrator rights:
@@ -521,17 +553,34 @@ need administrator rights:
   plain-English verdict at the end rather than a raw exit code
 - **Repair Windows' own repair source (DISM)** — runs `DISM /RestoreHealth`, which rebuilds
   the store of known-good copies that SFC draws from, downloading replacements through
-  Windows Update. Run this first when SFC reports files it could not fix
+  Windows Update. Run this first when SFC reports files it could not fix. Takes 10–30 minutes
 - **Reset Windows Update** — stop the update services and Windows Installer, rename the
   SoftwareDistribution and catroot2 caches so Windows rebuilds them, and restart the
   services. The confirmation says that it interrupts an installation running elsewhere, and
-  that the old folders are kept, a new pair on every reset. It waits for an app install, upgrade
-  or uninstall SysManager itself is running, and none starts until it is done. If a cache folder
-  is still in use and cannot be renamed, the fix says so instead of asking for a pointless reboot
-  — and restarts the services either way
+  that the old folders are kept, a new pair on every reset. It will not start while SysManager
+  itself is installing, upgrading or uninstalling an app — it says which one is running — and none
+  of those can start until the reset is done. If a cache folder is still in use and cannot be
+  renamed, the fix says so instead of asking for a pointless reboot — and restarts the services
+  either way
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
-- **Set up Auto Sign-in** — opens the built-in User Accounts dialog, so Windows
-  stores the credential securely and SysManager never handles your password
+
+**Fix the desktop and taskbar** — no administrator rights needed, and the quickest things
+to try when the taskbar, the Start menu or the icons misbehave. Both close any open File
+Explorer windows; the taskbar and desktop come back on their own within a few seconds:
+- **Restart Windows Explorer** — for a taskbar that has stopped responding, a Start
+  menu that will not open, or a desktop with no icons. Every Explorer instance is
+  ended individually, so one unkillable process cannot leave you without a shell
+- **Rebuild icon & thumbnail cache** — for icons or previews that come up blank,
+  wrong, or as a plain white page. Explorer is stopped first, because it holds those
+  cache files open — a delete with the shell running clears only the files that are
+  *not* the problem. Explorer is brought back even if the delete fails, and Windows
+  rebuilds the cache as you browse
+
+**Sign-in** — **Set up Auto Sign-in** opens the built-in User Accounts dialog (netplwiz), so
+Windows stores the credential securely and SysManager never handles your password. SysManager does
+not need administrator rights to open it.
+
+Across the tab:
 - Live output, honest success/failure reporting, admin elevation banner
 - *Network-stack reset (Winsock / TCP-IP / DNS flush) lives on the Network → Network
   Repair tab, which offers those as individual one-click tools.*
@@ -552,14 +601,15 @@ need administrator rights:
   filtered to that service; a slow app or background task opens Startup Manager. Drivers and devices
   get no link, because SysManager cannot disable one and sending you looking would waste your time
 - Read-only; reading the log requires administrator (elevation banner shown)
-- **A read that fails says so.** "No boots recorded yet" is kept for a history Windows
-  returned empty. When the log could not be read, the tab says that instead, and a
+- **A read that fails says so.** "No boot performance events found yet" is kept for a history
+  Windows returned empty. When the log could not be read, the tab says that instead, and a
   refresh that fails keeps what was already shown
 
 ### Task Scheduler
-- **Browse every Windows scheduled task** with its state, type, last and next run, and what the task
-  is for in Windows' own words — hovering that shows which publisher created it, which is what decides
-  the type label
+- **Browse every Windows scheduled task** with its state, type, and what the task is for in Windows'
+  own words, plus its last and next run once you select it — hovering the description shows which
+  publisher created it. The task's folder decides the type first (telemetry folders, then
+  `\Microsoft\Windows\` for System); the publisher decides it only outside those folders
 - **Color-coded by type** — Third-party, well-known **Telemetry** (Compatibility
   Appraiser, CEIP, Feedback, Error Reporting), and **System** — so it's obvious
   what's safe to touch
@@ -581,12 +631,13 @@ need administrator rights:
 - Direct Windows Update Agent COM integration (`Microsoft.Update.Session`) —
   installs everything WUA can offer, including optional drivers and firmware
   that PSWindowsUpdate filters out client-side
-- Unified DataGrid for **everything** in one scan — standard, feature
-  upgrades, optional drivers, and hidden updates
+- Unified DataGrid for **everything** in one scan — standard updates, feature
+  upgrades and optional drivers
 - Categorized with colored pills: Security, Cumulative, Defender, Driver,
-  Servicing, .NET, Feature upgrade, Hidden — click headers to sort
-- Per-update checkbox selection with Select all / Deselect all — install
-  exactly what you want, skip what you don't
+  Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort
+- Per-update checkbox selection with Select all / Deselect all — every update the scan lists
+  starts ticked, optional drivers and feature upgrades included, so untick what you don't want
+  before Install selected
 - Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
   streamed to the console as it happens
 - Per-row Status column updated in real time
@@ -596,9 +647,10 @@ need administrator rights:
   `Installed X/Y. Failed: Z. Not applied: W.`
 - Reboot detection — toast notification if any update requires reboot
 - Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
-- Admin banner with a one-click "Run as Administrator" relaunch. Installing needs it, and
+- Admin banner with a one-click "Run as administrator" relaunch. Installing needs it, and so
+  does changing when updates are installed — deferring, pausing or restoring the default;
   without it the tab says so before asking you to approve anything
-- PSWindowsUpdate is optional now (used only for the History view); install it
+- PSWindowsUpdate is optional (used only for the History view); install it
   from a normal, non-administrator SysManager session. The installer validates
   the official PowerShell Gallery endpoint and uses the current-user module directory.
   A **Check now** button confirms on demand whether the module is present, so you
@@ -614,7 +666,9 @@ need administrator rights:
 ### App Updates (winget)
 - Scan for upgradable packages
 - Sort by name, ID, version, or source via clickable column headers
-- Select all or individual packages, bulk upgrade with per-package status
+- Select all or individual packages — every package found starts ticked — and bulk upgrade with
+  per-package status, after a confirmation that warns an upgrade cannot be undone and names the
+  apps when there are five or fewer
 - **Unticking a package survives a rescan** — including when the rescan finds a newer
   version on offer, since "don't upgrade this one" doesn't stop being true because the
   version changed
@@ -633,31 +687,34 @@ System → System Fixes, where the tab name matches what they do.
 - **Component store (WinSxS), reported before it is touched.** WinSxS routinely holds
   several gigabytes of superseded Windows components, and it is where the free editions of
   the mainstream cleaners find their biggest number. "Check component store" runs the
-  read-only `DISM /AnalyzeComponentStore` and tells you what Windows itself says is
-  reclaimable; only then does "Clean up component store" become clickable, and only behind
+  read-only `DISM /AnalyzeComponentStore` and reports how large the store is and whether
+  Windows itself recommends a cleanup (the full breakdown is in the output below); only when
+  Windows recommends one does "Clean up component store" become clickable, and only behind
   a confirmation that states the cost — after a cleanup, updates already installed can no
   longer be uninstalled. `/ResetBase` is never used, and a test makes it impossible to add
-  by accident
+  by accident. The component-store steps and the Windows TEMP folder need administrator rights
 
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
-  before a single byte is deleted. You pick what goes.
+  before a single byte is deleted. Every category with something in it starts ticked — the
+  Recycle Bin on every drive included — except the blue-screen memory dumps and Windows.old, so
+  untick anything you want to keep. Deleting is permanent: nothing goes to the Recycle Bin, and
+  the confirmation says so
 - **What you untick stays unticked.** Scanning again — including with F5 — keeps your
   choices instead of re-ticking everything, so the tab cannot quietly undo the "untick
   anything you want to keep" it just asked you for. A category that was empty last time
   and has filled up since is the one exception: it was unticked by the scan rather than
   by you, so it takes the default again
-- **Says when administrator rights are what's stopping it.** Six of the buckets live in
+- **Says when administrator rights are what's stopping it.** Seven of the buckets live in
   the Windows folder — the Windows Update download cache, Delivery Optimization, the
-  Installer patch cache, `Windows\Temp`, Prefetch and the blue-screen memory dumps — and
-  without administrator they are still scanned and counted but cannot be deleted. They used
-  to show as "skipped" with no reason given; the tab now says so at the top, and offers to
-  restart elevated
+  Installer patch cache, `Windows\Temp`, Prefetch, the blue-screen memory dumps and the old
+  servicing logs — and without administrator they cannot be deleted. The tab says so at the
+  top, and offers to restart elevated
 - **System buckets**: NVIDIA / AMD / Intel installer leftovers, Windows
   Update cache, Delivery Optimization cache, Windows Installer patch
   cache, TEMP, Prefetch, crash dumps, old CBS logs, DirectX shader cache,
   Recycle Bin on every drive.
-- **The two biggest wins on a machine that has crashed**, both new and both scoped to
+- **The two biggest wins on a machine that has crashed**, both scoped to
   exactly the files they name: the **blue-screen memory dumps** (`MEMORY.DMP` is sized to
   your RAM, so it is routinely gigabytes — never ticked for you, because deleting it ends
   any investigation into the crash) and the **Explorer thumbnail & icon cache**, which
@@ -669,9 +726,10 @@ System → System Fixes, where the tab name matches what they do.
   the rest as skipped; **System → System Fixes → "Rebuild icon & thumbnail cache"**
   stops Explorer first and gets all of them, which is what you want if the goal is to
   fix blank icons rather than to reclaim space.
-- **Gamer buckets** — launcher *caches only*, never game files or logins:
-  Steam (appcache, htmlcache, depotcache, shader cache), Epic Games
-  Launcher, Battle.net, Riot / League of Legends, GOG Galaxy, EA Desktop.
+- **Gamer buckets** — launcher caches and logs, never game files or logins:
+  Steam (appcache, htmlcache, depotcache, logs, shader cache), Epic Games
+  Launcher (web cache and logs), Battle.net, Riot / League of Legends (logs only), GOG Galaxy,
+  EA app / Origin (cache and logs).
 - **Windows.old** is detected and flagged as irreversible, never selected
   by default.
 - Safe by design: never touches browsers, passwords, the registry, active
@@ -691,17 +749,20 @@ System → System Fixes, where the tab name matches what they do.
 - **Also reads the "policy" startup list that Task Manager does not show at all** — a favourite hiding
   place for bundled software, since you can switch off everything visible, restart, and it still starts.
   Windows gives an app no way to disable these, so each one is labelled "Set by a system policy —
-  managed elsewhere" instead of being offered a switch that would silently do nothing
+  managed elsewhere", and its switch refuses and says so rather than silently doing nothing. A
+  run-once item, which runs at the next boot and then removes itself, cannot be disabled either,
+  and says that instead
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
   really stays down
-- **A Signature column that says whether Windows can confirm the publisher.** The Publisher column
-  next to it comes from the file's own version info — a string any program can set to "Microsoft
-  Corporation" — so on its own it is a trust badge with nothing behind it. This checks the file's
-  certificate instead, using the same chain validation the in-app updater uses, and shows one of
-  three things: **Verified** ("Windows can confirm this really comes from Google LLC"), **Unsigned**,
-  or **Check failed**. Programs whose command doesn't point at a readable file get no badge at all
-  rather than a guess.
+- **Enable All** turns every disabled entry back on, after a confirmation, and **Hide system** hides
+  the entries whose publisher is Microsoft or whose command runs from a Windows or Microsoft folder
+- **A Signature column that says whether Windows can confirm the publisher.** The Publisher column next
+  to it comes from the file's own version info — a string any program can set to "Microsoft Corporation"
+  — so on its own it is a trust badge with nothing behind it. This asks Windows whether the file's
+  signature holds up instead, and shows one of three things: **Verified** ("Windows can confirm this
+  really comes from Google LLC"), **Unsigned**, or **Check failed**. Programs whose command doesn't
+  point at a readable file get no badge at all rather than a guess.
   - **Unsigned is grey, not a warning.** Most small utilities are unsigned and so is SysManager
     itself; the tooltip says so in as many words. Amber is reserved for a file that *is* signed and
     whose signature does not hold up — the one case here worth a second look.
@@ -715,25 +776,30 @@ System → System Fixes, where the tab name matches what they do.
 - Sort by name, publisher, location, safety, status, signature, or startup impact via clickable column
   headers
 - Plain-language description for recognised programs (from the built-in database) instead
-  of a raw command line, plus a Safety chip — Windows / Known app / Not recognised — so you
-  can tell what an entry is before deciding whether to turn it off
+  of a raw command line, plus a Safety chip — Windows or Known app — so you can tell what an
+  entry is before deciding whether to turn it off. A program the database does not know gets no
+  chip rather than a guess
 - Shows name, publisher, and enabled/disabled status; the full command path is on hover
 - **A Location column** saying where the entry actually lives — which registry Run key and hive, which
   Startup folder, or Task Scheduler. This is the difference between an entry you can switch off yourself,
   one that needs administrator rights, and one a system policy holds in place; long paths shorten from
   the end, with the full value on hover
 - **A Startup impact column** — how long Windows measured that program delaying your last start-up, from
-  Windows' own boot-performance events rather than an estimate. Sorts by the real delay, so the slowest
-  entry comes first. A figure appears only when Windows' report matches the entry exactly, by name or by
-  executable file name: a near-match would blame the wrong program, and this is the tab where you act on
-  that. Blank means Windows measured nothing, never "0 s". Requires administrator rights, because reading
-  those events does — the banner at the top of the tab says so
+  Windows' own boot-performance events rather than an estimate. Sorts by the real delay rather than the
+  text, and a second click on the header puts the slowest entry first. A figure appears only when
+  Windows' report matches the entry exactly, by name or by executable file name: a near-match would
+  blame the wrong program, and this is the tab where you act on that. Blank means Windows measured
+  nothing, never "0 s". Requires administrator rights, because reading those events does — the banner at
+  the top of the tab says so
 - Open file location in Explorer
 
 ### Windows Features
 - Lists all Windows optional features with current state (Enabled/Disabled)
 - Toggle enable/disable per feature with confirmation dialog
-- Categorized: Virtualization, Networking, Development, Media & Print, Legacy
+- Categorized: Virtualization, Networking, Development, Media & Print, Legacy, and Other for the rest
+- A **Safety** column — Safe, Caution or Critical, with the reason on hover. A feature the built-in
+  list does not know is marked Caution. It informs rather than blocks: every feature can still be
+  toggled after the confirmation
 - Shows reboot-required status after toggling
 - **A Windows restore point is attempted before the first toggle of the session**, shared with the
   other tabs that change system settings. This is the tab where it matters most: turning a feature
@@ -755,7 +821,8 @@ System → System Fixes, where the tab name matches what they do.
   silently, each row shows its date so you can check it, and "Keep this one" moves the
   badge when you know better — a copy that preserved its timestamp, or a cloud-sync
   rewrite, will fool the heuristic
-- **Read-only** — "Show in Explorer", "Copy path" and "Keep this one" only. Nothing is
+- **Read-only** — **Open** (shows the file in Explorer), **Copy** (copies its path) and "Keep this
+  one" only. Nothing is
   deleted, moved or renamed; deciding which of five identical photos to remove is done by
   you, in Explorer
 
@@ -766,7 +833,7 @@ System → System Fixes, where the tab name matches what they do.
   folder, right-click for Show in Explorer. Folders too small to label share one grey "Other"
   block, and a wider window shows more of them. Every block is a button with its name, size and
   share for a screen reader, and "Hide map" (remembered) gives the list its full height back
-- Drive usage bar with total/used/free
+- Drive usage bar showing how full the drive is
 - Preset paths (fixed drives, user profile, Program Files) or custom browse
 - Show in Explorer for each folder
 - **Export CSV** saves the breakdown to a file you choose the location for, with both the
@@ -777,29 +844,32 @@ System → System Fixes, where the tab name matches what they do.
   `System Volume Information`, `Windows\WinSxS`, `Windows\CSC`) are skipped because they are
   slow or unreadable, and junctions are never followed, since following one would
   double-count or lead outside the folder you asked about. `WinSxS` alone is often several
-  GB, so the tab states on screen that its total can be smaller than the free space Windows
-  reports, and names the exact folders on hover
+  GB, so the tab states on screen that its total can be smaller than the space Windows
+  reports as used, and names the exact folders on hover
 - Folders Windows wouldn't let it fully read are marked, so a partial figure never looks
   like a complete one
 - A folder it cannot measure at all — one that no longer exists, a link to somewhere else, or
   one Windows will not let it list — is reported as exactly that, not as an empty folder, and is
   not remembered as your last scan of it
-- **Remembers your last scan of each folder** and shows what changed — "3.2 GB larger than your
-  last scan on 12 Jul" — so a one-off number becomes an answer to "why did my disk fill up?". It is
-  always phrased as *since your last scan*, never as live monitoring, because you choose when to
-  scan. Stored only on this PC and never carried to another (folder sizes here mean nothing there).
-  If the earlier scans cannot be read, the tab says so, and never saves a new scan over them
+- **Remembers your last scan of each folder** (the 20 most recently scanned) and shows what changed —
+  "3.2 GB larger than your last scan on 12 Jul 2026" — so a one-off number becomes an answer to "why did
+  my disk fill up?". It is always phrased as *since your last scan*, never as live monitoring, because
+  you choose when to scan. Stored only on this PC and never carried to another (folder sizes here mean
+  nothing there). If the earlier scans cannot be read, the tab says so, and never saves a new scan over
+  them
 
 ### Large Files
 Answers "what is actually using my space?" by listing the biggest files in one place.
 - Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program Files, or a whole drive
 - Configurable minimum size (default 500 MB) and how many to list (default 100)
-- **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy path".
+- **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy" (copies its
+  path).
   Deletion is disabled by design, even with administrator rights, so a mis-click here can
   never cost you a file. Deleting is a decision to make in Explorer, where you can see what
   else is in the folder
-- Windows' own paging files are left out — `pagefile.sys`, `hiberfil.sys` and `swapfile.sys` are
-  usually the two biggest files on the system drive, and nothing you can do here affects them.
+- Windows' own paging and hibernation files are left out — `pagefile.sys`, `swapfile.sys` and
+  `hiberfil.sys` are usually among the biggest files on the system drive, and nothing you can do here
+  affects them.
   [Disk Analyzer](#disk-analyzer) still counts them, which is where to look if you want to know
   how much they take
 - Lives beside [Disk Analyzer](#disk-analyzer) and [Duplicate Finder](#duplicate-finder) because
@@ -810,6 +880,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 ### Process Manager
 - Lists running Windows processes with PID, memory, threads, status, and when each one started
 - Real-time filter by name, description, category, or PID
+- **Show only apps** narrows the list to programs with a window, and a program whose window has
+  stopped responding reads **Not responding** in the status column
 - Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
 - **Right-click a row** for the same actions the row's buttons offer, or press the Menu key or
   Shift+F10 — the Windows shortcut Task Manager honours. Without it, reaching the buttons on the
@@ -854,16 +926,16 @@ Answers "what is actually using my space?" by listing the biggest files in one p
     is on screen straight away and the badges arrive over the next couple of seconds rather than the tab
     making you wait for them
   - **Windows components count as signed too** — Windows signs most of its own programs through a
-    separate catalogue file rather than inside the program, and both are read, so `svchost.exe`,
-    `conhost.exe` and the rest are confirmed rather than listed as unsigned. What is still marked
+    separate catalogue file rather than inside the program, and both are read, so `powershell.exe`,
+    `cmd.exe`, `conhost.exe` and the rest are confirmed rather than listed as unsigned. What is still marked
     **Unsigned** is genuinely unsigned
-- Kill process with confirmation dialog, and the warning matches the real cost.
-  Processes Windows genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, …)
-  are refused outright. Security and servicing processes (Defender's engine, Windows
-  Installer) can be ended, but only after a prompt that says plainly it can switch off
-  protection or interrupt an update part-way, and that a restart does not undo that.
-  Other Windows components get a warning that a feature may look broken until you
-  sign out. Everything else gets the ordinary "unsaved work may be lost" confirm
+- Kill process with confirmation dialog, and the warning matches the real cost. Processes Windows
+  genuinely cannot survive losing (`winlogon`, `csrss`, `lsass`, `svchost`, `dwm` and eight more) are
+  refused outright, even as administrator. Security and servicing processes (Defender's engine, Windows
+  Installer) can be ended, but only after a prompt that says plainly it can switch off protection or
+  interrupt an update part-way, and that a restart does not undo that. Other Windows components get a
+  warning that a feature may look broken until you sign out. Everything else gets the ordinary "unsaved
+  work may be lost" confirm
 - **Kill ends that one program**, as Task Manager's End task does. The programs it
   started keep running, so ending Explorer to fix a frozen taskbar does not close
   everything you opened from it. If the program closed while the confirmation was open
@@ -871,14 +943,16 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   SysManager's own row is refused: close it from its window or the tray instead
 - Open file location in Explorer
 
-### Resource History
+### Resource History 🔬
 - **Historical CPU, RAM, GPU usage and temperatures** — the app samples your
   vitals every 10 seconds in the background (including while minimized to the
   tray), so you can investigate what caused a spike yesterday instead of seeing
   only the live moment
 - **Scrollable timeline** — pick a range (last hour, 6 hours, 24 hours, 7 days,
   30 days); the usage chart (CPU / RAM / GPU %) and a separate temperature chart
-  (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth
+  (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth. GPU usage is
+  read from NVIDIA cards only; temperatures need sensors Windows can read, and the CPU's needs
+  administrator rights
 - **Configurable retention** — keep 7, 14, or 30 days of history; older samples
   are pruned automatically. If the setting cannot be read, nothing newer than 30 days
   is pruned until it can be, or until you choose again
@@ -890,7 +964,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **See your network usage at a glance** — live total download and upload speed
   with a rolling throughput chart (the last ~2 minutes), so you can spot a sudden
   upload (a background sync, an update, something unexpected) the moment it starts
-- **Who's using the network** — a per-app list showing which programs are talking,
+- **Who's using the network** — a per-app list showing which programs are talking (the 40 busiest),
   how many connections each holds, and the remote ports involved. This works with
   **no administrator rights and no setup** — it reads the same connection tables
   Windows exposes to any user
@@ -909,8 +983,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Look back over the last hour, day, or week** — pick a range and the chart shows
   the throughput it recorded, with how much you actually downloaded and uploaded over
   that period and the fastest speed you hit. That answers "where did my data cap go?"
-  without any account or cloud service. History is recorded while the tab is open and
-  kept for 7 days, in a plain file on your own PC
+  without any account or cloud service. History is recorded only while the tab is on screen,
+  and kept for 7 days in a plain file on your own PC
 - Strictly local and read-only: SysManager only observes, never throttles or blocks,
   and nothing about your traffic leaves the machine
 
@@ -948,7 +1022,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   which app used the camera can be sent to whoever helps you with the PC instead of
   photographed off the screen. The file stays on your machine unless you move it
 
-### Settings Watchdog
+### Settings Watchdog 🔬
 - **Catch the settings Windows Update silently resets** — feature and quality
   updates often flip telemetry back to Full, re-enable web search, the Widgets
   board, lock-screen ads, and Start-menu suggestions
@@ -960,14 +1034,17 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   full disk, for example — the tab says it was not saved, and why. If a saved baseline
   cannot be read, the tab says so, and saving a new one asks first and keeps the old file
   aside
-- **Check now** re-reads the live values and lists any drift in plain language —
-  e.g. *"Diagnostic data: was 'Off (Security)', now 'Full'"* — with the category
-  and a before/after comparison
+- **Check now** re-reads the live values and lists any drift in plain language, one row per
+  setting with its category and **Was** / **Now** columns — e.g. *Diagnostic data (telemetry):
+  Was "Off (Security)", Now "Full"*
 - **Export CSV** saves the list of changes before you restore them. Restore overwrites the
   "now" column, so this file is the only record of what Windows changed — which is why the
   button sits to the left of Restore
 - **Restore changed** writes the drifted settings back to your baseline values in
-  one step (HKLM-backed settings need administrator rights, surfaced not crashed)
+  one step, after one confirmation. Telemetry, activity history and Widgets are machine-wide
+  policies and need administrator rights, surfaced not crashed. A setting that was not set at all
+  when you saved the baseline cannot be put back this way: it is listed, but Restore changed
+  reports it as not written
 - **Undo Changes links here** — the settings that drifted from your baseline, and that
   Restore changed can write back, are one row there that opens this tab
 - Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and
@@ -978,13 +1055,19 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Operations grouped by category (Disk, Network, SystemModification, Shell, Install)
 - If a conflicting operation is already running, the UI shows which operation
   is blocking and refuses to start the new one
-- Integrated into every tab that mutates disk, network, or system state, restarts the Windows
-  shell, or installs, upgrades or uninstalls software (Cleanup, Deep Cleanup, Disk Analyzer, Large
-  Files, Duplicate Finder, Speed Test, Traceroute, Network Repair, DNS & Hosts, Shortcut Cleaner,
-  File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
-  Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
-  Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender Tweaks,
-  Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions)
+- Taken by the tabs that change disk, network or system state, restart the Windows shell, or
+  install, upgrade or uninstall software: Quick Cleanup, Deep Cleanup, Shortcut Cleaner, File
+  Shredder, Browser Cleaner, Network Repair, DNS & Hosts, Performance Mode, Gaming Profile,
+  Environment Variables, System Fixes, Windows Features, Windows Update, Restore Points, Context
+  Menu, App Updates, Bulk Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender
+  Tweaks, Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions. Disk
+  Analyzer, Large Files and Duplicate Finder only read, and take it so a scan never runs while a
+  cleanup is deleting; Speed Test and Traceroute take it so a measurement never runs during a
+  network change
+- These tabs change things without it: Startup Manager, Task Scheduler, App Blocker, Notification
+  Blocker, Settings Watchdog, Scheduled Maintenance, Standby List Cleaner, Display Profiles, Timer
+  Resolution, CPU Core Affinity, Dark Mode Scheduler, Volume Control, Profile Export/Import, and
+  ending a process on Process Manager or File Lock Detector
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
   Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
   1618, because Windows Installer only ever runs one installation at a time.** The four now refuse
@@ -1006,19 +1089,25 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   around the changes — it and Performance Mode set the same power plan and the same
   visual-effects switch, so whichever starts second would otherwise write down the
   other one's change as "how you had it" and restore you to that later
-- Undoing is never refused. If a game exits while another change is running, the
-  optimizations are still reverted — leaving your PC on a gaming power plan because a
-  lock was busy would be worse than the clash the lock exists to avoid
+- **Gaming Profile's undo is never refused.** If a game exits while another change is running,
+  or SysManager puts back a session a crash left on, the optimizations are still reverted —
+  leaving your PC on a gaming power plan because a lock was busy would be worse than the clash
+  the lock exists to avoid. The undo buttons you press yourself — Performance Mode's Restore All,
+  Environment Variables' Restore backup, DNS & Hosts' Undo, and Undo Changes — wait their turn
+  like any other change, and say what is running
 
 ### Shortcut Cleaner
-- Scans Desktop, Start Menu, Quick Launch, and Recent Items for broken .lnk
-  shortcuts whose targets no longer exist
+- Scans your Desktop and the Public Desktop, your Start Menu and the all-users Start Menu, Quick
+  Launch, and Recent Items for broken .lnk shortcuts whose targets no longer exist. Removing one
+  from the Public Desktop or the all-users Start Menu needs administrator rights
 - **"Broken" means the scan proved the target is gone, never that it could not reach it.** A
   shortcut to a file on a drive that is not plugged in, on a network folder that is not
   answering, on a BitLocker volume still locked, or in a folder this user cannot read is
   **left alone and counted**, not listed — because every listed shortcut arrives ticked for
   deletion. The status line says how many were left alone and why, so an empty list on a PC
-  with an unplugged drive reads as "nothing confirmed" rather than "your PC is clean"
+  with an unplugged drive reads as "nothing confirmed" rather than "your PC is clean". A shortcut
+  to a network share is never judged gone, even when the share has been removed: from here a
+  removed share and a sleeping one look the same
 - Lists results with name, location, and missing target path
 - **Export CSV** saves the list before you delete anything, naming both the shortcut and its
   missing target, so the change is reviewable rather than a batch of deletions nobody can audit
@@ -1027,10 +1116,14 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Move to Recycle Bin or permanent delete, with confirmation dialog
 - COM-based IShellLink resolution for accurate target validation
 
-### Scheduled Maintenance
+### Scheduled Maintenance 🔬
 - **Automate maintenance on a schedule** — register one Windows scheduled task that
   runs SysManager in the background (via its CLI) to clean temporary files or purge
-  standby memory, daily or weekly at a time you pick
+  standby memory, daily or weekly at a time you pick — on the hour, or at a quarter past, half
+  past or a quarter to
+- **Purging standby memory needs administrator rights, and the scheduled task runs without
+  them**, so a scheduled purge does not succeed; the task's last result shows the failure.
+  Cleaning temporary files works on a schedule
 - See the **last run, next run, and last result** of the task at a glance
 - **"Not scheduled" means Windows said so.** If the schedule cannot be read, the page says that
   instead of "No maintenance is scheduled yet", and Save warns that it replaces any schedule
@@ -1050,7 +1143,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Windows' own count of skipped runs is shown** when it is not zero — the only signal
   Windows gives for a run its conditions blocked
 - Update or remove the schedule any time, each with a confirmation
-- Runs in your user context (no admin required) and only ever touches its own task
+- Runs in your user context (no admin required), only while you are signed in, and only ever
+  touches its own task
   at `\SysManager\Scheduled Maintenance` — no other scheduled tasks are affected
 - Built on the same safe CLI verbs; nothing destructive is automated
 
@@ -1074,15 +1168,18 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   the changes need it
 - Category filter
 - Requires admin for HKLM-backed toggles
-- Fully reversible — re-enable any toggle with one click
+- Fully reversible — switch a toggle back and press **Apply**. Turning one off removes the
+  value SysManager wrote, so Windows goes back to its own default
 - **A Windows restore point is attempted before the first Apply of the session** — the same one
   every tab that changes the system shares. It is attempted after you confirm, so declining
   costs you nothing, and it is mentioned only when one was really created
 
 ### File Shredder
-- Secure multi-pass file and folder deletion beyond recovery
-- Three shred methods: Quick (1 pass, zero fill), Standard (3 passes), Thorough (7 passes)
-- Cryptographically random overwrite data (RandomNumberGenerator)
+- Secure multi-pass file and folder deletion beyond recovery on a hard disk. **On an SSD the tab says
+  plainly that overwriting is unreliable** — wear-levelling can keep copies that no overwrite reaches —
+  and points to full-disk encryption (BitLocker or VeraCrypt) instead
+- Three shred methods: Quick (1 pass, zero fill), Standard (3 passes) and Thorough (7 passes); Standard
+  and Thorough end with a pass of cryptographically random data (RandomNumberGenerator)
 - Add files or entire folders via file picker dialogs
 - Per-item progress, and **Cancel stops the queue rather than abandoning a file mid-overwrite.**
   Nothing that has not started is touched; a file whose overwrite has already begun is finished
@@ -1090,6 +1187,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   there would leave a file at its original name holding nothing while telling you the operation
   was cancelled. The summary says how many items were destroyed before you stopped
 - Skips junction points and symbolic links (prevents symlink attacks)
+- **Refuses Windows' own folders** — Windows, System32 and Program Files — even through a link or a
+  short name, a file with more than one hard link, and a selected folder that is itself a link. A file
+  it cannot overwrite is left where it is and named, never deleted the ordinary way
 - Confirmation dialog before irreversible shred
 
 ### Ping
@@ -1110,8 +1210,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   - **Streaming** — YouTube, Twitch, Cloudflare, to correlate buffering with the network
 - **Your gateway is detected and added automatically**, so the first thing the chart can
   tell you apart is your own network from everything beyond it
-- **Live latency chart** with a pickable window (1, 5, 10 or 15 minutes) and a pingable
-  interval, default once per second
+- **Live latency chart** with a window you pick in seconds (60, 300, 600 or 900 — one to
+  fifteen minutes) and a ping interval you type in seconds, default once per second. Each
+  target has its own on/off switch
 - Headline numbers across all targets: average ping, worst loss, worst jitter
 - Start, Stop and Clear are separate, and the status line confirms what Clear did
 
@@ -1119,7 +1220,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Traces every ping target on a loop**, so you can see which hop the latency appears at
   rather than only that the destination is slow — interval 30 s to 10 min, default 60 s
 - **Latency per hop, charted**, alongside the hop table (number, address, ms)
-- **One-off trace to any host** you type, with its own status line and a Cancel button
+- **One-off trace to any host** you type (**Trace now**), with its own status line and a Cancel
+  button. **Start auto-trace** adds the host you typed to the loop and traces it straight away
 - Shares its targets and its start/stop state with the Ping tab, because it is the same
   monitor answering a different question
 
@@ -1163,8 +1265,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   - **Reset TCP/IP Stack** — rebuilds the TCP/IP registry keys from Windows defaults. The
     last resort, and labelled as one: it discards custom IP configuration, routes and
     adapter settings. Admin + reboot.
-- **Admin elevation banner** stating exactly which of the three need elevation and what
-  unlocks once you restart elevated
+- **Admin elevation banner** with a one-click restart as administrator, and the card says which
+  fixes need it: the Winsock and TCP/IP resets need administrator rights and a reboot, Flush DNS
+  needs neither
 - **A reboot warning appears only after a fix that actually needs one**, rather than
   standing on screen permanently
 - Each of the three is confirmed before it runs, and the buttons disable while a repair is
@@ -1172,7 +1275,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 
 ### DNS & Hosts
 - **DNS Preset Switching** — one-click DNS change: plain resolvers (Google,
-  Cloudflare, Quad9, OpenDNS) plus **ad/malware/family-blocking variants**
+  Cloudflare, OpenDNS), Quad9, which blocks known malware domains by default, plus
+  **ad/malware/family-blocking variants**
   (Cloudflare 1.1.1.2 malware / 1.1.1.3 family, AdGuard DNS ad-blocking + family,
   OpenDNS FamilyShield), each with a description of what it blocks. **IPv6
   resolvers** are configured automatically alongside IPv4. Preset changes and
@@ -1182,7 +1286,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   automatic/static configuration without persisting DHCP-supplied addresses as
   static overrides. Undo lasts until SysManager closes: DNS is not one of the changes SysManager
   keeps a copy of, so after a restart pick the preset you had, or **Reset to DHCP**.
-- **Current DNS** — the servers the active adapter uses, or "Automatic (DHCP)" when none
+- **Current DNS** — the IPv4 servers the active adapter uses, or "Automatic (DHCP)" when none
   are set. When Windows cannot report them it says "Unavailable" rather than guessing.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
@@ -1208,27 +1312,32 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   already installed is upgraded instead when a newer version exists, in the same
   words App Updates uses
 - **Custom winget search** — search the entire winget repository and add
-  any package to your install queue. A search that fails says why, rather than
-  "No packages found"
+  any package to your install queue; up to 30 results, listed under Custom. A search
+  that fails says why, rather than "No packages found"
 - **Already installed is not a failure** — an app that is already on the PC, with nothing
   newer to install, is marked "Already installed" and counted on its own, not as a failed
   install
 - Category filter and text search across the catalog, plus a button that ticks
   every app in the chosen category at once
 - Per-package install status tracking with ETA
-- GroupedView with visual category headers
+- The catalog is grouped under category headings, and an app already on this PC carries an
+  **Installed** badge
+- Some apps install system-wide and need administrator rights; the banner at the top says so
 
 ### New App Alerts
-- Monitors Program Files, AppData\Programs, and registry uninstall keys for
-  new application installations
+- Monitors Program Files, Program Files (x86), AppData\Local\Programs and the
+  machine-wide registry uninstall keys for new application installations, from the
+  moment you press **Start Monitoring**
 - FileSystemWatcher on install directories + 30-second registry poll cycle
 - Shows timestamped install history with app name, publisher, path, and
   detection source
 - **Export CSV** saves the history to a file you choose the location for. Worth doing before
   **Clear History**, which erases it — the button sits to the left of it for that reason
-- Start/stop monitoring, acknowledge alerts, clear history. While it is monitoring, **F5**
+- Start/stop monitoring, **Acknowledge All**, clear history. While it is monitoring, **F5**
   checks for new installs straight away instead of waiting for the next 30-second pass. To
   see every program that is installed, use the Uninstaller
+- **The list lasts while SysManager runs** — it is not saved to disk, so export it before
+  closing SysManager. Clear History asks first, since it cannot be undone
 - Notifies you when a new install is detected, so you find out even when you are
   on another tab or the window is in the notification area
 
@@ -1248,8 +1357,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   blocking and unblocking write the same protected setting, and each says so
   before asking you to confirm anything
 - **Refuses any target whose block could not be undone** — the processes Windows needs
-  to start, the permission prompt (`consent.exe`), and SysManager itself. Each refusal
-  says which one it is rather than blaming your admin rights
+  to start, the permission prompt (`consent.exe`), and SysManager itself — and a program
+  another program has already registered a debugger for, so that setup is never overwritten.
+  Each refusal says why rather than blaming your admin rights
 - **Warns about a block it could not lift**, including one written by an older version
   before that refusal existed. Such an entry is marked in the list, raised on the
   Dashboard, and the banner gives the recovery step — including the exact registry
@@ -1262,7 +1372,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 Remove preinstalled Windows Store apps you don't use. This tab has no ad or suggestion controls —
 those are in **Privacy & Telemetry**, and it used to be called "Debloater & Ads", which promised
 them:
-- **Scan** all installed Store apps with name, publisher, and a short description
+- **Scan** all installed Store apps with name and publisher, and a short description for the
+  apps in the built-in list
 - **Curated "common bloat" preset** pre-selects safe, frequently-removed apps
   (Bing News/Weather, Clipchamp, Solitaire, Xbox apps, consumer Teams, and more)
 - **System-critical apps are protected** — the Store, frameworks, and security/shell
@@ -1279,7 +1390,7 @@ them:
   that change system settings. Described honestly rather than reassuringly: System Restore does
   **not** bring Store apps back, so reinstalling from the Store stays the real undo and the app
   says exactly that
-- Search and per-app descriptions help you decide before removing
+- Search, and the descriptions of the apps it knows, help you decide before removing
 
 ### Browser Cleaner
 Reclaim space and clear browsing traces, per browser:
@@ -1317,10 +1428,12 @@ Reclaim space and clear browsing traces, per browser:
   **another program put there**, the ones your organisation manages, and the ones that are turned off.
   Those added by another program come first, and one whose files cannot be read is still listed rather
   than left out. **Read-only**: SysManager never changes a browser —
-  "Manage in …" opens the browser's own extensions page, where it asks you itself. While SysManager runs
-  as administrator it opens no browser, so the browser never gets those rights: it puts the page's address
-  on your clipboard for you to paste instead. Searching the sidebar for "extensions", "add-ons" or
-  "browser ads" opens this view
+  "Manage in …" opens the browser's own extensions page, where it asks you itself. For Opera, whose
+  channels share one program name, and for a Firefox profile other than the one Firefox starts in, it
+  puts the page's address on your clipboard to paste instead, since starting the browser could open the
+  wrong one. While SysManager runs as administrator it opens no browser, so the browser never gets those
+  rights: it copies the address then too. Searching the sidebar for "extensions", "add-ons", "search
+  changed" or "browser ads" opens this view
 
 ### Edge/OneDrive Remover
 Get Microsoft Edge and OneDrive out of your way — reversibly:
@@ -1340,8 +1453,8 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
 - **Honest about the default browser** — Windows hash-protects the default-browser
   choice, so no app can switch it for you; the tab opens Windows' default-apps settings
   and guides you instead of pretending to change it
-- Every action confirms first with a plain-language impact summary; disabling Edge needs
-  administrator (the tab explains why and what it unlocks), removing OneDrive does not
+- Every action confirms first with a plain-language impact summary; disabling Edge and restoring
+  it need administrator (the tab explains why and what it unlocks), removing OneDrive does not
 - **A Windows restore point is attempted before the first change of the session** — shared with
   the other tabs that change system settings, so at most one is made no matter how many tabs you
   use. It is mentioned only when one was really created: System Restore is switched off on many
@@ -1352,8 +1465,9 @@ Manage Microsoft Defender without digging through Windows Security:
 - **Status at a glance** — real-time protection, cloud protection (MAPS), PUA
   protection, and Controlled Folder Access
 - **Toggle PUA protection and Controlled Folder Access** (ransomware protection). Turning
-  Controlled Folder Access on first says which apps it will stop from saving into your
-  folders, and where in Windows Security to allow one
+  Controlled Folder Access on first says which folders it protects, that some games and
+  programs then cannot save there until you allow them, and where in Windows Security to
+  allow one
 - **Scan exclusions** — add or remove folders Defender should skip (handy for
   big game libraries); paths are validated and additions never replace your
   existing exclusions. Windows shows the list only to an administrator, so
@@ -1369,7 +1483,7 @@ Manage Microsoft Defender without digging through Windows Security:
   quietly skip it, and it is mentioned only when Windows really made one — never on a change that
   was rejected
 
-### Notification Blocker
+### Notification Blocker 🔬
 Mute the apps that nag you with pop-up notifications — update reminders, trial
 offers, "rate us" prompts:
 - **Lists every app that has shown a notification**, most recently active first,
@@ -1381,6 +1495,7 @@ offers, "rate us" prompts:
   also mutes calendar and reminder alerts)
 - **Pending-changes flow** — flips stay local until you press Apply, with a
   confirmation and a Discard to back out
+- Search the list by app name
 - Fully reversible (flip the switch back), per-user, no administrator needed
 
 ### Battery Health
@@ -1394,6 +1509,8 @@ offers, "rate us" prompts:
 - Health and wear need administrator rights (SysManager reads them from a part of
   Windows that answers only an elevated process). Without it they read "Not available"
   and the page explains why, instead of showing a number that isn't a measurement.
+  Design capacity, full-charge capacity and cycle count come from the same place, so
+  without administrator rights they show 0: read that as not measured
 - **Capacity over time** — how much charge the battery holds when full, as a percentage
   of what it held when new, drawn from the history Windows keeps of it, so it shows
   months on the first visit. No administrator rights needed
@@ -1401,15 +1518,17 @@ offers, "rate us" prompts:
   usual, judged on the last six months against what ordinary use costs, with what helps.
   It never says the battery is dying, and under three months of history a faster loss
   is called too early to tell
-- A replaced battery starts a new line instead of drawing as a recovery. With less than
-  a month of history the card says how much Windows has recorded so far
+- After a battery is replaced, the chart and the verdict start again from the new battery:
+  the old one's history is left out, so a replacement never draws as a recovery. With less
+  than a month of history the card says how much Windows has recorded so far
 
 ### Uninstaller
 - Lists all installed applications via winget with size from registry. If winget cannot
   list them, the tab says so instead of reporting 0 applications
 - Filter by name or package ID
-- Sort by name, size, or publisher via clickable column headers
-- Select/deselect all, batch uninstall with confirmation dialog. Ticks survive a rescan, and
+- Sort by any column — name, size, version, publisher, source or status — via clickable headers
+- Select/deselect all, batch uninstall with confirmation dialog. Select all asks first when it
+  would tick more than 20 apps with no filter typed. Ticks survive a rescan, and
   applications Windows reports without a package id — most of the older ones — are matched by
   name too, so they are not treated as one entry
 - Local app support — uninstalls apps not in winget via registry UninstallString
@@ -1422,9 +1541,11 @@ offers, "rate us" prompts:
 ### Gaming Profile 🔬
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,
   then restore them automatically when the game exits (or with a single Stop)
-- **Optionally target a running game** — its CPU priority is raised to High and it's
-  pinned to the performance cores, and its exit is what triggers the automatic revert, even
-  when it closes while game mode is still starting
+- **Optionally target a running game** — two ticks apply to it: High CPU priority, on by
+  default, and pinning it to the performance cores, off by default because many games schedule
+  better across all cores (on a CPU without performance cores, pinning uses all of them). Its
+  exit is what triggers the automatic revert, even when it closes while game mode is still
+  starting
 - **Changes the game you picked, and no other** — if it closed after the list was read and
   Windows gave its process ID to another program, Start changes nothing and says the game had
   already closed, and neither raising, restoring nor waiting for the game ever reaches that program
@@ -1452,7 +1573,7 @@ offers, "rate us" prompts:
 - **Honest about the restore** — every setting is put back even if one of them fails, and the
   tab names any setting it could not restore, instead of saying everything is back
 - **Honest about admin** — freeing standby memory and pausing indexing need
-  administrator; without it they're clearly skipped, not silently failed
+  administrator; without it those two ticks are greyed out and skipped, not silently failed
 - 🔬 Preview — fully reversible today; closing background apps and saved per-game
   profiles are planned for a later update
 
@@ -1460,11 +1581,12 @@ offers, "rate us" prompts:
 - **Lower input latency for games** — requests the finest Windows timer
   resolution (≈0.5 ms) instead of the ~15.6 ms default, via the ntdll
   `NtSetTimerResolution` API
-- **Live current/finest/default readout** — always re-queries the *effective*
-  resolution (Windows 11 may stop honoring a request while the window is
-  minimized), so the number shown is the real one
+- **Current/finest/default readout** — read when the tab opens, after each change and on
+  **Refresh** (or F5), always as the *effective* resolution (Windows 11 may stop honoring a
+  request while the window is minimized), so the number shown is the real one
 - **One-click enable / restore** — fully reversible; the request is released
-  when you restore it or simply close the app. No admin required
+  when you restore it or when SysManager exits — closing the window to the notification area
+  keeps it. No admin required
 - **Honest about other programs** — Windows runs the timer at the fastest rate any
   program asks for, so a game, a browser playing video or a chat app can keep it
   fast after SysManager lets go. The tab says so and shows the value, instead of
@@ -1478,7 +1600,7 @@ offers, "rate us" prompts:
   using only the Windows display APIs (no NVIDIA/AMD tool conflict)
 - **Safe by design** — applies for the session, so a reboot reverts; on top of
   that a **15-second auto-revert** restores the previous mode unless you confirm
-  "Keep", so a bad mode can never strand you on a blank screen
+  "Keep", so a bad mode can never strand you on a blank screen; **Revert now** goes back at once
 - **Per-display** — choose which monitor to configure; shows the current mode
 - Validates each mode (CDS_TEST) before applying; no admin required
 
@@ -1527,13 +1649,15 @@ offers, "rate us" prompts:
 - **Game Mode**: enable/disable via registry
 - **Xbox Game Bar**: disable overlay and Game DVR via registry
 - **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required)
-- **Processor State**: force CPU min state to 100%
+- **Processor State**: force CPU min state to 100%. Under the High Performance and Ultimate
+  Performance plans it is already 100%, so the switch is locked and says so
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
-- **Your original settings are recorded before the first change** and kept on disk, so
-  Restore All still works after a restart. Each Apply, and Restore All, reads that record
-  from disk when you press it; it is checked before use, and the question shows when it was
-  taken. A power plan the record could not read is listed as "unchanged", because Restore All
-  leaves it alone
+- **Your original settings are recorded before the first change** and kept on disk, so Restore All still
+  works after a restart. Restore All puts back seven settings — the power plan, visual effects, Game
+  Mode, the Xbox Game Bar, Game DVR, the NVIDIA setting and the processor minimum; hibernation is not
+  one of them, so turn it back on with its own switch. Each Apply, and Restore All, reads that record
+  from disk when you press it; it is checked before use, and the question shows when it was taken. A
+  power plan the record could not read is listed as "unchanged", because Restore All leaves it alone
 - **It will not record your settings while a game profile is running** — those are the
   profile's power plan and visual effects, not yours, and saving them as your baseline
   would restore you to them later. It asks you to stop the profile first. A baseline
@@ -1555,7 +1679,9 @@ offers, "rate us" prompts:
   that is gone
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
-  making changes (requires admin)
+  making changes (requires admin). If System Protection is off for the Windows drive it is
+  turned on first, which reserves some disk space for restore points, and the confirmation
+  says so
 - **RAM working set trim**: free physical RAM by trimming all process working
   sets — same as RAMMap's "Empty Working Set" (useful before launching a game)
 - **Hibernation toggle**: enable/disable hibernation to free disk space
@@ -1602,7 +1728,8 @@ offers, "rate us" prompts:
 - Requires admin for all mutations
 
 ### Drivers
-- Sortable DataGrid table of all installed system drivers
+- Sortable DataGrid table of all installed system drivers, listed when you press **List drivers**,
+  with a Cancel button while it runs
 - Columns: Device Name, Manufacturer, Version, Date, Signature — click headers to sort
 - **Signature** — whether Windows reports the driver as digitally signed. Manufacturer
   is a name the driver package supplies about itself, so it proves nothing; this column
@@ -1611,32 +1738,41 @@ offers, "rate us" prompts:
   certificate. Blank means Windows reported nothing, which is not the same as unsigned
 - **Hide built-in Windows drivers** — tick the filter to leave only the drivers your
   hardware maker installed (graphics, audio, network, …), which is usually what you
-  care about when checking whether something needs updating. The count shows both
-  totals, so nothing looks like it vanished
+  care about when checking whether something needs updating. A driver counts as built-in when
+  its manufacturer name says Microsoft or Windows. The count shows both totals, so nothing looks
+  like it vanished
 - Data parsed from `Get-CimInstance Win32_PnPSignedDriver`
 - A scan that fails says so instead of reporting 0 drivers, and keeps the previous list.
   If Windows reports an error part-way through, the drivers it did list are shown with a
   note that some may be missing
 
 ### Dashboard
-- One-line OS / CPU / RAM / disk summary
-- Live uptime counter
-- **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the
-  tab that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
+- **The Windows edition, build and uptime** under the title, read when SysManager starts and
+  again on "Scan system"
+- **Storage** — each fixed drive and how full it is
+- **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the tab
+  that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
   updates to App Updates, critical events to System Logs, low disk space to Deep Cleanup, high memory to
-  Process Manager. Findings with nothing wrong show no link, and neither do the two pieces of advice no
-  tab here can carry out — restarting, and replacing a worn battery
+  Process Manager, an app block that cannot be undone normally to App Blocker. Findings with nothing wrong
+  show no link, and neither do the two pieces of advice no tab here can carry out — restarting, and
+  replacing a worn battery
 - **System Alerts** — disk health, app updates, memory errors in the last 30 days, critical events in the
   last 7 days, a pending reboot, and any app block that cannot be undone normally. They are checked when
   SysManager starts, again when you press "Scan system", and after Update All Apps. A check that could not
   run says so in amber rather than reading as good news
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
-  indicator dots.
-- **Recent Activity** — what SysManager actually changed on this PC, with timestamps:
-  cleanups, deletes, uninstalls, privacy and DNS changes, restore points, shredded
-  files. Counts and sizes only — never file names, since the log is plain text on
-  your own disk. Opening a tab isn't an action, so it isn't listed, and neither is a speed
+  indicator dots. GPU usage is read from NVIDIA cards only.
+- **Temperatures** — every sensor Windows can read, refreshed every 2 seconds while the tab is
+  visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
+  temperatures are available, and the card says so
+- **Recent Activity** — the five most recent things SysManager changed on this PC, with how long
+  ago: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
+  restore points, shredded files, game mode, and what Undo Changes put back. Not every tab writes
+  here yet — Performance Mode, Services, Startup Manager, Windows Features and the App Updates tab,
+  among others, do not. The history keeps the last 60. Each entry holds counts, sizes and the
+  choice you made, such as a DNS preset or a restore point's name — never file names, since the
+  log is plain text on your own disk. Opening a tab isn't an action, so it isn't listed, and neither is a speed
   test, which goes into the Speed Test history instead. It does note when SysManager closed
   unexpectedly the previous time. A cleanup run from the command line or from Scheduled
   Maintenance appears here too, even while SysManager is open. If the history cannot be read
@@ -1648,23 +1784,24 @@ offers, "rate us" prompts:
   A check that could not run is named on the card ("Not checked this time:
   the disks") rather than counted as fine, so "All good" means every check
   ran and found nothing. The confirmation says that the Recycle Bin's contents
-  cannot be recovered; nothing else it does is destructive. No admin required.
+  cannot be recovered; the temporary files it cleans are deleted outright too, not sent to the
+  Recycle Bin. No admin required.
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
   Windows Update what is waiting and says how many updates it found, or that Windows is up to
   date. It installs nothing: the link under the result opens the Windows Update tab, where you
   choose what to install. Run Speed Test records its result in the Speed Test tab's history, and
-  does not start while another speed test, a traceroute or a network repair is running. In the same
-  way, Run Quick Cleanup does not start while another cleanup or disk scan is running, and Update
-  All Apps does not start while App Updates, Bulk Installer or Uninstaller is at work or Reset
-  Windows Update is running
+  does not start while another speed test, a traceroute, a network repair or a DNS change is
+  running. In the same way, Run Quick Cleanup does not start while another cleanup or disk scan is
+  running, and Update All Apps does not start while App Updates, Bulk Installer or Uninstaller is at
+  work or Reset Windows Update is running
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the
   commonest reason a PC feels slow and the one thing on that list you can
-  fix today — so a machine that is out of room cannot score green, and the
-  recommendation says how many GB are left and points at Deep Cleanup.
+  fix today — so a system drive under 5% free with less than 25 GB left cannot score green,
+  and the recommendation says how many GB are left and points at Deep Cleanup.
   Color-coded ring (green / amber / red) with up to 3 actionable
   recommendations. Auto-computes on load and refreshes with "Scan system".
   A battery counts only when its wear was actually read. Windows gives
@@ -1672,9 +1809,9 @@ offers, "rate us" prompts:
   out rather than scored as new.
 - **System Tray** — background health monitoring (60s polling), CPU/RAM tooltip,
   Windows notifications when RAM > 90%, uptime > 14 days, or disk health degrades.
-- **A tray menu that is worth opening** — because minimize-to-tray is the default, the tray
-  is where the app spends most of its life. Right-clicking it shows the current CPU, memory
-  and uptime on one line, refreshed as you open it, then three shortcuts: **What's using my
+- **A tray menu that is worth opening** — if you keep SysManager in the notification area, the
+  tray is where it spends most of its life. Right-clicking it shows CPU, memory and uptime on one
+  line, from its once-a-minute check, then three shortcuts: **What's using my
   PC**, **Free up space** and **Volume mixer**. Every item either opens a tab or reads a
   number — nothing that changes your system is one click away from here, because a
   confirmation dialog is not visible from the tray. Three is a deliberate ceiling.
@@ -1697,9 +1834,9 @@ offers, "rate us" prompts:
 ### About
 - **Version, build, license and source** in one place, with the update controls beside them
   rather than buried in a settings page
-- **What's new, pulled live from GitHub** — every release with its version, date and full
-  changelog, and a badge marking the one you are running, so you can see what you skipped
-  without leaving the app
+- **What's new, pulled live from GitHub** — the ten most recent releases with their version,
+  date and full changelog, and a badge marking the one you are running, so you can see what you
+  skipped without leaving the app
 - **Go back to the previous version** — the build you updated from is kept, and this button
   restores it. It appears only when that build is actually on disk, and refuses with a
   reason rather than half-doing it when the swap would not be safe.
@@ -1711,23 +1848,24 @@ offers, "rate us" prompts:
   and working out which day's log covered the problem. **Nothing is sent anywhere** — you
   choose where the file goes and whether to attach it, and a `README.txt` inside names every
   file and says what was deliberately left out. Your network adapters' hardware addresses are
-  not included and the host part of each local IP is masked, because a hardware address is
-  permanent and cannot be withdrawn once it is posted in public. Your Windows user name is
-  already stripped from every log line before it reaches disk. An oversized log is cut to its
+  not included and the last two parts of each local IP address are masked, because a hardware
+  address is permanent and cannot be withdrawn once it is posted in public. The user-name folder in
+  every path in the logs already reads `[user]` before it reaches disk. An oversized log is cut to its
   most recent activity so the zip stays small enough to attach, and says so at the top.
 - **Report a problem** and **Ask a question** open the right GitHub page directly; **View
   license** and **What's new** open the licence and the changelog
 - **The startup version check is a checkbox here** — "Check GitHub for a new version when
   SysManager starts" — and switching it off does not disable the **Check for updates**
-  button, which still works on demand. Switched off, it stays off even if the setting cannot
-  be read for a moment. What that check does and does not send is described
-  under [Privacy](#privacy).
+  button, which still works on demand. If the setting cannot be read when SysManager starts, the
+  check runs as if it were on, and the saved choice is not written over, so a check you switched off
+  is off again once the setting can be read. What that check does and does not send is described
+  under [What it is](#what-it-is).
 
 ### Updates (for SysManager itself)
-- Auto-check on startup against the GitHub Releases API, plus a manual
+- Auto-check on startup against the GitHub Releases API, at most once a day, plus a manual
   "Check for updates" button in the About tab.
-- Discreet banner in the main window when a newer version is available.
-- Background download of the new build with a progress bar. If the
+- Discreet banner in the main window when a check finds a newer version.
+- **Download** fetches the new build in the background with a progress bar. If the
   download is blocked, a "Manual download" button opens GitHub in the
   browser.
 - SHA256 hash verification before install — the downloaded build is checked
@@ -1750,7 +1888,8 @@ offers, "rate us" prompts:
   One generation is kept, so it never accumulates copies of the app.
 - Full release-note history pulled live from GitHub — the notes for the newest
   version appear under the update check, the last ten releases below it, and each
-  card links to its release on GitHub. If GitHub cannot be reached, the section
+  card links to its release on GitHub. The list is fetched with the startup check, or when you
+  press its **Refresh** (or F5). If GitHub cannot be reached, the section
   says so instead of going blank.
 - **"Report a problem"** opens the GitHub bug-report form with your SysManager
   version and administrator state already filled in — the two fields reports most
@@ -1768,10 +1907,12 @@ offers, "rate us" prompts:
   open on the Privacy & Telemetry tab as pending changes, so you see every switch the
   profile would move, and Windows changes only when you press Apply there. They are
   offered for export once at least one protection is on
-- **Selective export** (tick which sections to include) and **selective import**
-  (confirm what a profile contains before anything is overwritten). Your ticks survive a
-  refresh, so a section you excluded cannot quietly reappear in the export. An import says
-  how many of the profile's sections could not be applied, rather than only how many were
+- **Selective export** — tick which sections to include. Your ticks survive a refresh, so a
+  section you excluded cannot quietly reappear in the export
+- **One question per import** — an import lists what the profile contains and asks once, then
+  writes every section except the privacy choices, which wait on their own tab as described
+  above. Restart SysManager afterwards for those settings to take effect. It says how many of
+  the profile's sections could not be applied, rather than only how many were applied
 - **Exports what is saved now** — each ticked section is read from disk at the moment you
   export, and the list is re-read whenever you come back to the tab, so a theme, preset or
   speed test you changed since the tab first opened goes into the file
@@ -1783,24 +1924,25 @@ offers, "rate us" prompts:
   the Settings Watchdog's record of this machine's registry, the service-startup ledger,
   and the local activity log. Carrying those to another PC would restore it to settings
   it was never on, or report differences that are only "a different computer"
-- An import writes only SysManager's own config files, so it is fully reversible —
-  just import a different profile. A privacy change goes through the Privacy &
-  Telemetry tab's own Apply, with its confirmation and restore point
+- An import writes only SysManager's own config files. It keeps no copy of the settings it
+  overwrites, so export your own profile first if you may want them back. A privacy change goes
+  through the Privacy & Telemetry tab's own Apply, with its confirmation and restore point
 
-### CLI Interface
+### CLI Interface 🔬
 - **Automate the safe actions from scripts, Task Scheduler, or deployment tools** —
   SysManager accepts command-line flags and runs headless (no window), writing its
   output to the launching console
-- Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup,
-  never follows junctions), `--purge-standby` (purge the standby list), plus `--version`,
-  `--help`, and `--list`. `--trim-ram` still works as an alias for `--purge-standby`,
-  so an existing scheduled task keeps running; new scripts should use the current name,
-  which says which of the two memory operations it is
-- `--json` emits machine-readable output; `--silent` suppresses chatter for
-  scripting; conventional **exit codes** (0 success · 1 error · 2 usage) let a script
-  branch on the result
-- Only read-only or non-destructive actions are exposed on the CLI — anything that
-  changes the system irreversibly stays in the GUI behind a confirmation dialog
+- Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup, never follows
+  junctions), `--purge-standby` (purge the standby list; needs administrator), plus `--version` (`-v`),
+  `--help` (`-h`, `-?`, `/?`), and `--list`. `--trim-ram` still works as an alias for `--purge-standby`,
+  so an existing scheduled task keeps running; new scripts should use the current name, which says which
+  of the two memory operations it is
+- `--json` emits machine-readable output; `--silent` (`-s`, `/silent`) prints nothing at all when the
+  command succeeds, and still prints an error; conventional **exit codes** (0 success · 1 error · 2
+  usage) let a script branch on the result
+- The CLI has no confirmation dialog, so it offers only the health score and two actions: the
+  temp-file cleanup, which deletes the files for good without asking, and the standby purge, which
+  loses no data. Everything else stays in the GUI behind a confirmation dialog
 - **The two actions that change something record themselves in the app's history**, marked
   as having come from the command line. So a scheduled cleanup that ran while you were
   away is visible next time you open SysManager, instead of leaving no trace. `--health`
@@ -1865,15 +2007,12 @@ offers, "rate us" prompts:
 </details>
 
 <details>
-<summary><strong>📊 Monitor</strong> — Resource History · File Lock · Settings Watchdog</summary>
+<summary><strong>📊 Monitor</strong> — Resource History · Settings Watchdog</summary>
 <br>
 <p>
 <a href="docs/screenshots/resource-history.png"><img src="docs/screenshots/resource-history.png" width="280" alt="Resource History"></a>&nbsp;
-<a href="docs/screenshots/file-lock-detector.png"><img src="docs/screenshots/file-lock-detector.png" width="280" alt="File Lock Detector"></a>&nbsp;
 <a href="docs/screenshots/settings-watchdog.png"><img src="docs/screenshots/settings-watchdog.png" width="280" alt="Settings Watchdog"></a>
 </p>
-<p><em>Bandwidth Monitor is implemented but its screenshot is still being recaptured — the
-previous one showed the tab while it was a placeholder, which no longer reflects the app.</em></p>
 </details>
 
 <details>
@@ -1890,10 +2029,11 @@ previous one showed the tab while it was a placeholder, which no longer reflects
 </details>
 
 <details>
-<summary><strong>💾 Storage</strong> — Disk Analyzer</summary>
+<summary><strong>💾 Storage &amp; Files</strong> — Disk Analyzer · File Lock Detector</summary>
 <br>
 <p>
-<a href="docs/screenshots/disk-analyzer.png"><img src="docs/screenshots/disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
+<a href="docs/screenshots/disk-analyzer.png"><img src="docs/screenshots/disk-analyzer.png" width="280" alt="Disk Analyzer"></a>&nbsp;
+<a href="docs/screenshots/file-lock-detector.png"><img src="docs/screenshots/file-lock-detector.png" width="280" alt="File Lock Detector"></a>
 </p>
 <p><em>Duplicate Finder is implemented and has no screenshot yet — a shot of it would be a list
 of real file paths, which needs redacting before it can ship.</em></p>
@@ -1910,6 +2050,8 @@ of real file paths, which needs redacting before it can ship.</em></p>
 <p>
 <a href="docs/screenshots/network-repair.png"><img src="docs/screenshots/network-repair.png" width="280" alt="Network Repair"></a>
 </p>
+<p><em>Bandwidth Monitor is implemented but its screenshot is still being recaptured — the
+previous one showed the tab while it was a placeholder, which no longer reflects the app.</em></p>
 </details>
 
 <details>
@@ -1979,8 +2121,9 @@ community repository. Install or update with a single command:
 winget install laurentiu021.SysManager
 ```
 
-Updates are delivered automatically with each release — run `winget upgrade`
-to stay on the latest version.
+Each release is submitted to winget automatically and arrives there once the winget
+maintainers accept it, usually within a few hours — run `winget upgrade` to stay on the
+latest version.
 
 ### Direct download
 
@@ -1991,9 +2134,10 @@ runtime required.
 
 > **About the download counter.** The badge above counts release-asset downloads, not
 > people. Most of that number is machinery: SysManager's own in-app updater fetches the
-> exe, winget installs fetch it, and Microsoft's manifest validation fetches it for every
-> submitted version. Across all releases the exe has been fetched roughly 88 times for
-> every checksum file — and a human verifying a download takes both. Treat the badge as
+> exe and its checksum, winget installs fetch the exe, and Microsoft's manifest validation
+> fetches it for every submitted version. Across all releases the exe has been fetched about
+> 70 times for every checksum file (October 2026) — and a human verifying a download takes
+> both. Treat the badge as
 > traffic, not as an install base.
 
 ### Why portable, and why there is no installer
@@ -2001,9 +2145,11 @@ runtime required.
 The only build is a portable `.exe`. That is a decision, not an omission, and it has a cost
 worth stating alongside the benefit.
 
-**What you get.** Nothing is written outside `%LocalAppData%\SysManager` unless you ask for
-it. There is no service, no scheduled task you did not create, no uninstaller to trust, and
-no registry footprint to clean up — delete the exe and the app is gone. You can run it from
+**What you get.** Nothing is installed. SysManager keeps its settings, history and logs in
+`%LocalAppData%\SysManager` and `%AppData%\SysManager`, the .NET runtime unpacks its native
+libraries into `%TEMP%\.net\SysManager`, and anything else it writes is a change you asked for —
+[Uninstalling](#uninstalling) lists every place. There is no service, no scheduled task you did
+not create and no uninstaller to trust: delete the exe and the program is gone. You can run it from
 a USB stick on a machine you are fixing for someone else, which is a large part of what this
 tool is for.
 
@@ -2097,12 +2243,12 @@ it is worth explaining rather than leaving you to guess.
 
 **Why it happens.** Two reasons, and neither is about what the code does:
 
-- **The shape of the file.** SysManager ships as one large executable that carries
-  everything it needs inside it, compressed, and unpacks itself into a temporary folder when
-  you launch it. That is a legitimate way to ship a portable app with no installer — and it
-  is also what some malware does to hide, so a scanner that judges structure rather than
-  behaviour treats it as suspicious. Add an unknown publisher and no signature, and a
-  heuristic engine has every reason to be cautious.
+- **The shape of the file.** SysManager ships as one large executable that carries everything it needs
+  inside it, compressed, and unpacks its native libraries into `%TEMP%\.net\SysManager` when you launch
+  it. That is a legitimate way to ship a portable app with no installer — and it is also what some
+  malware does to hide, so a scanner that judges structure rather than behaviour treats it as
+  suspicious. Add an unknown publisher and no signature, and a heuristic engine has every reason to be
+  cautious.
 - **What the app genuinely does.** It deletes files, changes registry settings and stops
   processes. That *is* the job of a maintenance tool, and it is also a fair description of
   something you would not want running unasked.
@@ -2140,8 +2286,8 @@ to sign them through the [SignPath Foundation](https://signpath.org/) — a prog
 provides free code-signing certificates to open-source projects, with the signing performed
 by [SignPath.io](https://signpath.io/) — and an application there is the plan for this
 project. It has not happened yet: the Foundation asks for a level of public visibility
-(stars, external write-ups, independent references) that a three-month-old project does not
-have, which is a fair bar for a certificate issued in their name. Until a certificate is
+(stars, external write-ups, independent references) that a project begun in April 2026 does
+not have yet, which is a fair bar for a certificate issued in their name. Until a certificate is
 actually in place, this section says so plainly rather than implying one exists.
 
 Until a certificate is in place, the two checks above — the published SHA-256 and the
@@ -2191,13 +2337,14 @@ a public workflow run against a public commit", which anyone can check with
 
 **Privacy policy.** This program will not transfer any information to other networked systems
 unless specifically requested by the user or the person installing or operating it. The full
-policy — including a table of every file the app writes on your own machine, and the four
-situations in which it uses the network at all — is in [SECURITY.md](SECURITY.md#privacy).
+policy — including a table of the files the app keeps on your own machine, and every case in
+which it uses the network — is in [SECURITY.md](SECURITY.md#privacy). Two checks run on their own
+when SysManager starts: the version check against the GitHub Releases API, at most once a day and
+switched off from the About tab, and the Dashboard's app-updates alert, which asks winget.
+Everything else that uses the network runs only when you use it, and
+[When SysManager uses the network](#what-it-is) lists each case.
 
-Third-party components are listed in the SBOM published with every release. The network
-features that contact anything outside your machine do so only against a destination you
-choose (ping, traceroute and speed-test targets; app installs through winget), plus one
-optional daily version check against the GitHub Releases API that can be switched off.
+Third-party components are listed in the SBOM published with every release.
 
 ## Uninstalling
 
@@ -2255,8 +2402,12 @@ Or manually:
 dotnet publish SysManager/SysManager/SysManager.csproj `
   -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+  -p:EnableCompressionInSingleFile=true -p:DebugType=embedded `
   -o publish
 ```
+
+`publish.ps1` is what the release workflow runs. It also passes
+`-p:ContinuousIntegrationBuild=true -p:Deterministic=true`, so its build is reproducible.
 
 The resulting `SysManager.exe` lands in `publish/` and runs standalone on any
 Windows 10 / 11 x64 machine.
@@ -2264,10 +2415,10 @@ Windows 10 / 11 x64 machine.
 ## First-time flow
 
 1. Launch the app — it opens on the Dashboard.
-2. Go to Network and press Start — live ping begins.
-3. For anything in Windows Update, System Fixes (SFC/DISM), or system-wide App
-   updates, click the yellow "Run as Administrator" banner when it appears.
-   The app relaunches elevated.
+2. Open **Network › Ping** and press **Start** — live ping begins.
+3. For anything in Windows Update, System Fixes (SFC/DISM), or system-wide app
+   updates, press **Run as administrator** in the banner at the top of the page. The app
+   relaunches elevated, and the banner turns golden to show it.
 
 ## Documentation
 
@@ -2285,8 +2436,8 @@ Windows 10 / 11 x64 machine.
 Found something broken? Missing a feature you'd love to have?
 
 Two threads worth reading before you post — linked directly, because Discussions is sorted
-by recency and every release posts an announcement there, so these sit a long way down the
-list:
+by recency and every feature release posts an announcement there, so these sit a long way down
+the list:
 
 - 📌 [**Start here**](https://github.com/laurentiu021/SystemManager/discussions/2346) — what
   this project is, what it will not become, and where to put which kind of post.
@@ -2295,7 +2446,8 @@ list:
   already answered.
 
 - 🐛 **Bugs** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=bug_report.yml)
-  using the bug report template.
+  using the bug report template, or press **Report a problem** on the About tab, which opens it
+  with your SysManager version and administrator state filled in.
 - 💡 **Features** — [open an issue](https://github.com/laurentiu021/SystemManager/issues/new?template=feature_request.yml)
   using the feature request template, or post in
   [Discussions › Ideas](https://github.com/laurentiu021/SystemManager/discussions/categories/ideas)
@@ -2307,28 +2459,36 @@ list:
   [Security tab](https://github.com/laurentiu021/SystemManager/security/advisories/new).
   See [SECURITY.md](SECURITY.md) for the full policy.
 
-The **About** tab inside the app has a "Copy environment info" helper that
-dumps your SysManager version, Windows build, CPU, RAM, GPU, storage, display,
-and elevation state in a format ready to paste into a bug report.
+The **About** tab inside the app has a "Copy environment info" helper that copies your
+SysManager version, Windows version, architecture, .NET version and elevation state, plus a
+hardware summary — CPU, RAM, graphics card and driver, each drive's size and free space, and
+display resolution — in a format ready to paste into a bug report. **Save diagnostics bundle**,
+beside it, puts that, the system report and the newest three log files into one zip you can
+attach; nothing is sent.
 
 ## Tech stack
 
 - .NET 10 (WPF, C# 14)
 - CommunityToolkit.Mvvm for MVVM plumbing
 - Microsoft.Extensions.DependencyInjection for IoC
-- WPF-UI (lepoco/wpfui) for Fluent Design theme and controls
-- LiveCharts2 for the real-time latency chart
+- WPF-UI (lepoco/wpfui) for the base Fluent theme and control styles
+- LiveCharts2 (SkiaSharp) for the charts on Ping, Traceroute, Bandwidth Monitor, Resource History,
+  Speed Test and Battery Health
 - H.NotifyIcon.Wpf for system tray integration
 - LibreHardwareMonitor and NvAPIWrapper for CPU/GPU/disk temperature sensors
-- Serilog for structured logging
-- xUnit, NSubstitute, and FlaUI for unit, integration, and UI-automation tests
+- System.Management.Automation (PowerShell 7) for the PowerShell-driven tabs, System.Management for
+  WMI, ServiceController for services, and TraceEvent for Bandwidth Monitor's precise mode
+- Serilog with its file sink for the local rolling log
+- xUnit v3 on Microsoft Testing Platform, Xunit.StaFact, NSubstitute, NetArchTest and FlaUI for the
+  unit, integration, architecture and UI-automation tests
 
 ## Privacy
 
-SysManager runs entirely on your machine. It does not phone home, does not
-collect telemetry, and does not require an account. Network features only
-contact the hosts you explicitly configure (ping targets, speed-test servers,
-Windows Update / winget endpoints).
+SysManager runs entirely on your machine. It sends no usage data, collects no telemetry,
+and does not require an account. Two checks run on their own when it starts — the version
+check against GitHub's releases API, which the About tab can switch off, and the
+Dashboard's app-updates alert, which asks winget — and everything else that uses the network
+runs only when you use it. [When SysManager uses the network](#what-it-is) lists each one.
 
 ## Contributing
 
@@ -2353,10 +2513,12 @@ If it saved you a reinstall or a clean-up headache, you can back its development
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-laurentiu021-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/laurentiu021)
 
-Sponsorships go toward a code-signing certificate — which makes Windows show the
-publisher's name instead of "unknown publisher", and reduces the SmartScreen warning
-as the signed builds accumulate reputation — plus the build pipeline and time to fix
-bugs and finish the tools that are still half-built. The app stays free either way.
+[Ko-fi](https://ko-fi.com/laurentiu021) works too, for a one-off.
+
+Sponsorships go toward the build pipeline and the time to fix bugs and finish the tools that
+are still in preview. Code signing is planned through the SignPath Foundation's free
+certificates for open-source projects (see [Code signing](#code-signing)), which makes Windows
+show the publisher's name instead of "unknown publisher". The app stays free either way.
 
 ## License
 

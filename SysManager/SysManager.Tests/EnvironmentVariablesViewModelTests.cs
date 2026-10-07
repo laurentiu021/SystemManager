@@ -17,6 +17,9 @@ namespace SysManager.Tests;
 /// <c>BulkInstallerViewModelTests</c> passes a temp icon cache: a test never builds a service against the
 /// developer's real profile, whether or not this particular test would touch it.
 /// </remarks>
+// Serialized: the restore test answers through DialogService.Instance and takes OperationLockService.Instance's lock.
+// Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
+[Collection("ProcessWideStatics")]
 public class EnvironmentVariablesViewModelTests : IDisposable
 {
     private readonly string _backupDir =
@@ -33,6 +36,58 @@ public class EnvironmentVariablesViewModelTests : IDisposable
     {
         try { if (Directory.Exists(_backupDir)) Directory.Delete(_backupDir, recursive: true); }
         catch (IOException) { /* a leftover temp dir must never fail a test run */ }
+    }
+
+    /// <summary>
+    /// A copy that could not be read just now is said to be that, not invalid (#1525).
+    /// </summary>
+    /// <remarks>
+    /// Over throwaway registry keys and a temp folder: the restore runs, and refuses, against nothing of this PC's.
+    /// </remarks>
+    [Fact]
+    public async Task RestoringACopyThatCannotBeReadJustNow_SaysSo_NotThatItIsInvalid()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "changed");
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            await vm.RestoreBackupCommand.ExecuteAsync(null);
+
+        Assert.Equal("The environment backup could not be read just now; no changes were made. Try again in a moment.",
+            vm.StatusMessage);
+        Assert.Equal("changed", env.GetUser("SAFE_USER"));
+    }
+
+    /// <summary>
+    /// Applying over a copy that could not be read just now says that too, not that the copy is invalid (#1525).
+    /// </summary>
+    /// <remarks>
+    /// Over throwaway registry keys and a temp folder. The refusal comes before the first write, so nothing is applied
+    /// and no other window is told the variables changed.
+    /// </remarks>
+    [Fact]
+    public async Task ApplyingOverACopyThatCannotBeReadJustNow_SaysSo_NotThatItIsInvalid()
+    {
+        using var env = new RedirectedEnvironment();
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete;
+        vm.NewName = "SAFE_ADDED";
+        vm.NewValue = "added";
+        vm.AddVariableCommand.Execute(null);
+        Assert.Equal(1, vm.PendingChangeCount);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal("The environment backup could not be read just now; no changes were made. Try again in a moment.",
+            vm.StatusMessage);
+        Assert.Null(env.GetUser("SAFE_ADDED"));
     }
 
     /// <summary>

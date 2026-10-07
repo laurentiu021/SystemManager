@@ -28,12 +28,20 @@ public sealed class PerformanceSnapshotRestartTests
         return runner;
     }
 
+    /// <summary>A service over <paramref name="configDir"/>, whose process calls go to a substituted runner.</summary>
+    /// <param name="configDir">The folder its record is kept in.</param>
+    /// <param name="runner">The runner; one that answers every call with success unless a test passes its own.</param>
+    /// <param name="card">
+    /// What has become of the graphics card a record names: there unless a test says otherwise, so that what Restore
+    /// All asks does not depend on the graphics card of the PC running the suite.
+    /// </param>
     private static PerformanceService NewService(
         string configDir,
-        IPowerShellRunner? runner = null)
+        IPowerShellRunner? runner = null,
+        PerformanceService.RecordedAdapter card = PerformanceService.RecordedAdapter.Present)
     {
         runner ??= NewRunner();
-        return new PerformanceService(runner, new RestorePointService(runner), configDir);
+        return new PerformanceService(runner, new RestorePointService(runner), configDir, findAdapter: _ => card);
     }
 
     /// <summary>
@@ -114,6 +122,86 @@ public sealed class PerformanceSnapshotRestartTests
                         && message.Contains("GPU → Max performance", StringComparison.Ordinal)),
                     "Restore Original Settings — Confirm");
                 Assert.DoesNotContain("Nothing to restore", vm.StatusMessage, StringComparison.Ordinal);
+            }
+            finally
+            {
+                DialogService.Instance = previousDialog;
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_ForAGraphicsCardThatIsGone_SaysItIsLeftAsItIs()
+    {
+        // The restore leaves out a card that is no longer in the PC (#1525), so the question cannot promise its setting,
+        // nor a restart for it.
+        var dir = CreateTempDirectory();
+        try
+        {
+            var snapshot = ValidSnapshot() with { GpuDynamicPstate = false, NvidiaSubKey = "0000" };
+            using var service = NewService(dir, card: PerformanceService.RecordedAdapter.Gone);
+            Assert.True(service.SaveSnapshot(snapshot));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+            DialogService.Instance = dialog;
+            try
+            {
+                await vm.RestoreAllCommand.ExecuteAsync(null);
+
+                dialog.Received(1).Confirm(
+                    Arg.Is<string>(message =>
+                        message != null
+                        && message.Contains("• GPU → unchanged (SysManager no longer finds the NVIDIA card this was "
+                                            + "recorded on)", StringComparison.Ordinal)
+                        && !message.Contains("reboot needed", StringComparison.Ordinal)),
+                    "Restore Original Settings — Confirm");
+            }
+            finally
+            {
+                DialogService.Instance = previousDialog;
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
+    {
+        // The restore leaves such a plan alone, so the question cannot promise one named "Unknown".
+        var dir = CreateTempDirectory();
+        try
+        {
+            var snapshot = ValidSnapshot() with { PowerPlanGuid = "", PowerPlanName = "Unknown" };
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(snapshot));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+            DialogService.Instance = dialog;
+            try
+            {
+                await vm.RestoreAllCommand.ExecuteAsync(null);
+
+                dialog.Received(1).Confirm(
+                    Arg.Is<string>(message =>
+                        message != null
+                        && message.Contains("• Power plan → unchanged (it could not be read when this was recorded)",
+                            StringComparison.Ordinal)),
+                    "Restore Original Settings — Confirm");
             }
             finally
             {
@@ -636,4 +724,89 @@ public sealed class PerformanceSnapshotRestartTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // ── After Undo Changes put the original back (#1525) ─────────────────────
+
+    [Fact]
+    public async Task AnApply_AfterTheRecordWasDeletedElsewhere_RecordsAFreshOriginal()
+    {
+        // Undo Changes puts the original back and deletes the record while this tab is out of sight. The tab kept its
+        // copy in memory and skipped recording, so the next change was made with no original on disk: after a
+        // restart there was nothing to restore it from.
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(ValidSnapshot(Recorded)));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+            Assert.True(vm.HasSnapshot, "precondition: the tab read the record at start");
+
+            Assert.True(service.DeleteSnapshot());
+            using var dialog = new DialogAnswer(confirm: true);
+            vm.SelectedPlan = "high";
+            await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+            Assert.NotNull(service.LoadSnapshot());
+            Assert.True(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_AfterTheRecordWasDeletedElsewhere_SaysThereIsNothingToRestore()
+    {
+        // Declined either way, so the red run of this test cannot restore anything on the machine running it.
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(ValidSnapshot(Recorded)));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            Assert.True(service.DeleteSnapshot());
+            using var dialog = new DialogAnswer(confirm: false);
+            await vm.RestoreAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, dialog.Calls);
+            Assert.Equal("Nothing to restore — no changes have been applied yet.", vm.StatusMessage);
+            Assert.False(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreAll_WithARecordThatCannotBeReadJustNow_KeepsItsCopy_AndSaysToTryAgain()
+    {
+        var dir = CreateTempDirectory();
+        try
+        {
+            using var service = NewService(dir);
+            Assert.True(service.SaveSnapshot(ValidSnapshot(Recorded)));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            using var dialog = new DialogAnswer(confirm: false);
+            using (File.Open(Path.Combine(dir, "performance-snapshot.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+                await vm.RestoreAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(0, dialog.Calls);
+            Assert.Equal("SysManager could not read its record of your original settings just now. Try again in a moment.",
+                vm.StatusMessage);
+            Assert.True(vm.HasSnapshot);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private static readonly DateTimeOffset Recorded = new(2026, 10, 5, 19, 40, 0, TimeSpan.Zero);
 }

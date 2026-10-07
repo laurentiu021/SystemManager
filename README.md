@@ -1,6 +1,6 @@
 # SysManager for Windows
 
-One portable app for keeping a Windows PC healthy — 58 tabs of network diagnostics, cleanup, privacy
+One portable app for keeping a Windows PC healthy — 59 tabs of network diagnostics, cleanup, privacy
 controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
@@ -32,7 +32,7 @@ winget install laurentiu021.SysManager
 
 - [What it is](#what-it-is)
 - [Why SysManager?](#why-sysmanager)
-- [Features](#features) — all 58 tabs, grouped
+- [Features](#features) — all 59 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
@@ -81,10 +81,10 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-Beyond those, the rest of the 58 tabs cover performance tuning, DNS and hosts editing, duplicate files,
-battery health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
-new-install alerts and Windows optional features. [The full list is below](#features), grouped as the sidebar
-groups them.
+Beyond those, the rest of the 59 tabs cover performance tuning, putting SysManager's own changes back one at
+a time, DNS and hosts editing, duplicate files, battery health, processes with plain-English descriptions,
+startup entries, shortcut cleanup, app blocking, new-install alerts and Windows optional features.
+[The full list is below](#features), grouped as the sidebar groups them.
 
 ## Why SysManager?
 
@@ -126,17 +126,17 @@ Sponsorship goes toward that certificate — see [Support](#support).</sub>
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
+The sidebar organises 59 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
 selected background, and stronger label while you move between groups. Every tab
 row and every group header is also keyboard-operable with a visible focus cue. All
-58 tabs are fully implemented:
+59 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Undo Changes · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · Settings Watchdog 🔬 |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
@@ -153,7 +153,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 **Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
 actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
 Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
-finds Deep Cleanup. 54 of the 58 tabs carry keywords for this; typing clears the groups and shows a flat
+finds Deep Cleanup. 55 of the 59 tabs carry keywords for this; typing clears the groups and shows a flat
 list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
@@ -205,7 +205,7 @@ cycles the themes inside it, and `Escape` closes it and puts focus back on the b
 16 tabs that can be cancelled. It only acts while something is running, and only after the control you are
 on has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all 40 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
@@ -241,17 +241,19 @@ and because 28 is already the size of the small round buttons at the bottom of t
 The six controls that do something you cannot take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin." The same goes for Uninstall selected, Kill
-process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 30
+process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 31
 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
 who cannot see the screen — the dialog arrives after the button has already been pressed. The explanation is
 not a tooltip for the same reason: a tooltip needs a mouse hovering over the control, so it never reaches
-someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those six
-deliberately. An explanation on every button in the app would make it slower to navigate, not clearer.
+someone who tabbed to it, and it is not reliably handed to assistive software. It is kept to those six,
+plus the button on each Undo Changes row, which says before you press it that it asks first — or why it
+cannot be pressed yet. An explanation on every button in the app would make it slower to navigate, not
+clearer.
 
 Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
-"Removed 1,204 files", "Scan complete." — is announced on all 52 tabs that have one, as are the SFC and DISM
+"Removed 1,204 files", "Scan complete." — is announced on all 53 tabs that have one, as are the SFC and DISM
 results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
 so they wait their turn rather than cutting across whatever you are reading.
 
@@ -305,9 +307,17 @@ Edit Windows environment variables without the cramped built-in dialog:
   snapshot before its first write. New User snapshots stay under HKCU; System
   snapshots use access-controlled HKLM storage, and only that protected source can
   restore machine-wide variables
+- **Restore backup** puts every variable back to that snapshot and removes the ones added
+  since, after a confirmation — the machine-wide ones only as administrator — and **Discard**
+  drops the staged changes. A snapshot another program has open just then is said to be
+  unreadable for now, on Apply and on Restore backup, rather than called invalid
 - Changes broadcast to Windows, so new terminals pick them up without a reboot
 - System-scope edits need administrator rights (standard elevation banner); user
-  variables can be edited without it
+  variables can be edited without it. An Apply that includes a System change is refused
+  as a whole until SysManager runs as administrator
+- **Undo Changes can restore the snapshot too**, while a variable differs from it. This tab
+  then reads the variables again ("Variables read again after Undo Changes."), and an edit
+  not yet applied goes with the old list
 
 ### Dark Mode Scheduler
 - **Switch the Windows light/dark theme** instantly — apps only, or the taskbar
@@ -405,6 +415,55 @@ Edit Windows environment variables without the cramped built-in dialog:
   Dell, HP, Lenovo, …) for the detected board, and **Copy info** grabs the model +
   BIOS version for support searches. SysManager never flashes firmware itself.
 
+### Undo Changes
+- **One place to put back what SysManager changed, one change at a time.** Five tabs each keep what they
+  need to undo their own change; this tab reads all five copies, so putting something back no longer means
+  remembering which tab made it. It lists them in plain words, one row for each:
+  - **Performance Mode** — the settings that differ from its record of how they were before it was first
+    used: the power plan, visual effects, Game Mode, the Xbox Game Bar, Game DVR, the NVIDIA graphics
+    setting and the processor minimum. While game mode is on, was left on by an earlier run, or
+    SysManager cannot read whether it was, the settings are game mode's own, so Performance Mode waits
+    until game mode is off and the status line says why. The graphics setting takes effect after a
+    restart, and the setting of an NVIDIA card that is no longer found is left as it is
+  - **Services** — the services SysManager turned off that are still off, in one row: putting it back
+    returns each one to the startup type it had
+  - **Hosts file** — once SysManager has written the hosts file, the copy kept beside it, for as long as
+    the file still differs from it. Restoring it replaces everything written to the file since, by
+    SysManager or by any other program, and the question says so
+  - **Environment Variables** — the copy kept from before SysManager first changed them, for as long as a
+    variable differs from it. Every variable goes back to that copy, including changes other programs
+    made since, and variables added since are removed; the question lists them
+  - **Gaming Profile** — game mode while it is on, or after a run that did not end cleanly left it on
+  - and the settings you saved in Settings Watchdog that have changed since and that it can write back:
+    one row that opens Settings Watchdog, where **Restore changed** puts them back
+- **A copy that could not be read just now, could not be compared with how things are now, could not be
+  used, or is damaged, is named as such** — under "Nothing found to put back" when nothing else is listed
+  — and never shown as nothing to put back
+- **Asks first, and says what will change.** Each question says what goes back — "Power plan: Ultimate
+  Performance → Balanced", "Print Spooler: Disabled → Automatic", or the date of the hosts file copy it
+  restores — and the put-back goes through the same restore its own tab uses. It reads the copy again
+  first, and changes nothing if what it finds is no longer what the question described. There is
+  deliberately no "undo everything" button: one button that reverses several unrelated changes would
+  itself be a large change
+- **One that stops part-way says what went back and what did not**, and the list then shows what is
+  still different. Each change put back shows in the Dashboard's Recent activity
+- **Only what SysManager has a record of.** A switch that is on may have been set by Windows, by an
+  organisation or by you long ago, so the tabs whose switches are their own undo — Privacy & Telemetry,
+  Context Menu, Startup Manager, App Blocker, Notification Blocker, and DNS & Hosts for DNS — are links,
+  never rows
+- **The whole PC at once** points to Restore Points and names the newest restore point when SysManager
+  runs as administrator, and **what cannot be put back** — files deleted for good, removed preinstalled
+  apps, uninstalled programs — is said plainly
+- Some changes need administrator rights — the hosts file, services, machine-wide variables that differ
+  from the copy, game mode left on by a run that paused search indexing, and Performance Mode while the
+  NVIDIA graphics card it recorded may still be there (found, or not checked just now) — and their rows
+  say so, with the button off until SysManager runs as administrator. The rest go back without them
+- The tab that made a change hears of each put-back and reads its state again, so Performance Mode,
+  Services, DNS & Hosts, Environment Variables and Gaming Profile never go on showing a change that is
+  gone. An edit not yet saved on DNS & Hosts, or not yet applied on Environment Variables, goes with the
+  old list, since it was made to what Undo Changes just replaced
+- The page looks again each time it is shown, and on Refresh or **F5**
+
 ### Restore Points
 - List every Windows System Restore point — sequence number, date, description,
   and type — newest first
@@ -426,6 +485,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   rights, because Windows answers a standard user's request for the list with
   "Access denied". The tab says so, rather than reporting that there are no
   restore points
+- To put back one change SysManager made rather than the whole PC, the tab points
+  to **Undo Changes**
 
 ### Legacy Panels
 - One-click launcher for the classic Windows applets that newer releases keep
@@ -907,6 +968,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   button sits to the left of Restore
 - **Restore changed** writes the drifted settings back to your baseline values in
   one step (HKLM-backed settings need administrator rights, surfaced not crashed)
+- **Undo Changes links here** — the settings that drifted from your baseline, and that
+  Restore changed can write back, are one row there that opens this tab
 - Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and
   the watchdog only ever reads or writes a fixed list of well-known registry values
 
@@ -921,7 +984,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
   Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
   Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender Tweaks,
-  Edge/OneDrive Remover, Services, and the Dashboard's quick actions)
+  Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions)
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
   Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
   1618, because Windows Installer only ever runs one installation at a time.** The four now refuse
@@ -1117,14 +1180,22 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   DNS state again inside the mutation script. An **Undo** button follows that
   adapter's stable identity and restores its exact prior IPv4 and IPv6
   automatic/static configuration without persisting DHCP-supplied addresses as
-  static overrides.
+  static overrides. Undo lasts until SysManager closes: DNS is not one of the changes SysManager
+  keeps a copy of, so after a restart pick the preset you had, or **Reset to DHCP**.
 - **Current DNS** — the servers the active adapter uses, or "Automatic (DHCP)" when none
   are set. When Windows cannot report them it says "Unavailable" rather than guessing.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them; the changes are written to the hosts file when you press Save,
-  and the tab says so. Backs up hosts file before modifications. It never saves a list
-  it could not read from the file: after a failed read, Save asks you to Refresh first
+  and the tab says so. The first save keeps a copy of the file as it was (`hosts.bak`,
+  beside it), later saves never replace that copy, and **Restore original** puts it back.
+  It never saves a list it could not read from the file: after a failed read, Save asks
+  you to Refresh first
+- **Undo Changes can restore that copy too** — once SysManager has written the hosts file,
+  and while the file differs from the copy, Undo Changes lists it as "Hosts file"
+  (administrator rights needed). After it restores the copy, this tab reads the file again
+  ("Read again after Undo Changes: 12 entries.") so Save cannot write the old list back
+  over it; edits not saved yet go with the old list
 - Requires administrator privileges for both DNS and hosts operations
 - Admin elevation banner with one-click restart
 
@@ -1364,14 +1435,20 @@ offers, "rate us" prompts:
   effects, indexing, notifications) is captured before any change and restored exactly;
   SysManager also tries a System Restore point first (best-effort, needs administrator)
 - **Your own changes win** — if you switch notifications back on yourself while a profile is
-  running (from Privacy & Security → Notifications, which is the same switch), the restore leaves
-  your choice alone instead of silencing them again when the game exits. If you mute them yourself
-  on the Notifications tab, they stay muted, and if SysManager cannot tell whether you did, it
-  switches them back on. Likewise, if the fast timer was already on from the Timer Resolution tab,
-  game mode leaves it on when it ends
-- **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game the
-  system-wide changes are offered for restore on next launch. If SysManager cannot read that
-  record, Start changes nothing and says so, rather than writing over it
+  running (Customization → Notification Blocker, or Windows Settings, which is the same switch), the
+  restore leaves that switch as you set it. If you mute them yourself on the Notification Blocker
+  tab, they stay muted, and if SysManager cannot tell whether you did, it switches them back on.
+  Likewise, if the fast timer was already on from the Timer Resolution tab, game mode leaves it on
+  when it ends
+- **Crash-safe** — the session is recorded on disk, so if SysManager closes mid-game, the next
+  time you open Gaming Profile it asks whether to put the system-wide changes back, and until then
+  Undo Changes lists the session as left on. If the record cannot be read when you answer, nothing
+  is changed and the record is kept, so you are asked again the next time. If SysManager cannot read
+  that record when you press Start, Start changes nothing and says so, rather than writing over it
+- **Undo Changes can turn it off too** — while game mode is on, or after a run that did not end
+  cleanly left it on, Undo Changes lists it with **Turn it off…**, and this tab then says that Undo
+  Changes turned game mode off. Putting back a session left on that paused search indexing needs
+  administrator rights
 - **Honest about the restore** — every setting is put back even if one of them fails, and the
   tab names any setting it could not restore, instead of saying everything is back
 - **Honest about admin** — freeing standby memory and pausing indexing need
@@ -1452,10 +1529,11 @@ offers, "rate us" prompts:
 - **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required)
 - **Processor State**: force CPU min state to 100%
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
-- **OriginalSnapshot**: captures the exact system state before the first change,
-  persists it locally, and reloads it when the tab opens so Restore All remains
-  available after an app restart; persisted fields are validated before use and the
-  confirmation shows when the baseline was captured
+- **Your original settings are recorded before the first change** and kept on disk, so
+  Restore All still works after a restart. Each Apply, and Restore All, reads that record
+  from disk when you press it; it is checked before use, and the question shows when it was
+  taken. A power plan the record could not read is listed as "unchanged", because Restore All
+  leaves it alone
 - **It will not record your settings while a game profile is running** — those are the
   profile's power plan and visual effects, not yours, and saving them as your baseline
   would restore you to them later. It asks you to stop the profile first. A baseline
@@ -1465,6 +1543,16 @@ offers, "rate us" prompts:
   back. If the saved baseline cannot be read, the change is stopped and nothing is recorded. A
   damaged one is set aside once, you are told, and the next Apply records your current settings
   as the new original
+- **Restore All finishes even when the NVIDIA card it recorded is gone** — taken out, or its driver
+  removed. That card's setting has nothing to go back to, so the question lists it as "unchanged
+  (SysManager no longer finds the NVIDIA card this was recorded on)", and every other setting goes back
+- **The NVIDIA setting and the hibernation toggle need administrator rights**, and so does Restore All
+  while the NVIDIA card it recorded is still found: without them it puts back the power plan, visual
+  effects, Game Mode and the Xbox settings, then stops at the graphics setting, before the processor
+  minimum, and keeps the record so you can finish as administrator
+- **Undo Changes can put Performance Mode back too.** When it does, this tab reads its settings again
+  ("Settings read again after Undo Changes."), so Restore All and the switches never describe a change
+  that is gone
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
   making changes (requires admin)
@@ -1484,17 +1572,26 @@ offers, "rate us" prompts:
   gaming recommendation (Safe to disable / Keep enabled / Advanced), or free-text
   search — each chip shows how many services it matches, so you know before pressing it
 - Mark any row with the flag button to keep it findable while you keep filtering or
-  searching. "Clear marks" removes them all, including any a filter is hiding
+  searching. "Clear marks" removes them all, including any a filter is hiding. Reading the
+  list again — Refresh, or after Undo Changes turned services back on — clears the marks too
 - **Says what else breaks before you break it** — when other services need the one you
   are turning off, they are named in the confirmation by their real names, so the choice
   is "my printer will stop working" rather than "this may affect system functionality".
   The names are on the safety pill's tooltip too, which needs no admin rights to read
 - Start, stop, disable, or enable services with confirmation dialogs
+- **Stops and disables only services it knows** — SysManager rates 46 services by name (20
+  safe, 11 caution, 15 critical), and every other service counts as critical until it is
+  known. A critical one can be started and enabled but not stopped or disabled here, and the
+  status line says why; services.msc is the place for those
 - **Enable puts back what was there** — the startup type a service had before SysManager disabled
   it, remembered across restarts, "Automatic (Delayed Start)" included. For a service disabled some
   other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so.
   If SysManager cannot read or update that record, Disable and Enable leave the service alone and
   say so, rather than losing how the other services were set
+- **Undo Changes can turn them back on too** — the services SysManager turned off that are still
+  off are one row there (administrator rights needed), each going back to the startup type it had.
+  This tab then reads its list again ("Read again after Undo Changes: 312 services (98 running)."),
+  so no row goes on saying Disabled for a service that is back on
 - **Never claims a change it did not make** — Enable acts only on a disabled service and Disable only
   on one that is not, and each says so and leaves the service alone otherwise. Stop says when Windows
   will not stop a service rather than reporting that it did
@@ -2104,27 +2201,35 @@ optional daily version check against the GitHub Releases API that can be switche
 
 ## Uninstalling
 
-SysManager is a single portable executable. There is no installer, nothing is copied into
-`Program Files`, and no system-wide registry keys are created for the app itself.
+SysManager is a single portable executable. There is no installer and nothing is copied into
+`Program Files`. Do the first two steps while the app is still there, because they happen inside it.
 
 To remove it completely:
 
-1. **Delete the executable** — `SysManager-vX.Y.Z.exe`, wherever you saved it. That is the
-   whole program.
-2. **Delete its settings and logs** (optional, a few hundred kilobytes):
+1. **Put back what you want put back.** Changes you asked SysManager to make to Windows are Windows
+   settings rather than part of the app, so they stay as you set them. Open **System › Undo Changes**:
+   it lists what SysManager can still put back — Performance Mode, the services it turned off, the
+   hosts file, the environment variables, game mode, and the settings you saved in Settings Watchdog —
+   and links the tabs whose switches are their own undo. Files deleted for good, removed preinstalled
+   apps and uninstalled programs cannot be put back.
+2. **Remove the scheduled task, if you created one.** Only applies if you used **Scheduled
+   Maintenance**: open that tab and press **Remove schedule**, and the app unregisters the task
+   (`\SysManager\Scheduled Maintenance`) for you. It is the only thing SysManager registers with
+   Windows, and only ever when you explicitly ask for it.
+3. **Delete the executable** — `SysManager-vX.Y.Z.exe`, wherever you saved it. That is the whole
+   program. If you installed through winget, `winget uninstall laurentiu021.SysManager` does this.
+4. **Delete what it keeps** (optional). It is small, except `updates`, which holds about 170 MB once
+   the in-app updater has run, and the logs, which are capped at about 140 MB:
    - `%LocalAppData%\SysManager`
    - `%AppData%\SysManager`
-3. **Remove the scheduled task, if you created one.** Only applies if you used **Scheduled
-   Maintenance**: open that tab and remove the schedule, and the app unregisters the task for
-   you. It is the only thing SysManager registers with Windows, and only ever when you
-   explicitly ask for it.
+   - `%TEMP%\.net\SysManager`, where the .NET runtime unpacks the app's native libraries each time it starts
+   - `HKEY_CURRENT_USER\Software\SysManager`, the copy of your environment variables
+   - `HKEY_LOCAL_MACHINE\SOFTWARE\SysManagerEnvironmentBackup`, only if you changed a machine-wide
+     variable (needs administrator rights)
+   - `%SystemRoot%\System32\drivers\etc\hosts.bak`, only if DNS & Hosts saved the hosts file (needs
+     administrator rights)
 
-If you installed through winget, `winget uninstall laurentiu021.SysManager` covers step 1.
-
-Changes you asked SysManager to make to Windows — privacy toggles, context-menu entries,
-services, tweaks — are Windows settings rather than part of the app, so they stay as you set
-them. Every tab that changes something offers the reverse action, so undo anything you want
-reverted **before** deleting the executable.
+   Do step 1 first: deleting these removes the copies Undo Changes puts back from.
 
 ## Build from source
 

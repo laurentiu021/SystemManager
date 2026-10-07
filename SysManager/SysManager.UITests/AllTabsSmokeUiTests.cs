@@ -35,6 +35,7 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-services", "Services" },
         new object[] { "nav-startup", "Startup Manager" },
         new object[] { "nav-windows-features", "Windows Features" },
+        new object[] { "nav-undo-changes", "Undo Changes" },
         new object[] { "nav-restore-points", "Restore Points" },
         new object[] { "nav-task-scheduler", "Task Scheduler" },
         new object[] { "nav-boot-analyzer", "Boot Analyzer" },

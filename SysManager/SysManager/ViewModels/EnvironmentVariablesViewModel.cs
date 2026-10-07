@@ -24,7 +24,12 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
+    // What Apply and Restore backup both say of a copy that is there and could not be read just now (#1525).
+    private const string BackupUnreadable =
+        "The environment backup could not be read just now; no changes were made. Try again in a moment.";
+
     private readonly EnvironmentVariableService _service;
+    private readonly IPutBackSignal? _putBack;
 
     // Baseline of the on-disk state, keyed "scope\0NAME" → value. Used to compute the
     // pending-change count (edits + additions + deletions) the same way PrivacyViewModel does.
@@ -81,13 +86,36 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     // Add-directory row (PATH editor).
     [ObservableProperty] private string _newDirectory = "";
 
-    public EnvironmentVariablesViewModel(EnvironmentVariableService service)
+    public EnvironmentVariablesViewModel(EnvironmentVariableService service, IPutBackSignal? putBack = null)
     {
         _service = service;
+        _putBack = putBack;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
         // Read both env hives off the UI thread so the eagerly-built VM doesn't block
         // startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(LoadAsync);
+    }
+
+    /// <summary>The list the tab re-read after Undo Changes restored the variables. Internal so a test can await it.</summary>
+    internal Task PutBackReload { get; private set; } = Task.CompletedTask;
+
+    // Undo Changes put the kept copy of the variables back, or tried to (#1525), so the values on screen may no longer
+    // be the ones in the registry. An edit not applied yet was made against those old values, so it goes with them.
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.EnvironmentVariables) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            PutBackReload = ReloadAfterPutBackAsync();
+        });
+    }
+
+    private async Task ReloadAfterPutBackAsync()
+    {
+        await LoadAsync();
+        StatusMessage = "Variables read again after Undo Changes.";
     }
 
     private static string Key(EnvVariable v) => Key(v.Scope, v.Name);
@@ -373,6 +401,13 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             Log.Warning(ex, "Environment: invalid safety backup; aborting apply");
             return;
         }
+        catch (EnvironmentVariableService.BackupUnreadableException ex)
+        {
+            // Held open by another program, not damaged: the copy is fine, and trying again may work (#1525).
+            StatusMessage = BackupUnreadable;
+            Log.Warning(ex, "Environment: the safety backup could not be read just now; aborting apply");
+            return;
+        }
         catch (IOException ex)
         {
             StatusMessage = "Could not write the safety backup — no changes were made.";
@@ -506,7 +541,9 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         var r = await Task.Run(_service.RestoreFromBackup);
         if (r.InvalidBackup)
         {
-            StatusMessage = "The available environment backup is invalid; no changes were made.";
+            StatusMessage = r.UnreadableBackup
+                ? BackupUnreadable
+                : "The available environment backup is invalid; no changes were made.";
             return;
         }
         if (!r.HadBackup)
@@ -553,6 +590,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     {
         if (disposing)
         {
+            if (_putBack is not null) _putBack.PutBack -= OnPutBack;
             if (IsPathSelected)
                 PathEntries.CollectionChanged -= OnPathEntriesChanged;
             foreach (var v in Variables)

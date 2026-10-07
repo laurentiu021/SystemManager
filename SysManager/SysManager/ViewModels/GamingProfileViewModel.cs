@@ -27,6 +27,7 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
 
     private readonly IGamingProfileService _service;
     private readonly ICpuAffinityService _cpu;
+    private readonly IPutBackSignal? _putBack;
 
     /// <summary>Running processes the user can pick as the game to optimize (optional).</summary>
     public BulkObservableCollection<RunningProcess> Processes { get; } = new();
@@ -54,12 +55,14 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     [ObservableProperty] private bool _pauseSearchIndexing;
     [ObservableProperty] private bool _silenceNotifications;
 
-    public GamingProfileViewModel(IGamingProfileService service, ICpuAffinityService cpu)
+    public GamingProfileViewModel(IGamingProfileService service, ICpuAffinityService cpu, IPutBackSignal? putBack = null)
     {
         _service = service;
         _cpu = cpu;
+        _putBack = putBack;
         IsElevated = AdminHelper.IsElevated();
         _service.SessionAutoReverted += OnSessionAutoReverted;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
 
         LoadConfig(_service.LoadLastConfig());
         IsSessionActive = _service.IsActive;
@@ -75,7 +78,7 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         // Crash recovery: a previous run may have closed/crashed with tweaks still applied.
         // Offer to revert the leftover machine-wide changes (per-game affinity/priority are
         // never persisted, so a recycled PID is never touched).
-        if (_service.HasPendingRecovery)
+        if (_service.ReadPendingRecovery().Kind == PendingRecoveryKind.LeftOn)
         {
             bool revert = DialogService.Instance.Confirm(
                 "SysManager closed while game mode was still active last time.\n\n" +
@@ -83,10 +86,21 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
                 "Gaming Profile — Restore");
             if (revert)
             {
-                var result = await _service.RecoverPendingAsync();
-                StatusMessage = DescribeRevert(result,
-                    "Reverted the leftover changes from the previous session.",
-                    "Reverted the leftover changes from the previous session");
+                try
+                {
+                    var result = await _service.RecoverPendingAsync();
+                    StatusMessage = DescribeRevert(result,
+                        "Reverted the leftover changes from the previous session.",
+                        "Reverted the leftover changes from the previous session");
+                }
+                catch (System.IO.IOException ex)
+                {
+                    // Its record could not be read once the question was answered: nothing was reverted, and the record
+                    // is kept, so the next launch asks again (#1525).
+                    Log.Warning(ex, "Gaming Profile could not read the session left on by the previous run");
+                    StatusMessage = "SysManager could not read its record of the previous session just now, so nothing "
+                        + "was reverted. It asks again the next time it starts.";
+                }
             }
         }
     }
@@ -257,6 +271,19 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         StopCommand.NotifyCanExecuteChanged();
     }
 
+    // Undo Changes turned game mode off (#1525). IsSessionActive is this tab's copy of the service's answer, read after
+    // its own Start and Stop, so without this it went on saying game mode was on — and Start stays off while it does.
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.GamingProfile) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            IsSessionActive = _service.IsActive;
+            if (!IsSessionActive) StatusMessage = "Undo Changes turned game mode off.";
+        });
+    }
+
     private void OnSessionAutoReverted(object? sender, GamingRevertResult result)
     {
         // The bound game exited and the service auto-reverted. Reflect it in the UI (marshalled
@@ -270,20 +297,9 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
         });
     }
 
-    /// <summary>
-    /// The status line after a revert: <paramref name="fullyRestored"/> when every step came back, otherwise
-    /// <paramref name="partialLead"/> followed by the settings that did not, so a failed undo is never announced
-    /// as a restore (#2445).
-    /// </summary>
-    internal static string DescribeRevert(GamingRevertResult result, string fullyRestored, string partialLead)
-    {
-        if (result.FullyRestored) return fullyRestored;
-        var one = result.NotRestored.Count == 1;
-        var what = one
-            ? $"\"{result.NotRestored[0]}\" was"
-            : $"{result.NotRestored.Count} settings were ({string.Join(", ", result.NotRestored)})";
-        return $"{partialLead}, but {what} not restored — check {(one ? "it" : "them")} yourself. The log has the reason.";
-    }
+    /// <inheritdoc cref="GamingRevertResult.Describe"/>
+    internal static string DescribeRevert(GamingRevertResult result, string fullyRestored, string partialLead) =>
+        result.Describe(fullyRestored, partialLead);
 
     /// <summary>Builds an honest, plain-language summary of an apply batch (pure, testable).</summary>
     internal static string DescribeResult(GamingApplyResult result, GameTarget? game)
@@ -309,7 +325,10 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _service.SessionAutoReverted -= OnSessionAutoReverted;
+            if (_putBack is not null) _putBack.PutBack -= OnPutBack;
+        }
         base.Dispose(disposing);
     }
 }

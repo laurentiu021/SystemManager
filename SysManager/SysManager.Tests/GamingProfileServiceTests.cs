@@ -387,7 +387,78 @@ public class GamingProfileServiceTests
                 svc.SaveLastConfig(new GamingProfile { FinestTimerResolution = true });
 
             Assert.Equal(before, File.ReadAllBytes(path));
-            Assert.True(StoreOnlyService(path).HasPendingRecovery);
+            Assert.Equal(PendingRecoveryKind.LeftOn, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void PendingRecovery_WhenTheStoreCannotBeRead_IsNotKnown_RatherThanNone()
+    {
+        // A leftover session in a store that could not be read just now is still there. Undo Changes must not take
+        // "could not read" for "none": Performance Mode put back under it would be undone by its recovery (#1525).
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-unread-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var svc = StoreOnlyService(path);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                Assert.Equal(PendingRecoveryKind.Unreadable, svc.ReadPendingRecovery().Kind);
+
+            Assert.Equal(PendingRecoveryKind.LeftOn, svc.ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void PendingRecovery_FromAStoreThatDoesNotParse_IsUnusable_NotNone()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-unusable-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{ not json");
+
+            Assert.Equal(PendingRecoveryKind.Unusable, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void PendingRecovery_ThatPausedSearchIndexing_NeedsAdministratorRights()
+    {
+        // Its revert starts the indexer again, which only an administrator can.
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-indexing-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                ActiveSession = new GamingSessionRecord(new GamingProfile { PauseSearchIndexing = true }, new GamingSnapshot()),
+            }));
+            Assert.Equal(new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: true),
+                StoreOnlyService(path).ReadPendingRecovery());
+
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            Assert.Equal(new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: false),
+                StoreOnlyService(path).ReadPendingRecovery());
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public async Task RecoveringASession_WhoseRecordCannotBeRead_RevertsNothing_AndKeepsTheRecord()
+    {
+        // "Put back" was said of a session that was still on: the record had loaded as a fresh store.
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-recover-held-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var svc = StoreOnlyService(path);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                await Assert.ThrowsAsync<IOException>(() => svc.RecoverPendingAsync());
+
+            Assert.Equal(PendingRecoveryKind.LeftOn, svc.ReadPendingRecovery().Kind);
         }
         finally { DeleteStore(path); }
     }
@@ -703,7 +774,7 @@ public class GamingProfileServiceTests
             }));
 
             var svc = StoreOnlyService(path);
-            Assert.True(svc.HasPendingRecovery, "precondition: a leftover session is present on disk");
+            Assert.True(svc.ReadPendingRecovery().Kind == PendingRecoveryKind.LeftOn, "precondition: a leftover session is present on disk");
 
             // Start a revert that suspends INSIDE the gated step — RevertAsync is now holding _gate.
             var tweak = new GatedRevertTweak();
@@ -726,7 +797,7 @@ public class GamingProfileServiceTests
                 "RecoverPendingAsync never completed after the gate was released");
 
             // The leftover marker is cleared exactly once, under the gate.
-            Assert.False(StoreOnlyService(path).HasPendingRecovery,
+            Assert.True(StoreOnlyService(path).ReadPendingRecovery().Kind == PendingRecoveryKind.None,
                 "the recovered session's ActiveSession marker should be cleared after recovery");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
@@ -766,7 +837,7 @@ public class GamingProfileServiceTests
             // The refusal happens BEFORE the snapshot and before the restore-point attempt, so no
             // session marker can have been written. This is what makes the test safe to run on a real
             // machine: no powercfg, no registry, no restore point.
-            Assert.False(StoreOnlyService(path).HasPendingRecovery,
+            Assert.True(StoreOnlyService(path).ReadPendingRecovery().Kind == PendingRecoveryKind.None,
                 "a refused apply must leave no crash-recovery marker behind");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
@@ -964,7 +1035,7 @@ public class GamingProfileServiceTests
             Assert.True(result.EndedAtStart.FullyRestored);
             Assert.False(svc.IsActive);
             Assert.Null(svc.BoundGamePid);
-            Assert.False(svc.HasPendingRecovery);
+            Assert.Equal(PendingRecoveryKind.None, svc.ReadPendingRecovery().Kind);
             timer.Received(1).Disable();
             cpu.Received(1).TrySetPriority(int.MaxValue, GameStarted, System.Diagnostics.ProcessPriorityClass.Normal,
                 out Arg.Any<string>());

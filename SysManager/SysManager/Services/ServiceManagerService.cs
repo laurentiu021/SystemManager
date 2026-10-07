@@ -303,6 +303,50 @@ public sealed partial class ServiceManagerService
             ? AutomaticDelayedStart
             : entry.StartType;
 
+    /// <summary>
+    /// Sets a disabled service back to the startup type it had before SysManager disabled it, then forgets the record.
+    /// </summary>
+    /// <remarks>
+    /// Enable on the Services tab and Undo Changes both put a service back through here (#1525), so the order is
+    /// stated once: the change first, and the record only once the change has happened — a record forgotten before a
+    /// change that then failed would leave the service set to Manual the next time anyone tried. An unknown or
+    /// missing type goes back as Manual, through <see cref="StartTypeToScToken"/>.
+    /// </remarks>
+    internal static async Task PutBackStartupTypeAsync(
+        string serviceName, string? previousStartType, IPowerShellRunner ps, ServiceStartupLedgerService ledger,
+        CancellationToken ct = default)
+    {
+        await SetStartupTypeAsync(serviceName, StartTypeToScToken(previousStartType), ps, ct).ConfigureAwait(false);
+        ledger.Forget(serviceName);
+    }
+
+    /// <summary>
+    /// One service as Windows reports it now — name, display name, startup type and status — or null when there is no
+    /// such service, or Windows would not say.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that needs a handful of services rather than all of them: <see cref="GetAllServices"/> reads every
+    /// service on the PC, its description and its dependents included, which is the Services tab's whole list.
+    /// </remarks>
+    internal static ServiceEntry? ReadEntry(string serviceName)
+    {
+        try
+        {
+            using var sc = new ServiceController(serviceName);
+            var startMode = sc.StartType;
+            return new ServiceEntry
+            {
+                Name = sc.ServiceName,
+                DisplayName = sc.DisplayName,
+                Status = sc.Status.ToString(),
+                StartType = startMode.ToString(),
+                IsDelayedAutoStart = IsDelayedAutomatic(startMode, sc.ServiceName),
+            };
+        }
+        catch (InvalidOperationException) { return null; }
+        catch (System.ComponentModel.Win32Exception) { return null; }
+    }
+
     /// <summary>Refresh the status of a single service entry.</summary>
     public static void RefreshStatus(ServiceEntry entry)
     {

@@ -18,10 +18,10 @@ SysManager/
 │   ├── Services/               # Windows / PowerShell / CLI wrappers
 │   ├── ViewModels/             # one VM per tab + MainWindowViewModel
 │   ├── Views/                  # XAML views + code-behind, plus four shared controls:
-│   │                           #   AdminBanner (the elevation banner, 30 tabs)
+│   │                           #   AdminBanner (the elevation banner, 31 tabs)
 │   │                           #   EmptyState  (icon + title + message for an empty list)
 │   │                           #   DevelopmentBanner (the PREVIEW notice)
-│   │                           #   StatusFooter (progress bar + status line, 21 tabs)
+│   │                           #   StatusFooter (progress bar + status line, 22 tabs)
 │   ├── Helpers/                # AdminHelper, converters, collections, parsers
 │   ├── Resources/              # icons and assets
 │   ├── App.xaml(.cs)
@@ -40,7 +40,7 @@ The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Das
 `Tab<TVm>()`, which defers resolving the view-model until the tab is first opened, and `EagerItem()`
 for the few entries whose view-model must exist at startup. Dashboard renders as a flat top-level entry.
 Each group carries an icon, passed to `Group()` as a Segoe Fluent Icons code point and asserted distinct;
-leaves carry none, so the icon column belongs to the twelve headings rather than the fifty-eight pages.
+leaves carry none, so the icon column belongs to the twelve headings rather than the fifty-nine pages.
 Collapsed groups show a child count badge, a written two-line subtitle passed to `Group()` and asserted to
 fit that budget, and a tooltip still generated from the child labels. Exactly one group starts expanded —
 `InitiallyExpandedGroupId` (`grp-cleanup`) — set in the same loop that adds the groups; `#1519`'s arithmetic
@@ -154,7 +154,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 | Group | View Models |
 |-------|-------------|
 | Dashboard | `DashboardViewModel` |
-| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
+| System | `SystemHealthViewModel` · `WindowsUpdateViewModel` · `PerformanceViewModel` · `ServicesViewModel` · `StartupViewModel` · `WindowsFeaturesViewModel` · `UndoChangesViewModel` · `RestorePointsViewModel` · `TaskSchedulerViewModel` · `BootAnalyzerViewModel` · `SystemFixesViewModel` |
 | Gaming & Profiles | `GamingProfileViewModel` · `TimerResolutionViewModel` · `DisplayProfileViewModel` · `CpuAffinityViewModel` · `StandbyMemoryViewModel` |
 | Monitor | `ProcessManagerViewModel` · `ResourceHistoryViewModel` · `PrivacyMonitorViewModel` · `AppAlertsViewModel` · `SettingsWatchdogViewModel` |
 | Cleanup | `CleanupViewModel` · `DeepCleanupViewModel` · `ShortcutCleanerViewModel` · `ScheduledMaintenanceViewModel` |
@@ -250,6 +250,16 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
 - `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup or standby trim) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched.
+- `UndoChangesViewModel` — the Undo Changes tab (#1525): lists what `IUndoChangesService.ScanAsync` finds as
+  `UndoChangeRow`s, each putting one change back after a `DialogService.Confirm` that says what will change,
+  then writing the activity log when something changed, and looking again. A row that needs administrator
+  rights SysManager does not have is marked and cannot be pressed; the Settings Watchdog row opens that tab
+  instead. Looks again whenever it is shown (`IsActive`, set by `MainWindowViewModel.SetActive`), and once
+  more when a look was asked for while one ran; Refresh is off while a look or a put-back runs. A look or a
+  put-back that throws says so rather than leaving its progress line. Also lists the tabs whose switches are
+  their own undo (`UndoSwitch`) and, looked for only when shown and outside Busy, the newest restore point —
+  asked for only as an administrator, one question at a time, called off when the tab is disposed. No "undo
+  everything".
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (Windows Update reset, network reset, WinGet reinstall) with per-fix confirmation + live output; opens netplwiz for secure auto-logon.
@@ -279,7 +289,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-three are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-five are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
@@ -291,8 +301,9 @@ history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
 Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
 (NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry and the
-profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IGamingProfileService`, and
-`ISessionRestorePoint` (the last two via a factory).
+profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IUndoChangesService` (UndoChangesService, the Undo
+Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Changes put its change back),
+`IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory).
 
 `INavigationService` is the seam a tab uses to send the user to another tab, so a tab that diagnoses
 something can offer the tab that fixes it. It is **late-bound**: the shell builds the tab view models and
@@ -355,7 +366,7 @@ Key services:
   failing every later call; pipelines are serialised behind a gate, because a
   runspace runs one at a time and a shared one turns concurrent calls into a
   conflict; and the runspace is evicted after ~20 s idle, which matters because
-  nine runners are constructed directly in `MainWindowViewModel`'s designer graph
+  eleven runners are constructed directly in `MainWindowViewModel`'s designer graph
   and nothing ever disposes them — without eviction a dozen `powershell.exe`
   processes would be resident for the whole run. `Dispose` releases it
   deterministically where a consumer is disposed.
@@ -656,13 +667,26 @@ Key services:
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
   working set trim, hibernation toggle. The trim works through a process list and a trim call the
-  constructor takes. The public constructor passes every process and `EmptyWorkingSet`; the test
-  one defaults to no processes, so a test that passes no list trims nothing (#2557). Its
+  constructor takes. The public constructor passes every process; both trim through `EmptyWorkingSet`
+  unless a test passes its own call, and the test one defaults to no processes, so a test that passes no
+  list trims nothing (#2557). Its
   timestamped restore snapshot is persisted locally, bounded and validated at load, then rehydrated by
   `PerformanceViewModel` before live profile probes during initialization.
+  `RestoreOriginalAsync` puts the snapshot back and then deletes it, for Restore All and Undo Changes alike, and
+  `PerformanceViewModel` reads the snapshot from disk before every change and every Restore All, since Undo
+  Changes can delete it while the tab holds a copy (#1525).
   `LoadSnapshot(out SnapshotProblem)` tells no snapshot from one that could not be read or is
   invalid, so the first Apply captures a baseline only when there is none: an unreadable one
   stops the change, and an invalid one is set aside by `StoreFile` and the change stopped once.
+  The graphics step of a restore (`RestoreGraphics`) asks what has become of the NVIDIA card the snapshot
+  names — still there, gone, or unreadable (`RecordedAdapter`) — and leaves out only one that is gone, so
+  Restore All can finish once the card was taken out or its driver removed. `RestoreOriginalAsync` is handed the
+  card as the question about the restore found it (`AdapterOf`, which asks `FindAdapter`), so the restore does what
+  the question said. The lookup is a constructor seam, so what a question says does not depend on the graphics card
+  of the PC running a test, and the read of the card's key behind `FindRecordedAdapter` is a parameter, so a read that
+  fails is tested as not known rather than gone. `RestoreGraphics` takes the write as a parameter too, so its answers
+  are tested with a stand-in; the service's own restore passes the real `SetGpuMaxPerformance`, so no test runs a
+  whole restore of a record that names a card.
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
@@ -678,8 +702,15 @@ Key services:
   flag is what lets Disable and Enable round-trip "Automatic (Delayed Start)".
   `StopServiceAsync` refuses a service that accepts no stop request instead of
   returning as if it had stopped, and `IsSafeForScExe` is the one name check
-  that both the Services commands (before they prompt) and `SetStartupTypeAsync`
-  (before it builds the sc.exe command line) apply.
+  that the Services commands (before they prompt), `SetStartupTypeAsync`
+  (before it builds the sc.exe command line) and Undo Changes' scan (which skips a
+  ledger record whose name would fail it) apply. `PutBackStartupTypeAsync` is the
+  one put-back that Enable on the Services tab and Undo Changes share (#1525): it
+  sets the recorded startup type through `SetStartupTypeAsync` (Manual when none is
+  recorded) and only then forgets the ledger record, so a change that failed keeps
+  it. `ReadEntry` reads one service as Windows reports it now, for a caller that
+  needs a handful rather than the whole list, and `IsDisabled` is the one test for
+  the state Enable undoes.
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
@@ -732,13 +763,15 @@ Key services:
   None of them services Windows, so an SFC scan does not hold them up. Reset Windows Update stops the Windows
   Installer service, so it holds `Install` as well as `SystemModification` (#2553).
   `Network` covers the speed tests, traceroute, Network Repair, and DNS & Hosts' DNS changes. Saving or
-  restoring the hosts file takes no lock: nothing else writes that file, and `HostsFileService` swaps a
-  finished copy into place (#2553).
+  restoring the hosts file takes no lock, from DNS & Hosts or from Undo Changes: both write it only through
+  `HostsFileService`, which swaps a finished copy into place (#2553).
   `SystemModification` covers everything that services or restarts the running Windows image: the SFC and
   DISM repairs, the component-store cleanup, Windows feature changes, Windows Update installs, Reset
   Windows Update, and creating or restoring a restore point, besides every tab that writes a system-wide
   registry value or changes a Windows service (Performance Mode, Gaming Profile, Environment Variables,
-  Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services).
+  Preinstalled Apps, Privacy & Telemetry, Defender Tweaks, Edge/OneDrive Remover, Services), and Undo Changes,
+  which takes it under its own name for the three put-backs whose tabs take it: Performance Mode, the services
+  and the environment variables (#1525).
   Feature changes, update installs, Reset Windows Update and the Restore Points tab took no lock until
   #2484; the last five joined at #2510, mainly so closing SysManager mid-change can name them — overlap
   between any two of them is not itself dangerous the way an SFC repair racing a feature change is.
@@ -774,6 +807,37 @@ Key services:
   registry toggles (activity history, advertising ID, diagnostics, etc.). Each toggle carries a
   stable `Key` that a privacy profile names it by; the list is pinned by a test, because renaming a
   key would make every profile already exported drop that choice.
+- `UndoChangesService` (`IUndoChangesService`) — finds the changes SysManager can put back from the copies
+  five tabs already keep: Performance Mode's record of the original settings (compared with the settings now,
+  through `PerformanceService.TakeSnapshotAsync`, its graphics setting read from the card the record names; held
+  back while a Gaming Profile session is on, left on, or not known to be off, whose settings they are until it
+  ends), the Services tab's `ServiceStartupLedgerService` records of
+  services still off, the copy beside a hosts file SysManager has written while the two differ
+  (`HostsFileService.ReadBackupState`), the environment variables' kept copy while a variable the restore can
+  write differs (`EnvironmentVariableService.PreviewRestore`), and a Gaming Profile session that is on or was
+  left on; plus, as one row that opens that tab, the Settings Watchdog settings that drifted and that it can
+  write back. A copy that could not be read, could not be compared with how things are now, could not be used, or
+  is damaged, is reported as an `UndoProblem` of that kind, never as nothing. Game mode is read once per look,
+  for both rows it decides.
+  Owns no file. `PutBackAsync` takes the lock that tab's own restore takes, reads the copy again under it and
+  changes nothing unless it still says what the question said, then goes through the restore the tab itself
+  uses — `PerformanceService.RestoreOriginalAsync`, `ServiceManagerService.PutBackStartupTypeAsync`,
+  `HostsFileService.RestoreBackup`, `EnvironmentVariableService.RestoreFromBackup`,
+  `IGamingProfileService.RevertAsync`/`RecoverPendingAsync` — and raises `IPutBackSignal` afterwards, whenever
+  something may have been written. What a restore that stopped part-way left is read again and compared, line
+  by line, with what its question listed (`WhatWentBack`), rather than assumed or counted. `LookForRestorePointAsync` asks for
+  the newest restore point apart from the scan, since that question waits behind the PowerShell runner a
+  restore point being created holds. The calls that would read or change this PC are seams on the internal
+  constructor.
+- `PutBackSignal` (`IPutBackSignal`) — the one event Undo Changes raises after every put-back that may have
+  changed something, finished or not, and the tab that made the change listens to: Performance Mode, Services, DNS & Hosts, Environment
+  Variables and Gaming Profile each read their state again, on the UI thread, and unsubscribe when disposed.
+  A tab says only what it found when it read again; whether the put-back worked is said on Undo Changes. Raised
+  only by Undo Changes, so a tab's own put-back is not heard twice. Every tab is built once and kept for the
+  session, and without this the tab would go on showing the change: Performance Mode's Restore All and switches
+  would describe the settings as they were before (its next change no longer depends on the signal, because it
+  reads its record from disk first), and Gaming Profile would keep Start off. It is raised on the thread that
+  tried the put-back, which is why each listener posts its re-read to the UI thread.
 - `PrivacyChoicesHandoff` (`IPrivacyChoicesHandoff`) — the one slot the profile import and the
   Privacy & Telemetry tab share: the import offers the choices it read, and the tab takes them once,
   when it is next shown or finishes loading. A slot rather than a call, because that tab's view model
@@ -786,7 +850,9 @@ Key services:
   them in real Windows PowerShell with the cmdlets shadowed (`DnsScriptTests`).
 - `HostsFileService` — parses and edits the Windows hosts file with
   add/remove/toggle operations; keeps a one-time pristine backup and can
-  restore it (`HasBackup` / `RestoreBackup`). `SaveHosts` re-reads the file to keep the lines it
+  restore it (`HasBackup` / `RestoreBackup`); `ReadBackupState` says whether the file still differs from
+  that copy and whether SysManager has written it (its header), for Undo Changes, since the copy is never
+  deleted and need not be SysManager's. `SaveHosts` re-reads the file to keep the lines it
   does not manage, and throws before writing when that read fails. `DnsHostsViewModel` refuses
   Save until a read of the file has succeeded, since Save rewrites it from the list.
 - `ContextMenuService` — scans Explorer context menu registrations in both
@@ -845,12 +911,22 @@ Key services:
   failure messages prints a value, because they reach a public CI log.
 - `EnvironmentVariableService`: reads/writes User and Machine environment
   variables directly through HKCU/HKLM so `REG_EXPAND_SZ` values round-trip
-  without flattening, then broadcasts `WM_SETTINGCHANGE`. It provides name
+  without flattening; `BroadcastSettingChange` sends `WM_SETTINGCHANGE` once,
+  after a caller's batch. It provides name
   validation and pure PATH split/join/dedupe helpers. Reversibility uses
   independent one-time snapshots in matching registry hives: User state under
   HKCU and Machine state in access-controlled HKLM storage. Legacy LocalAppData
   data remains read-only compatibility input for User restore and is never
-  authoritative for an elevated Machine restore.
+  authoritative for an elevated Machine restore. `PreviewRestore` says what
+  `RestoreFromBackup` would change now — each variable put back, changed back or
+  removed, by scope, leaving out a name the restore can neither write nor remove —
+  so Undo Changes lists the copy only while restoring it would change something
+  (#1525). A copy that is there and cannot be used is refused before the first
+  write, by the preview, the restore and `EnsureBackup` alike, and the two kinds
+  are told apart: `InvalidDataException` (and `RestoreResult.InvalidBackup`) for a
+  damaged one, which looking again will not change, and
+  `BackupUnreadableException` (and `UnreadableBackup`) for one that could not be
+  read just now — another program had it open, say.
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested
@@ -863,14 +939,17 @@ Key services:
   restore points, which lets the tab say which one it is. The integration suite runs
   all three scripts in real Windows PowerShell with the cmdlets shadowed by functions.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
-  Every tab that changes system settings calls `EnsureAsync` before its first mutation; the first
-  call wins and the rest are no-ops, so a session takes at most one point no matter how many tabs
+  Each of the six consumers listed below calls `EnsureAsync` before its first mutation; the first
+  call wins and the rest are no-ops, so a session takes at most one point no matter how many of them
   the user visits — Windows grants roughly one per 24 hours, so two independent attempts meant the
   second reported "no snapshot" while a good one existed. Takes `RestorePointService.CreateAsync` as
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `GamingProfileService`, `EdgeOneDriveViewModel`,
-  `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`.
+  `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`. The
+  tabs outside that list take none: Undo Changes only looks for the newest point
+  (`UndoChangesService.LookForRestorePointAsync`), and Performance Mode and Restore Points create one
+  only when asked, through `RestorePointService.CreateAsync`.
   `ConfirmationNotice` is what each of their confirmations appends: the attempt turns System
   Protection back on when it is off, and `RestorePointService.ProtectionNotice` is the one sentence
   that says so, shared with the Restore Points tab and Performance Mode. It is empty once the
@@ -1082,7 +1161,10 @@ Key services:
   Windows currently reports as `Disabled`, so a stale entry can never override the machine.
   `Load` returns null for a ledger that could not be read, and `Remember` returns false and writes
   nothing then, so Disable records before it changes a service and refuses when it cannot. A ledger
-  that does not parse is set aside by `StoreFile` before a fresh one is written.
+  that does not parse is set aside by `StoreFile` before a fresh one is written. `Load` reads one that
+  does not parse as empty; the internal `Read` also says it did not parse, so Undo Changes reports
+  that ledger as damaged rather than as nothing to put back, since the services it recorded are still
+  off (#1525).
 - `CrashMarkerService` — records that the process died from an unhandled exception, as JSON under
   `%LocalAppData%\SysManager\last-crash.json`, so the next launch can say so. `App.OnDomain` writes
   the marker (a domain-level unhandled exception kills the process with no UI at all, so this is the
@@ -1107,15 +1189,20 @@ Key services:
   reimplements a tweak. A machine-wide `GamingSnapshot` is captured before the first change
   and persisted to its OWN `gaming-profiles.json` (never the Performance tab's snapshot);
   revert undoes each applied step in reverse order, and a leftover on-disk session is
-  offered for restore on next launch (crash recovery). The store is read through `StoreFile`:
+  offered for restore the next time the Gaming Profile tab is opened (crash recovery) — Undo Changes
+  lists it as left on until then. The store is read through `StoreFile`:
   one that could not be read is never written over, so Apply refuses before any change, and one
-  that does not parse or that a newer build wrote is set aside first. Every read-modify-write of
+  that does not parse or that a newer build wrote is set aside first. `ReadPendingRecovery` tells a session
+  left on — and whether undoing it needs administrator rights — from none and from a record that could not be
+  read or used, and `RecoverPendingAsync` refuses a record it cannot read rather than report it reverted
+  (#1525). Every read-modify-write of
   it holds `_storeLock`, and never across an await. Every revert path — Stop, the
   automatic revert when the game exits, the end of a session whose game closed while it was
   starting, and recovery — returns a `GamingRevertResult` naming
   the steps whose undo failed, so the tab never announces a restore it did not get. The
-  apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is an internal
-  static method exercised by unit tests with fake steps — no real system call.
+  apply/revert engine (order, admin-skip, failure-isolation, reverse-revert) is two internal
+  static methods, `RunApplyAsync` and `RunRevertAsync`, exercised by unit tests with fake steps — no
+  real system call.
   `CpuAffinityService` gained a small `Get`/`TrySetPriority` capability (behind
   `ICpuAffinityService`) for the game's priority. The game is a `GameTarget` that carries its
   start time: Apply refuses a game that has closed before changing anything
@@ -1177,9 +1264,10 @@ Key services:
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA). Real-time
   polling with 2s interval.
 - `ActivityLogService` — persists the last 60 user actions to a JSON file for the
-  Dashboard's recent-activity card. Records the six destructive operations (deep
-  cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) as
-  counts and sizes only, never file names. Takes a `configDir` seam so tests never
+  Dashboard's recent-activity card: 22 kinds of action, from 29 call sites. The six destructive
+  operations (deep cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) are
+  recorded as counts and sizes only, never file names; the others say what changed, and Undo Changes
+  records each put-back that changed something (#1525). Takes a `configDir` seam so tests never
   write to the user's real history. The file is shared with command-line and scheduled
   runs, which are separate processes, so `GetRecent` reads it rather than a list held since
   startup, and `Log` reads, adds and writes as one step under an exclusive handle on
@@ -1368,9 +1456,20 @@ consumer gets its own runner instance, avoiding `LineReceived` event cross-talk
 between tabs (e.g. Dashboard and App Updates running winget concurrently — see the
 transient registrations at the top of `ServiceRegistration.cs`).
 
+For a few singletons the single instance is the contract, and `ServiceRegistration.cs` says why beside
+each. Undo Changes raises `IPutBackSignal` and the tab that made the change listens, so a second instance
+would put a change back without that tab hearing of it (#1525). `IPrivacyChoicesHandoff` is the one slot
+Profile Export / Import leaves imported privacy choices in. `ISessionRestorePoint` makes "one restore point
+per session" mean the whole app. `NavigationService` is registered as itself and as `INavigationService`, one
+object behind both, and `ISpeedTestService` forwards to the `SpeedTestService` singleton the network tabs
+take. Some app-wide services are not in the container at all and are reached through a static `Instance`:
+`ThemeService`, `OperationLockService`, `DialogService`, `ToastService`, `ActivityLogService` and
+`ProcessDescriptionService`.
+
 `MainWindowViewModel` resolves child VMs from the container **lazily**: each tab's
 `NavItem` holds a `ContentFactory` and builds its view-model from DI only when the tab
-is first opened (`NavItem.Content`). This avoids constructing all 54 lazily-registered tab
+is first opened (`NavItem.Content`). Of the 59 tabs, 56 are registered this way and one of
+those, Standby, is still built at startup, as below; that avoids constructing the other 55 tab
 VMs at startup — most kick off a background scan/timer in their constructor, so eager
 construction ran that work up front for tabs the user might never open.
 

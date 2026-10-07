@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.122.x  | :white_check_mark: |
-| < 1.122  | :x:                |
+| 1.123.x  | :white_check_mark: |
+| < 1.123  | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a
@@ -109,6 +109,16 @@ What the app can and cannot do by design:
   installation remain available only to scripts started as a separate
   `powershell.exe` while the app runs without elevation (the Windows Update
   history's PSWindowsUpdate module).
+- **Putting changes back**: Performance Mode, Services, DNS & Hosts (for the hosts file),
+  Environment Variables and Gaming Profile each keep a copy from before their first change.
+  The Undo Changes tab lists the changes those copies can still put back, plus the Settings
+  Watchdog settings that have drifted, and puts back one at a time. Each one asks first and
+  names what will change, reads the copy again — under the lock its own tab's restore takes,
+  for the three that take one — and changes nothing if what it finds is no longer what the
+  question described. It keeps no file of its own, so deleting a copy removes that row. It
+  names the newest restore point only when SysManager runs as administrator, because Windows
+  lists restore points only to an administrator. Files deleted outright or shredded, removed
+  preinstalled apps and uninstalled programs cannot be put back.
 - **External CLI downloads**: the Ookla speed-test CLI is downloaded from
   `install.speedtest.net` the first time it's used. If that URL changes,
   the feature fails safely rather than substituting an alternative.
@@ -197,28 +207,37 @@ modified — and a test asserts it, so the opt-out cannot be dropped unnoticed.
 
 ### What the app stores, and where
 
-All of it stays on your PC, inside your own user profile. None of it is
-encrypted, because none of it is secret: you can open any of these files in a
-text editor, and you can delete any of them at any time without breaking the
-app.
+All of it stays on your PC, and almost all of it inside your own user profile. None
+of it is encrypted, because none of it is secret: the settings and histories open in a
+text editor, and you can delete any of them without breaking the app. Two copies kept
+to undo a change are the exception to the user profile, because of what they copy —
+see the last two rows.
 
 | What | Where | Why it exists |
 |---|---|---|
 | Appearance and theme choice | `%AppData%\SysManager` | So the app looks the same next launch |
 | Dark-mode schedule | `%AppData%\SysManager` | Your chosen on/off times |
 | Speed-test history | `%LocalAppData%\SysManager` | So you can compare results over time |
-| Recent-activity list | `%LocalAppData%\SysManager` | Counts and sizes of actions you performed — never file names |
+| Recent-activity list | `%LocalAppData%\SysManager` | One line per action you performed — counts and sizes, and names you gave things such as a volume preset or a restore point — never file names |
 | Settings-watchdog baseline | `%LocalAppData%\SysManager` | A snapshot of the Windows settings you chose, to detect later drift |
 | Resource history | `%LocalAppData%\SysManager` | CPU / RAM / temperature samples, for the history graphs |
-| Diagnostic log | `%LocalAppData%\SysManager\logs` | 14 days of rolling files, so a problem can be diagnosed |
+| Diagnostic log | `%LocalAppData%\SysManager\logs` | Up to 14 rolling files — a new one each day, or sooner at 10 MB — so a problem can be diagnosed |
 | Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |
 | Startup version-check on/off | `%AppData%\SysManager` | The About-tab checkbox that controls the once-a-day version check |
-| Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, saved environment variables |
-| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | A performance snapshot to restore from, a ledger of the service startup types it changed, whether the last session crashed, cached app-icon lookups |
+| Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
+| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, and a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key) |
+| Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message |
+| Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
+| Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |
+| Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
+| The original hosts file | `%SystemRoot%\System32\drivers\etc\hosts.bak` | Copied once, the first time SysManager saves the hosts file, and kept beside it so the original can be restored |
+| A copy of your environment variables | Registry: `HKCU\Software\SysManager\Backups\Environment`; machine-wide ones in `HKLM\SOFTWARE\SysManagerEnvironmentBackup` | Taken before SysManager first changes them. The machine-wide copy is locked so a standard user cannot change it |
 
-Every one of these sits inside your own user profile, opens in a text editor, and can be
-deleted without breaking the app. Two folders are involved only because Windows separates
-roaming settings from machine-local data; nothing is hidden in either.
+Apart from those last two, everything sits inside your own user profile, in two folders only
+because Windows separates roaming settings from machine-local data; nothing is hidden in either.
+If you set up Scheduled Maintenance, Windows also keeps one task, `\SysManager\Scheduled Maintenance`,
+in Task Scheduler. Deleting a copy kept to undo a change does not break the app, but that change can
+then no longer be put back: Undo Changes lists only the copies that are still there.
 
 Your Windows user name is replaced with `[user]` in every log line — including
 inside error messages — so a log you choose to share does not carry your account

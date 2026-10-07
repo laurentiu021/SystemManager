@@ -397,6 +397,11 @@ public sealed partial class EnvironmentVariableService
     public void EnsureBackup() => EnsureBackup(includeUser: true, includeMachine: true);
 
     /// <summary>Ensures pristine snapshots only for the scopes about to be changed.</summary>
+    /// <remarks>
+    /// Refuses before writing anything while a copy that is already there cannot be used: with
+    /// <see cref="InvalidDataException"/> when it is damaged, and <see cref="BackupUnreadableException"/> when it could
+    /// not be read just now.
+    /// </remarks>
     public void EnsureBackup(bool includeUser, bool includeMachine)
     {
         // Validate every present artifact even when this operation will not mutate that
@@ -405,9 +410,13 @@ public sealed partial class EnvironmentVariableService
         var userBackup = ReadUserBackup();
         var machineBackup = ReadMachineBackup();
 
-        if (userBackup.IsInvalid || machineBackup.IsInvalid)
+        // A damaged copy is said before one that could not be read just now, as PreviewRestore says it: looking again
+        // will not change the first, and may change the second.
+        if (userBackup.IsDamaged || machineBackup.IsDamaged)
             throw new InvalidDataException(
                 "An existing environment backup is invalid and will not be replaced.");
+        if (userBackup.IsUnreadable || machineBackup.IsUnreadable)
+            throw new BackupUnreadableException();
 
         string? userJson = null;
         string? machineJson = null;
@@ -635,12 +644,24 @@ public sealed partial class EnvironmentVariableService
             Failed + other.Failed);
     }
 
-    private readonly record struct BackupRead<T>(bool Exists, T? Snapshot)
+    private readonly record struct BackupRead<T>(bool Exists, T? Snapshot, bool Unread = false)
         where T : class
     {
+        /// <summary>True when a copy is there and cannot be used now: every restore refuses it.</summary>
         public bool IsInvalid => Exists && Snapshot is null;
+
+        /// <summary>
+        /// True when the copy is there and could not be read just now, which looking again may change — as against
+        /// damaged, which it will not (#1525).
+        /// </summary>
+        public bool IsUnreadable => Unread;
+
+        /// <summary>True when the copy is there, was read, and is not one that can be restored.</summary>
+        public bool IsDamaged => IsInvalid && !Unread;
+
         public static BackupRead<T> Missing => new(false, null);
         public static BackupRead<T> Invalid => new(true, null);
+        public static BackupRead<T> Unreadable => new(true, null, Unread: true);
         public static BackupRead<T> Valid(T snapshot) => new(true, snapshot);
     }
 
@@ -708,17 +729,17 @@ public sealed partial class EnvironmentVariableService
         catch (IOException ex)
         {
             Log.Warning(ex, "Environment: User registry backup could not be read");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
         catch (System.Security.SecurityException ex)
         {
             Log.Warning(ex, "Environment: User registry backup read was denied");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Environment: User registry backup read was denied");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
     }
 
@@ -745,17 +766,17 @@ public sealed partial class EnvironmentVariableService
         catch (IOException ex)
         {
             Log.Warning(ex, "Environment: legacy User backup could not be read");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
         catch (System.Security.SecurityException ex)
         {
             Log.Warning(ex, "Environment: legacy User backup read was denied");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Environment: legacy User backup read was denied");
-            return BackupRead<UserEnvBackup>.Invalid;
+            return BackupRead<UserEnvBackup>.Unreadable;
         }
     }
 
@@ -878,17 +899,17 @@ public sealed partial class EnvironmentVariableService
         catch (IOException ex)
         {
             Log.Warning(ex, "Environment: protected Machine backup could not be read");
-            return BackupRead<MachineEnvBackup>.Invalid;
+            return BackupRead<MachineEnvBackup>.Unreadable;
         }
         catch (System.Security.SecurityException ex)
         {
             Log.Warning(ex, "Environment: protected Machine backup read was denied");
-            return BackupRead<MachineEnvBackup>.Invalid;
+            return BackupRead<MachineEnvBackup>.Unreadable;
         }
         catch (UnauthorizedAccessException ex)
         {
             Log.Warning(ex, "Environment: protected Machine backup read was denied");
-            return BackupRead<MachineEnvBackup>.Invalid;
+            return BackupRead<MachineEnvBackup>.Unreadable;
         }
     }
 
@@ -947,6 +968,112 @@ public sealed partial class EnvironmentVariableService
         return null;
     }
 
+    /// <summary>
+    /// A kept copy of the variables is there and could not be read just now — another program had it open, say — so
+    /// trying again may work, as it would not for a damaged copy (#1525).
+    /// </summary>
+    public sealed class BackupUnreadableException : IOException
+    {
+        public BackupUnreadableException()
+            : base("The environment backup could not be read just now.")
+        {
+        }
+    }
+
+    /// <summary>What <see cref="RestoreFromBackup"/> would do to one variable now.</summary>
+    public enum DifferenceKind
+    {
+        /// <summary>It is there, with another value or kind than the copy holds, and goes back to the copy's.</summary>
+        ChangedBack,
+
+        /// <summary>The copy holds it and it is gone, so it comes back.</summary>
+        AddedBack,
+
+        /// <summary>It was added since the copy was made, so it is removed.</summary>
+        Removed,
+    }
+
+    /// <summary>One variable restoring the copy would change.</summary>
+    public sealed record Difference(string Name, EnvVarScope Scope, DifferenceKind Kind);
+
+    /// <summary>What restoring the copy would change now, and which scopes it covers.</summary>
+    /// <param name="CoversUser">True when the copy holds the user's own variables.</param>
+    /// <param name="CoversMachine">True when the copy holds the machine-wide variables, which only an administrator
+    /// can write.</param>
+    /// <param name="Differences">Every variable restoring it would change, the user's first, each scope by name.</param>
+    public sealed record RestorePreview(bool CoversUser, bool CoversMachine, IReadOnlyList<Difference> Differences);
+
+    /// <summary>
+    /// What <see cref="RestoreFromBackup"/> would change if it ran now, or null when there is no copy to restore (#1525).
+    /// </summary>
+    /// <remarks>
+    /// The copy is never deleted, so having one says nothing about whether anything is left to put back. This answers
+    /// that, with the rule <see cref="RestoreScope"/> applies: every value the copy holds is written back, and every
+    /// variable it does not hold is removed — apart from a name <see cref="TryValidateName"/> refuses, which the
+    /// restore can neither write nor remove. A kind counts as a difference because the restore writes the copy's kind
+    /// back too; a copy written before kinds were recorded is compared by value alone.
+    /// <para>Throws <see cref="InvalidDataException"/> when a copy is there and is not valid, the same refusal
+    /// <see cref="RestoreFromBackup"/> answers with, so a damaged copy is never described as nothing to do — and
+    /// <see cref="BackupUnreadableException"/> when a copy is there and could not be read just now, which is not
+    /// damage.</para>
+    /// </remarks>
+    public RestorePreview? PreviewRestore()
+    {
+        var userBackup = ReadUserBackup();
+        var machineBackup = ReadMachineBackup();
+        // A damaged copy is said before one that could not be read just now: looking again will not change it.
+        if (userBackup.IsDamaged || machineBackup.IsDamaged)
+            throw new InvalidDataException("The environment backup is not valid.");
+        if (userBackup.IsUnreadable || machineBackup.IsUnreadable)
+            throw new BackupUnreadableException();
+        if (userBackup.Snapshot is null && machineBackup.Snapshot is null)
+            return null;
+
+        List<Difference> differences = [];
+        if (userBackup.Snapshot is { } user)
+            differences.AddRange(CompareScope(EnvVarScope.User, user.User, user.UserKinds));
+        if (machineBackup.Snapshot is { } machine)
+            differences.AddRange(CompareScope(EnvVarScope.Machine, machine.Machine, machine.MachineKinds));
+
+        return new RestorePreview(userBackup.Snapshot is not null, machineBackup.Snapshot is not null, differences);
+    }
+
+    private IEnumerable<Difference> CompareScope(
+        EnvVarScope scope,
+        Dictionary<string, string> saved,
+        Dictionary<string, RegistryValueKind>? kinds)
+    {
+        var live = new Dictionary<string, EnvVariable>(StringComparer.OrdinalIgnoreCase);
+        foreach (var variable in Read(scope))
+            live.TryAdd(variable.Name, variable);
+
+        // A name SetVariable refuses — Windows allows a space in one, and some installers use it — is one the restore
+        // can neither write nor remove, so it is not a change restoring the copy makes, on either side.
+        List<Difference> found = [];
+        foreach (var (name, value) in saved)
+        {
+            if (!TryValidateName(name, out _)) continue;
+            if (!live.TryGetValue(name, out var current))
+            {
+                found.Add(new Difference(name, scope, DifferenceKind.AddedBack));
+                continue;
+            }
+
+            var kind = current.IsExpandable ? RegistryValueKind.ExpandString : RegistryValueKind.String;
+            var kindDiffers = kinds is not null && kinds.TryGetValue(name, out var savedKind) && savedKind != kind;
+            if (kindDiffers || !string.Equals(current.Value, value, StringComparison.Ordinal))
+                found.Add(new Difference(name, scope, DifferenceKind.ChangedBack));
+        }
+
+        foreach (var current in live.Values)
+        {
+            if (!saved.ContainsKey(current.Name) && TryValidateName(current.Name, out _))
+                found.Add(new Difference(current.Name, scope, DifferenceKind.Removed));
+        }
+
+        return found.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>The outcome of a <see cref="RestoreFromBackup"/> call.</summary>
     public readonly record struct RestoreResult(
         bool HadBackup,
@@ -954,7 +1081,14 @@ public sealed partial class EnvironmentVariableService
         int Removed,
         int Failed)
     {
+        /// <summary>True when a copy was there and could not be used, so nothing was written.</summary>
         public bool InvalidBackup { get; init; }
+
+        /// <summary>
+        /// With <see cref="InvalidBackup"/>, true when the copy only could not be read just now rather than being
+        /// damaged, so trying again may work.
+        /// </summary>
+        public bool UnreadableBackup { get; init; }
     }
 
     /// <summary>
@@ -973,7 +1107,11 @@ public sealed partial class EnvironmentVariableService
         if (userBackup.IsInvalid || machineBackup.IsInvalid)
         {
             Log.Warning("Environment: restore aborted because a present backup is invalid");
-            return new RestoreResult(hasValidBackup, 0, 0, 0) { InvalidBackup = true };
+            return new RestoreResult(hasValidBackup, 0, 0, 0)
+            {
+                InvalidBackup = true,
+                UnreadableBackup = !userBackup.IsDamaged && !machineBackup.IsDamaged,
+            };
         }
         if (!hasValidBackup)
             return new RestoreResult(false, 0, 0, 0);

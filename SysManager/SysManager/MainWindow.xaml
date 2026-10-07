@@ -167,7 +167,7 @@
                              PREVIEW pill overflowed the 220px sidebar. Kept now that the leaf glyph
                              is gone, because the label/pill grid still needs a real width to
                              constrain against.
-                             No glyph on a leaf: 58 icons in a 220px rail is noise, and the group
+                             No glyph on a leaf: 59 icons in a 220px rail is noise, and the group
                              header is what a reader scans. The gutter that used to sit here always
                              empty is reclaimed by the label instead. -->
                         <DockPanel>
@@ -232,7 +232,7 @@
                     <TextBlock Text="System toolkit" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
 
                     <!--
-                        Search over the 58 tabs (#1498). There was none: every SearchText in the app
+                        Search over the 59 tabs (#1498). There was none: every SearchText in the app
                         filtered one tab's own grid, and nothing filtered the navigation — so reaching a tab
                         meant guessing which of 11 collapsed groups held it and opening them one by one.
 

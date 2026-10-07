@@ -201,6 +201,46 @@ public class EnvironmentVariableServiceTests
     }
 
     [Fact]
+    public void ACopyThatCannotBeReadJustNow_IsRefused_ButNotCalledDamaged()
+    {
+        // Held open by another program it is fine: every restore still refuses it, and says why apart from damage.
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "changed");
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(() => env.Service.PreviewRestore());
+            var result = env.Service.RestoreFromBackup();
+            Assert.True(result.InvalidBackup);
+            Assert.True(result.UnreadableBackup);
+        }
+
+        Assert.Equal("changed", env.GetUser("SAFE_USER"));
+        env.WriteLegacyUserBackup("{ this is not valid json ");
+        Assert.Throws<InvalidDataException>(() => env.Service.PreviewRestore());
+        Assert.False(env.Service.RestoreFromBackup().UnreadableBackup);
+    }
+
+    [Fact]
+    public void TheSafetyCopyBeforeAChange_OverOneThatCannotBeReadJustNow_IsRefused_ButNotCalledDamaged()
+    {
+        // Apply takes its safety copy here first. One that is held open is not damaged, and the refusal says which.
+        using var env = new RedirectedEnvironment();
+        env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+        var before = File.ReadAllBytes(env.Service.BackupPath);
+
+        using (File.Open(env.Service.BackupPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(
+                () => env.Service.EnsureBackup(includeUser: true, includeMachine: false));
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(env.Service.BackupPath));
+        Assert.Null(env.GetUserBackupRaw());
+    }
+
+    [Fact]
     public void SetVariable_PreservesExpandSz_AndReadsRawTokens_EndToEnd()
     {
         // End-to-end regression for the REG_EXPAND_SZ flattening bug: write an expandable
@@ -976,137 +1016,5 @@ public class EnvironmentVariableServiceTests
         Assert.Throws<InvalidDataException>(() =>
             env.Service.EnsureBackup(includeUser: true, includeMachine: false));
         Assert.Equal(1, env.GetUserBackupRaw());
-    }
-
-    private sealed class RedirectedEnvironment : IDisposable
-    {
-        private readonly string _userRootName =
-            $@"Software\SysManagerTests\Environment\User_{Guid.NewGuid():N}";
-        private readonly string _machineRootName =
-            $@"Software\SysManagerTests\Environment\Machine_{Guid.NewGuid():N}";
-
-        public RedirectedEnvironment(bool enforceMachineBackupProtection = false)
-        {
-            BackupDirectory = Path.Combine(
-                Path.GetTempPath(),
-                $"SysManagerEnvironmentTests_{Guid.NewGuid():N}");
-            UserRoot = Registry.CurrentUser.CreateSubKey(_userRootName, writable: true)
-                ?? throw new InvalidOperationException("Could not create redirected User root.");
-            MachineRoot = Registry.CurrentUser.CreateSubKey(_machineRootName, writable: true)
-                ?? throw new InvalidOperationException("Could not create redirected Machine root.");
-
-            using var userEnvironment = UserRoot.CreateSubKey(
-                EnvironmentVariableService.UserEnvPath,
-                writable: true);
-            using var machineEnvironment = MachineRoot.CreateSubKey(
-                EnvironmentVariableService.MachineEnvPath,
-                writable: true);
-
-            Service = new EnvironmentVariableService(
-                BackupDirectory,
-                UserRoot,
-                MachineRoot,
-                enforceMachineBackupProtection);
-        }
-
-        public string BackupDirectory { get; }
-        public RegistryKey UserRoot { get; }
-        public RegistryKey MachineRoot { get; }
-        public EnvironmentVariableService Service { get; }
-
-        public void WriteUserBackup(string json)
-            => WriteLegacyUserBackup(json);
-
-        public void WriteLegacyUserBackup(string json)
-        {
-            Directory.CreateDirectory(BackupDirectory);
-            File.WriteAllText(Service.BackupPath, json);
-        }
-
-        public void WriteUserRegistryBackup(object value, RegistryValueKind kind = RegistryValueKind.String)
-        {
-            using var key = UserRoot.CreateSubKey(
-                EnvironmentVariableService.UserBackupPath,
-                writable: true);
-            key!.SetValue(EnvironmentVariableService.UserBackupValueName, value, kind);
-        }
-
-        public bool HasUserRegistryBackup()
-        {
-            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserBackupPath);
-            return key?.GetValueNames().Contains(
-                EnvironmentVariableService.UserBackupValueName,
-                StringComparer.OrdinalIgnoreCase) == true;
-        }
-
-        public object? GetUserBackupRaw()
-        {
-            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserBackupPath);
-            return key?.GetValue(
-                EnvironmentVariableService.UserBackupValueName,
-                defaultValue: null,
-                RegistryValueOptions.DoNotExpandEnvironmentNames);
-        }
-
-        public void WriteMachineBackup(object value, RegistryValueKind kind)
-        {
-            using var key = MachineRoot.CreateSubKey(
-                EnvironmentVariableService.MachineBackupPath,
-                writable: true);
-            key!.SetValue(EnvironmentVariableService.MachineBackupValueName, value, kind);
-        }
-
-        public object? GetMachineBackupRaw()
-        {
-            using var key = MachineRoot.OpenSubKey(EnvironmentVariableService.MachineBackupPath);
-            return key?.GetValue(
-                EnvironmentVariableService.MachineBackupValueName,
-                defaultValue: null,
-                RegistryValueOptions.DoNotExpandEnvironmentNames);
-        }
-
-        public void SetUser(string name, string value)
-            => SetUser(name, value, RegistryValueKind.String);
-
-        public void SetUser(string name, object value, RegistryValueKind kind)
-        {
-            using var key = UserRoot.OpenSubKey(
-                EnvironmentVariableService.UserEnvPath,
-                writable: true);
-            key!.SetValue(name, value, kind);
-        }
-
-        public void SetMachine(string name, string value)
-            => SetMachine(name, value, RegistryValueKind.String);
-
-        public void SetMachine(string name, object value, RegistryValueKind kind)
-        {
-            using var key = MachineRoot.OpenSubKey(
-                EnvironmentVariableService.MachineEnvPath,
-                writable: true);
-            key!.SetValue(name, value, kind);
-        }
-
-        public object? GetUser(string name)
-        {
-            using var key = UserRoot.OpenSubKey(EnvironmentVariableService.UserEnvPath);
-            return key?.GetValue(name, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-        }
-
-        public object? GetMachine(string name)
-        {
-            using var key = MachineRoot.OpenSubKey(EnvironmentVariableService.MachineEnvPath);
-            return key?.GetValue(name, defaultValue: null, RegistryValueOptions.DoNotExpandEnvironmentNames);
-        }
-
-        public void Dispose()
-        {
-            UserRoot.Dispose();
-            MachineRoot.Dispose();
-            Registry.CurrentUser.DeleteSubKeyTree(_userRootName, throwOnMissingSubKey: false);
-            Registry.CurrentUser.DeleteSubKeyTree(_machineRootName, throwOnMissingSubKey: false);
-            if (Directory.Exists(BackupDirectory))
-                Directory.Delete(BackupDirectory, recursive: true);
-        }
     }
 }

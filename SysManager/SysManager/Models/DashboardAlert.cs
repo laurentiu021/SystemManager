@@ -23,7 +23,7 @@ public sealed partial class DashboardAlert : ObservableObject
     /// <remarks>
     /// The Dashboard is the landing page and the only triage surface, and its alerts used to be inert
     /// strings — two of them literally read "check System Health" without being able to take anyone there
-    /// (#1496). Telling someone their disk is failing and leaving them to find the right tab among 58
+    /// (#1496). Telling someone their disk is failing and leaving them to find the right tab among 59
     /// behind 11 collapsed groups creates the anxiety without the path.
     /// <para>An id rather than a command: a model carrying an <c>ICommand</c> would put the shell inside
     /// the model, while a string keeps the model a description of the finding. The view model owns the

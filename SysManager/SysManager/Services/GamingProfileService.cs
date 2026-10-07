@@ -77,7 +77,21 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public bool IsActive => _appliedSteps.Count > 0;
     public int? BoundGamePid { get; private set; }
-    public bool HasPendingRecovery => !IsActive && LoadStore().ActiveSession is not null;
+    /// <inheritdoc />
+    public PendingRecovery ReadPendingRecovery()
+    {
+        if (IsActive) return new PendingRecovery(PendingRecoveryKind.None);
+
+        var (store, unusable) = ReadStore();
+        if (store is null) return new PendingRecovery(PendingRecoveryKind.Unreadable);
+        if (unusable) return new PendingRecovery(PendingRecoveryKind.Unusable);
+
+        // The session's profile holds only the steps that applied, and of those only pausing search indexing needs an
+        // administrator to undo: its revert starts the indexer it stopped.
+        return store.ActiveSession is { } session
+            ? new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: session.Profile.PauseSearchIndexing)
+            : new PendingRecovery(PendingRecoveryKind.None);
+    }
 
     /// <inheritdoc />
     public string RestorePointNotice => _restorePoint.ConfirmationNotice;
@@ -362,7 +376,12 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (LoadStore().ActiveSession is not { } session) return GamingRevertResult.Complete;
+            // A record that could not be read is not one with nothing in it: "put back" would be said of a session that
+            // is still on, and the record is kept for the next try.
+            var (store, _) = ReadStore();
+            if (store is null)
+                throw new IOException("SysManager could not read its record of the game mode session left on.");
+            if (store.ActiveSession is not { } session) return GamingRevertResult.Complete;
 
             // Rebuild ONLY the machine-wide tweaks from the persisted snapshot (per-game
             // affinity/priority are not persisted — a since-recycled PID must never be touched)

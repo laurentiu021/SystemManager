@@ -129,6 +129,11 @@ public static class ServiceRegistration
         services.AddSingleton<NavigationService>();
         services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
 
+        // One signal for the whole app: Undo Changes raises it and the tab that made the change listens, so a
+        // second instance would put a change back without that tab hearing of it (#1525).
+        services.AddSingleton<IPutBackSignal, PutBackSignal>();
+        services.AddSingleton<IUndoChangesService, UndoChangesService>();
+
         // ── ViewModels (Singleton — one instance per tab) ──────────────
         services.AddSingleton<DashboardViewModel>();
         services.AddSingleton<AppUpdatesViewModel>();
@@ -190,6 +195,7 @@ public static class ServiceRegistration
         services.AddSingleton<AudioMixerViewModel>();
         services.AddSingleton<GamingProfileViewModel>();
         services.AddSingleton<NotificationBlockerViewModel>();
+        services.AddSingleton<UndoChangesViewModel>();
 
         return services;
     }

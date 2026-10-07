@@ -427,6 +427,99 @@ public class PerformanceServiceTests
             () => service.SetProcessorMinStateAsync(5));
     }
 
+    // ── The graphics step of a restore ──
+
+    private static PerformanceService.OriginalSnapshot WithCard(string? subKey, bool dynamicPstate = true) =>
+        new("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced", true, true, true, true, dynamicPstate, 5, subKey);
+
+    [Fact]
+    public void RestoringGraphics_ForACardThatIsGone_LeavesItOut_SoTheRestCanFinish()
+    {
+        // Taken out, or its driver removed: there is nothing to write the setting to, and stopping here left the
+        // processor minimum and the record behind for good (#1525).
+        var writes = new List<(string, bool)>();
+
+        PerformanceService.RestoreGraphics(WithCard("0000"), _ => PerformanceService.RecordedAdapter.Gone,
+            (key, max) => { writes.Add((key, max)); return true; });
+
+        Assert.Empty(writes);
+    }
+
+    [Fact]
+    public void RestoringGraphics_ForACardThatIsThere_WritesItsOwnSettingBack()
+    {
+        var writes = new List<(string, bool)>();
+
+        PerformanceService.RestoreGraphics(WithCard("0001", dynamicPstate: true), _ => PerformanceService.RecordedAdapter.Present,
+            (key, max) => { writes.Add((key, max)); return true; });
+
+        Assert.Equal([("0001", false)], writes);
+    }
+
+    [Theory]
+    [InlineData("Present")]
+    [InlineData("Unreadable")]
+    public void RestoringGraphics_ThatCouldNotBeWritten_Stops_WhenTheCardMayStillBeThere(string found)
+    {
+        // A card whose key could not be read may still be there, so leaving its setting out would lose it for good.
+        var adapter = Enum.Parse<PerformanceService.RecordedAdapter>(found);
+
+        var thrown = Assert.Throws<InvalidOperationException>(() =>
+            PerformanceService.RestoreGraphics(WithCard("0000"), _ => adapter, (_, _) => false));
+
+        Assert.Equal("The NVIDIA graphics setting could not be restored.", thrown.Message);
+    }
+
+    [Fact]
+    public void RestoringGraphics_WithNoCardRecorded_AsksNothing()
+    {
+        var asked = 0;
+
+        PerformanceService.RestoreGraphics(WithCard(null),
+            _ => { asked++; return PerformanceService.RecordedAdapter.Present; },
+            (_, _) => { asked++; return true; });
+
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public void ARecordedCardThatIsNotAKey_IsGone_WithoutTheRegistryBeingRead()
+    {
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone, PerformanceService.FindRecordedAdapter(@"..\Other"));
+        Assert.False(PerformanceService.IsNvidiaSubKey(@"..\Other"));
+    }
+
+    [Fact]
+    public void ARecordedCard_IsThere_OnlyWhileItsKeyStillNamesNvidia()
+    {
+        // The driver's name or its maker's will do; a key that now belongs to another card, or is not there, is gone.
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("NVIDIA GeForce RTX 4070", "")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("", "NVIDIA")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone,
+            PerformanceService.FindRecordedAdapter("0000", _ => ("AMD Radeon RX 7800 XT", "Advanced Micro Devices, Inc.")));
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone, PerformanceService.FindRecordedAdapter("0000", _ => null));
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("security")]
+    [InlineData("access")]
+    public void ARecordedCardWhoseKeyCannotBeRead_IsNotKnown_RatherThanGone(string failure)
+    {
+        // "Gone" leaves its setting out of the restore and lets the record be deleted, while the card may still be there.
+        Exception thrown = failure switch
+        {
+            "io" => new System.IO.IOException("The registry key is marked for deletion."),
+            "security" => new System.Security.SecurityException("Requested registry access is not allowed."),
+            _ => new UnauthorizedAccessException("Access to the registry key is denied."),
+        };
+
+        Assert.Equal(PerformanceService.RecordedAdapter.Unreadable,
+            PerformanceService.FindRecordedAdapter("0000", _ => throw thrown));
+    }
+
     // ── OriginalSnapshot ──
 
     [Fact]

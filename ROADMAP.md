@@ -79,7 +79,7 @@ Partly done and pinned by tests, partly not.
   four colours with no contrast check
   ([#1561](https://github.com/laurentiu021/SystemManager/issues/1561)).
 
-## One design system rather than 58 views that resemble each other
+## One design system rather than 59 views that resemble each other
 
 Spacing, radii and type sizes are still literals in the views. The token scales exist and
 are widely bypassed, so a change to one of them does not reach the screens it should.

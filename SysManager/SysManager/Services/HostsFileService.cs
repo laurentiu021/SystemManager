@@ -205,6 +205,56 @@ public sealed partial class HostsFileService
     public bool HasBackup => File.Exists(BackupPath);
 
     /// <summary>
+    /// Whether the hosts file still differs from the copy kept beside it, whether SysManager has written the file, and
+    /// when that copy was made, or null when there is no copy (#1525).
+    /// </summary>
+    /// <remarks>
+    /// The copy is never deleted, so "there is a copy" stays true after the file has been put back. Undo Changes
+    /// offers it only while the two differ: a row that is still there after its change went back would say there was
+    /// something left to undo.
+    /// <para>Nor is the copy always SysManager's. <see cref="SaveHosts"/> makes it only when there is none, so a
+    /// <c>hosts.bak</c> another program or the user left there stays, and a file SysManager never wrote has no change
+    /// of SysManager's in it. Only a file that starts with the header <see cref="SaveHosts"/> writes counts as one
+    /// SysManager wrote.</para>
+    /// <para>Compared by length first, then in chunks, so a hosts file of a few hundred thousand blocked sites is not
+    /// read whole twice. Not gated: it only reads, and both writers swap a finished file into place, so it sees either
+    /// file whole. A file that is there and could not be read throws, because one that cannot be compared is not the
+    /// same.</para>
+    /// </remarks>
+    public HostsBackupState? ReadBackupState()
+    {
+        if (!File.Exists(BackupPath)) return null;
+        var takenAtUtc = File.GetCreationTimeUtc(BackupPath);
+        return new HostsBackupState(!SameContent(BackupPath, HostsPath), StartsWithOurHeader(HostsPath), takenAtUtc);
+    }
+
+    private static bool StartsWithOurHeader(string path)
+    {
+        if (!File.Exists(path)) return false;
+        using var reader = new StreamReader(
+            new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        return string.Equals(reader.ReadLine(), ManagedHeaderLine1, StringComparison.Ordinal);
+    }
+
+    private static bool SameContent(string first, string second)
+    {
+        if (!File.Exists(second)) return false;
+        using var a = new FileStream(first, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var b = new FileStream(second, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (a.Length != b.Length) return false;
+
+        var left = new byte[64 * 1024];
+        var right = new byte[left.Length];
+        while (true)
+        {
+            var read = a.ReadAtLeast(left, left.Length, throwOnEndOfStream: false);
+            if (read == 0) return true;
+            if (b.ReadAtLeast(right.AsSpan(0, read), read, throwOnEndOfStream: false) != read) return false;
+            if (!left.AsSpan(0, read).SequenceEqual(right.AsSpan(0, read))) return false;
+        }
+    }
+
+    /// <summary>
     /// Saves entries back to the hosts file. Disabled entries are written as commented lines.
     /// </summary>
     /// <remarks>
@@ -384,3 +434,10 @@ public sealed partial class HostsFileService
         return tokens.Length >= 2 && IPAddress.TryParse(tokens[0], out _);
     }
 }
+
+/// <summary>Whether the hosts file differs from the copy kept beside it, whether SysManager has written it, and when that
+/// copy was made.</summary>
+/// <param name="DiffersFromHosts">True while putting the copy back would change the hosts file.</param>
+/// <param name="WrittenBySysManager">True when the hosts file starts with the header SysManager writes into it.</param>
+/// <param name="TakenAtUtc">When the copy was made.</param>
+public sealed record HostsBackupState(bool DiffersFromHosts, bool WrittenBySysManager, DateTime TakenAtUtc);

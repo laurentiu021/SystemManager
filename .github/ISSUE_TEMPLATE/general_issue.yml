@@ -30,7 +30,7 @@ body:
     id: version
     attributes:
       label: SysManager version
-      description: Shown at the top of the **About** tab, and in the title bar.
+      description: Shown at the top of the **About** tab, and at the bottom of the sidebar.
       placeholder: e.g. the version shown on the About tab
     validations:
       required: true
@@ -61,9 +61,7 @@ body:
         - Process Manager
         - Resource History
         - Camera/Mic/Location
-        - File Lock Detector
         - Settings Watchdog
-        - Bandwidth Monitor
         - Quick Cleanup
         - Deep Cleanup
         - Shortcut Cleaner
@@ -71,9 +69,11 @@ body:
         - Disk Analyzer
         - Large Files
         - Duplicate Finder
+        - File Lock Detector
         - Ping
         - Traceroute
         - Speed Test
+        - Bandwidth Monitor
         - Network Repair
         - DNS & Hosts
         - App Updates
@@ -87,10 +87,10 @@ body:
         - Browser Cleaner
         - Edge/OneDrive Remover
         - Defender Tweaks
-        - Notification Blocker
         - Context Menu
         - Dark Mode Scheduler
         - Volume Control
+        - Notification Blocker
         - Drivers
         - Battery Health
         - System Logs
@@ -110,17 +110,25 @@ body:
     attributes:
       label: Describe the issue
       description: What happened? What did you expect? Any pattern you noticed?
-      placeholder: "The app freezes for ~10 seconds every time I switch to the Network tab..."
+      placeholder: "The app freezes for ~10 seconds every time I switch to the Ping tab..."
     validations:
       required: true
 
   - type: textarea
-    id: logs-screenshots
+    id: logs
     attributes:
-      label: Logs or screenshots (optional)
+      label: Log excerpt (optional)
       description: |
-        Logs are in `%LOCALAPPDATA%\SysManager\logs\`. Paste relevant lines or drag screenshots here.
+        Logs are in `%LOCALAPPDATA%\SysManager\logs\`. Paste the relevant lines, or attach the file.
+        **Save diagnostics bundle** on the About tab puts the newest logs, the system report and your
+        environment info into one zip you can attach instead.
       render: text
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots (optional)
+      description: Drag and drop screenshots directly into this box.
 
   - type: checkboxes
     id: checks

@@ -63,9 +63,7 @@ body:
         - Process Manager
         - Resource History
         - Camera/Mic/Location
-        - File Lock Detector
         - Settings Watchdog
-        - Bandwidth Monitor
         - Quick Cleanup
         - Deep Cleanup
         - Shortcut Cleaner
@@ -73,9 +71,11 @@ body:
         - Disk Analyzer
         - Large Files
         - Duplicate Finder
+        - File Lock Detector
         - Ping
         - Traceroute
         - Speed Test
+        - Bandwidth Monitor
         - Network Repair
         - DNS & Hosts
         - App Updates
@@ -89,10 +89,10 @@ body:
         - Browser Cleaner
         - Edge/OneDrive Remover
         - Defender Tweaks
-        - Notification Blocker
         - Context Menu
         - Dark Mode Scheduler
         - Volume Control
+        - Notification Blocker
         - Drivers
         - Battery Health
         - System Logs

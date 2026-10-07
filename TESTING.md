@@ -1,25 +1,29 @@
 # Testing
 
-SysManager has three test projects, each with a distinct scope and runner.
+SysManager has three test projects, each with a distinct scope. All three are xUnit v3 projects run on
+Microsoft.Testing.Platform.
 
 ## Projects
 
 | Project | What it tests | Runs on CI |
 |---|---|---|
-| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
-| `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher) | ⚠️ CI (non-blocking) |
+| `SysManager.Tests` | Unit tests — mostly pure logic, but some tests touch lightweight OS APIs (registry reads, throwaway keys under `HKCU\Software\SysManagerTests`, process enumeration, Task Scheduler queries) and a few exercise STA/UI-thread code via `Xunit.StaFact` (`[StaFact]`). No WMI, no network I/O, no admin required. | ✅ Every push / PR |
+| `SysManager.IntegrationTests` | Integration tests — real Windows APIs (Event Log, WMI, PowerShell, ICMP, WPF dispatcher); runs in CI non-blocking, on pushes and on pull requests from this repository, not from forks | ⚠️ CI (non-blocking) |
 | `SysManager.UITests` | End-to-end UI automation via FlaUI — needs an interactive desktop session; runs in CI on a desktop-enabled runner, non-blocking (`continue-on-error`) and skipped on fork PRs | ⚠️ CI (non-blocking) |
 
 ## Running unit tests (CI-equivalent)
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
+
+`--project` is required: under Microsoft.Testing.Platform, `dotnet test` does not take a project path on
+its own.
 
 ## Running integration tests locally
 
 ```powershell
-dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
+dotnet test --project SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
 ```
 
 Some integration tests require admin rights (WMI storage queries, ICMP sockets).
@@ -36,7 +40,7 @@ in this suite; anything pure belongs in `SysManager.Tests`, where it gates merge
 The app must not already be running. The test runner launches and closes it automatically.
 
 ```powershell
-dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
+dotnet test --project SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
 ## Manual smoke test over the published exe
@@ -45,7 +49,7 @@ dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 Windows UI Automation, and fails loudly if a tab doesn't render. It complements the
 UI test project: it exercises the single-file build a user actually downloads, rather
 than a `bin` output, which is where publish-only problems (missing native assets,
-single-file extraction, trimming) surface.
+single-file extraction) surface.
 
 Needs a published exe and an interactive desktop session — a WPF app cannot render
 over SSH or in a non-interactive scheduled task.
@@ -62,9 +66,9 @@ when a new tab is worth including in the quick check.
 ## Running everything at once
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
-dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
-dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test --project SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
+dotnet test --project SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
 
 ## Running one class or one test
@@ -83,8 +87,9 @@ discovered without running any of it. `-list` is the check to reach for after to
 project file or a package version: it answers "is everything still being found" separately
 from "does everything still pass", and those fail in different ways.
 
-Use `-?` for the full option list. This is the same runner `dotnet test` drives, so a result
-here and a result on CI mean the same thing.
+Use `-?` for the full option list. It is the same test executable `dotnet test` starts: `dotnet test`
+drives it through Microsoft.Testing.Platform, and run directly it takes xUnit's own options, so a
+result here and a result on CI come from the same tests and the same engine.
 
 ## Coverage
 
@@ -112,6 +117,7 @@ rejection back.
 | Microsoft.Testing.Extensions.CodeCoverage | Code coverage collection (unit project only) |
 | Microsoft.Testing.Extensions.HangDump | Dump on hang (integration project only) |
 | Xunit.StaFact | STA thread support for WPF-dependent tests |
+| FlaUI 5.0 (UIA3) | UI automation for `SysManager.UITests` |
 
 Package versions are managed centrally in `SysManager/Directory.Packages.props`
 (`ManagePackageVersionsCentrally`), so a `PackageReference` in a `.csproj` carries no
@@ -137,27 +143,34 @@ project, including the extension options its packages contribute.
 
 ### Parallelism
 
-Each project's `xunit.runner.json` sets its own mode. Unit tests run collections in parallel
-(`"parallelMode": "collections"`); the integration project runs strictly serially
-(`"parallelMode": "none"`, `"maxParallelThreads": 1`) because its tests touch the live system.
-`parallelMode` replaced v2's `parallelizeTestCollections` boolean, which xUnit v3 ignores — the runner
-prints the mode it resolved at startup, so a config key that stopped being read is visible there rather
-than silently reverting to the default.
+The unit and integration projects each set their mode in `xunit.runner.json`. Unit tests run
+collections in parallel (`"parallelMode": "collections"`); the integration project runs strictly
+serially (`"parallelMode": "none"`, `"maxParallelThreads": 1`) because its tests touch the live system.
+The UI project has no `xunit.runner.json`: every class in it sits in the one `App` collection, which runs
+them one at a time against a single launched app.
+`parallelMode` is xUnit v3's form of the setting; v2's `parallelizeTestCollections` boolean is still read,
+but it has no way to say `all`. Run a test executable with `-diagnostics` and its `Starting:` line names the
+mode it resolved (`parallel mode = collections [N threads]`), so a config key that is not being read shows
+there rather than silently reverting to the default.
 
-Tests that share state or touch OS resources are isolated via xUnit
-collection definitions (all defined in `TestCollections.cs`, each with
-`DisableParallelization = true`):
+Tests that share state or touch OS resources are isolated via xUnit collection definitions, each
+with `DisableParallelization = true`, so a collection runs on its own after the parallel ones. The unit
+project defines them in `TestCollections.cs`:
 
 - `[Collection("ProcessWideStatics")]` — tests that touch **any** process-wide static: swapping
   `DialogService.Instance`, acquiring `OperationLockService.Instance`, or pinning elevation with
-  `AdminHelper.ForceElevation`. This was once two collections, `"DialogService"` and `"OperationLock"`,
-  and the split was itself the defect: two *different* serialized collections still run in parallel
-  **with each other**, so a test swapping the dialog could race a test holding the lock. xUnit allows
-  one collection per class, so the fix was to merge them. This is the collection most of the suite uses.
+  `AdminHelper.ForceElevation`. This was once two collections, `"DialogService"` and `"OperationLock"`.
+  xUnit puts a class in one collection only, so a class that needed both statics could not declare
+  both; merging them is what lets one class swap the dialog and hold the lock. 62 of the 300 unit test
+  files use it, and an `ArchitectureTests` guard fails the build when a class touches one of those
+  statics without it.
 - `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
-- `[Collection("Network")]` — tests using ICMP sockets. Defined here, but currently used only by
-  `SysManager.IntegrationTests`.
+- `[Collection("Network")]` — defined here for tests using ICMP sockets, and used by none of them today.
+
+`SysManager.IntegrationTests` defines its own `Network` collection, which 26 of its classes use, and
+`SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` names a `Sequential`
+collection that nothing defines; the integration project runs serially anyway, so it changes nothing.
 
 ### Shared helpers
 
@@ -205,6 +218,10 @@ collection definitions (all defined in `TestCollections.cs`, each with
   administrator rights, so `hive: "HKLM"` gives the machine-wide case. Use it wherever the answer
   would otherwise depend on this PC's own privacy settings: a profile export carries the toggles as
   read, so a test over the real service passes or fails with the machine running it.
+- `ActivityLogScope` — **`SysManager.Tests` only.** Points `ActivityLogService.Instance` at a throwaway
+  folder for the scope and puts the real one back on dispose, so a test that drives an action which
+  records itself does not write into the Recent activity on this PC (#1772). Requires
+  `[Collection("ProcessWideStatics")]`.
 - `RedirectedEnvironment` — **`SysManager.Tests` only.** An `EnvironmentVariableService` over two
   throwaway keys under `HKCU\Software\SysManagerTests\Environment`, standing in for the user's and the
   machine's environment, plus a temp folder for the legacy backup file; all deleted on dispose. Shared
@@ -331,8 +348,9 @@ unconditional, so the graph the test builds is the graph the app builds, and ena
 `App.OnStartup` would turn a broken tab into a refusal to start. Two negative tests assert the
 validation is actually armed — one adds a type whose dependency is unregistered, one makes a singleton
 capture a scoped service — because a passing graph test proves nothing if validation is silently off.
-The single factory-lambda registration (`IGamingProfileService`) is opaque to validation; every other
-registration is covered.
+The five factory-lambda registrations (`SystemReportService`, `ISpeedTestService`, `ISessionRestorePoint`,
+`IGamingProfileService` and `INavigationService`) are opaque to validation — two of them only forward to
+a type registered on its own, which is validated — and every other registration is covered.
 
 ### Conventions
 

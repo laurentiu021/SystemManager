@@ -37,8 +37,9 @@ The largest gap between what the app is and how it is received.
   write-ups, independent references — that a project this young does not have, which is a
   fair bar for a certificate issued in their name. So this is the one roadmap item whose
   timing is not the project's to decide, and the practical route to it is people finding the
-  app useful enough to say so. The alternatives, their cost and their lead times are being
-  written up in [#1675](https://github.com/laurentiu021/SystemManager/issues/1675). Until
+  app useful enough to say so. The alternatives, their cost and their lead times were written
+  up in [#1675](https://github.com/laurentiu021/SystemManager/issues/1675), which settled on
+  that route. Until
   then, [the published SHA-256 and the build attestation](README.md#verifying-the-download)
   are what establish that a download is genuine, and the update path already refuses a
   signature it cannot read.
@@ -59,80 +60,63 @@ working set is. Several tabs still assume otherwise.
 
 - **A first-run screen** — one page saying what this is, what is safe, and what needs
   administrator rights ([#1635](https://github.com/laurentiu021/SystemManager/issues/1635)).
-- **Help you can reach from inside the app** — no F1, no menu, no link out to
-  documentation today ([#1640](https://github.com/laurentiu021/SystemManager/issues/1640)).
-- **One consistent voice across tabs.** Roughly twenty older tabs kept terse technical
-  headers while newer ones explain themselves in plain language
-  ([#1654](https://github.com/laurentiu021/SystemManager/issues/1654)).
-- **Nothing reaches the network before you have seen the window.** The update check runs at
-  startup ([#1653](https://github.com/laurentiu021/SystemManager/issues/1653)).
+
+Help inside the app (F1 and the `?` chip), one plain-language voice across the tab headers,
+and a startup update check you can switch off, which runs at most once a day, have shipped
+since this list was first written.
 
 ## Accessibility and keyboard use
 
-Partly done and pinned by tests, partly not.
+Mostly done and pinned by tests: Process Manager and Services rows have a right-click menu, so
+their actions no longer mean Tabbing through every cell, and custom theme colours are adjusted
+so text stays readable. What is left:
 
 - **Keyboard operability under test.** Source-level guards exist; driving real key presses
   through the UI does not ([#1552](https://github.com/laurentiu021/SystemManager/issues/1552)).
-- **Reaching a row's buttons without walking every cell**
-  ([#1551](https://github.com/laurentiu021/SystemManager/issues/1551)).
-- **Custom themes that cannot produce unreadable text.** The custom-colour mode accepts any
-  four colours with no contrast check
-  ([#1561](https://github.com/laurentiu021/SystemManager/issues/1561)).
 
 ## One design system rather than 59 views that resemble each other
 
-Spacing, radii and type sizes are still literals in the views. The token scales exist and
-are widely bypassed, so a change to one of them does not reach the screens it should.
+Corner radii now come from the `RadiusSm/Md/Lg` scale, held by a test, and the status footer
+that 37 views used to copy is one shared control. What is left:
 
 - **Typography scale** — raw `FontSize` values instead of the named text styles
   ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634)).
-- **Corner radii** — raw values instead of the `RadiusSm/Md/Lg` scale
-  ([#1633](https://github.com/laurentiu021/SystemManager/issues/1633)).
-- **The repeated status footer**, carried near-identically by most views
-  ([#1630](https://github.com/laurentiu021/SystemManager/issues/1630)).
 
-Page-layout gutters are further along: the three page-layout strategies and both
-page-ending shapes are pinned by a test rather than left to discipline.
+Spacing has no token scale, on purpose: every view uses one of three documented layout
+strategies with literal values, and a test pins how the per-section pages end. A scale would
+land together with moving the views onto it, not before.
 
-## Features people have asked for
+## Features next
 
-Ordered by how often they come up, not by effort.
+In the order they are planned. Everything this section listed before has shipped — the Disk
+Analyzer map, Deep Cleanup's biggest space hogs, the This PC card on Volume Control, where each
+startup entry lives, taskbar progress, maintenance on battery, the diagnostics bundle — along
+with Undo Changes and the extensions view in Browser Cleaner.
 
-- **A treemap for Disk Analyzer** ([#1592](https://github.com/laurentiu021/SystemManager/issues/1592))
-- **Deep Cleanup reaching the three biggest Windows space hogs**
-  ([#1577](https://github.com/laurentiu021/SystemManager/issues/1577))
-- **Master output slider and default-device switching in the volume mixer**
-  ([#1588](https://github.com/laurentiu021/SystemManager/issues/1588))
-- **Startup entries showing where they live**
-  ([#1587](https://github.com/laurentiu021/SystemManager/issues/1587))
-- **Taskbar progress during long operations**
-  ([#1584](https://github.com/laurentiu021/SystemManager/issues/1584))
-- **Scheduled maintenance that does not fire on battery**
-  ([#1578](https://github.com/laurentiu021/SystemManager/issues/1578))
-- **A one-click local diagnostics bundle** — exported by you, sent by you, never
-  automatically ([#1650](https://github.com/laurentiu021/SystemManager/issues/1650))
+- **Uninstaller finding what an uninstall leaves behind**
+  ([#1527](https://github.com/laurentiu021/SystemManager/issues/1527))
+- **"What changed on my PC recently"**
+  ([#1507](https://github.com/laurentiu021/SystemManager/issues/1507))
+- **Services saying what else stops with a service, and marking the ones it has no rating for
+  as such instead of Critical** ([#1512](https://github.com/laurentiu021/SystemManager/issues/1512))
+- **"Why is my PC slow right now"**
+  ([#1529](https://github.com/laurentiu021/SystemManager/issues/1529))
 
 ## Documentation and presentation
 
 - **A landing page** ([#1679](https://github.com/laurentiu021/SystemManager/issues/1679))
 - **Screenshots for the tabs that have none**, several of them recent features
   ([#1664](https://github.com/laurentiu021/SystemManager/issues/1664))
-- **A README first screen that reads as an introduction rather than a wall of prose and
-  badges** ([#1677](https://github.com/laurentiu021/SystemManager/issues/1677))
-- **Discussions that are usable** — everything currently sits in Announcements and nothing
-  is pinned ([#1665](https://github.com/laurentiu021/SystemManager/issues/1665))
 
 ## Under the floor
 
 Not user-visible, and the reason the rest can move at all.
 
-- **Spacing, radius and type scales that the views actually use.** Three token sets exist
-  and the views mostly bypass them with raw numbers, so a change to the scale changes
-  nothing ([#1633](https://github.com/laurentiu021/SystemManager/issues/1633),
-  [#1634](https://github.com/laurentiu021/SystemManager/issues/1634))
-- **Command-line parsing that rejects what it does not recognise.** Today an unknown
-  `-something` is accepted and ignored
-  ([#2159](https://github.com/laurentiu021/SystemManager/issues/2159))
+- **A type scale the views actually use** — the named text styles exist, and most body text
+  still writes its own size ([#1634](https://github.com/laurentiu021/SystemManager/issues/1634))
+- **Command-line parsing that refuses what it does not recognise, wherever it appears.** An
+  unknown option is refused, except when a known command follows it: `-bogus --health` runs
+  the health check and ignores `-bogus`
 
 ## How this list changes
 

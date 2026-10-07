@@ -26,27 +26,29 @@ what the rest of this checklist asks of you.
 
 - [ ] Branch created from `main` (not working on main directly)
 - [ ] Code compiles with 0 errors
-- [ ] `dotnet format <project> --verify-no-changes` passes on every project you touched — CI rejects
-      formatting drift, and a clean build does not catch it
+- [ ] `dotnet format <project> --verify-no-changes` passes on all four projects — CI checks all four
+      and rejects formatting drift, which a clean build does not catch (CONTRIBUTING has the loop)
 - [ ] Tests added/updated and passing locally
-- [ ] Author headers on all new/modified files — the three-line `// SysManager · <ClassName>` block;
-      copy it from the top of any existing `.cs` or `.xaml` file
+- [ ] Author headers on all new/modified files — the three-line `// SysManager · <ClassName>` block in
+      `.cs`, the one-line `<!-- SysManager · Author: … -->` comment in `.xaml`; copy it from the top of
+      an existing file of the same kind
 - [ ] Self-review completed (no debug code, no hardcoded values, no generic catch)
 - [ ] README updated (if features changed)
 
 ### Releasing changes only (`fix:` / `feat:`)
 
-Skip these on `docs:` / `test:` / `refactor:` / `ci:` / `chore:` — **doing them there makes CI fail**,
-because the version gate requires the newest CHANGELOG heading to equal the csproj version, and a
-non-releasing PR leaves that version alone.
+Skip these on `docs:` / `test:` / `refactor:` / `ci:` / `chore:`. Those merges publish nothing, so a
+new version written on one is never tagged — **and CI fails either way**: a CHANGELOG heading without
+the matching csproj bump fails this PR's version check, and both together fail the "Merged version is
+tagged" check on `main` once merged.
 
 - [ ] CHANGELOG entry added, opening with a one-line plain-English lead under the version heading
       before the first `###` category (CI checks the lead separately, because the release notes are
       copied from it verbatim)
 - [ ] CHANGELOG heading dated **today in UTC** — and re-dated if the merge slips to another UTC day.
-      This is the only gate that runs *after* the squash merge, when the branch is already gone: the
-      tag push that triggers the release requires the date to be today, so a stale date fails the
-      release rather than the PR. It has published yesterday's date twice.
+      The date is checked after the squash merge, when the branch is already gone: auto-release will
+      not tag an entry that is not dated today, so a stale date fails the release rather than the PR.
+      It has published yesterday's date twice.
 - [ ] `Version` / `FileVersion` / `AssemblyVersion` in `SysManager/SysManager/SysManager.csproj`
       bumped one step from the newest release tag and equal to the new CHANGELOG heading
       (`fix:` = patch, `feat:` = minor)

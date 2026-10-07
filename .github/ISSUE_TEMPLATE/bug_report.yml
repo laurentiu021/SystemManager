@@ -20,7 +20,7 @@ body:
     attributes:
       label: SysManager version
       description: >-
-        Shown at the top of the **About** tab, and in the title bar. The "Copy environment info"
+        Shown at the top of the **About** tab, and at the bottom of the sidebar. The "Copy environment info"
         button there puts it on your clipboard along with your Windows version.
       placeholder: e.g. the version shown on the About tab
     validations:
@@ -72,9 +72,7 @@ body:
         - Process Manager
         - Resource History
         - Camera/Mic/Location
-        - File Lock Detector
         - Settings Watchdog
-        - Bandwidth Monitor
         - Quick Cleanup
         - Deep Cleanup
         - Shortcut Cleaner
@@ -82,9 +80,11 @@ body:
         - Disk Analyzer
         - Large Files
         - Duplicate Finder
+        - File Lock Detector
         - Ping
         - Traceroute
         - Speed Test
+        - Bandwidth Monitor
         - Network Repair
         - DNS & Hosts
         - App Updates
@@ -98,10 +98,10 @@ body:
         - Browser Cleaner
         - Edge/OneDrive Remover
         - Defender Tweaks
-        - Notification Blocker
         - Context Menu
         - Dark Mode Scheduler
         - Volume Control
+        - Notification Blocker
         - Drivers
         - Battery Health
         - System Logs
@@ -140,7 +140,7 @@ body:
       description: Numbered steps if you can reproduce it reliably. "Sometimes" and "randomly" are OK too.
       placeholder: |
         1. Open the app
-        2. Go to the App updates tab
+        2. Go to the App Updates tab
         3. Click "Scan for updates"
         4. Wait 30 seconds
     validations:
@@ -152,7 +152,9 @@ body:
       label: Log excerpt (optional)
       description: |
         SysManager writes logs to `%LOCALAPPDATA%\SysManager\logs\`.
-        Paste the last 30-50 lines from around the time the bug happened, or attach the file.
+        Paste the last 30-50 lines from around the time the bug happened, or attach the file. **Save
+        diagnostics bundle** on the About tab puts the newest logs, the system report and your environment
+        info into one zip you can attach instead.
       render: text
 
   - type: textarea

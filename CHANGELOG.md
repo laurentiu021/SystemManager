@@ -7660,8 +7660,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 
 ## [1.18.3] - 2026-06-03
 
-### Fixed
-- **Async-safety follow-up.** Dropped the remaining `async void` pipe-listener path and the sync-over-async wrappers flagged during review, completing the threading cleanup started in 1.18.2.
+The same build as 1.18.2, tagged a second time from the same commit. Nothing changed.
 
 ## [1.18.2] - 2026-06-03
 
@@ -7688,8 +7687,8 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 
 ## [1.18.1] - 2026-06-03
 
-### Fixed
-- **Critical and high-priority audit fixes (P0 + P1).** Resolved the top-severity findings from the code audit ahead of the 1.18 line — crash-safety, resource, and correctness fixes across the service layer.
+Never released on its own: its fixes were merged under this number and shipped in 1.18.2, which lists
+them.
 
 ## [1.18.0] - 2026-06-03
 
@@ -7994,18 +7993,15 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 
 ## [1.7.19] - 2026-05-25
 
-### Fixed
-- **Task.Delay in WindowsUpdateViewModel** — replaced remaining `Task.Delay(1)`
-  with `Task.Yield()` for consistent async startup pattern.
+The same build as 1.7.18, tagged a second time from the same commit. Nothing changed.
 
 ## [1.7.18] - 2026-05-25
 
 ### Fixed
-- **Atomic update downloads** — UpdateService temp file + SHA-256 verification +
-  atomic rename (carried forward from 1.7.17 fix scope).
-- **ObservableCollection mutation** — build full list before clearing collection.
-- **DeepCleanup skipped-file counts** — track and surface IOException/access errors.
-- **Navigation refactor** — data-driven BuildNavGroups() with Group()/Item() helpers.
+- **Windows Update's startup wait** — `WindowsUpdateViewModel` waits with `Task.Delay(1)` again
+  instead of 1.7.17's `Task.Yield()`, which could resume on the thread pool before the constructor
+  returned and race `IsBusy` in the unit tests. The atomic downloads, the list rebuild, the skipped-file
+  counts and the navigation refactor this entry used to repeat are 1.7.17's.
 
 ## [1.7.17] - 2026-05-25
 

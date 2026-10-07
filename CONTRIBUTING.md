@@ -63,7 +63,7 @@ dotnet run --project SysManager/SysManager/SysManager.csproj
 **Run the tests** (see [Running tests](#running-tests) for more)
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
 
 **Check the formatting** — CI runs this on all four projects and fails the PR on any
@@ -134,9 +134,9 @@ guide. That said, a few explicit rules:
 
 ### Author headers
 
-Every source file opens with a three-line attribution block. All 704 of them
-carry it, and a test fails the build if a new file doesn't — so copy the shape
-exactly. In `.cs` files (the `— summary` after the class name is optional):
+Every source file opens with an attribution block, and a test fails the build if
+a new file doesn't — so copy the shape exactly. In `.cs` files (the `— summary`
+after the class name is optional):
 
 ```csharp
 // SysManager · UpdateService — GitHub releases client
@@ -156,18 +156,23 @@ is credited in the release notes and in `git log`.
 
 ## Running tests
 
-Unit tests run in parallel by default (`parallelizeTestCollections: true`).
-Tests that share state or touch OS resources are isolated via xUnit collection
-definitions in `TestCollections.cs` (each `DisableParallelization = true`), so
-file-system fixtures never collide. The integration suite runs sequentially.
+Unit tests run their collections in parallel (`"parallelMode": "collections"` in
+`xunit.runner.json`). Tests that share process-wide state or touch OS resources are
+isolated via xUnit collection definitions in `TestCollections.cs` (each
+`DisableParallelization = true`), so they never run beside each other or beside a
+test that needs the same static. The integration suite runs sequentially.
+[TESTING.md](TESTING.md) has the details.
 
 Full run:
 
 ```powershell
-dotnet test SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
-dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
-dotnet test SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
+dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
+dotnet test --project SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
+dotnet test --project SysManager/SysManager.UITests/SysManager.UITests.csproj -c Release
 ```
+
+`--project` is required: under Microsoft.Testing.Platform, which `global.json` selects,
+`dotnet test` does not take a project path on its own.
 
 The integration tests touch the live system, so run them locally rather than over
 SSH/Remote PowerShell. CI runs the unit tests as the merge gate, and both the
@@ -177,12 +182,16 @@ merge, because a runner difference should not. Put a test that needs the live
 system in the integration project; put anything pure in `SysManager.Tests`, where
 it gates merges.
 
-Filter to one class while iterating (pass the project the class lives in —
-`PingMonitorServiceTests` is an integration test):
+Run one class while iterating by starting the test project's own executable (build the
+project the class lives in first — `PingMonitorServiceTests` is an integration test):
 
 ```powershell
-dotnet test SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj --filter "FullyQualifiedName~PingMonitorServiceTests"
+dotnet build SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj -c Release
+./SysManager/SysManager.IntegrationTests/bin/Release/net10.0-windows/SysManager.IntegrationTests.exe `
+    -class SysManager.IntegrationTests.PingMonitorServiceTests
 ```
+
+`-method` narrows to one test; [TESTING.md](TESTING.md#running-one-class-or-one-test) has the rest.
 
 Generate a coverage report:
 
@@ -236,9 +245,11 @@ does and the prefix can be adjusted before the squash merge.
    ARCHITECTURE where relevant).
 5. **Open the PR** against `main`. Fill out the PR template honestly —
    if you didn't add tests, say why.
-6. **CI must be green** before review starts. On a Windows runner, CI builds
-   the app, runs the unit-test project, compile-checks the integration-test
-   project, and runs the UI-automation tests as a separate non-blocking job.
+6. **CI must be green** before review starts. On a Windows runner, CI checks the
+   formatting of all four projects, builds them, and runs the unit tests as the merge
+   gate. The integration and UI-automation suites run as separate non-blocking jobs on
+   pull requests from this repository; a pull request from a fork gets the build and
+   the unit tests.
 7. **Review and iterate.** I try to respond within a few days. If a PR
    goes silent, ping me with a comment.
 8. **Squash merge** is the default. Your individual commits are
@@ -258,11 +269,14 @@ Open an issue with the **Bug report** template. The template asks for:
 - Which tab and which action.
 - What you expected vs. what happened.
 - Steps to reproduce (if deterministic).
-- SysManager version (from the About tab) and Windows build.
+- SysManager version (at the top of the About tab, and at the bottom of the sidebar) and
+  Windows build.
 - Logs, if possible: `%LOCALAPPDATA%\SysManager\logs\`.
 
-The About tab has a **"Copy environment info"** button that dumps most
-of this in a format ready to paste.
+The About tab has a **"Copy environment info"** button that copies most of this in a
+format ready to paste, **Save diagnostics bundle**, which puts the logs, the system report
+and that environment info into one zip you can attach, and **Report a problem**, which
+opens the bug template with your version and administrator state already filled in.
 
 ## Requesting features
 

@@ -31,9 +31,18 @@ A few quick things that make bug reports land faster:
 2. **Search existing issues** — same topic may already be open or closed.
 3. **Grab environment info** — click **"Copy environment info"** on the
    About tab inside the app. It copies a ready-to-paste block with your
-   SysManager version, Windows version, architecture and elevation state.
-4. **Check the logs** — `%LOCALAPPDATA%\SysManager\logs\` holds rolling
-   daily logs. Attach the one around the time the bug happened.
+   SysManager version, Windows version, architecture, .NET version and
+   elevation state, plus a hardware summary — CPU, RAM, graphics card and
+   driver, each drive's size and free space, and display resolution. Read it
+   before you paste it somewhere public.
+4. **Attach the logs** — **Save diagnostics bundle** on the About tab puts the
+   newest three log files, the system report (with your network adapters' MAC
+   addresses left out and the last two parts of your IP address masked) and the environment
+   info into one zip, saved where you choose; nothing is sent. To pick a log
+   yourself instead, `%LOCALAPPDATA%\SysManager\logs\` holds rolling daily
+   logs — attach the one around the time the bug happened. **Report a problem**
+   on the same tab opens the bug form with your version and elevation already
+   filled in.
 
 ## What to expect
 

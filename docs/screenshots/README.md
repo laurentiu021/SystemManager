@@ -29,28 +29,31 @@ Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
 Remover, Environment Variables, Large Files, Legacy Panels, Notification Blocker,
 Process Manager, Services, Startup Manager, Task Scheduler, Undo Changes, Uninstaller
 and Volume Control. One of those — Notification Blocker — is still marked as a preview
-tab. Fourteen of the rest are list-heavy pages: a usable shot of them is a screenful of
+tab. Twelve of the rest are list-heavy pages: a usable shot of them is a screenful of
 real service names, installed programs, file paths or environment values, and the
-redaction cost is the reason they are not here yet (see Privacy check below). Large
-Files and Undo Changes are simply new, added in 1.109.0 and 1.123.0 respectively. None
-of the seventeen is missing because the tab is unfinished.
+redaction cost is the reason they are not here yet (see Privacy check below). Edge/OneDrive
+Remover and Legacy Panels show nothing personal and have simply not been captured, and Large
+Files and Undo Changes are new, added in 1.109.0 and 1.123.0 respectively. None of the
+seventeen is missing because the tab is unfinished.
 
 Those two counts are held against the source by
 `ArchitectureTests.TheScreenshotInventory_MatchesWhatIsOnDisk`, because both of them
 went stale in the release that added a tab.
 
-A short animated tour also lives under [`docs/gifs/`](../gifs/)
-(`feature-tour.gif`, `cleanup-tools.gif`) and is embedded at the top of the
-README's Screenshots section.
+Two short animated tours live under [`docs/gifs/`](../gifs/): `feature-tour.gif` is at the
+top of the README, and `cleanup-tools.gif` opens its Screenshots section.
 
 ## Outstanding recapture
 
-Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), predates two
-changes to the left-hand rail. 1.76.1 gave the twelve groups their icons, so the rail in
-each image is a column of text with an empty margin beside it. 1.76.2 replaced each
-collapsed group's subtitle — a truncated list of page names — with a written two-line
-description. 1.76.3 then gave the administrator strip at the top of 31 pages a single
-geometry, so where a shot shows that strip its corners and height are also out of date.
+Every shot in this folder, and both GIFs under [`docs/gifs/`](../gifs/), shows an older
+left-hand rail. In the shots every page in it carries an icon, where now only the twelve groups
+do (1.76.1); each collapsed group's subtitle is a truncated list of page names, where now it is a
+written two-line description (1.76.2); the administrator badge at its foot is a padlock, where
+now it is a shield; and several tabs sit in other groups or under other names — Storage is now
+Storage & Files, App Alerts is New App Alerts in Apps, Notification Blocker moved to
+Customization, and File Lock Detector and Bandwidth Monitor have left Monitor. 1.76.3 also gave
+the administrator strip at the top of 31 pages a single geometry, so where a shot shows that
+strip its corners and height are out of date too.
 
 The pages themselves are out of date too, and by more than the rail. The whole set was
 captured in one pass at 1.51.x, and every view it shows has changed since — the diffs are
@@ -60,6 +63,11 @@ descending order of that, so the shots a visitor sees first stop misrepresenting
 soonest, but retake the rail-only ones in the same pass so the sidebar matches across all
 of them. Until then treat every image as showing an older build, not just an older rail.
 
+Five are out of date beyond that, and come first: `gaming-profile.png` shows the tab while it
+was a placeholder; `preinstalled-apps.png`, `privacy-telemetry.png` and `new-app-alerts.png`
+carry their old page titles ("Debloater & Ads", "Privacy Toggles", "App Installation Alerts");
+and `deep-cleanup.png` still shows the Large files card that is now its own tab.
+
 ## Format and size
 
 - **Format**: PNG. No JPEG (banding in the dark theme looks bad).
@@ -68,6 +76,9 @@ of them. Until then treat every image as showing an older build, not just an old
 - **Compression**: run them through
   [tinypng.com](https://tinypng.com/) or `pngquant` before committing.
   Aim for each shot under 300 KB.
+
+The current set does not meet these yet: every shot is 3866 × 2330, and 31 of the 42 are over
+300 KiB. The recapture above fixes both.
 
 ## Capturing
 
@@ -88,8 +99,8 @@ On the machine you use day-to-day:
 Screenshots captured on a real machine will include personal data. Before
 you commit, black out or blur:
 
-- Windows username (visible in paths and the admin badge).
-- Machine name / hostname (visible in System Health and Logs).
+- Windows username (visible in file paths, and in event text on System Logs).
+- Machine name (the Machine line of an event's details on System Logs).
 - Corporate Windows edition string and IP addresses.
 - Installed-app and service lists, scheduled-task paths, and environment
   variables — these can name internal/work software. When in doubt, redact
@@ -102,12 +113,16 @@ was redacted with opaque boxes over the items above; capture full-window
 
 ## Linking from README
 
-The README's **Screenshots** section uses this pattern:
+The README's **Screenshots** section groups the shots as the sidebar does, one `<details>` block
+per group, with each image linked to its full-size file and its `alt` set to the tab's exact
+sidebar label:
 
-```markdown
-### Dashboard
-![Dashboard](docs/screenshots/dashboard.png)
+```html
+<a href="docs/screenshots/disk-analyzer.png"><img src="docs/screenshots/disk-analyzer.png" width="280" alt="Disk Analyzer"></a>
 ```
+
+`ArchitectureTests.EveryScreenshotSlug_NamesARealTab` checks that alt text as well as the file
+name.
 
 Once you've added new shots, update [README.md](../../README.md) to
 reference them (see the Screenshots section for the current layout).

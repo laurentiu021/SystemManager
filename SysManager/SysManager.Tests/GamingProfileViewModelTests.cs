@@ -357,6 +357,30 @@ public class GamingProfileViewModelTests
     }
 
     [Fact]
+    public async Task Recovery_IsNotOffered_WhenWhetherASessionWasLeftOnCannotBeRead()
+    {
+        // "Not known" is not "left on": offering to revert a session that may not exist would change settings for
+        // nothing. The next launch asks again.
+        var service = ServiceWith();
+        service.HasPendingRecovery.Returns((bool?)null);
+        var dialog = Substitute.For<IDialogService>();
+        var previous = DialogService.Instance;
+        DialogService.Instance = dialog;
+        try
+        {
+            var vm = new GamingProfileViewModel(service, CpuWith());
+            await vm.InitializationComplete;
+        }
+        finally
+        {
+            DialogService.Instance = previous;
+        }
+
+        dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+        await service.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public void DescribeRevert_NamesEverySettingThatWasNotRestored()
     {
         var text = GamingProfileViewModel.DescribeRevert(

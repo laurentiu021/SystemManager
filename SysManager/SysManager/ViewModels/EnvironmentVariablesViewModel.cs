@@ -25,6 +25,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
     private readonly EnvironmentVariableService _service;
+    private readonly IPutBackSignal? _putBack;
 
     // Baseline of the on-disk state, keyed "scope\0NAME" → value. Used to compute the
     // pending-change count (edits + additions + deletions) the same way PrivacyViewModel does.
@@ -81,13 +82,36 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     // Add-directory row (PATH editor).
     [ObservableProperty] private string _newDirectory = "";
 
-    public EnvironmentVariablesViewModel(EnvironmentVariableService service)
+    public EnvironmentVariablesViewModel(EnvironmentVariableService service, IPutBackSignal? putBack = null)
     {
         _service = service;
+        _putBack = putBack;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
         // Read both env hives off the UI thread so the eagerly-built VM doesn't block
         // startup; the UI update runs back on the UI thread (ConfigureAwait true).
         InitializeAsync(LoadAsync);
+    }
+
+    /// <summary>The list the tab re-read after Undo Changes restored the variables. Internal so a test can await it.</summary>
+    internal Task PutBackReload { get; private set; } = Task.CompletedTask;
+
+    // Undo Changes put the kept copy of the variables back, or tried to (#1525), so the values on screen may no longer
+    // be the ones in the registry. An edit not applied yet was made against those old values, so it goes with them.
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.EnvironmentVariables) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            PutBackReload = ReloadAfterPutBackAsync();
+        });
+    }
+
+    private async Task ReloadAfterPutBackAsync()
+    {
+        await LoadAsync();
+        StatusMessage = "Variables read again after Undo Changes.";
     }
 
     private static string Key(EnvVariable v) => Key(v.Scope, v.Name);
@@ -553,6 +577,7 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     {
         if (disposing)
         {
+            if (_putBack is not null) _putBack.PutBack -= OnPutBack;
             if (IsPathSelected)
                 PathEntries.CollectionChanged -= OnPathEntriesChanged;
             foreach (var v in Variables)

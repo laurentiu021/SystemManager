@@ -1,6 +1,6 @@
 # SysManager for Windows
 
-One portable app for keeping a Windows PC healthy — 58 tabs of network diagnostics, cleanup, privacy
+One portable app for keeping a Windows PC healthy — 59 tabs of network diagnostics, cleanup, privacy
 controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
@@ -32,7 +32,7 @@ winget install laurentiu021.SysManager
 
 - [What it is](#what-it-is)
 - [Why SysManager?](#why-sysmanager)
-- [Features](#features) — all 58 tabs, grouped
+- [Features](#features) — all 59 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
@@ -81,10 +81,10 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-Beyond those, the rest of the 58 tabs cover performance tuning, DNS and hosts editing, duplicate files,
-battery health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
-new-install alerts and Windows optional features. [The full list is below](#features), grouped as the sidebar
-groups them.
+Beyond those, the rest of the 59 tabs cover performance tuning, putting SysManager's own changes back one at
+a time, DNS and hosts editing, duplicate files, battery health, processes with plain-English descriptions,
+startup entries, shortcut cleanup, app blocking, new-install alerts and Windows optional features.
+[The full list is below](#features), grouped as the sidebar groups them.
 
 ## Why SysManager?
 
@@ -126,17 +126,17 @@ Sponsorship goes toward that certificate — see [Support](#support).</sub>
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 58 feature tabs into 12 groups — 11 collapsible groups
+The sidebar organises 59 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
 selected background, and stronger label while you move between groups. Every tab
 row and every group header is also keyboard-operable with a visible focus cue. All
-58 tabs are fully implemented:
+59 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
 | 🏠 Dashboard | Dashboard |
-| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
+| 🔧 System | System Health · Windows Update · Performance Mode · Services · Startup Manager · Windows Features · Undo Changes · Restore Points · Task Scheduler · Boot Analyzer · System Fixes |
 | 🎮 Gaming & Profiles | Gaming Profile 🔬 · Standby List Cleaner · Timer Resolution · CPU Core Affinity · Display Profiles |
 | 📊 Monitor | Process Manager · Resource History 🔬 · Camera/Mic/Location · Settings Watchdog 🔬 |
 | 🧹 Cleanup | Quick Cleanup · Deep Cleanup · Shortcut Cleaner · Scheduled Maintenance 🔬 |
@@ -153,7 +153,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 **Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
 actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
 Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
-finds Deep Cleanup. 54 of the 58 tabs carry keywords for this; typing clears the groups and shows a flat
+finds Deep Cleanup. 55 of the 59 tabs carry keywords for this; typing clears the groups and shows a flat
 list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
@@ -205,7 +205,7 @@ cycles the themes inside it, and `Escape` closes it and puts focus back on the b
 16 tabs that can be cancelled. It only acts while something is running, and only after the control you are
 on has had its own chance to use the key, so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all 40 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
@@ -241,7 +241,7 @@ and because 28 is already the size of the small round buttons at the bottom of t
 The six controls that do something you cannot take back explain themselves, not just their label. Landing on
 Shred All announces the button and then "Overwrites every item in the list so it cannot be recovered, then
 deletes it. This cannot be undone, not even from the Recycle Bin." The same goes for Uninstall selected, Kill
-process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 30
+process, Delete preset, Delete selected shortcuts, and the Run as administrator button that appears on the 31
 pages needing elevation.
 
 Before that, the red colour and the confirmation dialog were the only warnings, and neither reaches someone
@@ -251,7 +251,7 @@ someone who tabbed to it, and it is not reliably handed to assistive software. I
 deliberately. An explanation on every button in the app would make it slower to navigate, not clearer.
 
 Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
-"Removed 1,204 files", "Scan complete." — is announced on all 52 tabs that have one, as are the SFC and DISM
+"Removed 1,204 files", "Scan complete." — is announced on all 53 tabs that have one, as are the SFC and DISM
 results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
 so they wait their turn rather than cutting across whatever you are reading.
 
@@ -405,6 +405,44 @@ Edit Windows environment variables without the cramped built-in dialog:
   Dell, HP, Lenovo, …) for the detected board, and **Copy info** grabs the model +
   BIOS version for support searches. SysManager never flashes firmware itself.
 
+### Undo Changes
+- **One place to put back what SysManager changed, one change at a time.** Five tabs each keep what they
+  need to undo their own change, and until now each copy could only be used from the tab that made it, so
+  putting something back meant remembering which tab that was. This tab lists them all in plain words:
+  - **Performance Mode** — the settings that differ from its record of how they were before it was first
+    used: the power plan, visual effects, Game Mode, the Xbox Game Bar, Game DVR, the NVIDIA graphics
+    setting and the processor minimum. While game mode is on, its settings are game mode's own, so
+    Performance Mode is listed once game mode is off
+  - **Services** — each service SysManager turned off that is still off, going back to the startup type
+    it had
+  - **Hosts file** — once SysManager has written the hosts file, the copy kept beside it, for as long as
+    the file still differs from it
+  - **Environment Variables** — the copy kept from before SysManager first changed them, for as long as a
+    variable differs from it
+  - **Gaming Profile** — game mode while it is on, or after a run that did not end cleanly left it on
+  - and the settings you saved in Settings Watchdog that have changed since, those it can restore: one
+    row that opens Settings Watchdog, where each one is put back on its own
+- **A copy that could not be read just now, could not be compared with how things are now, or is damaged,
+  is named as such**, never shown as nothing to put back
+- **Asks first, and says what will change.** Each question says what goes back — "Power plan: Ultimate
+  Performance → Balanced", "Print Spooler: Disabled → Automatic", or the date of the hosts file copy it
+  restores — and the put-back goes through the same restore its own tab uses. It reads the copy again
+  first, and changes nothing if what it finds is no longer what the question described. There is
+  deliberately no "undo everything" button: one button that reverses several unrelated changes would
+  itself be a large change
+- **Only what SysManager has a record of.** A switch that is on may have been set by Windows, by an
+  organisation or by you long ago, so the tabs whose switches are their own undo — Privacy & Telemetry,
+  Context Menu, Startup Manager, App Blocker, Notification Blocker, and DNS & Hosts for DNS — are links,
+  never rows
+- **The whole PC at once** points to Restore Points and names the newest restore point when SysManager
+  runs as administrator, and **what cannot be put back** — files deleted for good, removed preinstalled
+  apps, uninstalled programs — is said plainly
+- Some changes need administrator rights — the hosts file, services, a copy that includes the
+  machine-wide variables and Performance Mode while the NVIDIA graphics card it recorded is still in the
+  PC — and their rows say so. The rest go back without them
+- The tab that made a change hears of each put-back and reads its state again, so Performance Mode,
+  Services, DNS & Hosts, Environment Variables and Gaming Profile never go on showing a change that is gone
+
 ### Restore Points
 - List every Windows System Restore point — sequence number, date, description,
   and type — newest first
@@ -426,6 +464,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   rights, because Windows answers a standard user's request for the list with
   "Access denied". The tab says so, rather than reporting that there are no
   restore points
+- To put back one change SysManager made rather than the whole PC, the tab points
+  to **Undo Changes**
 
 ### Legacy Panels
 - One-click launcher for the classic Windows applets that newer releases keep
@@ -921,7 +961,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   File Shredder, Browser Cleaner, Performance Mode, Gaming Profile, Environment Variables, System
   Fixes, Windows Features, Windows Update, Restore Points, Context Menu, App Updates, Bulk
   Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender Tweaks,
-  Edge/OneDrive Remover, Services, and the Dashboard's quick actions)
+  Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions)
 - **An MSI-based install, upgrade or uninstall started on one of App Updates, Bulk Installer,
   Uninstaller or the Dashboard's Update All Apps while another is running fails with exit code
   1618, because Windows Installer only ever runs one installation at a time.** The four now refuse
@@ -1465,6 +1505,9 @@ offers, "rate us" prompts:
   back. If the saved baseline cannot be read, the change is stopped and nothing is recorded. A
   damaged one is set aside once, you are told, and the next Apply records your current settings
   as the new original
+- **Restore All finishes even when the NVIDIA card it recorded is gone** — taken out, or its driver
+  removed. That card's setting has nothing to go back to, so the question says it is left as it is,
+  and every other setting goes back
 - Confirmation dialog before every change
 - **Restore point creation**: create a Windows System Restore point before
   making changes (requires admin)

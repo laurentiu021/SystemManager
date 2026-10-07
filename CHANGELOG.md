@@ -10,6 +10,55 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.123.0] - 2026-10-07
+
+**Undo Changes puts back what SysManager changed, one change at a time, from one page.** Five tabs each kept what they
+needed to undo their own change, and each copy could only be used from the tab that made it, so putting something back
+meant remembering which tab that was.
+
+### Added
+
+- **Undo Changes, a new tab in System, above Restore Points (#1525).** It lists, in plain words, what SysManager can
+  still put back, each as its own row:
+  - Performance Mode's settings, each from how it is now to how it was before Performance Mode was first used —
+    "Power plan: Ultimate Performance → Balanced" — once game mode is off, since until then they are game mode's;
+  - every service SysManager turned off that is still off, each going back to the startup type it had;
+  - the hosts file once SysManager has written it, and the environment variables, from the copy kept before
+    SysManager first changed them, for as long as they differ from it;
+  - game mode, while it is on, or after a run that did not end cleanly left it on;
+  - and the settings saved in Settings Watchdog that have changed since, as one row that opens that tab, where each
+    one is put back on its own.
+- **Each one asks first, saying what will change,** and goes back through the same restore its own tab uses. It reads
+  the copy again before changing anything, and changes nothing if the copy no longer says what the question did. A row
+  that needs administrator rights says so. A copy that could not be read just now, could not be compared with how
+  things are now, or is damaged, is named as such rather than shown as nothing to put back. There is no "undo
+  everything".
+- **The page also says where else to look:** the tabs whose switches are their own undo, Restore Points for the whole
+  PC at once — naming the newest restore point when SysManager runs as administrator — and, plainly, what cannot be put
+  back: files deleted for good, removed preinstalled apps and uninstalled programs.
+- **Searching the sidebar** for "undo", "put back" or "revert" finds it, and Restore Points now says it is there.
+
+### Changed
+
+- **The tab that made a change hears that Undo Changes put it back.** Performance Mode, Services, DNS & Hosts,
+  Environment Variables and Gaming Profile read their state again, so none of them goes on showing a change that is
+  gone. Without that, Gaming Profile would have kept its Start button off after Undo Changes turned game mode off, and
+  DNS & Hosts would have saved its old list over the restored file.
+- **Performance Mode reads its record of your original settings from disk before every change and every Restore All**,
+  rather than trusting the copy it read when it opened. A copy kept in memory after the record was put back and deleted
+  would have made the next change record no original at all. Restore All now says when that record cannot be read just
+  now, or is damaged, instead of restoring from what it read earlier. Each Apply, and Restore All, acts on what its
+  question showed, even when the settings are read again while the question is open.
+
+### Fixed
+
+- **Restore All on Performance Mode can finish once the NVIDIA card it recorded is gone.** Since 1.56.7 it stopped
+  at the graphics setting when the card it was recorded on had been taken out, or its driver removed so that its
+  place in the registry belonged to another card. By then the power plan, visual effects, Game Mode and the Xbox
+  settings were back, but the processor minimum was not, and the record of your original settings stayed, so every
+  later Restore All failed the same way. It now leaves that one setting out, says so in its question, and puts back
+  everything else.
+
 ## [1.122.0] - 2026-10-06
 
 **Browser Cleaner now shows the extensions each browser has, what they can do, and which ones another program put

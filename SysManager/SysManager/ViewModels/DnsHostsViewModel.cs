@@ -24,6 +24,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
 
     private readonly DnsService _dnsService;
     private readonly HostsFileService _hostsService;
+    private readonly IPutBackSignal? _putBack;
     private readonly CancellationTokenSource _cts = new();
 
     // ── DNS section ──────────────────────────────────────────────────────
@@ -67,8 +68,8 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isElevated;
 
-    public DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService)
-        : this(dnsService, hostsService, autoInit: true) { }
+    public DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService, IPutBackSignal? putBack = null)
+        : this(dnsService, hostsService, autoInit: true, putBack) { }
 
     /// <summary>
     /// Core constructor. <paramref name="autoInit"/> controls whether the startup
@@ -76,15 +77,42 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     /// on a background thread) runs. Production always passes true; tests pass false to
     /// exercise the command gates deterministically without racing the async init.
     /// </summary>
-    internal DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService, bool autoInit)
+    internal DnsHostsViewModel(DnsService dnsService, HostsFileService hostsService, bool autoInit,
+        IPutBackSignal? putBack = null)
     {
         _dnsService = dnsService;
         _hostsService = hostsService;
+        _putBack = putBack;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
         Presets = _dnsService.GetPresets();
         IsElevated = AdminHelper.IsElevated();
 
         if (autoInit)
             InitializeAsync(LoadInitialDataAsync);
+    }
+
+    /// <summary>The list the tab re-read after Undo Changes restored the hosts file. Internal so a test can await it.</summary>
+    internal Task PutBackReload { get; private set; } = Task.CompletedTask;
+
+    // Undo Changes put the kept copy of the hosts file back, or tried to (#1525). Save rewrites the whole file from this
+    // list, so a list read before the restore would have written the old entries straight back over it. Any edit not
+    // saved yet was made to a file the user just asked to replace with the copy, so it goes with the old list.
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.HostsFile) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            PutBackReload = ReloadHostsAfterPutBackAsync();
+        });
+    }
+
+    private async Task ReloadHostsAfterPutBackAsync()
+    {
+        await LoadHostsAsync();
+        if (_hostsRead)
+            HostsStatus = $"Read again after Undo Changes: {HostEntries.Count} "
+                + $"{(HostEntries.Count == 1 ? "entry" : "entries")}.";
     }
 
     private async Task LoadInitialDataAsync()
@@ -643,6 +671,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     {
         if (disposing)
         {
+            if (_putBack is not null) _putBack.PutBack -= OnPutBack;
             try { _cts.Cancel(); } catch (ObjectDisposedException) { }
             _cts.Dispose();
         }

@@ -34,6 +34,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     // visual-effects state belong to the profile, not to the user, so they must not be recorded as
     // the recovery baseline. See EnsureSnapshotAsync.
     private readonly IGamingProfileService _gaming;
+    private readonly IPutBackSignal? _putBack;
     private PerformanceService.OriginalSnapshot? _snapshot;
     // Serializes the load-modify of _snapshot so two Apply commands running at once
     // can't both observe a null snapshot and race the capture/save.
@@ -64,12 +65,75 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [ObservableProperty] private bool _needsReboot;
     [ObservableProperty] private bool _hasSnapshot;
 
-    public PerformanceViewModel(PerformanceService service, IGamingProfileService gaming)
+    public PerformanceViewModel(PerformanceService service, IGamingProfileService gaming, IPutBackSignal? putBack = null)
     {
         _service = service;
         _gaming = gaming;
+        _putBack = putBack;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
+    }
+
+    /// <summary>What the tab re-read after Undo Changes put Performance Mode back. Internal so a test can await it.</summary>
+    internal Task PutBackReload { get; private set; } = Task.CompletedTask;
+
+    private const string ReadAgainAfterPutBack = "Settings read again after Undo Changes.";
+
+    // A read Undo Changes asked for while one of this tab's own reads or commands was running, done once that read
+    // ends rather than beside it.
+    private bool _readAgain;
+
+    // Undo Changes put the original settings back and deleted the record, or tried to (#1525). The record was the one
+    // EnsureSnapshotAsync now reads from disk anyway; this is for what the tab SHOWS — Restore All and the toggles
+    // would otherwise go on describing the settings as they were before.
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.PerformanceMode) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            PutBackReload = ReloadAfterPutBackAsync();
+        });
+    }
+
+    private async Task ReloadAfterPutBackAsync()
+    {
+        try
+        {
+            await _snapshotGate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        try
+        {
+            // Read again rather than cleared: a put-back that could not delete the record leaves it on disk, and then
+            // Restore All is still the way to finish. A record that could not be read just now is not one that is
+            // gone, so the copy already held stays, and Restore All with it.
+            var (onDisk, problem) = await Task.Run(() =>
+            {
+                var loaded = _service.LoadSnapshot(out var why);
+                return (loaded, why);
+            });
+            if (onDisk is not null || problem != PerformanceService.SnapshotProblem.Unreadable)
+            {
+                _snapshot = onDisk;
+                HasSnapshot = onDisk is not null;
+            }
+        }
+        finally { ReleaseSnapshotGate(); }
+
+        // Not beside one of this tab's own reads or commands, since a read here would turn Busy off while it ran. The
+        // read that is running may have started before the settings went back, so it reads them again when it ends.
+        if (IsBusy)
+        {
+            _readAgain = true;
+            return;
+        }
+        await ReadSettingsAsync(loaded: ReadAgainAfterPutBack);
     }
 
     private async Task InitAsync()
@@ -123,40 +187,41 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         try
         {
-            if (_snapshot is null)
+            // Read from disk every time rather than trusting the copy read before. Undo Changes can put the original
+            // back and delete the record while this tab is out of sight, and a copy kept in memory after that would
+            // make the next change record no original at all — the tweak applied with nothing on disk to undo it
+            // after a restart (#1525). The file is a few hundred bytes.
+            var (persisted, problem) = await Task.Run(() =>
             {
-                var (persisted, problem) = await Task.Run(() =>
-                {
-                    var loaded = _service.LoadSnapshot(out var why);
-                    return (loaded, why);
-                });
-                if (persisted is not null)
-                {
-                    _snapshot = persisted;
-                }
-                else
-                {
-                    // A snapshot that is there but cannot be used is not "none". The settings on the machine may be
-                    // the tweaks of an earlier Apply, and capturing them now would record the tweaks as the original,
-                    // so Restore All would put them back (#2521).
-                    if (problem == PerformanceService.SnapshotProblem.Unreadable) throw SnapshotUnreadable();
-                    if (problem == PerformanceService.SnapshotProblem.Invalid)
-                        throw SnapshotDamaged(setAside: await Task.Run(_service.SetSnapshotAside));
+                var loaded = _service.LoadSnapshot(out var why);
+                return (loaded, why);
+            });
+            if (persisted is not null)
+            {
+                _snapshot = persisted;
+            }
+            else
+            {
+                // A snapshot that is there but cannot be used is not "none". The settings on the machine may be
+                // the tweaks of an earlier Apply, and capturing them now would record the tweaks as the original,
+                // so Restore All would put them back (#2521).
+                if (problem == PerformanceService.SnapshotProblem.Unreadable) throw SnapshotUnreadable();
+                if (problem == PerformanceService.SnapshotProblem.Invalid)
+                    throw SnapshotDamaged(setAside: await Task.Run(_service.SetSnapshotAside));
 
-                    // Refuse to CAPTURE while a game profile is live. The lock that keeps this tab and
-                    // Gaming Profile from overlapping is held per operation, but a gaming SESSION
-                    // outlives it: the profile applies, releases the lock, and its power plan and
-                    // visual-effects values stay live until the game exits. A snapshot taken in that
-                    // window records the profile's state as the user's own and persists it, so a later
-                    // Restore All would put the machine on a gaming plan it was never on. Loading an
-                    // ALREADY-persisted snapshot above is fine — it predates the session.
-                    if (_gaming.IsActive) throw SnapshotDuringGamingSession();
+                // Refuse to CAPTURE while a game profile is live. The lock that keeps this tab and
+                // Gaming Profile from overlapping is held per operation, but a gaming SESSION
+                // outlives it: the profile applies, releases the lock, and its power plan and
+                // visual-effects values stay live until the game exits. A snapshot taken in that
+                // window records the profile's state as the user's own and persists it, so a later
+                // Restore All would put the machine on a gaming plan it was never on. Loading an
+                // ALREADY-persisted snapshot above is fine — it predates the session.
+                if (_gaming.IsActive) throw SnapshotDuringGamingSession();
 
-                    var captured = await _service.TakeSnapshotAsync();
-                    var saved = await Task.Run(() => _service.SaveSnapshot(captured));
-                    if (!saved) throw SnapshotUnavailable();
-                    _snapshot = captured;
-                }
+                var captured = await _service.TakeSnapshotAsync();
+                var saved = await Task.Run(() => _service.SaveSnapshot(captured));
+                if (!saved) throw SnapshotUnavailable();
+                _snapshot = captured;
             }
             HasSnapshot = true;
         }
@@ -222,8 +287,13 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     // ═══════════════════════════════════════════════════════════════
 
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => ReadSettingsAsync(loaded: "Settings loaded.");
+
+    // The read behind Refresh. It says loaded only once the settings are read, so a read that failed keeps saying so.
+    private async Task ReadSettingsAsync(string loaded)
     {
+        // A read that starts now is after any put-back heard so far, so it answers that one.
+        _readAgain = false;
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Reading performance settings…";
@@ -235,7 +305,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             SyncTogglesFromProfile();
             IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
             UpdateSummary();
-            StatusMessage = "Settings loaded.";
+            StatusMessage = loaded;
         }
         catch (InvalidOperationException ex)
         {
@@ -257,6 +327,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             IsBusy = false;
             IsProgressIndeterminate = false;
         }
+
+        // Undo Changes put Performance Mode back while this read ran, so what it read may be from before (#1525).
+        if (_readAgain) await ReadSettingsAsync(loaded: ReadAgainAfterPutBack);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -266,13 +339,16 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private async Task ApplyPowerPlanAsync()
     {
-        if (SelectedPlan == GetCurrentPlanKey())
+        // Taken once, before the question: while it is open, Undo Changes can put Performance Mode back and this tab
+        // reads its settings again, which sets the toggles to what is on the PC (#1525). What was asked for stands.
+        var plan = SelectedPlan;
+        if (plan == GetCurrentPlanKey())
         {
             StatusMessage = "Power plan is already set to the selected option.";
             return;
         }
 
-        var planName = SelectedPlan switch
+        var planName = plan switch
         {
             "ultimate" => "Ultimate Performance",
             "high" => "High Performance",
@@ -301,7 +377,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             await EnsureSnapshotAsync();
             StatusMessage = $"Switching to {planName}…";
 
-            switch (SelectedPlan)
+            switch (plan)
             {
                 case "ultimate":
                     var guid = await _service.EnsureUltimatePerformancePlanAsync();
@@ -340,13 +416,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private async Task ApplyVisualEffectsAsync()
     {
-        if (WantVisualEffectsReduced == Profile.VisualEffectsReduced)
+        // Taken before the question, for the reason ApplyPowerPlanAsync gives.
+        var reduce = WantVisualEffectsReduced;
+        if (reduce == Profile.VisualEffectsReduced)
         {
             StatusMessage = "Visual effects are already in the selected state.";
             return;
         }
 
-        var action = WantVisualEffectsReduced ? "Reduce" : "Restore";
+        var action = reduce ? "Reduce" : "Restore";
         if (!DialogService.Instance.Confirm(
             $"{action} visual effects (animations, fades, shadows)?",
             "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
@@ -367,10 +445,10 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             await EnsureSnapshotAsync();
             // Registry write + SystemParametersInfo broadcast off the UI thread so the window
             // stays responsive, busy-gated like ApplyPowerPlanAsync.
-            await Task.Run(() => PerformanceService.SetUiEffects(!WantVisualEffectsReduced)).ConfigureAwait(true);
+            await Task.Run(() => PerformanceService.SetUiEffects(!reduce)).ConfigureAwait(true);
             await RefreshAsync();
-            StatusMessage = $"Visual effects {(WantVisualEffectsReduced ? "reduced" : "restored")}.";
-            Log.Information("Visual effects {Action}", WantVisualEffectsReduced ? "reduced" : "restored");
+            StatusMessage = $"Visual effects {(reduce ? "reduced" : "restored")}.";
+            Log.Information("Visual effects {Action}", reduce ? "reduced" : "restored");
         }
         catch (InvalidOperationException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"Visual effects change failed: {ex.Message}"; }
@@ -479,13 +557,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             StatusMessage = "No NVIDIA GPU detected.";
             return;
         }
-        if (WantGpuMaxPerformance == Profile.GpuMaxPerformance)
+        // Taken before the question, for the reason ApplyPowerPlanAsync gives.
+        var maxPerformance = WantGpuMaxPerformance;
+        if (maxPerformance == Profile.GpuMaxPerformance)
         {
             StatusMessage = "GPU is already in the selected state.";
             return;
         }
 
-        var action = WantGpuMaxPerformance ? "Enable" : "Disable";
+        var action = maxPerformance ? "Enable" : "Disable";
         if (!DialogService.Instance.Confirm(
             $"{action} NVIDIA GPU max performance (DisableDynamicPstate)?\n\n"
             + "⚠ This change requires a REBOOT to take effect.",
@@ -512,15 +592,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
                 var nvidiaKey = PerformanceService.FindNvidiaSubKey();
                 return nvidiaKey is null
                     ? (Found: false, Ok: false)
-                    : (Found: true, Ok: PerformanceService.SetGpuMaxPerformance(nvidiaKey, WantGpuMaxPerformance));
+                    : (Found: true, Ok: PerformanceService.SetGpuMaxPerformance(nvidiaKey, maxPerformance));
             }).ConfigureAwait(true);
             if (found)
             {
                 if (ok)
                 {
                     NeedsReboot = true;
-                    StatusMessage = $"GPU max performance {(WantGpuMaxPerformance ? "enabled" : "disabled")}. Reboot required.";
-                    Log.Information("GPU max performance {Action}. Reboot required", WantGpuMaxPerformance ? "enabled" : "disabled");
+                    StatusMessage = $"GPU max performance {(maxPerformance ? "enabled" : "disabled")}. Reboot required.";
+                    Log.Information("GPU max performance {Action}. Reboot required", maxPerformance ? "enabled" : "disabled");
                 }
                 else
                     StatusMessage = "Failed to write GPU registry key (admin required).";
@@ -546,13 +626,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             return;
         }
 
-        if (WantProcessorMaxState == Profile.ProcessorMaxState)
+        // Taken before the question, for the reason ApplyPowerPlanAsync gives.
+        var maxState = WantProcessorMaxState;
+        if (maxState == Profile.ProcessorMaxState)
         {
             StatusMessage = "Processor state is already in the selected state.";
             return;
         }
 
-        var action = WantProcessorMaxState ? "Set to 100%" : "Restore default";
+        var action = maxState ? "Set to 100%" : "Restore default";
         if (!DialogService.Instance.Confirm(
             $"{action} processor minimum state?",
             "Processor State — Confirm")) { SyncTogglesFromProfile(); return; }
@@ -573,7 +655,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             await EnsureSnapshotAsync();
             // "Restore default" targets the captured original; if it couldn't be read
             // (null), fall back to the Windows default of 5% for this explicit user action.
-            var target = WantProcessorMaxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
+            var target = maxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
             await _service.SetProcessorMinStateAsync(target);
             await RefreshAsync();
             StatusMessage = $"Processor min state set to {target}%.";
@@ -739,20 +821,41 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     [RelayCommand]
     private async Task RestoreAllAsync()
     {
-        if (_snapshot is null)
+        // The record on disk decides, not the one this tab read earlier: Undo Changes may have put the settings back and
+        // deleted it since (#1525). One that could not be read just now is not "nothing to restore", so the copy already
+        // held stays and the user is told to try again.
+        // The graphics card is looked for with it, off the UI thread: one the record names that is no longer in the PC is
+        // left out of the restore, so the question leaves it out too.
+        var (onDisk, problem, card) = await Task.Run(() =>
         {
-            StatusMessage = "Nothing to restore — no changes have been applied yet.";
+            var loaded = _service.LoadSnapshot(out var why);
+            return (loaded, why, loaded is null ? null : _service.AdapterOf(loaded));
+        });
+        if (onDisk is null && problem == PerformanceService.SnapshotProblem.Unreadable)
+        {
+            StatusMessage = "SysManager could not read its record of your original settings just now. Try again in a moment.";
             return;
         }
 
-        var gpuWillBeRestored = _snapshot.NvidiaSubKey is not null;
-        var capturedAt = _snapshot.CapturedAtUtc is DateTimeOffset timestamp
+        _snapshot = onDisk;
+        HasSnapshot = onDisk is not null;
+        if (onDisk is null)
+        {
+            StatusMessage = problem == PerformanceService.SnapshotProblem.Invalid
+                ? "SysManager's record of your original settings is damaged and cannot be restored."
+                : "Nothing to restore — no changes have been applied yet.";
+            return;
+        }
+
+        var gpuWillBeRestored = card is not null and not PerformanceService.RecordedAdapter.Gone;
+        var gpuLeftOut = card is PerformanceService.RecordedAdapter.Gone;
+        var capturedAt = onDisk.CapturedAtUtc is DateTimeOffset timestamp
             ? timestamp.ToLocalTime().ToString("f")
             : "Unknown (snapshot created by an earlier SysManager version)";
-        var powerPlan = string.IsNullOrEmpty(_snapshot.PowerPlanGuid)
-            ? _snapshot.PowerPlanName
-            : $"{_snapshot.PowerPlanName} ({_snapshot.PowerPlanGuid})";
-        var gpuRestoreState = _snapshot.GpuDynamicPstate
+        var powerPlan = string.IsNullOrEmpty(onDisk.PowerPlanGuid)
+            ? onDisk.PowerPlanName
+            : $"{onDisk.PowerPlanName} ({onDisk.PowerPlanGuid})";
+        var gpuRestoreState = onDisk.GpuDynamicPstate
             ? "Dynamic P-state"
             : "Max performance";
 
@@ -760,12 +863,13 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             "Restore ALL settings to the state before any changes were made?\n\n"
             + $"Snapshot captured: {capturedAt}\n\n"
             + $"• Power plan → {powerPlan}\n"
-            + $"• Visual effects → {(_snapshot.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
-            + $"• Game Mode → {(_snapshot.GameModeEnabled ? "ON" : "OFF")}\n"
-            + $"• Xbox Game Bar → {(_snapshot.XboxGameBarEnabled ? "ON" : "OFF")}\n"
-            + $"• Game DVR → {(_snapshot.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
-            + $"• Processor min state → {(_snapshot.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
+            + $"• Visual effects → {(onDisk.UiEffectsEnabled ? "Normal" : "Reduced")}\n"
+            + $"• Game Mode → {(onDisk.GameModeEnabled ? "ON" : "OFF")}\n"
+            + $"• Xbox Game Bar → {(onDisk.XboxGameBarEnabled ? "ON" : "OFF")}\n"
+            + $"• Game DVR → {(onDisk.XboxGameDvrEnabled ? "ON" : "OFF")}\n"
+            + $"• Processor min state → {(onDisk.ProcessorMinPercentAc is int p ? $"{p}%" : "unchanged")}\n"
             + (gpuWillBeRestored ? $"• GPU → {gpuRestoreState} (reboot needed)\n" : "")
+            + (gpuLeftOut ? "• GPU → left as it is: the NVIDIA card this was recorded on is no longer in this PC\n" : "")
             + "\nContinue?",
             "Restore Original Settings — Confirm")) return;
 
@@ -785,11 +889,12 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         try
         {
-            await _service.RestoreFromSnapshotAsync(_snapshot);
-            // Delete the persisted snapshot too — otherwise the next Apply reloads the
+            // Deletes the persisted snapshot too — otherwise the next Apply reloads the
             // now-reverted pre-restore baseline via LoadSnapshot and a later Restore All
             // would re-apply stale values.
-            var snapshotDeleted = await Task.Run(_service.DeleteSnapshot);
+            // The record the question described, held in a local: while the question was open, Undo Changes may have
+            // put it back and this tab cleared its copy, and restoring it again only sets the same settings.
+            var snapshotDeleted = await _service.RestoreOriginalAsync(onDisk);
             if (snapshotDeleted)
             {
                 _snapshot = null;
@@ -896,6 +1001,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             }
 
             _snapshotGate.Dispose();
+            if (_putBack is not null) _putBack.PutBack -= OnPutBack;
         }
         base.Dispose(disposing);
     }

@@ -11,18 +11,6 @@
              Background="{DynamicResource Surface0}">
 
     <UserControl.Resources>
-        <!-- One extension's row: the accent tint under the pointer, as the list rows elsewhere in the app. -->
-        <Style x:Key="ExtensionRowBorder" TargetType="Border">
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
-            <Setter Property="Padding" Value="6,8"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
         <!-- What an extension can do, in plain words: amber for what changes what she sees, reaches every
              website or can control the browser, neutral for the rest. -->
         <DataTemplate x:Key="PermissionChip">
@@ -208,7 +196,7 @@
                                         <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Style="{StaticResource ExtensionRowBorder}"
+                                                    <Border Style="{StaticResource ListRowBorder}"
                                                             AutomationProperties.Name="{Binding SpokenName}">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>

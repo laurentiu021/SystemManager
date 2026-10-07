@@ -150,19 +150,20 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     public void NavItems_ContainEveryTab()
     {
         var vm = _nav;
-        Assert.Equal(58, vm.NavItems.Count);
+        Assert.Equal(59, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
         Assert.Contains("nav-dashboard", ids);
 
-        // System (10)
+        // System (11)
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
         Assert.Contains("nav-performance", ids);
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-undo-changes", ids);
         Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);
@@ -412,7 +413,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     {
         var vm = _nav;
         var sys = vm.NavGroups.First(g => g.Id == "grp-system");
-        Assert.Equal(10, sys.Children.Count);
+        Assert.Equal(11, sys.Children.Count);
         var ids = sys.Children.Select(c => c.Id).ToList();
         Assert.Contains("nav-system-health", ids);
         Assert.Contains("nav-windows-update", ids);
@@ -420,6 +421,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         Assert.Contains("nav-services", ids);
         Assert.Contains("nav-startup", ids);
         Assert.Contains("nav-windows-features", ids);
+        Assert.Contains("nav-undo-changes", ids);
         Assert.Contains("nav-restore-points", ids);
         Assert.Contains("nav-task-scheduler", ids);
         Assert.Contains("nav-boot-analyzer", ids);

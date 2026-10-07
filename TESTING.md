@@ -55,7 +55,7 @@ over SSH or in a non-interactive scheduled task.
 ./docs/manual-smoke.ps1
 ```
 
-It checks 11 of the 58 tabs (the list is at the top of the script), so treat a pass as
+It checks 11 of the 59 tabs (the list is at the top of the script), so treat a pass as
 "the shell starts and those tabs render", not as full coverage. Add a nav id to `$navIds`
 when a new tab is worth including in the quick check.
 

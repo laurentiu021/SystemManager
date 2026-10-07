@@ -393,6 +393,25 @@ public class GamingProfileServiceTests
     }
 
     [Fact]
+    public void HasPendingRecovery_WhenTheStoreCannotBeRead_IsNotKnown_RatherThanNo()
+    {
+        // A leftover session in a store that could not be read just now is still there. Undo Changes must not take
+        // "could not read" for "none": Performance Mode put back under it would be undone by its recovery (#1525).
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-unread-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile()));
+            var svc = StoreOnlyService(path);
+
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                Assert.Null(svc.HasPendingRecovery);
+
+            Assert.True(svc.HasPendingRecovery);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
     public void SaveLastConfig_OverAStoreThatDoesNotParse_KeepsItAside_ThenSaves()
     {
         var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-aside-{Guid.NewGuid():N}.json");

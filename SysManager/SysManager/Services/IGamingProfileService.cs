@@ -61,7 +61,12 @@ public interface IGamingProfileService
     /// True if a previous run left a session applied on disk (closed/crashed mid-game). The
     /// UI offers to revert it on startup — crash recovery for the machine-wide tweaks.
     /// </summary>
-    bool HasPendingRecovery { get; }
+    /// <remarks>
+    /// Null when the file that would record it is there and could not be read just now, so whether a session was left
+    /// on is not known. Undo Changes holds Performance Mode back then, as it does for one that was (#1525): putting
+    /// Performance Mode back under a session that is still to be recovered would be undone by that recovery.
+    /// </remarks>
+    bool? HasPendingRecovery { get; }
 
     /// <summary>
     /// Revert a leftover session found on disk from a previous run (crash recovery). Reports
@@ -167,4 +172,23 @@ public sealed record GamingRevertResult(IReadOnlyList<string> NotRestored)
 
     /// <summary>True when every step was restored.</summary>
     public bool FullyRestored => NotRestored.Count == 0;
+
+    /// <summary>
+    /// The status line after a revert: <paramref name="fullyRestored"/> when every step came back, otherwise
+    /// <paramref name="partialLead"/> followed by the settings that did not, so a failed undo is never announced as a
+    /// restore (#2445).
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on the Gaming Profile tab because Undo Changes turns game mode off too (#1525), and both have
+    /// to say the same thing about a revert that did not fully work.
+    /// </remarks>
+    public string Describe(string fullyRestored, string partialLead)
+    {
+        if (FullyRestored) return fullyRestored;
+        var one = NotRestored.Count == 1;
+        var what = one
+            ? $"\"{NotRestored[0]}\" was"
+            : $"{NotRestored.Count} settings were ({string.Join(", ", NotRestored)})";
+        return $"{partialLead}, but {what} not restored — check {(one ? "it" : "them")} yourself. The log has the reason.";
+    }
 }

@@ -383,6 +383,20 @@
                 <Setter Property="SnapsToDevicePixels" Value="True"/>
             </Style>
 
+            <!-- One row of a list drawn inside a card, with the accent tint under the pointer. Browser Cleaner's
+                 extensions and Undo Changes' rows share it, so a row looks and answers the pointer the same
+                 wherever a card lists things one by one. -->
+            <Style x:Key="ListRowBorder" TargetType="Border">
+                <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}"/>
+                <Setter Property="Padding" Value="6,8"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
             <!-- NOTE: PERF-008 (no DropShadowEffect on cards — software-rendered shadows are
                  expensive when many cards are visible) still stands. It used to be documented on a
                  CardElevated style that no view ever applied; CardInner below is the live variant

@@ -297,15 +297,18 @@ public class PerformanceViewModelTests
         // this deterministic without a sleep.
         await vm.InitializationComplete;
 
-        // Restore All early-returns when _snapshot is null (before the lock guard). Seed a
-        // snapshot via the private field so the command reaches the guard we're testing.
+        // Restore All early-returns when there is no snapshot (before the lock guard). Save one through the tab's
+        // own service, so the command reaches the guard we're testing. On disk rather than in the private field:
+        // Restore All reads the record from disk, because Undo Changes can delete it while the tab holds a copy
+        // (#1525), so a snapshot only in memory is one the tab would rightly find gone.
         var snapshot = new PerformanceService.OriginalSnapshot(
-            PowerPlanGuid: "guid", PowerPlanName: "Balanced", UiEffectsEnabled: true,
+            PowerPlanGuid: "381b4222-f694-41f0-9685-ff5bb260df2e", PowerPlanName: "Balanced", UiEffectsEnabled: true,
             GameModeEnabled: true, XboxGameBarEnabled: true, XboxGameDvrEnabled: true,
             GpuDynamicPstate: true, ProcessorMinPercentAc: 5, NvidiaSubKey: null);
-        typeof(PerformanceViewModel)
-            .GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(vm, snapshot);
+        var service = (PerformanceService)typeof(PerformanceViewModel)
+            .GetField("_service", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(vm)!;
+        Assert.True(service.SaveSnapshot(snapshot));
     }
 
     [Fact]
@@ -313,7 +316,13 @@ public class PerformanceViewModelTests
     {
         // completeInitialization: the seed below must happen after InitAsync has finished, and
         // InitializationComplete only settles once the stubbed process calls return.
-        var vm = NewVm(completeInitialization: true);
+        // The plan switch fails, so a guard that stopped holding would throw at the first step of the restore —
+        // before visual effects, Game Mode and the Game Bar, which are written to this PC's own registry. The seed
+        // is a real record on disk, which the restore would otherwise carry out.
+        var vm = NewVm(completeInitialization: true, ps =>
+            ps.RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(5));
         await SeedSnapshotAsync(vm);
 
         var prevDialog = DialogService.Instance;
@@ -409,6 +418,85 @@ public class PerformanceViewModelTests
         {
             DialogService.Instance = prevDialog;
         }
+    }
+
+    // ── What was asked for stands, while the settings are read again under the question (#1525) ──
+    //
+    // Undo Changes can put Performance Mode back while one of this tab's questions is open, and the tab then reads its
+    // settings again, which sets the toggles to what is on the PC. Each callback below does that to the toggle the
+    // command reads, as the read would.
+
+    /// <summary>A question that, while it is open, does what the tab's read after a put-back does, and says yes.</summary>
+    private static IDisposable AnswerYesWhile(Action meanwhile)
+    {
+        var previous = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ =>
+        {
+            meanwhile();
+            return true;
+        });
+        DialogService.Instance = dialog;
+        return new Restore(() => DialogService.Instance = previous);
+    }
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose() => undo();
+    }
+
+    [Fact]
+    public async Task ApplyPowerPlan_SwitchesToThePlanItsQuestionAskedAbout()
+    {
+        IPowerShellRunner? runner = null;
+        var vm = NewVm(completeInitialization: true, ps => runner = ps);
+        await vm.InitializationComplete;
+        var onThePc = vm.SelectedPlan;
+        vm.SelectedPlan = "high";
+        Assert.NotEqual(onThePc, vm.SelectedPlan);
+
+        using (AnswerYesWhile(() => vm.SelectedPlan = onThePc))
+            await vm.ApplyPowerPlanCommand.ExecuteAsync(null);
+
+        await runner!.Received(1).RunProcessAsync("powercfg.exe", $"/setactive {PerformanceService.HighPerfGuid}",
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+        Assert.Equal("Power plan set to High Performance.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ApplyProcessorState_SetsTheMinimumItsQuestionAskedAbout()
+    {
+        IPowerShellRunner? runner = null;
+        var vm = NewVm(completeInitialization: true, ps => runner = ps);
+        await vm.InitializationComplete;
+        Assert.False(vm.IsProcessorStateLocked);
+        Assert.False(vm.WantProcessorMaxState);
+        vm.WantProcessorMaxState = true;
+
+        using (AnswerYesWhile(() => vm.WantProcessorMaxState = false))
+            await vm.ApplyProcessorStateCommand.ExecuteAsync(null);
+
+        await runner!.Received(1).RunProcessAsync("powercfg.exe",
+            "/setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100", Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task RestoreAll_RestoresTheRecordItsQuestionDescribed_EvenIfTheTabsCopyWasClearedMeanwhile()
+    {
+        // The plan switch fails, so the restore stops at its first step, before anything written to this PC's own
+        // registry: what is asserted is only that it was the record the question described that it set out to restore.
+        var vm = NewVm(completeInitialization: true, ps =>
+            ps.RunProcessAsync("powercfg.exe", Arg.Is<string>(a => a.StartsWith("/setactive ", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(5));
+        await SeedSnapshotAsync(vm);
+        var field = typeof(PerformanceViewModel).GetField("_snapshot", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        using (AnswerYesWhile(() => field.SetValue(vm, null)))
+            await vm.RestoreAllCommand.ExecuteAsync(null);
+
+        Assert.Equal("Restore all settings failed: powercfg failed to activate the power plan (exit code 5).", vm.StatusMessage);
     }
 
     // ── Success is reported only for what happened (#2438) ──

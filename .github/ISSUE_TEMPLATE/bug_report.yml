@@ -59,6 +59,7 @@ body:
         - Services
         - Startup Manager
         - Windows Features
+        - Undo Changes
         - Restore Points
         - Task Scheduler
         - Boot Analyzer

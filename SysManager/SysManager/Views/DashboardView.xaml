@@ -592,7 +592,7 @@
                                                    Visibility="{Binding ShowEta, Converter={StaticResource BoolToVis}}"/>
                                         <!--
                                             The route out of the dead end (#1496). This card told the user
-                                            something was wrong and then left them to find the fix among 58
+                                            something was wrong and then left them to find the fix among 59
                                             tabs behind 11 collapsed groups — two of these alerts literally
                                             read "check System Health" without being able to take anyone
                                             there. Those titles no longer say it, because this does.

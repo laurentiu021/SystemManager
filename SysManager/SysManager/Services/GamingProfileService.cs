@@ -77,7 +77,15 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
 
     public bool IsActive => _appliedSteps.Count > 0;
     public int? BoundGamePid { get; private set; }
-    public bool HasPendingRecovery => !IsActive && LoadStore().ActiveSession is not null;
+    public bool? HasPendingRecovery
+    {
+        get
+        {
+            if (IsActive) return false;
+            var (store, _) = ReadStore();
+            return store is null ? null : store.ActiveSession is not null;
+        }
+    }
 
     /// <inheritdoc />
     public string RestorePointNotice => _restorePoint.ConfirmationNotice;

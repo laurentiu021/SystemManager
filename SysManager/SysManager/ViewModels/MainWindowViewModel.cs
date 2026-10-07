@@ -303,6 +303,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<ServicesViewModel>("nav-services",             "Services",         typeof(Views.ServicesView), keywords: "background services, windows services"),
             Tab<StartupViewModel>("nav-startup",               "Startup Manager",  typeof(Views.StartupView), keywords: "slow startup, programs at boot, autostart, startup apps"),
             Tab<WindowsFeaturesViewModel>("nav-windows-features", "Windows Features", typeof(Views.WindowsFeaturesView), keywords: "turn features on, optional features"),
+            // Directly above Restore Points, which undoes everything since a restore point at once: this undoes one change
+            // at a time, and most of its changes need no administrator rights, where every restore point does (#1525).
+            Tab<UndoChangesViewModel>("nav-undo-changes",      "Undo Changes",     typeof(Views.UndoChangesView), keywords: "undo, put back, revert, change back, undo what sysmanager changed, restore my settings"),
             Tab<RestorePointsViewModel>("nav-restore-points",  "Restore Points",   typeof(Views.RestorePointsView), keywords: "system restore, undo changes, rollback"),
             Tab<TaskSchedulerViewModel>("nav-task-scheduler",  "Task Scheduler",   typeof(Views.TaskSchedulerView), keywords: "scheduled tasks, automatic tasks"),
             Tab<BootAnalyzerViewModel>("nav-boot-analyzer",    "Boot Analyzer",    typeof(Views.BootAnalyzerView), keywords: "slow startup, boot time, takes forever to start, slow to boot"),
@@ -567,7 +570,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// Follows the selected tab's progress, and only that tab's.
     /// </summary>
     /// <remarks>
-    /// Re-pointed on every navigation rather than subscribing to all 58 tabs: a stale subscription would let
+    /// Re-pointed on every navigation rather than subscribing to all 59 tabs: a stale subscription would let
     /// a background tab drive the button, which is the opposite of what the selected-tab rule says.
     /// </remarks>
     private void FollowTaskbarProgress(NavItem? oldValue, NavItem? newValue)
@@ -611,6 +614,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             case StandbyMemoryViewModel sm: sm.IsActive = active; break;
             case ProfileViewModel pr: pr.IsActive = active; break;
             case PrivacyViewModel pv: pv.IsActive = active; break;
+            case UndoChangesViewModel uc: uc.IsActive = active; break;
         }
     }
 
@@ -712,12 +716,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // event log twice for one answer.
         var bootAnalyzer = new BootAnalyzerService();
         var gamingCpu = new CpuAffinityService();
+        // One Performance Mode service, as under DI: the Performance Mode tab, Gaming Profile and Undo Changes all read
+        // and write its record, and an instance each would disagree about what is there (#1525).
+        var performance = new PerformanceService(runner, restorePoints);
         // ONE gaming service for the whole graph. Performance Mode asks it whether a profile is live
         // before it records a recovery baseline, so a second copy would answer "no" while the first
         // one had a session running — which is exactly the state that must never be snapshotted.
         // Under DI both resolve the same singleton; this keeps the designer/test path honest.
         var gamingProfiles = new GamingProfileService(
-            new PerformanceService(runner, restorePoints),
+            performance,
             new TimerResolutionService(), gamingCpu,
             new StandbyMemoryService(), sessionRestorePoint,
             Helpers.AdminHelper.IsElevated());
@@ -738,6 +745,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // choices in the handoff for the Privacy & Telemetry tab, which only works if both hold the same one.
         var privacy = new PrivacyService();
         var privacyChoices = new PrivacyChoicesHandoff();
+        // One of each store Undo Changes reads, shared with the tab that writes it, as under DI: a put-back through one
+        // instance and a tab reading another would disagree about what is there. And one signal, so the tab that made a
+        // change hears that Undo Changes put it back (#1525).
+        var serviceLedger = new ServiceStartupLedgerService();
+        var hosts = new HostsFileService();
+        var environment = new EnvironmentVariableService();
+        var watchdog = new SettingsWatchdogService();
+        var putBack = new PutBackSignal();
 
         return new Dictionary<Type, object>
         {
@@ -753,7 +768,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(new ProcessManagerService()),
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery, new BatteryReportService(runner)),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner)),
-            [typeof(PerformanceViewModel)] = new PerformanceViewModel(new PerformanceService(runner, restorePoints), gamingProfiles),
+            [typeof(PerformanceViewModel)] = new PerformanceViewModel(performance, gamingProfiles, putBack),
             [typeof(StartupViewModel)] = new StartupViewModel(new StartupService(), bootAnalyzer),
             [typeof(NetworkSharedState)] = networkShared,
             [typeof(PingViewModel)] = new PingViewModel(networkShared),
@@ -763,18 +778,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(DriversViewModel)] = new DriversViewModel(runner),
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),
             [typeof(AboutViewModel)] = new AboutViewModel(),
-            [typeof(ServicesViewModel)] = new ServicesViewModel(runner),
+            [typeof(ServicesViewModel)] = new ServicesViewModel(runner, serviceLedger, putBack),
             [typeof(AppAlertsViewModel)] = new AppAlertsViewModel(new AppAlertService()),
             [typeof(ShortcutCleanerViewModel)] = new ShortcutCleanerViewModel(shortcuts),
             [typeof(AppBlockerViewModel)] = new AppBlockerViewModel(new AppBlockerService()),
             [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService()),
             [typeof(FileShredderViewModel)] = new FileShredderViewModel(new FileShredderService()),
-            [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), new HostsFileService()),
+            [typeof(DnsHostsViewModel)] = new DnsHostsViewModel(new DnsService(new PowerShellRunner()), hosts, putBack),
             [typeof(WindowsFeaturesViewModel)] = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), sessionRestorePoint),
             [typeof(PrivacyViewModel)] = new PrivacyViewModel(privacy, sessionRestorePoint, privacyChoices),
             [typeof(ContextMenuViewModel)] = new ContextMenuViewModel(new ContextMenuService()),
             [typeof(SystemReportViewModel)] = new SystemReportViewModel(new SystemReportService(sysInfo, diskHealth, battery, new EventLogService())),
-            [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(new EnvironmentVariableService()),
+            [typeof(EnvironmentVariablesViewModel)] = new EnvironmentVariablesViewModel(environment, putBack),
             [typeof(RestorePointsViewModel)] = new RestorePointsViewModel(restorePoints),
             [typeof(DebloaterViewModel)] = new DebloaterViewModel(new DebloaterService(new PowerShellRunner()), sessionRestorePoint),
             [typeof(EdgeOneDriveViewModel)] = new EdgeOneDriveViewModel(new EdgeOneDriveService(new PowerShellRunner()), sessionRestorePoint),
@@ -796,12 +811,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
             [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth))),
             [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService()),
-            [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(new SettingsWatchdogService()),
+            [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(watchdog),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),
             [typeof(ScheduledMaintenanceViewModel)] = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(new PowerShellRunner())),
             [typeof(AudioMixerViewModel)] = new AudioMixerViewModel(new AudioMixerService(), new VolumePresetService()),
             [typeof(NotificationBlockerViewModel)] = new NotificationBlockerViewModel(new NotificationBlockerService()),
-            [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu),
+            [typeof(GamingProfileViewModel)] = new GamingProfileViewModel(gamingProfiles, gamingCpu, putBack),
+            [typeof(UndoChangesViewModel)] = new UndoChangesViewModel(
+                new UndoChangesService(performance, serviceLedger, new PowerShellRunner(), hosts, environment,
+                    gamingProfiles, watchdog, restorePoints, putBack),
+                designerNavigation),
         };
     }
 }

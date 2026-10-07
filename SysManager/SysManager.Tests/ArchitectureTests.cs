@@ -1040,7 +1040,7 @@ public partial class ArchitectureTests
 
         Assert.True(racingViewModels.Count >= 20,
             $"only {racingViewModels.Count} view-models were found whose constructor init can write "
-            + "StatusMessage, and 22 were measured. The init-path trace stopped matching, so this guard is "
+            + "StatusMessage, and 21 were measured. The init-path trace stopped matching, so this guard is "
             + "checking almost nothing — re-derive it before trusting a pass.");
 
         var testDir = TestPaths.TestProject();
@@ -1101,10 +1101,24 @@ public partial class ArchitectureTests
     /// <c>RefreshAsync</c> → the write. Following <c>*Async</c> plus the <c>Refresh</c>/<c>Load</c>/<c>Scan</c>
     /// families covers every init entry point in the app; anything it cannot follow simply is not reported,
     /// which keeps the guard's scope smaller than the truth rather than larger.
+    /// <para>An expression-bodied method counts too, its expression standing for the body. It has no braces for
+    /// <see cref="MethodBodiesByName"/> to find, so without this a <c>RefreshAsync() =&gt; LoadAsync(...)</c> ends
+    /// the trace one call early and takes its view-model out of scope — as Performance Mode and Services did when
+    /// their Refresh became one line (#1525).</para>
     /// </remarks>
     private static bool InitPathWritesStatusMessage(string viewModelSource, string entry)
     {
         var bodies = MethodBodiesByName(viewModelSource);
+        foreach (var member in Regex.Matches(
+                     viewModelSource,
+                     @"\n    (?:\[[^\]]*\]\s*\n\s*)*(?:public|private|internal|protected)[^\n=;{]*?\b(\w+)\s*\([^)]*\)\s*=>([^;]*);")
+                     .Cast<Match>())
+        {
+            if (!bodies.TryGetValue(member.Groups[1].Value, out var expressions))
+                bodies[member.Groups[1].Value] = expressions = [];
+            expressions.Add(member.Groups[2].Value);
+        }
+
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var frontier = new List<string> { entry };
 
@@ -3810,6 +3824,11 @@ public partial class ArchitectureTests
             ("ViewModels/DashboardViewModel.cs", "RefreshTemperaturesAsync", "TemperaturesUnavailable", 1,
              "set once per read, and OUTSIDE the dispatcher hop — inside it the assignment is skipped "
              + "whenever Application.Current is null, which is every unit test"),
+            ("ViewModels/UndoChangesViewModel.cs", "Show", "HasLooked", 1,
+             "set where every look's result lands, so the list or the empty state appears with it"),
+            ("ViewModels/UndoChangesViewModel.cs", "ScanAsync", "HasLooked", 1,
+             "the catch: a look that failed still ends with the empty state saying why, not \"Looking for "
+             + "changes\" over nothing"),
         ];
 
         var appDir = TestPaths.AppProject();
@@ -7756,7 +7775,7 @@ public partial class ArchitectureTests
 
     /// <summary>
     /// A sidebar group declaration, capturing its id and the escaped codepoint of its glyph:
-    /// <c>Group("grp-x", "Label", ""</c>.
+    /// <c>Group("grp-x", "Label", "\uE80F"</c>.
     /// </summary>
     [GeneratedRegex(@"Group\(""(?<id>[^""]+)"",\s*""[^""]+"",\s*""\\u(?<glyph>[0-9A-Fa-f]{4})""",
                     RegexOptions.CultureInvariant)]
@@ -16641,7 +16660,8 @@ public partial class ArchitectureTests
         string[] spelled = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
                             "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
                             "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two",
-                            "twenty-three", "twenty-four", "twenty-five"];
+                            "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven",
+                            "twenty-eight", "twenty-nine", "thirty"];
         Assert.True(seams.Length < spelled.Length, $"{seams.Length} seams is past the spelled-out numbers here.");
 
         // Sliced to the one paragraph that makes the claim, so a name mentioned under a neighbouring heading

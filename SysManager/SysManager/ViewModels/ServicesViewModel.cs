@@ -24,6 +24,14 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
 
     private readonly IPowerShellRunner _ps;
     private readonly ServiceStartupLedgerService _ledger;
+    private readonly IPutBackSignal? _putBack;
+    // Where the "Services refreshed" notice goes: the app's toast, or a recorder in a test. With no window, as in the
+    // unit suite, the toast shows nothing at all, so a test could not otherwise tell an announced read from a quiet one.
+    private readonly Action<string, string> _notify;
+    // Where the list comes from: Windows, or a stand-in in a test, which is the only way a test can see what this tab
+    // says when the read fails.
+    private readonly Func<List<ServiceEntry>> _readServices;
+    private int _loadGeneration;
     private List<ServiceEntry> _allServices = [];
 
     public BulkObservableCollection<ServiceEntry> Services { get; } = new();
@@ -71,12 +79,31 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         { "All", "Running", "Stopped", "Safe", "Caution", "Critical",
           "Safe to disable", "Keep enabled", "Advanced" };
 
-    public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null)
+    public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null, IPutBackSignal? putBack = null,
+        Action<string, string>? notify = null, Func<List<ServiceEntry>>? readServices = null)
     {
         _ps = ps;
         _ledger = ledger ?? new ServiceStartupLedgerService();
+        _putBack = putBack;
+        _notify = notify ?? ((title, detail) => ToastService.Instance.Show(title, detail));
+        _readServices = readServices ?? ServiceManagerService.GetAllServices;
+        if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(InitAsync);
+    }
+
+    /// <summary>The list the tab re-read after Undo Changes turned services back on. Internal so a test can await it.</summary>
+    internal Task PutBackReload { get; private set; } = Task.CompletedTask;
+
+    // Undo Changes turned services back on, or tried to, so rows that said Disabled may no longer do (#1525).
+    private void OnPutBack(UndoChangeKind kind)
+    {
+        if (kind != UndoChangeKind.Services) return;
+        UiThread.Post(() =>
+        {
+            if (IsDisposed) return;
+            PutBackReload = LoadAsync(afterPutBack: true);
+        });
     }
 
     [RelayCommand]
@@ -97,14 +124,22 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     partial void OnSelectedFilterChanged(string value) => ApplyFilter();
 
     [RelayCommand]
-    private async Task RefreshAsync()
+    private Task RefreshAsync() => LoadAsync(afterPutBack: false);
+
+    private async Task LoadAsync(bool afterPutBack)
     {
+        // Numbered, so only the newest read shows its list. A Refresh and the read after a put-back can overlap, and
+        // the older one ending last would paint the services as they were before the put-back, Enable offering
+        // "Manual" for one that is already back on.
+        var generation = Interlocked.Increment(ref _loadGeneration);
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Loading services…";
         try
         {
-            _allServices = await Task.Run(ServiceManagerService.GetAllServices);
+            var services = await Task.Run(_readServices);
+            if (generation != Volatile.Read(ref _loadGeneration)) return;
+            _allServices = services;
             // GetAllServices builds fresh ServiceEntry objects, so anything Disable recorded on
             // the previous instances is gone. Re-attach it from the persisted ledger, or Enable
             // would restore an Automatic service as Manual after any refresh or restart.
@@ -115,13 +150,28 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             // spinner before the list it is waiting for had appeared. Awaiting a DispatcherOperation
             // keeps that order without parking this thread the way Invoke did (#2152).
             if (Application.Current?.Dispatcher is { } d && !d.CheckAccess())
-                await d.InvokeAsync(ApplyFilterCore);
+                await d.InvokeAsync(() => ApplyFilterCore(afterPutBack));
             else
-                ApplyFilterCore();
+                ApplyFilterCore(afterPutBack);
         }
-        catch (InvalidOperationException ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
-        catch (Win32Exception ex) { StatusMessage = $"Service scan failed: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        // Said only by the newest read: an older one that failed has nothing on screen to speak for.
+        catch (InvalidOperationException ex)
+        {
+            if (generation == Volatile.Read(ref _loadGeneration)) StatusMessage = $"Service scan failed: {ex.Message}";
+        }
+        catch (Win32Exception ex)
+        {
+            if (generation == Volatile.Read(ref _loadGeneration)) StatusMessage = $"Service scan failed: {ex.Message}";
+        }
+        finally
+        {
+            // A newer read is still running, and it clears these when it ends.
+            if (generation == Volatile.Read(ref _loadGeneration))
+            {
+                IsBusy = false;
+                IsProgressIndeterminate = false;
+            }
+        }
     }
 
     /// <summary>
@@ -145,7 +195,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         }
     }
 
-    private void ApplyFilterCore()
+    private void ApplyFilterCore(bool afterPutBack)
     {
         // A refresh replaces every ServiceEntry, so the marks are gone with them — recount rather than
         // leaving a stale non-zero count that would keep offering to clear marks that no longer exist.
@@ -155,8 +205,16 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // across two methods: every other path into ApplyFilter — a search keystroke, a filter chip —
         // refreshed the other seven counts and left these two showing a previous scan's numbers.
         ApplyFilter();
-        StatusMessage = $"Loaded {TotalCount} services ({RunningCount} running).";
-        ToastService.Instance.Show("Services refreshed", $"{TotalCount} services ({RunningCount} running)");
+        var counts = $"{TotalCount} services ({RunningCount} running)";
+        if (afterPutBack)
+        {
+            // Without the "Services refreshed" notice: the user is on Undo Changes, where a notice about a list they
+            // are not looking at would only say something they did not ask about.
+            StatusMessage = $"Read again after Undo Changes: {counts}.";
+            return;
+        }
+        StatusMessage = $"Loaded {counts}.";
+        _notify("Services refreshed", counts);
     }
 
     [RelayCommand]
@@ -371,7 +429,6 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         }
         var previous = (ledger.TryGetValue(entry.Name, out var record) ? record.PreviousStartType : null)
             ?? entry.PreviousStartType;
-        var targetToken = ServiceManagerService.StartTypeToScToken(previous);
 
         // Confirm, like Start / Stop / Disable already do. This is a persistent, machine-scope change
         // to a Windows service, and it was the ONE mutating command on this tab with no prompt —
@@ -405,9 +462,8 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
 
         try
         {
-            await ServiceManagerService.SetStartupTypeAsync(entry.Name, targetToken, _ps);
+            await ServiceManagerService.PutBackStartupTypeAsync(entry.Name, previous, _ps, _ledger);
             entry.PreviousStartType = null;
-            _ledger.Forget(entry.Name);
             ServiceManagerService.RefreshStatus(entry);
             var now = ServiceManagerService.StartTypeWithDelay(entry);
             StatusMessage = $"✓ {entry.DisplayName} set to {now}.";
@@ -515,4 +571,12 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     }
 
     private void UpdateHighlightCount() => HighlightedCount = _allServices.Count(s => s.IsHighlighted);
+
+    protected override void Dispose(bool disposing)
+    {
+        // The signal is a singleton that outlives this tab, so the handler comes off with it.
+        if (disposing && _putBack is not null)
+            _putBack.PutBack -= OnPutBack;
+        base.Dispose(disposing);
+    }
 }

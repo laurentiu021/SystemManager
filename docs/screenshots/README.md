@@ -24,16 +24,16 @@ deliberate rather than tolerated: a renamed tab almost always means the header i
 the image now says the old name too, so the file needs recapturing and not just moving.
 The guard tells you which files, by name.
 
-42 of the 58 tabs have a shot. The 16 without one are Bandwidth Monitor,
+42 of the 59 tabs have a shot. The 17 without one are Bandwidth Monitor,
 Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
 Remover, Environment Variables, Large Files, Legacy Panels, Notification Blocker,
-Process Manager, Services, Startup Manager, Task Scheduler, Uninstaller and Volume
-Control. One of those — Notification Blocker — is still marked as a preview tab.
-Fourteen of the rest are list-heavy pages: a usable shot of them is a screenful of
+Process Manager, Services, Startup Manager, Task Scheduler, Undo Changes, Uninstaller
+and Volume Control. One of those — Notification Blocker — is still marked as a preview
+tab. Fourteen of the rest are list-heavy pages: a usable shot of them is a screenful of
 real service names, installed programs, file paths or environment values, and the
 redaction cost is the reason they are not here yet (see Privacy check below). Large
-Files is simply new, added in 1.109.0. None of the sixteen is missing because the tab
-is unfinished.
+Files and Undo Changes are simply new, added in 1.109.0 and 1.123.0 respectively. None
+of the seventeen is missing because the tab is unfinished.
 
 Those two counts are held against the source by
 `ArchitectureTests.TheScreenshotInventory_MatchesWhatIsOnDisk`, because both of them

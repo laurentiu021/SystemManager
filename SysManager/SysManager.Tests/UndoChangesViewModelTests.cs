@@ -504,17 +504,29 @@ public sealed class UndoChangesViewModelTests
     {
         using var elevated = AdminHelper.ForceElevation(true);
         var (vm, service, _) = NewVm();
+        var asked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var answer = new TaskCompletionSource<RestorePointLook>(TaskCreationOptions.RunContinuationsAsynchronously);
-        service.LookForRestorePointAsync(Arg.Any<CancellationToken>()).Returns(answer.Task);
+        service.LookForRestorePointAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            asked.TrySetResult();
+            return answer.Task;
+        });
 
         vm.IsActive = true;
+        var first = vm.RestorePointLookup;
+        // Windows is asked from a worker thread, so the question is waited for before anything is counted.
+        await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
         await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Same(first, vm.RestorePointLookup);
         await service.Received(1).LookForRestorePointAsync(Arg.Any<CancellationToken>());
 
         answer.SetResult(new RestorePointLook(Newest, Listed: true));
-        await vm.RestorePointLookup;
+        await first;
         await vm.RefreshCommand.ExecuteAsync(null);
+        await vm.RestorePointLookup;
 
+        Assert.NotSame(first, vm.RestorePointLookup);
         await service.Received(2).LookForRestorePointAsync(Arg.Any<CancellationToken>());
     }
 

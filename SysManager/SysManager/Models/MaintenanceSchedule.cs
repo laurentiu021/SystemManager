@@ -12,27 +12,25 @@ public enum MaintenanceFrequency
 }
 
 /// <summary>Which maintenance action the schedule performs (maps to a safe CLI verb).</summary>
+/// <remarks>
+/// Every action has to work without administrator rights, because the task runs at the limited run level. The
+/// standby purge was offered too, and it needs administrator, so every scheduled run of it failed. It was taken
+/// out rather than registered elevated: the exe sits in a folder its user can write to, so an elevated task would
+/// start whatever replaced it with administrator rights (#2593). A schedule saved while it was offered still runs,
+/// and <see cref="MaintenanceStatus.PurgesStandby"/> is how the tab recognises one. The CLI keeps
+/// <c>--purge-standby</c> for scripts run as administrator.
+/// <para>Removing the value is safe because a schedule is never persisted by name: it is built fresh from the view
+/// model and turned into a Windows scheduled task, and the task stores the CLI arguments.</para>
+/// </remarks>
 public enum MaintenanceAction
 {
     /// <summary>Delete temporary files (CLI <c>--cleanup</c>).</summary>
     Cleanup,
-    /// <summary>Purge the standby memory list (CLI <c>--purge-standby</c>).</summary>
-    /// <remarks>
-    /// Was <c>TrimRam</c>, which pointed at the wrong tab. Performance Mode's "Trim RAM" is
-    /// <c>EmptyWorkingSet</c> per process and needs no elevation; this is
-    /// <c>NtSetSystemInformation(MemoryPurgeStandbyList)</c> and needs administrator. Someone scheduling
-    /// "TrimRam" reasonably expected the button of that name and got the other operation, with a
-    /// different elevation requirement — so the name also misled about whether the task would work
-    /// unelevated (#1524). Renaming this value is safe because a schedule is never persisted by name: it
-    /// is built fresh from the view model and turned into a Windows scheduled task. The CLI verb is the
-    /// part that crosses a persistence boundary, which is why <c>--trim-ram</c> is still accepted.
-    /// </remarks>
-    PurgeStandby,
 }
 
 /// <summary>
-/// A user-defined recurring maintenance schedule. The watchdog registers a single Windows
-/// scheduled task from this definition that launches SysManager headless with the matching
+/// A user-defined recurring maintenance schedule. <c>MaintenanceSchedulerService</c> registers a single
+/// Windows scheduled task from this definition that launches SysManager headless with the matching
 /// CLI verb. Only the fields here are configurable — the command itself is built from a
 /// fixed whitelist, so no free-form text ever reaches the scheduler.
 /// </summary>
@@ -50,7 +48,6 @@ public sealed record MaintenanceSchedule(
     public string CliArguments => Action switch
     {
         MaintenanceAction.Cleanup => "--cleanup --silent",
-        MaintenanceAction.PurgeStandby => "--purge-standby --silent",
         _ => "--help",
     };
 
@@ -66,7 +63,6 @@ public sealed record MaintenanceSchedule(
     public static string LabelFor(MaintenanceAction action) => action switch
     {
         MaintenanceAction.Cleanup => "Clean temporary files",
-        MaintenanceAction.PurgeStandby => "Purge standby memory",
         _ => "Unknown",
     };
 
@@ -109,7 +105,9 @@ public sealed record MaintenanceStatus(
     DateTime? NextRun,
     string? LastResultDescription,
     // How many scheduled runs Windows recorded as missed.
-    int? MissedRuns = null)
+    int? MissedRuns = null,
+    // Whether the task's command line purges standby memory, which needs administrator rights the task lacks.
+    bool PurgesStandby = false)
 {
     /// <summary>No task is registered: Windows answered that the task does not exist.</summary>
     /// <remarks>
@@ -133,5 +131,21 @@ public sealed record MaintenanceStatus(
     public string? MissedRunsWarning => MissedRuns is > 0
         ? $"{MissedRuns} scheduled run{(MissedRuns == 1 ? "" : "s")} did not happen — the PC was probably "
           + "off, asleep, or blocked by one of the conditions below."
+        : null;
+
+    /// <summary>
+    /// What to tell someone whose schedule purges standby memory, or null when it does not.
+    /// </summary>
+    /// <remarks>
+    /// The task runs without administrator rights and a purge needs them, so every run of such a schedule fails.
+    /// The purge is no longer offered, but a schedule saved while it was keeps running, and its only trace was
+    /// LAST RESULT reading "Last run returned 0x00000001" (#2593). Nothing is removed on the user's behalf: this
+    /// says what Save and Remove will do, and where a purge runs with the rights it needs.
+    /// </remarks>
+    public string? StandbyPurgeWarning => PurgesStandby
+        ? "This schedule purges standby memory, which needs administrator rights the scheduled task does not "
+          + "have, so every run fails. Saving a schedule below replaces it with a temporary-file cleanup, and "
+          + "Remove schedule removes it. To purge standby memory automatically, tick \"Automatically purge when "
+          + "available RAM is low\" in Standby List Cleaner while SysManager runs as administrator."
         : null;
 }

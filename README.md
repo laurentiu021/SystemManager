@@ -1118,13 +1118,15 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 
 ### Scheduled Maintenance 🔬
 - **Automate maintenance on a schedule** — register one Windows scheduled task that
-  runs SysManager in the background (via its CLI) to clean temporary files or purge
-  standby memory, daily or weekly at a time you pick — on the hour, or at a quarter past, half
-  past or a quarter to
-- **Purging standby memory needs administrator rights, and the scheduled task runs without
-  them**, so a scheduled purge does not succeed; the task's last result shows the failure.
-  Cleaning temporary files works on a schedule
-- See the **last run, next run, and last result** of the task at a glance
+  runs SysManager in the background (via its CLI) to clean temporary files, daily or weekly
+  at a time you pick — on the hour, or at a quarter past, half past or a quarter to
+- **Purging standby memory is not offered.** It needs administrator rights, which the scheduled
+  task does not have, and a task given them would start, with those rights, whatever replaced
+  SysManager's exe in a folder your account can write to. Standby List Cleaner can purge
+  automatically while SysManager runs as administrator. A purge schedule saved by an earlier
+  version is flagged on the page, which says every run of it fails and how to replace or remove it
+- See the **last run, next run, and last result** of the task at a glance, with a failed run
+  described in words
 - **"Not scheduled" means Windows said so.** If the schedule cannot be read, the page says that
   instead of "No maintenance is scheduled yet", and Save warns that it replaces any schedule
   SysManager has already set
@@ -1648,7 +1650,11 @@ offers, "rate us" prompts:
 - **Visual Effects**: reduce animations via P/Invoke (instant, no logout)
 - **Game Mode**: enable/disable via registry
 - **Xbox Game Bar**: disable overlay and Game DVR via registry
-- **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required)
+- **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required). The
+  reboot notice stays on the page for as long as SysManager is open, instead of going away the moment
+  the settings are read again
+- **Refresh is off while a change or Restore All is running**, so it cannot start a second read in the
+  middle of one
 - **Processor State**: force CPU min state to 100%. Under the High Performance and Ultimate
   Performance plans it is already 100%, so the switch is locked and says so
 - **Overlays info**: manual instructions for Discord, Steam, NVIDIA GFE, EA App
@@ -1800,8 +1806,8 @@ offers, "rate us" prompts:
   SMART, free space on the system drive, RAM usage, uptime, and battery
   wear. Free space counts for a quarter of it, because a full drive is the
   commonest reason a PC feels slow and the one thing on that list you can
-  fix today — so a system drive under 5% free with less than 25 GB left cannot score green,
-  and the recommendation says how many GB are left and points at Deep Cleanup.
+  fix today — so a system drive with less than 10 GB free, or under 5% free with less than 25 GB
+  left, cannot score green, and the recommendation says how many GB are left and points at Deep Cleanup.
   Color-coded ring (green / amber / red) with up to 3 actionable
   recommendations. Auto-computes on load and refreshes with "Scan system".
   A battery counts only when its wear was actually read. Windows gives
@@ -1935,8 +1941,8 @@ offers, "rate us" prompts:
 - Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup, never follows
   junctions), `--purge-standby` (purge the standby list; needs administrator), plus `--version` (`-v`),
   `--help` (`-h`, `-?`, `/?`), and `--list`. `--trim-ram` still works as an alias for `--purge-standby`,
-  so an existing scheduled task keeps running; new scripts should use the current name, which says which
-  of the two memory operations it is
+  so a script or scheduled task written with the old name is still understood; new scripts should use the
+  current name, which says which of the two memory operations it is
 - `--json` emits machine-readable output; `--silent` (`-s`, `/silent`) prints nothing at all when the
   command succeeds, and still prints an error; conventional **exit codes** (0 success · 1 error · 2
   usage) let a script branch on the result

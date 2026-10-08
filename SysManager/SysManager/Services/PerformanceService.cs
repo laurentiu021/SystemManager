@@ -36,6 +36,7 @@ public sealed partial class PerformanceService : IDisposable
     private readonly Func<System.Diagnostics.Process[]> _processes;
     private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly Func<string, RecordedAdapter> _findAdapter;
+    private readonly Func<bool, (bool Found, bool Ok)> _writeGpu;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -82,7 +83,8 @@ public sealed partial class PerformanceService : IDisposable
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "SysManager"),
-            System.Diagnostics.Process.GetProcesses)
+            System.Diagnostics.Process.GetProcesses,
+            writeGpu: WriteGpuToRegistry)
     {
     }
 
@@ -100,13 +102,19 @@ public sealed partial class PerformanceService : IDisposable
     /// What has become of the NVIDIA adapter a record names; the registry's answer unless a test passes its own, so
     /// that what a test sees does not depend on the graphics card of the PC running it.
     /// </param>
+    /// <param name="writeGpu">
+    /// The NVIDIA setting's write for <see cref="WriteGpuMaxPerformance"/>. Like <paramref name="processes"/> it
+    /// defaults to nothing: the public constructor passes the registry write, and a test that leaves it out finds no
+    /// card rather than changing the graphics setting of the PC running the suite.
+    /// </param>
     internal PerformanceService(
         IPowerShellRunner ps,
         RestorePointService restorePoints,
         string configDir,
         Func<System.Diagnostics.Process[]>? processes = null,
         Func<System.Diagnostics.Process, bool>? trimWorkingSet = null,
-        Func<string, RecordedAdapter>? findAdapter = null)
+        Func<string, RecordedAdapter>? findAdapter = null,
+        Func<bool, (bool Found, bool Ok)>? writeGpu = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
@@ -114,6 +122,7 @@ public sealed partial class PerformanceService : IDisposable
         _processes = processes ?? (() => []);
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
         _findAdapter = findAdapter ?? FindRecordedAdapter;
+        _writeGpu = writeGpu ?? (_ => (Found: false, Ok: false));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -790,6 +799,21 @@ public sealed partial class PerformanceService : IDisposable
     /// restore goes through here, so that it says what the restore will do.
     /// </summary>
     internal RecordedAdapter FindAdapter(string subKey) => _findAdapter(subKey);
+
+    /// <summary>
+    /// Finds the NVIDIA card and writes its max-performance setting: <c>Found</c> is false when there is no card, and
+    /// <c>Ok</c> false when the write was refused. Performance Mode's own Apply; Restore All writes the recorded card
+    /// through <see cref="RestoreOriginalAsync"/> instead.
+    /// </summary>
+    internal (bool Found, bool Ok) WriteGpuMaxPerformance(bool maxPerformance) => _writeGpu(maxPerformance);
+
+    private static (bool Found, bool Ok) WriteGpuToRegistry(bool maxPerformance)
+    {
+        var nvidiaKey = FindNvidiaSubKey();
+        return nvidiaKey is null
+            ? (Found: false, Ok: false)
+            : (Found: true, Ok: SetGpuMaxPerformance(nvidiaKey, maxPerformance));
+    }
 
     /// <summary>What has become of the NVIDIA adapter <paramref name="snapshot"/> names, or null when it names none.</summary>
     internal RecordedAdapter? AdapterOf(OriginalSnapshot snapshot) =>

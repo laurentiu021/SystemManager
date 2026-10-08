@@ -10,6 +10,44 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.123.1] - 2026-10-08
+
+**Scheduled Maintenance no longer offers a standby memory purge, which failed on every scheduled run.** The
+Dashboard's health score is no longer green with less than 10 GB free on the Windows drive, and Performance Mode
+keeps saying that a graphics change needs a reboot instead of dropping the notice at once.
+
+### Removed
+
+- **Scheduled Maintenance: "Purge standby memory" (#2593).** A purge needs administrator rights and the scheduled
+  task runs without them, so every scheduled purge failed, and all the page showed was "Last run returned
+  0x00000001". Giving the task administrator rights is no answer: SysManager's exe sits in a folder your account can
+  write to, so anything running as you could replace it, and Windows would start the replacement with those rights.
+  Standby List Cleaner's "Automatically purge when available RAM is low" purges for you while SysManager runs as
+  administrator. Present since 1.50.0, when Scheduled Maintenance was added.
+  - A purge schedule saved before this keeps running, so the page now says that every run of it fails, that saving
+    a schedule replaces it with a temporary-file cleanup, and where to purge instead. Nothing is removed for you.
+  - `--purge-standby` stays on the command line, for scripts you run as administrator.
+
+### Fixed
+
+- **Scheduled Maintenance: a failed run is described in words (#2593).** SysManager's own error codes read "Last run
+  returned 0x00000001" and "0x00000002"; they now read "Last run failed" and "Last run failed (command not
+  recognised)".
+- **Dashboard: the health score could be green with less than 10 GB free on the Windows drive (#2603).** Free space
+  counts for a quarter of the score, and below 10 GB its part was held to 25 out of 100, so with everything else
+  perfect the total was 81, and green starts at 80: a 128 GB laptop drive with 9 GB free scored green. Below 10 GB
+  it is now held to 10, its lowest band, and the best total is 78. Present since 1.78.0, when free space joined the
+  score.
+- **Performance Mode: the reboot notice after an NVIDIA change disappeared at once (#2607).** The read that shows the
+  new state began by clearing it, and ended on "Settings loaded." in place of "Reboot required". A read no longer
+  clears it, so the notice stays for as long as SysManager is open, and the outcome of the change is written after
+  the read. Any later Refresh or F5 cleared it too, and so did a Restore All that left the graphics setting alone,
+  although the PC had not restarted.
+  - Refresh, and F5, are off while a change or Restore All is running. Either could start a second read in the
+    middle of one, which ended the busy state early and replaced the change's message with "Settings loaded.".
+  - If the NVIDIA card can no longer be found when the change is applied, the page says that nothing was changed.
+  - Both have been there since Performance Mode was added in 0.12.0.
+
 ## [1.123.0] - 2026-10-07
 
 **Undo Changes puts back what SysManager changed, one change at a time, from one page.** Five tabs each kept what they

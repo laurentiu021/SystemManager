@@ -72,7 +72,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         _putBack = putBack;
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
+        PropertyChanged += OnVmPropertyChanged;
         InitializeAsync(InitAsync);
+    }
+
+    // Refresh follows IsBusy, so the button greys out and F5, which asks CanExecute first, does nothing mid-command.
+    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(IsBusy)) RefreshCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>What the tab re-read after Undo Changes put Performance Mode back. Internal so a test can await it.</summary>
@@ -295,10 +302,20 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     //  REFRESH
     // ═══════════════════════════════════════════════════════════════
 
-    [RelayCommand]
+    /// <summary>Reads the settings again.</summary>
+    /// <remarks>
+    /// Off while a command runs (#2607). It used to have no <c>CanExecute</c>, so Refresh or F5 pressed during an
+    /// Apply started a read beside it: the read's own end cleared <c>IsBusy</c> while the Apply still ran, and its
+    /// status line replaced the Apply's. The Apply commands' own reads call the method, not the command.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRefresh))]
     private Task RefreshAsync() => ReadSettingsAsync(loaded: "Settings loaded.");
 
+    private bool CanRefresh() => !IsBusy;
+
     // The read behind Refresh. It says loaded only once the settings are read, so a read that failed keeps saying so.
+    // It leaves NeedsReboot alone: a change that needs a restart still needs it after a read, and a read cannot tell
+    // whether the PC has restarted since, which is the only thing that clears it (#2607).
     private async Task ReadSettingsAsync(string loaded)
     {
         // A read that starts now is after any put-back heard so far, so it answers that one.
@@ -307,7 +324,6 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = "Reading performance settings…";
-        NeedsReboot = false;
 
         try
         {
@@ -620,15 +636,15 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             await EnsureSnapshotAsync();
-            // FindNvidiaSubKey + the registry write run off the UI thread; the UI updates below
+            // Finding the card and the registry write run off the UI thread; the UI updates below
             // resume on it (ConfigureAwait true), busy-gated like ApplyPowerPlanAsync.
-            var (found, ok) = await Task.Run(() =>
-            {
-                var nvidiaKey = PerformanceService.FindNvidiaSubKey();
-                return nvidiaKey is null
-                    ? (Found: false, Ok: false)
-                    : (Found: true, Ok: PerformanceService.SetGpuMaxPerformance(nvidiaKey, maxPerformance));
-            }).ConfigureAwait(true);
+            var (found, ok) = await Task.Run(() => _service.WriteGpuMaxPerformance(maxPerformance))
+                .ConfigureAwait(true);
+
+            // The read that shows the new state comes first and the outcome after it, as in the other Apply
+            // commands. The outcome used to be written first, and the read replaced the line with "Settings
+            // loaded." (#2607).
+            await RefreshAsync();
             if (found)
             {
                 if (ok)
@@ -640,7 +656,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
                 else
                     StatusMessage = "Failed to write GPU registry key (admin required).";
             }
-            await RefreshAsync();
+            else
+                StatusMessage = "No NVIDIA GPU found, so nothing was changed.";
         }
         catch (InvalidOperationException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
         catch (SecurityException ex) { StatusMessage = $"GPU setting change failed: {ex.Message}"; }
@@ -940,9 +957,11 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             }
 
             await RefreshAsync();
-            NeedsReboot = gpuWillBeRestored;
+            // Raised, never cleared: a graphics change applied earlier in this session still needs its restart
+            // whether or not this restore wrote the card again (#2607).
+            if (gpuWillBeRestored) NeedsReboot = true;
             StatusMessage = snapshotDeleted
-                ? NeedsReboot
+                ? gpuWillBeRestored
                     ? "Original settings restored. Reboot required for GPU changes."
                     : "Original settings restored."
                 : "Original settings were restored, but the recovery snapshot could not be cleared. "
@@ -1040,6 +1059,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
             _snapshotGate.Dispose();
             if (_putBack is not null) _putBack.PutBack -= OnPutBack;
+            PropertyChanged -= OnVmPropertyChanged;
         }
         base.Dispose(disposing);
     }

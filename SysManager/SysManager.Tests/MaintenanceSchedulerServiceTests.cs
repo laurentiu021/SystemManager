@@ -67,10 +67,10 @@ public class MaintenanceSchedulerServiceTests
     public async Task RegisterAsync_DailySchedule_SetsDailyTrue()
     {
         var (svc, ps) = NewService(StateRow("Ready"));
-        var schedule = new MaintenanceSchedule(MaintenanceAction.PurgeStandby, MaintenanceFrequency.Daily, 9, 0);
+        var schedule = new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Daily, 9, 0);
         await svc.RegisterAsync(schedule, exePath: @"C:\x.exe");
         await ps.Received(1).RunAsync(Arg.Any<string>(),
-            Arg.Is<IDictionary<string, object?>?>(p => (bool)p!["Daily"]! && (string)p["Args"]! == "--purge-standby --silent"),
+            Arg.Is<IDictionary<string, object?>?>(p => (bool)p!["Daily"]! && (string)p["At"]! == "09:00"),
             Arg.Any<CancellationToken>());
     }
 
@@ -137,6 +137,55 @@ public class MaintenanceSchedulerServiceTests
 
         Assert.NotNull(status);
         Assert.Equal("Last run failed (file not found)", status.LastResultDescription);
+    }
+
+    /// <summary>
+    /// SysManager's own error exit code reads as a failure in words, whichever type the host returns it as.
+    /// </summary>
+    /// <remarks>
+    /// It read "Last run returned 0x00000001", and that 1 was every scheduled standby purge failing for want of
+    /// administrator rights (#2593).
+    /// </remarks>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1u)]
+    [InlineData("1")]
+    public async Task GetStatusAsync_DescribesAFailedRunInWords(object lastResult)
+    {
+        var (svc, _) = NewService(StatusRow("Ready", lastResult));
+
+        var status = await svc.GetStatusAsync();
+
+        Assert.NotNull(status);
+        Assert.Equal("Last run failed", status.LastResultDescription);
+    }
+
+    /// <summary>
+    /// A schedule whose command line purges standby memory is flagged, read the way the CLI reads it when the task
+    /// runs.
+    /// </summary>
+    /// <remarks>
+    /// The task runs without administrator rights and a purge needs them, so every run of such a schedule fails
+    /// (#2593). The old name counts too: a schedule saved before #1524 runs <c>--trim-ram</c>. A row without the
+    /// property is a task this cannot read the command line of, and is not flagged.
+    /// </remarks>
+    [Theory]
+    [InlineData("--purge-standby --silent", true)]
+    [InlineData("--trim-ram --silent", true)]
+    [InlineData("--cleanup --silent", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public async Task GetStatusAsync_FlagsAScheduleThatPurgesStandby(string? arguments, bool purges)
+    {
+        var row = StatusRow("Ready", 0);
+        if (arguments is not null) row.Properties.Add(new PSNoteProperty("Arguments", arguments));
+        var (svc, _) = NewService(row);
+
+        var status = await svc.GetStatusAsync();
+
+        Assert.NotNull(status);
+        Assert.True(status.Exists);
+        Assert.Equal(purges, status.PurgesStandby);
     }
 
     /// <summary>

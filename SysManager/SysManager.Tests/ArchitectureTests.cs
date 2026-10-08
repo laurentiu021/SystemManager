@@ -10113,7 +10113,7 @@ public partial class ArchitectureTests
     /// does not.
     /// </summary>
     /// <remarks>
-    /// The two mutating verbs are what Scheduled Maintenance runs unattended, and neither wrote to the
+    /// The two mutating verbs are what a scheduled task runs unattended, and neither wrote to the
     /// activity log — while the GUI paths for the same two operations both do. So a user who scheduled a
     /// weekly cleanup opened SysManager afterwards and found nothing to say it had ever run (#1509).
     /// <para>Source-shape rather than behavioural because executing these verbs really deletes temporary

@@ -13,7 +13,7 @@ namespace SysManager.ViewModels;
 
 /// <summary>
 /// ViewModel for the Scheduled Maintenance tab. Lets the user register a single recurring
-/// Windows task that runs SysManager headless (temp cleanup or standby trim) on a daily or
+/// Windows task that runs SysManager headless (temporary-file cleanup) on a daily or
 /// weekly schedule, and shows its status / last run. Creating or removing the task is
 /// confirmed first; only SysManager's own task is ever touched (via
 /// <see cref="MaintenanceSchedulerService"/>).
@@ -25,7 +25,8 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
 
     private readonly MaintenanceSchedulerService _service;
 
-    public IReadOnlyList<MaintenanceAction> Actions { get; } = [MaintenanceAction.Cleanup, MaintenanceAction.PurgeStandby];
+    /// <summary>The actions a schedule can run: only what works without administrator rights (#2593).</summary>
+    public IReadOnlyList<MaintenanceAction> Actions { get; } = [MaintenanceAction.Cleanup];
     public IReadOnlyList<MaintenanceFrequency> Frequencies { get; } = [MaintenanceFrequency.Daily, MaintenanceFrequency.Weekly];
     public IReadOnlyList<DayOfWeek> Days { get; } = Enum.GetValues<DayOfWeek>();
     public IReadOnlyList<int> Hours { get; } = [.. Enumerable.Range(0, 24)];
@@ -80,6 +81,16 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// the user got. NumberOfMissedRuns is the signal that does exist.
     /// </remarks>
     [ObservableProperty] private string _missedRunsWarning = "";
+
+    /// <summary>
+    /// Why the registered schedule cannot work, in words, or empty when it can.
+    /// </summary>
+    /// <remarks>
+    /// Set only for a schedule that purges standby memory, which fails every run because the task has no
+    /// administrator rights (#2593). Empty rather than null, like <see cref="MissedRunsWarning"/>: the view
+    /// collapses the warning on empty.
+    /// </remarks>
+    [ObservableProperty] private string _standbyPurgeWarning = "";
 
     public ScheduledMaintenanceViewModel(MaintenanceSchedulerService service)
     {
@@ -171,7 +182,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
         if (status is null)
         {
             CurrentSummary = "The maintenance schedule could not be read.";
-            LastRun = NextRun = LastResult = MissedRunsWarning = "";
+            LastRun = NextRun = LastResult = MissedRunsWarning = StandbyPurgeWarning = "";
             StatusMessage = "Windows did not answer when SysManager asked for the schedule. Press Refresh to try again.";
         }
         else if (status.Exists)
@@ -181,13 +192,14 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             NextRun = status.NextRun is { } nr ? nr.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : "—";
             LastResult = status.LastResultDescription ?? "";
             MissedRunsWarning = status.MissedRunsWarning ?? "";
+            StandbyPurgeWarning = status.StandbyPurgeWarning ?? "";
             StatusMessage = "A maintenance task is registered. You can update or remove it below.";
         }
         else
         {
             CurrentSummary = "No maintenance is scheduled yet.";
-            LastRun = NextRun = LastResult = MissedRunsWarning = "";
-            StatusMessage = "Pick an action and time, then Save schedule to automate it.";
+            LastRun = NextRun = LastResult = MissedRunsWarning = StandbyPurgeWarning = "";
+            StatusMessage = "Pick how often and at what time, then Save schedule to automate it.";
         }
         RemoveScheduleCommand.NotifyCanExecuteChanged();
     }
@@ -199,9 +211,9 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// The wording IS the behaviour for this gate. One text served both cases and it described only the first:
     /// "This creates a Windows scheduled task" was shown while about to overwrite an existing one, so the
     /// dialog that exists to stop an unwanted change actively concealed which change it was (#1509).
-    /// <para>The replacement text names the existing task's next run, which is as specific as it can be: the
-    /// status read-back reports state and times, not which action or trigger Windows is holding. That is still
-    /// enough to tell the user WHICH schedule they are about to lose, and it comes from the same read the
+    /// <para>The replacement text names the existing task's next run: the status read-back reports state and
+    /// times, and of the command line only whether it purges standby memory, not the trigger Windows is holding.
+    /// That is enough to tell the user WHICH schedule they are about to lose, and it comes from the same read the
     /// card above displays, so the two cannot disagree.</para>
     /// </remarks>
     private string ConfirmSavePrompt(MaintenanceSchedule schedule)

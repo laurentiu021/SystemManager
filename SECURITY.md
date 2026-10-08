@@ -165,10 +165,12 @@ What the app can and cannot do by design:
   CPU, motherboard and storage sensors. Without administrator rights it loads nothing
   and reads only NVIDIA GPU and disk temperatures.
 - **Unattended cleanup**: `SysManager.exe --cleanup` deletes temporary files from your
-  TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it,
-  or a standby-list purge, on a schedule. The schedule is one task,
-  `\SysManager\Scheduled Maintenance`, which runs without administrator rights, so a
-  scheduled standby-list purge, which needs them, fails rather than gaining them. You
+  TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it
+  on a schedule. The schedule is one task, `\SysManager\Scheduled Maintenance`, which
+  runs without administrator rights. It does not offer the standby-list purge, which
+  needs them: a task given administrator rights would start, with those rights, whatever
+  replaced SysManager's exe in a folder your account can write to. A purge schedule saved
+  by an earlier version still runs without them, so it fails, and the tab says so. You
   confirm when you create it, not on each run. Each run that completes is recorded in
   Recent activity.
 - **Signature checks on lists, and what they cost**: the Signature columns in the Startup Manager and

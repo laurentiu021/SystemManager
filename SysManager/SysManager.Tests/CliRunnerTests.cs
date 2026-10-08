@@ -37,8 +37,9 @@ public class CliRunnerTests
     /// operation while doing Standby List Cleaner's (#1524). The old spelling has to keep working: a
     /// maintenance schedule registered before the rename has <c>"--trim-ram --silent"</c> baked into a
     /// Windows scheduled task's argument string on the user's machine, and an unrecognised flag routes to
-    /// <c>Unknown</c> — so dropping the alias would leave that task running <c>--help</c> nightly and
-    /// reporting success while doing nothing.
+    /// <c>Unknown</c> — so dropping the alias would turn that task into a usage error, and Scheduled
+    /// Maintenance, which reads the task's arguments through <c>Parse</c>, would stop recognising it as the
+    /// standby purge it warns about (#2593).
     /// <para>Asserted here rather than as another <c>[InlineData]</c> row so that deleting the alias
     /// fails a test whose name says what broke, instead of one that reads like a parser typo.</para>
     /// </remarks>
@@ -284,7 +285,7 @@ public class CliRunnerTests
 
     // ── Headless runs reach the app's own history (#1509) ──────────────────
     //
-    // The two mutating verbs are the ones Scheduled Maintenance runs while nobody is watching, and
+    // The two mutating verbs are the ones a scheduled task runs while nobody is watching, and
     // neither left a trace: the GUI paths for the same two operations log, so a weekly scheduled cleanup
     // deleted files and the app's history had nothing to say it ever ran.
     //

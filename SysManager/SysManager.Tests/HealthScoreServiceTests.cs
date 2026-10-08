@@ -476,7 +476,7 @@ public class HealthScoreServiceTests
     [InlineData(20, 55)]    // 10% exactly, and exactly ON the floor rather than under it
     [InlineData(15, 25)]    //  7.5%: percentage 25, and the 20 GB floor caps at 55 — the lower wins
     [InlineData(10, 25)]    //  5% exactly, at the 10 GB floor rather than under it
-    [InlineData(8, 10)]     //  4%: percentage 10; the 10 GB floor caps at 25 and cannot raise it
+    [InlineData(8, 10)]     //  4%: percentage 10, and under the 10 GB floor, which caps at 10 too
     public void ComputeFreeSpaceScore_ScoresTheSystemDriveAcrossTheRange(double freeGb, int expected)
         => Assert.Equal(expected, HealthScoreService.ComputeFreeSpaceScore(
             [new(SystemDrive, SystemDrive, "NTFS", 200, freeGb, "", "")], SystemDrive));
@@ -507,9 +507,9 @@ public class HealthScoreServiceTests
     /// around 20 GB. The floor is what stops the percentage calling that healthy.
     /// </remarks>
     [Theory]
-    [InlineData(40, 9, 25)]     // 22% free, under the 10 GB floor
+    [InlineData(40, 9, 10)]     // 22% free, under the 10 GB floor
     [InlineData(64, 15, 55)]    // 23% free, under the 20 GB floor
-    [InlineData(32, 4, 25)]     // 12% free and nearly empty in absolute terms
+    [InlineData(32, 4, 10)]     // 12% free and nearly empty in absolute terms
     public void ComputeFreeSpaceScore_AHardFloorOverridesAHealthyPercentage(
         double sizeGb, double freeGb, int expected)
         => Assert.Equal(expected, HealthScoreService.ComputeFreeSpaceScore(
@@ -620,6 +620,37 @@ public class HealthScoreServiceTests
 
         Assert.True(overall < 90, $"a machine out of space still scored {overall}, which reads as Excellent");
         Assert.True(overall < 80, $"a machine out of space still scored {overall}, which reads as Good");
+    }
+
+    /// <summary>
+    /// Under 10 GB free on the Windows drive the score cannot be green, whatever the percentage says.
+    /// </summary>
+    /// <remarks>
+    /// The floor used to cap the component at 25, and free space carries a quarter of the total, so with every
+    /// other component perfect a drive under 10 GB still totalled 75 + 6.25 = 81, inside "Good" (#2603). That
+    /// was a 128 GB laptop drive with 9 GB left: 7% free, so the percentage band is 25 too, and far too little
+    /// for Windows to stage a feature update. The 40 GB rows are the same drive size the floor's own test uses,
+    /// where 9 GB is 22% free and the percentage alone would say 100.
+    /// <para>Through <see cref="HealthScoreService.Combine"/>, for the reason
+    /// <see cref="AFullSystemDrive_CannotScoreGreen"/> gives.</para>
+    /// </remarks>
+    [Theory]
+    [InlineData(128, 9, true)]
+    [InlineData(128, 9, false)]
+    [InlineData(40, 9, true)]
+    [InlineData(40, 9, false)]
+    [InlineData(500, 9.9, false)]
+    public void ASystemDriveUnderTenGigabytes_CannotScoreGreen(double sizeGb, double freeGb, bool hasBattery)
+    {
+        const int perfect = 100;
+        var freeSpace = HealthScoreService.ComputeFreeSpaceScore(
+            [new(SystemDrive, SystemDrive, "NTFS", sizeGb, freeGb, "", "")], SystemDrive);
+
+        var overall = HealthScoreService.Combine(
+            perfect, freeSpace, perfect, perfect, perfect, hasBattery);
+
+        Assert.True(overall < 80,
+            $"{freeGb} GB free on a {sizeGb} GB Windows drive still scored {overall}, which reads as Good");
     }
 
     /// <summary>Every component perfect scores exactly 100, on both arms.</summary>

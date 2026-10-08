@@ -102,7 +102,8 @@ public sealed class MaintenanceSchedulerService
                 LastRun: Date(row, "LastRunTime"),
                 NextRun: Date(row, "NextRunTime"),
                 LastResultDescription: DescribeResult(row),
-                MissedRuns: Count(row, "MissedRunsCount"));
+                MissedRuns: Count(row, "MissedRunsCount"),
+                PurgesStandby: IsStandbyPurge(Str(row, "Arguments")));
         }
         catch (RuntimeException ex)
         {
@@ -192,12 +193,15 @@ public sealed class MaintenanceSchedulerService
         }
         if ($null -eq $task) { return }
         $info = Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Folder -ErrorAction SilentlyContinue
+        # Arguments is the command line the task runs, so the tab can spot a standby purge, which fails every run
+        # without administrator rights (#2593). SysManager registers one action, so the first is the one it set.
         [PSCustomObject]@{
             State           = [string]$task.State
             LastRunTime     = $info.LastRunTime
             NextRunTime     = $info.NextRunTime
             LastTaskResult  = $info.LastTaskResult
             MissedRunsCount = $info.NumberOfMissedRuns
+            Arguments       = [string](@($task.Actions)[0].Arguments)
         }
         """;
 
@@ -207,15 +211,33 @@ public sealed class MaintenanceSchedulerService
         """;
 
     /// <summary>Plain-language description of the last task result code. Pure/testable.</summary>
+    /// <remarks>
+    /// The task's result is the exit code of the SysManager it started, so the CLI's own codes are described too.
+    /// They read "Last run returned 0x00000001", and that 1 was every scheduled standby purge failing for want of
+    /// administrator rights (#2593).
+    /// </remarks>
     public static string DescribeResultCode(int? code) => code switch
     {
         null => "Not run yet",
         0 => "Last run succeeded",
+        CliResult.Error => "Last run failed",
+        CliResult.UsageError => "Last run failed (command not recognised)",
         267009 => "Currently running",
         267011 => "Not run yet",
         unchecked((int)0x80070002) => "Last run failed (file not found)",
         _ => $"Last run returned 0x{unchecked((uint)code.Value):X8}",
     };
+
+    /// <summary>
+    /// Whether a task's command line purges standby memory, read the way the CLI reads it when the task runs.
+    /// </summary>
+    /// <remarks>
+    /// Parsed by <see cref="CliRunner.Parse"/> rather than matched as text, so the old <c>--trim-ram</c> name counts,
+    /// and the answer is whatever the scheduled run will actually do (#2593).
+    /// </remarks>
+    internal static bool IsStandbyPurge(string? arguments) =>
+        !string.IsNullOrWhiteSpace(arguments)
+        && CliRunner.Parse(arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Command == CliCommand.PurgeStandby;
 
     private static string DescribeResult(PSObject row)
     {

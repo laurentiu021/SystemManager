@@ -381,9 +381,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // REMOVES software; this only silences it.
             Tab<NotificationBlockerViewModel>("nav-notification-blocker", "Notification Blocker", typeof(Views.NotificationBlockerView), inDevelopment: true, keywords: "popups, notifications, nagging, alerts, stop bothering me")),
 
-        Group("grp-info", "Info", "\uE946", "Drivers, battery, logs and reports",  // Info
+        Group("grp-info", "Info", "\uE946", "What changed, drivers, battery, logs and reports",  // Info
             Tab<DriversViewModel>("nav-drivers",       "Drivers",        typeof(Views.DriversView), keywords: "drivers, hardware, devices"),
             Tab<BatteryHealthViewModel>("nav-battery", "Battery Health", typeof(Views.BatteryHealthView), keywords: "battery, laptop battery, wear, charge"),
+            // Beside System Logs and before it: what changed, then what went wrong, the two halves of "it was fine
+            // last week" (#1507).
+            Tab<RecentChangesViewModel>("nav-recent-changes", "Recent Changes", typeof(Views.RecentChangesView), keywords: "what changed, recent changes, history, it was fine last week, updates installed, new programs, what happened"),
             Tab<LogsViewModel>("nav-logs",             "System Logs",    typeof(Views.LogsView), keywords: "event log, errors, crashes, what went wrong"),
             Tab<SystemReportViewModel>("nav-system-report", "System Report", typeof(Views.SystemReportView), keywords: "report, send to support, system info, specs"),
             Tab<LegacyPanelsViewModel>("nav-legacy-panels", "Legacy Panels", typeof(Views.LegacyPanelsView), keywords: "control panel, old settings, applets"),
@@ -615,6 +618,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             case ProfileViewModel pr: pr.IsActive = active; break;
             case PrivacyViewModel pv: pv.IsActive = active; break;
             case UndoChangesViewModel uc: uc.IsActive = active; break;
+            case RecentChangesViewModel rc: rc.IsActive = active; break;
         }
     }
 
@@ -751,8 +755,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var serviceLedger = new ServiceStartupLedgerService();
         var hosts = new HostsFileService();
         var environment = new EnvironmentVariableService();
-        var watchdog = new SettingsWatchdogService();
+        // A look at Settings Watchdog or Recent Changes records what it saw, and a look this graph makes is the
+        // designer's or a test's, not the user's: kept in the user's folder, it would date the user's next "between
+        // your look on ... and ..." from a look nobody took. So what those looks record stays out of it (#1507).
+        var lookRecords = System.IO.Path.Join(System.IO.Path.GetTempPath(), "SysManager-designer");
+        var watchdog = new SettingsWatchdogService(lookRecords);
         var putBack = new PutBackSignal();
+        // One record of App Alerts' detections, as under DI: Recent Changes reads what App Alerts writes (#1507).
+        var appAlertHistory = new AppAlertHistory(lookRecords);
 
         return new Dictionary<Type, object>
         {
@@ -779,7 +789,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(LogsViewModel)] = new LogsViewModel(new EventLogService()),
             [typeof(AboutViewModel)] = new AboutViewModel(),
             [typeof(ServicesViewModel)] = new ServicesViewModel(runner, serviceLedger, putBack),
-            [typeof(AppAlertsViewModel)] = new AppAlertsViewModel(new AppAlertService()),
+            [typeof(AppAlertsViewModel)] = new AppAlertsViewModel(new AppAlertService(), appAlertHistory),
             [typeof(ShortcutCleanerViewModel)] = new ShortcutCleanerViewModel(shortcuts),
             [typeof(AppBlockerViewModel)] = new AppBlockerViewModel(new AppBlockerService()),
             [typeof(BulkInstallerViewModel)] = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()), new AppIconService()),
@@ -820,6 +830,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(UndoChangesViewModel)] = new UndoChangesViewModel(
                 new UndoChangesService(performance, serviceLedger, new PowerShellRunner(), hosts, environment,
                     gamingProfiles, watchdog, restorePoints, putBack),
+                designerNavigation),
+            [typeof(RecentChangesViewModel)] = new RecentChangesViewModel(
+                new RecentChangesService(new WmiReliabilityHistory(), new InstalledProgramsHistory(lookRecords, UninstallEntries.ReadAll),
+                    appAlertHistory, watchdog),
                 designerNavigation),
         };
     }

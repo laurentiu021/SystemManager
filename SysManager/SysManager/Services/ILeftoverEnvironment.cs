@@ -4,7 +4,6 @@
 
 using System.IO;
 using Microsoft.Win32;
-using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
 
@@ -72,14 +71,6 @@ public interface ILeftoverEnvironment
 /// <summary>The real machine's folders and registry.</summary>
 public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
 {
-    /// <summary>The uninstall entries, as <see cref="UninstallerService"/> reads them: both machine views, then the user's.</summary>
-    private static readonly (RegistryKey Hive, string Path)[] UninstallKeys =
-    [
-        (Registry.LocalMachine, UninstallerService.UninstallKey),
-        (Registry.LocalMachine, UninstallerService.UninstallKeyWow64),
-        (Registry.CurrentUser, UninstallerService.UninstallKey),
-    ];
-
     public string RoamingAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 
     public string LocalAppData { get; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -129,42 +120,13 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
         catch (IOException) { return false; }
     }
 
-    public IReadOnlyList<UninstallProbe> RegisteredApps()
-    {
-        var apps = new List<UninstallProbe>();
-        foreach (var (hive, path) in UninstallKeys)
-        {
-            try
-            {
-                using var key = hive.OpenSubKey(path);
-                if (key is null) continue;
-                foreach (var name in key.GetSubKeyNames())
-                {
-                    try
-                    {
-                        using var entry = key.OpenSubKey(name);
-                        if (entry is null) continue;
-                        apps.Add(new UninstallProbe(
-                            Text(entry, "DisplayName"), Text(entry, "Publisher"), "",
-                            Text(entry, "InstallLocation"), Text(entry, "UninstallString")));
-                    }
-                    catch (System.Security.SecurityException) { /* one protected entry: the rest still count */ }
-                    catch (UnauthorizedAccessException) { /* ditto */ }
-                    catch (IOException) { /* deleted while being read */ }
-                }
-            }
-            catch (System.Security.SecurityException ex) { Log.Debug("Leftovers: {Path} unreadable: {Error}", path, ex.Message); }
-            catch (UnauthorizedAccessException ex) { Log.Debug("Leftovers: {Path} denied: {Error}", path, ex.Message); }
-            catch (IOException ex) { Log.Debug("Leftovers: {Path} failed: {Error}", path, ex.Message); }
-        }
-        return apps;
-    }
+    /// <summary>Every entry <see cref="UninstallEntries"/> reads, hidden components and updates included.</summary>
+    public IReadOnlyList<UninstallProbe> RegisteredApps() =>
+        [.. UninstallEntries.ReadAll().Entries.Select(e => new UninstallProbe(e.Name, e.Publisher, "", e.InstallLocation, e.UninstallCommand))];
 
     public DriveType DriveTypeOf(string root)
     {
         try { return new DriveInfo(root).DriveType; }
         catch (ArgumentException) { return DriveType.Unknown; }
     }
-
-    private static string Text(RegistryKey key, string name) => (key.GetValue(name) as string)?.Trim() ?? "";
 }

@@ -260,6 +260,37 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The shell's no-container graph keeps what its looks record out of the user's folder (#1507).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Tests_NeverLeaveAConfigDirAtTheRealProfile"/> reads the tests, and this graph is app code the tests
+    /// build: <c>new MainWindowViewModel()</c> constructs every tab's view model at once, ten times over in the
+    /// integration suite. Most of them only read when they are built, which is why the graph otherwise builds its
+    /// stores over the real profile, as production does. Opening Settings Watchdog or Recent Changes is a look, and a
+    /// look writes: when each changed setting was first seen, and the list of installed programs. Over the real
+    /// profile, every build of the graph made a look in the records of whoever ran the suite, and dated their next
+    /// "between your look on ... and ..." from a look nobody took.
+    /// </remarks>
+    [Fact]
+    public void TheDesignerGraph_KeepsWhatItsLooksRecordOutOfTheUsersFolder()
+    {
+        var shell = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
+        var at = shell.IndexOf("private Dictionary<Type, object> BuildDesignerGraph()", StringComparison.Ordinal);
+        Assert.True(at > 0, "BuildDesignerGraph was not found in MainWindowViewModel.cs, so nothing below is checked.");
+        var graph = WithStringsBlanked(WithoutComments(shell[at..]));
+
+        foreach (var store in new[] { nameof(SettingsWatchdogService), nameof(InstalledProgramsHistory), nameof(AppAlertHistory) })
+        {
+            var built = Regex.Matches(graph, $@"\bnew\s+{store}\s*\((?<args>[^()]*)\)")
+                .Select(m => m.Groups["args"].Value.Trim())
+                .ToList();
+            Assert.True(built.Count > 0, $"BuildDesignerGraph builds no {store}, so this checks nothing for it.");
+            Assert.All(built, args => Assert.True(args.StartsWith("lookRecords", StringComparison.Ordinal),
+                $"BuildDesignerGraph builds {store}({args}) over the real profile. Give it lookRecords as its folder."));
+        }
+    }
+
+    /// <summary>
     /// Every type in the app with a constructor that takes a <c>configDir</c>, keyed by name, and all of its
     /// constructors: how many arguments each requires and takes, where <c>configDir</c> sits (-1 when it has none),
     /// and whether it takes a string at all.
@@ -16680,7 +16711,10 @@ public partial class ArchitectureTests
         var after = architecture[at..];
         var breakAt = ParagraphBreak().Match(after);
         var paragraph = Collapse(breakAt.Success ? after[..breakAt.Index] : after);
-        Assert.True(paragraph.Length is > 300 and < 1500,
+        // The ceiling only has to tell the paragraph from a slice that ran past its break into the rest of the
+        // document, which is a hundred times longer. It is not a length the paragraph should keep to: each seam
+        // adds a name to the list, and the four of #1507 took it past the 1,500 this used to be.
+        Assert.True(paragraph.Length is > 300 and < 3000,
             $"the seam paragraph sliced to {paragraph.Length} chars — that is not the paragraph.");
 
         var offenders = new List<string>();

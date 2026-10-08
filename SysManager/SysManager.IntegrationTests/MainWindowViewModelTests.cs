@@ -12,7 +12,7 @@ namespace SysManager.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// <see cref="MainWindowViewModel"/>'s parameterless constructor is the designer/test path, so it calls
-/// <c>BuildDesignerGraph()</c> and builds all 59 tab view models eagerly — including the ones that launch
+/// <c>BuildDesignerGraph()</c> and builds all 60 tab view models eagerly — including the ones that launch
 /// real <c>winget</c> and <c>powershell</c> child processes. Those children outlive the test, and the cost
 /// is superlinear in the number of constructions rather than in the number of assertions: this class ran
 /// 1 construction in 0.9&#160;s, 41 in 9.7&#160;s and 43 in 27.3&#160;s.
@@ -150,7 +150,7 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
     public void NavItems_ContainEveryTab()
     {
         var vm = _nav;
-        Assert.Equal(59, vm.NavItems.Count);
+        Assert.Equal(60, vm.NavItems.Count);
         var ids = vm.NavItems.Select(n => n.Id).ToList();
 
         // Dashboard
@@ -223,9 +223,10 @@ public class MainWindowViewModelTests(NavSurfaceFixture fixture) : IClassFixture
         Assert.Contains("nav-volume-control", ids);
         Assert.Contains("nav-notification-blocker", ids);
 
-        // Info (6)
+        // Info (7)
         Assert.Contains("nav-drivers", ids);
         Assert.Contains("nav-battery", ids);
+        Assert.Contains("nav-recent-changes", ids);
         Assert.Contains("nav-logs", ids);
         Assert.Contains("nav-system-report", ids);
         Assert.Contains("nav-legacy-panels", ids);

@@ -51,7 +51,7 @@ The sidebar organises tabs into 12 groups (11 collapsible + a flat top-level Das
 `Tab<TVm>()`, which defers resolving the view-model until the tab is first opened, and `EagerItem()`
 for the few entries whose view-model must exist at startup. Dashboard renders as a flat top-level entry.
 Each group carries an icon, passed to `Group()` as a Segoe Fluent Icons code point and asserted distinct;
-leaves carry none, so the icon column belongs to the twelve headings rather than the fifty-nine pages.
+leaves carry none, so the icon column belongs to the twelve headings rather than the sixty pages.
 Collapsed groups show a child count badge, a written two-line subtitle passed to `Group()` and asserted to
 fit that budget, and a tooltip still generated from the child labels. Exactly one group starts expanded —
 `InitiallyExpandedGroupId` (`grp-cleanup`) — set in the same loop that adds the groups; `#1519`'s arithmetic
@@ -181,7 +181,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 | Apps | `AppUpdatesViewModel` · `BulkInstallerViewModel` · `AppAlertsViewModel` · `UninstallerViewModel` |
 | Privacy & Security | `PrivacyViewModel` · `FileShredderViewModel` · `AppBlockerViewModel` · `DebloaterViewModel` · `BrowserCleanerViewModel` · `EdgeOneDriveViewModel` · `DefenderViewModel` |
 | Customization | `ContextMenuViewModel` · `DarkModeViewModel` · `AudioMixerViewModel` · `NotificationBlockerViewModel` |
-| Info | `DriversViewModel` · `BatteryHealthViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
+| Info | `DriversViewModel` · `BatteryHealthViewModel` · `RecentChangesViewModel` · `LogsViewModel` · `SystemReportViewModel` · `LegacyPanelsViewModel` · `AboutViewModel` |
 | Advanced | `ProfileViewModel` · `CliInterfaceViewModel` · `EnvironmentVariablesViewModel` |
 
 - `DashboardViewModel` — real-time system vitals (CPU/RAM/GPU at 300ms polling),
@@ -253,7 +253,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
-- `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
+- `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
+  in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
+  Recent Changes lists them; Clear History clears that record too (#1507).
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
@@ -288,6 +290,13 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   their own undo (`UndoSwitch`) and, looked for only when shown and outside Busy, the newest restore point —
   asked for only as an administrator, one question at a time, called off when the tab is disposed. No "undo
   everything".
+- `RecentChangesViewModel` — the Recent Changes tab (#1507): one `IRecentChangesService.LookAsync` over
+  `RecentChangesService.LongestPeriodDays`, which the period and kind chips then filter without looking again.
+  `BuildDays` lays the changes out by day, newest first, folding two or more installed updates on one day into one
+  `ChangeRow` that opens to their list; `Summarize`, `DescribeProblems`, `Describe` and `DescribeEmpty` are the
+  wording, pure. Looks again whenever it is shown (`IsActive`, set by `MainWindowViewModel.SetActive`), since each
+  look is what keeps the list of installed programs, and once more when a look was asked for while one ran. A row's
+  button opens the tab that can act on it through `INavigationService`. Read-only.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair.
@@ -324,7 +333,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-six are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
@@ -338,6 +347,8 @@ Dashboard's quick test; it forwards to the concrete singleton the network tabs t
 (NavigationService), `IPrivacyService` (PrivacyService, read by Privacy & Telemetry and the
 profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IUndoChangesService` (UndoChangesService, the Undo
 Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Changes put its change back),
+`IRecentChangesService` (RecentChangesService, the Recent Changes tab, over `IReliabilityHistory`,
+`IInstalledProgramsHistory` and `IAppAlertHistory`, which New App Alerts writes),
 `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
 `ISpeedTestService`, forwards to the concrete singleton.
 
@@ -779,6 +790,29 @@ Key services:
   the state Enable undoes.
 - `AppAlertService` — monitors for new application installations via
   FileSystemWatcher and registry polling.
+- `AppAlertHistory` (`IAppAlertHistory`) — New App Alerts' detections, newest first, the last 200, in
+  `app-alerts.json` (#1507). Reads before it writes under one lock, sets a file that does not parse aside, and
+  writes nothing over one it could not read.
+- `RecentChangesService` (`IRecentChangesService`) — one look for the Recent Changes tab (#1507): SysManager's
+  activity log, Windows' reliability history, the installed programs kept from the last look, New App Alerts'
+  detections and Settings Watchdog's sightings, put in one list by `Combine`, each program once by the best record
+  of it — Windows Installer's, then a detection within ten minutes of it, then a difference between two looks
+  whose window, widened by the same ten minutes, holds neither. Windows' history is asked first and the local
+  sources are read while it answers. A source that could not be read is named in `RecentChangesLook.Unreadable`,
+  never read as empty, and when the activity log is full `ActivityKeptFrom` says how far back it reaches. `KeptFor`
+  is how long the records it reads keep a change: past the 90-day longest period. Changes nothing on the PC.
+- `WmiReliabilityHistory` (`IReliabilityHistory`) — `Win32_ReliabilityRecords` since a time, filtered by WMI,
+  which needs no administrator rights, with a 30-second timeout. `ReliabilityChanges.Parse` turns the records into
+  changes and problem counts without touching the PC: Windows Update installs and failures (a Store app by its
+  twelve-character id, Defender definitions, a driver as "Vendor - Device - Version"), Windows Installer installs
+  and removals whose status is 0, and crashes and hangs as problems. A change recorded twice is listed once.
+- `InstalledProgramsHistory` (`IInstalledProgramsHistory`) — the list of installed programs, kept in
+  `installed-programs.json` from one look to the next, and the differences: appeared, gone, or a new version of
+  the same program from the same publisher, each with the window between the two looks. Compares and writes
+  nothing when Windows' list could not be read whole (`UninstallList.Complete`): every program missing from a
+  partial list would read as removed, and as installed again at the next look.
+- `UninstallEntries` — the one reader of every uninstall entry, both machine views and then the user's, shared by
+  the leftover search and Recent Changes. `UninstallEntry.IsListed` is what Windows' own list shows.
 - `AppBlockerService` — blocks/unblocks app execution via Image File
   Execution Options (IFEO) debugger redirect. Injectable registry root for tests.
   One predicate decides both which targets are refused and which existing blocks
@@ -1341,18 +1375,18 @@ Key services:
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
   only the NVIDIA GPU and the disks' SMART temperatures. It does not poll: the Dashboard asks
   every 2 s while it is visible, and the Resource History sampler every 10 s.
-- `ActivityLogService` — persists the last 60 user actions to a JSON file for the
-  Dashboard's recent-activity card: 22 kinds of action, from 29 call sites. The six destructive
-  operations (deep cleanup, browser clean, privacy write, uninstall, shred, shortcut delete) are
-  recorded as counts and sizes only, never file names; the others say what changed, and Undo Changes
-  records each put-back that changed something (#1525). Takes a `configDir` seam so tests never
-  write to the user's real history. The file is shared with command-line and scheduled
-  runs, which are separate processes, so `GetRecent` reads it rather than a list held since
-  startup, and `Log` reads, adds and writes as one step under an exclusive handle on
-  `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects.
-  Without that, the open app's next write erased a scheduled run's entry. A file that could not
-  be read is never written over: the entry waits in `_unsaved`, is listed by `GetRecent`, and is
-  written by the next `Log` that can read the file. One that does not parse is set aside first.
+- `ActivityLogService` — persists the last 200 user actions (60 before Recent Changes read them over as
+  long as 90 days, #1507) to a JSON file for the Dashboard's recent-activity card and Recent Changes: 22
+  kinds of action, from 29 call sites. The six destructive operations (deep cleanup, browser clean,
+  privacy write, uninstall, shred, shortcut delete) are recorded as counts and sizes only, never file
+  names; the others say what changed, and Undo Changes records each put-back that changed something
+  (#1525). Takes a `configDir` seam so tests never write to the user's real history. The file is shared
+  with command-line and scheduled runs, which are separate processes, so `GetRecent` reads it rather than
+  a list held since startup, and `Log` reads, adds and writes as one step under an exclusive handle on
+  `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects. Without that,
+  the open app's next write erased a scheduled run's entry. A file that could not be read is never written
+  over: the entry waits in `_unsaved`, is listed by `GetRecent`, and is written by the next `Log` that can
+  read the file. One that does not parse is set aside first.
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
@@ -1397,7 +1431,13 @@ Key services:
   two reads let a setting move in between and appear settled while it had changed. A baseline
   file that is there and did not load is not "no baseline": `BaselineFileExists` tells the two
   apart, the VM asks before replacing it, and `SaveBaseline` sets it aside under `_saveLock`
-  first, throwing `IOException` rather than replacing it when it cannot.
+  first, throwing `IOException` rather than replacing it when it cannot. `RecordDrift` keeps when each
+  drift was first seen and when it went, in `settings-drift.json` beside the baseline, for Recent
+  Changes (#1507) — under the same lock, because `SaveBaseline` forgets those sightings, measured against
+  the baseline it replaces. A sighting that ended because the setting changed to another value is marked
+  `ChangedAgain`, so Recent Changes does not say it went back. One that ended longer ago than
+  `RecentChangesService.KeptFor` is dropped, and past `MaxSightings` the earliest to end go; one still open
+  is kept, so the same drift is not reported again as new.
 - `CliRunner` — the headless command-line entry point (dispatched from `App.OnStartup`
   before the single-instance mutex, attaching to the parent console). Exposes only
   read-only/safe verbs (`--health`, `--cleanup`, `--purge-standby` — with `--trim-ram`
@@ -1560,8 +1600,8 @@ take. Some app-wide services are not in the container at all and are reached thr
 
 `MainWindowViewModel` resolves child VMs from the container **lazily**: each tab's
 `NavItem` holds a `ContentFactory` and builds its view-model from DI only when the tab
-is first opened (`NavItem.Content`). Of the 59 tabs, 56 are registered this way and one of
-those, Standby, is still built at startup, as below; that avoids constructing the other 55 tab
+is first opened (`NavItem.Content`). Of the 60 tabs, 57 are registered this way and one of
+those, Standby, is still built at startup, as below; that avoids constructing the other 56 tab
 VMs at startup — most kick off a background scan/timer in their constructor, so eager
 construction ran that work up front for tabs the user might never open.
 

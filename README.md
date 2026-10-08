@@ -1,6 +1,6 @@
 # SysManager for Windows
 
-One portable app for keeping a Windows PC healthy — 59 tabs of network diagnostics, cleanup, privacy
+One portable app for keeping a Windows PC healthy — 60 tabs of network diagnostics, cleanup, privacy
 controls, app updates and hardware health, with no telemetry and no account.
 
 <p align="center">
@@ -32,7 +32,7 @@ winget install laurentiu021.SysManager
 
 - [What it is](#what-it-is)
 - [Why SysManager?](#why-sysmanager)
-- [Features](#features) — all 59 tabs, grouped
+- [Features](#features) — all 60 tabs, grouped
 - [Screenshots](#screenshots)
 - [Install](#install)
   - [Why portable, and why there is no installer](#why-portable-and-why-there-is-no-installer)
@@ -90,9 +90,10 @@ Built with gamers in mind — live ping overlays for CS2, FACEIT, PUBG and strea
 endpoints, Steam/Epic/Battle.net/Riot/GOG/EA launcher cache cleanup, and
 an honest "is it my PC, my ISP, or the server?" verdict.
 
-Beyond those, the rest of the 59 tabs cover performance tuning, putting SysManager's own changes back one at
-a time, DNS and hosts editing, duplicate files, battery health, processes with plain-English descriptions,
-startup entries, shortcut cleanup, app blocking, new-install alerts and Windows optional features.
+Beyond those, the rest of the 60 tabs cover performance tuning, putting SysManager's own changes back one at
+a time, what changed on the PC lately and who changed it, DNS and hosts editing, duplicate files, battery
+health, processes with plain-English descriptions, startup entries, shortcut cleanup, app blocking,
+new-install alerts and Windows optional features.
 [The full list is below](#features), grouped as the sidebar groups them.
 
 ## Why SysManager?
@@ -135,12 +136,12 @@ Sponsorship goes toward that certificate — see [Support](#support).</sub>
 ## Features
 
 ### Sidebar navigation
-The sidebar organises 59 feature tabs into 12 groups — 11 collapsible groups
+The sidebar organises 60 feature tabs into 12 groups — 11 collapsible groups
 plus a flat top-level Dashboard entry — so you can find what you need without
 scrolling through a flat list. The active tab stays marked with an accent bar,
 selected background, and stronger label while you move between groups. Every tab
 row and every group header is also keyboard-operable with a visible focus cue. All
-59 tabs are fully implemented:
+60 tabs are fully implemented:
 
 | Group | Tabs |
 |-------|------|
@@ -154,7 +155,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 | 📦 Apps | App Updates · Bulk Installer · New App Alerts · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Preinstalled Apps · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks |
 | 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control · Notification Blocker 🔬 |
-| ℹ️ Info | Drivers · Battery Health · System Logs · System Report · Legacy Panels · About |
+| ℹ️ Info | Drivers · Battery Health · Recent Changes · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export / Import · CLI Interface 🔬 · Environment Variables |
 
 > 🔬 = Preview — fully implemented and usable, marked in-app while it settles in.
@@ -162,7 +163,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 **Search finds any tab in your own words.** The box at the top of the sidebar matches what you would
 actually type, not just the tab's name: "slow startup" finds Boot Analyzer, "popups" finds Notification
 Blocker, "webcam" finds Camera/Mic/Location, "cannot delete" finds File Lock Detector, "free up space"
-finds Deep Cleanup. 55 of the 59 tabs carry keywords for this; typing clears the groups and shows a flat
+finds Deep Cleanup. 56 of the 60 tabs carry keywords for this; typing clears the groups and shows a flat
 list of matches with a count, and clearing the box brings the groups back.
 
 Groups expand and collapse with a click. **Cleanup opens with the app** — every group
@@ -227,7 +228,7 @@ that keep their Cancel button on screen all the time are not reached by Escape y
 Cleanup, App Updates, Windows Update, System Health, Drivers, System Logs, Traceroute and the Dashboard's
 Quick Tune-Up.
 
-**`F5` re-reads the tab you are on**, across all 41 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 42 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
@@ -278,7 +279,7 @@ cannot be pressed yet. An explanation on every button in the app would make it s
 clearer.
 
 Every tab also reads out what it is doing as it works. The line at the bottom of each tab — "Scanning…",
-"Removed 1,204 files", "Scan complete." — is announced on all 53 tabs that have one, as are the SFC and DISM
+"Removed 1,204 files", "Scan complete." — is announced on all 54 tabs that have one, as are the SFC and DISM
 results when a system repair finishes and Deep Cleanup's scan and clean summaries. Announcements are polite,
 so they wait their turn rather than cutting across whatever you are reading. The one exception is the pop-up
 notification in the corner, which is announced at once because it fades on its own.
@@ -397,6 +398,44 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
   to this tab, alongside "What's using my PC" (Process Manager) and "Free up space" (Quick
   Cleanup)
+
+### Recent Changes
+- **"It was fine last week — what changed?" answered in one list.** What SysManager did, what Windows
+  installed or could not install, the programs installed, updated or removed, and the settings you saved in
+  Settings Watchdog that have changed since, newest first and one day at a time. Each row says when, what,
+  and who: you in SysManager, Windows Update, the Microsoft Store, an installer, or Windows or another program
+- **Windows' own record, including what happened while SysManager was closed.** Windows updates, Microsoft
+  Store app updates, Defender definitions and drivers that were installed or could not be, and programs
+  installed or removed with Windows Installer, come from the history behind Windows' Reliability Monitor,
+  which needs no administrator rights. A change Windows recorded twice is listed once
+- **Programs Windows keeps no record of.** Each time the tab is shown it keeps the list of installed
+  programs, so a program that appears, goes away or changes version between two looks is listed with the
+  time between them — "some time between your look on Fri 2 Oct and 15:20" — which is all that can be
+  known. The first look only starts the list, and the page says so. A new version of a program, from the
+  same publisher, is one update rather than one program removed and another installed
+- **What New App Alerts noticed**, at the time it noticed. A program that Windows Installer and New App
+  Alerts both saw within ten minutes is listed once, from Windows' record
+- **Settings that changed from the ones you saved**, from when Settings Watchdog first noticed: each look at
+  either tab records it, and when the setting went back or changed again. When a setting changed is not
+  known, only when it was noticed, so its row shows a dash where the time goes and says when it was noticed
+  underneath
+- **A night of updates does not bury the rest**: two or more updates Windows installed on one day are one
+  row — "Windows installed 9 updates", and what they were by kind — that opens to the full list
+- **Filter by kind** — SysManager, Windows, Programs, Settings — and **by period**: 7, 30 or 90 days. The
+  activity log keeps 200 entries instead of 60, and when even that does not reach back to the start of the
+  period, the page says from when SysManager's own actions are listed
+- **Problems are not changes.** Crashes and programs that stopped responding in the same days are counted
+  in one line, which opens System Logs
+- **A source that could not be read is named** rather than shown as nothing changed, and an empty period
+  says what was checked: "Nothing was installed or updated, SysManager changed nothing, and your saved
+  settings still match"
+- Rows lead to the tab that can do something about them — **Open Uninstaller** for a program, **Open App
+  Alerts** for one New App Alerts noticed, **Review** for a changed setting — and the Dashboard's Recent
+  activity card leads here with **See all changes**
+- **Export CSV** saves what is shown to a file you choose. Nothing on this tab changes anything on the PC,
+  and nothing leaves it: the list of programs and when each setting was noticed are kept in your
+  `%LocalAppData%\SysManager` folder
+- The page looks again each time it is shown, and on Refresh or **F5**
 
 ### System Logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
@@ -1052,6 +1091,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   reports it as not written
 - **Undo Changes links here** — the settings that drifted from your baseline, and that
   Restore changed can write back, are one row there that opens this tab
+- **Recent Changes says when** — each look records when a changed setting was first seen and when it
+  went back to your baseline or changed again, so Recent Changes can list it among everything else that
+  changed. Saving a new baseline starts that record again
 - Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and
   the watchdog only ever reads or writes a fixed list of well-known registry values
 
@@ -1343,8 +1385,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Start/stop monitoring, **Acknowledge All**, clear history. While it is monitoring, **F5**
   checks for new installs straight away instead of waiting for the next 30-second pass. To
   see every program that is installed, use the Uninstaller
-- **The list lasts while SysManager runs** — it is not saved to disk, so export it before
-  closing SysManager. Clear History asks first, since it cannot be undone
+- **The list is kept between sessions** — the last 200 detections, with the time each was noticed,
+  in your `%LocalAppData%\SysManager` folder — and Recent Changes lists them too. Clear History clears
+  both, and asks first, since it cannot be undone
 - Notifies you when a new install is detected, so you find out even when you are
   on another tab or the window is in the notification area
 
@@ -1799,7 +1842,8 @@ offers, "rate us" prompts:
   ago: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
   restore points, shredded files, game mode, and what Undo Changes put back. Not every tab writes
   here yet — Performance Mode, Services, Startup Manager, Windows Features and the App Updates tab,
-  among others, do not. The history keeps the last 60. Each entry holds counts, sizes and the
+  among others, do not. The history keeps the last 200, and **See all changes** opens Recent Changes,
+  which lists them beside what Windows and other programs changed. Each entry holds counts, sizes and the
   choice you made, such as a DNS preset or a restore point's name — never file names, since the
   log is plain text on your own disk. Opening a tab isn't an action, so it isn't listed, and neither is a speed
   test, which goes into the Speed Test history instead. It does note when SysManager closed

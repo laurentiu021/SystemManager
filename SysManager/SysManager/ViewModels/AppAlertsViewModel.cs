@@ -21,12 +21,18 @@ namespace SysManager.ViewModels;
 /// App Alerts tab — monitors for new application installations and shows
 /// a timestamped history of detected installs.
 /// </summary>
+/// <remarks>
+/// The history is kept in <see cref="IAppAlertHistory"/>, so it outlives the session and Recent Changes can say when a
+/// program appeared (#1507). It is read and written where the list on screen changes, on the UI thread, as the activity
+/// log is: a file of at most 200 short entries, written on a detection or a click, and in the order the list changed.
+/// </remarks>
 public sealed partial class AppAlertsViewModel : ViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanForNewAppsCommand;
 
     private readonly AppAlertService _service;
+    private readonly IAppAlertHistory _history;
     private readonly Dispatcher _dispatcher;
 
     public BulkObservableCollection<AppInstallEntry> Alerts { get; } = new();
@@ -38,11 +44,32 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
     [ObservableProperty] private int _alertCount;
     [ObservableProperty] private int _unacknowledgedCount;
 
-    public AppAlertsViewModel(AppAlertService service)
+    public AppAlertsViewModel(AppAlertService service, IAppAlertHistory history)
     {
         _service = service;
+        _history = history ?? throw new ArgumentNullException(nameof(history));
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _service.NewAppDetected += OnNewAppDetected;
+        InitializeAsync(() => { LoadHistory(); return Task.CompletedTask; });
+    }
+
+    /// <summary>Lists what earlier sessions noticed.</summary>
+    private void LoadHistory()
+    {
+        var saved = _history.Load();
+        if (!saved.Readable)
+        {
+            MonitorStatus = "The installations noticed earlier could not be read. New ones still show up here while SysManager is open.";
+            return;
+        }
+        if (saved.Alerts.Count == 0) return;
+
+        Alerts.ReplaceWith(saved.Alerts);
+        AlertCount = Alerts.Count;
+        UnacknowledgedCount = Alerts.Count(a => !a.IsAcknowledged);
+        MonitorStatus = saved.Alerts.Count == 1
+            ? "1 installation noticed earlier is listed below. Click Start to watch for new ones."
+            : $"{saved.Alerts.Count} installations noticed earlier are listed below. Click Start to watch for new ones.";
     }
 
     [RelayCommand]
@@ -88,26 +115,29 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         foreach (var a in Alerts)
             a.IsAcknowledged = true;
         UnacknowledgedCount = 0;
+        _history.AcknowledgeAll();
     }
 
     [RelayCommand]
     private void ClearHistory()
     {
-        // The alert list is never written to disk, so this collection IS the only record of
-        // what installed itself. Confirm before discarding it — but stay frictionless when
-        // there is nothing to lose, otherwise the prompt is pure noise.
+        // This list is the only record of what installed itself, and Recent Changes reads it too. Confirm before
+        // discarding it — but stay frictionless when there is nothing to lose, otherwise the prompt is pure noise.
         if (AlertCount > 0 && !DialogService.Instance.Confirm(
                 $"Clear all {AlertCount} recorded alert{(AlertCount == 1 ? "" : "s")}?\n\n" +
-                "The history is not saved to disk, so this cannot be undone.",
+                "They are also taken off Recent Changes, and this cannot be undone.",
                 "Clear History — Confirm"))
             return;
 
+        var cleared = _history.Clear();
         Alerts.Clear();
         AlertCount = 0;
         UnacknowledgedCount = 0;
-        MonitorStatus = IsMonitoring
-            ? "Monitoring active — history cleared."
-            : "History cleared.";
+        MonitorStatus = !cleared
+            ? "Cleared from this list, but the saved copy could not be removed, so it is back the next time SysManager starts."
+            : IsMonitoring
+                ? "Monitoring active — history cleared."
+                : "History cleared.";
     }
 
     /// <summary>
@@ -131,21 +161,22 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
             MonitorStatus = "Checked just now — no new installations. Monitoring active.";
     }
 
-    private void OnNewAppDetected(AppInstallEntry entry)
-    {
-        _dispatcher.BeginInvoke(() =>
-        {
-            Alerts.Insert(0, entry);
-            AlertCount = Alerts.Count;
-            UnacknowledgedCount = Alerts.Count(a => !a.IsAcknowledged);
-            MonitorStatus = $"New app detected: {entry.Name}";
+    private void OnNewAppDetected(AppInstallEntry entry) => _dispatcher.BeginInvoke(() => Record(entry));
 
-            // Surface it outside this tab. The whole point of monitoring is to learn about an
-            // install you did not start, and the user is almost never sitting on this tab when
-            // that happens — the list entry and the status line were only visible to someone
-            // already looking at them, so a detection went unnoticed.
-            ToastService.Instance.Show("New app installed", entry.Name);
-        });
+    /// <summary>Lists one detection, keeps it, and says so outside this tab. Runs on the UI thread.</summary>
+    internal void Record(AppInstallEntry entry)
+    {
+        _history.Add(entry);
+        Alerts.Insert(0, entry);
+        AlertCount = Alerts.Count;
+        UnacknowledgedCount = Alerts.Count(a => !a.IsAcknowledged);
+        MonitorStatus = $"New app detected: {entry.Name}";
+
+        // Surface it outside this tab. The whole point of monitoring is to learn about an
+        // install you did not start, and the user is almost never sitting on this tab when
+        // that happens — the list entry and the status line were only visible to someone
+        // already looking at them, so a detection went unnoticed.
+        ToastService.Instance.Show("New app installed", entry.Name);
     }
 
     /// <summary>Whether there are alerts worth exporting.</summary>

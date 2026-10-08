@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.124.x  | :white_check_mark: |
-| < 1.124  | :x:                |
+| 1.125.x  | :white_check_mark: |
+| < 1.125  | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a
@@ -284,6 +284,9 @@ see the last two rows.
 | Speed-test history | `%LocalAppData%\SysManager` | So you can compare results over time |
 | Recent-activity list | `%LocalAppData%\SysManager` | One line per action you performed — counts and sizes, and names you gave things such as a volume preset or a restore point — never file names |
 | Settings-watchdog baseline | `%LocalAppData%\SysManager` | A snapshot of the Windows settings you chose, to detect later drift |
+| When a changed setting was noticed | `%LocalAppData%\SysManager` | Beside the baseline: when each watched setting that differs from it was first seen, and when it went back, so Recent Changes can say when it changed. Forgotten when you save a new baseline |
+| The list of installed programs | `%LocalAppData%\SysManager` | The name and publisher of each program installed at your last look at Recent Changes, and what changed between looks, kept 120 days, so the next look can tell what is new |
+| New App Alerts' detections | `%LocalAppData%\SysManager` | The name, publisher, folder and time of each install New App Alerts noticed, the last 200, until you clear its history |
 | Resource history | `%LocalAppData%\SysManager` | CPU / RAM / temperature samples, for the history graphs |
 | Diagnostic log | `%LocalAppData%\SysManager\logs` | Up to 14 rolling files — a new one each day, or sooner at 10 MB — so a problem can be diagnosed |
 | Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |

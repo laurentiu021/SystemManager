@@ -59,4 +59,17 @@ public static class FormatHelper
         1 => items[0],
         _ => string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1],
     };
+
+    /// <summary>
+    /// The line a result card shows to name the checks that could not run: "Not checked this time: the disks. The result
+    /// above does not cover it." Empty when every check ran.
+    /// </summary>
+    /// <remarks>
+    /// One wording for every card that has to say so — the Quick Tune-Up's and the "Why is it slow?" check's — so a check
+    /// that did not run reads the same wherever it is reported (#2501).
+    /// </remarks>
+    public static string NotChecked(IReadOnlyList<string> notChecked) => notChecked.Count == 0
+        ? ""
+        : $"Not checked this time: {JoinForSentence(notChecked)}. The result above does not cover "
+          + (notChecked.Count == 1 ? "it." : "them.");
 }

@@ -189,6 +189,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   alerts (checked at launch, on Scan system and after Update All Apps; a check that
   could not run is amber, never green), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
+  "Why is it slow?" (#1529) runs `ISlowdownService.CheckAsync` under the Disk lock, ticks off the five things
+  it looks at through a `SettlingProgress`, and shows the ranked `SlowdownReport`, whose buttons only open a tab
+  through `OpenTabCommand`. The service is an optional constructor parameter, like `IAppBlockerService`.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
@@ -333,9 +336,10 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-one are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
+`ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
 history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
 `ICleanupPreScanService`, `IContextMenuService`, `ILeftoverService`,
@@ -477,7 +481,19 @@ Key services:
   `OverallScore` weights the battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
   desktop's, and named in `UnavailableComponents`. `ComputeAsync` gathers and then calls the static
   `Evaluate`, which scores evidence already in hand; the System Report calls `Evaluate` with the snapshot and
-  disks it read itself, so the report and the Dashboard share one copy of the scoring.
+  disks it read itself, so the report and the Dashboard share one copy of the scoring. The lines past which it
+  recommends freeing space or a restart are named constants (`FreeSpaceRecommendBelow`,
+  `FreeSpaceCriticalAtOrBelow`, `RestartRecommendedAtOrBelow`) that `SlowdownService` reads too.
+- `SlowdownService` (`ISlowdownService`) — the Dashboard's "Why is it slow?" check (#1529). Looks at five things at
+  once: the system drive, judged by `HealthScoreService.ComputeFreeSpaceScore`; the program using the most of the
+  processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never
+  SysManager itself or the idle process; what starts with Windows (`StartupService`) and what Windows blamed at its
+  last timed start, if that was within 30 days (`BootAnalyzerService`); memory in use, from 90%; and the time since
+  the last restart, judged by `ComputeUptimeScore`. Returns a `SlowdownReport`: the findings ranked in
+  `SlowdownKind` order, worst first, each with the tabs that can act on it, and the parts that could not be read,
+  which are named rather than counted as fine. Read-only. Every source is a delegate its internal constructor takes,
+  with a `TimeProvider` for the wait between the samples, so every threshold and sentence is tested without
+  reading the PC.
 - `TrayIconService` — system tray icon with background monitoring (60s),
   tooltip updates, context menu, and Windows toast notifications. The menu's status header
   is refreshed from the 60s poll on `Opened` rather than rebuilt per tick, so a menu nobody

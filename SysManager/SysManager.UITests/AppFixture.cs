@@ -8,6 +8,7 @@ using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.Exceptions;
 using FlaUI.Core.Tools;
 using FlaUI.UIA3;
 
@@ -130,12 +131,34 @@ public sealed class AppFixture : IDisposable
                 .Select(e =>
                 {
                     var id = e.Properties.AutomationId.ValueOrDefault;
-                    var name = e.Properties.Name.ValueOrDefault;
+                    var name = NameOf(e);
                     return $"  [{e.ControlType}] id='{id}' name='{name}'";
                 });
             return "\nAutomation tree (first 120 elements):\n" + string.Join("\n", lines);
         }
         catch (Exception ex) { return $"\n(could not dump tree: {ex.Message})"; }
+    }
+
+    /// <summary>
+    /// An element's accessible name, or null when it has none, or has gone since it was found.
+    /// </summary>
+    /// <remarks>
+    /// Read through here, never as <c>element.Name</c>. A list that changes while a test waits on it replaces its rows,
+    /// and a row one walk of the tree found can be gone by the time its name is asked for. <c>Name</c> then throws
+    /// <see cref="PropertyNotSupportedException"/>, which ends a wait that would have succeeded a moment later: the
+    /// "Why is it slow?" check ticks its five rows off while its test waits for the result, and its first run failed that
+    /// way (#1529). Null makes the wait go round again. <c>ArchitectureTests</c> holds the UI tests to this.
+    /// </remarks>
+    public static string? NameOf(AutomationElement element)
+    {
+        try
+        {
+            return element.Properties.Name.ValueOrDefault;
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or PropertyNotSupportedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -145,9 +168,7 @@ public sealed class AppFixture : IDisposable
     public AutomationElement? WaitForText(string text, int timeoutSeconds = 5)
         => Retry.WhileNull(() =>
             MainWindow.FindAllDescendants()
-                .FirstOrDefault(e =>
-                    !string.IsNullOrEmpty(e.Name) &&
-                    e.Name.Contains(text, StringComparison.OrdinalIgnoreCase)),
+                .FirstOrDefault(e => NameOf(e)?.Contains(text, StringComparison.OrdinalIgnoreCase) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
     /// <summary>Find a control by its AutomationId.</summary>
@@ -186,7 +207,7 @@ public sealed class AppFixture : IDisposable
             CurrentViewHost
                 .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
                 .FirstOrDefault(button =>
-                    string.Equals(button.Name, accessibleName, StringComparison.OrdinalIgnoreCase)),
+                    string.Equals(NameOf(button), accessibleName, StringComparison.OrdinalIgnoreCase)),
             TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
 
     /// <summary>True when the current tab exposes a Button with the exact accessible name.</summary>
@@ -208,7 +229,7 @@ public sealed class AppFixture : IDisposable
             CurrentViewHost
                 .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
                 .FirstOrDefault(button =>
-                    button.Name?.StartsWith(prefix, StringComparison.Ordinal) is true),
+                    NameOf(button)?.StartsWith(prefix, StringComparison.Ordinal) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
 
     private static AutomationElement? FindUniqueDescendantById(
@@ -237,9 +258,7 @@ public sealed class AppFixture : IDisposable
     public AutomationElement? WaitForTextInCurrentTab(string text, int timeoutSeconds = 5) =>
         Retry.WhileNull(() =>
             CurrentViewHost.FindAllDescendants()
-                .FirstOrDefault(element =>
-                    !string.IsNullOrEmpty(element.Name)
-                    && element.Name.Contains(text, StringComparison.OrdinalIgnoreCase)),
+                .FirstOrDefault(element => NameOf(element)?.Contains(text, StringComparison.OrdinalIgnoreCase) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
     public bool HasTextInCurrentTab(string text, int timeoutSeconds = 5)

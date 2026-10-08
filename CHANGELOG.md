@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.0] - 2026-10-08
+
+**The Dashboard can now answer "why is my PC slow right now?".** One button looks at disk space, the program using the
+processor, what starts with Windows, memory and the time since the last restart, and lists what it found, worst first,
+each with the tab that deals with it (#1529).
+
+### Added
+
+- **Why is it slow?** on the Dashboard, between Scan system and Quick Tune-Up. It looks at five things at once and ticks
+  each off as it finishes, in a few seconds:
+  - the system drive, judged the way the Health Score judges it, so a large drive with plenty left is not called full:
+    it is named under 20 GB free, or under 15% free with less than 25 GB left, and put first under 10 GB, or under
+    10% with less than 25 GB left;
+  - a program using 40% or more of the processor, counted across all of its processes and measured twice, a second
+    apart, so a moment's spike is not named. SysManager itself and the idle process never are;
+  - more than ten programs starting with Windows, counted as Startup Manager counts them, or more than 20 seconds that
+    Windows itself blamed on what ran during the last start it timed, if that was in the last 30 days;
+  - memory at 90% or more;
+  - Windows not restarted for more than a week, the same line past which the Health Score recommends a restart.
+- Each finding says what it means in plain words and offers the tabs that deal with it: Deep Cleanup and Disk Analyzer,
+  Process Manager, Startup Manager or Boot Analyzer. The buttons only open the tab; nothing is changed from the card. A
+  program is named together with the reason it may be fine, a busy part of Windows is said to be doing a job of its own,
+  and the restart is mentioned last, as information rather than a fault. "Nothing obvious is slowing it down" appears
+  only when all five could be looked at; anything that could not be read is named instead, in the words the Tune-Up
+  card uses. The result is also said on the status line, so a screen reader announces it.
+- It takes the Disk lock while it looks, so it does not start while a cleanup or a disk scan is running in SysManager,
+  which would be what it found.
+
 ## [1.126.0] - 2026-10-08
 
 **The Services tab no longer calls a service "Critical" just because SysManager has not rated it.** Those services, most of

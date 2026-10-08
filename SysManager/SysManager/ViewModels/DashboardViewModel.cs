@@ -44,7 +44,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // constructor's appBlocker parameter for why it is optional.
     private readonly IAppBlockerService? _appBlocker;
 
+    // Null when no caller supplied one, which leaves "Why is it slow?" unable to run. See the constructor's slowdown
+    // parameter for why it is optional.
+    private readonly ISlowdownService? _slowdown;
+
     private CancellationTokenSource? _tuneUpCts;
+    private CancellationTokenSource? _slowdownCts;
     private CancellationTokenSource? _pollingCts;
 
     // GPU adapter name and usage availability are effectively static for a session,
@@ -131,6 +136,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private TuneUpResult? _tuneUpResult;
     [ObservableProperty] private bool _hasTuneUpResult;
 
+    // ── Why is it slow? (#1529) ──────────────────────────────────────────
+    [ObservableProperty] private bool _isSlowdownCheckRunning;
+    [ObservableProperty] private SlowdownReport? _slowdownReport;
+    [ObservableProperty] private bool _hasSlowdownReport;
+
+    /// <summary>The five things the check looks at, each marked as it is done with, while the check runs.</summary>
+    public BulkObservableCollection<SlowdownProbeStatus> SlowdownProbes { get; } = new();
+
     // ── IsActive (pause polling when tab not visible) ────────────────────
     [ObservableProperty] private bool _isActive;
 
@@ -167,17 +180,24 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// directions: a test supplies a service over a redirected registry hive to assert it fires, and omits
     /// it to assert nothing else moved.
     /// </param>
+    /// <param name="slowdown">
+    /// The "Why is it slow?" check (#1529). Optional for the same reason as <paramref name="appBlocker"/>: the six
+    /// construction sites written before it keep compiling unchanged. Null leaves the button unable to run, and the
+    /// container and the designer graph both supply the real one. A test passes a substitute, because the real one reads
+    /// whatever machine runs it.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
-        IAppBlockerService? appBlocker = null)
+        IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null)
     {
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
         _speedHistory = speedHistory;
         _appBlocker = appBlocker;
+        _slowdown = slowdown;
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
@@ -1285,6 +1305,79 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand]
     private void DismissTuneUpResult() { HasTuneUpResult = false; TuneUpResult = null; }
 
+    // ── Why is it slow? (#1529) ───────────────────────────────────────────
+
+    /// <summary>The name the Disk lock is held under while the check runs, which another tab's refusal names.</summary>
+    internal const string SlowdownCheckName = "Dashboard slowness check";
+
+    /// <summary>
+    /// Looks at the five things that most often slow a PC down, all at once, and shows what it found, worst first, each with
+    /// the tab that can act on it.
+    /// </summary>
+    /// <remarks>
+    /// Takes the Disk lock, as Quick Tune-Up does. A cleanup or a disk scan running in SysManager would be what the check
+    /// finds, and the check reads the process list and the drives while it works. Asks nothing first: it only reads, and
+    /// every button on what it finds only opens a tab. Nothing goes into Recent Activity, which lists what changed, and a
+    /// check changes nothing.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanCheckSlowdown))]
+    private async Task CheckSlowdownAsync()
+    {
+        var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, SlowdownCheckName);
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
+        using var opLockGuard = opLock;
+        _slowdownCts = new CancellationTokenSource();
+        var token = _slowdownCts.Token;
+        IsSlowdownCheckRunning = true;
+        HasSlowdownReport = false;
+        SlowdownReport = null;
+        SlowdownProbes.ReplaceWith(SlowdownProbeStatus.Looking);
+        CheckSlowdownCommand.NotifyCanExecuteChanged();
+
+        // Settling, so a probe's last report cannot land after the result: the list is hidden by then either way, and
+        // this is what keeps that true rather than lucky.
+        var progress = new SettlingProgress<SlowdownProbeStatus>(MarkSlowdownProbe);
+        try
+        {
+            var report = await progress.SettleAfterAsync(reporter => _slowdown!.CheckAsync(reporter, token));
+            SlowdownReport = report;
+            HasSlowdownReport = true;
+            StatusMessage = report.Headline;
+        }
+        catch (OperationCanceledException) { StatusMessage = "Check cancelled."; }
+        finally
+        {
+            IsSlowdownCheckRunning = false;
+            _slowdownCts?.Dispose();
+            _slowdownCts = null;
+            CheckSlowdownCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private bool CanCheckSlowdown() => _slowdown is not null && !IsSlowdownCheckRunning;
+
+    /// <summary>Marks one of the five as done with, in its place, so the list keeps its order.</summary>
+    private void MarkSlowdownProbe(SlowdownProbeStatus status)
+    {
+        for (var i = 0; i < SlowdownProbes.Count; i++)
+        {
+            if (SlowdownProbes[i].Probe != status.Probe) continue;
+            SlowdownProbes[i] = status;
+            return;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelSlowdownCheck() => _slowdownCts?.Cancel();
+
+    [RelayCommand]
+    private void DismissSlowdownReport() { HasSlowdownReport = false; SlowdownReport = null; }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -1293,6 +1386,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
             _pollingCts?.Dispose();
             _tuneUpCts?.Cancel();
             _tuneUpCts?.Dispose();
+            _slowdownCts?.Cancel();
+            _slowdownCts?.Dispose();
         }
         base.Dispose(disposing);
     }

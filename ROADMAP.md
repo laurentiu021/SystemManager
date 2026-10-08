@@ -88,19 +88,16 @@ land together with moving the views onto it, not before.
 
 ## Features next
 
-In the order they are planned. Everything this section listed before has shipped — the Disk
-Analyzer map, Deep Cleanup's biggest space hogs, the This PC card on Volume Control, where each
-startup entry lives, taskbar progress, maintenance on battery, the diagnostics bundle — along
-with Undo Changes and the extensions view in Browser Cleaner.
-
-- **Uninstaller finding what an uninstall leaves behind**
-  ([#1527](https://github.com/laurentiu021/SystemManager/issues/1527))
-- **"What changed on my PC recently"**
-  ([#1507](https://github.com/laurentiu021/SystemManager/issues/1507))
-- **Services saying what else stops with a service, and marking the ones it has no rating for
-  as such instead of Critical** ([#1512](https://github.com/laurentiu021/SystemManager/issues/1512))
-- **"Why is my PC slow right now"**
-  ([#1529](https://github.com/laurentiu021/SystemManager/issues/1529))
+Everything this section has listed so far has shipped: the Disk Analyzer map, Deep Cleanup's
+biggest space hogs, the This PC card on Volume Control, where each startup entry lives, taskbar
+progress, maintenance on battery, the diagnostics bundle, Undo Changes, the extensions view in
+Browser Cleaner, what an uninstall leaves behind
+([#1527](https://github.com/laurentiu021/SystemManager/issues/1527)), Recent Changes
+([#1507](https://github.com/laurentiu021/SystemManager/issues/1507)), Services saying what else
+stops with a service and marking the ones it has no rating for
+([#1512](https://github.com/laurentiu021/SystemManager/issues/1512)), and the Dashboard's "Why is
+it slow?" ([#1529](https://github.com/laurentiu021/SystemManager/issues/1529)). The next ones come
+from the open issues, and this list names them once they are chosen.
 
 ## Documentation and presentation
 

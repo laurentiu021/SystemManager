@@ -33,7 +33,8 @@ public class DashboardViewModelTests
                                             ISpeedTestService? speedTest = null,
                                             SpeedTestHistoryService? speedHistory = null,
                                             ITuneUpService? tuneUp = null,
-                                            MemoryTestService? memTest = null)
+                                            MemoryTestService? memTest = null,
+                                            ISlowdownService? slowdown = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -63,7 +64,10 @@ public class DashboardViewModelTests
             speedHistory ?? new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
             // Null by default, which omits the stranded-block alert entirely — so the 58 tests written
             // before it existed keep asserting against the same five alerts they always did.
-            appBlocker);
+            appBlocker,
+            // Null by default, which leaves "Why is it slow?" unable to run. A test that runs it passes a substitute:
+            // the real check reads this machine's processes, drives and startup programs.
+            slowdown);
     }
 
     // ---------- empty states on the cards ----------
@@ -152,6 +156,9 @@ public class DashboardViewModelTests
     [InlineData("RunTuneUpCommand")]
     [InlineData("CancelTuneUpCommand")]
     [InlineData("DismissTuneUpResultCommand")]
+    [InlineData("CheckSlowdownCommand")]
+    [InlineData("CancelSlowdownCheckCommand")]
+    [InlineData("DismissSlowdownReportCommand")]
     [InlineData("QuickCleanupCommand")]
     [InlineData("QuickUpdateAppsCommand")]
     [InlineData("QuickWindowsUpdateCommand")]
@@ -1117,6 +1124,203 @@ public class DashboardViewModelTests
         var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyMemoryHealth(null).Title);
         Assert.Equal(AlertSeverity.Yellow, alert.Severity);
         Assert.Equal("nav-system-health", alert.NavTargetId);
+    }
+
+    // ---------- Why is it slow? (#1529) ----------
+
+    private static readonly SlowdownReport TwoFindings = new(
+        [
+            new SlowdownFinding(SlowdownKind.ProcessorBusy, "Google Chrome is using 61% of the processor", "Right now.",
+                [new SlowdownAction("See what is running", "nav-processes", "Process Manager")]) { Rank = 1 },
+            new SlowdownFinding(SlowdownKind.LongUptime, "Windows has not restarted in 9 days", "Not a problem by itself.", [])
+                { Rank = 2 },
+        ],
+        [],
+        new DateTime(2026, 10, 8, 15, 0, 0));
+
+    private static ISlowdownService SlowdownThatFinds(SlowdownReport report)
+    {
+        var slowdown = Substitute.For<ISlowdownService>();
+        slowdown.CheckAsync(Arg.Any<IProgress<SlowdownProbeStatus>?>(), Arg.Any<CancellationToken>()).Returns(report);
+        return slowdown;
+    }
+
+    [Fact]
+    public void WhyIsItSlow_WithNoCheckToRun_CannotBePressed()
+    {
+        // The designer graph and the container both supply the check. A caller that does not gets a button that cannot
+        // run, rather than one that throws.
+        var vm = NewVm(QuietWinget());
+
+        Assert.False(vm.CheckSlowdownCommand.CanExecute(null));
+        Assert.False(vm.IsSlowdownCheckRunning);
+        Assert.False(vm.HasSlowdownReport);
+        Assert.Null(vm.SlowdownReport);
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_ShowsWhatTheCheckFound_AndSaysSoOnTheStatusLine()
+    {
+        var vm = NewVm(QuietWinget(), slowdown: SlowdownThatFinds(TwoFindings));
+        Assert.True(vm.CheckSlowdownCommand.CanExecute(null));
+
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        Assert.Same(TwoFindings, vm.SlowdownReport);
+        Assert.True(vm.HasSlowdownReport);
+        Assert.False(vm.IsSlowdownCheckRunning);
+        Assert.Equal("2 things are worth a look, worst first.", vm.StatusMessage);
+        Assert.True(vm.CheckSlowdownCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_WhileItLooks_ListsTheFiveAsLooking_AndCannotBePressedAgain()
+    {
+        var slowdown = Substitute.For<ISlowdownService>();
+        var vm = NewVm(QuietWinget(), slowdown: slowdown);
+        (bool Running, bool CanPressAgain, bool HasReport, string[] Lines)? during = null;
+        slowdown.CheckAsync(Arg.Any<IProgress<SlowdownProbeStatus>?>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            during = (vm.IsSlowdownCheckRunning, vm.CheckSlowdownCommand.CanExecute(null), vm.HasSlowdownReport,
+                      [.. vm.SlowdownProbes.Select(p => p.Line)]);
+            return Task.FromResult(TwoFindings);
+        });
+
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        Assert.NotNull(during);
+        Assert.True(during.Value.Running);
+        Assert.False(during.Value.CanPressAgain);
+        Assert.False(during.Value.HasReport);
+        Assert.Equal(["Disk space…", "What is running…", "Startup programs…", "Memory…", "Time since the last restart…"],
+                     during.Value.Lines);
+    }
+
+    /// <summary>
+    /// A report marks its own row in place, and the others stay as they were. Delivered inline, so the marks have landed
+    /// by the time the check returns: with no context, a report is posted to the thread pool and lands whenever it lands.
+    /// </summary>
+    [Fact]
+    public async Task WhyIsItSlow_MarksEachOfTheFive_InItsOwnPlace_AsItIsReported()
+    {
+        var slowdown = Substitute.For<ISlowdownService>();
+        slowdown.CheckAsync(Arg.Any<IProgress<SlowdownProbeStatus>?>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            var progress = call.ArgAt<IProgress<SlowdownProbeStatus>?>(0)!;
+            progress.Report(new SlowdownProbeStatus(SlowdownProbe.DiskSpace, Done: true, Read: true, "C: 40% full"));
+            progress.Report(new SlowdownProbeStatus(SlowdownProbe.Memory, Done: true, Read: false, ""));
+            return Task.FromResult(TwoFindings);
+        });
+        var vm = NewVm(QuietWinget(), slowdown: slowdown);
+
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new InlineContext());
+        try
+        {
+            await vm.CheckSlowdownCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.Equal(
+            ["Disk space — C: 40% full", "What is running…", "Startup programs…", "Memory — could not be read",
+             "Time since the last restart…"],
+            vm.SlowdownProbes.Select(p => p.Line));
+    }
+
+    /// <summary>Runs a post on the thread that made it, so a progress report has landed by the time Report returns.</summary>
+    private sealed class InlineContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) => d(state);
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_HoldsTheDiskLockWhileItLooks_AndLetsGoAfter()
+    {
+        // As Quick Tune-Up does: a cleanup or a disk scan running in SysManager would be what the check finds.
+        string? heldBy = null;
+        var slowdown = Substitute.For<ISlowdownService>();
+        slowdown.CheckAsync(Arg.Any<IProgress<SlowdownProbeStatus>?>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk);
+            return Task.FromResult(TwoFindings);
+        });
+        var vm = NewVm(QuietWinget(), slowdown: slowdown);
+
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        Assert.Equal(DashboardViewModel.SlowdownCheckName, heldBy);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_WhileACleanupRuns_DoesNotLook_AndSaysWhy()
+    {
+        var slowdown = SlowdownThatFinds(TwoFindings);
+        var vm = NewVm(QuietWinget(), slowdown: slowdown);
+
+        using (var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup"))
+        {
+            Assert.NotNull(held);
+            await vm.CheckSlowdownCommand.ExecuteAsync(null);
+        }
+
+        Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
+        Assert.False(vm.HasSlowdownReport);
+        Assert.False(vm.IsSlowdownCheckRunning);
+        await slowdown.DidNotReceiveWithAnyArgs().CheckAsync(default, default);
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_Cancel_CancelsTheCheck_AndLetsGoOfTheLock()
+    {
+        var slowdown = Substitute.For<ISlowdownService>();
+        var vm = NewVm(QuietWinget(), slowdown: slowdown);
+        slowdown.CheckAsync(Arg.Any<IProgress<SlowdownProbeStatus>?>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            // Pressed while the check looks: the token the check was handed is the one Cancel cancels.
+            vm.CancelSlowdownCheckCommand.Execute(null);
+            call.ArgAt<CancellationToken>(1).ThrowIfCancellationRequested();
+            return Task.FromResult(TwoFindings);
+        });
+
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        Assert.Equal("Check cancelled.", vm.StatusMessage);
+        Assert.False(vm.HasSlowdownReport);
+        Assert.Null(vm.SlowdownReport);
+        Assert.False(vm.IsSlowdownCheckRunning);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
+        Assert.True(vm.CheckSlowdownCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_Dismiss_PutsTheCardAway()
+    {
+        var vm = NewVm(QuietWinget(), slowdown: SlowdownThatFinds(TwoFindings));
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        vm.DismissSlowdownReportCommand.Execute(null);
+
+        Assert.False(vm.HasSlowdownReport);
+        Assert.Null(vm.SlowdownReport);
+    }
+
+    [Fact]
+    public async Task WhyIsItSlow_AFindingsButton_OpensItsTab_AndLeavesTheCardUp()
+    {
+        // The buttons only open a tab, through the command the other cards' links use. The card stays, because the user
+        // may want the next finding when they come back.
+        var navigation = Substitute.For<INavigationService>();
+        var vm = NewVm(QuietWinget(), navigation: navigation, slowdown: SlowdownThatFinds(TwoFindings));
+        await vm.CheckSlowdownCommand.ExecuteAsync(null);
+
+        vm.OpenTabCommand.Execute(vm.SlowdownReport!.Findings[0].Actions[0].NavTargetId);
+
+        navigation.Received(1).GoTo("nav-processes", null);
+        Assert.True(vm.HasSlowdownReport);
     }
 
     // ---------- what the Tune-Up confirmation says (#2505) ----------

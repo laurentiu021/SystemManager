@@ -32,7 +32,26 @@ public sealed record ProcessDescriptionEntry(
     string Name,
     string Description,
     string Category,
-    ProcessSafety Safety);
+    ProcessSafety Safety)
+{
+    /// <summary>
+    /// What the program is called, from the start of <see cref="Description"/>: "Google Chrome" from "Google Chrome — web
+    /// browser". The whole description when it has no dash to end the name at.
+    /// </summary>
+    /// <remarks>
+    /// Every entry in the database is written as the name, a spaced em dash, then what the program does, and
+    /// <c>ProcessDescriptionServiceTests</c> holds the database to that shape. The "Why is it slow?" check names a busy
+    /// program by it, because "chrome is using 61%" names a file and "Google Chrome is using 61%" names the program.
+    /// </remarks>
+    public string ShortName
+    {
+        get
+        {
+            var end = Description.IndexOf(" — ", StringComparison.Ordinal);
+            return end > 0 ? Description[..end] : Description;
+        }
+    }
+}
 
 /// <summary>
 /// Loads and queries the built-in process description database (JSON embedded resource).

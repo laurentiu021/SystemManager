@@ -91,7 +91,7 @@ public sealed class UninstallerRemovalCheckTests : IDisposable
     {
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunProcessWithShellAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(0);
-        var vm = new UninstallerViewModel(Service(runner)) { IsElevated = false };
+        var vm = new UninstallerViewModel(Service(runner), Substitute.For<ILeftoverService>(), () => false) { IsElevated = false };
         vm.AllApps.Add(TestApp());
         vm.FilterText = "Test";   // repopulates FilteredApps through the public filter path
         vm.FilterText = "";
@@ -140,7 +140,7 @@ public sealed class UninstallerRemovalCheckTests : IDisposable
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
               .Returns(0);
-        var vm = new UninstallerViewModel(Service(runner)) { IsElevated = false };
+        var vm = new UninstallerViewModel(Service(runner), Substitute.For<ILeftoverService>(), () => false) { IsElevated = false };
         vm.AllApps.Add(new InstalledApp { Name = "Test App", Id = "Test.App", Source = "winget", UninstallString = Uninstaller });
         vm.FilterText = "Test";
         vm.FilterText = "";

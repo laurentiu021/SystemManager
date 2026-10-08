@@ -227,7 +227,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `BatteryCapacityChart` — the battery's capacity history as a line in percent of new, with a dashed 100% line, on
   a scale from 70% (or lower) to just above 100%, so a small loss is not drawn as a cliff. The same paint lifecycle
   as `SpeedTrendChart`.
-- `UninstallerViewModel` — winget-based app uninstaller with batch support.
+- `UninstallerViewModel` — winget-based app uninstaller with batch support, and the Left behind card
+  that follows an uninstall.
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore. Refresh is off while `IsBusy`,
   and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607).
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
@@ -323,12 +324,12 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Twenty-five are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Twenty-six are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
 history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
-`ICleanupPreScanService`, `IContextMenuService`,
+`ICleanupPreScanService`, `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
@@ -352,7 +353,7 @@ A tab opened from the sidebar search that implements `ISearchDestination` is tol
 which is how a search for "tweaks" or "tune windows" opens Privacy & Telemetry grouped by reach (#1517),
 and one for "extensions" or "browser ads" opens Browser Cleaner on its Extensions view (#1526).
 
-Three further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
+Four further seams exist but are reached differently, so grepping `ServiceRegistration.cs` for them
 finds nothing:
 
 - `IDialogService` — consumed through the static `DialogService.Instance`, which tests swap for a
@@ -369,6 +370,11 @@ finds nothing:
   as "the size is non-negative"; with the roots injected a test points it at a tree it built and asserts
   exact counts, the 30-day cutoff and which categories arrive pre-selected. A fitness function keeps the
   machine reads out of the service.
+- `ILeftoverEnvironment` — the folders, uninstall entries and registry keys the Uninstaller's leftover
+  search reads, taken by `LeftoverService`'s second constructor beside the Recycle Bin and key-deletion
+  delegates. Production's constructor passes `SystemLeftoverEnvironment`, `RecycleBinHelper.SendToRecycleBin`
+  and an HKCU delete; the test constructor's two delegates default to refusing, so a test that leaves them out
+  cannot reach the real Recycle Bin or registry (#1527).
 
 Key services:
 - `PingMonitorService` / `TracerouteService` / `TracerouteMonitorService` —
@@ -705,7 +711,23 @@ Key services:
   returns, `IsStillRegistered` checks that Windows no longer lists the app before the tab
   calls it removed: the exit code belongs to the launched process, and an NSIS uninstaller
   hands over to a copy of itself and exits at once. The uninstall roots it reads are
-  injectable, so the check is tested against a redirected registry.
+  injectable, so the check is tested against a redirected registry. The scan also records each
+  entry's `InstallLocation`, which the leftover search starts from.
+- `LeftoverService` (`ILeftoverService`) — the Uninstaller's Left behind card (#1527). `FindAsync` runs
+  `LeftoverFinder` for one uninstalled app and measures each folder with `SafeFileWalk`, refusing a folder
+  that holds a link; `RemoveAsync` sends folders to the Recycle Bin and deletes an app's own HKCU key only
+  after `reg.exe export` has written its `.reg` backup to `Backups\Uninstaller` (newest three per key, pruned
+  by `ContextMenuService.PruneBackups`). Every folder is re-checked by the finder's rules just before it goes.
+  Folders under Program Files or ProgramData found without administrator rights are kept in
+  `uninstaller-leftovers.json` and offered again, re-checked and unticked, in an elevated session: the record
+  is user-writable, so an administrator session removes only what is ticked in it.
+- `LeftoverFinder` — the pure rules behind it: what an uninstalled app left, ranked Certain (the install
+  folder its entry named, read before uninstalling), Probably (a folder named after the app directly under
+  AppData, Local AppData or ProgramData), its own key (`HKCU\Software\<Publisher>\<App>`) and Guess (a
+  publisher folder in AppData when no installed app shares the publisher). Refuses Windows, the roots, the
+  user's own folders, SysManager's, names Windows and many apps share, links, non-fixed drives, and any
+  folder an installed app still lives in — judged against every uninstall entry Windows holds, hidden ones
+  included, not only the list on screen.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
   working set trim, hibernation toggle. The trim works through a process list and a trim call the
@@ -1479,7 +1501,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   prevent because nothing holds those files open yet.
 - `RecycleBinHelper` — empties the Recycle Bin via the shell API (`SHEmptyRecycleBin`); shared
   by Quick Cleanup, Deep Cleanup and the Dashboard's Quick Tune-Up so the interop has one source
-  of truth.
+  of truth. `SendToRecycleBin` is the one `SHFileOperation` recycle, shared by Shortcut Cleaner and the
+  Uninstaller's leftovers; its `RecycleFlags` include `FOF_WANTNUKEWARNING`, so an item the bin cannot
+  take is never deleted for good without Windows asking.
 - `ExplorerShell` — stops, starts and restarts the Windows shell, and owns the
   `thumbcache_*.db` / `iconcache_*.db` pattern list that Deep Cleanup's cache category
   shares. Shared by Context Menu (applying a menu style) and System Fixes (a frozen

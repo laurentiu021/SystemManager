@@ -14,6 +14,15 @@ namespace SysManager.Services;
 /// </summary>
 public sealed partial class UninstallerService
 {
+    /// <summary>
+    /// Where Windows keeps uninstall entries, under HKLM for the machine and under HKCU for one user. Declared once for
+    /// every reader that lists them: this service, and the Uninstaller's leftover search (#1527).
+    /// </summary>
+    internal const string UninstallKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+
+    /// <summary>The same entries for 32-bit programs on 64-bit Windows, under HKLM only.</summary>
+    internal const string UninstallKeyWow64 = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
+
     private readonly IPowerShellRunner _runner;
     private readonly Func<bool> _isElevated;
     private readonly Microsoft.Win32.RegistryKey _machineRoot;
@@ -140,11 +149,7 @@ public sealed partial class UninstallerService
             lookup.TryAdd(app.Name, app);
         }
 
-        var regPaths = new[]
-        {
-            @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
-            @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-        };
+        var regPaths = new[] { UninstallKey, UninstallKeyWow64 };
 
         foreach (var regPath in regPaths)
         {
@@ -162,8 +167,7 @@ public sealed partial class UninstallerService
         // Also scan HKCU (per-user installs like Discord, VS Code, etc.)
         try
         {
-            using var hkcuKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
+            using var hkcuKey = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(UninstallKey);
             if (hkcuKey is not null)
                 EnrichFromRegistryKey(hkcuKey, lookup);
         }
@@ -212,10 +216,13 @@ public sealed partial class UninstallerService
                         app.UninstallString = uninst;
                 }
 
+                var installLoc = sub.GetValue("InstallLocation") as string;
+                if (string.IsNullOrWhiteSpace(app.InstallLocation) && !string.IsNullOrWhiteSpace(installLoc))
+                    app.InstallLocation = installLoc.Trim();
+
                 if (app.Icon is null)
                 {
                     var iconPath = sub.GetValue("DisplayIcon") as string;
-                    var installLoc = sub.GetValue("InstallLocation") as string;
 
                     if (!string.IsNullOrWhiteSpace(iconPath))
                     {
@@ -341,9 +348,9 @@ public sealed partial class UninstallerService
     {
         (Microsoft.Win32.RegistryKey Root, string Path)[] uninstallKeys =
         [
-            (_machineRoot, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-            (_machineRoot, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-            (_userRoot, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (_machineRoot, UninstallKey),
+            (_machineRoot, UninstallKeyWow64),
+            (_userRoot, UninstallKey),
         ];
         foreach (var (root, path) in uninstallKeys)
         {

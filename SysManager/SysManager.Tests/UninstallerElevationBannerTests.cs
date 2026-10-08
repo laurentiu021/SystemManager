@@ -102,7 +102,8 @@ public class UninstallerElevationBannerTests
         // returns false no matter what elevation says — asserting only the elevated case would pass with
         // the elevation term deleted, which is precisely the change this test exists to catch.
         var vm = new SysManager.ViewModels.UninstallerViewModel(
-            new SysManager.Services.UninstallerService(new SysManager.Services.PowerShellRunner()));
+            new SysManager.Services.UninstallerService(new SysManager.Services.PowerShellRunner()),
+            NSubstitute.Substitute.For<SysManager.Services.ILeftoverService>(), () => false);
         vm.IsElevated = false;
         vm.AllApps.Add(new SysManager.Models.InstalledApp { Name = "app", Id = "id" });
         vm.FilterText = "app";   // triggers ApplyFilter, which refreshes AppCount

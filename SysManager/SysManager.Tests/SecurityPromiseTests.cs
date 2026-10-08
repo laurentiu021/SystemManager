@@ -98,16 +98,19 @@ public class SecurityPromiseTests
     // ── 3. No registry writes for cleanup ──
 
     /// <summary>
-    /// Promise: "Touching the Windows registry for cleanup."
+    /// Promise: "Registry cleaning: searching the registry for entries to delete."
     /// </summary>
     /// <remarks>
-    /// The app deletes registry values in fourteen places and every one is a feature undoing its own
+    /// The app deletes registry keys and values in fifteen places. Fourteen are a feature undoing its own
     /// change — the app blocker releasing an IFEO key, a context-menu entry being re-enabled, an
-    /// environment variable removed, a notification toggle restored. None of that is cleanup, and the
-    /// distinction is the promise: a cleaner that edits the registry is the class of tool this project
-    /// deliberately is not.
-    /// <para>The floor is the fourteen legitimate sites. If it drops, either the detection broke or a
-    /// feature lost its undo — both worth failing on.</para>
+    /// environment variable removed, a notification toggle restored. The fifteenth is the one exception the
+    /// promise names: the Uninstaller's Left behind list removing an uninstalled app's own key under
+    /// <c>HKEY_CURRENT_USER\Software</c>, one exact key the user ticked, deleted only once its <c>.reg</c>
+    /// export exists (#1527). None of that is cleanup, and the distinction is the promise: a cleaner that
+    /// edits the registry is the class of tool this project deliberately is not.
+    /// <para>The floor is the fifteen legitimate sites. If it drops, either the detection broke or a
+    /// feature lost its undo — both worth failing on. The exception is pinned to the user's own hive, so it
+    /// cannot grow into deleting machine-wide keys without this failing.</para>
     /// </remarks>
     [Fact]
     public void NoCleanupService_DeletesFromTheRegistry()
@@ -128,12 +131,19 @@ public class SecurityPromiseTests
             }
         }
 
-        Assert.True(deleteSites >= 12,
-            $"only {deleteSites} registry-delete sites found, out of 14 measured — the pattern has stopped "
+        Assert.True(deleteSites >= 13,
+            $"only {deleteSites} registry-delete sites found, out of 15 measured — the pattern has stopped "
             + "matching, so this guard is no longer looking at anything.");
         Assert.True(offenders.Count == 0,
-            $"{Forbidden} says the app never touches the registry for cleanup:\n  "
+            $"{Forbidden} says the app never cleans the registry:\n  "
             + string.Join("\n  ", offenders));
+
+        // The exception, exactly as SECURITY.md words it: one delete, in the user's own hive, and nothing of the
+        // machine's. A leftover search that started deleting under HKLM would be registry cleaning in all but name.
+        var leftovers = CodeOf("Services", "LeftoverService.cs");
+        Assert.Single(Regex.Matches(leftovers, @"\.Delete(?:SubKey|Value)(?:Tree)?\s*\("));
+        Assert.Contains("Registry.CurrentUser.DeleteSubKeyTree(", leftovers, StringComparison.Ordinal);
+        Assert.DoesNotContain("LocalMachine", leftovers, StringComparison.Ordinal);
     }
 
     // ── 4. Never a game's own files ──

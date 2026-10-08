@@ -16,6 +16,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -101,8 +102,136 @@
             <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" Style="{StaticResource Body}"/>
         </Border>
 
+        <!-- What the last uninstall left behind (#1527). Shown after a run that removed an app, and, as
+             administrator, for what an earlier run could not remove without those rights. Only the install
+             folder the app itself named arrives ticked; the rest are labelled guesses. Folders go to the
+             Recycle Bin and keys are saved to a file first, so a wrong tick can be put back. -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12"
+                Visibility="{Binding ShowLeftovers, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="Dismiss" Command="{Binding DismissLeftoversCommand}"
+                            AutomationProperties.Name="Dismiss the left behind list"
+                            Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0" VerticalAlignment="Top"/>
+                    <StackPanel>
+                        <TextBlock Text="Left behind" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="{Binding LeftoverIntro}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Capped so a long list scrolls inside the card instead of pushing the app list off the page. -->
+                <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding LeftoverGroups}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,12,0,0">
+                                    <TextBlock Style="{StaticResource Body}">
+                                        <Run Text="{Binding AppName, Mode=OneWay}" FontWeight="SemiBold"/>
+                                        <Run Text="  "/>
+                                        <Run Text="{Binding Caption, Mode=OneWay}" Foreground="{DynamicResource TextMuted}"/>
+                                    </TextBlock>
+                                    <ItemsControl ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource CardInner}" Margin="0,6,0,0">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                  IsEnabled="{Binding CanSelect}" VerticalAlignment="Top" Margin="0,2,12,0"
+                                                                  AutomationProperties.Name="{Binding DisplayLocation, StringFormat='Select {0} for removal'}"/>
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="{Binding DisplayLocation}" Style="{StaticResource Subtle}"
+                                                                       FontFamily="{StaticResource MonoFont}" Foreground="{DynamicResource TextPrimary}"
+                                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayLocation}"/>
+                                                            <WrapPanel Margin="0,4,0,0">
+                                                                <TextBlock Text="{Binding Reason}" Style="{StaticResource Subtle}"
+                                                                           VerticalAlignment="Center"/>
+                                                                <Border Margin="8,0,0,0" Padding="8,2" CornerRadius="{StaticResource RadiusPill}"
+                                                                        BorderThickness="1" VerticalAlignment="Center">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Background" Value="{DynamicResource Surface3}"/>
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding ConfidenceLabel}" Value="Certain">
+                                                                                    <Setter Property="Background" Value="{DynamicResource SuccessBgSubtle}"/>
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorder}"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding ConfidenceLabel}" Value="Guess">
+                                                                                    <Setter Property="Background" Value="Transparent"/>
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource WarningBorder}"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <TextBlock Text="{Binding ConfidenceLabel}" FontWeight="SemiBold">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding ConfidenceLabel}" Value="Certain">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource SuccessText}"/>
+                                                                                    </DataTrigger>
+                                                                                    <DataTrigger Binding="{Binding ConfidenceLabel}" Value="Guess">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource WarningText}"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </Border>
+                                                                <Border Margin="6,0,0,0" Padding="8,2" CornerRadius="{StaticResource RadiusPill}"
+                                                                        Background="{DynamicResource WarningBgSubtle}" BorderBrush="{DynamicResource WarningStripe}"
+                                                                        BorderThickness="1" VerticalAlignment="Center"
+                                                                        Visibility="{Binding NeedsAdministrator, Converter={StaticResource BoolToVis}}">
+                                                                    <TextBlock Text="Administrator" Foreground="{DynamicResource WarningText}"
+                                                                               Style="{StaticResource Caption}" FontWeight="SemiBold"/>
+                                                                </Border>
+                                                            </WrapPanel>
+                                                            <TextBlock Text="Run SysManager as administrator and open Uninstaller again to remove it; it stays on this list until then."
+                                                                       Style="{StaticResource Caption}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                                       Visibility="{Binding NeedsAdministrator, Converter={StaticResource BoolToVis}}"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="2" Text="{Binding SizeDisplay}" Style="{StaticResource Body}"
+                                                                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Top"
+                                                                   HorizontalAlignment="Right" Margin="12,0,0,0"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <ItemsControl ItemsSource="{Binding NotOffered}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding}" Style="{StaticResource Caption}" Margin="0,6,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <DockPanel Margin="0,12,0,0" Visibility="{Binding HasLeftoverItems, Converter={StaticResource BoolToVis}}">
+                    <Button DockPanel.Dock="Right" Content="Remove ticked…" Command="{Binding RemoveLeftoversCommand}"
+                            Style="{StaticResource SecondaryButton}"
+                            AutomationProperties.Name="Remove ticked leftovers"
+                            AutomationProperties.HelpText="Sends the ticked folders to the Recycle Bin and deletes the ticked registry keys after saving each to a file. SysManager lists them and asks you to confirm first."/>
+                    <TextBlock Text="{Binding LeftoverSelection}" Style="{StaticResource Subtle}" VerticalAlignment="Center"
+                               TextWrapping="Wrap" Margin="0,0,12,0"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
         <!-- App list -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="5" Style="{StaticResource Card}" Padding="0">
             <Grid>
             <DataGrid AutomationProperties.Name="Installed applications" ItemsSource="{Binding FilteredApps}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
@@ -273,7 +402,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="5" Margin="0,8,0,0">
+        <DockPanel Grid.Row="6" Margin="0,8,0,0">
             <ProgressBar AutomationProperties.Name="Uninstall progress" DockPanel.Dock="Left" Width="120" Height="4" Margin="0,0,12,0"
                          IsIndeterminate="{Binding IsProgressIndeterminate}"
                          Value="{Binding Progress}"

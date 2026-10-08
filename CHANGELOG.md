@@ -36,9 +36,9 @@ registry key is saved to a file before it is deleted (#1527).
 - Uninstalling runs without administrator rights, so a leftover under Program Files or ProgramData cannot be removed
   in the same session. It shows an Administrator label and is kept in
   `%LocalAppData%\SysManager\uninstaller-leftovers.json`; the next time Uninstaller is opened with SysManager running
-  as administrator, the card offers it again, once it has checked the folder is still there and no installed app has
-  moved into it. Nothing on that list arrives ticked, because the file it comes from is one anything running as you
-  could have changed.
+  as administrator, the card offers it again, once it has checked that the folder is still there, that no app Windows
+  lists as installed uses it or answers to its name, and that the app itself has not been installed again. Nothing on
+  that list arrives ticked, because the file it comes from is one anything running as you could have changed.
 
 ### Changed
 

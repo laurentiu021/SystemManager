@@ -38,8 +38,8 @@ public interface ILeftoverService
 
     /// <summary>
     /// The items an earlier session could not remove for want of administrator rights, checked against the PC again:
-    /// what is gone, now refused or now used by an installed app is dropped, from the list and from the record. None
-    /// arrives ticked. Empty when there are none or the record cannot be read.
+    /// what is gone, now refused, now used by an installed app, or left by an app installed again since is dropped,
+    /// from the list and from the record. None arrives ticked. Empty when there are none or the record cannot be read.
     /// </summary>
     IReadOnlyList<LeftoverGroup> LoadPending();
 
@@ -188,7 +188,8 @@ public sealed class LeftoverService : ILeftoverService
         if (!Directory.Exists(item.Location)) return FolderOutcome.AlreadyGone;
 
         // Checked again now rather than trusted from the search: a folder can be swapped for a link in between,
-        // or have one put inside it.
+        // or have one put inside it. The shell takes a path, so the moment between this check and its move is not
+        // closed; it is the same window File Shredder documents, kept as small as doing the check last makes it.
         var why = LeftoverFinder.Refusal(item.Location, _env)
             ?? (MeasureFolder(item.Location, ct).HoldsLink ? "holds a link to another folder" : null);
         if (why is not null)
@@ -266,6 +267,9 @@ public sealed class LeftoverService : ILeftoverService
             var kept = new List<StoredGroup>();
             foreach (var group in stored)
             {
+                // An app installed again since is not gone any more, so nothing it left is a leftover now either.
+                if (others.Any(o => string.Equals(o.Name, group.AppName, StringComparison.OrdinalIgnoreCase))) continue;
+
                 var items = new ObservableCollection<LeftoverItem>();
                 var keptFolders = new List<StoredFolder>();
                 foreach (var folder in group.Folders)
@@ -274,6 +278,10 @@ public sealed class LeftoverService : ILeftoverService
                     if (!Directory.Exists(folder.Path)) continue;
                     if (LeftoverFinder.Refusal(folder.Path, _env) is not null) continue;
                     if (LeftoverFinder.SharedWith(folder.Path, others, _env) is not null) continue;
+                    // Found by its name, so refused again by its name, exactly as the search refused it, when an app
+                    // answering to that name has been installed since.
+                    if (folder.Confidence == LeftoverConfidence.Probably
+                        && LeftoverFinder.IsShared(Path.GetFileName(folder.Path), others)) continue;
                     var (bytes, holdsLink) = MeasureFolder(folder.Path, CancellationToken.None);
                     if (holdsLink) continue;
 

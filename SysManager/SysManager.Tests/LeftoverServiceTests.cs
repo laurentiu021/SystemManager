@@ -313,6 +313,44 @@ public sealed class LeftoverServiceTests : IDisposable
     }
 
     [Fact]
+    public void AnAppInstalledAgain_TakesWhatItLeftOffTheList()
+    {
+        // Uninstalled, then installed again before an administrator session came round: the data folder it left is
+        // in use once more, and the old install folder is the app's again, though the new install went elsewhere and
+        // neither folder is inside the other — only the app's own name says so.
+        var oldInstall = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes 1"));
+        var data = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramData, "Acme Notes"));
+        var service = Service();
+        service.RememberPending([new LeftoverGroup
+        {
+            AppName = "Acme Notes",
+            Items = [Folder(oldInstall, needsAdmin: true), Folder(data, LeftoverConfidence.Probably, needsAdmin: true)],
+        }]);
+        _env.Registered.Add(new UninstallProbe("Acme Notes", "Acme", "", Path.Combine(_env.ProgramFiles, "Acme Notes")));
+        _env.IsElevated = true;
+
+        Assert.Empty(service.LoadPending());
+        Assert.False(File.Exists(service.PendingPath));
+    }
+
+    [Fact]
+    public void AFolderNamedAfterAnAppInstalledSince_IsNotOfferedAgain()
+    {
+        // Found by its name, so it is refused again by its name once another app answering to it is installed.
+        var data = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramData, "Zoom"));
+        var service = Service();
+        service.RememberPending([new LeftoverGroup
+        {
+            AppName = "Zoom",
+            Items = [Folder(data, LeftoverConfidence.Probably, needsAdmin: true)],
+        }]);
+        _env.Registered.Add(new UninstallProbe("Zoom Workplace (64-bit)", "Zoom", "", ""));
+        _env.IsElevated = true;
+
+        Assert.Empty(service.LoadPending());
+    }
+
+    [Fact]
     public void ForgettingEveryFolder_RemovesTheRecord()
     {
         var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"));

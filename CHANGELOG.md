@@ -7660,7 +7660,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 
 ## [1.18.3] - 2026-06-03
 
-The same build as 1.18.2, tagged a second time from the same commit. Nothing changed.
+The same code as 1.18.2, released a second time from the same commit under a new number. Nothing changed.
 
 ## [1.18.2] - 2026-06-03
 
@@ -7993,7 +7993,7 @@ them.
 
 ## [1.7.19] - 2026-05-25
 
-The same build as 1.7.18, tagged a second time from the same commit. Nothing changed.
+The same code as 1.7.18, released a second time from the same commit under a new number. Nothing changed.
 
 ## [1.7.18] - 2026-05-25
 

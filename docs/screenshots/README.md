@@ -77,8 +77,8 @@ and `deep-cleanup.png` still shows the Large files card that is now its own tab.
   [tinypng.com](https://tinypng.com/) or `pngquant` before committing.
   Aim for each shot under 300 KB.
 
-The current set does not meet these yet: every shot is 3866 × 2330, and 31 of the 42 are over
-300 KiB. The recapture above fixes both.
+The current set does not meet these yet: every shot is 3866 × 2330, and 37 of the 42 are over
+300 KB. The recapture above fixes both.
 
 ## Capturing
 

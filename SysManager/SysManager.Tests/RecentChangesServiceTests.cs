@@ -97,6 +97,26 @@ public sealed class RecentChangesServiceTests
     }
 
     [Fact]
+    public async Task WhenTheActivityLogIsFull_TheLookSaysFromWhenItsActionsAreKept()
+    {
+        // The log keeps a number of entries, not a number of days, so a busy PC's oldest may be inside the period.
+        _activity = [.. Enumerable.Range(0, ActivityLogService.MaxEntries)
+            .Select(i => new ActivityEntry("Quick Cleanup", "Freed 1 MB", Now.AddHours(-i)))];
+
+        var look = await NewService().LookAsync(90);
+
+        Assert.Equal(Now.AddHours(-(ActivityLogService.MaxEntries - 1)), look.ActivityKeptFrom);
+    }
+
+    [Fact]
+    public async Task WithRoomLeftInTheActivityLog_NothingOfItIsMissing()
+    {
+        _activity = [new ActivityEntry("Quick Cleanup", "Freed 1 MB", Now.AddDays(-80))];
+
+        Assert.Null((await NewService().LookAsync(90)).ActivityKeptFrom);
+    }
+
+    [Fact]
     public async Task ALook_LooksAtTheProgramsAtThatMoment()
     {
         await NewService().LookAsync(7);
@@ -204,6 +224,28 @@ public sealed class RecentChangesServiceTests
 
         Assert.Equal([installed], RecentChangesService.Combine([installed], [], [appeared], []));
         Assert.Equal([detected], RecentChangesService.Combine([], [detected], [appeared], []));
+    }
+
+    [Fact]
+    public void ADetectionJustOutsideTheWindow_StillStandsForTheSameInstall()
+    {
+        // An installer writes its folder minutes before its uninstall entry, and New App Alerts checks the entries every
+        // 30 seconds, so its time can fall a moment either side of the window the two looks give.
+        var appeared = Change(ChangeKind.ProgramAppeared, "Contoso Notes", Now, since: Now.AddDays(-3));
+        var justAfter = Change(ChangeKind.ProgramDetected, "Contoso Notes", Now.AddSeconds(20));
+        var justBefore = Change(ChangeKind.ProgramDetected, "Contoso Notes", Now.AddDays(-3).AddMinutes(-3));
+
+        Assert.Equal([justAfter], RecentChangesService.Combine([], [justAfter], [appeared], []));
+        Assert.Equal([justBefore], RecentChangesService.Combine([], [justBefore], [appeared], []));
+    }
+
+    [Fact]
+    public void ADetectionWellOutsideTheWindow_IsAnotherChange()
+    {
+        var appeared = Change(ChangeKind.ProgramAppeared, "Contoso Notes", Now, since: Now.AddDays(-3));
+        var later = Change(ChangeKind.ProgramDetected, "Contoso Notes", Now.AddMinutes(11));
+
+        Assert.Equal([later, appeared], RecentChangesService.Combine([], [later], [appeared], []));
     }
 
     [Fact]
@@ -316,6 +358,17 @@ public sealed class RecentChangesServiceTests
             [new DriftSighting("ads", 0, 1, new DateTime(2026, 10, 7, 18, 30, 0), new DateTime(2026, 10, 8, 9, 0, 0))], [Ads]));
 
         Assert.EndsWith(" It is back as you saved it since Thu 8 Oct.", change.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AChangedSettingThatChangedAgain_SaysSo_NotThatItWentBack()
+    {
+        var change = Assert.Single(RecentChangesService.Settings(
+            [new DriftSighting("ads", 0, 1, new DateTime(2026, 10, 7, 18, 30, 0), new DateTime(2026, 10, 8, 9, 0, 0), ChangedAgain: true)],
+            [Ads]));
+
+        Assert.EndsWith(" It changed again on Thu 8 Oct.", change.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("back as you saved", change.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -42,9 +42,10 @@ changed from the ones you saved, each with who made the change (#1507).
   `%LocalAppData%\SysManager\app-alerts.json`. Until now the list was lost when SysManager closed. Clear History clears
   the saved copy too, and its question now says Recent Changes loses them as well.
 - **Settings Watchdog** records, each time it looks, when a setting that differs from your baseline was first seen and
-  when it went back, for Recent Changes. Saving a new baseline starts that record again.
-- The activity log behind the Dashboard's Recent activity card keeps 200 entries instead of 60, so Recent Changes'
-  longest period holds.
+  when it went back or changed again, for Recent Changes. Saving a new baseline starts that record again.
+- The activity log behind the Dashboard's Recent activity card keeps 200 entries instead of 60, to reach further back.
+  When it still does not reach the start of the period shown, Recent Changes says from when SysManager's own actions
+  are listed.
 
 ## [1.124.0] - 2026-10-08
 

@@ -797,9 +797,10 @@ Key services:
   activity log, Windows' reliability history, the installed programs kept from the last look, New App Alerts'
   detections and Settings Watchdog's sightings, put in one list by `Combine`, each program once by the best record
   of it — Windows Installer's, then a detection within ten minutes of it, then a difference between two looks
-  whose window holds neither. Windows' history is asked first and the local sources are read while it answers. A
-  source that could not be read is named in `RecentChangesLook.Unreadable`, never read as empty. `KeptFor` is how
-  long the records it reads keep a change: past the 90-day longest period. Changes nothing on the PC.
+  whose window, widened by the same ten minutes, holds neither. Windows' history is asked first and the local
+  sources are read while it answers. A source that could not be read is named in `RecentChangesLook.Unreadable`,
+  never read as empty, and when the activity log is full `ActivityKeptFrom` says how far back it reaches. `KeptFor`
+  is how long the records it reads keep a change: past the 90-day longest period. Changes nothing on the PC.
 - `WmiReliabilityHistory` (`IReliabilityHistory`) — `Win32_ReliabilityRecords` since a time, filtered by WMI,
   which needs no administrator rights, with a 30-second timeout. `ReliabilityChanges.Parse` turns the records into
   changes and problem counts without touching the PC: Windows Update installs and failures (a Store app by its
@@ -1374,18 +1375,18 @@ Key services:
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
   only the NVIDIA GPU and the disks' SMART temperatures. It does not poll: the Dashboard asks
   every 2 s while it is visible, and the Resource History sampler every 10 s.
-- `ActivityLogService` — persists the last 200 user actions, enough for the 90 days Recent Changes looks
-  back over, to a JSON file for the Dashboard's recent-activity card and Recent Changes: 22 kinds of
-  action, from 29 call sites. The six destructive operations (deep cleanup, browser clean, privacy write,
-  uninstall, shred, shortcut delete) are recorded as counts and sizes only, never file names; the others
-  say what changed, and Undo Changes records each put-back that changed something (#1525). Takes a
-  `configDir` seam so tests never write to the user's real history. The file is shared with command-line
-  and scheduled runs, which are separate processes, so `GetRecent` reads it rather than a list held since
-  startup, and `Log` reads, adds and writes as one step under an exclusive handle on `activity.json.lock`
-  beside it, a file lock so the lock is bound to the file it protects. Without that, the open app's next
-  write erased a scheduled run's entry. A file that could not be read is never written over: the entry
-  waits in `_unsaved`, is listed by `GetRecent`, and is written by the next `Log` that can read the file.
-  One that does not parse is set aside first.
+- `ActivityLogService` — persists the last 200 user actions (60 before Recent Changes read them over as
+  long as 90 days, #1507) to a JSON file for the Dashboard's recent-activity card and Recent Changes: 22
+  kinds of action, from 29 call sites. The six destructive operations (deep cleanup, browser clean,
+  privacy write, uninstall, shred, shortcut delete) are recorded as counts and sizes only, never file
+  names; the others say what changed, and Undo Changes records each put-back that changed something
+  (#1525). Takes a `configDir` seam so tests never write to the user's real history. The file is shared
+  with command-line and scheduled runs, which are separate processes, so `GetRecent` reads it rather than
+  a list held since startup, and `Log` reads, adds and writes as one step under an exclusive handle on
+  `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects. Without that,
+  the open app's next write erased a scheduled run's entry. A file that could not be read is never written
+  over: the entry waits in `_unsaved`, is listed by `GetRecent`, and is written by the next `Log` that can
+  read the file. One that does not parse is set aside first.
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,
@@ -1433,8 +1434,10 @@ Key services:
   first, throwing `IOException` rather than replacing it when it cannot. `RecordDrift` keeps when each
   drift was first seen and when it went, in `settings-drift.json` beside the baseline, for Recent
   Changes (#1507) — under the same lock, because `SaveBaseline` forgets those sightings, measured against
-  the baseline it replaces. A sighting that ended longer ago than `RecentChangesService.KeptFor` is
-  dropped; one still open is kept, so the same drift is not reported again as new.
+  the baseline it replaces. A sighting that ended because the setting changed to another value is marked
+  `ChangedAgain`, so Recent Changes does not say it went back. One that ended longer ago than
+  `RecentChangesService.KeptFor` is dropped, and past `MaxSightings` the earliest to end go; one still open
+  is kept, so the same drift is not reported again as new.
 - `CliRunner` — the headless command-line entry point (dispatched from `App.OnStartup`
   before the single-instance mutex, attaching to the parent console). Exposes only
   read-only/safe verbs (`--health`, `--cleanup`, `--purge-standby` — with `--trim-ram`

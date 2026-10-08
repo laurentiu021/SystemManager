@@ -416,12 +416,14 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **What New App Alerts noticed**, at the time it noticed. A program that Windows Installer and New App
   Alerts both saw within ten minutes is listed once, from Windows' record
 - **Settings that changed from the ones you saved**, from when Settings Watchdog first noticed: each look at
-  either tab records it, and when the setting went back. When a setting changed is not known, only when it
-  was noticed, so its row shows a dash where the time goes and says when it was noticed underneath
+  either tab records it, and when the setting went back or changed again. When a setting changed is not
+  known, only when it was noticed, so its row shows a dash where the time goes and says when it was noticed
+  underneath
 - **A night of updates does not bury the rest**: two or more updates Windows installed on one day are one
   row — "Windows installed 9 updates", and what they were by kind — that opens to the full list
 - **Filter by kind** — SysManager, Windows, Programs, Settings — and **by period**: 7, 30 or 90 days. The
-  activity log keeps 200 entries instead of 60, so 90 days holds
+  activity log keeps 200 entries instead of 60, and when even that does not reach back to the start of the
+  period, the page says from when SysManager's own actions are listed
 - **Problems are not changes.** Crashes and programs that stopped responding in the same days are counted
   in one line, which opens System Logs
 - **A source that could not be read is named** rather than shown as nothing changed, and an empty period
@@ -1090,8 +1092,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Undo Changes links here** — the settings that drifted from your baseline, and that
   Restore changed can write back, are one row there that opens this tab
 - **Recent Changes says when** — each look records when a changed setting was first seen and when it
-  went back to your baseline, so Recent Changes can list it among everything else that changed. Saving a
-  new baseline starts that record again
+  went back to your baseline or changed again, so Recent Changes can list it among everything else that
+  changed. Saving a new baseline starts that record again
 - Strictly local: the baseline lives in your `%LocalAppData%\SysManager` folder and
   the watchdog only ever reads or writes a fixed list of well-known registry values
 

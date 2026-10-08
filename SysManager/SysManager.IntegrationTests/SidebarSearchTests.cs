@@ -7,7 +7,7 @@ using SysManager.ViewModels;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Search over the 59 tabs, and the keywords that make it work for someone who does not know the
+/// Search over the 60 tabs, and the keywords that make it work for someone who does not know the
 /// vocabulary (#1498, #1505).
 /// </summary>
 /// <remarks>
@@ -76,6 +76,8 @@ public class SidebarSearchTests(NavSurfaceFixture fixture) : IClassFixture<NavSu
     [InlineData("browser ads", "nav-browser-cleaner")]
     [InlineData("put back", "nav-undo-changes")]
     [InlineData("revert", "nav-undo-changes")]
+    [InlineData("what changed", "nav-recent-changes")]
+    [InlineData("it was fine last week", "nav-recent-changes")]
     public void SearchingByPlainWords_FindsTheJargonNamedTab(string typed, string expectedNavId)
     {
         var results = Search(typed);

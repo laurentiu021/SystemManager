@@ -30,9 +30,13 @@ public enum ChangeSource
 /// <param name="FirstProgramsLook">True when this was the first look at the installed programs, so none could be new yet.</param>
 /// <param name="HasBaseline">True when Settings Watchdog has a saved baseline the settings were compared with.</param>
 /// <param name="LookedAt">When the look was made.</param>
+/// <param name="ActivityKeptFrom">
+/// When the activity log is full, the time of the oldest action it still holds: SysManager's actions before it are no
+/// longer kept. Null while the log has room, so every action is there.
+/// </param>
 public sealed record RecentChangesLook(IReadOnlyList<ChangeEvent> Changes, IReadOnlyList<ProblemEvent> Problems,
                                        IReadOnlyList<ChangeSource> Unreadable, bool FirstProgramsLook, bool HasBaseline,
-                                       DateTime LookedAt);
+                                       DateTime LookedAt, DateTime? ActivityKeptFrom = null);
 
 /// <summary>Everything that changed on the PC lately, in one list (#1507).</summary>
 public interface IRecentChangesService
@@ -63,6 +67,12 @@ public sealed class RecentChangesService : IRecentChangesService
     /// still there for a look a few weeks late, and no longer, so the records do not grow for good.
     /// </summary>
     internal static readonly TimeSpan KeptFor = TimeSpan.FromDays(LongestPeriodDays + 30);
+
+    /// <summary>
+    /// How far apart two records of one install can be. An installer creates its folder minutes before it writes its
+    /// uninstall entry, Windows Installer records the end, and New App Alerts checks the entries every 30 seconds.
+    /// </summary>
+    private static readonly TimeSpan SameInstall = TimeSpan.FromMinutes(10);
 
     private readonly IReliabilityHistory _reliability;
     private readonly IInstalledProgramsHistory _programs;
@@ -116,10 +126,15 @@ public sealed class RecentChangesService : IRecentChangesService
             local.Programs.Changes.Select(Program).ToList(),
             Settings(local.Sightings.Sightings, _watchdog.Catalog));
 
+        // The log keeps a number of actions, not a number of days, so when it is full its oldest may be inside the period.
+        DateTime? activityKeptFrom = local.Activity.Count >= ActivityLogService.MaxEntries
+            ? local.Activity.Min(e => e.Timestamp)
+            : null;
+
         return new RecentChangesLook(
             [.. changes.Where(c => c.When >= since && c.When <= now)],
             [.. problems.Where(p => p.When >= since && p.When <= now)], unreadable, local.Programs.FirstLook,
-            local.HasBaseline, now);
+            local.HasBaseline, now, activityKeptFrom);
     }
 
     private sealed record LocalSources(IReadOnlyList<ActivityEntry> Activity, ProgramsLook Programs, AppAlertsRead Alerts,
@@ -150,7 +165,7 @@ public sealed class RecentChangesService : IRecentChangesService
         var removed = exact.Where(c => c.Kind == ChangeKind.ProgramRemoved).ToList();
 
         var keptDetections = detected
-            .Where(d => !installed.Any(i => SameName(i, d) && (i.When - d.When).Duration() <= TimeSpan.FromMinutes(10)))
+            .Where(d => !installed.Any(i => SameName(i, d) && (i.When - d.When).Duration() <= SameInstall))
             .ToList();
 
         var keptDifferences = betweenLooks.Where(b => b.Kind switch
@@ -164,7 +179,7 @@ public sealed class RecentChangesService : IRecentChangesService
         static bool SameName(ChangeEvent a, ChangeEvent b) => string.Equals(a.Subject, b.Subject, StringComparison.OrdinalIgnoreCase);
 
         static bool Covers(ChangeEvent window, DateTime when) =>
-            when <= window.When && (window.Since is not { } since || when >= since);
+            when <= window.When + SameInstall && (window.Since is not { } since || when >= since - SameInstall);
     }
 
     /// <summary>SysManager's own actions, in the words the Dashboard's Recent activity card uses.</summary>
@@ -208,7 +223,9 @@ public sealed class RecentChangesService : IRecentChangesService
             if (catalog.FirstOrDefault(s => s.Key == sighting.Key) is not { } setting) continue;
             var detail = $"Found {setting.Describe(sighting.Value)}, where you saved {setting.Describe(sighting.Baseline)}. "
                          + $"Settings Watchdog noticed at {Time(sighting.FirstSeen)}."
-                         + (sighting.GoneAt is { } gone ? $" It is back as you saved it since {Day(gone)}." : "");
+                         + (sighting.GoneAt is not { } gone ? ""
+                            : sighting.ChangedAgain ? $" It changed again on {Day(gone)}."
+                            : $" It is back as you saved it since {Day(gone)}.");
             changes.Add(new ChangeEvent(sighting.FirstSeen, null, ChangeKind.SettingChanged, setting.Name,
                 "Windows or another program", detail));
         }

@@ -52,7 +52,8 @@ public sealed class RecentChangesViewUiTests
     private static async Task<RecentChangesViewModel> VmAsync(IReadOnlyList<ChangeEvent> changes, IReadOnlyList<ProblemEvent>? problems = null)
     {
         var vm = new RecentChangesViewModel(
-            new FakeRecentChanges(new RecentChangesLook(changes, problems ?? [], [], FirstProgramsLook: false, HasBaseline: true, Now)),
+            new FakeRecentChanges(new RecentChangesLook(changes, problems ?? [], [], FirstProgramsLook: false, HasBaseline: true, Now,
+                ActivityKeptFrom: null)),
             new NoNavigation());
         await vm.InitializationComplete;
         return vm;

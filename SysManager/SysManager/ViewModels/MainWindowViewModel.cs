@@ -755,10 +755,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var serviceLedger = new ServiceStartupLedgerService();
         var hosts = new HostsFileService();
         var environment = new EnvironmentVariableService();
-        var watchdog = new SettingsWatchdogService();
+        // A look at Settings Watchdog or Recent Changes records what it saw, and a look this graph makes is the
+        // designer's or a test's, not the user's: kept in the user's folder, it would date the user's next "between
+        // your look on ... and ..." from a look nobody took. So what those looks record stays out of it (#1507).
+        var lookRecords = System.IO.Path.Join(System.IO.Path.GetTempPath(), "SysManager-designer");
+        var watchdog = new SettingsWatchdogService(lookRecords);
         var putBack = new PutBackSignal();
         // One record of App Alerts' detections, as under DI: Recent Changes reads what App Alerts writes (#1507).
-        var appAlertHistory = new AppAlertHistory();
+        var appAlertHistory = new AppAlertHistory(lookRecords);
 
         return new Dictionary<Type, object>
         {
@@ -828,7 +832,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
                     gamingProfiles, watchdog, restorePoints, putBack),
                 designerNavigation),
             [typeof(RecentChangesViewModel)] = new RecentChangesViewModel(
-                new RecentChangesService(new WmiReliabilityHistory(), new InstalledProgramsHistory(), appAlertHistory, watchdog),
+                new RecentChangesService(new WmiReliabilityHistory(), new InstalledProgramsHistory(lookRecords, UninstallEntries.ReadAll),
+                    appAlertHistory, watchdog),
                 designerNavigation),
         };
     }

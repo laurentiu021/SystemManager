@@ -82,11 +82,37 @@ public sealed class SettingsDriftSightingsTests : IDisposable
     }
 
     [Fact]
-    public void ADriftToAnotherValue_EndsTheOldSighting_AndStartsANewOne()
+    public void ADriftToAnotherValue_EndsTheOldSighting_AsChangedAgain_AndStartsANewOne()
     {
+        // Not back as it was saved: still changed, to something else. Recent Changes must not say it went back.
         var sightings = SettingsWatchdogService.UpdateSightings([Sighting("ads", Monday)], [Drift("ads", now: 2)], Tuesday);
 
-        Assert.Equal([Sighting("ads", Monday, goneAt: Tuesday), Sighting("ads", Tuesday, value: 2)], sightings);
+        Assert.Equal([Sighting("ads", Monday, goneAt: Tuesday) with { ChangedAgain = true }, Sighting("ads", Tuesday, value: 2)],
+            sightings);
+    }
+
+    [Fact]
+    public void ADriftThatWentBack_WhileAnotherSettingDrifted_IsNotTakenForOneThatChangedAgain()
+    {
+        var sightings = SettingsWatchdogService.UpdateSightings([Sighting("ads", Monday)], [Drift("tips")], Tuesday);
+
+        Assert.False(sightings.Single(s => s.Key == "ads").ChangedAgain);
+    }
+
+    [Fact]
+    public void AtMostMaxSightingsAreKept_EveryOpenOne_AndTheLatestToEnd()
+    {
+        // A setting that two programs keep flipping adds a sighting at every look; the record still stays small.
+        List<DriftSighting> kept = [.. Enumerable.Range(0, SettingsWatchdogService.MaxSightings + 5)
+            .Select(i => Sighting("ads", Monday.AddMinutes(i), goneAt: Monday.AddMinutes(i + 1)))];
+        kept.Add(Sighting("tips", Monday));
+
+        var sightings = SettingsWatchdogService.UpdateSightings(kept, [Drift("tips")], Tuesday);
+
+        Assert.Equal(SettingsWatchdogService.MaxSightings, sightings.Count);
+        Assert.Contains(Sighting("tips", Monday), sightings);
+        Assert.DoesNotContain(sightings, s => s.FirstSeen == Monday && s.Key == "ads");
+        Assert.Contains(sightings, s => s.FirstSeen == Monday.AddMinutes(SettingsWatchdogService.MaxSightings + 4));
     }
 
     [Fact]

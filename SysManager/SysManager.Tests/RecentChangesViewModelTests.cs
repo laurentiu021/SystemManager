@@ -23,8 +23,8 @@ public sealed class RecentChangesViewModelTests
 
     private static RecentChangesLook Look(IReadOnlyList<ChangeEvent>? changes = null, IReadOnlyList<ProblemEvent>? problems = null,
                                           IReadOnlyList<ChangeSource>? unreadable = null, bool firstLook = false,
-                                          bool hasBaseline = true) =>
-        new(changes ?? [], problems ?? [], unreadable ?? [], firstLook, hasBaseline, Now);
+                                          bool hasBaseline = true, DateTime? activityKeptFrom = null) =>
+        new(changes ?? [], problems ?? [], unreadable ?? [], firstLook, hasBaseline, Now, activityKeptFrom);
 
     private static ChangeEvent Change(ChangeKind kind, string subject, DateTime when, DateTime? since = null,
                                       string who = "Who", string detail = "") =>
@@ -320,6 +320,7 @@ public sealed class RecentChangesViewModelTests
             Change(ChangeKind.StoreAppUpdate, "Contoso.B", Now.AddMinutes(-1)),
         ]);
 
+        Assert.Equal("2 apps were updated from the Microsoft Store", row.Title);
         Assert.Equal("Microsoft Store", row.Who);
         Assert.Equal("2 app updates from the Microsoft Store", row.Detail);
     }
@@ -503,7 +504,7 @@ public sealed class RecentChangesViewModelTests
     {
         var notes = RecentChangesViewModel.Describe(Look(
             unreadable: [ChangeSource.WindowsHistory, ChangeSource.InstalledPrograms, ChangeSource.SettingsWatchdog],
-            firstLook: true));
+            firstLook: true), 7);
 
         Assert.Equal(
             "Windows' own history could not be read just now, so the updates and installs it records are missing. Refresh to try again. "
@@ -517,7 +518,17 @@ public sealed class RecentChangesViewModelTests
     [Fact]
     public void WithEverythingRead_ThereAreNoNotes()
     {
-        Assert.Equal("", RecentChangesViewModel.Describe(Look()));
+        Assert.Equal("", RecentChangesViewModel.Describe(Look(), 7));
+    }
+
+    [Fact]
+    public void WhenTheActivityLogDoesNotReachBackThePeriod_ItIsSaid()
+    {
+        var look = Look(activityKeptFrom: Now.AddDays(-3));
+
+        Assert.Equal($"SysManager keeps its last {ActivityLogService.MaxEntries} actions, so what it did before Mon 5 Oct is not listed.",
+            RecentChangesViewModel.Describe(look, 7));
+        Assert.Equal("", RecentChangesViewModel.Describe(Look(activityKeptFrom: Now.AddDays(-10)), 7));
     }
 
     [Fact]

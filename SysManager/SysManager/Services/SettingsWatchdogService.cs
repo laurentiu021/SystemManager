@@ -34,6 +34,12 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     // When each drift was first seen, beside the baseline it was measured against (#1507).
     private readonly string _sightingsPath;
 
+    /// <summary>
+    /// How many sightings are kept. A setting two programs keep flipping adds one at every look; the open ones, one a
+    /// setting at most, are always kept, and past this the ones that ended longest ago go.
+    /// </summary>
+    internal const int MaxSightings = 200;
+
     // Serializes SaveBaseline, which reads the baseline file to decide whether to set it aside before replacing it, and
     // RecordDrift, which reads the sightings and writes them back: saving a baseline forgets the sightings, and a look
     // in between would otherwise write them back.
@@ -115,19 +121,29 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
 
     /// <summary>
     /// The sightings after a look that found <paramref name="drifts"/>: one opened for each drift with no open sighting
-    /// of the same value, each open one whose drift is no longer there closed at <paramref name="now"/>, and each closed
+    /// of the same value, each open one whose drift is no longer there closed at <paramref name="now"/> — marked
+    /// <see cref="DriftSighting.ChangedAgain"/> when its setting is still changed, to another value — and each closed
     /// longer ago than Recent Changes looks back dropped. An open one is kept however old: it is what stops the same
-    /// drift being reported again as new. Pure.
+    /// drift being reported again as new. At most <see cref="MaxSightings"/>, the earliest to end going first. Pure.
     /// </summary>
     internal static List<DriftSighting> UpdateSightings(IReadOnlyList<DriftSighting> kept, IReadOnlyList<SettingDrift> drifts,
                                                          DateTime now)
     {
         var sightings = kept
             .Where(s => s.GoneAt is not { } gone || now - gone <= RecentChangesService.KeptFor)
-            .Select(s => s.GoneAt is null && !drifts.Any(d => Matches(s, d)) ? s with { GoneAt = now } : s)
+            .Select(s => s.GoneAt is null && !drifts.Any(d => Matches(s, d))
+                ? s with { GoneAt = now, ChangedAgain = drifts.Any(d => d.Setting.Key == s.Key) }
+                : s)
             .ToList();
         foreach (var drift in drifts.Where(d => !sightings.Any(s => s.GoneAt is null && Matches(s, d))))
             sightings.Add(new DriftSighting(drift.Setting.Key, drift.BaselineValue, drift.CurrentValue, now, null));
+
+        var excess = sightings.Count - MaxSightings;
+        if (excess > 0)
+        {
+            var earliestEnded = sightings.Where(s => s.GoneAt is not null).OrderBy(s => s.GoneAt).Take(excess).ToHashSet();
+            sightings.RemoveAll(earliestEnded.Contains);
+        }
         return sightings;
 
         static bool Matches(DriftSighting s, SettingDrift d) =>
@@ -413,7 +429,12 @@ public sealed record BaselineSnapshot(DateTime TakenAt, Dictionary<string, int?>
 /// <param name="Value">The value it was found with.</param>
 /// <param name="FirstSeen">The first look that found it.</param>
 /// <param name="GoneAt">The first look that found it gone, or null while it is still there.</param>
-public sealed record DriftSighting(string Key, int? Baseline, int? Value, DateTime FirstSeen, DateTime? GoneAt);
+/// <param name="ChangedAgain">
+/// True when it went because the setting changed to yet another value rather than back to the saved one; that value has
+/// a sighting of its own.
+/// </param>
+public sealed record DriftSighting(string Key, int? Baseline, int? Value, DateTime FirstSeen, DateTime? GoneAt,
+                                   bool ChangedAgain = false);
 
 /// <summary>The sightings kept, or that they could not be read, in which case none were recorded.</summary>
 public sealed record DriftSightings(IReadOnlyList<DriftSighting> Sightings, bool Readable)

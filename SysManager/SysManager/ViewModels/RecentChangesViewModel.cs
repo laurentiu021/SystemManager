@@ -38,7 +38,6 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
     private readonly INavigationService _navigation;
     private readonly CancellationTokenSource _cts = new();
     private RecentChangesLook? _look;
-    private Task _looking = Task.CompletedTask;
     private bool _lookAgain;
 
     /// <summary>The days shown, newest first, each with its changes.</summary>
@@ -134,7 +133,7 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
             _lookAgain = true;
             return Task.CompletedTask;
         }
-        return _looking = LookNowAsync();
+        return LookNowAsync();
     }
 
     private async Task LookNowAsync()
@@ -189,7 +188,7 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
         ProblemsText = DescribeProblems(problems);
         HasProblems = ProblemsText.Length > 0;
 
-        Notes = Describe(look);
+        Notes = Describe(look, days);
         HasNotes = Notes.Length > 0;
 
         (EmptyTitle, EmptyMessage) = DescribeEmpty(look, days, SelectedCategory);
@@ -297,8 +296,11 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
         return parts.Count == 0 ? "" : $"Problems in the same days — {string.Join(", ", parts)} — are in System Logs.";
     }
 
-    /// <summary>What could not be read, and what a first look means, one sentence each.</summary>
-    internal static string Describe(RecentChangesLook look)
+    /// <summary>
+    /// What could not be read, whether SysManager's own actions reach back the <paramref name="days"/> shown, and what a
+    /// first look means, one sentence each.
+    /// </summary>
+    internal static string Describe(RecentChangesLook look, int days)
     {
         var said = new List<string>();
         foreach (var source in look.Unreadable)
@@ -310,6 +312,11 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
                 ChangeSource.AppAlerts => "New App Alerts' list could not be read, so what it noticed is missing.",
                 _ => "Settings Watchdog's record could not be read, so changed settings are missing.",
             });
+        }
+        if (look.ActivityKeptFrom is { } from && from > look.LookedAt.AddDays(-days))
+        {
+            said.Add($"SysManager keeps its last {ActivityLogService.MaxEntries} actions, so what it did before "
+                     + $"{RecentChangesService.Day(from)} is not listed.");
         }
         if (look.FirstProgramsLook)
         {
@@ -469,11 +476,15 @@ public sealed partial class ChangeRow : ObservableObject
         TitleOf(change), change.Who, change.Detail, change.Link, []);
 
     /// <summary>The one row for the updates Windows installed on a day, newest first, which opens to their names.</summary>
-    internal static ChangeRow ForUpdates(IReadOnlyList<ChangeEvent> updates) => new(
-        RecentChangesService.Time(updates[0].When), "\uE895", $"Windows installed {updates.Count} updates",
-        updates.Any(u => u.Kind == ChangeKind.StoreAppUpdate) && updates.All(u => u.Kind == ChangeKind.StoreAppUpdate)
-            ? "Microsoft Store" : "Windows Update",
-        Breakdown(updates), ChangeLink.None, [.. updates.Select(TitleOf)]);
+    internal static ChangeRow ForUpdates(IReadOnlyList<ChangeEvent> updates)
+    {
+        var store = updates.All(u => u.Kind == ChangeKind.StoreAppUpdate);
+        return new(
+            RecentChangesService.Time(updates[0].When), "\uE895",
+            store ? $"{updates.Count} apps were updated from the Microsoft Store" : $"Windows installed {updates.Count} updates",
+            store ? "Microsoft Store" : "Windows Update",
+            Breakdown(updates), ChangeLink.None, [.. updates.Select(TitleOf)]);
+    }
 
     /// <summary>What a day's updates were, by kind: "6 app updates from the Microsoft Store, 1 driver".</summary>
     internal static string Breakdown(IReadOnlyList<ChangeEvent> updates)

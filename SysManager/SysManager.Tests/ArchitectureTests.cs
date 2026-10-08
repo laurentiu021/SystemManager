@@ -16660,6 +16660,53 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The UI tests read an element's name through <c>AppFixture.NameOf</c>, never as <c>.Name</c>.
+    /// </summary>
+    /// <remarks>
+    /// A row one walk of the automation tree found can be gone by the time its name is read, and <c>Name</c> then throws,
+    /// ending a wait that would have succeeded a moment later. That is how the UI test for "Why is it slow?" failed on its
+    /// first run, while the check ticked its five rows off (#1529), and the Services test reads a list that fills in the
+    /// same way. <c>NameOf</c> answers null for such an element, so the wait goes round again.
+    /// <para><c>Properties.Name.ValueOrDefault</c> is the read <c>NameOf</c> makes, and the only other form allowed.</para>
+    /// </remarks>
+    [Fact]
+    public void NoUiTest_ReadsAnElementsNameOutsideNameOf()
+    {
+        // The pattern still tells the read it bans from the two it allows.
+        Assert.Matches(RawElementNameRead(), "e => e.Name.Contains(text)");
+        Assert.Matches(RawElementNameRead(), "button.Name?.StartsWith(prefix)");
+        Assert.DoesNotMatch(RawElementNameRead(), "AppFixture.NameOf(e)");
+        Assert.DoesNotMatch(RawElementNameRead(), "element.Properties.Name.ValueOrDefault");
+
+        var files = Directory.GetFiles(Path.Combine(TestPaths.SolutionDir(), "SysManager.UITests"), "*.cs");
+        Assert.True(files.Length >= 10, $"only {files.Length} UI test files were read, so this would check nothing.");
+
+        var offenders = new List<string>();
+        var throughNameOf = 0;
+        foreach (var path in files.OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var lines = WithoutComments(File.ReadAllText(path)).Replace("\r\n", "\n").Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                throughNameOf += Regex.Matches(lines[i], @"\bNameOf\(").Count;
+                if (RawElementNameRead().IsMatch(lines[i]))
+                    offenders.Add($"{Path.GetFileName(path)}:{i + 1}  {lines[i].Trim()}");
+            }
+        }
+
+        // Floor: six reads went through it when it was written. Fewer means the search stopped finding them, not that
+        // the tests stopped reading names.
+        Assert.True(throughNameOf >= 6, $"only {throughNameOf} reads go through NameOf, against the 6 when this was written.");
+        Assert.True(offenders.Count == 0,
+            "these UI tests read an element's name directly, which throws once the element has gone and ends the wait "
+            + "early. Read it through AppFixture.NameOf instead:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A read of <c>.Name</c> that is not <c>Properties.Name</c>; <c>NameOf</c> has no boundary after Name.</summary>
+    [GeneratedRegex(@"(?<!Properties)\.Name\b", RegexOptions.Compiled)]
+    private static partial Regex RawElementNameRead();
+
+    /// <summary>
     /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
     /// and the list beside the number names each one — so both are derived here from the registrations
     /// themselves, which is the only place a seam actually becomes injectable.

@@ -1864,7 +1864,7 @@ offers, "rate us" prompts:
   Recycle Bin. No admin required.
 - **Why is it slow?** — the button beside Scan system looks at the five things that most often
   slow a PC down, all at once, and lists what it found, worst first. It ticks each one off as it
-  finishes, which takes about two seconds:
+  finishes, which takes a few seconds, most of them spent listing what is running:
   - **the system drive**, judged the way the Health Score judges it, so a large drive with plenty
     left is not called full: it is named under 20 GB free, or under 15% free with less than 25 GB
     left, and put first under 10 GB, or under 10% with less than 25 GB left

@@ -19,7 +19,7 @@ each with the tab that deals with it (#1529).
 ### Added
 
 - **Why is it slow?** on the Dashboard, between Scan system and Quick Tune-Up. It looks at five things at once and ticks
-  each off as it finishes, in about two seconds:
+  each off as it finishes, in a few seconds:
   - the system drive, judged the way the Health Score judges it, so a large drive with plenty left is not called full:
     it is named under 20 GB free, or under 15% free with less than 25 GB left, and put first under 10 GB, or under
     10% with less than 25 GB left;

@@ -24,6 +24,11 @@ public class DashboardTabUiTests
     /// the card says when it checked and how much it looked at, so that line is what proves the check ran end to end in
     /// the real app: the button, the lock, the five probes on a real PC, and the card drawing the result.
     /// </summary>
+    /// <remarks>
+    /// The wait reads names through <see cref="AppFixture.NameOf"/>, because the list of five is redrawn row by row while
+    /// it waits. A check still running when the wait gives up is cancelled, so the tests after this one do not start with
+    /// the Disk lock held.
+    /// </remarks>
     [Fact]
     public void WhyIsItSlow_Looks_AndSaysWhatItLookedAt()
     {
@@ -32,9 +37,13 @@ public class DashboardTabUiTests
         Assert.NotNull(check);
 
         check!.Invoke();
+        var shown = _fx.HasTextInCurrentTab("things looked at", timeoutSeconds: 60);
+        var stillLooking = !shown && _fx.HasButtonWithName("Cancel the slowness check");
+        if (stillLooking) _fx.FindButtonByAccessibleName("Cancel the slowness check")!.Invoke();
 
-        Assert.True(_fx.HasTextInCurrentTab("things looked at", timeoutSeconds: 60),
-            "the slowness check did not show what it looked at within a minute");
+        Assert.True(shown, stillLooking
+            ? "the slowness check was still looking after a minute, and was cancelled"
+            : "the slowness check did not show what it looked at, and was not running either");
     }
 
     [Fact]

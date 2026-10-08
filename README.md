@@ -1544,6 +1544,24 @@ offers, "rate us" prompts:
   to a second copy of themselves and return straight away; those apps stay on the list, marked as
   still installed, until the uninstaller finishes and you scan again
 - Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
+- **What it left behind** — after an uninstall, a Left behind card lists what the app left on
+  the PC: the folder it was installed in, folders named after it in AppData, Local AppData and
+  ProgramData, its own settings key under `HKEY_CURRENT_USER\Software`, and a folder named after
+  its publisher in AppData when no other app of that publisher is installed. Only the install
+  folder arrives ticked; everything else is labelled Probably, Its own key or Guess, and stays
+  unticked unless you tick it
+- **Never offered** — anything inside Windows; Program Files, ProgramData, your profile and its
+  AppData folders themselves; Documents, Desktop, Downloads, Pictures, Music and Videos and
+  everything in them; SysManager's own folders; a folder any installed app still uses, including
+  drivers and runtimes the list does not show; links, or a folder holding one; and anything not
+  on this PC's own drives. What was found in those places is listed with the reason it is left alone
+- **Can be put back** — folders go to the Recycle Bin, and if one is too big for it, Windows asks
+  before deleting it for good. A registry key is saved as a `.reg` file in
+  `%LocalAppData%\SysManager\Backups\Uninstaller` before it is deleted; double-click the file to put
+  the key back. You confirm the exact list first, and every folder is checked again just before it goes
+- **Leftovers that need administrator rights wait for them** — uninstalling runs without them,
+  so a leftover under Program Files or ProgramData is kept on a list and offered again, unticked,
+  the next time you open Uninstaller with SysManager running as administrator
 
 ### Gaming Profile 🔬
 - **One-click "game mode"** — apply a bundle of reversible optimizations together,

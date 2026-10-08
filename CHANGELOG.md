@@ -10,6 +10,46 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.124.0] - 2026-10-08
+
+**After you uninstall an app, the Uninstaller now shows what it left behind and lets you remove it.** Only the folder
+the app was installed in arrives ticked; everything else is labelled as a guess, folders go to the Recycle Bin, and a
+registry key is saved to a file before it is deleted (#1527).
+
+### Added
+
+- **Uninstaller** shows a **Left behind** card after a run that removed an app. It lists the folder the app was
+  installed in, read before the uninstaller runs because some uninstallers delete the entry that names it first;
+  folders named exactly after the app directly in AppData, Local AppData and ProgramData; the app's own key,
+  `HKEY_CURRENT_USER\Software\<Publisher>\<App>`; and a folder named after the publisher in AppData or Local AppData
+  when no other installed app has that publisher. Each says why it is listed and how sure SysManager is — Certain,
+  Probably, Its own key or Guess — and only Certain starts ticked.
+- Nothing is offered from inside Windows; Program Files, ProgramData, the profile and the AppData folders themselves;
+  Documents, Desktop, Downloads, Pictures, Music and Videos and everything in them; SysManager's own folders; a folder
+  that is a link, holds one or is reached through one; a folder any installed app still uses, judged against every
+  uninstall entry Windows holds, including the drivers and runtimes the list does not show; or anything not on one of
+  this PC's own fixed drives. What was found in those places is listed with the reason it is left alone.
+- **Remove ticked…** lists exactly what goes and asks first. Folders go to the Recycle Bin. A registry key is exported
+  with `reg export` to `%LocalAppData%\SysManager\Backups\Uninstaller`, the newest three per key kept, and deleted only
+  once that file exists; double-click the file to put the key back. Every folder is checked against the same rules
+  again just before it goes, so one that became a link, or gained one, since the search is refused.
+- Uninstalling runs without administrator rights, so a leftover under Program Files or ProgramData cannot be removed
+  in the same session. It shows an Administrator label and is kept in
+  `%LocalAppData%\SysManager\uninstaller-leftovers.json`; the next time Uninstaller is opened with SysManager running
+  as administrator, the card offers it again, once it has checked the folder is still there and no installed app has
+  moved into it. Nothing on that list arrives ticked, because the file it comes from is one anything running as you
+  could have changed.
+
+### Changed
+
+- **Shortcut Cleaner** and the Uninstaller's leftovers share one "send to the Recycle Bin" call, and it now asks
+  Windows to warn before deleting anything for good. Since Shortcut Cleaner arrived in 0.32.0, a shortcut the Recycle
+  Bin could not take, such as one on a drive whose bin is turned off, could be deleted permanently without a warning
+  while the tab said it had been moved to the Recycle Bin.
+- **SECURITY.md** no longer says the app never touches the registry for cleanup. It says the app never cleans the
+  registry, and names the one key SysManager removes that it did not create: an uninstalled app's own key, when you
+  tick it, after saving it as a `.reg` file.
+
 ## [1.123.3] - 2026-10-08
 
 **Nineteen places in the app now say what it actually does.** Each described a feature, a button or a rule that the

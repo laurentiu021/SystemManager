@@ -17,7 +17,7 @@ public class UninstallerViewModelTests
 {
     private static UninstallerViewModel NewVm()
     {
-        var viewModel = new UninstallerViewModel(new UninstallerService(new PowerShellRunner()));
+        var viewModel = new UninstallerViewModel(new UninstallerService(new PowerShellRunner()), Substitute.For<ILeftoverService>(), () => false);
         viewModel.IsElevated = false;
         return viewModel;
     }
@@ -145,7 +145,7 @@ public class UninstallerViewModelGateTests
     private static UninstallerViewModel NewVm(IPowerShellRunner? runner = null)
     {
         var viewModel = new UninstallerViewModel(
-            new UninstallerService(runner ?? new PowerShellRunner(), () => false));
+            new UninstallerService(runner ?? new PowerShellRunner(), () => false), Substitute.For<ILeftoverService>(), () => false);
         viewModel.IsElevated = false;
         return viewModel;
     }

@@ -27,6 +27,13 @@ public sealed partial class InstalledApp : ObservableObject, Helpers.ISelectable
     [ObservableProperty] private string _uninstallString = "";
     [ObservableProperty] private string _quietUninstallString = "";
 
+    /// <summary>
+    /// The folder the app's uninstall entry names as its install location, or empty. Read when the list is built,
+    /// which is before any uninstall: some uninstallers delete that entry first, and the leftover search needs it
+    /// afterwards (#1527).
+    /// </summary>
+    [ObservableProperty] private string _installLocation = "";
+
     /// <summary>Formatted size for display.</summary>
     public string SizeDisplay => SizeBytes > 0 ? FormatHelper.FormatSize(SizeBytes) : "—";
 }

@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.123.x  | :white_check_mark: |
-| < 1.123  | :x:                |
+| 1.124.x  | :white_check_mark: |
+| < 1.124  | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a
@@ -84,6 +84,12 @@ What the app can and cannot do by design:
 - Edit the hosts file and switch DNS servers (DNS & Hosts).
 - Remove preinstalled Store apps for your account, run a program's own uninstaller or
   winget's, and uninstall OneDrive.
+- Remove what an uninstalled app left behind, only the items you tick on the Uninstaller's
+  Left behind list. Folders go to the Recycle Bin; the app's own key under
+  `HKEY_CURRENT_USER\Software` is saved as a `.reg` file before it is deleted. Nothing inside
+  Windows, your own folders, SysManager's folders, a link or a folder holding one, a folder
+  any installed app still uses, or anything not on this PC's own drives is ever offered, and
+  each folder is checked again just before it goes.
 - Run Windows' own repairs and resets: SFC, DISM `/RestoreHealth`, component-store
   cleanup (never `/ResetBase`), Winsock and TCP/IP resets, Windows feature changes and
   Windows Update installs.
@@ -114,7 +120,10 @@ What the app can and cannot do by design:
 - The Deep Cleanup engine touching browser data — that engine never reads or
   deletes browser caches/cookies; only the dedicated Browser Cleaner tab does,
   and only with the explicit per-category consent described above.
-- Touching the Windows registry for cleanup.
+- Registry cleaning: searching the registry for entries to delete. The one key SysManager
+  removes that it did not create is an uninstalled app's own key under
+  `HKEY_CURRENT_USER\Software`, from the Uninstaller's Left behind list, and only when you
+  tick it, after saving it as a `.reg` file.
 - The cleanup engines deleting game files, installed programs, or any active driver
   folder. They never touch `steamapps\common` or installed game/program
   executables; it does remove specific launcher cache and log subfolders that
@@ -280,7 +289,8 @@ see the last two rows.
 | Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |
 | Startup version-check on/off | `%AppData%\SysManager` | The About-tab checkbox that controls the once-a-day version check |
 | Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
-| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, and a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key) |
+| State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
+| Uninstaller leftovers waiting for administrator rights | `%LocalAppData%\SysManager` | The paths of folders an uninstalled app left under Program Files or ProgramData, so the Uninstaller can offer them again in a session that runs as administrator. Deleted once nothing is left on it |
 | Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message |
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
 | Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |

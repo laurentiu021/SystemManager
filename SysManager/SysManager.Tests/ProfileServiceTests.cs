@@ -366,6 +366,9 @@ public class ProfileServiceTests : IDisposable
     // A count of how many times the master toggle was written on THIS machine, used to decide whether a
     // restore point is still needed. Carried over, it would claim work had been done here that was not.
     [InlineData("notification-master-writes.json")]
+    // Folders an uninstall left under Program Files or ProgramData on THIS machine, waiting for administrator rights.
+    // Carried over, another PC would be offered folders of programs it never had (#1527).
+    [InlineData("uninstaller-leftovers.json")]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

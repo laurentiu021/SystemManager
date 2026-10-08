@@ -205,7 +205,7 @@ public sealed partial class ShortcutCleanerService
                 if (toRecycleBin)
                 {
                     // Only count it if the shell actually recycled the file.
-                    if (MoveToRecycleBin(s.ShortcutPath))
+                    if (Helpers.RecycleBinHelper.SendToRecycleBin(s.ShortcutPath))
                         deleted++;
                     else
                         Log.Warning("Recycle failed (shell reported error): {Path}", s.ShortcutPath);
@@ -280,37 +280,6 @@ public sealed partial class ShortcutCleanerService
             // both would double-decrement the ref count.
             System.Runtime.InteropServices.Marshal.ReleaseComObject(link);
         }
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
-
-    private static bool MoveToRecycleBin(string path)
-    {
-        var op = new SHFILEOPSTRUCT
-        {
-            wFunc = 0x0003,
-            pFrom = path + '\0' + '\0',
-            fFlags = 0x0040 | 0x0010
-        };
-        // SHFileOperation returns non-zero (and/or sets fAnyOperationsAborted) on
-        // failure WITHOUT throwing. Returning that result lets the caller avoid
-        // counting a silently-failed recycle as a successful deletion.
-        var rc = SHFileOperation(ref op);
-        return rc == 0 && !op.fAnyOperationsAborted;
-    }
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct SHFILEOPSTRUCT
-    {
-        public IntPtr hwnd;
-        public uint wFunc;
-        [MarshalAs(UnmanagedType.LPWStr)] public string pFrom;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? pTo;
-        public ushort fFlags;
-        [MarshalAs(UnmanagedType.Bool)] public bool fAnyOperationsAborted;
-        public IntPtr hNameMappings;
-        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszProgressTitle;
     }
 
     [ComImport]

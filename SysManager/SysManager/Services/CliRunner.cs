@@ -200,9 +200,9 @@ public sealed class CliRunner
     /// writes to.
     /// </summary>
     /// <remarks>
-    /// The two mutating verbs delete temporary files and drop the standby memory list, and both are
-    /// reachable from Scheduled Maintenance — which exists to run them while nobody is watching. Neither
-    /// left any trace: the GUI paths for the same two operations log ("Quick Cleanup" in
+    /// The two mutating verbs delete temporary files and drop the standby memory list, and both were
+    /// reachable from Scheduled Maintenance — which exists to run them while nobody is watching (it now
+    /// offers only the cleanup, #2593). Neither left any trace: the GUI paths for the same two operations log ("Quick Cleanup" in
     /// <c>CleanupViewModel</c>, "Standby cleaner" in <c>StandbyMemoryViewModel</c>), so a user who
     /// scheduled a weekly cleanup opened the app afterwards and found nothing in the history to say it
     /// had ever run. That history file is described in <see cref="ActivityLogService"/> as the only record

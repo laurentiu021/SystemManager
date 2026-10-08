@@ -28,8 +28,10 @@
             <TextBlock Text="Scheduled Maintenance" Style="{StaticResource Display}"/>
             <!-- "One schedule" is stated as the rule it is, not as the implementation detail it used to read
                  as. Saving replaces rather than adds, and a header that mentioned "one Windows scheduled
-                 task" in passing left that for the user to discover by losing a schedule (#1509). -->
-            <TextBlock Text="Run maintenance automatically so you don't have to remember. SysManager keeps one schedule at a time: pick an action and a time, and it runs SysManager in the background to clean temporary files or purge standby memory. Saving a new schedule replaces the previous one."
+                 task" in passing left that for the user to discover by losing a schedule (#1509). The last
+                 sentence says where the standby purge went: it needs administrator rights the task does not
+                 have, so it is no longer offered here (#2593). -->
+            <TextBlock Text="Run maintenance automatically so you don't have to remember. SysManager keeps one schedule at a time: pick how often and at what time, and it cleans temporary files in the background. Saving a new schedule replaces the previous one. Purging standby memory needs administrator rights, which a scheduled task does not have, so it is not offered here: Standby List Cleaner can purge automatically while SysManager runs as administrator."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 
@@ -75,6 +77,15 @@
                 <Border Style="{StaticResource CardInner}" Margin="0,12,0,0"
                         Visibility="{Binding MissedRunsWarning, Converter={StaticResource FlexVis}}">
                     <TextBlock Text="{Binding MissedRunsWarning}" Style="{StaticResource Body}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource WarningText}"/>
+                </Border>
+
+                <!-- A schedule that purges standby memory, saved while the purge was offered. The task has no
+                     administrator rights and a purge needs them, so every run fails, and LAST RESULT alone
+                     cannot say why (#2593). Collapses for any other schedule. -->
+                <Border Style="{StaticResource CardInner}" Margin="0,12,0,0"
+                        Visibility="{Binding StandbyPurgeWarning, Converter={StaticResource FlexVis}}">
+                    <TextBlock Text="{Binding StandbyPurgeWarning}" Style="{StaticResource Body}" TextWrapping="Wrap"
                                Foreground="{DynamicResource WarningText}"/>
                 </Border>
             </StackPanel>

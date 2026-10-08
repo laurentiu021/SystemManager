@@ -90,7 +90,8 @@ public class ScheduledMaintenanceViewModelTests
     /// contributing field from being added without its notification.
     /// <para>Six fields, not seven: the summary answers <em>when</em>, so the chosen action is deliberately
     /// absent from it — the action's own label is shown in the picker and in the confirmation. The tail of
-    /// this test pins that, so the list above reads as a decision rather than an omission.</para>
+    /// this test pins that, so the list above reads as a decision rather than an omission. It used to switch
+    /// the action and compare; with the cleanup the only action left (#2593), it looks for the label.</para>
     /// </remarks>
     [Fact]
     public void EveryFieldThePendingSummaryReads_RaisesItWhenChanged()
@@ -130,11 +131,8 @@ public class ScheduledMaintenanceViewModelTests
             Assert.True(raised, $"changing {field} did not raise PendingSummary — the preview text goes stale");
         }
 
-        var beforeAction = vm.PendingSummary;
-        vm.SelectedAction = vm.SelectedAction == MaintenanceAction.Cleanup
-            ? MaintenanceAction.PurgeStandby
-            : MaintenanceAction.Cleanup;
-        Assert.Equal(beforeAction, vm.PendingSummary);
+        Assert.DoesNotContain(MaintenanceSchedule.LabelFor(vm.SelectedAction), vm.PendingSummary,
+                              StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -206,20 +204,27 @@ public class ScheduledMaintenanceViewModelTests
     /// filler: the replace confirmation names it, so it is the thing that tells the user WHICH schedule they
     /// are about to lose.
     /// </remarks>
-    private static async Task<(ScheduledMaintenanceViewModel vm, IPowerShellRunner ps)> NewScheduledVmAsync()
+    private static async Task<(ScheduledMaintenanceViewModel vm, IPowerShellRunner ps)> NewScheduledVmAsync(
+        string arguments = "--cleanup --silent", int lastResult = 0)
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject> { ScheduledRow(arguments, lastResult) });
+        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
+        await vm.InitializationComplete;
+        return (vm, ps);
+    }
+
+    /// <summary>The row the status script returns for a registered task running <paramref name="arguments"/>.</summary>
+    private static PSObject ScheduledRow(string arguments, int lastResult)
     {
         var row = new PSObject();
         row.Properties.Add(new PSNoteProperty("State", "Ready"));
         row.Properties.Add(new PSNoteProperty("LastRunTime", new DateTime(2026, 6, 29, 3, 0, 0)));
         row.Properties.Add(new PSNoteProperty("NextRunTime", new DateTime(2026, 6, 30, 3, 0, 0)));
-        row.Properties.Add(new PSNoteProperty("LastTaskResult", 0));
-
-        var ps = Substitute.For<IPowerShellRunner>();
-        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
-          .Returns(new Collection<PSObject> { row });
-        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
-        await vm.InitializationComplete;
-        return (vm, ps);
+        row.Properties.Add(new PSNoteProperty("LastTaskResult", lastResult));
+        row.Properties.Add(new PSNoteProperty("Arguments", arguments));
+        return row;
     }
 
     /// <summary>
@@ -345,6 +350,72 @@ public class ScheduledMaintenanceViewModelTests
 
         Assert.True(vm.IsScheduled);
         Assert.StartsWith("3 scheduled runs did not happen", vm.MissedRunsWarning, StringComparison.Ordinal);
+    }
+
+    // ── a schedule that purges standby memory fails every run (#2593) ──────
+    // The task runs without administrator rights and a purge needs them. Its only trace was LAST RESULT reading
+    // "Last run returned 0x00000001".
+
+    [Fact]
+    public async Task AScheduleThatPurgesStandby_IsCalledOutWithWhatToDoInstead()
+    {
+        var (vm, _) = await NewScheduledVmAsync(arguments: "--purge-standby --silent", lastResult: 1);
+
+        Assert.True(vm.IsScheduled);
+        Assert.Contains("every run fails", vm.StandbyPurgeWarning, StringComparison.Ordinal);
+        Assert.Contains("Standby List Cleaner", vm.StandbyPurgeWarning, StringComparison.Ordinal);
+        Assert.Equal("Last run failed", vm.LastResult);
+    }
+
+    [Fact]
+    public async Task ACleanupSchedule_CarriesNoPurgeWarning()
+    {
+        var (vm, _) = await NewScheduledVmAsync(arguments: "--cleanup --silent");
+
+        Assert.True(vm.IsScheduled);
+        Assert.Equal("", vm.StandbyPurgeWarning);
+    }
+
+    /// <summary>
+    /// Saving over a schedule that purges standby memory replaces it with a cleanup, and the warning goes with it.
+    /// </summary>
+    /// <remarks>
+    /// The warning says that saving replaces the purge with a temporary-file cleanup, so this holds it to that:
+    /// the command line the save sends, and the card once Windows reports the new task.
+    /// </remarks>
+    [Fact]
+    public async Task SavingOverAPurgeSchedule_ReplacesItWithACleanup_AndClearsTheWarning()
+    {
+        var registered = false;
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(call =>
+          {
+              if (call.ArgAt<string>(0).Contains("Register-ScheduledTask", StringComparison.Ordinal))
+              {
+                  registered = true;
+                  var state = new PSObject();
+                  state.Properties.Add(new PSNoteProperty("State", "Ready"));
+                  return Task.FromResult(new Collection<PSObject> { state });
+              }
+              return Task.FromResult(new Collection<PSObject>
+              {
+                  registered ? ScheduledRow("--cleanup --silent", 0) : ScheduledRow("--purge-standby --silent", 1),
+              });
+          });
+        var vm = new ScheduledMaintenanceViewModel(new MaintenanceSchedulerService(ps));
+        await vm.InitializationComplete;
+        Assert.NotEqual("", vm.StandbyPurgeWarning);   // the starting point, or the end state below proves nothing
+
+        using var activity = new ActivityLogScope();
+        using var dialog = new DialogAnswer(confirm: true);
+        await vm.SaveScheduleCommand.ExecuteAsync(null);
+
+        await ps.Received(1).RunAsync(
+            Arg.Is<string>(s => s.Contains("Register-ScheduledTask", StringComparison.Ordinal)),
+            Arg.Is<IDictionary<string, object?>?>(p => p != null && (string)p["Args"]! == "--cleanup --silent"),
+            Arg.Any<CancellationToken>());
+        Assert.Equal("", vm.StandbyPurgeWarning);
     }
 
     // ── a read that fails is not "nothing scheduled" (#2487) ──────────────

@@ -228,7 +228,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   a scale from 70% (or lower) to just above 100%, so a small loss is not drawn as a cliff. The same paint lifecycle
   as `SpeedTrendChart`.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support.
-- `PerformanceViewModel` — per-tweak performance tuning with snapshot restore.
+- `PerformanceViewModel` — per-tweak performance tuning with snapshot restore. Refresh is off while `IsBusy`,
+  and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607).
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
 - `TracerouteViewModel` — auto-traceroute + manual trace. Its Start/Stop drive the auto-trace monitor in
   `NetworkSharedState`, which traces the Ping tab's targets plus the host typed here.
@@ -274,7 +275,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `SystemReportViewModel` — generate a read-only full-system snapshot, opening with a health verdict and recent problems, and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
-- `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup or standby trim) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched.
+- `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched. The standby purge is not offered: it needs administrator rights the task does not have, and `StandbyPurgeWarning` says so for a purge schedule saved before it was taken out (#2593).
 - `UndoChangesViewModel` — the Undo Changes tab (#1525): lists what `IUndoChangesService.ScanAsync` finds as
   `UndoChangeRow`s, each putting one change back after a `DialogService.Confirm` that says what will change,
   then writing the activity log when something changed, and looking again. A row that needs administrator
@@ -722,7 +723,9 @@ Key services:
   of the PC running a test, and the read of the card's key behind `FindRecordedAdapter` is a parameter, so a read that
   fails is tested as not known rather than gone. `RestoreGraphics` takes the write as a parameter too, so its answers
   are tested with a stand-in; the service's own restore passes the real `SetGpuMaxPerformance`, so no test runs a
-  whole restore of a record that names a card.
+  whole restore of a record that names a card. Performance Mode's own NVIDIA Apply goes through
+  `WriteGpuMaxPerformance`, a constructor seam the public constructor fills with the registry write and the test
+  constructor leaves finding no card (#2607).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
   system commands with live output capture.
 - `ServiceManagerService` — enumerate Windows services, gaming
@@ -1398,6 +1401,9 @@ Key services:
   the settings block now opts in unless the user unticks it. The status read also selects
   `NumberOfMissedRuns`, because Windows expresses "the conditions blocked this run" by simply not
   running: there is no result code for it, so the count is the only honest explanation available.
+  It returns the action's arguments too, which `IsStandbyPurge` reads through `CliRunner.Parse`, the way
+  the scheduled run will, to flag a standby-purge schedule: the task runs at the limited level, so every
+  run of one fails (#2593). `DescribeResultCode` puts the CLI's own exit codes, 1 and 2, into words.
 - `SafetyDatabase` — curated safety ratings for Windows services and optional features. A service it does
   not know counts as Critical, so Services refuses to stop or disable it; a feature it does not know counts
   as Caution.

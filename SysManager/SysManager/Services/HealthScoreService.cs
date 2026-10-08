@@ -339,8 +339,10 @@ public sealed class HealthScoreService
 
         // Lowers only, and it is what stops a small disk being called healthy for having a healthy
         // percentage: 9 GB free on a 40 GB drive is 22% and still not enough for Windows to update itself.
+        // Under 10 GB the cap is the bottom band, because free space carries a quarter of the total: at 25,
+        // every other component perfect still made 81, which is green (#2603). At 10 the best total is 78.
         if (drive.FreeGB < 20) score = Math.Min(score, 55);
-        if (drive.FreeGB < 10) score = Math.Min(score, 25);
+        if (drive.FreeGB < 10) score = Math.Min(score, 10);
 
         return Math.Clamp(score, 0, 100);
     }

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -13,7 +14,6 @@ public class MaintenanceScheduleTests
 
     [Theory]
     [InlineData(MaintenanceAction.Cleanup, "--cleanup --silent")]
-    [InlineData(MaintenanceAction.PurgeStandby, "--purge-standby --silent")]
     public void CliArguments_MapToWhitelistedVerbs(MaintenanceAction action, string expected)
     {
         var s = new MaintenanceSchedule(action, MaintenanceFrequency.Daily, 3, 0);
@@ -44,7 +44,7 @@ public class MaintenanceScheduleTests
     [Fact]
     public void Summary_Weekly_NamesDay()
     {
-        var s = new MaintenanceSchedule(MaintenanceAction.PurgeStandby, MaintenanceFrequency.Weekly, 22, 30, DayOfWeek.Friday);
+        var s = new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Weekly, 22, 30, DayOfWeek.Friday);
         Assert.Equal("Every Friday at 22:30", s.Summary);
     }
 
@@ -52,7 +52,6 @@ public class MaintenanceScheduleTests
     public void ActionLabel_IsHumanReadable()
     {
         Assert.Equal("Clean temporary files", new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Daily, 0, 0).ActionLabel);
-        Assert.Equal("Purge standby memory", new MaintenanceSchedule(MaintenanceAction.PurgeStandby, MaintenanceFrequency.Daily, 0, 0).ActionLabel);
     }
 
     // ── DescribeResultCode: last-run status in plain language ─────────────
@@ -62,6 +61,10 @@ public class MaintenanceScheduleTests
     [InlineData(0, "Last run succeeded")]
     [InlineData(267009, "Currently running")]
     [InlineData(267011, "Not run yet")]
+    // SysManager's own exit codes, which are what the task reports. They read "Last run returned 0x00000001",
+    // and the 1 was every scheduled standby purge failing for want of administrator rights (#2593).
+    [InlineData(CliResult.Error, "Last run failed")]
+    [InlineData(CliResult.UsageError, "Last run failed (command not recognised)")]
     public void DescribeResultCode_KnownCodes(int? code, string expected)
         => Assert.Equal(expected, MaintenanceSchedulerService.DescribeResultCode(code));
 
@@ -85,11 +88,11 @@ public class MaintenanceScheduleTests
 
     /// <summary>
     /// Every declared <see cref="MaintenanceAction"/> has a plain-language label and a CLI argument
-    /// string the parser actually recognises.
+    /// string the parser actually recognises, for a command that works without administrator rights.
     /// </summary>
     /// <remarks>
-    /// Enumerates the enum rather than listing values, so adding a third action fails here until it has
-    /// both — which is the failure mode this is for. The existing rows are asserted individually above;
+    /// Enumerates the enum rather than listing values, so adding an action fails here until it has
+    /// all three — which is the failure mode this is for. The existing rows are asserted individually above;
     /// this asserts the SET is complete, and those are different questions.
     /// <para><b>Why the round trip through the parser.</b> The defect behind #1524 was exactly a
     /// disagreement between the name and the behaviour: <c>MaintenanceAction.TrimRam</c> emitted
@@ -103,7 +106,7 @@ public class MaintenanceScheduleTests
     public void EveryMaintenanceAction_HasALabelAndAVerbTheParserKnows()
     {
         var actions = Enum.GetValues<MaintenanceAction>();
-        Assert.True(actions.Length >= 2, $"only {actions.Length} actions found — reading the wrong enum");
+        Assert.True(actions.Length >= 1, "no actions found — reading the wrong enum");
 
         foreach (var action in actions)
         {
@@ -122,6 +125,13 @@ public class MaintenanceScheduleTests
             Assert.NotEqual(CliCommand.Unknown, parsed);
             Assert.NotEqual(CliCommand.None, parsed);
             Assert.NotEqual(CliCommand.Help, parsed);
+
+            // The task runs at the limited run level, so an action that needs administrator rights fails on every
+            // run, and the standby purge does (#2593). Registering it elevated is no answer: the exe sits in a
+            // folder its user can write to, so anything running as that user could swap it for one Windows then
+            // starts with administrator rights.
+            Assert.True(parsed != CliCommand.PurgeStandby,
+                $"{action} purges standby memory, which needs administrator rights the scheduled task does not have");
         }
     }
     // ── Power and idle policy (#1578): the conditions that decide whether the schedule happens at all ──
@@ -270,6 +280,41 @@ public class MaintenanceScheduleTests
         Assert.Null(status.LastResultDescription);
         Assert.Null(status.MissedRuns);
         Assert.Null(status.MissedRunsWarning);
+        Assert.False(status.PurgesStandby);
+        Assert.Null(status.StandbyPurgeWarning);
     }
 
+    // ── A schedule that purges standby memory fails every run (#2593) ──
+
+    [Fact]
+    public void StandbyPurgeWarning_IsSilentForAScheduleThatDoesNotPurge()
+    {
+        var status = new MaintenanceStatus(true, "Ready", null, null, "Last run succeeded");
+
+        Assert.Null(status.StandbyPurgeWarning);
+    }
+
+    [Fact]
+    public void StandbyPurgeWarning_SaysEveryRunFails_AndWhereAPurgeCanRun()
+    {
+        var status = new MaintenanceStatus(true, "Ready", null, null, "Last run failed", PurgesStandby: true);
+
+        Assert.NotNull(status.StandbyPurgeWarning);
+        Assert.Contains("every run fails", status.StandbyPurgeWarning, StringComparison.Ordinal);
+        // What to do about it, in the names the user sees: the button on this tab, and the tab and the
+        // switch that purge with the rights this task does not have.
+        Assert.Contains("Remove schedule", status.StandbyPurgeWarning, StringComparison.Ordinal);
+        Assert.Contains("Standby List Cleaner", status.StandbyPurgeWarning, StringComparison.Ordinal);
+        Assert.Contains("Automatically purge when available RAM is low", status.StandbyPurgeWarning,
+                        StringComparison.Ordinal);
+
+        // The names it quotes have to stay the names on screen: a renamed switch, button or page would leave
+        // the warning sending the user to something that is not there.
+        var views = Path.Combine(TestPaths.AppProject(), "Views");
+        var standby = File.ReadAllText(Path.Combine(views, "StandbyMemoryView.xaml"));
+        Assert.Contains("Text=\"Standby List Cleaner\"", standby, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Automatically purge when available RAM is low\"", standby, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Remove schedule\"",
+                        File.ReadAllText(Path.Combine(views, "ScheduledMaintenanceView.xaml")), StringComparison.Ordinal);
+    }
 }

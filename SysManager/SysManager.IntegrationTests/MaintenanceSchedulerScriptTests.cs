@@ -63,4 +63,18 @@ public class MaintenanceSchedulerScriptTests
         Assert.Contains("Ready", output, StringComparison.Ordinal);
         Assert.Contains("__SM_AFTER_STATUS__", output, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task WhenTheTaskExists_ReportsTheCommandLineItRuns()
+    {
+        // The tab reads it to spot a schedule that purges standby memory, which fails every run because the task
+        // has no administrator rights (#2593). Get-ScheduledTask carries it in the Actions array, so this is the
+        // shape that has to reach the output.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Run(
+            "function Get-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath) " +
+            "[PSCustomObject]@{ State = 'Ready'; Actions = @([PSCustomObject]@{ Arguments = '--purge-standby --silent' }) } } ; "));
+
+        Assert.Contains("--purge-standby --silent", output, StringComparison.Ordinal);
+        Assert.Contains("__SM_AFTER_STATUS__", output, StringComparison.Ordinal);
+    }
 }

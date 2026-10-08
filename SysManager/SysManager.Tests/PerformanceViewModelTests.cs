@@ -27,9 +27,11 @@ public class PerformanceViewModelTests
     /// <param name="configure">Applied after the defaults, so a test can make one specific call answer differently.</param>
     /// <param name="processes">What Trim RAM works through. Left out, it is none, never the machine's own (#2557).</param>
     /// <param name="trim">The trim call for each of <paramref name="processes"/>.</param>
+    /// <param name="writeGpu">The NVIDIA setting's write. Left out, there is no card, never this PC's own.</param>
     private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null,
                                               Func<System.Diagnostics.Process[]>? processes = null,
-                                              Func<System.Diagnostics.Process, bool>? trim = null)
+                                              Func<System.Diagnostics.Process, bool>? trim = null,
+                                              Func<bool, (bool Found, bool Ok)>? writeGpu = null)
     {
         var ps = Substitute.For<IPowerShellRunner>();
         var processCall = ps.RunProcessAsync(
@@ -54,7 +56,7 @@ public class PerformanceViewModelTests
             Path.GetTempPath(),
             "SysManagerPerformanceTests",
             Guid.NewGuid().ToString("N"));
-        return new(new PerformanceService(ps, new RestorePointService(ps), configDir, processes, trim),
+        return new(new PerformanceService(ps, new RestorePointService(ps), configDir, processes, trim, writeGpu: writeGpu),
                    NoGamingSession());
     }
 
@@ -623,5 +625,65 @@ public class PerformanceViewModelTests
         var message = Assert.Single(dialog.Messages);
         Assert.Contains("Disable hibernation?", message, StringComparison.Ordinal);
         Assert.Contains("turns off Fast Startup and hybrid sleep", message, StringComparison.Ordinal);
+    }
+
+    // ---------- the reboot notice, and a read that overlaps a command (#2607) ----------
+
+    /// <summary>A graphics change says it needs a reboot after the read that shows the new state, too.</summary>
+    /// <remarks>
+    /// The Apply set the notice and "Reboot required.", then read the settings to show them, and that read cleared
+    /// the notice and replaced the line with "Settings loaded.", so both were gone at once. The write is the
+    /// substitute's; this PC's graphics setting is not touched. <c>HasNvidiaGpu</c> is set by hand because the read
+    /// decides it from the registry of the PC running the test.
+    /// </remarks>
+    [Fact]
+    public async Task ApplyGpu_KeepsItsRebootNotice_AfterTheReadThatShowsTheNewState()
+    {
+        var vm = NewVm(completeInitialization: true, writeGpu: _ => (Found: true, Ok: true));
+        await vm.InitializationComplete;
+        vm.HasNvidiaGpu = true;
+        vm.WantGpuMaxPerformance = !vm.Profile.GpuMaxPerformance;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyGpuCommand.ExecuteAsync(null);
+
+        Assert.True(vm.NeedsReboot, "the reboot notice was cleared by the read after the change");
+        Assert.Contains("Reboot required", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>A Refresh does not clear a reboot that is still pending: nothing has restarted.</summary>
+    [Fact]
+    public async Task Refresh_KeepsARebootThatIsStillPending()
+    {
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.NeedsReboot = true;
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.True(vm.NeedsReboot);
+    }
+
+    /// <summary>Refresh, and F5 through it, is off while a command runs, and comes back when it ends.</summary>
+    /// <remarks>
+    /// Refresh had no <c>CanExecute</c>, so pressing it during an Apply started a read beside it: the read's own end
+    /// cleared <c>IsBusy</c> while the Apply was still running, and its status line replaced the Apply's.
+    /// </remarks>
+    [Fact]
+    public async Task Refresh_IsOffWhileTheTabIsBusy()
+    {
+        var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        var raised = 0;
+        vm.RefreshCommand.CanExecuteChanged += (_, _) => raised++;
+        Assert.True(vm.RefreshCommand.CanExecute(null));
+
+        vm.IsBusy = true;
+        Assert.False(vm.RefreshCommand.CanExecute(null));
+        Assert.Same(vm.RefreshCommand, vm.RefreshOnF5);
+
+        vm.IsBusy = false;
+        Assert.True(vm.RefreshCommand.CanExecute(null));
+        Assert.True(raised >= 2, $"CanExecuteChanged was raised {raised} time(s), so the button would not follow IsBusy");
     }
 }

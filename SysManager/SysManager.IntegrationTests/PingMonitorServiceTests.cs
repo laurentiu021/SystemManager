@@ -108,15 +108,18 @@ public class PingMonitorServiceTests
         using var svc = CreateFast();
         svc.Start();
 
-        var seen = false;
-        svc.SampleReceived += _ => seen = true;
+        // Waited for, as EmitsSamples_ForEnabledTargets does, rather than slept for: a fixed 1.5 seconds was a guess at
+        // how soon a loaded machine answers, and a busy runner missed it. The wait ends at the first sample; only a pump
+        // that never picks the new target up takes the whole ten seconds, and fails.
+        var tcs = new TaskCompletionSource<PingSample>();
+        svc.SampleReceived += s => tcs.TrySetResult(s);
 
         await Task.Delay(200);
         svc.AddOrUpdate(new PingTarget("late", UnreachableHost, "#111"));
-        await Task.Delay(1500);
+        var sample = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
         svc.Stop();
 
-        Assert.True(seen, "Expected at least one sample after late Add");
+        Assert.Equal(UnreachableHost, sample.Host);
     }
 
     [Fact]

@@ -106,10 +106,15 @@ public class PingMonitorEdgeTests
         svc.Start();
         await Task.Delay(400);
         Assert.Equal(0, Interlocked.Read(ref count));
+
+        // The first sample after re-enabling is waited for, bounded, rather than looked for after a fixed 700 ms that a
+        // busy machine can miss.
+        var resumed = new TaskCompletionSource<PingSample>();
+        svc.SampleReceived += s => resumed.TrySetResult(s);
         t.IsEnabled = true;
-        await Task.Delay(700);
+        var sample = await resumed.Task.WaitAsync(TimeSpan.FromSeconds(10));
         svc.Stop();
-        Assert.True(Interlocked.Read(ref count) > 0);
+        Assert.Equal(Unreachable, sample.Host);
     }
 
     [Fact]

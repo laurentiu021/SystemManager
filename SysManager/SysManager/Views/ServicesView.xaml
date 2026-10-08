@@ -85,6 +85,14 @@
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
                                  Style="{StaticResource FilterChipCritical}"
                                  AutomationProperties.Name="Filter critical services"/>
+                    <!-- The services SysManager has no rating for. They counted as Critical, which made that chip
+                         most of the list; grey because nothing is known about them either way (#1512). -->
+                    <RadioButton Content="{Binding NotRatedCount, StringFormat='Not rated ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Not rated'}"
+                                 Style="{StaticResource FilterChipNeutral}"
+                                 ToolTip="Services SysManager has not rated, so it leaves them alone"
+                                 AutomationProperties.Name="Filter services SysManager has not rated"/>
 
                     <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>

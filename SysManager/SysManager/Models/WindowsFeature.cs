@@ -18,7 +18,7 @@ public sealed partial class WindowsFeature : ObservableObject
     [ObservableProperty] private string _category = "Other";
     [ObservableProperty] private string _status = "";
 
-    public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.Caution;
+    public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.NotRated;
     public string SafetyDescription { get; init; } = "";
 
     /// <summary>Category assignment based on feature name patterns.</summary>

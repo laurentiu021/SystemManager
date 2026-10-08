@@ -842,8 +842,8 @@ System → System Fixes, where the tab name matches what they do.
 - Toggle enable/disable per feature with confirmation dialog
 - Categorized: Virtualization, Networking, Development, Media & Print, Legacy, and Other for the rest
 - A **Safety** column — Safe, Caution or Critical, with the reason on hover. A feature the built-in
-  list does not know is marked Caution. It informs rather than blocks: every feature can still be
-  toggled after the confirmation
+  list does not know is marked **Not rated**, in grey, and its hover says to look it up first. It
+  informs rather than blocks: every feature can still be toggled after the confirmation
 - Shows reboot-required status after toggling
 - **A Windows restore point is attempted before the first toggle of the session**, shared with the
   other tabs that change system settings. This is the tab where it matters most: turning a feature
@@ -1766,7 +1766,7 @@ offers, "rate us" prompts:
 - **Gaming recommendations**: services tagged as "safe to disable", "advanced",
   or "keep enabled" — hover a row's description to read why, in plain language
   instead of Microsoft's own wording
-- Filter by status (Running/Stopped), safety level (Safe/Caution/Critical),
+- Filter by status (Running/Stopped), safety level (Safe/Caution/Critical/Not rated),
   gaming recommendation (Safe to disable / Keep enabled / Advanced), or free-text
   search — each chip shows how many services it matches, so you know before pressing it
 - Mark any row with the flag button to keep it findable while you keep filtering or
@@ -1777,10 +1777,12 @@ offers, "rate us" prompts:
   is "my printer will stop working" rather than "this may affect system functionality".
   The names are on the safety pill's tooltip too, which needs no admin rights to read
 - Start, stop, disable, or enable services with confirmation dialogs
-- **Stops and disables only services it knows** — SysManager rates 46 services by name (20
-  safe, 11 caution, 15 critical), and every other service counts as critical until it is
-  known. A critical one can be started and enabled but not stopped or disabled here, and the
-  status line says why; services.msc is the place for those
+- **Stops and disables only services it knows** — SysManager rates 48 services by name (21
+  safe, 12 caution, 15 critical). Every other service is **Not rated**: a grey pill, because
+  SysManager has not checked it, rather than the red one that means "this breaks Windows" — so
+  red stays rare enough to mean something. A critical or not-rated service can be started and
+  enabled but not stopped or disabled here, and the status line says why; services.msc is the
+  place for those
 - **Enable puts back what was there** — the startup type a service had before SysManager disabled
   it, remembered across restarts, "Automatic (Delayed Start)" included. For a service disabled some
   other way there is nothing to put back, so Enable sets it to Manual, and its confirmation says so.

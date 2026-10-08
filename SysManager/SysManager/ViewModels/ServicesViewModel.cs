@@ -45,6 +45,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     [ObservableProperty] private int _safeCount;
     [ObservableProperty] private int _cautionCount;
     [ObservableProperty] private int _criticalCount;
+    [ObservableProperty] private int _notRatedCount;
 
     // Counts for the filters that had no chip. Each chip shows its own count for the same reason the
     // safety chips do: "Safe to disable (12)" tells the user whether the filter is worth pressing before
@@ -76,7 +77,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     /// fails <c>EveryFilterOption_HasAChipInTheView</c> rather than going unnoticed again.</para>
     /// </remarks>
     public string[] FilterOptions { get; } =
-        { "All", "Running", "Stopped", "Safe", "Caution", "Critical",
+        { "All", "Running", "Stopped", "Safe", "Caution", "Critical", "Not rated",
           "Safe to disable", "Keep enabled", "Advanced" };
 
     public ServicesViewModel(IPowerShellRunner ps, ServiceStartupLedgerService? ledger = null, IPutBackSignal? putBack = null,
@@ -257,12 +258,16 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // Stopping a boot/logon-critical service (RpcSs, DcomLaunch, ProfSvc, lsass, …)
         // can freeze the session or force a reboot just as surely as disabling it, so it
         // gets the same unconditional refusal as DisableServiceAsync rather than the
-        // neutral "may affect system functionality" confirm. Checked before the elevation
-        // guard — it can never proceed regardless of admin.
-        if (entry.SafetyLevel == SafetyLevel.Critical)
+        // neutral "may affect system functionality" confirm. A service SysManager has not
+        // rated is refused too, in its own words: it is not known to be critical, only not
+        // known to be safe (#1512). Checked before the elevation guard — it can never
+        // proceed regardless of admin.
+        if (!entry.MayBeTurnedOff)
         {
-            StatusMessage = $"⛔ \"{entry.DisplayName}\" is critical and cannot be stopped — {entry.SafetyDescription}";
-            Log.Warning("Refused to stop critical service: {ServiceName} ({DisplayName})", entry.Name, entry.DisplayName);
+            StatusMessage = entry.SafetyLevel == SafetyLevel.Critical
+                ? $"⛔ \"{entry.DisplayName}\" is critical and cannot be stopped — {entry.SafetyDescription}"
+                : $"SysManager has not rated \"{entry.DisplayName}\", so it will not stop it. Use Windows' own Services console if you are sure.";
+            Log.Warning("Refused to stop {Level} service: {ServiceName} ({DisplayName})", entry.SafetyLevel, entry.Name, entry.DisplayName);
             return;
         }
 
@@ -308,12 +313,16 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // A boot/logon-critical service must never be disabled: setting RpcSs,
         // DcomLaunch, ProfSvc, lsass, etc. to Disabled can prevent Windows from
         // booting or logging in. Refuse outright rather than hide the risk behind
-        // the same neutral confirm shown for safe-to-disable services. Checked
-        // before the elevation guard — it can never proceed regardless of admin.
-        if (entry.SafetyLevel == SafetyLevel.Critical)
+        // the same neutral confirm shown for safe-to-disable services, and refuse a
+        // service SysManager has not rated as well, saying that rather than calling it
+        // critical (#1512). Checked before the elevation guard — it can never proceed
+        // regardless of admin.
+        if (!entry.MayBeTurnedOff)
         {
-            StatusMessage = $"⛔ \"{entry.DisplayName}\" is critical and cannot be disabled — {entry.SafetyDescription}";
-            Log.Warning("Refused to disable critical service: {ServiceName} ({DisplayName})", entry.Name, entry.DisplayName);
+            StatusMessage = entry.SafetyLevel == SafetyLevel.Critical
+                ? $"⛔ \"{entry.DisplayName}\" is critical and cannot be disabled — {entry.SafetyDescription}"
+                : $"SysManager has not rated \"{entry.DisplayName}\", so it will not disable it. Use Windows' own Services console if you are sure.";
+            Log.Warning("Refused to disable {Level} service: {ServiceName} ({DisplayName})", entry.SafetyLevel, entry.Name, entry.DisplayName);
             return;
         }
 
@@ -489,6 +498,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             "Safe" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Safe),
             "Caution" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Caution),
             "Critical" => filtered.Where(s => s.SafetyLevel == SafetyLevel.Critical),
+            "Not rated" => filtered.Where(s => s.SafetyLevel == SafetyLevel.NotRated),
             // Gaming recommendation, not safety level — see FilterOptions. The stored values are the
             // literals from ServiceManagerService.GamingGuide, which uses exactly three:
             // safe-to-disable (12 entries), keep-enabled (9) and advanced (4).
@@ -504,7 +514,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // so each chip shows how many it WOULD match — a count that shrank to reflect the active filter
         // would make the other chips look empty and unpressable.
         int running = 0, stopped = 0;
-        int safe = 0, caution = 0, critical = 0;
+        int safe = 0, caution = 0, critical = 0, notRated = 0;
         int safeToDisable = 0, keepEnabled = 0, advanced = 0;
         foreach (var s in _allServices)
         {
@@ -519,6 +529,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
                 case SafetyLevel.Safe: safe++; break;
                 case SafetyLevel.Caution: caution++; break;
                 case SafetyLevel.Critical: critical++; break;
+                case SafetyLevel.NotRated: notRated++; break;
             }
 
             switch (s.Recommendation)
@@ -534,6 +545,7 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         SafeCount = safe;
         CautionCount = caution;
         CriticalCount = critical;
+        NotRatedCount = notRated;
         SafeToDisableCount = safeToDisable;
         KeepEnabledCount = keepEnabled;
         AdvancedCount = advanced;

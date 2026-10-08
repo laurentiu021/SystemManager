@@ -444,6 +444,29 @@ public class ServicesViewModelTests
     }
 
     [Fact]
+    public async Task DisableService_NotRatedService_IsRefused_InWordsThatDoNotCallItCritical()
+    {
+        // #1512: a service SysManager has no rating for is left alone as before, and says why in its own words.
+        var unrated = new ServiceEntry
+        {
+            Name = "VndUpdSvc",
+            DisplayName = "Vendor Update Helper",
+            Status = "Running",
+            StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.NotRated,
+        };
+        var vm = await CreateWithDataAsync(new List<ServiceEntry> { unrated });
+
+        using var answer = new DialogAnswer(true);
+        await vm.DisableServiceCommand.ExecuteAsync(unrated);
+
+        Assert.Equal("SysManager has not rated \"Vendor Update Helper\", so it will not disable it. Use Windows' own Services "
+                     + "console if you are sure.", vm.StatusMessage);
+        Assert.Equal(0, answer.Calls);
+        Assert.Equal("Automatic", unrated.StartType);
+    }
+
+    [Fact]
     public async Task DisableService_NullEntry_DoesNotThrow()
     {
         var vm = await CreateWithDataAsync();
@@ -476,6 +499,56 @@ public class ServicesViewModelTests
         Assert.Contains("cannot be stopped", vm.StatusMessage);
         // The service must be left running — the refused command never touched it.
         Assert.Equal("Running", critical.Status);
+    }
+
+    [Fact]
+    public async Task StopService_NotRatedService_IsRefused_InWordsThatDoNotCallItCritical()
+    {
+        var unrated = new ServiceEntry
+        {
+            Name = "VndUpdSvc",
+            DisplayName = "Vendor Update Helper",
+            Status = "Running",
+            StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.NotRated,
+        };
+        var vm = await CreateWithDataAsync(new List<ServiceEntry> { unrated });
+
+        using var answer = new DialogAnswer(true);
+        await vm.StopServiceCommand.ExecuteAsync(unrated);
+
+        Assert.Equal("SysManager has not rated \"Vendor Update Helper\", so it will not stop it. Use Windows' own Services "
+                     + "console if you are sure.", vm.StatusMessage);
+        Assert.Equal(0, answer.Calls);
+        Assert.Equal("Running", unrated.Status);
+    }
+
+    [Fact]
+    public void AServiceWithNoRating_IsNotRated_AndOnlyARatedSafeOrCautionServiceMayBeTurnedOff()
+    {
+        Assert.Equal(Models.SafetyLevel.NotRated, new ServiceEntry().SafetyLevel);
+        Assert.Equal([Models.SafetyLevel.Safe, Models.SafetyLevel.Caution],
+            Enum.GetValues<Models.SafetyLevel>().Where(l => new ServiceEntry { SafetyLevel = l }.MayBeTurnedOff));
+    }
+
+    [Fact]
+    public async Task TheNotRatedChip_ShowsOnlyTheUnratedServices_AndCountsThem()
+    {
+        var unrated = new ServiceEntry
+        {
+            Name = "VndUpdSvc",
+            DisplayName = "Vendor Update Helper",
+            Status = "Running",
+            StartType = "Automatic",
+            SafetyLevel = Models.SafetyLevel.NotRated,
+        };
+        var vm = await CreateWithDataAsync([.. TestServices, unrated]);
+
+        vm.SelectedFilter = "Not rated";
+
+        Assert.Same(unrated, Assert.Single(vm.Services));
+        Assert.Equal(1, vm.NotRatedCount);
+        Assert.Equal(1, vm.CriticalCount);   // BITS in the fixtures; the unrated one is not counted as Critical
     }
 
     [Fact]

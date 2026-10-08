@@ -44,8 +44,18 @@ public sealed partial class ServiceEntry : ObservableObject
     /// <summary>Short explanation of what this service does and why the recommendation.</summary>
     public string RecommendationReason { get; init; } = "";
 
-    public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.Critical;
+    public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.NotRated;
     public string SafetyDescription { get; init; } = "";
+
+    /// <summary>
+    /// Whether Stop and Disable may act on it: only a service rated Safe or Caution. A Critical one breaks Windows, and
+    /// one SysManager has not rated is one it cannot vouch for, so both are left alone (#1512).
+    /// </summary>
+    /// <remarks>
+    /// Named for what is allowed rather than what is refused, so a level added later is refused until someone decides
+    /// otherwise, instead of slipping through a check that lists the refused ones.
+    /// </remarks>
+    public bool MayBeTurnedOff => SafetyLevel is SafetyLevel.Safe or SafetyLevel.Caution;
 
     /// <summary>
     /// Display names of the services Windows would stop along with this one, in the order the service

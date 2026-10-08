@@ -17,7 +17,7 @@ public static class SafetyDatabase
             return (SafetyLevel.Caution, caution);
         if (CriticalServices.TryGetValue(serviceName, out var critical))
             return (SafetyLevel.Critical, critical);
-        return (SafetyLevel.Critical, "Unknown service — treat as critical until verified.");
+        return (SafetyLevel.NotRated, NotRatedService);
     }
 
     public static (SafetyLevel Level, string Description) GetFeatureSafety(string featureName)
@@ -28,8 +28,14 @@ public static class SafetyDatabase
             return (SafetyLevel.Caution, caution);
         if (CriticalFeatures.TryGetValue(featureName, out var critical))
             return (SafetyLevel.Critical, critical);
-        return (SafetyLevel.Caution, "Check documentation before modifying.");
+        return (SafetyLevel.NotRated, NotRatedFeature);
     }
+
+    /// <summary>How many services SysManager has rated, of every level.</summary>
+    internal static int RatedServiceCount => SafeServices.Count + CautionServices.Count + CriticalServices.Count;
+
+    /// <summary>How many Windows features SysManager has rated, of every level.</summary>
+    internal static int RatedFeatureCount => SafeFeatures.Count + CautionFeatures.Count + CriticalFeatures.Count;
 
     private static readonly FrozenDictionary<string, string> SafeServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -53,6 +59,9 @@ public static class SafetyDatabase
         ["TrkWks"] = "Distributed Link Tracking Client — tracks NTFS links across network. Rarely needed.",
         ["WerSvc"] = "Windows Error Reporting — sends crash reports to Microsoft.",
         ["PhoneSvc"] = "Phone Service — manages telephony state. Not needed on desktops.",
+        // The gaming advice has called these two safe to disable all along, and with no rating here Disable refused
+        // them (#2611).
+        ["lmhosts"] = "TCP/IP NetBIOS Helper — finds older PCs and printers by name on a local network. Not needed on most home networks.",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, string> CautionServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -68,6 +77,7 @@ public static class SafetyDatabase
         ["LanmanServer"] = "Server — SMB file sharing. Disable if you don't share files on network.",
         ["LanmanWorkstation"] = "Workstation — SMB client. Disable if you don't access network shares.",
         ["Schedule"] = "Task Scheduler — many system tasks depend on this. Disabling can break maintenance.",
+        ["WbioSrvc"] = "Windows Biometric Service — fingerprint and face sign-in (Windows Hello). Disable only if you sign in without them.",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<string, string> CriticalServices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -127,4 +137,18 @@ public static class SafetyDatabase
         ["Containers"] = "Windows Containers — used by Docker. Disabling breaks container workloads.",
         ["Microsoft-Windows-Client-EmbeddedExp-Package"] = "Windows Sandbox — isolated test environment. Useful for security.",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+    // Below the lists they count, because static fields are set in the order they are written: above them, the counts
+    // would read lists that do not exist yet.
+
+    /// <summary>What a service SysManager has not rated says on hover: who does not know, and what follows from it.</summary>
+    private static readonly string NotRatedService =
+        $"SysManager has not rated this service. It is not one of the {RatedServiceCount} services SysManager has checked, "
+        + "so it does not know whether turning it off is safe, and it will not turn it off for you. Most services like this "
+        + "are part of Windows or came with a program you use.";
+
+    /// <summary>What a Windows feature SysManager has not rated says on hover. Turning one on or off is still offered.</summary>
+    private static readonly string NotRatedFeature =
+        $"SysManager has not rated this feature. It is not one of the {RatedFeatureCount} features SysManager has checked, "
+        + "so look up what it does before you turn it on or off.";
 }

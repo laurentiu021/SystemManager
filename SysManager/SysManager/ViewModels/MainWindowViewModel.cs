@@ -763,10 +763,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var putBack = new PutBackSignal();
         // One record of App Alerts' detections, as under DI: Recent Changes reads what App Alerts writes (#1507).
         var appAlertHistory = new AppAlertHistory(lookRecords);
+        // One of each, as under DI: the Dashboard's "Why is it slow?" check reads the processes and the startup programs
+        // through the services Process Manager and Startup Manager use (#1529).
+        var processes = new ProcessManagerService();
+        var startup = new StartupService();
 
         return new Dictionary<Type, object>
         {
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory),
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
+                slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer)),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
@@ -775,11 +780,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
             [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService()),
-            [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(new ProcessManagerService()),
+            [typeof(ProcessManagerViewModel)] = new ProcessManagerViewModel(processes),
             [typeof(BatteryHealthViewModel)] = new BatteryHealthViewModel(battery, new BatteryReportService(runner)),
             [typeof(UninstallerViewModel)] = new UninstallerViewModel(new UninstallerService(runner), new LeftoverService(runner)),
             [typeof(PerformanceViewModel)] = new PerformanceViewModel(performance, gamingProfiles, putBack),
-            [typeof(StartupViewModel)] = new StartupViewModel(new StartupService(), bootAnalyzer),
+            [typeof(StartupViewModel)] = new StartupViewModel(startup, bootAnalyzer),
             [typeof(NetworkSharedState)] = networkShared,
             [typeof(PingViewModel)] = new PingViewModel(networkShared),
             [typeof(TracerouteViewModel)] = new TracerouteViewModel(networkShared),

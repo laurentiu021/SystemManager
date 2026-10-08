@@ -211,6 +211,28 @@ public sealed class HealthScoreService
     internal const string UptimeComponent = "Uptime";
     internal const string BatteryComponent = "Battery";
 
+    /// <summary>
+    /// Below this free-space score the card recommends freeing space, and the Dashboard's "Why is it slow?" check names
+    /// the drive: under 20 GB free, or under 15% free with less than 25 GB left.
+    /// </summary>
+    /// <remarks>
+    /// Named here, once, so the two cards on the Dashboard cannot disagree about whether the drive is a problem. The
+    /// slowness check reads the score through <see cref="ComputeFreeSpaceScore"/> rather than restating its bands (#1529).
+    /// </remarks>
+    internal const int FreeSpaceRecommendBelow = 80;
+
+    /// <summary>
+    /// At or below this free-space score the recommendation is critical, and the slowness check ranks the drive first:
+    /// under 10 GB free, or under 10% free with less than 25 GB left.
+    /// </summary>
+    internal const int FreeSpaceCriticalAtOrBelow = 25;
+
+    /// <summary>
+    /// At or below this uptime score the card recommends a restart, and the slowness check mentions the time since the last
+    /// one: more than seven days.
+    /// </summary>
+    internal const int RestartRecommendedAtOrBelow = 70;
+
     // ── Component scoring ──────────────────────────────────────────────
 
     /// <summary>
@@ -431,7 +453,7 @@ public sealed class HealthScoreService
         // Free space FIRST, because only three recommendations are returned and this is the one the user can
         // act on today — with a tab this app already owns. A worn battery and a degrading disk are real, and
         // neither has a fix inside SysManager; a full drive does.
-        if (freeSpaceScore < 80 && drives is not null)
+        if (freeSpaceScore < FreeSpaceRecommendBelow && drives is not null)
         {
             var drive = drives.FirstOrDefault(d =>
                 string.Equals(d.Letter, systemDrive, StringComparison.OrdinalIgnoreCase));
@@ -440,14 +462,14 @@ public sealed class HealthScoreService
                 recs.Add(new HealthRecommendation
                 {
                     Message = $"Only {drive.FreeGB:0} GB free on {drive.Letter} — Deep Cleanup can reclaim space",
-                    Severity = freeSpaceScore <= 25 ? "critical" : "warning",
+                    Severity = freeSpaceScore <= FreeSpaceCriticalAtOrBelow ? "critical" : "warning",
                     NavTargetId = "nav-deep-cleanup"
                 });
             }
         }
 
         // Uptime
-        if (uptimeScore <= 70 && snapshot is not null)
+        if (uptimeScore <= RestartRecommendedAtOrBelow && snapshot is not null)
         {
             int days = (int)snapshot.Os.Uptime.TotalDays;
             recs.Add(new HealthRecommendation

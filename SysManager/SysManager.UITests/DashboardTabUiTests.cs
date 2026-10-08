@@ -19,6 +19,24 @@ public class DashboardTabUiTests
         Assert.NotNull(_fx.FindButtonById("btn-dashboard-scan-system"));
     }
 
+    /// <summary>
+    /// "Why is it slow?" looks, and ends on how many of the five it could look at (#1529). Whatever this machine is doing,
+    /// the card says when it checked and how much it looked at, so that line is what proves the check ran end to end in
+    /// the real app: the button, the lock, the five probes on a real PC, and the card drawing the result.
+    /// </summary>
+    [Fact]
+    public void WhyIsItSlow_Looks_AndSaysWhatItLookedAt()
+    {
+        GoTo();
+        var check = _fx.FindButtonById("btn-dashboard-why-slow");
+        Assert.NotNull(check);
+
+        check!.Invoke();
+
+        Assert.True(_fx.HasTextInCurrentTab("things looked at", timeoutSeconds: 60),
+            "the slowness check did not show what it looked at within a minute");
+    }
+
     [Fact]
     public void SectionLabels_Present()
     {

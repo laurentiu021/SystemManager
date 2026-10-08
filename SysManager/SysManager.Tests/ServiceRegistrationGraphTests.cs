@@ -89,6 +89,51 @@ public class ServiceRegistrationGraphTests
         Assert.Contains(nameof(SingletonCapturingScopedProbe), ex.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Every optional service a registered type's constructor takes is registered too, so the container hands it over
+    /// rather than the null the constructor falls back on.
+    /// </summary>
+    /// <remarks>
+    /// Those parameters are optional so that the construction sites written before them kept compiling. A parameter with
+    /// a default is one the container fills with that default when its type is not registered, and it does so silently:
+    /// the validation above passes either way. Unregistered, the Dashboard would lose its blocked-apps alert and its "Why
+    /// is it slow?" button would never run (#1529), and a tab whose change Undo Changes put back would not hear of it.
+    /// <para>The constructor read is the public one with the most parameters, the one the container uses when it can
+    /// satisfy all of them, which the validation above has just proved it can.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryOptionalServiceAConstructorTakes_IsRegistered()
+    {
+        var services = RealGraph();
+        var registered = services.Select(d => d.ServiceType).ToHashSet();
+
+        var optional = services
+            .Select(d => d.ImplementationType)
+            .OfType<Type>()
+            .Distinct()
+            .SelectMany(type => type.GetConstructors()
+                .OrderByDescending(c => c.GetParameters().Length)
+                .Take(1)
+                .SelectMany(c => c.GetParameters())
+                .Where(p => p.HasDefaultValue
+                            && (p.ParameterType.IsInterface || p.ParameterType.Assembly == typeof(ServiceRegistration).Assembly))
+                .Select(p => (Owner: type.Name, Parameter: p)))
+            .ToList();
+
+        // Floor: nine when written — Undo Changes' signal in five tabs, the Dashboard's two, Deep Cleanup's runner and the
+        // Services tab's ledger. A reader that stopped finding them would pass by checking nothing.
+        Assert.True(optional.Count >= 9, $"only {optional.Count} optional services were found in the real graph's constructors.");
+        Assert.Contains(optional, o => o.Owner == "DashboardViewModel" && o.Parameter.ParameterType == typeof(Services.ISlowdownService));
+
+        var missing = optional
+            .Where(o => !registered.Contains(o.Parameter.ParameterType))
+            .Select(o => $"{o.Owner}({o.Parameter.ParameterType.Name} {o.Parameter.Name})")
+            .ToList();
+        Assert.True(missing.Count == 0,
+            "these constructors take an optional service the container does not register, so it passes the default "
+            + "instead:\n  " + string.Join("\n  ", missing));
+    }
+
     // Probes for the two negative tests. Intentionally never registered as a dependency of anything in
     // the real graph — each exists only to give validation something it must reject.
     private sealed class NeverRegistered;

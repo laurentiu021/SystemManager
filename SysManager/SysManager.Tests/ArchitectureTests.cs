@@ -16697,7 +16697,9 @@ public partial class ArchitectureTests
                             "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
                             "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two",
                             "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven",
-                            "twenty-eight", "twenty-nine", "thirty"];
+                            "twenty-eight", "twenty-nine", "thirty", "thirty-one", "thirty-two", "thirty-three",
+                            "thirty-four", "thirty-five", "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine",
+                            "forty"];
         Assert.True(seams.Length < spelled.Length, $"{seams.Length} seams is past the spelled-out numbers here.");
 
         // Sliced to the one paragraph that makes the claim, so a name mentioned under a neighbouring heading

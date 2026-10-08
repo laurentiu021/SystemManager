@@ -42,6 +42,7 @@ public partial class UiAutomationContractTests
             ["btn-ping-stop"] = "Stop ping monitoring",
             ["btn-ping-clear"] = "Clear ping history",
             ["btn-dashboard-scan-system"] = "Scan system",
+            ["btn-dashboard-why-slow"] = "Why is it slow? — look for what is slowing this PC down right now",
             ["btn-drivers-list"] = "List drivers",
             ["btn-uninstaller-uninstall-selected"] = "Uninstall selected applications",
             ["btn-windows-update-install-module"] = "Install PSWindowsUpdate for update history",

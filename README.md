@@ -1110,7 +1110,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Tweaks, Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions. Disk
   Analyzer, Large Files and Duplicate Finder only read, and take it so a scan never runs while a
   cleanup is deleting; Speed Test and Traceroute take it so a measurement never runs during a
-  network change
+  network change; the Dashboard's Why is it slow? takes it so it never measures SysManager's own
+  cleanup as the thing slowing the PC down
 - These tabs change things without it: Startup Manager, Task Scheduler, App Blocker, Notification
   Blocker, Settings Watchdog, Scheduled Maintenance, Standby List Cleaner, Display Profiles, Timer
   Resolution, CPU Core Affinity, Dark Mode Scheduler, Volume Control, Profile Export/Import, and
@@ -1861,6 +1862,28 @@ offers, "rate us" prompts:
   ran and found nothing. The confirmation says that the Recycle Bin's contents
   cannot be recovered; the temporary files it cleans are deleted outright too, not sent to the
   Recycle Bin. No admin required.
+- **Why is it slow?** — the button beside Scan system looks at the five things that most often
+  slow a PC down, all at once, and lists what it found, worst first. It ticks each one off as it
+  finishes, which takes about two seconds:
+  - **the system drive**, judged the way the Health Score judges it, so a large drive with plenty
+    left is not called full: it is named under 20 GB free, or under 15% free with less than 25 GB
+    left, and put first under 10 GB, or under 10% with less than 25 GB left
+  - **a program using 40% or more of the processor**, counted across all of its processes and
+    measured twice, a second apart, so a moment's spike is not named. SysManager itself never is
+  - **more than ten programs starting with Windows**, or more than 20 seconds that Windows itself
+    blamed on what ran during the last start it timed, if that was in the last 30 days. Reading
+    what Windows blamed needs administrator rights; the count does not
+  - **memory at 90% or more**
+  - **Windows not restarted for more than a week**, the same line past which the Health Score
+    recommends a restart. Always last, because it is not a problem by itself
+- **Why is it slow? says what each finding means, and where to deal with it** — in plain words,
+  with a button to the tab that can act on it: Deep Cleanup and Disk Analyzer, Process Manager,
+  Startup Manager, Boot Analyzer. The buttons only open that tab, so nothing is changed from here.
+  A program is named together with the reason it may be fine — "that may be exactly what you want
+  if you are watching or playing something" — and a busy part of Windows is said to be doing a job
+  of its own. "Nothing obvious is slowing it down" appears only when all five could be looked at;
+  anything that could not be read is named instead. It does not start while a cleanup or a disk
+  scan is running in SysManager, which would be what it found
 - **Quick Actions** — Run Quick Cleanup, Update All Apps, Check Windows Updates and Run Speed
   Test run in place with a progress bar, and the result says whether it worked: an app update
   that fails ends as "Failed" with winget's reason, not "Done". Check Windows Updates asks
@@ -2491,8 +2514,10 @@ Windows 10 / 11 x64 machine.
 ## First-time flow
 
 1. Launch the app — it opens on the Dashboard.
-2. Open **Network › Ping** and press **Start** — live ping begins.
-3. For anything in Windows Update, System Fixes (SFC/DISM), or system-wide app
+2. If the PC feels slow, press **Why is it slow?** at the top of the Dashboard. It lists what it
+   found, worst first, each with the tab that deals with it.
+3. Open **Network › Ping** and press **Start** — live ping begins.
+4. For anything in Windows Update, System Fixes (SFC/DISM), or system-wide app
    updates, press **Run as administrator** in the banner at the top of the page. The app
    relaunches elevated, and the banner turns golden to show it.
 

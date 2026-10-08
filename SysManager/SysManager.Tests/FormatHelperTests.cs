@@ -141,4 +141,16 @@ public class FormatHelperTests
     [InlineData(new[] { "Skype", "Maps", "Mail & Calendar" }, "Skype, Maps and Mail & Calendar")]
     public void JoinForSentence_ReadsAsASentence(string[] items, string expected)
         => Assert.Equal(expected, FormatHelper.JoinForSentence(items));
+
+    // ── NotChecked: one wording for every card that says a check did not run (#1529) ──
+
+    [Fact]
+    public void NotChecked_WhenEverythingRan_IsEmpty()
+        => Assert.Equal("", FormatHelper.NotChecked(Array.Empty<string>()));
+
+    [Theory]
+    [InlineData(new[] { "the disks" }, "Not checked this time: the disks. The result above does not cover it.")]
+    [InlineData(new[] { "memory", "uptime" }, "Not checked this time: memory and uptime. The result above does not cover them.")]
+    public void NotChecked_NamesWhatDidNotRun_AndSaysTheResultDoesNotCoverIt(string[] notChecked, string expected)
+        => Assert.Equal(expected, FormatHelper.NotChecked(notChecked));
 }

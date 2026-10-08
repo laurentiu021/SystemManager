@@ -48,6 +48,9 @@ public static class ServiceRegistration
         services.AddSingleton<IInstalledProgramsHistory, InstalledProgramsHistory>();
         services.AddSingleton<IReliabilityHistory, WmiReliabilityHistory>();
         services.AddSingleton<IRecentChangesService, RecentChangesService>();
+        // The Dashboard's "Why is it slow?" check, over the same process, startup and boot services the tabs that own them
+        // use (#1529).
+        services.AddSingleton<ISlowdownService, SlowdownService>();
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();

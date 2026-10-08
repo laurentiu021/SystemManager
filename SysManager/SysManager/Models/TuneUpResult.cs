@@ -97,10 +97,7 @@ public sealed record TuneUpResult
     public bool AllChecksPassed => WarningCount == 0 && NotChecked.Count == 0;
 
     /// <summary>The line naming what was not checked, or empty when everything was.</summary>
-    public string NotCheckedDisplay => NotChecked.Count == 0
-        ? ""
-        : $"Not checked this time: {FormatHelper.JoinForSentence(NotChecked)}. The result above does not cover "
-          + (NotChecked.Count == 1 ? "it." : "them.");
+    public string NotCheckedDisplay => FormatHelper.NotChecked(NotChecked);
 
     public string OverallVerdict => (WarningCount, NotChecked.Count) switch
     {

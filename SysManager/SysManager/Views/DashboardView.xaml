@@ -16,6 +16,9 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <!-- "Why is it slow?": the check while it runs, then what it found (#1529). -->
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <!-- Tune-Up progress + result. The ViewModel has computed TuneUpResult, HasTuneUpResult,
                      TuneUpProgress, TuneUpStep and even a DismissTuneUpResult command all along; none
                      of it was ever rendered, so the wizard ran, found problems and discarded them. -->
@@ -35,6 +38,12 @@
                     <Button Content="Scan system" Command="{Binding RefreshCommand}"
                             AutomationProperties.AutomationId="btn-dashboard-scan-system"
                             AutomationProperties.Name="Scan system"
+                            Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
+                    <!-- "Why is it slow?" (#1529). Secondary, like Scan system: it only reads, so the primary purple stays
+                         with the Tune-Up on the end. -->
+                    <Button Content="Why is it slow?" Command="{Binding CheckSlowdownCommand}"
+                            AutomationProperties.AutomationId="btn-dashboard-why-slow"
+                            AutomationProperties.Name="Why is it slow? — look for what is slowing this PC down right now"
                             Style="{StaticResource SecondaryButton}" Padding="14,8" Margin="0,0,8,0"/>
                     <Button Command="{Binding RunTuneUpCommand}"
                             AutomationProperties.Name="Quick Tune-Up"
@@ -69,11 +78,141 @@
                            NotElevatedMessage="Some features require administrator privileges for full data."
                            ElevatedMessage="Running as administrator — all sensors and quick actions have full access."/>
 
-            <!-- ═══ ROW 2: Tune-Up in progress ═══ -->
+            <!-- ═══ ROW 2: Why is it slow? — checking ═══ -->
+            <!-- The five things it looks at, each ticked off as it is done with: they finish at different times, and the
+                 processor is sampled twice, a second apart. The spinner is the one System Alerts uses. -->
+            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16"
+                    Visibility="{Binding IsSlowdownCheckRunning, Converter={StaticResource FlexVis}}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelSlowdownCheckCommand}"
+                                AutomationProperties.Name="Cancel the slowness check"
+                                Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
+                        <TextBlock Text="Why is this PC slow?" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding SlowdownProbes}" Margin="0,10,0,0" Focusable="False"
+                                  AutomationProperties.Name="What the check is looking at">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:SlowdownProbeStatus}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <ProgressBar AutomationProperties.Name="{Binding Label, StringFormat='Checking {0}'}"
+                                                 IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
+                                                 VerticalAlignment="Center"
+                                                 Visibility="{Binding IsLooking, Converter={StaticResource FlexVis}}"/>
+                                    <TextBlock Text="&#xE73E;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="12"
+                                               Width="14" Margin="0,0,8,0" VerticalAlignment="Center" TextAlignment="Center"
+                                               Foreground="{DynamicResource Success}"
+                                               Visibility="{Binding WasRead, Converter={StaticResource FlexVis}}"/>
+                                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="12"
+                                               Width="14" Margin="0,0,8,0" VerticalAlignment="Center" TextAlignment="Center"
+                                               Foreground="{DynamicResource Warning}"
+                                               Visibility="{Binding CouldNotRead, Converter={StaticResource FlexVis}}"/>
+                                    <TextBlock Text="{Binding Line}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 3: Why is it slow? — what it found ═══ -->
+            <!-- Each finding says what was seen and what it means, then offers the tab that can act on it. The buttons only
+                 open a tab, so nothing here is a new way to change the PC. Worst first and numbered, with the 4px stripe
+                 of System Logs' severity cards. "Nothing obvious" only when everything could be looked at: a check that
+                 could not run finds nothing too (#2501). -->
+            <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
+                    Visibility="{Binding HasSlowdownReport, Converter={StaticResource FlexVis}}">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,12">
+                        <Button DockPanel.Dock="Right" Content="Dismiss" Command="{Binding DismissSlowdownReportCommand}"
+                                AutomationProperties.Name="Dismiss what the slowness check found"
+                                Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
+                        <StackPanel>
+                            <TextBlock Text="Why is this PC slow?" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="{Binding SlowdownReport.Summary}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <ItemsControl ItemsSource="{Binding SlowdownReport.Findings}" Focusable="False"
+                                  AutomationProperties.Name="What is slowing this PC down, worst first">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type models:SlowdownFinding}">
+                                <Border Style="{StaticResource CardInner}" Margin="0,0,0,10">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.ColumnSpan="2" Width="4" HorizontalAlignment="Left" CornerRadius="2"
+                                                Margin="-12,-12,0,-12"
+                                                Background="{Binding ColorHex, Converter={StaticResource HexBrush}}"/>
+                                        <Border Width="30" Height="30" CornerRadius="{StaticResource RadiusPill}"
+                                                Background="{DynamicResource Surface3}" Margin="4,0,12,0" VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding Rank}" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Style="{StaticResource Body}"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Subtle}" TextWrapping="Wrap"
+                                                       Margin="0,2,0,0"/>
+                                            <ItemsControl ItemsSource="{Binding Actions}" Margin="0,8,0,0" Focusable="False"
+                                                          Visibility="{Binding HasActions, Converter={StaticResource FlexVis}}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type models:SlowdownAction}">
+                                                        <!-- Two buttons, one shown: a style cannot be swapped by a trigger in
+                                                             itself, and only the action a card leads with is purple. -->
+                                                        <Grid Margin="0,0,8,0">
+                                                            <Button Content="{Binding Label}" Style="{StaticResource PrimaryButton}" Padding="10,4"
+                                                                    Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                    CommandParameter="{Binding NavTargetId}"
+                                                                    AutomationProperties.Name="{Binding AccessibleName}"
+                                                                    Visibility="{Binding IsPrimary, Converter={StaticResource FlexVis}}"/>
+                                                            <Button Content="{Binding Label}" Style="{StaticResource SecondaryButton}" Padding="10,4"
+                                                                    Command="{Binding DataContext.OpenTabCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                    CommandParameter="{Binding NavTargetId}"
+                                                                    AutomationProperties.Name="{Binding AccessibleName}"
+                                                                    Visibility="{Binding IsPrimary, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <StackPanel Visibility="{Binding SlowdownReport.NothingFound, Converter={StaticResource FlexVis}}">
+                        <v:EmptyState Glyph="&#xE73E;" Title="Nothing obvious is slowing it down"
+                                      Message="Disk space, memory, startup programs and the time since the last restart all look normal, and nothing is using an unusual share of the processor. If it still feels slow, System Health looks at the slower-moving things, such as how worn the drives are."/>
+                        <Button Content="Open System Health" Command="{Binding OpenTabCommand}" CommandParameter="nav-system-health"
+                                AutomationProperties.Name="Open System Health"
+                                Style="{StaticResource SecondaryButton}" Padding="10,4" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource Subtle}" TextWrapping="Wrap"
+                               Text="Nothing stood out in what could be checked."
+                               Visibility="{Binding SlowdownReport.NothingFoundInWhatRan, Converter={StaticResource FlexVis}}"/>
+
+                    <!-- What could not be looked at, in the Tune-Up card's words for the same thing. -->
+                    <TextBlock Style="{StaticResource Subtle}" Margin="0,8,0,0" TextWrapping="Wrap"
+                               Text="{Binding SlowdownReport.NotCheckedDisplay}"
+                               Visibility="{Binding SlowdownReport.HasUncheckedItems, Converter={StaticResource FlexVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ ROW 4: Tune-Up in progress ═══ -->
             <!-- TuneUpProgress / TuneUpStep were computed on every step and never shown, so the wizard
                  ran with no indication of what it was doing or how far along it was. Cancel is offered
                  here because CancelTuneUpCommand already existed and was also unbound. -->
-            <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16"
+            <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16"
                     Visibility="{Binding IsTuneUpRunning, Converter={StaticResource FlexVis}}">
                 <StackPanel>
                     <DockPanel>
@@ -89,14 +228,14 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══ ROW 3: Tune-Up results ═══ -->
+            <!-- ═══ ROW 5: Tune-Up results ═══ -->
             <!-- The whole point of #1489: the wizard cleaned, scanned and computed a full TuneUpResult —
                  including a WarningCount, an OverallVerdict and a per-disk DiskHealthSummary whose own
                  doc comment says it is "for the Tune-Up result card" — and then threw all of it away.
                  Each finding links to the tab that can act on it: "3 broken shortcuts" is only useful
                  if it can take you to the cleaner. Navigation goes through OpenTabCommand, which shares
                  the shell lookup this view model already used for the quick-action link. -->
-            <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
+            <Border Grid.Row="5" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
                     Visibility="{Binding HasTuneUpResult, Converter={StaticResource FlexVis}}">
                 <StackPanel>
                     <DockPanel Margin="0,0,0,12">
@@ -205,8 +344,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══ ROW 4: Health Score Hero ═══ -->
-            <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
+            <!-- ═══ ROW 6: Health Score Hero ═══ -->
+            <Border Grid.Row="6" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="20"
                     Visibility="{Binding HasHealthScore, Converter={StaticResource FlexVis}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -268,7 +407,7 @@
             </Border>
 
             <!-- Health score loading -->
-            <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14"
+            <Border Grid.Row="6" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14"
                     Visibility="{Binding IsHealthScoreLoading, Converter={StaticResource BoolToVis}}">
                 <StackPanel Orientation="Horizontal">
                     <ProgressBar AutomationProperties.Name="Computing health score" IsIndeterminate="True" Width="80" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"/>
@@ -276,8 +415,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══ ROW 5: Vitals (CPU, RAM, GPU) — REAL-TIME ═══ -->
-            <Grid Grid.Row="5" Margin="0,0,0,12">
+            <!-- ═══ ROW 7: Vitals (CPU, RAM, GPU) — REAL-TIME ═══ -->
+            <Grid Grid.Row="7" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="12"/>
@@ -353,8 +492,8 @@
                 </Border>
             </Grid>
 
-            <!-- ═══ ROW 6: Temperatures ═══ -->
-            <Border Grid.Row="6" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
+            <!-- ═══ ROW 8: Temperatures ═══ -->
+            <Border Grid.Row="8" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
                 <StackPanel>
                     <StackPanel Margin="0,0,0,12">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -426,8 +565,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══ ROW 7: Storage ═══ -->
-            <Border Grid.Row="7" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
+            <!-- ═══ ROW 9: Storage ═══ -->
+            <Border Grid.Row="9" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="16">
                 <StackPanel>
                     <TextBlock Text="STORAGE" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
@@ -458,8 +597,8 @@
                 </StackPanel>
             </Border>
 
-            <!-- ═══ ROW 8: Bottom row (Quick Actions | Alerts | Activity) ═══ -->
-            <Grid Grid.Row="8" Margin="0,0,0,12">
+            <!-- ═══ ROW 10: Bottom row (Quick Actions | Alerts | Activity) ═══ -->
+            <Grid Grid.Row="10" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="12"/>
@@ -668,8 +807,8 @@
                 </Border>
             </Grid>
 
-            <!-- ═══ ROW 9: Status bar ═══ -->
-            <TextBlock Grid.Row="9" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" Margin="0,4,0,0"/>
+            <!-- ═══ ROW 11: Status bar ═══ -->
+            <TextBlock Grid.Row="11" Text="{Binding StatusMessage}" Style="{StaticResource StatusLine}" Margin="0,4,0,0"/>
         </Grid>
     </ScrollViewer>
 </UserControl>

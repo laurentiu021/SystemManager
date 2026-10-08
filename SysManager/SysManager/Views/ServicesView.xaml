@@ -60,13 +60,13 @@
                         </TextBlock>
                     </StackPanel>
                 </DockPanel>
-                <!-- Filter chips. All nine share one GroupName because SelectedFilter holds a single
+                <!-- Filter chips. All ten share one GroupName because SelectedFilter holds a single
                      value, so they are mutually exclusive by construction.
                      Five of these are new: ApplyFilter has always implemented Running, Stopped and the
                      three gaming recommendations, but no control ever selected them, so they could only
                      be reached from a debugger — while the README promised filtering "by status
                      (Running/Stopped)" and "gaming recommendation". A WrapPanel rather than the previous
-                     StackPanel so nine chips reflow instead of clipping on a narrow window. -->
+                     StackPanel so ten chips reflow instead of clipping on a narrow window. -->
                 <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="0,0,8,4"/>
@@ -85,6 +85,14 @@
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
                                  Style="{StaticResource FilterChipCritical}"
                                  AutomationProperties.Name="Filter critical services"/>
+                    <!-- The services SysManager has no rating for. They counted as Critical, which made that chip
+                         most of the list; grey because nothing is known about them either way (#1512). -->
+                    <RadioButton Content="{Binding NotRatedCount, StringFormat='Not rated ({0})'}"
+                                 GroupName="SafetyFilter" Margin="0,0,6,4"
+                                 IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Not rated'}"
+                                 Style="{StaticResource FilterChipNeutral}"
+                                 ToolTip="Services SysManager has not rated, so it leaves them alone"
+                                 AutomationProperties.Name="Filter services SysManager has not rated"/>
 
                     <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>

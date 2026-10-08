@@ -10,9 +10,9 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="SafetyDatabase"/> — the curated lookup that drives the
 /// risk warnings shown before a user disables a Windows service or feature. The
-/// fail-safe defaults (unknown service → Critical, unknown feature → Caution) are
-/// the load-bearing behavior: a wrong default could let someone disable a core
-/// service without a warning.
+/// fail-safe default (a service or feature not in the list is Not rated, which Services
+/// refuses to stop or disable) is the load-bearing behavior: a wrong default could let
+/// someone disable a core service without a warning.
 /// </summary>
 public class SafetyDatabaseTests
 {
@@ -28,16 +28,39 @@ public class SafetyDatabaseTests
     [InlineData("RpcSs", SafetyLevel.Critical)]        // core IPC — critical
     [InlineData("lsass", SafetyLevel.Critical)]
     [InlineData("WinDefend", SafetyLevel.Critical)]
+    [InlineData("lmhosts", SafetyLevel.Safe)]          // the gaming advice says to turn these two off (#2611)
+    [InlineData("WbioSrvc", SafetyLevel.Caution)]
     public void GetServiceSafety_MapsKnownServicesToTier(string service, SafetyLevel expected)
         => Assert.Equal(expected, SafetyDatabase.GetServiceSafety(service).Level);
 
     [Fact]
-    public void GetServiceSafety_UnknownService_DefaultsToCritical()
+    public void GetServiceSafety_UnknownService_IsNotRated_AndSaysWhoDoesNotKnow()
     {
-        // Fail-safe: an unrecognised service must NOT be presented as safe to disable.
+        // Fail-safe: an unrecognised service must NOT be presented as safe to disable. Nor as critical any more:
+        // that put the red pill on most rows and taught the user to ignore it (#1512).
         var (level, description) = SafetyDatabase.GetServiceSafety("Totally.Made.Up.Service");
-        Assert.Equal(SafetyLevel.Critical, level);
-        Assert.Contains("critical", description, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(SafetyLevel.NotRated, level);
+        Assert.False(new ServiceEntry { SafetyLevel = level }.MayBeTurnedOff);
+        Assert.StartsWith("SysManager has not rated this service.", description, StringComparison.Ordinal);
+        Assert.Contains($"one of the {SafetyDatabase.RatedServiceCount} services", description, StringComparison.Ordinal);
+        Assert.DoesNotContain("critical", description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EveryServiceTheGamingAdviceSaysToTurnOff_IsOneDisableActsOn()
+    {
+        // The advice said WbioSrvc and lmhosts were safe to disable, and with no rating Disable refused them (#2611).
+        var offenders = ServiceManagerService.GamingGuide
+            .Where(g => g.Value.Rec is "safe-to-disable" or "advanced")
+            .Where(g => !new ServiceEntry { SafetyLevel = SafetyDatabase.GetServiceSafety(g.Key).Level }.MayBeTurnedOff)
+            .Select(g => g.Key)
+            .ToList();
+
+        Assert.True(ServiceManagerService.GamingGuide.Count(g => g.Value.Rec == "safe-to-disable") >= 10,
+            "the advice list was not read, so nothing below is checked");
+        Assert.True(offenders.Count == 0,
+            "The gaming advice tells the user to turn these off, and Disable refuses them: " + string.Join(", ", offenders));
     }
 
     [Theory]
@@ -78,13 +101,15 @@ public class SafetyDatabaseTests
         => Assert.Equal(expected, SafetyDatabase.GetFeatureSafety(feature).Level);
 
     [Fact]
-    public void GetFeatureSafety_UnknownFeature_DefaultsToCaution()
+    public void GetFeatureSafety_UnknownFeature_IsNotRated_AndSaysToLookItUp()
     {
-        // Features default to Caution (not Critical) — unknown optional features are
-        // generally reversible, but still warrant a "check the docs" warning.
+        // It read Caution, which claimed a rating SysManager does not have (#1512). Toggling it is still offered, so the
+        // words say to look it up rather than that it is left alone.
         var (level, description) = SafetyDatabase.GetFeatureSafety("Made-Up-Feature");
-        Assert.Equal(SafetyLevel.Caution, level);
-        Assert.False(string.IsNullOrWhiteSpace(description));
+
+        Assert.Equal(SafetyLevel.NotRated, level);
+        Assert.StartsWith("SysManager has not rated this feature.", description, StringComparison.Ordinal);
+        Assert.Contains($"one of the {SafetyDatabase.RatedFeatureCount} features", description, StringComparison.Ordinal);
     }
 
     [Theory]

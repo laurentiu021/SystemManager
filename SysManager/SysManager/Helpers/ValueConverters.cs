@@ -178,12 +178,15 @@ public sealed class SafetyLevelToBrushConverter : IValueConverter
     private static readonly SolidColorBrush SafeBrush = new(Color.FromRgb(0x4A, 0xDE, 0x80));
     private static readonly SolidColorBrush CautionBrush = new(Color.FromRgb(0xFB, 0xBF, 0x24));
     private static readonly SolidColorBrush CriticalBrush = new(Color.FromRgb(0xF8, 0x71, 0x71));
+    // The app's TextMuted grey, the "no information" colour Process Manager's Not recognised chip already uses (#1512).
+    private static readonly SolidColorBrush NotRatedBrush = new(Color.FromRgb(0x7B, 0x83, 0x96));
 
     static SafetyLevelToBrushConverter()
     {
         SafeBrush.Freeze();
         CautionBrush.Freeze();
         CriticalBrush.Freeze();
+        NotRatedBrush.Freeze();
     }
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -196,6 +199,7 @@ public sealed class SafetyLevelToBrushConverter : IValueConverter
         {
             SafetyLevel.Safe => ("SuccessText", SafeBrush),
             SafetyLevel.Caution => ("WarningText", CautionBrush),
+            SafetyLevel.NotRated => ("TextMuted", NotRatedBrush),
             SafetyLevel.Critical => ("DangerText", CriticalBrush),
             _ => ("DangerText", CriticalBrush)
         } : ("DangerText", CriticalBrush);
@@ -211,12 +215,14 @@ public sealed class SafetyLevelToBackgroundConverter : IValueConverter
     private static readonly SolidColorBrush SafeBg = new(Color.FromArgb(0x20, 0x22, 0xC5, 0x5E));
     private static readonly SolidColorBrush CautionBg = new(Color.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
     private static readonly SolidColorBrush CriticalBg = new(Color.FromArgb(0x20, 0xEF, 0x44, 0x44));
+    private static readonly SolidColorBrush NotRatedBg = new(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
 
     static SafetyLevelToBackgroundConverter()
     {
         SafeBg.Freeze();
         CautionBg.Freeze();
         CriticalBg.Freeze();
+        NotRatedBg.Freeze();
     }
 
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -225,6 +231,7 @@ public sealed class SafetyLevelToBackgroundConverter : IValueConverter
         {
             SafetyLevel.Safe => SafeBg,
             SafetyLevel.Caution => CautionBg,
+            SafetyLevel.NotRated => NotRatedBg,
             SafetyLevel.Critical => CriticalBg,
             _ => CriticalBg
         } : CriticalBg;
@@ -242,6 +249,7 @@ public sealed class SafetyLevelToTextConverter : IValueConverter
         {
             SafetyLevel.Safe => "Safe",
             SafetyLevel.Caution => "Caution",
+            SafetyLevel.NotRated => "Not rated",
             SafetyLevel.Critical => "Critical",
             _ => "Critical"
         } : "Critical";

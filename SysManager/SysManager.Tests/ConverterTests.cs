@@ -325,6 +325,40 @@ public class ConverterTests
     // every arm and falls through to `_ => Critical`, i.e. every process rendered red. The first
     // test below is what makes that mistake impossible to reintroduce silently.
 
+    [Fact]
+    public void SafetyLevel_NotRated_ReadsAsNotRated_InTheNeutralGrey()
+    {
+        // #1512: grey and plain, so "we have no rating" no longer wears the red that means "this breaks Windows".
+        var text = new SafetyLevelToTextConverter().Convert(SafetyLevel.NotRated, typeof(string), null!, CultureInfo.InvariantCulture);
+        var brush = Assert.IsType<SolidColorBrush>(
+            new SafetyLevelToBrushConverter().Convert(SafetyLevel.NotRated, typeof(Brush), null!, CultureInfo.InvariantCulture));
+        var critical = Assert.IsType<SolidColorBrush>(
+            new SafetyLevelToBrushConverter().Convert(SafetyLevel.Critical, typeof(Brush), null!, CultureInfo.InvariantCulture));
+        var background = new SafetyLevelToBackgroundConverter();
+
+        Assert.Equal("Not rated", text);
+        Assert.Equal(Color.FromRgb(0x7B, 0x83, 0x96), brush.Color);   // TextMuted, as Not recognised uses
+        Assert.NotEqual(critical.Color, brush.Color);
+        Assert.NotEqual(background.Convert(SafetyLevel.Critical, typeof(Brush), null!, CultureInfo.InvariantCulture),
+            background.Convert(SafetyLevel.NotRated, typeof(Brush), null!, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void EverySafetyLevel_HasItsOwnWordsAndColours()
+    {
+        // A level the converters do not name falls through to Critical's red and word, which is how most services came
+        // to read Critical: this keeps a new level from doing it silently.
+        var text = new SafetyLevelToTextConverter();
+        var background = new SafetyLevelToBackgroundConverter();
+        var levels = Enum.GetValues<SafetyLevel>();
+
+        var words = levels.Select(l => text.Convert(l, typeof(string), null!, CultureInfo.InvariantCulture)).ToList();
+        var fills = levels.Select(l => background.Convert(l, typeof(Brush), null!, CultureInfo.InvariantCulture)).ToList();
+
+        Assert.Equal(levels.Length, words.Distinct().Count());
+        Assert.Equal(levels.Length, fills.Distinct().Count());
+    }
+
     [Theory]
     [InlineData("System")]
     [InlineData("Trusted")]

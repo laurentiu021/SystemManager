@@ -10,6 +10,32 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.126.0] - 2026-10-08
+
+**The Services tab no longer calls a service "Critical" just because SysManager has not rated it.** Those services, most of
+the list, now show a grey **Not rated** pill, so the red one is back to meaning "this breaks Windows". What SysManager
+will and will not do with them has not changed (#1512).
+
+### Added
+
+- **Services** has a **Not rated** filter chip with its count, for the services SysManager has no rating for.
+
+### Changed
+
+- **Services**: a service that is not one of the 48 SysManager has rated shows a grey **Not rated** pill instead of the
+  red Critical one, and its hover says SysManager has not rated it and will not turn it off, rather than "Unknown
+  service — treat as critical until verified". It is still refused for Stop and Disable, and the status line now says
+  "SysManager has not rated … so it will not stop it" instead of calling it critical. The **Critical** chip counts only
+  the services rated Critical, so its number drops from most of the list to 15 at most.
+- **Windows Features**: a feature SysManager has not rated shows **Not rated** instead of Caution, with a hover that
+  says to look it up before turning it on or off. It can still be turned on or off, as before.
+
+### Fixed
+
+- **Services**: Windows Biometric Service and TCP/IP NetBIOS Helper, which the gaming advice calls safe to disable, are
+  now rated (Caution and Safe), so Disable acts on them. Since 1.20.30, when Disable began refusing the services it had
+  no rating for, it refused these two while its own advice said to turn them off (#2611).
+
 ## [1.125.0] - 2026-10-08
 
 **A new Recent Changes tab answers "it was fine last week — what changed?".** It lists, day by day, what SysManager

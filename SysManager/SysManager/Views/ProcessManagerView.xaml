@@ -30,7 +30,7 @@
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
                        NotElevatedMessage="Ending system processes requires administrator privileges."
-                       ElevatedMessage="Running as administrator — you can end any process."/>
+                       ElevatedMessage="Running as administrator — you can end system processes too, except the ones Windows needs to keep running and SysManager itself."/>
 
         <!-- Toolbar -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">

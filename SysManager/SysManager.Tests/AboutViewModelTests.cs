@@ -378,11 +378,26 @@ public class AboutViewModelTests
     }
 
     [Fact]
-    public void BuildDate_IsString()
+    public void BuildCommit_IsString()
     {
         var vm = NewVmNoAutoCheck();
-        Assert.NotNull(vm.BuildDate);
+        Assert.NotNull(vm.BuildCommit);
     }
+
+    /// <summary>
+    /// BUILD names the commit the build came from, which the informational version carries after its '+'.
+    /// </summary>
+    /// <remarks>
+    /// It showed the exe's last-write time, which is when the file reached the PC, not when it was built (#2611).
+    /// </remarks>
+    [Theory]
+    [InlineData("1.123.2+258c7d83f0a1b2c3d4e5f60718293a4b5c6d7e8f", "258c7d8")]
+    [InlineData("1.123.2+abc", "abc")]
+    [InlineData("1.123.2", "")]
+    [InlineData("1.123.2+", "")]
+    [InlineData(null, "")]
+    public void BuildCommitOf_TakesTheCommitAfterThePlus(string? informationalVersion, string expected)
+        => Assert.Equal(expected, AboutViewModel.BuildCommitOf(informationalVersion));
 
     [Fact]
     public void ReleaseNote_Defaults_AreEmpty()

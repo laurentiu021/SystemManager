@@ -92,4 +92,55 @@ public class BootAnalyzerViewModelTests
         Assert.StartsWith("1 boots analyzed; 1 slow-component events.", vm.StatusMessage);
         Assert.Single(vm.Degradations);
     }
+
+    // ── What the empty list says (#2611) ─────────────────────────────────────
+    // It said "Boot history needs administrator to read." whenever the list was empty, including as administrator.
+
+    [Fact]
+    public async Task TheEmptyList_AsAdministratorWithNoRecords_SaysThereAreNoneYet()
+    {
+        var vm = NewVm(elevated: true, () => new ScriptedBootReader(End()), () => new ScriptedBootReader(End()));
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.Boots);
+        Assert.StartsWith("Windows has no boot performance records yet.", vm.EmptyMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("administrator", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TheEmptyList_AsAdministratorAfterAFailedRead_SaysTheReadFailed()
+    {
+        var vm = NewVm(elevated: true, () => new ScriptedBootReader(Fails()), () => new ScriptedBootReader(End()));
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.Boots);
+        Assert.Contains("could not be read", vm.EmptyMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheEmptyList_WithoutElevation_PointsAtAdministrator()
+    {
+        var vm = NewVm(elevated: false, () => new ScriptedBootReader(Fails()), () => new ScriptedBootReader(Fails()));
+        await vm.InitializationComplete;
+
+        Assert.Equal("Boot history needs administrator to read.", vm.EmptyMessage);
+    }
+
+    [Fact]
+    public async Task TheEmptyListMessage_FollowsARefreshThatRecovers()
+    {
+        var reads = 0;
+        var vm = NewVm(elevated: true,
+            () => ++reads == 1 ? new ScriptedBootReader(Fails()) : new ScriptedBootReader(End()),
+            () => new ScriptedBootReader(End()));
+        await vm.InitializationComplete;
+        Assert.Contains("could not be read", vm.EmptyMessage, StringComparison.Ordinal);   // the starting point
+
+        var raised = false;
+        vm.PropertyChanged += (_, e) => raised |= e.PropertyName == nameof(BootAnalyzerViewModel.EmptyMessage);
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Windows has no boot performance records yet.", vm.EmptyMessage, StringComparison.Ordinal);
+        Assert.True(raised, "EmptyMessage changed without a notification, so the empty state would keep the old text");
+    }
 }

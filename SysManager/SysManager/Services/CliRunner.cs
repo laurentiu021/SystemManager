@@ -114,7 +114,7 @@ public sealed class CliRunner
         ("--purge-standby", "Purge the standby memory list (non-destructive; needs administrator). "
                           + "Also accepted as --trim-ram, its former name."),
         ("--json", "Modifier: emit machine-readable JSON instead of text."),
-        ("--silent, -s", "Modifier: suppress non-essential output."),
+        ("--silent, -s", "Modifier: print nothing when the command succeeds; an error is still printed."),
     ];
 
     /// <summary>
@@ -167,12 +167,11 @@ public sealed class CliRunner
             double mb = bytes / 1024.0 / 1024.0;
             RecordHeadlessRun("Quick Cleanup", string.Create(CultureInfo.InvariantCulture,
                 $"Freed {mb:F0} MB across {files} file(s)"));
+            // No shorter text for --silent: a successful command prints nothing at all then (App.RunCliAndExit).
             return request.Json
                 ? new CliResult(CliResult.Ok, Json(new { freedBytes = bytes, freedMB = Math.Round(mb, 1), filesDeleted = files, errors }))
-                : new CliResult(CliResult.Ok, request.Silent
-                    ? $"{mb:F0} MB freed"
-                    : string.Create(CultureInfo.InvariantCulture,
-                        $"Cleanup complete: freed {mb:F1} MB across {files} file(s){(errors > 0 ? $", {errors} skipped" : "")}."));
+                : new CliResult(CliResult.Ok, string.Create(CultureInfo.InvariantCulture,
+                    $"Cleanup complete: freed {mb:F1} MB across {files} file(s){(errors > 0 ? $", {errors} skipped" : "")}."));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -192,7 +191,7 @@ public sealed class CliRunner
         RecordHeadlessRun("Standby cleaner", "Purged the standby memory list");
         return request.Json
             ? new CliResult(CliResult.Ok, Json(new { freedMB = Math.Round((after.AvailableBytes - before.AvailableBytes) / 1024.0 / 1024.0, 0), loadPercentAfter = after.LoadPercent }))
-            : new CliResult(CliResult.Ok, request.Silent ? "Standby list purged" : $"Standby list purged. Memory load now {after.LoadPercent}%.");
+            : new CliResult(CliResult.Ok, $"Standby list purged. Memory load now {after.LoadPercent}%.");
     }
 
     /// <summary>

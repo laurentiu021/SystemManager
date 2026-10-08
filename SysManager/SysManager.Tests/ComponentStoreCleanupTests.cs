@@ -154,14 +154,23 @@ public sealed class ComponentStoreCleanupTests
         }
     }
 
+    /// <summary>
+    /// A finished cleanup says it worked, and claims no amount freed.
+    /// </summary>
+    /// <remarks>
+    /// It said "The space Windows reported as reclaimable is now free", but the analysis reports the size of the
+    /// whole store, not an amount it can reclaim, so there was no such figure to have freed (#2611).
+    /// </remarks>
     [Fact]
-    public void Cleanup_WhenItSucceeds_SaysTheSpaceIsFree()
+    public void Cleanup_WhenItSucceeds_SaysSoWithoutClaimingAnAmount()
     {
         var (verdict, color, _) = CleanupViewModel.ParseComponentStoreResult(
             ["The operation completed successfully."], 0, analyzing: false);
 
         Assert.Equal(StatusColors.Good, color);
-        Assert.Contains("free", verdict, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("Component store cleaned up.", verdict, StringComparison.Ordinal);
+        Assert.DoesNotContain("reclaimable", verdict, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("free", verdict, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

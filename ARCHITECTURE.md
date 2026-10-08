@@ -249,7 +249,8 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   asks the dispatcher whether it is on the UI thread; comparing `SynchronizationContext` instances, as it once
   did, fails there after the first await, and `ArchitectureTests.NothingComparesSynchronizationContextInstances`
   keeps that comparison out of the code.
-- `AboutViewModel` — version info, auto-update, release history.
+- `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
+  version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.

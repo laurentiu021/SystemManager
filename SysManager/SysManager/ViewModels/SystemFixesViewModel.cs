@@ -124,7 +124,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     private bool RequireElevation(string what)
     {
         if (IsElevated) return true;
-        StatusMessage = $"{what} needs administrator rights — use \"Restart as administrator\" above.";
+        StatusMessage = $"{what} needs administrator rights — use \"Run as administrator\" above.";
         return false;
     }
 

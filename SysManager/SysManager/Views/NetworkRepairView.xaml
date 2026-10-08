@@ -11,13 +11,13 @@
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Network Repair" Style="{StaticResource Display}"/>
-            <TextBlock Text="The standard things to try when the internet stops working but the connection still looks fine: renew your address, clear the stored name lookups, and reset the two Windows networking layers (Winsock and TCP/IP). Those last two only take effect after a restart."
+            <TextBlock Text="The standard things to try when the internet stops working but the connection still looks fine: clear the stored name lookups, and reset the two Windows networking layers (Winsock and TCP/IP). Those last two need administrator rights and only take effect after a restart."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="28,12,28,0"
-                       NotElevatedMessage="Resetting network configuration (DNS flush, Winsock reset) requires administrator privileges."
+                       NotElevatedMessage="Resetting Winsock and TCP/IP requires administrator privileges. Flushing DNS works without it."
                        ElevatedMessage="Running as administrator — you can reset network settings."/>
 
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,28">

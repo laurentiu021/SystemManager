@@ -32,7 +32,26 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
     public BulkObservableCollection<BootRecord> Boots { get; } = new();
     public BulkObservableCollection<BootDegradation> Degradations { get; } = new();
 
-    [ObservableProperty] private bool _isElevated;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _isElevated;
+
+    /// <summary>True when the last read of the boot history failed, so an empty list is not an empty history.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private bool _readFailed;
+
+    /// <summary>What the empty boot list says, which depends on whether SysManager could read the history at all.</summary>
+    /// <remarks>
+    /// It said "Boot history needs administrator to read." whenever the list was empty, including when SysManager
+    /// already ran as administrator and Windows simply had no boot records yet (#2611).
+    /// </remarks>
+    public string EmptyMessage => !IsElevated
+        ? "Boot history needs administrator to read."
+        : ReadFailed
+            ? "Windows' boot history could not be read. Press Refresh to try again."
+            : "Windows has no boot performance records yet. A few restarts build the history.";
+
     [ObservableProperty] private bool _hasData;
     [ObservableProperty] private BootRecord? _latestBoot;
     [ObservableProperty] private string _trend = "";
@@ -102,6 +121,7 @@ public sealed partial class BootAnalyzerViewModel : ViewModelBase
             // A read that failed is not an empty history (#2500). Without elevation the log refuses every read, and
             // the banner and this line say why; with it, the read genuinely failed. Either way what is on screen
             // stays, so a refresh that fails does not empty the tab.
+            ReadFailed = boots is null;
             if (boots is null)
             {
                 StatusMessage = IsElevated

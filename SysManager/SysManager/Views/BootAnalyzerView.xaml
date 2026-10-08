@@ -79,7 +79,7 @@
                     <!-- Empty state -->
                     <v:EmptyState Glyph="&#xE946;"
                                   Title="No boot records"
-                                  Message="Boot history needs administrator to read."
+                                  Message="{Binding EmptyMessage}"
                                   Visibility="{Binding Boots.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                     </Grid>
                 </DockPanel>

@@ -20,13 +20,13 @@
                 <!-- Elevation. Directly under the header, which is where the golden admin-control contract
                      puts it on every other privileged tab, and Margin="0,12,0,0" because this is a
                      scrolling page whose StackPanel already carries the 28 gutter.
-                     Six of the buckets live under %WinDir% — the Windows Update download cache, Delivery
-                     Optimization, the Installer patch cache, Windows\Temp, Prefetch and the blue-screen
-                     memory dumps — and without admin they were silently counted as "skipped" with no
-                     stated reason. -->
+                     Seven of the buckets live under %WinDir% — the Windows Update download cache, Delivery
+                     Optimization, the Installer patch cache, Windows\Temp, Prefetch, the blue-screen memory
+                     dumps and the old servicing logs — and without admin they read as "skipped", or as
+                     empty where Windows will not even list the folder, with no stated reason (#2611). -->
                 <v:AdminBanner Margin="0,12,0,0"
-                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp, Prefetch and the blue-screen memory dumps — can only be deleted as administrator. They are still scanned and counted, and shown as skipped."
-                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp, Prefetch and blue-screen memory dump items can be deleted too."/>
+                               NotElevatedMessage="Some of the biggest items — the Windows Update download cache, Delivery Optimization, the Installer patch cache, Windows\Temp, Prefetch, the blue-screen memory dumps and the old servicing logs — can only be deleted as administrator. Without it, some of them show as empty or as skipped, because Windows will not let SysManager look inside."
+                               ElevatedMessage="Running as administrator — the Windows Update, Delivery Optimization, Installer patch cache, Windows\Temp, Prefetch, blue-screen memory dump and old servicing log items can be deleted too."/>
 
                 <!-- Safety note -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"
@@ -37,8 +37,10 @@
                         <StackPanel>
                             <TextBlock Text="Safe by design" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" MaxWidth="900" Margin="0,4,0,0" Style="{StaticResource Subtle}">
-                                Only locations documented as safe by vendors (NVIDIA, AMD, Microsoft) are scanned. We never touch browser caches, passwords,
-                                live app settings, the registry, active drivers, or Program Files. A file that's locked or in use is skipped — nothing is forced.
+                                Only a fixed list of folders is scanned: driver installer leftovers, Windows' own caches, logs and leftovers, the Recycle Bin, and
+                                game launchers' caches and logs.
+                                We never touch browser caches, passwords, live app settings, the registry, active drivers or game files; inside Program Files only
+                                named launcher cache and log folders are cleaned. A file that's locked or in use is skipped — nothing is forced.
                             </TextBlock>
                         </StackPanel>
                     </StackPanel>

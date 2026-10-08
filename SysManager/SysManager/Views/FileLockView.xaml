@@ -32,7 +32,7 @@
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="2" Margin="0,0,0,12"
                        NotElevatedMessage="Unlocking files in protected locations requires administrator privileges."
-                       ElevatedMessage="Running as administrator — you can unlock and close handles on protected files."/>
+                       ElevatedMessage="Running as administrator — you can end the programs that lock files in protected locations."/>
 
         <!-- Input toolbar -->
         <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="12">

@@ -43,6 +43,11 @@ public static class ServiceRegistration
         services.AddSingleton<ITuneUpService, TuneUpService>();
         services.AddSingleton<HealthScoreService>();
         services.AddSingleton<AppAlertService>();
+        // One record of New App Alerts' detections for the whole app: the tab writes it and Recent Changes reads it (#1507).
+        services.AddSingleton<IAppAlertHistory, AppAlertHistory>();
+        services.AddSingleton<IInstalledProgramsHistory, InstalledProgramsHistory>();
+        services.AddSingleton<IReliabilityHistory, WmiReliabilityHistory>();
+        services.AddSingleton<IRecentChangesService, RecentChangesService>();
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();
@@ -197,6 +202,7 @@ public static class ServiceRegistration
         services.AddSingleton<GamingProfileViewModel>();
         services.AddSingleton<NotificationBlockerViewModel>();
         services.AddSingleton<UndoChangesViewModel>();
+        services.AddSingleton<RecentChangesViewModel>();
 
         return services;
     }

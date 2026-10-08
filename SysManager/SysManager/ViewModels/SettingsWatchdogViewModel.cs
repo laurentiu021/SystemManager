@@ -85,6 +85,8 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         // Still read per refresh, not per session: stale displayed values would be their own quiet lie.
         var current = _service.ReadCurrent();
         var drifts = baseline is null ? [] : _service.DetectDrift(baseline, current);
+        // Each look is a sighting: Recent Changes says when a drift was first seen, and when it went back (#1507).
+        if (baseline is not null) _service.RecordDrift(drifts, DateTime.Now);
         Drifts.ReplaceWith(drifts.Select(d => new DriftRow(d)));
         HasDrift = Drifts.Count > 0;
         RestoreSelectedCommand.NotifyCanExecuteChanged();

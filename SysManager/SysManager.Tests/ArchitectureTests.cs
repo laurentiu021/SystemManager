@@ -16680,7 +16680,10 @@ public partial class ArchitectureTests
         var after = architecture[at..];
         var breakAt = ParagraphBreak().Match(after);
         var paragraph = Collapse(breakAt.Success ? after[..breakAt.Index] : after);
-        Assert.True(paragraph.Length is > 300 and < 1500,
+        // The ceiling only has to tell the paragraph from a slice that ran past its break into the rest of the
+        // document, which is a hundred times longer. It is not a length the paragraph should keep to: each seam
+        // adds a name to the list, and the four of #1507 took it past the 1,500 this used to be.
+        Assert.True(paragraph.Length is > 300 and < 3000,
             $"the seam paragraph sliced to {paragraph.Length} chars — that is not the paragraph.");
 
         var offenders = new List<string>();

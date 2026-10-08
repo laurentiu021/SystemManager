@@ -10,6 +10,42 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.125.0] - 2026-10-08
+
+**A new Recent Changes tab answers "it was fine last week — what changed?".** It lists, day by day, what SysManager
+did, what Windows installed or could not install, the programs installed, updated or removed, and the settings that
+changed from the ones you saved, each with who made the change (#1507).
+
+### Added
+
+- **Recent Changes**, in Info beside System Logs. It reads SysManager's own activity log; the history behind Windows'
+  Reliability Monitor, which records the Windows updates, Microsoft Store app updates, Defender definitions and
+  drivers that were installed or could not be, and the programs installed or removed with Windows Installer, including
+  while SysManager was closed, and needs no administrator rights; what New App Alerts noticed; and the settings saved
+  in Settings Watchdog. Each change is listed once: a program that Windows Installer and New App Alerts both saw within
+  ten minutes appears once, from Windows' record.
+- Each time it is shown it keeps the list of installed programs, so a program that appears, goes away or changes
+  version between two looks is listed with the time between them — all that can be known about an installer Windows
+  keeps no record of. The first look only starts the list, and the page says so.
+- Two or more updates Windows installed on one day are one row, with what they were by kind, that opens to the full
+  list. The list filters by kind — SysManager, Windows, Programs, Settings — and by period: 7, 30 or 90 days. Crashes
+  and programs that stopped responding in the same days are counted in one line that opens System Logs, and a source
+  that could not be read is named rather than shown as nothing changed. Rows open the Uninstaller, New App Alerts or
+  Settings Watchdog, and **Export CSV** saves what is shown.
+- The Dashboard's Recent activity card has a **See all changes** button that opens it.
+- `%LocalAppData%\SysManager\installed-programs.json` and `settings-drift.json`, the two records the tab keeps. A
+  profile export carries neither, since both describe this PC.
+
+### Changed
+
+- **New App Alerts** keeps what it noticed between sessions: the last 200 detections, in
+  `%LocalAppData%\SysManager\app-alerts.json`. Until now the list was lost when SysManager closed. Clear History clears
+  the saved copy too, and its question now says Recent Changes loses them as well.
+- **Settings Watchdog** records, each time it looks, when a setting that differs from your baseline was first seen and
+  when it went back, for Recent Changes. Saving a new baseline starts that record again.
+- The activity log behind the Dashboard's Recent activity card keeps 200 entries instead of 60, so Recent Changes'
+  longest period holds.
+
 ## [1.124.0] - 2026-10-08
 
 **After you uninstall an app, the Uninstaller now shows what it left behind and lets you remove it.** Only the folder

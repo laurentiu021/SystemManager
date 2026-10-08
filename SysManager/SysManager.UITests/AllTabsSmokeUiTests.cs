@@ -89,6 +89,7 @@ public class AllTabsSmokeUiTests
         // ── Info ──
         new object[] { "nav-drivers", "Drivers" },
         new object[] { "nav-battery", "Battery Health" },
+        new object[] { "nav-recent-changes", "Recent Changes" },
         new object[] { "nav-logs", "System Logs" },
         new object[] { "nav-system-report", "System Report" },
         new object[] { "nav-legacy-panels", "Legacy Panels" },

@@ -15,10 +15,11 @@ public sealed class ActivityLogService
     /// <summary>
     /// How many entries are kept. Raised from 20 once the destructive operations started logging:
     /// at 20 a busy session could still push a Deep Cleanup or an uninstall out of the history, and
-    /// this file is the only record of what the app changed. Each entry is a short action/detail pair,
-    /// so the JSON stays a few kilobytes.
+    /// this file is the only record of what the app changed. Raised from 60 to 200 for Recent Changes,
+    /// whose longest period is 90 days (#1507). Each entry is a short action/detail pair, so the JSON
+    /// stays a few tens of kilobytes.
     /// </summary>
-    internal const int MaxEntries = 60;
+    internal const int MaxEntries = 200;
 
     private readonly string _filePath;
     private readonly int _lockAttempts;

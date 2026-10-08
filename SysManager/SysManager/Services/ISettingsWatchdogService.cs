@@ -63,4 +63,15 @@ public interface ISettingsWatchdogService
     /// restored: read-only, no baseline value recorded, or the write was denied.
     /// </summary>
     bool Restore(SettingDrift drift);
+
+    /// <summary>
+    /// Records when each drift in <paramref name="drifts"/> was first seen, and when one seen before is seen gone, and
+    /// returns every sighting kept (#1507).
+    /// </summary>
+    /// <remarks>
+    /// The drift list is worked out again on every look, so on its own it can never say when a setting changed. A
+    /// sighting is when SysManager first noticed it, which is the earliest anyone can know without a watcher running.
+    /// Saving a new baseline forgets them, since what they were measured against is gone.
+    /// </remarks>
+    DriftSightings RecordDrift(IReadOnlyList<SettingDrift> drifts, DateTime now);
 }

@@ -31,7 +31,12 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     // ArchitectureTests.Services_DoNotHoldUserDataPathsInStaticFields.
     private readonly string _baselinePath;
 
-    // Serializes SaveBaseline, which reads the baseline file to decide whether to set it aside before replacing it.
+    // When each drift was first seen, beside the baseline it was measured against (#1507).
+    private readonly string _sightingsPath;
+
+    // Serializes SaveBaseline, which reads the baseline file to decide whether to set it aside before replacing it, and
+    // RecordDrift, which reads the sightings and writes them back: saving a baseline forgets the sightings, and a look
+    // in between would otherwise write them back.
     private readonly Lock _saveLock = new();
 
     /// <summary>
@@ -44,10 +49,10 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     /// </param>
     public SettingsWatchdogService(string? configDir = null)
     {
-        _baselinePath = Path.Join(
-            configDir ?? Path.Join(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager"),
-            "settings-baseline.json");
+        var dir = configDir ?? Path.Join(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
+        _baselinePath = Path.Join(dir, "settings-baseline.json");
+        _sightingsPath = Path.Join(dir, "settings-drift.json");
     }
 
     /// <summary>The catalog of settings the watchdog tracks. Stable order for the UI.</summary>
@@ -80,7 +85,91 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
 
             var current = ReadCurrent();
             Persist(new BaselineSnapshot(takenAt, new Dictionary<string, int?>(current)));
+            // Measured against the baseline just replaced, so they no longer mean anything.
+            ForgetSightings();
             return current;
+        }
+    }
+
+    /// <inheritdoc />
+    public DriftSightings RecordDrift(IReadOnlyList<SettingDrift> drifts, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(drifts);
+        lock (_saveLock)
+        {
+            var json = StoreFile.ReadText(_sightingsPath);
+            if (json is null) return DriftSightings.Unreadable;
+
+            var kept = json.Length == 0 ? [] : ParseSightings(json);
+            if (kept is null)
+            {
+                if (!StoreFile.SetAside(_sightingsPath)) return DriftSightings.Unreadable;
+                kept = [];
+            }
+
+            var sightings = UpdateSightings(kept, drifts, now);
+            if (!sightings.SequenceEqual(kept)) SaveSightings(sightings);
+            return new DriftSightings(sightings, Readable: true);
+        }
+    }
+
+    /// <summary>
+    /// The sightings after a look that found <paramref name="drifts"/>: one opened for each drift with no open sighting
+    /// of the same value, each open one whose drift is no longer there closed at <paramref name="now"/>, and each closed
+    /// longer ago than Recent Changes looks back dropped. An open one is kept however old: it is what stops the same
+    /// drift being reported again as new. Pure.
+    /// </summary>
+    internal static List<DriftSighting> UpdateSightings(IReadOnlyList<DriftSighting> kept, IReadOnlyList<SettingDrift> drifts,
+                                                         DateTime now)
+    {
+        var sightings = kept
+            .Where(s => s.GoneAt is not { } gone || now - gone <= RecentChangesService.KeptFor)
+            .Select(s => s.GoneAt is null && !drifts.Any(d => Matches(s, d)) ? s with { GoneAt = now } : s)
+            .ToList();
+        foreach (var drift in drifts.Where(d => !sightings.Any(s => s.GoneAt is null && Matches(s, d))))
+            sightings.Add(new DriftSighting(drift.Setting.Key, drift.BaselineValue, drift.CurrentValue, now, null));
+        return sightings;
+
+        static bool Matches(DriftSighting s, SettingDrift d) =>
+            s.Key == d.Setting.Key && s.Baseline == d.BaselineValue && s.Value == d.CurrentValue;
+    }
+
+    /// <summary>The sightings in <paramref name="json"/>, or null when it is not a list of them.</summary>
+    internal static List<DriftSighting>? ParseSightings(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<List<DriftSighting>>(json)?.Where(s => s is { Key.Length: > 0 }).ToList();
+        }
+        catch (JsonException ex)
+        {
+            Log.Debug("Settings drift sightings unreadable: {Error}", ex.Message);
+            return null;
+        }
+    }
+
+    private void SaveSightings(List<DriftSighting> sightings)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_sightingsPath)!);
+            AtomicFile.WriteAllText(_sightingsPath, JsonSerializer.Serialize(sightings));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Debug("Settings drift sightings not saved: {Error}", ex.Message);
+        }
+    }
+
+    private void ForgetSightings()
+    {
+        try
+        {
+            if (File.Exists(_sightingsPath)) File.Delete(_sightingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Warning("Settings drift sightings from the old baseline not removed: {Error}", ex.Message);
         }
     }
 
@@ -317,3 +406,17 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
 
 /// <summary>The saved baseline of watched setting values, with when it was captured.</summary>
 public sealed record BaselineSnapshot(DateTime TakenAt, Dictionary<string, int?> Values);
+
+/// <summary>When one drift was first seen and, once it is gone, when that was seen.</summary>
+/// <param name="Key">The watched setting's <see cref="WatchedSetting.Key"/>.</param>
+/// <param name="Baseline">The value in the saved baseline.</param>
+/// <param name="Value">The value it was found with.</param>
+/// <param name="FirstSeen">The first look that found it.</param>
+/// <param name="GoneAt">The first look that found it gone, or null while it is still there.</param>
+public sealed record DriftSighting(string Key, int? Baseline, int? Value, DateTime FirstSeen, DateTime? GoneAt);
+
+/// <summary>The sightings kept, or that they could not be read, in which case none were recorded.</summary>
+public sealed record DriftSightings(IReadOnlyList<DriftSighting> Sightings, bool Readable)
+{
+    public static readonly DriftSightings Unreadable = new([], false);
+}

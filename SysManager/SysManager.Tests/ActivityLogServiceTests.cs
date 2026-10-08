@@ -104,6 +104,15 @@ public sealed class ActivityLogServiceTests : IDisposable
     }
 
     [Fact]
+    public void MaxEntries_HoldsWhatRecentChangesLooksBackOver()
+    {
+        // Recent Changes lists SysManager's own actions from this log over as long as 90 days (#1507). At 60 a busy
+        // week pushed the start of the period out of the log, and the tab would say nothing was done.
+        Assert.True(ActivityLogService.MaxEntries >= 200,
+            $"MaxEntries is {ActivityLogService.MaxEntries}; Recent Changes looks back {RecentChangesService.LongestPeriodDays} days.");
+    }
+
+    [Fact]
     public void Load_WhenTheFileIsMalformed_StartsEmptyRatherThanThrowing()
     {
         File.WriteAllText(StoreFile, "{ not json");

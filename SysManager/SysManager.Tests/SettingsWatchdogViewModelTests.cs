@@ -34,6 +34,40 @@ public class SettingsWatchdogViewModelTests
         return svc;
     }
 
+    // ── Each look is a sighting, for Recent Changes (#1507) ──────────────────
+
+    [Fact]
+    public void ALookWithABaseline_RecordsWhatItFound()
+    {
+        var drift = Drift("ads");
+        var svc = NewService(drift);
+
+        _ = new SettingsWatchdogViewModel(svc);
+
+        svc.Received(1).RecordDrift(Arg.Is<IReadOnlyList<SettingDrift>>(d => d.Count == 1 && d[0] == drift), Arg.Any<DateTime>());
+    }
+
+    [Fact]
+    public void ALookWithABaseline_AndNoDrift_StillRecords_SoAnEarlierDriftIsMarkedGone()
+    {
+        var svc = NewService();
+
+        _ = new SettingsWatchdogViewModel(svc);
+
+        svc.Received(1).RecordDrift(Arg.Is<IReadOnlyList<SettingDrift>>(d => d.Count == 0), Arg.Any<DateTime>());
+    }
+
+    [Fact]
+    public void ALookWithNoBaseline_RecordsNothing()
+    {
+        var svc = NewService();
+        svc.LoadBaseline().Returns((BaselineSnapshot?)null);
+
+        _ = new SettingsWatchdogViewModel(svc);
+
+        svc.DidNotReceive().RecordDrift(Arg.Any<IReadOnlyList<SettingDrift>>(), Arg.Any<DateTime>());
+    }
+
     // ── SaveBaseline confirm gate ──────────────────────────────────────────
 
     [Fact]

@@ -369,6 +369,11 @@ public class ProfileServiceTests : IDisposable
     // Folders an uninstall left under Program Files or ProgramData on THIS machine, waiting for administrator rights.
     // Carried over, another PC would be offered folders of programs it never had (#1527).
     [InlineData("uninstaller-leftovers.json")]
+    // What Recent Changes compares from one look to the next, and what New App Alerts and Settings Watchdog noticed
+    // on THIS machine (#1507). Carried over, another PC would list programs and settings it never had as changes.
+    [InlineData("installed-programs.json")]
+    [InlineData("app-alerts.json")]
+    [InlineData("settings-drift.json")]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

@@ -260,7 +260,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
             return;
         }
 
-        // The two categories inside SoftwareDistribution also take the lock a Windows Update install and Reset
+        // The Windows Update and Delivery Optimization caches also take the lock a Windows Update install and Reset
         // Windows Update hold, so none of the three can start while another runs (#2510). Why they conflict is on
         // CleanupCategory.IsWindowsUpdateCache. Only when one of them is ticked: any other clean neither waits for
         // an unrelated system change nor holds one up.

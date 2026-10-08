@@ -47,16 +47,29 @@ public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelecta
     public bool IsRecycleBin { get; init; }
 
     /// <summary>
-    /// True for the two categories inside <c>%WinDir%\SoftwareDistribution</c>: the Windows Update download
-    /// cache and the Delivery Optimization cache. Cleaning one also takes the system-modification lock (#2510).
+    /// True for the Windows Update download cache and the Delivery Optimization cache. Cleaning one also takes
+    /// the system-modification lock (#2510).
     /// </summary>
     /// <remarks>
-    /// Two operations elsewhere in SysManager use that folder and hold that lock. A Windows Update install reads
-    /// its downloaded packages from the cache while it runs. Reset Windows Update renames the whole folder, and
-    /// the rename fails while anything inside it is open. Deleting there at the same time as either one could
-    /// remove packages an install still needs, or fail the reset.
+    /// Two operations elsewhere in SysManager use <c>%WinDir%\SoftwareDistribution</c> and hold that lock. A
+    /// Windows Update install reads its downloaded packages from the cache while it runs. Reset Windows Update
+    /// renames the whole folder, and the rename fails while anything inside it is open. Deleting there at the same
+    /// time as either one could remove packages an install still needs, or fail the reset.
+    /// <para>Current Windows keeps the Delivery Optimization cache in the Network Service profile instead, and it
+    /// keeps the flag: Windows Update downloads through it (#2602).</para>
     /// </remarks>
     public bool IsWindowsUpdateCache { get; init; }
+
+    /// <summary>
+    /// True for the Delivery Optimization cache, which is emptied through Windows'
+    /// <c>Delete-DeliveryOptimizationCache</c> rather than the generic file-delete path (#2602).
+    /// </summary>
+    /// <remarks>
+    /// The files belong to the Delivery Optimization service, and that command empties the cache through the
+    /// service. Carried here, like <see cref="IsRecycleBin"/>, because the cleaner is handed categories rather than
+    /// looking them up.
+    /// </remarks>
+    public bool IsDeliveryOptimizationCache { get; init; }
 
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
     public string CountDisplay => SkippedCount > 0 ? string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files · {SkippedCount:N0} skipped") : string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files");

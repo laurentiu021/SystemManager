@@ -66,7 +66,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     [Fact]
     public void Constructs()
     {
-        var s = new DeepCleanupService();
+        var s = new DeepCleanupService(new SystemCleanupRoots());
         Assert.NotNull(s);
     }
 
@@ -105,7 +105,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     [Fact]
     public async Task ScanAsync_RespectsCancellation()
     {
-        var s = new DeepCleanupService();
+        var s = new DeepCleanupService(new SystemCleanupRoots());
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         // Task.Run(..., cancelledToken) throws TaskCanceledException — that's
@@ -286,7 +286,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
     [Fact]
     public async Task CleanAsync_EmptyList_ReturnsZero()
     {
-        var s = new DeepCleanupService();
+        var s = new DeepCleanupService(new SystemCleanupRoots());
         var r = await s.CleanAsync(new List<CleanupCategory>());
         Assert.Equal(0, r.BytesFreed);
         Assert.Equal(0, r.FilesDeleted);
@@ -345,7 +345,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                 FileCount = 2,
                 IsSelected = true
             };
-            var s = new DeepCleanupService();
+            var s = new DeepCleanupService(new SystemCleanupRoots());
             var r = await s.CleanAsync(new[] { cat });
             Assert.True(r.FilesDeleted >= 2);
             Assert.True(r.BytesFreed >= 9);
@@ -388,7 +388,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                     IsSelected = true
                 };
 
-                var result = await new DeepCleanupService().CleanAsync([cat]);
+                var result = await new DeepCleanupService(new SystemCleanupRoots()).CleanAsync([cat]);
 
                 Assert.Equal(0, result.FilesDeleted);
                 Assert.NotEmpty(result.Errors);
@@ -424,7 +424,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
             FileCount = 0,
             IsSelected = true
         };
-        var s = new DeepCleanupService();
+        var s = new DeepCleanupService(new SystemCleanupRoots());
         var r = await s.CleanAsync(new[] { cat });
         Assert.Equal(0, r.FilesDeleted);
     }
@@ -446,7 +446,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                 FileCount = 1,
                 IsSelected = false // deliberately unselected
             };
-            var s = new DeepCleanupService();
+            var s = new DeepCleanupService(new SystemCleanupRoots());
             var r = await s.CleanAsync(new[] { catSelected });
             Assert.Equal(0, r.FilesDeleted);
             Assert.True(File.Exists(f1));
@@ -475,7 +475,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                 IsSelected = true,
                 OlderThan = TimeSpan.FromDays(30)
             };
-            var s = new DeepCleanupService();
+            var s = new DeepCleanupService(new SystemCleanupRoots());
             var r = await s.CleanAsync(new[] { cat });
             Assert.Equal(0, r.FilesDeleted);
             Assert.True(File.Exists(fresh));
@@ -516,7 +516,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                 FileCount = 1,
                 IsSelected = true
             };
-            var s = new DeepCleanupService();
+            var s = new DeepCleanupService(new SystemCleanupRoots());
             await s.CleanAsync(new[] { cat });
 
             // The file behind the junction must survive: traversal never entered it.
@@ -557,7 +557,7 @@ public class DeepCleanupServiceTests(DeepCleanupScanFixture scan) : IClassFixtur
                 FileCount = 1,
                 IsSelected = true
             };
-            var s = new DeepCleanupService();
+            var s = new DeepCleanupService(new SystemCleanupRoots());
             await s.CleanAsync(new[] { cat });
 
             // The file behind the junction-root must survive: the root reparse guard

@@ -167,7 +167,8 @@ public sealed class DeepCleanupScanLogicTests
     /// The categories flagged <see cref="CleanupCategory.IsWindowsUpdateCache"/> are exactly the ones that delete
     /// inside <c>SoftwareDistribution</c>, the folder a Windows Update install reads from and Reset Windows Update
     /// renames. Cleaning a flagged one takes the lock those two hold (#2510), so a category there without the flag
-    /// would delete under an install or a reset again.
+    /// would delete under an install or a reset again. The Delivery Optimization bucket also looks where current
+    /// Windows keeps its cache, outside this folder, and is flagged for that too (see the next test).
     /// </summary>
     [Fact]
     public async Task Scan_FlagsExactlyTheCategoriesInsideSoftwareDistribution()
@@ -189,6 +190,47 @@ public sealed class DeepCleanupScanLogicTests
         // Named, so a category that moves out of the folder fails here rather than shrinking both lists together.
         Assert.Equal(new[] { "Delivery Optimization cache", "Windows Update cache" }, inside);
         Assert.Equal(inside, flagged);
+    }
+
+    /// <summary>
+    /// The Delivery Optimization bucket finds the cache where current Windows keeps it.
+    /// </summary>
+    /// <remarks>
+    /// On current Windows 10 and 11 the cache is in the Network Service profile, and
+    /// <c>SoftwareDistribution\DeliveryOptimization</c> does not exist, so a bucket that scanned only that folder
+    /// always reported nothing (#2602). The bucket keeps its Windows Update flag: Delivery Optimization is what Windows
+    /// Update downloads through, so cleaning it waits for an install the same way.
+    /// </remarks>
+    [Fact]
+    public async Task Scan_FindsTheDeliveryOptimizationCacheWhereCurrentWindowsKeepsIt()
+    {
+        using var roots = Roots();
+        var cache = Path.Combine(roots.WindowsDirectory, "ServiceProfiles", "NetworkService", "AppData", "Local",
+            "Microsoft", "Windows", "DeliveryOptimization", "Cache");
+        WriteFile(Path.Combine(cache, "piece.bin"), 10);
+
+        var categories = await new DeepCleanupService(roots).ScanAsync();
+
+        var bucket = Assert.Single(categories, c => c.Name == "Delivery Optimization cache");
+        Assert.Equal(10, bucket.TotalSizeBytes);
+        Assert.Contains(cache, bucket.Paths, StringComparer.OrdinalIgnoreCase);
+        Assert.True(bucket.IsWindowsUpdateCache);
+        Assert.True(bucket.IsDeliveryOptimizationCache);
+    }
+
+    /// <summary>
+    /// Only the Delivery Optimization bucket is emptied through Windows' own command; every other bucket deletes its
+    /// files itself.
+    /// </summary>
+    [Fact]
+    public async Task Scan_FlagsOnlyTheDeliveryOptimizationBucketForWindowsOwnCleanup()
+    {
+        using var roots = Roots();
+
+        var categories = await new DeepCleanupService(roots).ScanAsync();
+
+        Assert.Equal(new[] { "Delivery Optimization cache" },
+                     categories.Where(c => c.IsDeliveryOptimizationCache).Select(c => c.Name));
     }
 
     // ── Progress ─────────────────────────────────────────────────────────────
@@ -231,7 +273,15 @@ public sealed class DeepCleanupScanLogicTests
 
     [Fact]
     public void Constructor_WithoutRoots_Throws()
-        => Assert.Throws<ArgumentNullException>(() => new DeepCleanupService(null!));
+        => Assert.Throws<ArgumentNullException>(() => new DeepCleanupService((ICleanupRoots)null!));
+
+    /// <summary>
+    /// Production's constructor refuses a missing runner rather than building a service whose Delivery Optimization
+    /// clean can only say it was not done.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithoutARunner_Throws()
+        => Assert.Throws<ArgumentNullException>(() => new DeepCleanupService((IPowerShellRunner)null!));
 
     /// <summary>
     /// The default roots are the values the scan read inline before the seam existed, so production

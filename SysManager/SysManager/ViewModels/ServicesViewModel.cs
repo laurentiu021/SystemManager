@@ -67,14 +67,15 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     /// </summary>
     /// <remarks>
     /// <para>"Safe to disable" / "Keep enabled" / "Advanced" filter on the GAMING RECOMMENDATION, which
-    /// is a different dataset from the Safe/Caution/Critical SAFETY level: safety answers "will this
-    /// break Windows", the recommendation answers "is this worth turning off for games, and why".</para>
+    /// is a different dataset from the Safe/Caution/Not rated/Critical SAFETY level: safety answers "will
+    /// this break Windows", the recommendation answers "is this worth turning off for games, and why".</para>
     /// <para>This array previously existed with nothing bound to it, and its comment claimed the
     /// README's "filter by recommendation level" promise had been made true — while five of the nine
-    /// values (Running, Stopped, and all three recommendations) had no control at all, so they could
-    /// only be reached from a debugger. The chips now cover all nine. The array is still not bound to a
-    /// ComboBox: it is the single list the filter tests enumerate, so a value added here without a chip
-    /// fails <c>EveryFilterOption_HasAChipInTheView</c> rather than going unnoticed again.</para>
+    /// values then (Running, Stopped, and all three recommendations) had no control at all, so they could
+    /// only be reached from a debugger. The chips now cover every value, Not rated included (#1512). The
+    /// array is still not bound to a ComboBox: it is the single list the filter tests enumerate, so a value
+    /// added here without a chip fails <c>EveryFilterOption_HasAChipInTheView</c> rather than going
+    /// unnoticed again.</para>
     /// </remarks>
     public string[] FilterOptions { get; } =
         { "All", "Running", "Stopped", "Safe", "Caution", "Critical", "Not rated",

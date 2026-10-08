@@ -59,8 +59,8 @@ public static class SafetyDatabase
         ["TrkWks"] = "Distributed Link Tracking Client — tracks NTFS links across network. Rarely needed.",
         ["WerSvc"] = "Windows Error Reporting — sends crash reports to Microsoft.",
         ["PhoneSvc"] = "Phone Service — manages telephony state. Not needed on desktops.",
-        // The gaming advice has called these two safe to disable all along, and with no rating here Disable refused
-        // them (#2611).
+        // The gaming advice calls this one, and WbioSrvc under Caution, safe to disable; with no rating here, Disable
+        // refused both (#2611).
         ["lmhosts"] = "TCP/IP NetBIOS Helper — finds older PCs and printers by name on a local network. Not needed on most home networks.",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

@@ -60,13 +60,13 @@
                         </TextBlock>
                     </StackPanel>
                 </DockPanel>
-                <!-- Filter chips. All nine share one GroupName because SelectedFilter holds a single
+                <!-- Filter chips. All ten share one GroupName because SelectedFilter holds a single
                      value, so they are mutually exclusive by construction.
                      Five of these are new: ApplyFilter has always implemented Running, Stopped and the
                      three gaming recommendations, but no control ever selected them, so they could only
                      be reached from a debugger — while the README promised filtering "by status
                      (Running/Stopped)" and "gaming recommendation". A WrapPanel rather than the previous
-                     StackPanel so nine chips reflow instead of clipping on a narrow window. -->
+                     StackPanel so ten chips reflow instead of clipping on a narrow window. -->
                 <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="0,0,8,4"/>

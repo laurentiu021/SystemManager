@@ -22,7 +22,7 @@ public sealed class RealMachineScanFixture : IAsyncLifetime
     public IReadOnlyList<CleanupCategory> Categories { get; private set; } = [];
 
     public async ValueTask InitializeAsync()
-        => Categories = await new DeepCleanupService().ScanAsync();
+        => Categories = await new DeepCleanupService(new SystemCleanupRoots()).ScanAsync();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

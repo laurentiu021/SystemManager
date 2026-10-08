@@ -714,6 +714,11 @@ System → System Fixes, where the tab name matches what they do.
   Update cache, Delivery Optimization cache, Windows Installer patch
   cache, TEMP, Prefetch, crash dumps, old CBS logs, DirectX shader cache,
   Recycle Bin on every drive.
+- **The Delivery Optimization cache is emptied the way Windows empties it.** It is measured
+  where current Windows keeps it, in the Network Service profile, and emptied through Windows'
+  own `Delete-DeliveryOptimizationCache` rather than file by file, so the service that owns it
+  stays in step. Files a download in progress is using are kept, and the result counts only
+  what actually went
 - **The two biggest wins on a machine that has crashed**, both scoped to
   exactly the files they name: the **blue-screen memory dumps** (`MEMORY.DMP` is sized to
   your RAM, so it is routinely gigabytes — never ticked for you, because deleting it ends
@@ -1082,8 +1087,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   each wait their turn behind an SFC or DISM repair, a component-store cleanup, or one another.
   A restore restarts Windows at once, so it can no longer cut off a repair SysManager is running
 - **Deep Cleanup and Windows Update take turns with the Windows Update folder.** The "Windows Update cache"
-  and "Delivery Optimization cache" categories delete inside it, so a clean with either ticked waits for an
-  update install or a Windows Update reset, and they wait for it. The refusal names both ways out, untick
+  category deletes inside it, and the "Delivery Optimization cache" holds what Windows Update downloads, so a
+  clean with either ticked waits for an update install or a Windows Update reset, and they wait for it. The refusal names both ways out, untick
   them or wait, and a clean without them is never held up
 - **Gaming Profile takes the lock before it reads your current settings**, not just
   around the changes — it and Performance Mode set the same power plan and the same

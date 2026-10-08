@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.IO.Enumeration;
+using System.Management.Automation;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -21,11 +22,18 @@ namespace SysManager.Services;
 public sealed class DeepCleanupService
 {
     private readonly ICleanupRoots _roots;
+    private readonly IPowerShellRunner? _ps;
 
     /// <summary>
-    /// Builds a service that scans the real machine.
+    /// Builds the service production uses: the real machine's roots, and the runner the Delivery Optimization
+    /// cache is emptied through.
     /// </summary>
-    public DeepCleanupService() : this(new SystemCleanupRoots())
+    /// <remarks>
+    /// It passes the same roots the service read inline before that seam existed, so the default behaviour is
+    /// unchanged by construction rather than by inspection (#2176).
+    /// </remarks>
+    public DeepCleanupService(IPowerShellRunner ps)
+        : this(new SystemCleanupRoots(), ps ?? throw new ArgumentNullException(nameof(ps)))
     {
     }
 
@@ -33,12 +41,15 @@ public sealed class DeepCleanupService
     /// Builds a service that scans <paramref name="roots"/>, so a test can supply a tree it owns.
     /// </summary>
     /// <remarks>
-    /// The parameterless overload above is what production uses, and it passes the same roots the service
-    /// read inline before this seam existed — so the default behaviour is unchanged by construction
-    /// rather than by inspection (#2176).
+    /// Without <paramref name="ps"/> the Delivery Optimization cache is left as it is, and its clean reports that it
+    /// was not emptied. A test that leaves the runner out cannot empty the cache of the PC running it, and the bucket
+    /// never falls back to deleting the service's files itself (#2602).
     /// </remarks>
-    public DeepCleanupService(ICleanupRoots roots)
-        => _roots = roots ?? throw new ArgumentNullException(nameof(roots));
+    public DeepCleanupService(ICleanupRoots roots, IPowerShellRunner? ps = null)
+    {
+        _roots = roots ?? throw new ArgumentNullException(nameof(roots));
+        _ps = ps;
+    }
 
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
 
@@ -51,7 +62,19 @@ public sealed class DeepCleanupService
         IReadOnlyList<CleanupCategory> categories,
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Clean(categories, progress, ct), ct);
+        => Task.Run(() => CleanCoreAsync(categories, progress, ct), ct);
+
+    /// <summary>
+    /// What empties the Delivery Optimization cache: Windows' own command, from the DeliveryOptimization module.
+    /// </summary>
+    /// <remarks>
+    /// <c>-Force</c> is load-bearing. Without it the command asks for a key press through
+    /// <c>$Host.UI.RawUI.ReadKey()</c>, which a background runspace has no console for. Pinned files, which a
+    /// download in progress holds, are kept, because <c>-IncludePinnedFiles</c> is not passed. The runner discovers
+    /// modules only under System32 and Program Files, which a standard user cannot write to, so nothing in the user's
+    /// own module folder can stand in for the command when it runs as administrator (#2602).
+    /// </remarks>
+    internal const string EmptyDeliveryOptimizationCacheScript = "Delete-DeliveryOptimizationCache -Force -ErrorAction Stop";
 
     // ---------- scan definitions (built once, then iterated with progress) ----------
 
@@ -66,8 +89,13 @@ public sealed class DeepCleanupService
     /// null and means "everything under the path" — see <see cref="Scan"/> for why both halves matter.
     /// </param>
     /// <param name="IsWindowsUpdateCache">
-    /// True for the buckets inside <c>%WinDir%\SoftwareDistribution</c>. See
+    /// True for the buckets inside <c>%WinDir%\SoftwareDistribution</c>, and for Delivery Optimization's, whose cache
+    /// has moved out of it but is still what Windows Update downloads through. See
     /// <see cref="CleanupCategory.IsWindowsUpdateCache"/> for what cleaning one also has to wait for.
+    /// </param>
+    /// <param name="IsDeliveryOptimizationCache">
+    /// True for the one bucket emptied through <see cref="EmptyDeliveryOptimizationCacheScript"/> instead of file by
+    /// file. See <see cref="CleanupCategory.IsDeliveryOptimizationCache"/>.
     /// </param>
     private sealed record Def(
         string Name,
@@ -77,7 +105,8 @@ public sealed class DeepCleanupService
         TimeSpan? OlderThan = null,
         bool IsDestructiveHint = false,
         bool IsRecycleBin = false,
-        bool IsWindowsUpdateCache = false);
+        bool IsWindowsUpdateCache = false,
+        bool IsDeliveryOptimizationCache = false);
 
     private static List<Def> BuildDefinitions(ICleanupRoots roots)
     {
@@ -116,10 +145,19 @@ public sealed class DeepCleanupService
                 [Path.Combine(windowsDir, "SoftwareDistribution", "Download")],
                 IsWindowsUpdateCache: true),
 
+            // Current Windows keeps the cache in the Network Service profile; SoftwareDistribution's copy is where older
+            // builds kept it. The bucket used to name only that one, which no longer exists, so it always found nothing
+            // (#2602). The folders are where its size is read; it is emptied through Windows' own command. Flagged like
+            // the Windows Update cache: Windows Update downloads through it.
             new("Delivery Optimization cache",
                 "Peer-to-peer update cache. Regenerated on demand.",
-                [Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache")],
-                IsWindowsUpdateCache: true),
+                [
+                    Path.Combine(windowsDir, "ServiceProfiles", "NetworkService", "AppData", "Local",
+                        "Microsoft", "Windows", "DeliveryOptimization", "Cache"),
+                    Path.Combine(windowsDir, "SoftwareDistribution", "DeliveryOptimization", "Cache"),
+                ],
+                IsWindowsUpdateCache: true,
+                IsDeliveryOptimizationCache: true),
 
             new("Windows Installer patch cache",
                 "C:\\Windows\\Installer\\$PatchCache$ stores baseline patch files used only when uninstalling an MSI patch. Safe per Microsoft devblog.",
@@ -305,6 +343,7 @@ public sealed class DeepCleanupService
                 IsDestructiveHint = d.IsDestructiveHint,
                 IsRecycleBin = d.IsRecycleBin,
                 IsWindowsUpdateCache = d.IsWindowsUpdateCache,
+                IsDeliveryOptimizationCache = d.IsDeliveryOptimizationCache,
                 IsSelected = size > 0 && !d.IsDestructiveHint
             });
         }
@@ -385,7 +424,8 @@ public sealed class DeepCleanupService
 
     // ---------- cleaning ----------
 
-    private static CleanupResult Clean(IReadOnlyList<CleanupCategory> categories, IProgress<ScanProgress>? progress, CancellationToken ct)
+    private async Task<CleanupResult> CleanCoreAsync(
+        IReadOnlyList<CleanupCategory> categories, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
         long freed = 0;
         List<string> errors = [];
@@ -417,6 +457,16 @@ public sealed class DeepCleanupService
                 {
                     errors.Add($"{cat.Name}: the Recycle Bin could not be emptied.");
                 }
+                continue;
+            }
+
+            // The Delivery Optimization cache is the service's own, emptied through Windows' command for it rather
+            // than file by file (#2602). See EmptyDeliveryOptimizationCacheAsync.
+            if (cat.IsDeliveryOptimizationCache)
+            {
+                var (bytes, files) = await EmptyDeliveryOptimizationCacheAsync(cat, errors, ct).ConfigureAwait(false);
+                freed += bytes;
+                filesDeleted += files;
                 continue;
             }
 
@@ -485,6 +535,67 @@ public sealed class DeepCleanupService
 
         progress?.Report(new ScanProgress(total, total, "Done"));
         return new CleanupResult { BytesFreed = freed, FilesDeleted = filesDeleted, Errors = errors };
+    }
+
+    /// <summary>
+    /// Empties the Delivery Optimization cache through <see cref="EmptyDeliveryOptimizationCacheScript"/>, and
+    /// returns what that freed, measured on the bucket's folders before and after.
+    /// </summary>
+    /// <remarks>
+    /// The files belong to the Delivery Optimization service, and Windows provides that command to empty its cache
+    /// through the service rather than from underneath it (#2602). It needs administrator rights; a refusal, or a
+    /// Windows without the command, is reported with the bucket's name like any file that could not be deleted, and
+    /// never falls back to deleting the files one by one.
+    /// <para>Measured rather than taken from the scan, because the cache can change after the scan, and because the
+    /// command keeps the files a download in progress has pinned.</para>
+    /// </remarks>
+    private async Task<(long Bytes, int Files)> EmptyDeliveryOptimizationCacheAsync(
+        CleanupCategory cat, List<string> errors, CancellationToken ct)
+    {
+        if (_ps is null)
+        {
+            errors.Add($"{cat.Name}: not emptied, because Windows' Delivery Optimization cleanup is not available here.");
+            return (0, 0);
+        }
+
+        var (bytesBefore, filesBefore) = Measure(cat, ct);
+        try
+        {
+            await _ps.RunAsync(EmptyDeliveryOptimizationCacheScript, null, ct).ConfigureAwait(false);
+        }
+        catch (RuntimeException ex)
+        {
+            errors.Add($"{cat.Name}: {ex.Message}");
+            Log.Debug(ex, "Deep cleanup: Delete-DeliveryOptimizationCache failed");
+        }
+
+        var (bytesAfter, filesAfter) = Measure(cat, ct);
+        return (Math.Max(0, bytesBefore - bytesAfter), Math.Max(0, filesBefore - filesAfter));
+    }
+
+    /// <summary>The bytes and files a category's folders hold now, walked the way the scan walks them.</summary>
+    private static (long Bytes, int Files) Measure(CleanupCategory cat, CancellationToken ct)
+    {
+        long bytes = 0;
+        var files = 0;
+        var patterns = cat.FilePatterns?.ToArray();
+        foreach (var path in cat.Paths)
+        {
+            if (string.IsNullOrWhiteSpace(path) || (!Directory.Exists(path) && !File.Exists(path))) continue;
+            try
+            {
+                foreach (var file in EnumerateTargets(path, patterns, ct))
+                {
+                    bytes += SafeLength(file);
+                    files++;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                Log.Debug(ex, "Deep cleanup: failed to measure path {Path}", path);
+            }
+        }
+        return (bytes, files);
     }
 
     // ---------- IO helpers ----------

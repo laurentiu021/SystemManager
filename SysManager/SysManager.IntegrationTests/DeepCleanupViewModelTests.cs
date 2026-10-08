@@ -14,63 +14,63 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void Constructs()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.NotNull(vm);
     }
 
     [Fact]
     public void InitialSummary_IsNonEmpty()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.False(string.IsNullOrWhiteSpace(vm.ScanSummary));
     }
 
     [Fact]
     public void CleanSummary_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.Equal(string.Empty, vm.CleanSummary);
     }
 
     [Fact]
     public void Categories_StartsEmpty()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.Empty(vm.Categories);
     }
 
     [Fact]
     public void IsScanning_DefaultsFalse()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.False(vm.IsScanning);
     }
 
     [Fact]
     public void IsCleaning_DefaultsFalse()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.False(vm.IsCleaning);
     }
 
     [Fact]
     public void TotalSelectedBytes_StartsZero()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.Equal(0, vm.TotalSelectedBytes);
     }
 
     [Fact]
     public void TotalSelectedDisplay_StartsWithZeroBytes()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.StartsWith("0", vm.TotalSelectedDisplay);
     }
 
     [Fact]
     public async Task ScanCommand_PopulatesCategories()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var task = vm.ScanCommand.ExecuteAsync(null);
         if (task is Task t) await t;
         Assert.True(vm.Categories.Count >= 10);
@@ -86,7 +86,7 @@ public class DeepCleanupViewModelTests
         // before the fix the "Clean selected" button kept its initial DISABLED state after
         // the first scan and the user had to untick/retick a category to enable it. The fix
         // calls CleanCommand.NotifyCanExecuteChanged() right after ReplaceWith.
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         Assert.False(vm.CleanCommand.CanExecute(null)); // disabled on the empty pre-scan list
 
         var task = vm.ScanCommand.ExecuteAsync(null);
@@ -103,7 +103,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task ScanCommand_UpdatesScanSummary()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var before = vm.ScanSummary;
         var task = vm.ScanCommand.ExecuteAsync(null);
         if (task is Task t) await t;
@@ -113,7 +113,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task SelectAllCommand_True_SelectsNonDestructive()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var t = vm.ScanCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
 
@@ -129,7 +129,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public async Task SelectAllCommand_False_DeselectsEverything()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var t = vm.ScanCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         vm.SelectAllCommand.Execute(false);
@@ -139,7 +139,7 @@ public class DeepCleanupViewModelTests
     [Fact]
     public void CancelCommand_DoesNotThrow()
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }
@@ -160,7 +160,7 @@ public class DeepCleanupViewModelTests
     [InlineData("CancelCommand")]
     public void CommandExists(string propertyName)
     {
-        var vm = new DeepCleanupViewModel(new DeepCleanupService());
+        var vm = new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots()));
         var prop = vm.GetType().GetProperty(propertyName);
         Assert.NotNull(prop);
         Assert.NotNull(prop!.GetValue(vm));

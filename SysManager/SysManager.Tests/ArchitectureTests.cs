@@ -12058,14 +12058,16 @@ public partial class ArchitectureTests
     /// <remarks>
     /// #2333. <c>DeepCleanupViewModel.CleanAsync</c> ends with a rescan so the displayed sizes refresh after a
     /// delete. Correct product behaviour — but <c>DeepCleanupViewModelTests</c> built its service through the
-    /// PARAMETERLESS constructor, which is production's, so that rescan walked the whole machine.
+    /// PARAMETERLESS constructor, which was production's, so that rescan walked the whole machine. Since #2602
+    /// production's constructor takes the PowerShell runner and no roots, and a test that wants the real roots
+    /// passes <c>new SystemCleanupRoots()</c>.
     /// <c>Clean_WhenUserConfirms_DeletesSelectedFiles</c> took <b>170 seconds</b> on a used workstation while
     /// the other 31 tests in its class took 0.12s between them, and it was 63% of the entire unit suite.
     /// <para>It hid for a long time because a scan's cost is proportional to what is on the host's disks: on a
     /// fresh CI runner with an empty temp tree the whole unit job is 1m 13s, so nothing in CI would ever have
     /// prompted a fix. The local number was the only symptom, and it swung between 97.7s and 269.2s in one
     /// session as the disk state changed.</para>
-    /// <para><b>Why the rule is this narrow.</b> "No test may use the parameterless constructor" would flag ten
+    /// <para><b>Why the rule is this narrow.</b> "No test may use the real roots" would flag ten
     /// legitimate uses in <c>DeepCleanupServiceTests</c>: nine pass explicit categories to <c>CleanAsync</c>,
     /// which never consults the roots, and the tenth calls <c>ScanAsync</c> with an already-cancelled token so
     /// no work happens. The roots only matter when something reaches a real scan, and the one construction that
@@ -12113,24 +12115,27 @@ public partial class ArchitectureTests
 
                 reachingTheViewModel++;
 
-                // Empty parentheses on the service is the production root set. Anything inside them is a
-                // supplied ICleanupRoots, which is the seam.
-                if (m.Groups["roots"].Value.Trim().Length == 0)
+                // A supplied ICleanupRoots is the seam, and the call names it. No roots argument at all is
+                // production's constructor, which takes only the runner and scans the real machine, and
+                // SystemCleanupRoots is the real machine's roots spelled out (#2602).
+                var arguments = m.Groups["roots"].Value;
+                if (!arguments.Contains("roots", StringComparison.OrdinalIgnoreCase)
+                    || arguments.Contains(nameof(SystemCleanupRoots), StringComparison.Ordinal))
                 {
                     offenders.Add($"{Path.GetFileName(file)}: a DeepCleanupViewModel is built on a "
-                                + "DeepCleanupService with no roots, so the rescan after Clean walks the real "
-                                + "machine — pass TempCleanupRoots");
+                                + "DeepCleanupService over the real machine's roots, so the rescan after Clean walks "
+                                + "the real machine — pass TempCleanupRoots");
                 }
             }
         }
 
-        // Two floors, because either half can go silently vacuous. 35 service constructions across
-        // DeepCleanupServiceTests, DeepCleanupScanLogicTests and DeepCleanupFilteredBucketTests; exactly one
-        // statement carries a view model, which is DeepCleanupViewModelTests.NewVm. The second floor is the
-        // one that matters: without it a regex that matched services but never a view model would pass.
+        // Two floors, because either half can go silently vacuous. The Deep Cleanup test classes held 46 service
+        // constructions when #2602 counted them, so 30 is well under what is there; exactly one statement
+        // carries a view model, which is DeepCleanupViewModelTests.NewVm. The second floor is the one that
+        // matters: without it a regex that matched services but never a view model would pass.
         Assert.True(services >= 30,
-            $"only {services} DeepCleanupService constructions were found in the unit project, and there are 35. "
-          + "DeepCleanupServiceConstruction() has stopped matching.");
+            $"only {services} DeepCleanupService constructions were found in the unit project, under a floor well "
+          + "below what the Deep Cleanup test classes hold. DeepCleanupServiceConstruction() has stopped matching.");
         Assert.True(reachingTheViewModel >= 1,
             "no statement building a DeepCleanupViewModel from a DeepCleanupService was found in the unit "
           + "project. The statement window has stopped working, so this guard is checking nothing.");
@@ -12139,8 +12144,8 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// A <c>DeepCleanupService</c> construction, capturing its argument list so an empty one — the production
-    /// root set — can be told from a supplied <c>ICleanupRoots</c>.
+    /// A <c>DeepCleanupService</c> construction, capturing its argument list, up to the first closing parenthesis,
+    /// so the production root set can be told from a supplied <c>ICleanupRoots</c>.
     /// </summary>
     [GeneratedRegex(@"new\s+(?:Services\.)?DeepCleanupService\s*\((?<roots>[^)]*)\)", RegexOptions.Compiled)]
     private static partial Regex DeepCleanupServiceConstruction();

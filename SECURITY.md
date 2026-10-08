@@ -96,7 +96,8 @@ What the app can and cannot do by design:
 - Delete files in the cleanup categories you tick (Deep Cleanup, Quick Cleanup, Quick
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
   followed, the folders single-file .NET apps unpack into under TEMP are left alone, and
-  files are deleted outright, not sent to the Recycle Bin.
+  files are deleted outright, not sent to the Recycle Bin. The Delivery Optimization cache
+  is emptied through Windows' own `Delete-DeliveryOptimizationCache` instead.
 - Empty the Recycle Bin.
 - Clear per-browser cache, history, cookies, and sessions (Browser Cleaner tab)
   — only for the categories ticked when you press Clean. Cache and history start

@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.123.2] - 2026-10-08
+
+**Deep Cleanup now finds the Delivery Optimization cache, and empties it the way Windows does.** It looked in a
+folder current Windows no longer uses, so the bucket always read 0 bytes.
+
+### Fixed
+
+- **Deep Cleanup: the Delivery Optimization cache always read 0 bytes (#2602).** The bucket looked only in
+  `C:\Windows\SoftwareDistribution\DeliveryOptimization\Cache`, which current Windows 10 and 11 do not have. The
+  cache is in the Network Service profile,
+  `C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache`, and the
+  bucket now reads its size there, and in the old folder on a Windows that still uses it. Present since 0.5.0, when
+  the bucket was added.
+  - It is emptied through Windows' own `Delete-DeliveryOptimizationCache` rather than file by file, because the
+    files belong to the service that keeps them. Files a download in progress is using are kept, and the total freed
+    counts only what actually went.
+  - If Windows refuses, or has no such command, the result says so for that bucket, and SysManager deletes nothing
+    there itself.
+
 ## [1.123.1] - 2026-10-08
 
 **Scheduled Maintenance no longer offers a standby memory purge, which failed on every scheduled run.** The

@@ -361,8 +361,9 @@ finds nothing:
   (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
   Monitor can switch source at runtime. See the sources note further down.
 - `ICleanupRoots` — the directories Deep Cleanup's scan is built from, taken by
-  `DeepCleanupService`'s second constructor with `SystemCleanupRoots` as the parameterless default, so
-  `AddSingleton<DeepCleanupService>()` needs no change. It exists because the scan read
+  `DeepCleanupService`'s second constructor. Production's constructor takes only the `IPowerShellRunner`
+  and passes `SystemCleanupRoots`, so `AddSingleton<DeepCleanupService>()` needs no change; a test that
+  wants the real roots passes `new SystemCleanupRoots()` itself (#2602). It exists because the scan read
   `Environment.GetFolderPath` and `DriveInfo.GetDrives()` inline, which left its logic assertable only
   as "the size is non-negative"; with the roots injected a test points it at a tree it built and asserts
   exact counts, the 30-day cutoff and which categories arrive pre-selected. A fitness function keeps the
@@ -477,7 +478,10 @@ Key services:
 - `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming
   launcher caches, Windows caches). Per-file try/catch so locked files
-  are skipped, not forced.
+  are skipped, not forced. The Delivery Optimization bucket (`IsDeliveryOptimizationCache`) is the one
+  cleaned through the runner, with `Delete-DeliveryOptimizationCache -Force`, and its freed total is measured
+  on its folders before and after; without a runner, or when Windows refuses, it reports that and deletes
+  nothing itself (#2602).
 - `CleanupPreScanService` (`ICleanupPreScanService`) — sizes the temp folders and the current user's
   Recycle Bin for the two labels Quick Cleanup shows before the user asks for anything. Behind an
   interface because the work used to sit inline in `CleanupViewModel`, whose constructor fires it and
@@ -1650,7 +1654,9 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   `appcache`, `htmlcache`, `depotcache`, `logs` and shader cache, and the League of Legends logs.
 - Every walk goes through `Helpers/SafeFileWalk`, so no link is followed and the folders single-file
   apps unpack into under TEMP are left alone. The servicing-logs bucket takes only files older than
-  30 days, and the Recycle Bin is emptied through `RecycleBinHelper`, not by deleting its folders.
+  30 days, and the Recycle Bin is emptied through `RecycleBinHelper`, not by deleting its folders. The
+  Delivery Optimization cache is emptied through Windows' `Delete-DeliveryOptimizationCache` for the same
+  reason: the files belong to the service that keeps them.
 - Windows.old is tagged **Irreversible** and never selected by default, as are the
   blue-screen memory dumps: they are the only record of why a machine crashed.
 - A bucket may restrict itself to files matching a wildcard (`FilePatterns`), and the

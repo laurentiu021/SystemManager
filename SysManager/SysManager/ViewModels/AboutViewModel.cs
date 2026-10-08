@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
@@ -59,7 +60,15 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private bool _historyUnavailable;
 
     [ObservableProperty] private string _currentVersion = UpdateService.CurrentVersion.ToString(3);
-    [ObservableProperty] private string _buildDate = BuildStamp();
+
+    /// <summary>The commit this build came from, shortened, or empty when the build does not carry one.</summary>
+    /// <remarks>
+    /// BUILD showed the exe's last-write time, which is when the file reached this PC — the download, the winget
+    /// install or an in-app update — not when it was built (#2611). See <see cref="BuildCommitOf"/>.
+    /// </remarks>
+    [ObservableProperty]
+    private string _buildCommit = BuildCommitOf(
+        typeof(AboutViewModel).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
 
     // Update check state
     [ObservableProperty] private string _updateStatus = "Ready.";
@@ -551,7 +560,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         {
             var sb = new StringBuilder();
             sb.Append("SysManager ").Append(UpdateService.CurrentVersion.ToString(3));
-            if (!string.IsNullOrWhiteSpace(BuildDate)) sb.Append(" (build ").Append(BuildDate).Append(')');
+            if (!string.IsNullOrWhiteSpace(BuildCommit)) sb.Append(" (build ").Append(BuildCommit).Append(')');
             sb.AppendLine();
             sb.Append("Windows: ").AppendLine(DescribeWindows());
             sb.Append("Architecture: ").AppendLine(RuntimeInformation.OSArchitecture.ToString());
@@ -1065,24 +1074,19 @@ public sealed partial class AboutViewModel : ViewModelBase
         catch (System.ComponentModel.Win32Exception) { /* best-effort */ }
     }
 
-    private static string BuildStamp()
+    /// <summary>
+    /// The first seven characters of the commit an informational version names after its '+', or empty.
+    /// </summary>
+    /// <remarks>
+    /// The build stamps that suffix itself, and the release workflow checks the version in front of it, so it is the
+    /// build's own record of where it came from rather than anything about the PC it runs on.
+    /// </remarks>
+    internal static string BuildCommitOf(string? informationalVersion)
     {
-        try
-        {
-            // Use AppContext.BaseDirectory instead of Assembly.Location which
-            // returns empty string in single-file publish (IL3000).
-            var dir = AppContext.BaseDirectory;
-            var exe = Path.Join(dir, "SysManager.exe");
-            if (File.Exists(exe))
-                return File.GetLastWriteTime(exe).ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
-            // Fallback: try the DLL
-            var dll = Path.Join(dir, "SysManager.dll");
-            if (File.Exists(dll))
-                return File.GetLastWriteTime(dll).ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
-        }
-        catch (IOException ex) { Log.Debug(ex, "About: could not read build date from disk"); }
-        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "About: access denied reading build date"); }
-        return string.Empty;
+        var plus = informationalVersion?.IndexOf('+') ?? -1;
+        if (plus < 0) return string.Empty;
+        var commit = informationalVersion![(plus + 1)..].Trim();
+        return commit.Length > 7 ? commit[..7] : commit;
     }
     // Forward any running state to IsBusy so the sidebar progress indicator works
     partial void OnIsDownloadingChanged(bool value) => IsBusy = value;

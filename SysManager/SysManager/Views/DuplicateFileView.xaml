@@ -117,7 +117,7 @@
                                         <DataTemplate>
                                             <DockPanel Margin="16,3,0,3">
                                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                                                    <Button Content="Open" ToolTip="Show in Explorer"
+                                                    <Button Content="Show" ToolTip="Show in Explorer"
                                                             AutomationProperties.Name="{Binding Name, Mode=OneWay, StringFormat='Show {0} in Explorer'}"
                                                             Command="{Binding DataContext.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"

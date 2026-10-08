@@ -1844,7 +1844,8 @@ offers, "rate us" prompts:
 
 ### About
 - **Version, build, license and source** in one place, with the update controls beside them
-  rather than buried in a settings page
+  rather than buried in a settings page. The build is the commit the exe was built from, the
+  same one the release page names
 - **What's new, pulled live from GitHub** — the ten most recent releases with their version,
   date and full changelog, and a badge marking the one you are running, so you can see what you
   skipped without leaving the app

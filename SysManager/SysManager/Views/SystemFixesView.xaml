@@ -22,13 +22,13 @@
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="System Fixes" Style="{StaticResource Display}"/>
-            <TextBlock Text="One-click repairs for common Windows breakages. Each fix explains what it does and asks for confirmation before it runs. These change system state and need administrator rights."
+            <TextBlock Text="One-click repairs for common Windows breakages. Each fix explains what it does and asks for confirmation before it runs. The system repairs change Windows and need administrator rights; the two desktop fixes do not."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="These repairs modify system services and settings, so they require administrator privileges."
+                       NotElevatedMessage="The system repairs modify services and settings, so they require administrator privileges. The two desktop fixes work without it."
                        ElevatedMessage="Running as administrator — all repairs are available."/>
 
         <!-- Fix cards -->

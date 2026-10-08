@@ -291,7 +291,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
 
         if (!AdminHelper.IsElevated())
         {
-            StatusMessage = "chkdsk requires admin privileges. Click 'Grant admin privileges' to elevate.";
+            StatusMessage = "chkdsk requires admin privileges. Use \"Run as administrator\" above to elevate.";
             foreach (var d in selected) d.Status = "Needs admin";
             return;
         }
@@ -320,7 +320,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         // message instead of running and reporting a cryptic exit code.
         if (!AdminHelper.IsElevated())
         {
-            var msg = $"chkdsk {driveLetter} requires admin privileges. Click 'Grant admin privileges' to elevate.";
+            var msg = $"chkdsk {driveLetter} requires admin privileges. Use \"Run as administrator\" above to elevate.";
             StatusMessage = msg;
             if (target is not null) target.Status = "Needs admin";
             return;

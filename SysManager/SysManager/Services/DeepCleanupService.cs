@@ -220,7 +220,7 @@ public sealed class DeepCleanupService
                 IsRecycleBin: true),
 
             new("Steam — browser & depot cache",
-                "Steam web browser cache, HTML cache, app cache and depot lookup cache. Doesn't touch game files, downloads or logins.",
+                "Steam web browser cache, HTML cache, app cache, depot lookup cache and Steam's own logs. Doesn't touch game files, downloads or logins.",
                 SteamCacheDirs(roots)),
 
             new("Steam — shader cache",

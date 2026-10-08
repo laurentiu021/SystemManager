@@ -461,9 +461,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// everything else. <c>Component Store Cleanup Recommended : No</c> is a real and common answer, and
     /// saying so is more useful than an empty result — a store already cleaned should not present a button
     /// that would spend half an hour reclaiming nothing.
-    /// <para>The reclaimable size is quoted from <c>Actual Size of Component Store</c> rather than computed.
-    /// Windows' own number is the honest one to show, and the alternative — subtracting "Shared with
-    /// Windows" — would state a saving this app cannot actually promise.</para>
+    /// <para>The size shown is the store's own, quoted from <c>Actual Size of Component Store</c> rather than
+    /// computed. Windows' own number is the honest one to show, and the alternative — subtracting "Shared with
+    /// Windows" — would state a saving this app cannot actually promise. For the same reason a finished cleanup
+    /// claims no amount: the analysis never reported one.</para>
     /// </remarks>
     internal static (string Verdict, string ColorHex, bool CleanupRecommended) ParseComponentStoreResult(
         IReadOnlyList<string> lines, int exitCode, bool analyzing)
@@ -473,7 +474,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         if (!analyzing)
         {
             if (all.Contains("The operation completed successfully", StringComparison.OrdinalIgnoreCase))
-                return ("Component store cleaned up. The space Windows reported as reclaimable is now free.", StatusColors.Good, false);
+                return ("Component store cleaned up. Windows removed the older versions it no longer needs; press Check component store to see its size now.", StatusColors.Good, false);
 
             return exitCode == 0
                 ? ("Component store cleanup finished.", StatusColors.Good, false)

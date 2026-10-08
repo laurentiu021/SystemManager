@@ -1122,16 +1122,18 @@ public class DashboardViewModelTests
     // ---------- what the Tune-Up confirmation says (#2505) ----------
 
     [Fact]
-    public async Task RunTuneUp_Confirmation_SaysTheRecycleBinCannotBeRecovered()
+    public async Task RunTuneUp_Confirmation_SaysNeitherTheTempFilesNorTheBinCanBeRecovered()
     {
-        // The Tune-Up always empties the bin, and its prompt used to mention it as one chore among three.
+        // The Tune-Up always empties the bin, and its prompt used to mention it as one chore among three (#2505).
+        // It then named only the bin as unrecoverable, and the temp files it deletes cannot be recovered either (#2611).
         var tuneUp = Substitute.For<ITuneUpService>();
         var vm = NewVm(tuneUp: tuneUp);
         using var dialog = new DialogAnswer(confirm: false);
 
         await vm.RunTuneUpCommand.ExecuteAsync(null);
 
-        Assert.Contains("cannot be recovered", Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        Assert.Contains("Neither the temp files nor what is in the Recycle Bin can be recovered afterwards",
+                        Assert.Single(dialog.Messages), StringComparison.Ordinal);
         await tuneUp.DidNotReceive().RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>());
     }
 }

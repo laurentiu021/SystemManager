@@ -10,6 +10,56 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.123.3] - 2026-10-08
+
+**Nineteen places in the app now say what it actually does.** Each described a feature, a button or a rule that the
+code did not have, mostly because the code had changed since the words were written (#2611).
+
+### Fixed
+
+- **Network Repair** no longer offers to "renew your address", which it has no repair for, and its banner says that
+  Winsock and TCP/IP need administrator rights and Flush DNS does not. It named the DNS flush as the one that needs them.
+- **DNS & Hosts** names the Undo button rather than "Restore", and says that the hosts file is kept as it was before
+  SysManager first saved it, not backed up before every save.
+- **Battery Health**'s note says that the design capacity, full charge capacity and cycle count need administrator
+  rights too. It said everything else on the page works without them. Those three still read 0 when Windows refuses
+  them, which #2623 tracks.
+- **App Updates** says that every app found starts ticked. It said nothing is updated until you tick it.
+- **System Fixes** says that the two desktop fixes need no administrator rights, as its own desktop section already
+  did, and points at "Run as administrator", the button's real name. **System Health** pointed at a "Grant admin
+  privileges" button that does not exist; it now names "Run as administrator" too.
+- **Quick Cleanup** no longer says that "the space Windows reported as reclaimable is now free" after a component
+  store cleanup. The check reports the size of the whole store, not an amount it can reclaim.
+- **Deep Cleanup**'s banner lists the old servicing logs among the items that need administrator rights, seven in
+  all, and says that without them some read as empty or as skipped. It said they were still scanned and counted, and
+  a folder Windows will not list cannot be. The safety note no longer claims that only NVIDIA, AMD and Microsoft
+  locations are scanned and that Program Files is never touched: it says that game launchers' caches and logs are
+  cleaned too, and that inside Program Files only those named folders are. The Steam bucket's description now
+  includes the Steam logs it deletes.
+- **File Lock Detector**, as administrator, says it can end the programs that lock protected files. It said it could
+  close their handles, which it does not do.
+- **Boot Analyzer**'s empty list says "Windows has no boot performance records yet" as administrator, and that the
+  history could not be read after a read that failed. It said that boot history needs administrator rights even
+  when SysManager already had them.
+- **About**: the privacy note names the two checks SysManager makes when it starts, and points at SECURITY.md for
+  every connection; it said that all operations are local and named only the update check. It no longer claims a
+  restore point before every system change. **BUILD now shows the commit the exe was built from**, the same one the
+  release page names. It showed the exe's file date, which is when the file reached your PC, not when it was built.
+  "Copy environment info" carries the commit too.
+- **Profile Export / Import** says that an import keeps no copy of the settings it replaces. It said that importing
+  a different profile undoes it.
+- **Performance Mode** says that Restore All does not cover hibernation. It said every change is reversible through
+  it.
+- **Process Manager**, as administrator, says that the processes Windows needs to keep running, and SysManager
+  itself, still cannot be ended. It said any process could be.
+- **Duplicate Finder**'s "Open" button is "Show", as on Large Files: both show the file in Explorer.
+- **Dashboard**: the Quick Tune-Up confirmation says that the temp files it deletes cannot be recovered either. It
+  named only the Recycle Bin.
+- **Command line**: `--help` says that `--silent` prints nothing when a command succeeds and still prints an error.
+  It said it suppressed "non-essential output". The shorter success messages that were never printed are gone.
+- The Services tab's advice that two services are safe to disable while its Disable refuses them is a code problem,
+  not a wording one, and stays with #1512.
+
 ## [1.123.2] - 2026-10-08
 
 **Deep Cleanup now finds the Delivery Optimization cache, and empties it the way Windows does.** It looked in a

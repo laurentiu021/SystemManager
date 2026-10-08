@@ -40,7 +40,7 @@
                             <TextBlock Text="Local Windows system monitoring toolkit." Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                 <TextBlock Text="BUILD" Style="{StaticResource SectionLabel}"/>
-                                <TextBlock Text="{Binding BuildDate}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
+                                <TextBlock Text="{Binding BuildCommit}" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="LICENSE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
@@ -338,13 +338,15 @@
                         <TextBlock Text="Legal" Style="{StaticResource SectionTitle}"/>
                         <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             SysManager is released under the MIT License. The software is provided "AS IS", without warranty of any kind.
-                            All operations are local to your machine — no telemetry, no accounts. Updates are fetched from the public
-                            GitHub Releases API and downloaded directly from GitHub.
+                            No telemetry, no accounts. SysManager goes online only for what you ask it to do, plus two checks when it
+                            starts: GitHub's list of releases, for the update check, and winget's list of app updates, which reaches
+                            Microsoft. SECURITY.md on GitHub lists every connection.
                         </TextBlock>
                         <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             Some tools change system settings, the registry, or delete files. Use them at your own risk: review each
-                            action before confirming, and back up important data first. Where it can, SysManager creates a System
-                            Restore point before a system-altering operation and makes changes individually reversible.
+                            action before confirming, and back up important data first. Some tools create a System Restore point
+                            before they change Windows, and say so when they ask; many changes can also be put back, one at a time,
+                            from Undo Changes.
                         </TextBlock>
                     </StackPanel>
                 </Border>

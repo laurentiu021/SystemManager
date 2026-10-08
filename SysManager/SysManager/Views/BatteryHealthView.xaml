@@ -141,7 +141,7 @@
                         <Border Style="{StaticResource Card}" Padding="12" Margin="0,0,0,12"
                                 Visibility="{Binding Battery.HasCapacityData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse, Mode=OneWay}">
                             <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}"
-                                       Text="Battery health and wear could not be read. SysManager reads these two figures from a part of Windows that only answers an elevated process, so they need it to be running as administrator. Everything else on this page works without it, including the capacity history below."/>
+                                       Text="Battery health and wear could not be read. SysManager reads them, and the design capacity, full charge capacity and cycle count below, from a part of Windows that only answers an elevated process, so they need it to be running as administrator. The rest of the page, including the capacity history, works without it."/>
                         </Border>
 
                         <!-- Capacity over time (#1513). "Health 87%" alone cannot be read as fine or failing; how much

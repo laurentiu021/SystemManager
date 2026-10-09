@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.1] - 2026-10-09
+
+**In Volume Control, an app sent to another output device keeps its row, with its level and a slider that works, and
+is still listed after it restarts** (#2652).
+
+### Fixed
+
+- **Volume Control lists the apps playing on every output device, not only the default one.** An app routed to another
+  device plays there, and the session it left on the default device goes inactive. The list read only the default
+  device, so after a route the app's row showed no level, its slider and mute moved that stale session rather than the
+  sound the app was making, and once the app restarted it was not listed at all, so it could not be moved back from
+  SysManager. The tab now reads every active output device and shows each app once, wherever it plays: its level is
+  the sound it is making, its slider and mute reach it on every device, and its Output picker stays with it. This had
+  been so since routing first worked, in 1.128.0.
+
 ## [1.128.0] - 2026-10-09
 
 **Volume Control can now send an app to another output device, and shows which device each app plays through**

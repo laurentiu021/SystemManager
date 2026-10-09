@@ -1644,6 +1644,103 @@ public class AudioMixerViewModelTests
         Assert.Null(AudioMixerService.StripStreamGuid(null!));
     }
 
+    // ── AppKeyOf: one row per app, on every device (#2652) ───
+
+    private const string OnHeadphones =
+        @"{0.0.0.00000000}.{7f8f03fe-4f9b-434f-8569-60149a4c244c}|\Device\HarddiskVolume5\Apps\player.exe%b{00000000-0000-0000-0000-000000000000}|1%b18496";
+    private const string OnSpeakers =
+        @"{0.0.0.00000000}.{fb3fb1ab-3cb7-4dfa-a583-23998a32cfc3}|\Device\HarddiskVolume5\Apps\player.exe%b{00000000-0000-0000-0000-000000000000}|1%b18496";
+
+    [Fact]
+    public void AppKeyOf_TheSameAppOnTwoDevices_IsOneKey()
+    {
+        // The two instance ids an app had on Windows 11 build 26200 before and after it was routed to the speakers.
+        Assert.Equal(AudioMixerService.AppKeyOf(OnHeadphones), AudioMixerService.AppKeyOf(OnSpeakers));
+        Assert.Equal(@"\Device\HarddiskVolume5\Apps\player.exe%b{00000000-0000-0000-0000-000000000000}|1",
+            AudioMixerService.AppKeyOf(OnSpeakers));
+    }
+
+    [Fact]
+    public void AppKeyOf_TwoApps_StayTwoKeys()
+    {
+        var other = OnSpeakers.Replace("player.exe", "browser.exe", StringComparison.Ordinal);
+
+        Assert.NotEqual(AudioMixerService.AppKeyOf(OnSpeakers), AudioMixerService.AppKeyOf(other));
+    }
+
+    [Theory]
+    // A form this does not know is left whole: no endpoint id in front, or nothing after the bar.
+    [InlineData("plain-identifier-no-marker", "plain-identifier-no-marker")]
+    [InlineData(@"\Device\HarddiskVolume5\Apps\player.exe%b{guid}", @"\Device\HarddiskVolume5\Apps\player.exe")]
+    [InlineData(@"not-an-endpoint|\Device\Apps\player.exe%b{guid}", @"not-an-endpoint|\Device\Apps\player.exe")]
+    [InlineData("{0.0.0.00000000}.{guid}|", "{0.0.0.00000000}.{guid}|")]
+    [InlineData("{0.0.0.00000000}.{guid}", "{0.0.0.00000000}.{guid}")]
+    [InlineData("", "")]
+    public void AppKeyOf_LeavesAnUnknownFormWhole(string input, string expected)
+    {
+        Assert.Equal(expected, AudioMixerService.AppKeyOf(input));
+    }
+
+    // ── OthersChanged: the other devices are read again when they change (#2652) ───
+
+    [Theory]
+    [InlineData(new[] { "{spk}" }, new[] { "{hp}", "{spk}" }, "{hp}", false)]      // nothing changed
+    [InlineData(new[] { "{SPK}" }, new[] { "{hp}", "{spk}" }, "{hp}", false)]      // ids compared without case
+    [InlineData(new string[0], new[] { "{hp}", "{spk}" }, "{hp}", true)]           // speakers plugged in
+    [InlineData(new[] { "{spk}" }, new[] { "{hp}" }, "{hp}", true)]                // speakers pulled out
+    [InlineData(new[] { "{spk}", "{tv}" }, new[] { "{hp}", "{spk}" }, "{hp}", true)] // the TV went away
+    [InlineData(new string[0], new[] { "{hp}" }, "{hp}", false)]                   // only the default, before and now
+    public void OthersChanged_IsTrue_WhenADeviceOtherThanTheDefaultCameOrWent(
+        string[] held, string[] active, string defaultId, bool changed)
+    {
+        var heldIds = new HashSet<string>(held, StringComparer.OrdinalIgnoreCase);
+
+        Assert.Equal(changed, AudioMixerService.OthersChanged(heldIds, active, defaultId));
+    }
+
+    // ── The slider shows the volume of the session that plays (#2652) ───
+
+    [Fact]
+    public void AGroup_ShowsTheVolumeOfItsPlayingSession_NotOfAStaleOneReadFirst()
+    {
+        // The default device is read first, and an app routed away left an inactive session there.
+        var group = new AudioMixerService.GroupAccumulator("player", 18496, pidKnown: true, isSystemSounds: false);
+        group.Absorb(volume: 1.0f, muted: false, AudioSessionState.Inactive, peak: 0f);
+        group.Absorb(volume: 0.3f, muted: true, AudioSessionState.Active, peak: 0.02f);
+
+        var info = group.ToInfo("Player", @"C:\Apps\player.exe");
+        Assert.Equal(0.3f, info.Volume);
+        Assert.True(info.IsMuted);
+        Assert.Equal(AudioSessionState.Active, info.State);
+        Assert.Equal(0.02f, info.PeakLevel);
+    }
+
+    [Fact]
+    public void AGroup_WithNoPlayingSession_ShowsTheFirst()
+    {
+        var group = new AudioMixerService.GroupAccumulator("player", 1, pidKnown: true, isSystemSounds: false);
+        group.Absorb(volume: 0.8f, muted: false, AudioSessionState.Inactive, peak: 0f);
+        group.Absorb(volume: 0.2f, muted: true, AudioSessionState.Inactive, peak: 0f);
+
+        var info = group.ToInfo("Player", "");
+        Assert.Equal(0.8f, info.Volume);
+        Assert.False(info.IsMuted);
+        Assert.Equal(AudioSessionState.Inactive, info.State);
+    }
+
+    [Fact]
+    public void AGroup_KeepsTheFirstPlayingSessionsVolume_WhenASecondPlays()
+    {
+        var group = new AudioMixerService.GroupAccumulator("player", 1, pidKnown: true, isSystemSounds: false);
+        group.Absorb(volume: 0.6f, muted: false, AudioSessionState.Active, peak: 0.1f);
+        group.Absorb(volume: 0.4f, muted: true, AudioSessionState.Active, peak: 0.3f);
+
+        var info = group.ToInfo("Player", "");
+        Assert.Equal(0.6f, info.Volume);
+        Assert.False(info.IsMuted);
+        Assert.Equal(0.3f, info.PeakLevel);
+    }
+
     // ── Mid-adjust guard: drag OR keyboard-focus (regression: drag-then-arrow-key) ─
 
     // dragging=false + focused=true is the Audit #3 regression case: a mouse drag has ENDED but

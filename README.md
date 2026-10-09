@@ -379,8 +379,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   it, and neither the PC's volume nor its device is saved in a preset, so applying one never
   moves the sound to other speakers. Plug in headphones or switch from the taskbar and the
   card, and the app list under it, follow within about ten seconds
-- **Per-app volume mixer** — lists every app currently playing on your default
-  playback device, each with its own volume slider, mute toggle, and a live peak meter
+- **Per-app volume mixer** — lists every app currently playing sound, on any of your
+  playback devices, each with its own volume slider, mute toggle, and a live peak meter
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
   update on a shared timer, both paused while the tab is hidden so it costs nothing in
   the background. The refresh never replaces a message on the status line, so a saved preset
@@ -395,9 +395,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   list, so a change made in Windows' own settings shows up too, and a route is still shown after
   the app or SysManager restarts. Plug a headset in while the tab is open and it appears on its
   own. When Windows cannot say where an app plays, the picker says "Choose a device" rather than
-  guessing. The list shows the apps playing on your default device, so an app you send to
-  another device leaves it once it restarts; Windows' per-app sound settings still show it and
-  can move it back
+  guessing. An app you send to another device keeps its row there, with its level and a slider
+  that reaches it, and is still listed after it restarts
 - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`. The summary counts

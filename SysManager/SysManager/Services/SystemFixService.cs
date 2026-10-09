@@ -7,8 +7,8 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// One-click repairs for common Windows breakages — Windows Update, the network stack,
-/// and WinGet. All commands run through the <see cref="IPowerShellRunner"/> seam (so the
+/// One-click repairs for two common Windows breakages — Windows Update and WinGet; the network-stack
+/// reset lives on Network Repair. All commands run through the <see cref="IPowerShellRunner"/> seam (so the
 /// orchestration is substitutable in tests) and stream their output via
 /// <see cref="IPowerShellRunner.LineReceived"/> for live display.
 ///

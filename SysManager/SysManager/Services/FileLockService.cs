@@ -20,7 +20,7 @@ namespace SysManager.Services;
 /// Explorer uses for its "file in use" dialog. Enumeration works for a standard user;
 /// terminating a locker owned by SYSTEM or another user requires elevation.
 ///
-/// NOTE on interop style: this is the one place we use classic <c>[DllImport]</c> with
+/// NOTE on interop style: this file uses classic <c>[DllImport]</c> with
 /// <c>CharSet.Unicode</c> rather than the project-preferred <c>[LibraryImport]</c>.
 /// <c>RM_PROCESS_INFO</c> contains inline <c>ByValTStr</c> buffers (non-blittable), and
 /// <c>RmStartSession</c> takes a <c>StringBuilder</c> out-buffer — neither is supported

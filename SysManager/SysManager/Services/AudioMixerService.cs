@@ -14,9 +14,9 @@ namespace SysManager.Services;
 /// Reads and controls per-application audio via Windows Core Audio (WASAPI) on <b>every active
 /// output device</b>. Enumerates the render sessions, groups them by owning app across devices
 /// (the Windows Volume Mixer mental model — one row per app), and gets/sets each group's volume,
-/// mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the seven
-/// documented interfaces (<c>IMMDeviceEnumerator</c> → <c>IAudioSessionManager2</c> →
-/// <c>IAudioSessionEnumerator</c> → <c>IAudioSessionControl(2)</c> /
+/// mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the documented Core Audio interfaces
+/// (<c>IMMDeviceEnumerator</c> and the device, collection and property-store interfaces it hands out →
+/// <c>IAudioSessionManager2</c> → <c>IAudioSessionEnumerator</c> → <c>IAudioSessionControl2</c> /
 /// <c>ISimpleAudioVolume</c> / <c>IAudioMeterInformation</c>, and <c>IAudioEndpointVolume</c>) so
 /// nothing but the .NET runtime is added to the single portable .exe.
 ///
@@ -35,11 +35,12 @@ namespace SysManager.Services;
 /// the Windows default: a switch made here drops it at once, and one made elsewhere (headphones plugged in, the
 /// taskbar flyout) is noticed on the next device enumeration, so the apps and the PC volume move with it.</para>
 ///
-/// <para>Thread-safety: every COM access is guarded by <see cref="_gate"/>. The manager /
-/// device / enumerator handle is held open across polls; the per-app session interfaces
-/// are cached keyed by process and released deterministically on the next enumeration and
-/// on <see cref="Dispose"/> (COM RCWs are released explicitly, never left to finalizers,
-/// because this tab is created/destroyed on navigation — not app-lifetime).</para>
+/// <para>Thread-safety: every COM access is guarded by <see cref="_gate"/>. The enumerator, the
+/// default device and a session manager per active output device are held open across polls; the
+/// per-app session interfaces are cached by group and released deterministically on the next
+/// enumeration and on <see cref="Dispose"/>. COM RCWs are released explicitly, never left to
+/// finalizers: every poll enumerates the sessions again, and the service, a singleton, is disposed
+/// with the container when the app exits.</para>
 /// </summary>
 public sealed class AudioMixerService : IAudioMixerService, IDisposable
 {
@@ -61,7 +62,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private readonly HashSet<string> _otherIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
-    // Per-app cached session interfaces, keyed by the group key (PID string, or the
+    // Per-app cached session interfaces, keyed by the group key (GroupKeyFor's app key, or the
     // "system-sounds" sentinel). Each app can own several render sessions; the group holds
     // all of their control RCWs so a single slider/mute drives every stream of the app.
     private readonly Dictionary<string, List<object>> _groups = new(StringComparer.Ordinal);

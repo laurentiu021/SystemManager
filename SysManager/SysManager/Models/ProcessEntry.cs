@@ -66,7 +66,7 @@ public sealed partial class ProcessEntry : ObservableObject
     /// Same format and same em-dash fallback as <see cref="FileLocker.StartTimeDisplay"/>, which was the only
     /// place in the app showing a process start time before this one.
     /// <para>The fallback is not cosmetic. <c>Process.StartTime</c> throws for most system processes without
-    /// elevation, and <see cref="ProcessManagerService"/> swallows that and leaves the field at
+    /// elevation, and <see cref="SysManager.Services.ProcessManagerService"/> swallows that and leaves the field at
     /// <c>default</c> — so binding the raw value would print <c>0001-01-01 00:00:00</c> in a column, which
     /// reads as a bug rather than as "not available".</para>
     /// <para>Absolute rather than a relative age ("4 min ago"), deliberately. The list refreshes through

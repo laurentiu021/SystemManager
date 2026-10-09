@@ -9,7 +9,10 @@
     <AssemblyName>SysManager</AssemblyName>
     <RootNamespace>SysManager</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NoWarn>NU1603;NU1701</NoWarn>
+    <!-- Appended, not replaced, so the doc-comment settings in Directory.Build.props still apply. -->
+    <NoWarn>$(NoWarn);NU1603;NU1701</NoWarn>
+    <!-- The documentation file exists for the compiler's checks; it is not part of what ships. -->
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <Version>1.128.3</Version>
     <FileVersion>1.128.3.0</FileVersion>
     <AssemblyVersion>1.128.3.0</AssemblyVersion>

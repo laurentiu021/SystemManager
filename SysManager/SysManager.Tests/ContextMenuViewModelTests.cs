@@ -13,7 +13,7 @@ namespace SysManager.Tests;
 /// <summary>
 /// Tests for <see cref="ContextMenuViewModel"/>. Verifies constructor defaults,
 /// filter state, counter consistency, and command wiring. The VM auto-scans the
-/// registry on construction; <see cref="NewVm"/> awaits <see cref="ViewModelBase.InitializationComplete"/>
+/// registry on construction; <see cref="NewVm()"/> awaits <see cref="ViewModelBase.InitializationComplete"/>
 /// so assertions observe a settled state deterministically (no race with the scan).
 /// </summary>
 // Serialized: the toggle-failure tests pin elevation with AdminHelper.ForceElevation and swap

@@ -150,7 +150,7 @@ public class PingMonitorServiceLifecycleTests
     /// A <see cref="TimeProvider"/> whose delays complete only when the test says so.
     /// <para><c>Task.Delay(delay, provider, ct)</c> asks the provider for a one-shot timer, so
     /// overriding <see cref="CreateTimer"/> is the whole seam: every delay the pump requests lands
-    /// in <see cref="_requested"/> and stays pending until <see cref="CompleteOldestDelay"/> fires
+    /// in <see cref="_pending"/> and stays pending until <see cref="CompleteOldestDelay"/> fires
     /// its callback. Hand-written rather than taking a dependency on
     /// Microsoft.Extensions.TimeProvider.Testing, matching the fakes in
     /// <c>EtaCalculatorTests</c> and <c>EtwBandwidthSourceTests</c>.</para>

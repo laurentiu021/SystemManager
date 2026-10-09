@@ -300,9 +300,9 @@ internal static class AtomicFile
     /// The first-creation swap: with no destination descriptor to preserve, a plain move is correct.
     /// </summary>
     /// <remarks>
-    /// <see cref="Swap"/> asks whether the destination exists and then acts on the answer, and those are
-    /// two operations rather than one. Two writers saving a file that does not exist yet — the first save
-    /// of a preset, profile or history — can both be told "absent", and the loser's
+    /// <see cref="Swap(string, string, Action{TimeSpan})"/> asks whether the destination exists and then acts on the
+    /// answer, and those are two operations rather than one. Two writers saving a file that does not exist yet — the
+    /// first save of a preset, profile or history — can both be told "absent", and the loser's
     /// <c>Move(overwrite: false)</c> then throws because the winner got there first. Callers log a failed
     /// save at Debug, so that writer's data would disappear without a word. Every subsequent write is
     /// already safe, since it takes the <see cref="File.Replace(string, string, string?)"/> branch.

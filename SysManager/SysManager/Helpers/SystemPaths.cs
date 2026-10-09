@@ -112,7 +112,7 @@ internal static class SystemPaths
     /// picking the highest package version present.
     /// <para>
     /// Why this exists: winget is an MSIX execution alias, NOT a System32 tool, so
-    /// <see cref="ResolveSystemTool"/>'s System32 probes never match and would return the bare name
+    /// <see cref="ResolveSystemTool(string)"/>'s System32 probes never match and would return the bare name
     /// <c>"winget"</c>. Launched with <c>UseShellExecute=false</c>, an unrooted name lets Win32
     /// <c>CreateProcess</c> search the calling process's OWN directory FIRST — so an attacker-planted
     /// <c>winget.exe</c> beside SysManager's portable .exe (often run from a user-writable folder,

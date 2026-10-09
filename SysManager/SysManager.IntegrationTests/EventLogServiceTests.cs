@@ -171,7 +171,7 @@ public class EventLogServiceTests
     /// </summary>
     /// <remarks>
     /// Cancellation is an acceptable end to the enumeration, matching what
-    /// <c>Read_Cancellation_StopsQuickly</c> above already does. The assertion is about each ENTRY, so running
+    /// <see cref="Read_Cancellation_StopsFast"/> above already does. The assertion is about each ENTRY, so running
     /// out of time means fewer entries were checked, not that the ones checked were wrong. Without that, this
     /// failed on a CI runner with <c>OperationCanceledException</c> — a slower machine reading a larger log
     /// than the developer box the 10-second budget was tuned on. The budget is 30 seconds now for the same

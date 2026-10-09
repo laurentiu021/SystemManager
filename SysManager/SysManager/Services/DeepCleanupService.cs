@@ -614,7 +614,7 @@ public sealed class DeepCleanupService
     /// would walk all of Windows. And a walk may need narrowing, because
     /// <c>%LOCALAPPDATA%\Microsoft\Windows\Explorer</c> holds the rebuildable thumbnail caches next to the
     /// jump lists that are the user's recent-files history.
-    /// <para>Called by BOTH <see cref="Scan"/> and <see cref="Clean"/>, so the set of files a bucket
+    /// <para>Called by BOTH <see cref="Scan"/> and <see cref="CleanAsync"/>, so the set of files a bucket
     /// reports is by construction the set it deletes. That is the whole point of the helper: those were
     /// two separate walks, and a filter added to one of them is a bucket that lies.</para>
     /// </remarks>

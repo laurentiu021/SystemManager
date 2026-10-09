@@ -76,7 +76,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     /// search — the view would greet the user with "No packages found" for a query they had not typed. Same
     /// shape as <c>LogsViewModel.HasNoResults</c>, which distinguishes "the filters hid everything" from
     /// "nothing was loaded". Deliberately NOT set on the two failure paths: those already put their own
-    /// reason in <see cref="StatusMessage"/>, and "no packages found" would contradict "winget is
+    /// reason in <see cref="ViewModelBase.StatusMessage"/>, and "no packages found" would contradict "winget is
     /// unavailable".
     /// </remarks>
     [ObservableProperty] private bool _searchFoundNothing;

@@ -181,8 +181,9 @@ public class StartupSignatureTests
     /// The scan still routes its verdict through the shared describer rather than growing its own copy.
     /// </summary>
     /// <remarks>
-    /// The revocation mode itself moved with the chain build and is pinned by
-    /// <see cref="AuthenticodeTests.TheInformationalPath_AsksForOfflineRevocation_SoItDoesNotFetchPerFile"/>.
+    /// How the verdict is reached moved out with the chain build: the informational path asks Windows through
+    /// <c>WinVerifyTrust</c> rather than building a chain, which
+    /// <see cref="AuthenticodeTests.TheInformationalPath_DoesNotBuildAManagedChain"/> pins.
     /// What is this tab's business is that it keeps ASKING the shared describer: the wording of a verdict is
     /// user-facing copy, and a local reimplementation here would compile, pass, and leave two tabs
     /// describing one certificate in two different sentences.

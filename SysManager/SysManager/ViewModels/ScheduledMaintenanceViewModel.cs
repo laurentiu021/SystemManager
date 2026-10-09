@@ -170,7 +170,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Reads the task status and updates the bound state. Does NOT touch <see cref="IsBusy"/>,
+    /// Reads the task status and updates the bound state. Does NOT touch <see cref="ViewModelBase.IsBusy"/>,
     /// so Save/Remove can call it without prematurely clearing their own busy flag (which would
     /// re-enable the commands mid-operation).
     /// </summary>

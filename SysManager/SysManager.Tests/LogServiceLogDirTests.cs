@@ -11,8 +11,8 @@ namespace SysManager.Tests;
 /// The log directory has to be redirectable, which is what took <c>LogService</c> off the user-data-path
 /// ratchet in <c>ArchitectureTests.Services_DoNotHoldUserDataPathsInStaticFields</c>.
 /// <para><c>LogDir</c> was <c>static readonly</c>. A resolved path in static state cannot be pointed at a
-/// temp directory by any test, because <see cref="Environment.GetFolderPath"/> resolves through the Win32
-/// known-folder function and ignores the <c>LOCALAPPDATA</c> environment variable. That is not a
+/// temp directory by any test, because <see cref="Environment.GetFolderPath(Environment.SpecialFolder)"/> resolves
+/// through the Win32 known-folder function and ignores the <c>LOCALAPPDATA</c> environment variable. That is not a
 /// hypothetical risk: a service holding its path this way had tests that wrote into the user's real
 /// speed-test history.</para>
 /// <para>The usual fix — a constructor-injected <c>string? configDir = null</c> — does not apply, because

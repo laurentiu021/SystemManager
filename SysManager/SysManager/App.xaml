@@ -167,7 +167,8 @@
             <!--   CornerRadius="16" x1  — ThemePopup's outer shell, the only floating panel in the    -->
             <!--                          app and deliberately rounder than a card.                    -->
             <!-- Adding a token for either would extend a scale chosen as 4/8/12/999, so they are      -->
-            <!-- documented here instead. EveryOnScaleCornerRadius_UsesItsToken enforces the rest.     -->
+            <!-- documented here instead. ArchitectureTests.EveryCornerRadius_IsOnTheScale enforces    -->
+            <!-- the rest.                                                                             -->
             <CornerRadius x:Key="RadiusSm">4</CornerRadius>
             <CornerRadius x:Key="RadiusMd">8</CornerRadius>
             <CornerRadius x:Key="RadiusLg">12</CornerRadius>

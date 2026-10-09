@@ -129,6 +129,13 @@ guide. That said, a few explicit rules:
   uses that have to stay (Windows API names such as `SetMasterVolume`, a file
   name already on users' PCs, and winget-pkgs' own branch) are listed in
   `InclusiveTermsTests`.
+- **Doc comments are checked**: every project generates its documentation
+  file, so a `cref` that names nothing or could mean two overloads, a
+  `paramref` to a parameter that is not there, and an unescaped `&` all fail
+  the build. In plain comments and the docs, name a test with its class, as in
+  `ArchitectureTests.EverySourceFile_CarriesTheAuthorHeader`, and
+  `ArchitectureTests.EveryTestCitedWithItsClass_StillExists` checks that the
+  test still has that name.
 
 ### XAML conventions
 

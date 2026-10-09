@@ -456,8 +456,8 @@ public sealed class UpdateService : IUpdateService
     /// but wrong, unreadable, or unverifiable.
     ///
     /// This is NOT the integrity gate: file integrity is enforced by the SHA256 check
-    /// (<see cref="VerifyHashAsync"/>) against the published .sha256, which runs first in
-    /// the install flow. <c>CreateFromSignedFile</c> extracts the signer certificate but
+    /// (<see cref="VerifyHashAsync(ReleaseInfo, Stream, CancellationToken)"/>) against the published .sha256, which
+    /// runs first in the install flow. <c>CreateFromSignedFile</c> extracts the signer certificate but
     /// does not by itself validate the file against the signature, so it cannot detect a
     /// tampered signed binary — the SHA256 comparison is what catches a modified download.
     /// </summary>

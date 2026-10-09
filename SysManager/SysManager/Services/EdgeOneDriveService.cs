@@ -361,7 +361,8 @@ public sealed partial class EdgeOneDriveService
     /// falling back to the per-user copy under LOCALAPPDATA. Returns null when none exists
     /// (OneDrive not installed). Preferring the System copy also avoids launching a user-writable
     /// binary should the app ever be elevated for the Edge portion (binary-planting guard, matching
-    /// <see cref="SystemPaths"/>). A test override replaces the candidates; it is probed the same way.
+    /// <see cref="SysManager.Helpers.SystemPaths"/>). A test override replaces the candidates; it is probed the same
+    /// way.
     /// </summary>
     private string? ResolveOneDriveSetup()
     {

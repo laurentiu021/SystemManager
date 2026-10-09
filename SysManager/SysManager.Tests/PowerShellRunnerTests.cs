@@ -332,9 +332,9 @@ public class PowerShellRunnerTests
     /// passes left it green. It was asserting that the method honours its own argument, which is trivially
     /// true. Renamed to what it actually covers.
     /// <para>The wiring is proven end to end by
-    /// <c>PowerShellRunnerTests.RunspaceTeardown_StopsTheChildTheRunspaceWasBuiltWith</c> in
-    /// <c>SysManager.IntegrationTests</c>, which injects a real live child and asserts <c>RunAsync</c>'s
-    /// teardown killed it. That needs a real process, because the decision is
+    /// <c>PowerShellRunnerTests.DisposingTheRunner_StopsTheChildItsRunspaceWasBuiltWith</c> in
+    /// <c>SysManager.IntegrationTests</c>, which injects a real live child, runs through it, and asserts that
+    /// disposing the runner killed it. That needs a real process, because the decision is
     /// <c>is Process &amp;&amp; !HasExited</c> and no double satisfies it.</para>
     /// </remarks>
     [Fact]

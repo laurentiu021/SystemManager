@@ -22,6 +22,16 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
 
+  <!-- Doc comments are checked, not only written (#2658). With the documentation file on, the compiler resolves
+       every cref and reports a comment that is not well-formed XML, and TreatWarningsAsErrors makes either one a
+       build error, so a renamed member cannot leave a comment pointing at nothing. A member with no comment
+       (CS1591) and a parameter left out beside documented ones (CS1573) stay allowed: the check is that what a
+       comment says is true, not that everything has one. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>

@@ -34,7 +34,7 @@ public sealed class ActivityLogService
     /// Shared singleton the ViewModels log through. Settable for the same reason
     /// <see cref="DialogService.Instance"/> is: 20+ ViewModel code paths call
     /// <c>ActivityLogService.Instance.Log(...)</c>, and a get-only singleton made the
-    /// <see cref="ActivityLogService(string?)"/> seam unreachable from those call sites — so a test
+    /// <see cref="ActivityLogService(string, TimeSpan?)"/> seam unreachable from those call sites — so a test
     /// exercising any destructive operation appended to the developer's OWN activity history and, at
     /// <see cref="MaxEntries"/>, evicted every genuine entry. Redirecting the store alone could not
     /// fix that; the call site needs a substitutable instance. See <c>ActivityLogScope</c> in the

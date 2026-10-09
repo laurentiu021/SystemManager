@@ -9,7 +9,7 @@ using SysManager.ViewModels;
 namespace SysManager.IntegrationTests;
 
 /// <summary>
-/// Constructor & shape sweep across every view model in the app. Each
+/// Constructor &amp; shape sweep across every view model in the app. Each
 /// test instantiates a VM and verifies invariants (no throw, observable
 /// collections non-null, status strings present) without actually
 /// performing any network / disk / process work.

@@ -139,7 +139,8 @@ public class UpdateServiceAuthenticodeTests
         //
         // The chain build now lives in Helpers/Authenticode, shared with the Ookla gate, so what is
         // asserted here is the DELEGATION and the pin; the policy inside it is pinned by
-        // AuthenticodeTests.ValidateChain_UsesTheStrictPolicy_AndFailsClosed, and the fact that this
+        // AuthenticodeTests.EveryPolicy_IsTheStrictOne and
+        // AuthenticodeTests.ValidateChain_BuildsWithThatPolicy_AndFailsClosed, and the fact that this
         // caller asks for online revocation by AuthenticodeTests.EveryFailClosedGate_AsksForOnlineRevocation.
         // This test going red when the build moved out is exactly what it is for — the assertions were
         // moved with the code rather than dropped.

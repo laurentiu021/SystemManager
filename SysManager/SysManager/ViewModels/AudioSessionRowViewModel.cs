@@ -63,7 +63,7 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
     /// <summary>
     /// The output device this app is routed to. Bound to the per-row device picker when in-app
     /// routing is supported. Set from the service on refresh under the propagation guard; a
-    /// user-initiated change writes through <see cref="OnSelectedOutputDeviceChanged"/>.
+    /// user-initiated change writes through <see cref="OnSelectedOutputDeviceChanged(AudioDevice)"/>.
     /// </summary>
     [ObservableProperty] private AudioDevice? _selectedOutputDevice;
 
@@ -76,8 +76,8 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
     /// who opens the picker and closes it without choosing leaves the selection null, and that is not the
     /// same claim: this flag says the SERVICE could not tell us, which is what the placeholder is about.
     /// <para>Two writers, and both are needed. <see cref="SetOutputDeviceFromService"/> sets it from what the
-    /// read produced; <see cref="OnSelectedOutputDeviceChanged"/> clears it after a successful write. Without
-    /// the second one an app the user routed by hand stayed flagged unreadable, which drew the placeholder over
+    /// read produced; <see cref="OnSelectedOutputDeviceChanged(AudioDevice)"/> clears it after a successful write.
+    /// Without the second one an app the user routed by hand stayed flagged unreadable, which drew the placeholder over
     /// the chosen name and made the parent's refresh snapshot discard the choice ten seconds later.</para>
     /// </remarks>
     [ObservableProperty] private bool _outputRouteUnknown;
@@ -207,7 +207,7 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
                 $"Could not {(value ? "mute" : "unmute")} {DisplayName} — it may have just stopped playing.");
     }
 
-    /// <summary>Flip the mute state; the change propagates via <see cref="OnIsMutedChanged"/>.</summary>
+    /// <summary>Flip the mute state; the change propagates via <see cref="OnIsMutedChanged(bool)"/>.</summary>
     [RelayCommand]
     private void ToggleMute() => IsMuted = !IsMuted;
 

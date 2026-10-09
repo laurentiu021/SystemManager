@@ -30,6 +30,12 @@ query-filters:
   # hand-written occurrences exist.
   - exclude:
       id: cs/useless-cast-to-self
+  # cs/unused-label fires only on the same [GeneratedRegex] output. The generator writes a
+  # label at every place its matching code can return to, such as the "LoopEnd:;" it
+  # flagged, and jumps to only some of them for a given pattern. No hand-written file uses
+  # a label or a goto at all.
+  - exclude:
+      id: cs/unused-label
   # cs/useless-upcast misfires on WUApiLib COM interop in WindowsUpdateService: the
   # update objects are `dynamic` (late-bound COM), so casts like (bool)u.IsDownloaded
   # or (string)u.Identity.UpdateID are load-bearing runtime conversions from dynamic

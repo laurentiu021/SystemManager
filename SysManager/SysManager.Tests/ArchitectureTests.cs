@@ -12208,6 +12208,72 @@ public partial class ArchitectureTests
     private static partial Regex ProgressFigureBinding();
 
     /// <summary>
+    /// No element sets a property locally that a trigger in its own style sets too.
+    /// </summary>
+    /// <remarks>
+    /// #2610. A local value outranks every style trigger in WPF's order of precedence, so a trigger in the element's
+    /// own style that sets the same property never applies. Bulk Installer's two lists set
+    /// <c>Background="Transparent"</c> on each row and put the hover in a trigger beside it, so no row ever
+    /// highlighted. The sidebar's help and appearance buttons set <c>BorderBrush</c> the same way, so neither showed
+    /// its accent border on hover, nor on keyboard focus, where it was the only sign of where focus was. The fix
+    /// each time is a setter: the default goes in the style, where a trigger can override it.
+    /// <para>The style's own triggers only. A trigger in a control template names a part, or reaches the element
+    /// through a different precedence, and a style nested inside a template belongs to another element.</para>
+    /// </remarks>
+    [Fact]
+    public void NoElement_SetsLocallyWhatATriggerInItsOwnStyleSets()
+    {
+        var appDir = TestPaths.AppProject();
+        string[] triggerKinds = ["Trigger", "DataTrigger", "MultiTrigger", "MultiDataTrigger"];
+        var files = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "App.xaml"))
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .OrderBy(p => p, StringComparer.Ordinal);
+
+        var offenders = new List<string>();
+        var triggered = 0;
+
+        foreach (var file in files)
+        {
+            foreach (var element in XDocument.Load(file, LoadOptions.SetLineInfo).Descendants())
+            {
+                var ns = element.Name.Namespace;
+                var setters = element.Elements(ns + (element.Name.LocalName + ".Style"))
+                    .Elements(ns + "Style")
+                    .Elements(ns + "Style.Triggers")
+                    .Elements()
+                    .Where(trigger => triggerKinds.Contains(trigger.Name.LocalName))
+                    .SelectMany(trigger => trigger.Elements(ns + "Setter")
+                        .Concat(trigger.Elements(ns + (trigger.Name.LocalName + ".Setters")).Elements(ns + "Setter")))
+                    .ToList();
+                if (setters.Count == 0) continue;
+                triggered++;
+
+                foreach (var setter in setters)
+                {
+                    if ((string?)setter.Attribute("Property") is not { } property) continue;
+                    if (setter.Attribute("TargetName") is not null) continue;
+                    if (element.Attribute(property) is not { } local) continue;
+
+                    var line = ((System.Xml.IXmlLineInfo)element).LineNumber;
+                    offenders.Add($"{Path.GetFileName(file)}:{line}: <{element.Name.LocalName} {property}=\"{local.Value}\"> "
+                                + $"outranks the trigger in its own style that sets {property} to "
+                                + $"{(string?)setter.Attribute("Value")}, so that trigger never applies");
+                }
+            }
+        }
+
+        // Vacuity floor: 46 elements have triggers in their own style today.
+        Assert.True(triggered >= 40,
+            $"only {triggered} elements with triggers in their own style were found, out of 46 measured — the parse "
+            + "is broken, not the views.");
+
+        Assert.True(offenders.Count == 0,
+            "a local value hides a trigger in the same element's style; move the default into the style as a "
+            + "setter:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// A view model that collects console output has a view that shows it.
     /// </summary>
     /// <remarks>

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.12] - 2026-10-09
+
+**Bulk Installer's lists now highlight the row under the mouse, and the sidebar's help and appearance buttons show
+when the mouse or keyboard focus is on them** (#2610).
+
+### Fixed
+
+- **Bulk Installer: the row under the mouse is highlighted, in both lists.** Each row set its background directly
+  and put the hover in a style beside it, and in WPF a value set directly wins over a style's trigger, so no row
+  ever highlighted. The background now comes from the style, and both lists use the hover tint every other list
+  uses, where one used the tint that marks a selection. The catalog's hover had never shown since at least 1.13.3.
+- **Sidebar: the help and appearance buttons show an accent border on hover and on keyboard focus.** The same mistake
+  hid both triggers, so tabbing to either button showed nothing at all. The appearance button's focus border had
+  been hidden since it arrived in 1.52.38, the help button's since 1.110.0.
+- A test now fails when an element sets a property itself that a trigger in its own style also sets.
+
 ## [1.127.11] - 2026-10-09
 
 **SysManager's taskbar button now shows the progress of a deep cleanup, a speed test, a file shred, an update download

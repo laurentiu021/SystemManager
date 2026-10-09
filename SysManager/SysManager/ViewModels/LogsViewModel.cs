@@ -144,12 +144,35 @@ public sealed partial class LogsViewModel : ViewModelBase
 
     // ---------- Filter changes refresh the view ----------
 
-    partial void OnShowCriticalChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
-    partial void OnShowErrorChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
-    partial void OnShowWarningChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
-    partial void OnShowInfoChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
-    partial void OnShowVerboseChanged(bool value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+    partial void OnShowCriticalChanged(bool value) => OnSeverityChanged(EventSeverity.Critical, value);
+    partial void OnShowErrorChanged(bool value) => OnSeverityChanged(EventSeverity.Error, value);
+    partial void OnShowWarningChanged(bool value) => OnSeverityChanged(EventSeverity.Warning, value);
+    partial void OnShowInfoChanged(bool value) => OnSeverityChanged(EventSeverity.Info, value);
+    partial void OnShowVerboseChanged(bool value) => OnSeverityChanged(EventSeverity.Verbose, value);
     partial void OnFilterTextChanged(string value) { EntriesView.Refresh(); UpdateVisibleCount(); }
+
+    /// <summary>
+    /// The severities the listed events were asked for, or null before the first load.
+    /// </summary>
+    /// <remarks>
+    /// The severity switches do two jobs: a load asks Windows only for the severities switched on, and the switches
+    /// then filter what it listed. Info and Verbose start off, so switching either on after a load filtered a list
+    /// that held none of them, and nothing appeared until Refresh (#2601). Switching on a severity the load did not
+    /// ask for now loads the list again. Switching one off stays a filter, because its events are already listed.
+    /// </remarks>
+    private HashSet<EventSeverity>? _loadedSeverities;
+
+    private void OnSeverityChanged(EventSeverity severity, bool shown)
+    {
+        EntriesView.Refresh();
+        UpdateVisibleCount();
+        // While a load runs the command cannot start again; that load sees the switch when it ends.
+        if (shown && NotLoaded(severity) && RefreshCommand.CanExecute(null))
+            RefreshCommand.Execute(null);
+    }
+
+    /// <summary>True when the listed events come from a load that did not ask for <paramref name="severity"/>.</summary>
+    private bool NotLoaded(EventSeverity severity) => _loadedSeverities is { } loaded && !loaded.Contains(severity);
 
     private bool EntryFilter(object o)
     {
@@ -213,6 +236,23 @@ public sealed partial class LogsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RefreshAsync()
     {
+        var finished = await LoadAsync().ConfigureAwait(true);
+        // A severity switched on while that load ran was not asked for by it, so the list loads once more with it.
+        while (finished && BuildSeverityFilter().Exists(NotLoaded))
+            finished = await LoadAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Loads the list with what is chosen now. True when the load ran to its end, false when it was cancelled or
+    /// failed.
+    /// </summary>
+    /// <remarks>
+    /// An event the load lists again gets back its mark, and stays open in the detail pane (#2601). Switching a
+    /// severity on loads the list again, and a load builds new rows, so without this a switch the user took for a
+    /// filter would have dropped every mark and closed the event they were reading. Refresh dropped them too.
+    /// </remarks>
+    private async Task<bool> LoadAsync()
+    {
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -222,6 +262,10 @@ public sealed partial class LogsViewModel : ViewModelBase
         // Clear before loading so a previous refusal cannot keep the overlay up over a
         // successful reload (e.g. after the user elevates and switches back to Security).
         LoadWasRefused = false;
+        HashSet<EventKey> marked = [];
+        foreach (var row in Entries)
+            if (row.IsHighlighted && EventKey.Of(row) is { } key) marked.Add(key);
+        var open = SelectedEntry;
         Entries.Clear();
         ResetCounts();
 
@@ -232,6 +276,7 @@ public sealed partial class LogsViewModel : ViewModelBase
             MaxResults = int.TryParse(SelectedMaxResults, out var m) ? m : 500,
             Severities = BuildSeverityFilter()
         };
+        _loadedSeverities = [.. opt.Severities];
 
         try
         {
@@ -254,10 +299,7 @@ public sealed partial class LogsViewModel : ViewModelBase
                     UiThread.Post(() =>
                     {
                         foreach (var item in items)
-                        {
-                            Entries.Add(item);
-                            UpdateCounts(item, 1);
-                        }
+                            AddLoaded(item, marked);
                     });
                 }
             }
@@ -269,16 +311,14 @@ public sealed partial class LogsViewModel : ViewModelBase
                 UiThread.Post(() =>
                 {
                     foreach (var item in remaining)
-                    {
-                        Entries.Add(item);
-                        UpdateCounts(item, 1);
-                    }
+                        AddLoaded(item, marked);
                 });
             }
 
             StatusMessage = DescribeLoad(Entries.Count, _eventLogs.LastOutcome, SelectedLog);
             LoadWasRefused = Entries.Count == 0 && _eventLogs.LastOutcome != EventLogService.ReadOutcome.Ok;
             UpdateVisibleCount();
+            return true;
         }
         catch (OperationCanceledException) { StatusMessage = "Cancelled"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = "Access denied: " + ex.Message; }
@@ -286,9 +326,43 @@ public sealed partial class LogsViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = "Error: " + ex.Message; }
         finally
         {
+            UpdateHighlightCount();
+            Reopen(open);
             IsBusy = false;
             IsProgressIndeterminate = false;
         }
+        return false;
+    }
+
+    /// <summary>Lists an event the load read, marked when the same event was marked before it.</summary>
+    private void AddLoaded(FriendlyEventEntry entry, HashSet<EventKey> marked)
+    {
+        if (EventKey.Of(entry) is { } key && marked.Contains(key)) entry.IsHighlighted = true;
+        Entries.Add(entry);
+        UpdateCounts(entry, 1);
+    }
+
+    /// <summary>
+    /// Opens again the event that was open before the load, when the load listed it again and no other event was
+    /// opened meanwhile.
+    /// </summary>
+    private void Reopen(FriendlyEventEntry? open)
+    {
+        // The grid lets go of its row when the list is cleared, and keeps a row picked while the load ran.
+        if (open is null || (SelectedEntry is not null && !ReferenceEquals(SelectedEntry, open))) return;
+        SelectedEntry = EventKey.Of(open) is { } key ? Entries.FirstOrDefault(e => EventKey.Of(e) == key) : null;
+    }
+
+    /// <summary>
+    /// Which event a row shows, so a load that lists it again can tell. A record id is unique within its log. The
+    /// time is there because a cleared log starts its record ids again, and the event that gets one is not the event
+    /// that had it before.
+    /// </summary>
+    private readonly record struct EventKey(string Log, long Record, DateTime When)
+    {
+        /// <summary>The event <paramref name="e"/> shows, or null when it has no record id to tell it by.</summary>
+        public static EventKey? Of(FriendlyEventEntry e)
+            => e.RecordId > 0 ? new EventKey(e.LogName, e.RecordId, e.Timestamp) : null;
     }
 
     [RelayCommand]
@@ -450,9 +524,9 @@ public sealed partial class LogsViewModel : ViewModelBase
     /// <remarks>
     /// The mark lives on the <see cref="FriendlyEventEntry"/> instance, and the severity checkboxes and
     /// search box filter through <see cref="EntriesView"/> — an <see cref="ICollectionView"/> over those
-    /// same instances — so a mark survives filtering and column sorting. Loading a different log or time
-    /// range clears <see cref="Entries"/> and builds new ones, which drops the marks; those are
-    /// different events, so carrying the marks over would be wrong.
+    /// same instances — so a mark survives filtering and column sorting. A load clears <see cref="Entries"/>
+    /// and builds new ones; an event it lists again gets its mark back, and one it does not list, such as an
+    /// event from another log, takes its mark with it (#2601).
     /// </remarks>
     [RelayCommand]
     private void ToggleHighlight(object? parameter)

@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.9] - 2026-10-09
+
+**System Logs now shows Information or Verbose events when you tick them, instead of only after the next Refresh, and
+a Refresh keeps your marks** (#2601).
+
+### Changed
+
+- **System Logs: a load keeps your marks and the event you have open.** A Refresh builds the list anew, and it dropped
+  every mark and closed the event open on the right. An event the load lists again now keeps its mark and stays open;
+  one it does not list, such as an event from another log, takes its mark with it. This matters more now that ticking
+  a severity loads the list too (below). Refresh had dropped the marks since marking arrived in 1.61.6.
+
+### Fixed
+
+- **System Logs: ticking a severity the list was loaded without now loads it.** The severity switches decide what a
+  load asks Windows for, and then filter what it listed. Information and Verbose start off, so ticking either after a
+  load filtered a list that held none of them, and nothing appeared until Refresh. Ticking one now loads the list
+  again with it, also when it is ticked while a load is still running. Unticking one still filters straight away. The
+  switches had worked this way since System Logs arrived in 0.3.0.
+
 ## [1.127.8] - 2026-10-09
 
 **Battery Health now says "Not available" for a design capacity, full charge capacity or cycle count that Windows did

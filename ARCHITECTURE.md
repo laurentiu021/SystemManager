@@ -255,7 +255,10 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which
   asks the dispatcher whether it is on the UI thread; comparing `SynchronizationContext` instances, as it once
   did, fails there after the first await, and `ArchitectureTests.NothingComparesSynchronizationContextInstances`
-  keeps that comparison out of the code.
+  keeps that comparison out of the code. The severity switches are part of the query, so switching on one the
+  last load did not ask for loads again, and `RefreshAsync` loads once more when one was switched on while it
+  ran. A load gives an event it lists again, the same log, record id and time, back its mark and keeps it open
+  in the detail pane (#2601).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.

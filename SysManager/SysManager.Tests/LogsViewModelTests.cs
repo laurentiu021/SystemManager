@@ -370,4 +370,275 @@ public class LogsViewModelTests
 
         public override void Send(SendOrPostCallback d, object? state) => d(state);
     }
+
+    // ---------- switching on a severity the list was not loaded with loads it (#2601) ----------
+    //
+    // The switches are part of the query and also a filter over what it listed. Info and Verbose start off, so
+    // switching either on after a load filtered a list that held none of them, and nothing appeared until Refresh.
+
+    /// <summary>
+    /// A log read the way Windows reads one: only the severities asked for, as new rows on every read. Records what
+    /// each read asked for, and can hold a read at the event it would list at <see cref="PauseAt"/>.
+    /// </summary>
+    private sealed class FakeLog
+    {
+        private static readonly DateTime FirstEvent = new(2026, 10, 9, 8, 0, 0);
+
+        public List<(EventSeverity Severity, long Record, int Minute)> Events { get; set; } = [];
+
+        public List<List<EventSeverity>> Asked { get; } = [];
+
+        public TaskCompletionSource? Gate { get; set; }
+
+        public int PauseAt { get; set; }
+
+        public async IAsyncEnumerable<FriendlyEventEntry> ReadAsync(
+            EventLogQueryOptions options, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            Asked.Add([.. options.Severities ?? []]);
+            var listed = 0;
+            foreach (var (severity, record, minute) in Events)
+            {
+                if (options.Severities?.Contains(severity) == false) continue;
+                if (listed++ == PauseAt && Gate is { } gate) await gate.Task.WaitAsync(ct);
+                yield return new FriendlyEventEntry
+                {
+                    LogName = options.LogName,
+                    RecordId = record,
+                    Timestamp = FirstEvent.AddMinutes(minute),
+                    Severity = severity,
+                    Message = $"{severity} {record}",
+                    // Filled in, so opening a row does not read this PC's event log for it.
+                    Xml = "<Event/>",
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="test"/> under the dispatcher-like context, so every load runs on this thread, as it does
+    /// on the UI thread, and the test pumps it to its end.
+    /// </summary>
+    private static void OnADispatcher(Action<Queue<(SendOrPostCallback Work, object? State)>> test)
+    {
+        var queue = new Queue<(SendOrPostCallback Work, object? State)>();
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherLikeContext(queue));
+        try
+        {
+            test(queue);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    [Fact]
+    public void SwitchingOnASeverityTheLoadDidNotAskFor_LoadsTheListAgainWithIt()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Info, 2, 2), (EventSeverity.Info, 3, 3)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            Assert.Equal(1, vm.VisibleCount);
+
+            vm.ShowInfo = true;
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.Equal(2, log.Asked.Count);
+            Assert.Contains(EventSeverity.Info, log.Asked[1]);
+            Assert.Equal(3, vm.VisibleCount);
+            Assert.Equal("Loaded 3 events from System", vm.StatusMessage);
+        });
+    }
+
+    [Fact]
+    public void SwitchingASeverityOff_OnlyFilters_AndOnAgain_DoesNotLoadAgain()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Info, 2, 2)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync) { ShowInfo = true };
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+
+            vm.ShowInfo = false;
+            Assert.Equal(1, vm.VisibleCount);
+            vm.ShowInfo = true;
+            Assert.Equal(2, vm.VisibleCount);
+
+            Assert.Single(log.Asked);
+        });
+    }
+
+    [Fact]
+    public void BeforeAnyLoad_SwitchingASeverityOn_LoadsNothing()
+    {
+        // The first load asks for whatever is switched on by then.
+        var log = new FakeLog { Events = [(EventSeverity.Info, 1, 1)] };
+        var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+
+        vm.ShowInfo = true;
+        vm.ShowVerbose = true;
+
+        Assert.Empty(log.Asked);
+    }
+
+    [Fact]
+    public void ASeveritySwitchedOnWhileALoadRuns_IsLoadedWhenThatLoadEnds()
+    {
+        var gate = new TaskCompletionSource();
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Info, 2, 2)], Gate = gate };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+
+            vm.ShowInfo = true;
+            Assert.Single(log.Asked);   // no second load beside the one running
+            gate.SetResult();
+            PumpUntilDone(queue, refresh);
+
+            Assert.Equal(2, log.Asked.Count);
+            Assert.Contains(EventSeverity.Info, log.Asked[1]);
+            Assert.Equal(2, vm.Entries.Count);
+        });
+    }
+
+    [Fact]
+    public void ACancelledLoad_IsNotFollowedByAnother()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Info, 2, 2)], Gate = new TaskCompletionSource() };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+
+            vm.ShowInfo = true;
+            vm.CancelCommand.Execute(null);
+            PumpUntilDone(queue, refresh);
+
+            Assert.Single(log.Asked);
+            Assert.Equal("Cancelled", vm.StatusMessage);
+        });
+    }
+
+    // A load builds new rows, so loading again on a switch the user took for a filter would have dropped every mark
+    // and closed the event they were reading. An event listed again keeps both.
+
+    [Fact]
+    public void ALoad_GivesAnEventItListsAgainBackItsMark()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Error, 2, 2), (EventSeverity.Info, 3, 3)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.ToggleHighlightCommand.Execute(vm.Entries.Single(e => e.RecordId == 1));
+
+            vm.ShowInfo = true;
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.Equal(3, vm.Entries.Count);
+            var marked = Assert.Single(vm.Entries, e => e.IsHighlighted);
+            Assert.Equal(1, marked.RecordId);
+            Assert.Equal(1, vm.HighlightedCount);
+        });
+    }
+
+    [Fact]
+    public void AnEventInAnotherLog_WithTheSameRecordId_IsNotMarked()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.ToggleHighlightCommand.Execute(vm.Entries.Single());
+
+            vm.SelectedLog = "Application";
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+
+            Assert.False(vm.Entries.Single().IsHighlighted);
+            Assert.Equal(0, vm.HighlightedCount);
+        });
+    }
+
+    [Fact]
+    public void ARecordIdHandedOutAgain_AfterTheLogWasCleared_IsNotMarked()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.ToggleHighlightCommand.Execute(vm.Entries.Single());
+
+            log.Events = [(EventSeverity.Error, 1, 30)];   // record 1 is now a later event
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+
+            Assert.False(vm.Entries.Single().IsHighlighted);
+            Assert.Equal(0, vm.HighlightedCount);
+        });
+    }
+
+    [Fact]
+    public void ALoad_KeepsTheOpenEventOpen_WhenItListsItAgain()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1), (EventSeverity.Error, 2, 2), (EventSeverity.Info, 3, 3)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.SelectedEntry = vm.Entries.Single(e => e.RecordId == 2);
+
+            vm.ShowInfo = true;
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.NotNull(vm.SelectedEntry);
+            Assert.Equal(2, vm.SelectedEntry.RecordId);
+            Assert.Contains(vm.SelectedEntry, vm.Entries);
+        });
+    }
+
+    [Fact]
+    public void ALoad_ThatDoesNotListTheOpenEventAgain_LeavesNothingOpen()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.SelectedEntry = vm.Entries.Single();
+
+            vm.SelectedLog = "Application";
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+
+            Assert.Null(vm.SelectedEntry);
+        });
+    }
+
+    [Fact]
+    public void AnEventOpenedWhileALoadRuns_StaysOpen_RatherThanTheOneOpenBefore()
+    {
+        var log = new FakeLog { Events = [.. Enumerable.Range(1, 60).Select(i => (EventSeverity.Error, (long)i, i))] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+            vm.SelectedEntry = vm.Entries.Single(e => e.RecordId == 60);
+
+            var gate = new TaskCompletionSource();
+            log.Gate = gate;
+            log.PauseAt = 55;   // by then the first 50 are listed, as one batch
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+            vm.SelectedEntry = vm.Entries.Single(e => e.RecordId == 10);
+            gate.SetResult();
+            PumpUntilDone(queue, refresh);
+
+            Assert.Equal(10, vm.SelectedEntry?.RecordId);
+            Assert.Contains(vm.SelectedEntry, vm.Entries);
+        });
+    }
 }

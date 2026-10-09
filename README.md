@@ -534,8 +534,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   Context Menu, Startup Manager, App Blocker, Notification Blocker, and DNS & Hosts for DNS — are links,
   never rows
 - **The whole PC at once** points to Restore Points and names the newest restore point when SysManager
-  runs as administrator, and **what cannot be put back** — files deleted for good, removed preinstalled
-  apps, uninstalled programs — is said plainly
+  runs as administrator. If Windows has not answered about its restore points within a minute, the card
+  says so, and Refresh asks again. **What cannot be put back** — files deleted for good, removed
+  preinstalled apps, uninstalled programs — is said plainly
 - Some changes need administrator rights — the hosts file, services, machine-wide variables that differ
   from the copy, game mode left on by a run that paused search indexing, and Performance Mode while the
   NVIDIA graphics card it recorded may still be there (found, or not checked just now) — and their rows

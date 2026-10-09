@@ -225,6 +225,51 @@ public sealed class UndoChangesViewModelTests : IDisposable
         Assert.Equal("Windows shows the list of restore points only to an administrator.", vm.RestorePointText);
     }
 
+    /// <summary>
+    /// A restore point question Windows never answers gives up after a minute, says so, and Refresh asks again (#2606).
+    /// </summary>
+    /// <remarks>
+    /// It had no end of its own: the card stayed on "Looking…", and Refresh would not ask again while it was out. The
+    /// minute is on a clock the test holds, so nothing here waits for it.
+    /// <para>The first question is answered by never answering, and the test waits until it has really been asked.
+    /// Answering by call order alone failed in the full suite: the question is asked from the thread pool, and with the
+    /// pool busy the second one could be asked before the first and be handed the answer that never comes.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ARestorePointQuestionThatIsNeverAnswered_GivesUpAfterAMinute_AndRefreshAsksAgain()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var service = Service();
+        var never = new TaskCompletionSource<RestorePointLook>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var asked = 0;
+        service.LookForRestorePointAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            if (Interlocked.Increment(ref asked) > 1) return Task.FromResult(new RestorePointLook(Newest, Listed: true));
+            firstAsked.TrySetResult();
+            return never.Task;
+        });
+        var clock = new HeldTimers();
+        var vm = new UndoChangesViewModel(service, Substitute.For<INavigationService>(), clock);
+        await vm.InitializationComplete;
+
+        vm.IsActive = true;
+        Assert.Equal("Looking for the newest restore point…", vm.RestorePointText);
+        Assert.Equal(TimeSpan.FromMinutes(1), clock.OnlyDue);
+        await firstAsked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        clock.FireAll();
+        await vm.RestorePointLookup.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal("Windows did not answer about its restore points within a minute. Refresh asks again.",
+            vm.RestorePointText);
+
+        await vm.RefreshCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(30));
+        await vm.RestorePointLookup.WaitAsync(TimeSpan.FromSeconds(30));
+
+        await service.Received(2).LookForRestorePointAsync(Arg.Any<CancellationToken>());
+        Assert.Equal("Newest: \"SysManager Privacy & Telemetry\", 5 Oct 2026, 19:39", vm.RestorePointText);
+    }
+
     // ── Putting one back ────────────────────────────────────────────────────
 
     [Fact]

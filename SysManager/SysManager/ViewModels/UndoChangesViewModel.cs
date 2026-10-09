@@ -31,8 +31,19 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
 
     private const string LookingForRestorePoint = "Looking for the newest restore point…";
 
+    /// <summary>What the card says when Windows has not answered within <see cref="RestorePointPatience"/>.</summary>
+    internal const string RestorePointNotAnswered =
+        "Windows did not answer about its restore points within a minute. Refresh asks again.";
+
+    /// <summary>
+    /// How long the restore point question may go unanswered. It waits on System Restore and the shadow copy service,
+    /// and a minute is far longer than either takes on a PC where they work.
+    /// </summary>
+    internal static readonly TimeSpan RestorePointPatience = TimeSpan.FromMinutes(1);
+
     private readonly IUndoChangesService _service;
     private readonly INavigationService _navigation;
+    private readonly TimeProvider _clock;
 
     // The look running now, so a put-back confirmed while a look started under its question can wait for that look
     // rather than run beside it: the look's end would turn Busy off while the put-back was still going.
@@ -108,10 +119,15 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
     /// <summary>The look for the newest restore point the tab last started. Internal so a test can await it.</summary>
     internal Task RestorePointLookup { get; private set; } = Task.CompletedTask;
 
-    public UndoChangesViewModel(IUndoChangesService service, INavigationService navigation)
+    /// <summary>Builds the tab and starts its first look at the kept copies.</summary>
+    /// <param name="service">What the tab lists and puts back.</param>
+    /// <param name="navigation">Opens the tab a row is reviewed on.</param>
+    /// <param name="clock">What <see cref="RestorePointPatience"/> is measured on. A test holds it.</param>
+    public UndoChangesViewModel(IUndoChangesService service, INavigationService navigation, TimeProvider? clock = null)
     {
         _service = service;
         _navigation = navigation;
+        _clock = clock ?? TimeProvider.System;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Looking for changes SysManager can put back…";
         RestorePointText = IsElevated
@@ -220,11 +236,22 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         RestorePointLook look;
         try
         {
-            look = await Task.Run(() => _service.LookForRestorePointAsync(ct));
+            // The wait is bounded, not the question (#2606). It waits on System Restore and the shadow copy service, and
+            // with no end of its own the card stayed on "Looking…" for as long as they did not answer, and Refresh would
+            // not ask again while it was out. An answer that comes after the minute is dropped; the next look asks again.
+            // Closing the tab still ends the wait by calling the question off, not by abandoning it.
+            look = await Task.Run(() => _service.LookForRestorePointAsync(ct)).WaitAsync(RestorePointPatience, _clock);
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
         {
             // The tab was disposed while Windows was asked: there is no card left to fill.
+            return;
+        }
+        catch (TimeoutException)
+        {
+            if (IsDisposed) return;
+            Log.Warning("Undo Changes: Windows did not answer about its restore points within {Patience}", RestorePointPatience);
+            RestorePointText = RestorePointNotAnswered;
             return;
         }
 

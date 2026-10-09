@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.5] - 2026-10-09
+
+**Undo Changes no longer says "Looking for the newest restore point…" for good when Windows does not answer** (#2606).
+
+### Fixed
+
+- **Undo Changes: the restore point line gives up after a minute.** As administrator, the "whole PC at once" card asks
+  Windows for its newest restore point, and that question waits on System Restore and the shadow copy service. It had
+  no limit of its own, so when they did not answer the line stayed on "Looking for the newest restore point…", and
+  Refresh would not ask again while the first question was still out. After a minute the card now says "Windows did
+  not answer about its restore points within a minute. Refresh asks again", and Refresh, or opening the tab again,
+  does. The question had waited without a limit since Undo Changes arrived in 1.123.0.
+
 ## [1.127.4] - 2026-10-09
 
 **Settings Watchdog's Restore changed now says which settings it cannot put back, and waits while Privacy & Telemetry

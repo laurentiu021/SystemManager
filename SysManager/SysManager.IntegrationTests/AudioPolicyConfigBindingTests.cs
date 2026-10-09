@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.ServiceProcess;
 using Microsoft.Win32;
 using SysManager.Services;
 
@@ -37,12 +38,34 @@ public class AudioPolicyConfigBindingTests
     public void ThisProcess_WhichNothingRouted_ReadsAsFollowingTheDefault()
     {
         SkipUnlessWindowsHasTheFactory();
+        SkipUnlessTheAudioServiceRuns();
         var config = AudioPolicyConfigFactory.TryCreate();
         if (config is null) Assert.Fail("the routing interface did not bind, so there is no route to read");
 
         // Empty is "read, and no override". Null would be "could not read", which the picker shows as unknown.
         Assert.Equal(string.Empty,
             AudioPolicyConfigFactory.GetPersistedDefaultEndpoint(config, (uint)Environment.ProcessId));
+    }
+
+    /// <summary>
+    /// A reported skip where the Windows Audio service is not running. It keeps the routes, so without it no route can
+    /// be read, and a build machine with no sound hardware may not run it.
+    /// </summary>
+    private static void SkipUnlessTheAudioServiceRuns()
+    {
+        ServiceControllerStatus? status;
+        try
+        {
+            using var audio = new ServiceController("Audiosrv");
+            status = audio.Status;
+        }
+        catch (InvalidOperationException)
+        {
+            status = null;
+        }
+
+        if (status != ServiceControllerStatus.Running)
+            Assert.Skip($"The Windows Audio service is {status?.ToString() ?? "not installed"} here, so no route can be read.");
     }
 
     /// <summary>A reported skip on a Windows without the factory, rather than a pass that bound nothing.</summary>

@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.7] - 2026-10-09
+
+**System Health and Ping now show "—" for a figure that was not measured, instead of 100%, a bare unit or nothing**
+(#2600).
+
+### Fixed
+
+- **System Health: a drive that does not report its wear no longer reads "LIFE REMAINING 100%".** Unknown wear counted
+  as none, so a hard disk, or one of the many SSDs that do not report wear, showed 100% with a full bar, as if it were
+  new. It now reads "—" with an empty bar. The other figures on the same card had the same fault in another form: a
+  drive with nothing to score read a bare "%" for HEALTH, one with no temperature read " °C", and read and write
+  errors it does not count read nothing. Each now reads "—". The card has shown them this way since its gauges
+  arrived in 0.16.0.
+- **Ping: a ping that got no reply no longer reads " ms".** Each row's latency, and an average or jitter not measured
+  yet, now read "—". They had read that way since 0.19.0.
+- A test now fails when any page counts on a binding's fallback value to stand in for a missing figure, which WPF
+  never shows, so this cannot come back on another page.
+
 ## [1.127.6] - 2026-10-09
 
 **After SysManager closes with game mode on, it now asks at the next start whether to put game mode's changes back,

@@ -22,12 +22,17 @@ public sealed partial class DiskHealthReport : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthGauge))]
     private string _healthStatus = "";    // Healthy / Warning / Unhealthy
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
     [NotifyPropertyChangedFor(nameof(TemperatureColorHex))]
     [NotifyPropertyChangedFor(nameof(TemperatureGauge))]
+    [NotifyPropertyChangedFor(nameof(TemperatureDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthGauge))]
     private double? _temperatureC;
 
     [ObservableProperty] private double? _temperatureMaxC;
@@ -37,6 +42,9 @@ public sealed partial class DiskHealthReport : ObservableObject
     [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
     [NotifyPropertyChangedFor(nameof(WearGauge))]
     [NotifyPropertyChangedFor(nameof(WearColorHex))]
+    [NotifyPropertyChangedFor(nameof(WearDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthGauge))]
     private int? _wearPercent;            // 0 = new, 100 = worn out (SSD only)
 
     [ObservableProperty]
@@ -46,11 +54,17 @@ public sealed partial class DiskHealthReport : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    [NotifyPropertyChangedFor(nameof(ReadErrorsDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthGauge))]
     private long? _readErrors;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HealthPercent))]
     [NotifyPropertyChangedFor(nameof(HealthPercentColorHex))]
+    [NotifyPropertyChangedFor(nameof(WriteErrorsDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthDisplay))]
+    [NotifyPropertyChangedFor(nameof(HealthGauge))]
     private long? _writeErrors;
     [ObservableProperty] private long? _startStopCount;
     [ObservableProperty] private string _verdict = "";         // plain-English summary
@@ -108,6 +122,17 @@ public sealed partial class DiskHealthReport : ObservableObject
         _ => null,
     };
 
+    /// <summary>The health score as the card shows it, or "—" when there is nothing to score it on.</summary>
+    /// <remarks>
+    /// The card bound <see cref="HealthPercent"/> through <c>StringFormat={}{0}%</c> with a <c>FallbackValue</c> of
+    /// "—". A fallback is for a binding that fails, not for a value that is null, so a drive with nothing to score read
+    /// a bare "%". The same holds for every figure on the card below.
+    /// </remarks>
+    public string HealthDisplay => HealthPercent is { } health ? $"{health}%" : "—";
+
+    /// <summary>The health score as the bar's width: an empty bar when there is nothing to score it on.</summary>
+    public int HealthGauge => HealthPercent ?? 0;
+
     /// <summary>Color hex for the health percentage gauge.</summary>
     public string HealthPercentColorHex => HealthPercent switch
     {
@@ -128,15 +153,30 @@ public sealed partial class DiskHealthReport : ObservableObject
         _ => StatusColors.Bad
     };
 
+    /// <summary>The temperature as the card shows it, or "—" when the drive does not report it.</summary>
+    public string TemperatureDisplay => TemperatureC is { } celsius
+        ? string.Create(CultureInfo.InvariantCulture, $"{celsius:F0} °C")
+        : "—";
+
     /// <summary>Temperature as a 0–100 gauge value (0 °C = 0, 80 °C = 100).</summary>
     public int TemperatureGauge => TemperatureC.HasValue
         ? Math.Clamp((int)(TemperatureC.Value / 80.0 * 100), 0, 100)
         : 0;
 
-    /// <summary>Wear as a 0–100 gauge value (inverted: 0 wear = 100% life remaining).</summary>
+    /// <summary>
+    /// Wear as a 0–100 gauge value (inverted: 0 wear = 100% life remaining), and an empty bar when the drive does not
+    /// report its wear.
+    /// </summary>
+    /// <remarks>
+    /// Unknown wear used to count as 100, so a drive that reports none, as hard disks and many SSDs do not, read
+    /// "LIFE REMAINING 100%" with a full bar: a healthy new drive, from no measurement at all (#2600).
+    /// </remarks>
     public int WearGauge => WearPercent.HasValue
         ? Math.Clamp(100 - WearPercent.Value, 0, 100)
-        : 100;
+        : 0;
+
+    /// <summary>The life remaining as the card shows it, or "—" when the drive does not report its wear.</summary>
+    public string WearDisplay => WearPercent.HasValue ? $"{WearGauge}%" : "—";
 
     /// <summary>Color hex for the wear gauge.</summary>
     public string WearColorHex => WearPercent switch
@@ -147,6 +187,12 @@ public sealed partial class DiskHealthReport : ObservableObject
         <= 80 => StatusColors.Elevated,
         _ => StatusColors.Bad
     };
+
+    /// <summary>The read error count as the card shows it, or "—" when the drive does not report it.</summary>
+    public string ReadErrorsDisplay => ReadErrors?.ToString(CultureInfo.InvariantCulture) ?? "—";
+
+    /// <summary>The write error count as the card shows it, or "—" when the drive does not report it.</summary>
+    public string WriteErrorsDisplay => WriteErrors?.ToString(CultureInfo.InvariantCulture) ?? "—";
 
     /// <summary>Friendly power-on time display.</summary>
     public string PowerOnDisplay => PowerOnHours switch

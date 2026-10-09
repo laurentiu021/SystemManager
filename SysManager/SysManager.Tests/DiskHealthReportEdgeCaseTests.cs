@@ -168,10 +168,77 @@ public class DiskHealthReportEdgeCaseTests
     }
 
     [Fact]
-    public void WearGauge_NullWear_Returns100()
+    public void WearGauge_NullWear_IsAnEmptyBar()
     {
+        // It was 100: a drive that does not report its wear read "LIFE REMAINING 100%" with a full bar (#2600).
         var report = new DiskHealthReport { WearPercent = null };
-        Assert.Equal(100, report.WearGauge);
+        Assert.Equal(0, report.WearGauge);
+        Assert.Equal("—", report.WearDisplay);
+    }
+
+    [Theory]
+    [InlineData(0, "100%")]
+    [InlineData(7, "93%")]
+    [InlineData(100, "0%")]
+    [InlineData(130, "0%")]
+    public void WearDisplay_IsTheLifeRemaining(int wear, string expected)
+        => Assert.Equal(expected, new DiskHealthReport { WearPercent = wear }.WearDisplay);
+
+    // ── Figures the drive does not report read "—" (#2600) ─────────────────
+    //
+    // The card bound them through a StringFormat with a FallbackValue of "—", and a fallback is for a binding that fails,
+    // not for a value that is null: the health score read a bare "%", the temperature " °C", and the error counts nothing.
+
+    [Fact]
+    public void WithNothingReported_EveryFigureReadsADash_AndEveryBarIsEmpty()
+    {
+        var report = new DiskHealthReport { HealthStatus = "SomethingUnknown" };
+
+        Assert.Equal("—", report.HealthDisplay);
+        Assert.Equal(0, report.HealthGauge);
+        Assert.Equal("—", report.TemperatureDisplay);
+        Assert.Equal("—", report.WearDisplay);
+        Assert.Equal(0, report.WearGauge);
+        Assert.Equal("—", report.ReadErrorsDisplay);
+        Assert.Equal("—", report.WriteErrorsDisplay);
+    }
+
+    [Fact]
+    public void ReportedFigures_ReadAsTheyDidBefore()
+    {
+        var report = new DiskHealthReport
+        {
+            HealthStatus = "Healthy",
+            TemperatureC = 41.6,
+            WearPercent = 12,
+            ReadErrors = 0,
+            WriteErrors = 3,
+        };
+
+        Assert.Equal($"{report.HealthPercent}%", report.HealthDisplay);
+        Assert.Equal(report.HealthPercent, report.HealthGauge);
+        Assert.Equal("42 °C", report.TemperatureDisplay);
+        Assert.Equal("88%", report.WearDisplay);
+        Assert.Equal("0", report.ReadErrorsDisplay);
+        Assert.Equal("3", report.WriteErrorsDisplay);
+    }
+
+    [Fact]
+    public void ChangingAFigure_RaisesItsDisplay()
+    {
+        var report = new DiskHealthReport();
+        var raised = report.RecordPropertyChanges();
+
+        report.WearPercent = 5;
+        report.TemperatureC = 30;
+        report.ReadErrors = 1;
+        report.WriteErrors = 1;
+        report.HealthStatus = "Healthy";
+
+        foreach (var name in new[] { nameof(DiskHealthReport.WearDisplay), nameof(DiskHealthReport.TemperatureDisplay),
+                                     nameof(DiskHealthReport.ReadErrorsDisplay), nameof(DiskHealthReport.WriteErrorsDisplay),
+                                     nameof(DiskHealthReport.HealthDisplay), nameof(DiskHealthReport.HealthGauge) })
+            Assert.Contains(name, raised);
     }
 
     [Fact]

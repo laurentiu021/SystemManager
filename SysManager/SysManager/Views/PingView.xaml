@@ -143,17 +143,17 @@
                                                 Visibility="{Binding IsCustom, Converter={StaticResource FlexVis}}"/>
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding LastLatencyMs, StringFormat={}{0:F0} ms, FallbackValue=—}"
+                                                <TextBlock Text="{Binding LastLatencyDisplay}"
                                                            Foreground="{DynamicResource Info}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="LATENCY" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding AverageMs, StringFormat={}{0:F1}, FallbackValue=—}"
+                                                <TextBlock Text="{Binding AverageDisplay}"
                                                            Foreground="{DynamicResource TextSecondary}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="AVG" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding JitterMs, StringFormat={}{0:F0}, FallbackValue=—}"
+                                                <TextBlock Text="{Binding JitterDisplay}"
                                                            Foreground="{DynamicResource Warning}" FontWeight="Bold" Style="{StaticResource Body}" HorizontalAlignment="Center"/>
                                                 <TextBlock Text="JITTER" Foreground="{DynamicResource TextSecondary}" FontSize="9" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                             </StackPanel>

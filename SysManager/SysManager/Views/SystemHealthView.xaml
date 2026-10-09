@@ -212,12 +212,12 @@
                                                 <StackPanel Margin="0,0,24,6" Width="120">
                                                     <TextBlock Text="HEALTH" Style="{StaticResource SectionLabel}"/>
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0}%, FallbackValue=—}" Style="{StaticResource MetricCompact}" FontWeight="Bold"
+                                                        <TextBlock Text="{Binding HealthDisplay}" Style="{StaticResource MetricCompact}" FontWeight="Bold"
                                                                    Foreground="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
                                                     </StackPanel>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
-                                                                Width="{Binding HealthPercent, FallbackValue=0}"
+                                                                Width="{Binding HealthGauge}"
                                                                 MaxWidth="120" Height="4"
                                                                 Background="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
                                                     </Border>
@@ -225,7 +225,7 @@
                                                 <!-- Temperature gauge -->
                                                 <StackPanel Margin="0,0,24,6" Width="100">
                                                     <TextBlock Text="TEMPERATURE" Style="{StaticResource SectionLabel}"/>
-                                                    <TextBlock Text="{Binding TemperatureC, StringFormat={}{0:F0} °C, FallbackValue=—}" FontSize="14"
+                                                    <TextBlock Text="{Binding TemperatureDisplay}" FontSize="14"
                                                                Foreground="{Binding TemperatureColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
@@ -236,7 +236,7 @@
                                                 <!-- Wear / life remaining gauge -->
                                                 <StackPanel Margin="0,0,24,6" Width="100">
                                                     <TextBlock Text="LIFE REMAINING" Style="{StaticResource SectionLabel}"/>
-                                                    <TextBlock Text="{Binding WearGauge, StringFormat={}{0}%}" FontSize="14"
+                                                    <TextBlock Text="{Binding WearDisplay}" FontSize="14"
                                                                Foreground="{Binding WearColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
@@ -250,11 +250,11 @@
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,24,6">
                                                     <TextBlock Text="READ ERRORS" Style="{StaticResource SectionLabel}"/>
-                                                    <TextBlock Text="{Binding ReadErrors, FallbackValue=—}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding ReadErrorsDisplay}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,0,6">
                                                     <TextBlock Text="WRITE ERRORS" Style="{StaticResource SectionLabel}"/>
-                                                    <TextBlock Text="{Binding WriteErrors, FallbackValue=—}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
+                                                    <TextBlock Text="{Binding WriteErrorsDisplay}" FontSize="14" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,0"/>
                                                 </StackPanel>
                                             </WrapPanel>
                                         </StackPanel>

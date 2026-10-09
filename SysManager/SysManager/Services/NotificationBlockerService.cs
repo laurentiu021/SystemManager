@@ -15,7 +15,7 @@ namespace SysManager.Services;
 /// Mutes app notification nags using the same documented HKCU registry values the Windows
 /// Settings &gt; System &gt; Notifications page writes — nothing deeper. Two levers:
 /// the per-app <c>Enabled</c> DWORD under <c>Notifications\Settings\&lt;AUMID&gt;</c>
-/// (the per-app switch) and the user-wide <c>PushNotifications\ToastEnabled</c> master
+/// (the per-app switch) and the user-wide <c>PushNotifications\ToastEnabled</c> main
 /// toggle (shared with <see cref="NotificationsTweak"/> in the Gaming Profile).
 ///
 /// Deliberately NOT here: window-hooking/pop-up interception (issue #340's original idea) —
@@ -35,7 +35,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     internal const string SettingsPath = @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings";
     internal const string EnabledValueName = "Enabled";
 
-    // The user-wide master toggle. This service OWNS these two strings: NotificationsTweak (Gaming
+    // The user-wide main toggle. This service OWNS these two strings: NotificationsTweak (Gaming
     // Profile) writes the same value and references them from here rather than declaring its own
     // copies, which is what let the two drift apart before.
     internal const string PushKeyPath = @"Software\Microsoft\Windows\CurrentVersion\PushNotifications";
@@ -69,7 +69,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     private readonly string _ledgerPath;
 
     /// <summary>
-    /// Serializes <see cref="RecordMasterToggleWrite"/> against itself. It is a read-increment-write over
+    /// Serializes <see cref="RecordMainToggleWrite"/> against itself. It is a read-increment-write over
     /// one file holding a single counter, and <see cref="AtomicFile"/> makes the WRITE atomic but not the
     /// read-then-write pair: two overlapping toggles both read N and both write N+1, so one increment is
     /// silently lost. That is the direction that costs the user something — Gaming Profile compares the
@@ -104,7 +104,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     private sealed record Ledger(int Writes);
 
     /// <summary>
-    /// How many times the Notifications tab has written the master toggle on this machine: 0 when there is no
+    /// How many times the Notifications tab has written the main toggle on this machine: 0 when there is no
     /// ledger yet, or null when it is there and could not be read or does not parse.
     /// </summary>
     /// <remarks>
@@ -116,11 +116,11 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// game when nobody had touched them (#2538). An unknown count skips the comparison and restores, which is
     /// the behaviour that shipped before this ledger existed.</para>
     /// </remarks>
-    internal static int? ReadMasterToggleWriteCount(string? configDir = null) =>
-        ReadMasterToggleWriteCountAt(LedgerPath(configDir));
+    internal static int? ReadMainToggleWriteCount(string? configDir = null) =>
+        ReadMainToggleWriteCountAt(LedgerPath(configDir));
 
     /// <summary>
-    /// Records that the user-facing path just wrote the master toggle.
+    /// Records that the user-facing path just wrote the main toggle.
     /// </summary>
     /// <remarks>
     /// A failure here is logged and swallowed: the toggle itself already succeeded, and refusing the user's
@@ -131,7 +131,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// another is between its own read and its write. Not <c>async</c> and no <c>await</c>, so the lock is
     /// never held across a yield.</para>
     /// </remarks>
-    private void RecordMasterToggleWrite()
+    private void RecordMainToggleWrite()
     {
         try
         {
@@ -142,7 +142,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
                 // only has to change, because an unchanged count tells a revert the user never touched the
                 // toggle. Leaving it unwritten would lose this write every time; writing 1 is mistaken for no
                 // write only when the count at apply was exactly 1.
-                var next = (ReadMasterToggleWriteCountAt(_ledgerPath) ?? 0) + 1;
+                var next = (ReadMainToggleWriteCountAt(_ledgerPath) ?? 0) + 1;
                 // AtomicFile, like every other store here: a torn write would read back as a malformed
                 // ledger, which reads as unknown and makes revert restore when it should have held back.
                 AtomicFile.WriteAllText(_ledgerPath, JsonSerializer.Serialize(new Ledger(next)));
@@ -156,7 +156,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// Reads the ledger at an explicit path, so the instance uses its own injected location: 0 for no ledger, null
     /// for one that could not be read or does not parse.
     /// </summary>
-    private static int? ReadMasterToggleWriteCountAt(string path)
+    private static int? ReadMainToggleWriteCountAt(string path)
     {
         var text = StoreFile.ReadText(path);
         if (text is null) return null;
@@ -174,8 +174,8 @@ public sealed class NotificationBlockerService : INotificationBlockerService
             // Absent value = notifications on (Windows default).
             return key?.GetValue(ToastValueName) is not int v || v != 0;
         }
-        catch (System.Security.SecurityException ex) { Log.Debug("Toast master read denied: {Error}", ex.Message); return true; }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Toast master read denied: {Error}", ex.Message); return true; }
+        catch (System.Security.SecurityException ex) { Log.Debug("ToastEnabled read denied: {Error}", ex.Message); return true; }
+        catch (UnauthorizedAccessException ex) { Log.Debug("ToastEnabled read denied: {Error}", ex.Message); return true; }
     }
 
     /// <inheritdoc />
@@ -188,12 +188,12 @@ public sealed class NotificationBlockerService : INotificationBlockerService
                 key.DeleteValue(ToastValueName, throwOnMissingValue: false); // absent = default = on
             else
                 key.SetValue(ToastValueName, 0, RegistryValueKind.DWord);
-            RecordMasterToggleWrite();
-            Log.Information("Notifications: master toggle set to {Enabled}", enabled);
+            RecordMainToggleWrite();
+            Log.Information("Notifications: main toggle set to {Enabled}", enabled);
             return true;
         }
-        catch (System.Security.SecurityException ex) { Log.Warning("Toast master write denied: {Error}", ex.Message); return false; }
-        catch (UnauthorizedAccessException ex) { Log.Warning("Toast master write denied: {Error}", ex.Message); return false; }
+        catch (System.Security.SecurityException ex) { Log.Warning("ToastEnabled write denied: {Error}", ex.Message); return false; }
+        catch (UnauthorizedAccessException ex) { Log.Warning("ToastEnabled write denied: {Error}", ex.Message); return false; }
     }
 
     /// <inheritdoc />

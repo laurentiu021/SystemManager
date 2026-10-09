@@ -206,13 +206,13 @@ public sealed class NotificationsTweakTests : IDisposable
         using var config = new TempConfig();
         Seed(null);                                     // notifications on: value absent
 
-        var atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var atApply = NotificationBlockerService.ReadMainToggleWriteCount(config.Path);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
         Assert.Equal(0, Current());                     // the profile silenced them
 
-        // The user opens Privacy & Security -> Notifications and turns the master toggle off herself.
+        // The user opens Privacy & Security -> Notifications and turns the main toggle off herself.
         new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false);
 
         await tweak.RevertAsync(CancellationToken.None);
@@ -230,7 +230,7 @@ public sealed class NotificationsTweakTests : IDisposable
         using var config = new TempConfig();
         Seed(null);
 
-        var atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var atApply = NotificationBlockerService.ReadMainToggleWriteCount(config.Path);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
@@ -280,9 +280,9 @@ public sealed class NotificationsTweakTests : IDisposable
     {
         using var config = new TempConfig();
 
-        var before = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var before = NotificationBlockerService.ReadMainToggleWriteCount(config.Path);
         new NotificationBlockerService(_root, config.Path).SetGlobalToastEnabled(false);
-        var after = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+        var after = NotificationBlockerService.ReadMainToggleWriteCount(config.Path);
 
         Assert.Equal(before + 1, after);
     }
@@ -298,7 +298,7 @@ public sealed class NotificationsTweakTests : IDisposable
         service.SetGlobalToastEnabled(true);
         service.SetGlobalToastEnabled(false);
 
-        Assert.Equal(3, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+        Assert.Equal(3, NotificationBlockerService.ReadMainToggleWriteCount(config.Path));
     }
 
     /// <summary>A missing ledger reads as 0 rather than throwing: nothing has been counted yet.</summary>
@@ -307,7 +307,7 @@ public sealed class NotificationsTweakTests : IDisposable
     {
         using var config = new TempConfig();
 
-        Assert.Equal(0, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+        Assert.Equal(0, NotificationBlockerService.ReadMainToggleWriteCount(config.Path));
     }
 
     // ── A ledger that cannot be read (#2538) ─────────────────────────────
@@ -327,7 +327,7 @@ public sealed class NotificationsTweakTests : IDisposable
         var service = new NotificationBlockerService(_root, config.Path);
         service.SetGlobalToastEnabled(false);
         service.SetGlobalToastEnabled(true);
-        Assert.Equal(2, NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+        Assert.Equal(2, NotificationBlockerService.ReadMainToggleWriteCount(config.Path));
         Assert.Null(Current());
     }
 
@@ -338,10 +338,10 @@ public sealed class NotificationsTweakTests : IDisposable
         CountTwoWrites(config);
 
         using (HoldAgainstReads(config))
-            Assert.Null(NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+            Assert.Null(NotificationBlockerService.ReadMainToggleWriteCount(config.Path));
 
         File.WriteAllText(LedgerFile(config), "{ not a ledger");
-        Assert.Null(NotificationBlockerService.ReadMasterToggleWriteCount(config.Path));
+        Assert.Null(NotificationBlockerService.ReadMainToggleWriteCount(config.Path));
     }
 
     [Fact]
@@ -351,7 +351,7 @@ public sealed class NotificationsTweakTests : IDisposable
         CountTwoWrites(config);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root,
-            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+            writeCountAtApply: NotificationBlockerService.ReadMainToggleWriteCount(config.Path), configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
         Assert.Equal(0, Current());
 
@@ -368,7 +368,7 @@ public sealed class NotificationsTweakTests : IDisposable
         CountTwoWrites(config);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root,
-            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+            writeCountAtApply: NotificationBlockerService.ReadMainToggleWriteCount(config.Path), configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
 
         File.WriteAllText(LedgerFile(config), "{ not a ledger");
@@ -385,7 +385,7 @@ public sealed class NotificationsTweakTests : IDisposable
 
         int? atApply;
         using (HoldAgainstReads(config))
-            atApply = NotificationBlockerService.ReadMasterToggleWriteCount(config.Path);
+            atApply = NotificationBlockerService.ReadMainToggleWriteCount(config.Path);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root, writeCountAtApply: atApply, configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
@@ -409,7 +409,7 @@ public sealed class NotificationsTweakTests : IDisposable
         CountTwoWrites(config);
         var tweak = new NotificationsTweak(
             originalToastEnabled: null, baseKey: _root,
-            writeCountAtApply: NotificationBlockerService.ReadMasterToggleWriteCount(config.Path), configDir: config.Path);
+            writeCountAtApply: NotificationBlockerService.ReadMainToggleWriteCount(config.Path), configDir: config.Path);
         await tweak.ApplyAsync(CancellationToken.None);
 
         using (HoldAgainstReads(config))

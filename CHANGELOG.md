@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.3] - 2026-10-09
+
+**Notification Blocker's switch that silences every notification at once is now called the main switch** (#2617).
+
+### Changed
+
+- **Notification Blocker: the main switch.** The switch at the top of the tab is the main switch in its caption, in
+  the confirmation that warns it also mutes calendar and reminder alerts, on the status line and in the README, and
+  the comments, log messages, identifiers and test names behind it follow. The fixed arguments a maintenance schedule
+  runs are described as an allowlist in the same way. What the switch does is unchanged, and so is the name of the
+  file that counts its writes, because renaming it would lose the count on PCs that already have one.
+- **A test keeps the older terms out.** `InclusiveTermsTests` reads every text file in the repository, this changelog
+  included, and fails on a non-inclusive term. The only uses it allows are Windows API names such as
+  `SetMasterVolume`, that file's name, and winget-pkgs' own branch in the link and the release steps that reach it.
+  An earlier pass removed these words by hand in 0.48.22, and they came back with the maintenance scheduler in 1.50.0
+  and Notification Blocker in 1.56.0.
+
 ## [1.128.2] - 2026-10-09
 
 **On the command line, an option SysManager does not know now stops the command wherever it appears, so a typo can no
@@ -6691,7 +6708,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Added
 - **Notification Blocker — the last work-in-progress tab is now implemented** (Privacy & Security). Mute the apps that nag you with pop-up notifications — update reminders, trial offers, "rate us" prompts — without digging through Windows Settings:
   - **Per-app mute switches** for every app Windows has recorded as a notification sender, sorted most-recently-active first and showing each app's recent notification count so the noisy ones stand out. Flipping a switch writes the same documented per-user setting as Windows Settings > System > Notifications — nothing is hooked, injected, or hacked, and Windows itself enforces the mute.
-  - **Master switch** to silence all notifications at once, with an explicit warning that it also mutes calendar and reminder alerts until turned back on.
+  - **Main switch** to silence all notifications at once, with an explicit warning that it also mutes calendar and reminder alerts until turned back on.
   - **Pending-changes flow** (like the Privacy & Telemetry tab): switch flips stay local until you press Apply, a confirmation summarises what changes, Discard backs out, and a failed write stays visibly pending instead of silently vanishing.
   - Everything is per-user (no administrator), fully reversible by flipping the switch back, and searchable. App names resolve from Windows' own AppUserModelId registrations, falling back to a readable form of the sender ID.
   - Scope note: the original idea (#340) included intercepting arbitrary pop-up windows; that requires manipulating other processes' windows — invasive, fragile, and malware-adjacent — so this tab deliberately sticks to the supported notification channel. Closes #340.

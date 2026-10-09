@@ -11,7 +11,7 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="NotificationBlockerViewModel"/>: sender population, search filter,
-/// pending-change tracking (per-app and master), the confirm gate, partial-failure baseline
+/// pending-change tracking (per-app and the main switch), the confirm gate, partial-failure baseline
 /// handling, and discard — all against a substituted service (no registry).
 /// </summary>
 [Collection("ProcessWideStatics")]
@@ -40,13 +40,13 @@ public class NotificationBlockerViewModelTests
     }
 
     [Fact]
-    public void Constructor_PopulatesAppsAndMaster()
+    public void Constructor_PopulatesAppsAndTheMainSwitch()
     {
         var vm = NewVm(NewService(App("a.app"), App("b.app", enabled: false)));
 
         Assert.Equal(2, vm.Apps.Count);
         Assert.Equal(2, vm.FilteredApps.Count);
-        Assert.True(vm.MasterEnabled);
+        Assert.True(vm.AllowNotifications);
         Assert.Equal(0, vm.PendingChangeCount);
         Assert.False(vm.HasPendingChanges);
     }
@@ -83,14 +83,14 @@ public class NotificationBlockerViewModelTests
     }
 
     [Fact]
-    public void TogglingMaster_TracksPendingChange()
+    public void TogglingTheMainSwitch_TracksPendingChange()
     {
         var vm = NewVm(NewService(App("a.app")));
 
-        vm.MasterEnabled = false;
+        vm.AllowNotifications = false;
         Assert.Equal(1, vm.PendingChangeCount);
 
-        vm.MasterEnabled = true;
+        vm.AllowNotifications = true;
         Assert.Equal(0, vm.PendingChangeCount);
     }
 
@@ -121,12 +121,12 @@ public class NotificationBlockerViewModelTests
     }
 
     [Fact]
-    public void ApplyChanges_WhenUserConfirms_WritesAppAndMaster_AndRebaselines()
+    public void ApplyChanges_WhenUserConfirms_WritesAppAndTheMainSwitch_AndRebaselines()
     {
         var svc = NewService(App("a.app"));
         var vm = NewVm(svc);
         vm.Apps[0].IsEnabled = false;
-        vm.MasterEnabled = false;
+        vm.AllowNotifications = false;
         Assert.Equal(2, vm.PendingChangeCount);
 
         var prevDialog = DialogService.Instance;
@@ -175,11 +175,11 @@ public class NotificationBlockerViewModelTests
     }
 
     [Fact]
-    public void ApplyChanges_MutingMaster_WarnsAboutSilencingEverything()
+    public void ApplyChanges_TurningOffTheMainSwitch_WarnsAboutSilencingEverything()
     {
         var svc = NewService(App("a.app"));
         var vm = NewVm(svc);
-        vm.MasterEnabled = false;
+        vm.AllowNotifications = false;
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -205,14 +205,14 @@ public class NotificationBlockerViewModelTests
         var vm = NewVm(NewService(App("a.app"), App("b.app", enabled: false)));
         vm.Apps[0].IsEnabled = false;
         vm.Apps[1].IsEnabled = true;
-        vm.MasterEnabled = false;
+        vm.AllowNotifications = false;
         Assert.Equal(3, vm.PendingChangeCount);
 
         vm.DiscardChangesCommand.Execute(null);
 
         Assert.True(vm.Apps[0].IsEnabled);
         Assert.False(vm.Apps[1].IsEnabled);
-        Assert.True(vm.MasterEnabled);
+        Assert.True(vm.AllowNotifications);
         Assert.Equal(0, vm.PendingChangeCount);
     }
 

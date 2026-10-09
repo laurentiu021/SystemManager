@@ -11,10 +11,10 @@ namespace SysManager.Tests;
 /// <summary>
 /// Round-trip tests for <see cref="NotificationBlockerService"/>. The service takes an
 /// injectable registry root; here we point it at a disposable HKCU subkey so the per-app
-/// and master toggles can be verified against a real hive without touching the machine's
+/// and main toggles can be verified against a real hive without touching the machine's
 /// actual notification settings (mirrors <see cref="AppBlockerServiceRegistryTests"/>).
 /// <para>The config directory is injected for the same reason: every <c>SetGlobalToastEnabled</c>
-/// increments the master-write ledger, so without it these tests would read and write the
+/// increments the toggle-write ledger, so without it these tests would read and write the
 /// developer's real <c>notification-master-writes.json</c> in %LOCALAPPDATA% — the file Gaming
 /// Profile consults to decide whether to restore its snapshot.</para>
 /// </summary>
@@ -48,7 +48,7 @@ public sealed class NotificationBlockerServiceTests : IDisposable
         return key;
     }
 
-    // ── Master toggle ──────────────────────────────────────────────────────
+    // ── Main toggle ────────────────────────────────────────────────────────
 
     [Fact]
     public void IsGlobalToastEnabled_NoValue_DefaultsTrue()
@@ -207,20 +207,20 @@ public sealed class NotificationBlockerServiceTests : IDisposable
         Assert.Equal(expected, NotificationBlockerService.PrettifyAumid(aumid));
     }
 
-    // ── The master-write ledger's read-increment-write ─────────────────────
+    // ── The toggle-write ledger's read-increment-write ─────────────────────
 
     [Fact]
-    public void SetGlobalToastEnabled_IncrementsTheMasterWriteLedger()
+    public void SetGlobalToastEnabled_IncrementsTheToggleWriteLedger()
     {
         // The single-threaded baseline the race below builds on: without this, a race test that
         // asserted "2" could pass simply because nothing ever counted.
-        Assert.Equal(0, NotificationBlockerService.ReadMasterToggleWriteCount(_configDir));
+        Assert.Equal(0, NotificationBlockerService.ReadMainToggleWriteCount(_configDir));
 
         _svc.SetGlobalToastEnabled(false);
-        Assert.Equal(1, NotificationBlockerService.ReadMasterToggleWriteCount(_configDir));
+        Assert.Equal(1, NotificationBlockerService.ReadMainToggleWriteCount(_configDir));
 
         _svc.SetGlobalToastEnabled(true);
-        Assert.Equal(2, NotificationBlockerService.ReadMasterToggleWriteCount(_configDir));
+        Assert.Equal(2, NotificationBlockerService.ReadMainToggleWriteCount(_configDir));
     }
 
     /// <summary>
@@ -232,9 +232,9 @@ public sealed class NotificationBlockerServiceTests : IDisposable
     private const int RaceAttempts = 64;
 
     [Fact]
-    public async Task TwoMasterToggleWritesAtOnce_BothIncrementsAreCounted()
+    public async Task TwoMainToggleWritesAtOnce_BothIncrementsAreCounted()
     {
-        // RecordMasterToggleWrite reads the counter, adds one, and writes it back. AtomicFile makes the
+        // RecordMainToggleWrite reads the counter, adds one, and writes it back. AtomicFile makes the
         // write atomic but not the pair: unsynchronized, both callers read N and both write N+1, so one
         // increment vanishes. What that costs is the discriminator this ledger exists to be — Gaming
         // Profile compares the count it recorded at apply against the count at revert, and a count that
@@ -251,9 +251,9 @@ public sealed class NotificationBlockerServiceTests : IDisposable
 
             // Named attempt, no path in the message: a failure here is printed in public CI output,
             // and the temp directories carry the account name.
-            var counted = NotificationBlockerService.ReadMasterToggleWriteCount(dir);
+            var counted = NotificationBlockerService.ReadMainToggleWriteCount(dir);
             Assert.True(counted == 2,
-                $"attempt {attempt}: the ledger counted {counted} of 2 master-toggle writes — both "
+                $"attempt {attempt}: the ledger counted {counted} of 2 main-toggle writes — both "
                     + "callers read the counter before either wrote it, so an increment was lost");
         }
     }

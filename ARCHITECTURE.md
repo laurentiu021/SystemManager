@@ -334,7 +334,7 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
 - `SettingsWatchdogViewModel` — saves a baseline of the watched settings (asking first, and keeping the old file
   aside, when the saved one cannot be read), lists what has drifted since, exports the drift as CSV, and restores
   every drift `SettingDrift.CanWriteBack` allows after one confirmation. Undo Changes' row for it opens this tab.
-- `NotificationBlockerViewModel` — lists the apps that have shown notifications with a per-app mute and the master
+- `NotificationBlockerViewModel` — lists the apps that have shown notifications with a per-app mute and the main
   switch; flips stay pending until Apply, which confirms and writes them, or Discard.
 - `BandwidthMonitorViewModel` — live total download/upload speed with a rolling throughput chart and a per-app usage list (Bandwidth Monitor tab). Polls the active `IBandwidthMonitorService` on a ~1&#160;s loop, paused while the tab is hidden (`IsActive`) and wrapping every sample in one `Task.Run` so no source runs its work on the render thread, reconciling rows in place by PID so icons/order don't flicker. Defaults to the no-admin connection source; when elevated and opted in, switches to the ETW source for precise per-app rates and falls back automatically if ETW can't start. Threshold-alert derivation and rate formatting come from `BandwidthFormat`/`FormatHelper`. A stored range is loaded through a function its internal constructor takes, so a test decides when the load finishes; a load that finishes after `Dispose` changes nothing, like a poll that does. The poll writes its app count through `ViewModelBase.ShowRefreshStatus`, so an export, a refusal or a loaded range stays on the status line. Read-only.
 - `ConsoleViewModel` — shared, per-tab scrollable console (each tab gets its own
@@ -857,11 +857,11 @@ Key services:
   failed read is never reported as "nothing blocked".
 - `NotificationBlockerService` — mutes app notification nags via the documented
   per-user registry switches Windows Settings writes (per-app `Enabled` under
-  `Notifications\Settings`, plus the `ToastEnabled` master toggle). Injectable
-  registry root for tests; per-user, reversible, no window hooking. Every master-toggle write
+  `Notifications\Settings`, plus the `ToastEnabled` main toggle). Injectable
+  registry root for tests; per-user, reversible, no window hooking. Every main-toggle write
   is counted in `notification-master-writes.json`, which Gaming Profile's `NotificationsTweak`
   compares at apply and at revert to keep a mute the user made during a game.
-  `ReadMasterToggleWriteCount` returns null for a ledger that cannot be read or parsed, and the
+  `ReadMainToggleWriteCount` returns null for a ledger that cannot be read or parsed, and the
   revert then restores; a write still counts from 0 over such a ledger, because its number only
   has to change.
 - `BatteryService` — battery charge, health, wear level and cycle count via WMI

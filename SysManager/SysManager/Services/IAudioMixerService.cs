@@ -26,7 +26,7 @@ public interface IAudioMixerService
     IReadOnlyList<AudioSessionInfo> GetSessions();
 
     /// <summary>
-    /// Set a session's master volume (clamped to 0.0–1.0). No-ops if the session no
+    /// Set a session's volume (clamped to 0.0–1.0). No-ops if the session no
     /// longer exists. Returns true if the change was applied.
     /// </summary>
     bool SetVolume(string sessionId, float level);

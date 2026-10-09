@@ -86,7 +86,7 @@ public sealed record GamingSnapshot
     public int? OriginalToastEnabled { get; init; }
 
     /// <summary>
-    /// The Notifications tab's master-toggle write count at apply time (null = not captured).
+    /// The Notifications tab's main-toggle write count at apply time (null = not captured).
     /// </summary>
     /// <remarks>
     /// Revert compares this against the current count to tell a <c>ToastEnabled = 0</c> the profile wrote

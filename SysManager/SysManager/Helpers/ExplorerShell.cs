@@ -53,7 +53,7 @@ public static class ExplorerShell
                 proc.Kill();
                 proc.WaitForExit(3000);
             }
-            catch (InvalidOperationException) { }
+            catch (InvalidOperationException) { /* it had already exited */ }
             catch (System.ComponentModel.Win32Exception ex)
             {
                 Log.Debug("Could not kill explorer PID {Pid}: {Error}", proc.Id, ex.Message);

@@ -278,6 +278,8 @@ public sealed class TemperatureService : IDisposable
             }
             catch (Exception ex)
             {
+                // Broad on purpose: LibreHardwareMonitor reads each sensor through its own drivers, which fail with
+                // whatever the hardware layer reports, and a failed read must leave the rest of the poll intact.
                 Log.Debug("LibreHardwareMonitor failed: {Error}", ex.Message);
             }
         }
@@ -318,7 +320,11 @@ public sealed class TemperatureService : IDisposable
             // same whatever it throws — give up cleanly rather than retry a driver load 30 times a minute.
             Log.Debug("LibreHardwareMonitor could not be opened, giving up for this session: {Error}", ex.Message);
             try { computer.Close(); }
-            catch (Exception closeEx) { Log.Debug("LHM close after a failed open also failed: {Error}", closeEx.Message); }
+            catch (Exception closeEx)
+            {
+                // Broad on purpose: the same native layer whose Open() has just failed.
+                Log.Debug("LHM close after a failed open also failed: {Error}", closeEx.Message);
+            }
             return null;
         }
     }
@@ -330,7 +336,12 @@ public sealed class TemperatureService : IDisposable
             if (_disposed) return;
             _disposed = true;
             try { _computer?.Close(); }
-            catch (Exception ex) { Log.Debug(ex, "LibreHardwareMonitor close failed"); }
+            catch (Exception ex)
+            {
+                // Broad on purpose: Close() releases LibreHardwareMonitor's drivers, and disposing goes on whatever
+                // that throws.
+                Log.Debug(ex, "LibreHardwareMonitor close failed");
+            }
             _computer = null;
         }
         _enrichGate.Dispose();
@@ -361,6 +372,7 @@ public sealed class TemperatureService : IDisposable
         }
         catch (Exception ex)
         {
+            // Broad on purpose: the names are cosmetic, and failing to read them must not cost the readings they label.
             Log.Debug("Storage name enrichment failed: {Error}", ex.Message);
         }
     }

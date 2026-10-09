@@ -150,6 +150,8 @@ public sealed class TrayIconService : IDisposable
         }
         catch (Exception ex)
         {
+            // Broad on purpose: GDI+ and the WPF resource lookup fail in ways the icon has no other answer to, and any
+            // of them means no icon rather than a failed start.
             Log.Warning("TrayIcon: failed to load icon: {Error}", ex.Message);
             return null;
         }

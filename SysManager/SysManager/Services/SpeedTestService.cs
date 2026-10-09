@@ -369,7 +369,11 @@ public sealed class SpeedTestService : ISpeedTestService
             // masks the OperationCanceledException re-thrown below (same filter as
             // PowerShellRunner's cancel-kill).
             try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException) { }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception
+                                           or AggregateException)
+            {
+                // Gone, denied or half-killed: whichever, the cancellation below is what the caller must see.
+            }
             throw;
         }
 

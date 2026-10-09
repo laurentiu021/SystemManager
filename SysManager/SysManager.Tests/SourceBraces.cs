@@ -1,12 +1,12 @@
-// SysManager · SourceBraces — one place that knows where a C# block ends
+// SysManager · SourceBraces — one place that knows where a C# block ends, and which text is code
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
 namespace SysManager.Tests;
 
 /// <summary>
-/// Finds the closing brace that matches an opening one, for the source-text guards that carve a file into
-/// members, methods or blocks before asserting something about one of them.
+/// Finds the closing brace that matches an opening one, and which text is code, for the source-text guards that
+/// carve a file into members, methods or blocks before asserting something about one of them.
 /// </summary>
 /// <remarks>
 /// Counting bare <c>{</c> and <c>}</c> characters is not enough on this corpus: 293 string literals across the
@@ -54,6 +54,53 @@ internal static class SourceBraces
         }
 
         return -1;
+    }
+
+    /// <summary>
+    /// <paramref name="source"/> with every literal and comment blanked to spaces and its line breaks kept, so a
+    /// pattern matched on the result finds code only, at the same index and on the same line as in the source.
+    /// </summary>
+    /// <remarks>
+    /// The same walk as <see cref="MatchingBrace"/>, so the two agree on what is code. An interpolated literal is
+    /// blanked whole, its holes with it. A literal or comment that never ends blanks the rest of the source, which is
+    /// what the compiler would make of it too.
+    /// </remarks>
+    internal static string CodeOnly(string source)
+    {
+        var chars = source.ToCharArray();
+
+        for (var i = 0; i < source.Length; i++)
+        {
+            int end;
+            switch (source[i])
+            {
+                case '/' when CharAt(source, i + 1) is '/' or '*':
+                    end = EndOfComment(source, i);
+                    break;
+                case '\'':
+                    end = EndOfCharacterLiteral(source, i);
+                    break;
+                case '"':
+                    end = EndOfStringLiteral(source, i);
+                    break;
+                case '@' or '$' when OpensAStringLiteral(source, i):
+                    end = EndOfStringLiteral(source, i);
+                    break;
+                default:
+                    continue;
+            }
+
+            if (end < 0) end = source.Length - 1;
+
+            for (var j = i; j <= end; j++)
+            {
+                if (chars[j] is not ('\n' or '\r')) chars[j] = ' ';
+            }
+
+            i = end;
+        }
+
+        return new string(chars);
     }
 
     /// <summary>The character at <paramref name="index"/>, or NUL past the end, so lookahead needs no bounds check.</summary>

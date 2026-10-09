@@ -129,6 +129,8 @@ public sealed class ResourceHistoryService : IDisposable
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
+                    // Broad on purpose: the sampler runs for the life of the app, and one sample that fails in any way
+                    // must not end it.
                     Log.Debug("Resource history sampling error: {Error}", ex.Message);
                     try { await Task.Delay(TimeSpan.FromSeconds(SampleIntervalSeconds), ct).ConfigureAwait(false); }
                     catch (OperationCanceledException) { break; }
@@ -176,6 +178,8 @@ public sealed class ResourceHistoryService : IDisposable
             }
             catch (Exception ex)
             {
+                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
+                // document: no driver, an old one, a remote session.
                 _nvApiAvailable = false;
                 Log.Debug("Resource history: NVIDIA GPU API unavailable: {Error}", ex.Message);
             }
@@ -189,6 +193,8 @@ public sealed class ResourceHistoryService : IDisposable
         }
         catch (Exception ex)
         {
+            // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
+            // document: no driver, an old one, a remote session.
             Log.Debug("Resource history: NVIDIA GPU usage read failed: {Error}", ex.Message);
             return null;
         }

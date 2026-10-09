@@ -860,7 +860,10 @@ public sealed class ThemeService
             var json = JsonSerializer.Serialize(data, JsonDefaults.Indented);
             AtomicFile.WriteAllText(_settingsPath, json);
         }
-        catch (Exception ex) { Log.Debug("Theme save failed: {Error}", ex.Message); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Debug("Theme save failed: {Error}", ex.Message);
+        }
     }
 
     private void Load()

@@ -17,6 +17,8 @@ namespace SysManager.Tests;
 /// nesting level early. A walker fooled that way fails in both directions: the truncated body can lose the
 /// evidence that made it compliant, which reports a clean test as an offender, or lose the mention that put it
 /// in scope, which drops a real offender and quietly erodes the vacuity floor that was supposed to notice.
+/// <para><c>SourceBraces.CodeOnly</c> makes the same walk, and has to blank exactly what it steps over while
+/// leaving every other character where it was, so a match on its result points into the source.</para>
 /// </remarks>
 public class SourceBracesTests
 {
@@ -277,4 +279,71 @@ public class SourceBracesTests
 
         Assert.Equal(-1, SourceBraces.MatchingBrace(source, source.IndexOf('{')));
     }
+
+    [Fact]
+    public void CodeOnly_BlanksLiteralsAndComments_AndLeavesTheCodeWhereItWas()
+    {
+        const string text = "\"x { y\"";
+        const string character = "'}'";
+        const string block = "/* b */";
+        const string line = "// c";
+
+        var code = SourceBraces.CodeOnly($"var a = {text}; {block} Done({character}, a); {line}");
+
+        Assert.Equal($"var a = {Spaces(text)}; {Spaces(block)} Done({Spaces(character)}, a); {Spaces(line)}", code);
+    }
+
+    [Fact]
+    public void CodeOnly_KeepsTheLineBreaksOfAMultiLineLiteralOrComment()
+    {
+        const string source = """"
+            var block = """
+                catch { }
+                """;
+            /* one
+               two */
+            Done();
+            """";
+
+        var code = SourceBraces.CodeOnly(source);
+
+        Assert.Equal(source.Length, code.Length);
+        Assert.Equal(source.Split('\n').Length, code.Split('\n').Length);
+        Assert.DoesNotContain("catch", code, StringComparison.Ordinal);
+        Assert.Equal(source.IndexOf("Done();", StringComparison.Ordinal),
+                     code.IndexOf("Done();", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CodeOnly_BlanksAnInterpolatedLiteralWithItsHoles()
+    {
+        const string source = """var text = $"{{literal}} {value} }"; Done();""";
+
+        var code = SourceBraces.CodeOnly(source);
+
+        Assert.DoesNotContain("value", code, StringComparison.Ordinal);
+        Assert.Equal("var text =", code[..10]);
+        Assert.EndsWith("; Done();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CodeOnly_LeavesAVerbatimIdentifierAndADivisionAlone()
+    {
+        const string source = "var @class = total / 2;";
+
+        Assert.Equal(source, SourceBraces.CodeOnly(source));
+    }
+
+    [Fact]
+    public void CodeOnly_BlanksTheRestOfTheSourceAfterACommentThatNeverEnds()
+    {
+        const string open = "/* never closed";
+        const string rest = " catch { }";
+
+        var code = SourceBraces.CodeOnly($"Done(); {open}\n{rest}");
+
+        Assert.Equal($"Done(); {Spaces(open)}\n{Spaces(rest)}", code);
+    }
+
+    private static string Spaces(string text) => new(' ', text.Length);
 }

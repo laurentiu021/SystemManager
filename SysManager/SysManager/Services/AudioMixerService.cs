@@ -924,8 +924,8 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             }
             // MainModule throws for protected / cross-bitness processes when not elevated —
             // fall back to the process name and no path (icon degrades to the fallback).
-            catch (Win32Exception) { }
-            catch (InvalidOperationException) { }
+            catch (Win32Exception) { /* protected, or the other bitness */ }
+            catch (InvalidOperationException) { /* it exited meanwhile */ }
             return (name, path);
         }
         catch (ArgumentException) { return ($"PID {pid}", string.Empty); }   // exited mid-enumeration

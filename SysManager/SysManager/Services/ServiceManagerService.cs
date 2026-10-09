@@ -124,7 +124,7 @@ public sealed partial class ServiceManagerService
             {
                 try { names.Add(dependent.DisplayName); }
                 catch (InvalidOperationException) { /* this one vanished — the others still count */ }
-                catch (System.ComponentModel.Win32Exception) { }
+                catch (System.ComponentModel.Win32Exception) { /* nor can this one be read; the others still count */ }
             }
             return names;
         }

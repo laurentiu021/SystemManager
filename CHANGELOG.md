@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.13] - 2026-10-09
+
+**In the Appearance panel, picking a theme while Auto is on now shows Dark or Light selected, instead of leaving Auto
+selected** (#2599).
+
+### Fixed
+
+- **Appearance panel: picking a preset under Auto selects the pill of the preset's own mode.** A preset is either
+  dark or light, so picking one turns Auto off, but the mode pills were set only when the panel opened, so Auto stayed
+  selected while the theme no longer followed Windows. The pills now follow the pick, and the pick stays: the pill
+  that moves no longer applies its mode's default preset over the one picked. Auto mode had shown this since it
+  arrived in 1.82.0.
+
 ## [1.127.12] - 2026-10-09
 
 **Bulk Installer's lists now highlight the row under the mouse, and the sidebar's help and appearance buttons show

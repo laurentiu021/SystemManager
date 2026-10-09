@@ -53,6 +53,20 @@ public class AboutViewModelTests
         new(new UpdateService(), new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(ConfigDir), updatesDir: ConfigDir);
 
+    // ---------- the taskbar button (#2596) ----------
+
+    [Fact]
+    public void TheUpdateDownload_FillsTheTaskbarButton()
+    {
+        var vm = NewVmNoAutoCheck();
+
+        vm.IsDownloading = true;
+        vm.DownloadPercent = 30;
+
+        Assert.True(vm.IsBusy);
+        Assert.Equal(30, vm.Progress);
+    }
+
     [Fact]
     public void Constructs_WithDefaultService()
     {

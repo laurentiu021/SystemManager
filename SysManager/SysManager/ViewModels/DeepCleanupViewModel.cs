@@ -94,6 +94,10 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
         CleanCommand.NotifyCanExecuteChanged();
     }
 
+    // The taskbar button follows Progress, and this tab's two bars bind figures of their own (#2596).
+    partial void OnScanProgressChanged(int value) => ShowOnTaskbar(value);
+    partial void OnCleanProgressChanged(int value) => ShowOnTaskbar(value);
+
     /// <summary>
     /// Copies the ticks the user set onto a freshly scanned set of categories, so a rescan does not throw
     /// their choices away.

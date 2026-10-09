@@ -12133,6 +12133,81 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A job's progress bar that binds a figure of its own feeds that figure to the taskbar button too.
+    /// </summary>
+    /// <remarks>
+    /// #2596. The taskbar button follows <c>ViewModelBase.Progress</c>, which most tabs' bars bind. Deep Cleanup,
+    /// Speed Test, the update download and the Dashboard's Quick Tune-Up and quick actions each bind a figure of
+    /// their own, <c>ScanProgress</c>, <c>SpeedProgress</c>, <c>DownloadPercent</c> and the rest, and none of them
+    /// reached <c>Progress</c>, so some of the longest jobs in the app never showed on the taskbar.
+    /// <para><b>A job's bar is told from a meter by its accessible name.</b> CPU and memory use, a drive's used
+    /// space, a battery's charge and an audio level are bars too, and they are readings, not work. Every job's bar
+    /// is named "… progress", which is what a screen reader announces, so the name is the independent test, as it
+    /// is for the filter boxes Ctrl+F finds. A bar inside a template belongs to a row rather than to the tab, and
+    /// is left out.</para>
+    /// <para>The figure reaches <c>ShowOnTaskbar</c>, from its change hook or named in the call. That seam exists
+    /// so that a write the taskbar alone reads is not taken for a percentage
+    /// <see cref="EveryProgressPercentageAViewModelComputes_IsBoundToAProgressBar"/> expects a bar to show. File
+    /// Shredder draws no bar at all, so it is outside this population, and its own test covers it.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryJobsProgressBar_AlsoFillsTheTaskbarButton()
+    {
+        var appDir = TestPaths.AppProject();
+        var offenders = new List<string>();
+        var figures = 0;
+
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var bound = XDocument.Load(view).Descendants()
+                .Where(e => e.Name.LocalName == "ProgressBar")
+                .Where(e => !e.Ancestors().Any(a => a.Name.LocalName == "DataTemplate"))
+                .Where(e => ((string?)e.Attribute("AutomationProperties.Name") ?? "")
+                    .EndsWith("progress", StringComparison.OrdinalIgnoreCase))
+                .Select(e => ProgressFigureBinding().Match((string?)e.Attribute("Value") ?? ""))
+                .Where(m => m.Success && m.Groups["name"].Value != "Progress")
+                .Select(m => m.Groups["name"].Value)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (bound.Count == 0) continue;
+
+            var viewName = Path.GetFileNameWithoutExtension(view);
+            var vmPath = Path.Combine(appDir, "ViewModels", viewName + "Model.cs");
+            if (!File.Exists(vmPath))
+            {
+                offenders.Add($"{viewName}.xaml binds {string.Join(", ", bound)} but {viewName}Model.cs does not exist");
+                continue;
+            }
+
+            var vm = WithoutComments(File.ReadAllText(vmPath));
+            foreach (var figure in bound)
+            {
+                figures++;
+                var fromItsHook = Regex.IsMatch(vm,
+                    $@"partial\s+void\s+On{figure}Changed\s*\([^)]*\)\s*=>\s*ShowOnTaskbar\(");
+                var namedInTheCall = Regex.IsMatch(vm, $@"ShowOnTaskbar\([^;]*\b{figure}\b");
+                if (!fromItsHook && !namedInTheCall)
+                    offenders.Add($"{viewName}Model.{figure} fills a bar named as a job's progress, and never reaches "
+                                + "ShowOnTaskbar, so the taskbar button stays blank while the job runs");
+            }
+        }
+
+        // Vacuity floor: six figures today, About's DownloadPercent, the Dashboard's TuneUpProgress and
+        // QuickActionProgress, Deep Cleanup's ScanProgress and CleanProgress, and Speed Test's SpeedProgress.
+        Assert.True(figures >= 5,
+            $"only {figures} job progress figures were found across Views/, out of 6 measured — the parse is "
+            + "broken, not the views.");
+
+        Assert.True(offenders.Count == 0,
+            "a job's progress bar shows a figure the taskbar button never gets:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A binding to a plain property of the view model: no dotted path, no converter in its name.</summary>
+    [GeneratedRegex(@"^\{Binding\s+(?:Path=)?(?<name>\w+)\s*[,}]", RegexOptions.Compiled)]
+    private static partial Regex ProgressFigureBinding();
+
+    /// <summary>
     /// A view model that collects console output has a view that shows it.
     /// </summary>
     /// <remarks>

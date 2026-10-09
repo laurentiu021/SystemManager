@@ -1101,6 +1101,9 @@ public sealed partial class AboutViewModel : ViewModelBase
     }
     // Forward any running state to IsBusy so the sidebar progress indicator works
     partial void OnIsDownloadingChanged(bool value) => IsBusy = value;
+
+    // And the download's progress to the taskbar button, which follows Progress (#2596).
+    partial void OnDownloadPercentChanged(int value) => ShowOnTaskbar(value);
 }
 
 /// <summary>Single release entry in the "What's new" history.</summary>

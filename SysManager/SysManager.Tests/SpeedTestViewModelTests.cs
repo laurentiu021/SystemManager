@@ -49,6 +49,20 @@ public sealed class SpeedTestViewModelTests : IDisposable
         Assert.Same(shared, vm.Shared);
     }
 
+    // ---------- the taskbar button (#2596) ----------
+
+    [Fact]
+    public void ATestsProgress_FillsTheTaskbarButton()
+    {
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+
+        vm.IsSpeedTesting = true;
+        vm.SpeedProgress = 55;
+
+        Assert.True(vm.IsBusy);
+        Assert.Equal(55, vm.Progress);
+    }
+
     [Fact]
     public void DefaultState_NotTesting()
     {

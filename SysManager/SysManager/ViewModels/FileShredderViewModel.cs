@@ -204,8 +204,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             // Shred a SNAPSHOT of the queue, not the live collection: indexing Items across the
             // per-file awaits would race a concurrent Add/Remove. (Those commands are also
             // disabled while shredding via CanEditQueue; the snapshot is the belt-and-suspenders.)
+            // The taskbar button follows the whole queue rather than one file filling it again and again (#2596).
+            var count = Items.Count;
+            var next = 0;
+            ShowOnTaskbar(0);
             foreach (var item in Items.ToArray())
             {
+                var place = next++;
                 if (ct.IsCancellationRequested) { cancelled = true; break; }
 
                 var totalPasses = (int)SelectedMethod;
@@ -217,6 +222,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 {
                     var currentPass = (int)Math.Ceiling(p / 100.0 * totalPasses);
                     item.Status = $"Shredding pass {currentPass}/{totalPasses}...";
+                    // The tab draws no bar, so the taskbar button is the one place this shows.
+                    ShowOnTaskbar(QueuePercent(place, count, p));
                 });
 
                 try
@@ -325,6 +332,13 @@ public sealed partial class FileShredderViewModel : ViewModelBase
     }
 
     private bool CanShredAll() => Items.Count > 0 && !IsShredding;
+
+    /// <summary>
+    /// How far a shred is through the whole queue, from the place of the item it is on and that item's own
+    /// percentage.
+    /// </summary>
+    internal static int QueuePercent(int place, int count, int itemPercent)
+        => count <= 0 ? 0 : (int)((place * 100.0 + Math.Clamp(itemPercent, 0, 100)) / count);
 
     [RelayCommand]
     private void Cancel()

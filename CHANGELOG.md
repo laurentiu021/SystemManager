@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.11] - 2026-10-09
+
+**SysManager's taskbar button now shows the progress of a deep cleanup, a speed test, a file shred, an update download
+and Quick Tune-Up, and goes blank when a job ends** (#2596).
+
+### Fixed
+
+- **Taskbar: some of the longest jobs in the app now show their progress on the taskbar button.** The button follows
+  the open tab's progress, and Deep Cleanup, Speed Test, File Shredder, the update download on About, and the
+  Dashboard's Quick Tune-Up and quick actions each kept theirs in a figure of their own, so the button stayed blank
+  through all of them. Each now fills it. File Shredder, which draws no progress bar, shows how far it is through the
+  whole queue. They had been left out since taskbar progress arrived in 1.83.0. A test now fails when a job's
+  progress bar shows a figure the taskbar button never gets.
+- **Taskbar: the button goes blank when a job ends.** App Updates, Bulk Installer and Uninstaller end on 100%, which
+  their own bar shows as done, and the taskbar button stayed full after the job had finished. It now shows a tab's
+  progress only while the tab is busy.
+- **Dashboard: the sidebar now shows the Dashboard as busy while Quick Tune-Up, a quick action or the slowdown check
+  runs**, not only while a scan does.
+
 ## [1.127.10] - 2026-10-09
 
 **Escape now stops what is running on every tab with a Cancel button, and F5 works on Drivers, Windows Update and

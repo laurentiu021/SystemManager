@@ -55,6 +55,19 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     protected void LetRefreshReplaceStatus() => _refreshableStatus = StatusMessage;
 
     /// <summary>
+    /// Shows <paramref name="percent"/> on the taskbar button, for a tab whose own progress bar binds a figure of its
+    /// own, or that has none.
+    /// </summary>
+    /// <remarks>
+    /// The taskbar button follows <see cref="Progress"/> while the tab is busy, and most tabs bind their bar to
+    /// <see cref="Progress"/> too, so one assignment fills both. Deep Cleanup, Speed Test, the update download and
+    /// the Dashboard's Quick Tune-Up and quick actions each draw a bar from a figure of their own, and File Shredder
+    /// draws none, so none of that work reached the taskbar (#2596). This writes the same property, under a name
+    /// that says the taskbar is its only reader.
+    /// </remarks>
+    protected void ShowOnTaskbar(int percent) => Progress = percent;
+
+    /// <summary>
     /// The status line for a setting that was changed but could not be saved.
     /// </summary>
     /// <remarks>

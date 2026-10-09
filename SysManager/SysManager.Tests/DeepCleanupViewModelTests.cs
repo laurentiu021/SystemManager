@@ -727,4 +727,23 @@ public class DeepCleanupViewModelTests : IDisposable
 
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
     }
+
+    // ---------- the taskbar button (#2596) ----------
+
+    [Fact]
+    public void TheScanAndTheClean_FillTheTaskbarButton()
+    {
+        var vm = NewVm();
+
+        vm.IsScanning = true;
+        vm.ScanProgress = 40;
+        Assert.True(vm.IsBusy);
+        Assert.Equal(40, vm.Progress);
+
+        vm.IsScanning = false;
+        vm.IsCleaning = true;
+        vm.CleanProgress = 70;
+        Assert.True(vm.IsBusy);
+        Assert.Equal(70, vm.Progress);
+    }
 }

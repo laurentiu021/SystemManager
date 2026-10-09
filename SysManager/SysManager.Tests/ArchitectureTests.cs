@@ -17369,7 +17369,6 @@ public partial class ArchitectureTests
             ["Services/TemperatureService.cs"] = 5,
             ["Services/ThemeService.cs"] = 1,
             ["Services/TrayIconService.cs"] = 2,
-            ["Services/UpdateService.cs"] = 1,
             ["ViewModels/AudioMixerViewModel.cs"] = 2,
             ["ViewModels/BandwidthMonitorViewModel.cs"] = 1,
             ["ViewModels/BulkInstallerViewModel.cs"] = 3,

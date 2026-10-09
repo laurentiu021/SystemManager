@@ -548,7 +548,10 @@ Key services:
   instance member so a consumer never has to hold both it and the concrete class;
   the version/repo statics stay static, since they read assembly metadata and the
   local filesystem and so need no double. Without it a test that lets the About
-  tab's startup check run had to call `api.github.com` for real.
+  tab's startup check run had to call `api.github.com` for real. An internal
+  constructor takes the HTTP handler, so a test can make GitHub's reply fail in a
+  given way with no network, and both release reads take the ways a reply that has
+  arrived can fail to read from one list, `IsUnreadableReply` (#2663).
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
   old one and restart, before any DI/UI is built (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs across seven kinds of

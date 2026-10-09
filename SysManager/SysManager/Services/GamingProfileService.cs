@@ -55,6 +55,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     private Process? _boundGame;
     private bool _disposed;
 
+    // 1 once the question about a session a previous run left on has been claimed in this run.
+    private int _recoveryQuestionClaimed;
+
     public GamingProfileService(
         PerformanceService performance,
         ITimerResolutionService timer,
@@ -92,6 +95,9 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             ? new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: session.Profile.PauseSearchIndexing)
             : new PendingRecovery(PendingRecoveryKind.None);
     }
+
+    /// <inheritdoc />
+    public bool ClaimRecoveryQuestion() => Interlocked.Exchange(ref _recoveryQuestionClaimed, 1) == 0;
 
     /// <inheritdoc />
     public string RestorePointNotice => _restorePoint.ConfirmationNotice;

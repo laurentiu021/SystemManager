@@ -771,7 +771,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         return new Dictionary<Type, object>
         {
             [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
-                slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer)),
+                slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),

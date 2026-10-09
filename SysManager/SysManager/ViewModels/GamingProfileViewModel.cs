@@ -75,33 +75,47 @@ public sealed partial class GamingProfileViewModel : ViewModelBase
     {
         await RefreshProcessesAsync();
 
-        // Crash recovery: a previous run may have closed/crashed with tweaks still applied.
-        // Offer to revert the leftover machine-wide changes (per-game affinity/priority are
-        // never persisted, so a recycled PID is never touched).
-        if (_service.ReadPendingRecovery().Kind == PendingRecoveryKind.LeftOn)
-        {
-            bool revert = DialogService.Instance.Confirm(
+        // Unless the Dashboard has already asked in this run.
+        if (await OfferToRevertLeftoverAsync(_service) is { } said)
+            StatusMessage = said;
+    }
+
+    /// <summary>
+    /// Crash recovery: asks whether to put back what a game mode session left on by a previous run changed, and puts it
+    /// back when the answer is yes. Per-game affinity and priority are never persisted, so a recycled PID is never
+    /// touched.
+    /// </summary>
+    /// <remarks>
+    /// Asked once a run, by whichever gets there first. Only this tab asked, and it is built when it is first opened, so
+    /// after a crash the power plan, visual effects, paused indexing and silenced notifications stayed as game mode left
+    /// them until someone opened it (#2592). The Dashboard, built at startup, now asks too.
+    /// </remarks>
+    /// <returns>What happened, for a status line, or null when nothing was asked or the answer was no.</returns>
+    internal static async Task<string?> OfferToRevertLeftoverAsync(IGamingProfileService service)
+    {
+        if (service.ReadPendingRecovery().Kind != PendingRecoveryKind.LeftOn || !service.ClaimRecoveryQuestion())
+            return null;
+
+        if (!DialogService.Instance.Confirm(
                 "SysManager closed while game mode was still active last time.\n\n" +
                 "Revert the leftover system changes (power plan, visual effects, search indexing, notifications) now?",
-                "Gaming Profile — Restore");
-            if (revert)
-            {
-                try
-                {
-                    var result = await _service.RecoverPendingAsync();
-                    StatusMessage = DescribeRevert(result,
-                        "Reverted the leftover changes from the previous session.",
-                        "Reverted the leftover changes from the previous session");
-                }
-                catch (System.IO.IOException ex)
-                {
-                    // Its record could not be read once the question was answered: nothing was reverted, and the record
-                    // is kept, so the next launch asks again (#1525).
-                    Log.Warning(ex, "Gaming Profile could not read the session left on by the previous run");
-                    StatusMessage = "SysManager could not read its record of the previous session just now, so nothing "
-                        + "was reverted. It asks again the next time it starts.";
-                }
-            }
+                "Gaming Profile — Restore"))
+            return null;
+
+        try
+        {
+            var result = await service.RecoverPendingAsync();
+            return DescribeRevert(result,
+                "Reverted the leftover changes from the previous session.",
+                "Reverted the leftover changes from the previous session");
+        }
+        catch (System.IO.IOException ex)
+        {
+            // Its record could not be read once the question was answered: nothing was reverted, and the record is kept,
+            // so the next launch asks again (#1525).
+            Log.Warning(ex, "Gaming Profile could not read the session left on by the previous run");
+            return "SysManager could not read its record of the previous session just now, so nothing "
+                + "was reverted. It asks again the next time it starts.";
         }
     }
 

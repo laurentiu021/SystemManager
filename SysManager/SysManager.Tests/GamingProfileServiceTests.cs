@@ -393,6 +393,18 @@ public class GamingProfileServiceTests
     }
 
     [Fact]
+    public void TheRecoveryQuestion_IsClaimedOnceARun()
+    {
+        // The Dashboard and Gaming Profile both offer it, and only the first of them may ask (#2592). One instance is one
+        // run: the service is a singleton.
+        var svc = StoreOnlyService(Path.Combine(Path.GetTempPath(), $"sm-gaming-claim-{Guid.NewGuid():N}.json"));
+
+        Assert.True(svc.ClaimRecoveryQuestion());
+        Assert.False(svc.ClaimRecoveryQuestion());
+        Assert.False(svc.ClaimRecoveryQuestion());
+    }
+
+    [Fact]
     public void PendingRecovery_WhenTheStoreCannotBeRead_IsNotKnown_RatherThanNone()
     {
         // A leftover session in a store that could not be read just now is still there. Undo Changes must not take

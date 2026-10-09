@@ -38,6 +38,17 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
 
     private UpdateCheckPreferenceService NewService() => new(_dir);
 
+    /// <summary>
+    /// What a fresh instance loads, as after a restart, asserted to have been readable. Null is its own answer, "could
+    /// not be read" (#2614).
+    /// </summary>
+    private UpdateCheckPreference Loaded(string? dir = null)
+    {
+        var preference = new UpdateCheckPreferenceService(dir ?? _dir).Load();
+        Assert.NotNull(preference);
+        return preference;
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 8, 10, 12, 0, 0, TimeSpan.Zero);
 
     // ── Defaults ────────────────────────────────────────────────────────────
@@ -47,7 +58,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
     {
         // Enabled by default on purpose: an update check is how someone on an unsigned,
         // self-distributed build learns about a security fix, so silence is the worse default.
-        var pref = NewService().Load();
+        var pref = Loaded();
         Assert.True(pref.CheckOnStartup);
         Assert.Null(pref.LastCheckUtc);
     }
@@ -65,6 +76,31 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
 
     private string PreferenceFile => Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
 
+    // Load answered "on" for both, and the startup check went by it: GitHub was asked for the newest version on a
+    // launch where the saved "off" could not be read (#2614).
+
+    [Fact]
+    public void Load_WhenThePreferenceCannotBeRead_IsNull()
+    {
+        NewService().SetCheckOnStartup(false);
+
+        using (new FileStream(PreferenceFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            Assert.Null(NewService().Load());
+
+        Assert.False(Loaded().CheckOnStartup);   // once it can be read again, the choice is still there
+    }
+
+    [Fact]
+    public void Load_OverAFileThatDoesNotParse_IsNull_AndLeavesTheFileAsItIs()
+    {
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+
+        Assert.Null(NewService().Load());
+
+        Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile));
+        Assert.False(File.Exists(PreferenceFile + ".unreadable"));
+    }
+
     [Fact]
     public void RecordCheck_WhenThePreferenceCannotBeRead_KeepsTheUsersOff()
     {
@@ -73,7 +109,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         using (new FileStream(PreferenceFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
             NewService().RecordCheck(Now);
 
-        var pref = NewService().Load();
+        var pref = Loaded();
         Assert.False(pref.CheckOnStartup);
         Assert.Null(pref.LastCheckUtc);   // nothing was written
     }
@@ -86,7 +122,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         NewService().RecordCheck(Now);
 
         Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile + ".unreadable"));
-        Assert.Equal(Now, NewService().Load().LastCheckUtc);
+        Assert.Equal(Now, Loaded().LastCheckUtc);
     }
 
     [Fact]
@@ -97,7 +133,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         NewService().SetCheckOnStartup(false);
 
         Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile + ".unreadable"));
-        Assert.False(NewService().Load().CheckOnStartup);
+        Assert.False(Loaded().CheckOnStartup);
     }
 
     // A folder where the set-aside copy would go: the move fails, and a write to the file itself would not. A
@@ -123,7 +159,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
 
         NewService().SetCheckOnStartup(false);
 
-        Assert.False(NewService().Load().CheckOnStartup);
+        Assert.False(Loaded().CheckOnStartup);
     }
 
     // ── The on/off switch ───────────────────────────────────────────────────
@@ -134,7 +170,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         NewService().SetCheckOnStartup(false);
 
         // A second instance, as after a restart — the point of persisting at all.
-        Assert.False(NewService().Load().CheckOnStartup);
+        Assert.False(Loaded().CheckOnStartup);
     }
 
     [Fact]
@@ -150,7 +186,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         var service = NewService();
         service.SetCheckOnStartup(false);
         service.SetCheckOnStartup(true);
-        Assert.True(NewService().Load().CheckOnStartup);
+        Assert.True(Loaded().CheckOnStartup);
     }
 
     [Fact]
@@ -163,7 +199,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         service.SetCheckOnStartup(false);
         service.SetCheckOnStartup(true);
 
-        Assert.Equal(Now, NewService().Load().LastCheckUtc);
+        Assert.Equal(Now, Loaded().LastCheckUtc);
     }
 
     // ── The 24h throttle ────────────────────────────────────────────────────
@@ -173,7 +209,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
     {
         NewService().RecordCheck(Now);
 
-        var pref = NewService().Load();
+        var pref = Loaded();
         Assert.Equal(Now, pref.LastCheckUtc);
         Assert.True(pref.CheckOnStartup);   // recording must not disturb the user's choice
     }
@@ -239,21 +275,20 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
     [InlineData("{ truncated")]
     public void MalformedInput_FallsBackToEnabled(string? json)
     {
-        // Deliberately the opposite of ClosePreferenceService, which falls back to "ask". There is
-        // nothing to ask here, and defaulting to OFF would quietly close the only channel that
-        // tells the user about a fix — a silent failure they would never notice.
+        // Parse always has an answer. Load does not take it for a file that does not parse: that file may have held
+        // "off", so it loads as null and the startup check does not run (#2614).
         var pref = UpdateCheckPreferenceService.Parse(json);
         Assert.True(pref.CheckOnStartup);
         Assert.Null(pref.LastCheckUtc);
     }
 
     [Fact]
-    public void AnUnreadableFile_FallsBackToEnabled()
+    public void AFolderWhereTheFileShouldBe_CountsAsNothingSaved()
     {
-        // A directory where the file should be: File.Exists is false for it, so this exercises the
-        // guard rather than the read — the point is that Load never throws into app startup.
+        // File.Exists is false for a folder, so it reads as no file at all: it holds no choice that could be "off",
+        // the default applies, and Load does not throw into app startup.
         Directory.CreateDirectory(Path.Combine(_dir, UpdateCheckPreferenceService.FileName));
-        Assert.True(NewService().Load().CheckOnStartup);
+        Assert.True(Loaded().CheckOnStartup);
     }
 
     [Fact]
@@ -271,8 +306,8 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
 
         NewService().SetCheckOnStartup(false);
 
-        Assert.False(NewService().Load().CheckOnStartup);
-        Assert.True(new UpdateCheckPreferenceService(other).Load().CheckOnStartup);
+        Assert.False(Loaded().CheckOnStartup);
+        Assert.True(Loaded(other).CheckOnStartup);
     }
 
     // ── The two mutators racing each other ──────────────────────────────────
@@ -306,7 +341,7 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
 
             // No path in the message: a failure here is printed in public CI output.
             Assert.False(
-                new UpdateCheckPreferenceService(dir).Load().CheckOnStartup,
+                Loaded(dir).CheckOnStartup,
                 $"attempt {attempt}: the startup check came back on — a mutator saved a snapshot "
                     + "it had taken before the user's choice landed");
         }

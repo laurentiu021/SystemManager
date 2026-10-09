@@ -76,11 +76,20 @@ public sealed class UpdateCheckPreferenceService
     private sealed record Stored(bool CheckOnStartup, DateTimeOffset? LastCheckUtc);
 
     /// <summary>
-    /// Loads the preference. Returns the default (enabled, never checked) when nothing is saved
-    /// or the file cannot be trusted — falling back to "enabled" keeps a corrupt file from
-    /// silently turning update notifications off, which the user would never notice.
+    /// Loads the preference: <see cref="Default"/> when nothing is saved yet, or null when a file is there and the
+    /// choice in it could not be read, because the file could not be opened or does not parse.
     /// </summary>
-    public UpdateCheckPreference Load() => Read().Preference ?? Default;
+    /// <remarks>
+    /// Null is not "on". Both cases used to load as the default, so the startup check asked GitHub for the newest
+    /// version for someone who had switched it off (#2614). <see cref="VolumePresetService"/> loads a file that does
+    /// not parse as holding no presets, because none is safe to apply. The default here is a request to GitHub, so it
+    /// does not stand in for a choice that could not be read.
+    /// </remarks>
+    public UpdateCheckPreference? Load()
+    {
+        var (preference, unparsable) = Read();
+        return unparsable ? null : preference;
+    }
 
     /// <summary>
     /// The stored preference, or null when the file is there and could not be read. Unparsable is true when it was
@@ -168,10 +177,8 @@ public sealed class UpdateCheckPreferenceService
             new Stored(preference.CheckOnStartup, preference.LastCheckUtc), JsonOptions);
 
     /// <summary>
-    /// Parses the stored preference; returns <see cref="Default"/> for null, blank or malformed
-    /// input. Unlike the close preference, an unreadable file falls back to ENABLED rather than
-    /// to a prompt: there is nothing to ask here, and defaulting to off would quietly stop the
-    /// only channel that tells the user about a fix.
+    /// Parses the stored preference; returns <see cref="Default"/> for null, blank or malformed input. The startup
+    /// check does not go by this: <see cref="Load"/> does not take a file that does not parse for the default.
     /// </summary>
     public static UpdateCheckPreference Parse(string? json) => TryParse(json) ?? Default;
 

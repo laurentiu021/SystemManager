@@ -66,7 +66,8 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 >   releases for the About tab. Nothing about you or your PC is sent. Once a check has
 >   succeeded it waits a day before the next one, and the About tab has a checkbox —
 >   "Check GitHub for a new version when SysManager starts" — that switches it off
->   entirely. The **Check for updates** button still works on demand either way.
+>   entirely, and when that setting cannot be read, the check does not run. The **Check
+>   for updates** button still works on demand either way.
 > - **The Dashboard's app-updates alert** asks winget which of your installed apps have
 >   updates (`winget upgrade`), and winget answers from its package sources, which
 >   Microsoft runs. SysManager adds nothing about you to it. There is no switch for it yet.
@@ -1955,10 +1956,11 @@ offers, "rate us" prompts:
   license** and **What's new** open the licence and the changelog
 - **The startup version check is a checkbox here** — "Check GitHub for a new version when
   SysManager starts" — and switching it off does not disable the **Check for updates**
-  button, which still works on demand. If the setting cannot be read when SysManager starts, the
-  check runs as if it were on, and the saved choice is not written over, so a check you switched off
-  is off again once the setting can be read. What that check does and does not send is described
-  under [What it is](#what-it-is).
+  button, which still works on demand. If the setting cannot be read when SysManager starts
+  (another program has its file open, say, or the file is damaged), the check does not run, the box
+  shows clear, and About says why. Nothing is written over the saved choice, so it decides again once
+  it can be read, and ticking the box turns the check on and saves that. What that check does and
+  does not send is described under [What it is](#what-it-is).
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, at most once a day, plus a manual

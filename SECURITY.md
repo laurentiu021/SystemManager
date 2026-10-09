@@ -321,8 +321,9 @@ starts:
   which release is newest, so it can tell you when a fix is available, and fetches
   the notes of the last ten releases for the About tab. Nothing about you or your PC
   is sent. Once a check has succeeded it waits a day before the next one, and the
-  About tab has a checkbox that switches it off entirely; the manual **Check for
-  updates** button still works either way.
+  About tab has a checkbox that switches it off entirely. When that setting cannot be
+  read, the check does not run. The manual **Check for updates** button still works
+  either way.
 - **App update check** — each time SysManager starts, the Dashboard asks winget which
   of your installed apps have updates (`winget upgrade`, accepting winget's source
   agreements). winget answers from its package sources, which Microsoft runs, so this

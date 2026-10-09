@@ -1253,10 +1253,14 @@ Key services:
   anonymous limit (60/hour/IP) across repeated restarts. `ShouldCheckAtStartup` is a pure static
   taking the clock as a parameter, so the 24h throttle is unit-tested without sleeping; a
   future-dated timestamp is treated as stale so a bad clock cannot suppress checks indefinitely.
-  Malformed input degrades to ENABLED (unlike `ClosePreferenceService`'s `Ask`), because defaulting
-  to off would silently close the only channel that tells the user about a fix. `AboutViewModel`
-  applies it on the startup path only — the manual "Check for updates" and "Retry" buttons always
-  bypass the throttle. Registered in `ProfileService`'s catalog so it survives profile
+  A first run, with no file yet, is ENABLED. A file that is there but cannot be read, or does not
+  parse, is not guessed at: `Load` returns null, the startup check does not run, the About checkbox
+  shows clear, and About says the setting could not be read (#2614). Both used to load as ENABLED,
+  on the reasoning that defaulting to off would silently close the only channel that tells the user
+  about a fix, but for someone who had switched the check off, that sent the very request the
+  setting exists to stop.
+  `AboutViewModel` applies it on the startup path only — the manual "Check for updates" and "Retry"
+  buttons always bypass the throttle. Registered in `ProfileService`'s catalog so it survives profile
   export/import. `RecordCheck` writes nothing over a file it could not read, since that file may
   hold "off"; `SetCheckOnStartup` writes the user's choice regardless, losing at most the last-run
   time. A file that does not parse is set aside first.

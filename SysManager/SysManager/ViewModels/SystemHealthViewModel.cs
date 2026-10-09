@@ -21,6 +21,11 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
 
+    // The tab's Cancel stops chkdsk, the one run on this tab that can be stopped.
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsChkdskRunning ? CancelScanCommand : null;
+
     private readonly SystemInfoService _sys;
     private readonly DiskHealthService _diskHealth;
     private readonly MemoryTestService _memTest;

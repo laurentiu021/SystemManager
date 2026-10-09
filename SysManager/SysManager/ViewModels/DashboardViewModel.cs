@@ -19,6 +19,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
+    // Quick Tune-Up and the slowdown check both take the Disk lock, so at most one of them runs.
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsTuneUpRunning ? CancelTuneUpCommand : IsSlowdownCheckRunning ? CancelSlowdownCheckCommand : null;
+
     private readonly SystemInfoService _sys;
     private readonly ITuneUpService _tuneUp;
     private readonly HealthScoreService _healthScore;

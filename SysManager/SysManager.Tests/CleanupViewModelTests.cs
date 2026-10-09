@@ -462,4 +462,21 @@ public class CleanupViewModelTests
         // printing "Done" either way would satisfy the check above and fix nothing.
         Assert.Contains("Could not empty the Recycle Bin", source, StringComparison.Ordinal);
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Theory]
+    [InlineData(nameof(CleanupViewModel.IsTempRunning))]
+    [InlineData(nameof(CleanupViewModel.IsBinRunning))]
+    [InlineData(nameof(CleanupViewModel.IsStoreRunning))]
+    public async Task Escape_CancelsWhileAnyOfTheThreeRuns(string running)
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+        Assert.Null(vm.EscapeCancel);
+
+        typeof(CleanupViewModel).GetProperty(running)!.SetValue(vm, true);
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }

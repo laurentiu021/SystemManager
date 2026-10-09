@@ -1400,4 +1400,21 @@ public class DashboardViewModelTests
                         Assert.Single(dialog.Messages), StringComparison.Ordinal);
         await tuneUp.DidNotReceive().RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>());
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Fact]
+    public async Task Escape_CancelsTheTuneUpOrTheSlowdownCheck_WhicheverRuns()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsTuneUpRunning = true;
+        Assert.Same(vm.CancelTuneUpCommand, vm.EscapeCancel);
+
+        vm.IsTuneUpRunning = false;
+        vm.IsSlowdownCheckRunning = true;
+        Assert.Same(vm.CancelSlowdownCheckCommand, vm.EscapeCancel);
+    }
 }

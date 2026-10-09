@@ -136,4 +136,18 @@ public class TracerouteViewModelTests
 
         Assert.Equal(1, raised);   // no further notifications after disposal
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Fact]
+    public void Escape_CancelsTheTrace_OnlyWhileItRuns()
+    {
+        var shared = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(), new Services.TracerouteMonitorService(), new Services.SpeedTestService(), new Services.NetworkRepairService(new Services.PowerShellRunner()));
+        using var vm = new TracerouteViewModel(shared);
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsTracing = true;
+
+        Assert.Same(vm.CancelTraceCommand, vm.EscapeCancel);
+    }
 }

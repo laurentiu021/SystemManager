@@ -20,6 +20,10 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => ScanCommand;
 
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        (IsScanning || IsCleaning) ? CancelCommand : null;
+
     private readonly DeepCleanupService _cleanup;
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _cleanCts;

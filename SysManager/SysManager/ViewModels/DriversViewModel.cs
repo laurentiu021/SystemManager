@@ -15,6 +15,13 @@ namespace SysManager.ViewModels;
 
 public sealed partial class DriversViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ListDriversCommand;
+
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly IPowerShellRunner _runner;
     private CancellationTokenSource? _cts;
     private readonly List<DriverEntry> _allDrivers = new();

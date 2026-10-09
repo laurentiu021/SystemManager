@@ -87,13 +87,13 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// F5 is the most widely known shortcut in Windows and it did nothing anywhere in this app (#1549), on
     /// a tool whose tabs are almost all "go and look again".
     /// <para><b>A property per view model rather than a naming convention the shell matches.</b> The
-    /// tabs do not agree on what their refresh is called: measured across the views, 12 distinct spellings
+    /// tabs do not agree on what their refresh is called: measured across the views, 15 distinct spellings
     /// bind to a refresh-shaped button — <c>RefreshCommand</c>, <c>ScanCommand</c>, <c>RescanCommand</c>,
     /// <c>ReloadCommand</c>, <c>LoadHistoryCommand</c>, <c>RefreshDrivesCommand</c>,
-    /// <c>RefreshProcessesCommand</c> and more. A shell that matched names would have to guess, and on two
-    /// tabs it would have had to pick between two candidates: Deep Cleanup binds both <c>ScanCommand</c>
-    /// and <c>ScanLargeFilesCommand</c>, System Health both <c>ScanCommand</c> and
-    /// <c>RefreshDrivesCommand</c>. Naming the command here records the decision where it is made, and the
+    /// <c>ListDriversCommand</c>, <c>AnalyzeCommand</c> and more. A shell that matched names would have to
+    /// guess, and on two tabs it would have had to pick between two candidates: Quick Cleanup binds both
+    /// <c>RescanCommand</c> and <c>AnalyzeComponentStoreCommand</c>, System Health both <c>ScanCommand</c>
+    /// and <c>RefreshDrivesCommand</c>. Naming the command here records the decision where it is made, and the
     /// compiler checks it — a renamed command breaks the build instead of silently unbinding the key.</para>
     /// <para><b>Not gated on busy, unlike <see cref="EscapeCancel"/>.</b> Escape must only appear while
     /// there is something to stop, so the flag and the command have to travel together. A refresh is
@@ -102,7 +102,7 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// <para><b>Read-only commands only.</b> Every tab's F5 target re-reads something — the registry, a
     /// WMI query, a folder, an event log. Nothing that cleans, deletes, applies or kills is reachable from
     /// a bare keypress, and a guard asserts that by requiring the named command to begin with Refresh,
-    /// Rescan, Reload, Scan or Load.</para>
+    /// Rescan, Reload, Scan, Load, List or Analyze.</para>
     /// </remarks>
     protected internal virtual IRelayCommand? RefreshOnF5 => null;
 

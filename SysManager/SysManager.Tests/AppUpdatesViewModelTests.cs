@@ -375,4 +375,17 @@ public class AppUpdatesViewModelTests
         Assert.Equal(1, dialog.Calls);
         await winget.Received(3).UpgradeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Fact]
+    public void Escape_CancelsTheScanOrTheUpgrade_OnlyWhileOneRuns()
+    {
+        var vm = NewVm();
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsBusy = true;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }

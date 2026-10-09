@@ -1678,13 +1678,16 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   stop. One property rather than a flag beside a command, because the app answers "is
   something running?" five different ways (`IsBusy` on most tabs, plus `IsShredding`,
   `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
-  four tabs. 16 tabs override it.
+  four tabs. 25 tabs override it: every tab with a Cancel button, whether the button hides
+  while nothing runs or stays on screen. One that stays states no flag in the view, so its
+  override still returns null while nothing runs, on its Cancel command's `CanExecute` flag
+  where it has one (#2597).
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
-  agree on a name: 11 distinct spellings bind to a refresh-shaped button, and two views bind
-  two candidates each, so a convention-matching shell would have to guess. 41 tabs override
+  agree on a name: 15 distinct spellings bind to a refresh-shaped button, and two views bind
+  two candidates each, so a convention-matching shell would have to guess. 45 tabs override
   it — Browser Cleaner's returns the read of whichever half is on screen — and every command
-  it can return must begin with Refresh/Rescan/Reload/Scan/Load, which mechanically keeps
-  Clean, Delete, Apply and Uninstall off a bare keypress.
+  it can return must begin with Refresh/Rescan/Reload/Scan/Load/List/Analyze, which
+  mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.
 
 `Ctrl+F` is the third, and takes no seam at all: `Helpers/FilterBoxes` walks the visual tree under
 `ContentHost` — the element the shell binds the live tab into — for the first `TextBox` whose `Text`

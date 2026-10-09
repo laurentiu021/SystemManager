@@ -2874,6 +2874,11 @@ public partial class ArchitectureTests
     /// <c>EscapeCancel</c> override must name both.</para>
     /// <para>Parsed with XDocument rather than a regex over the text, so "the same element" is a fact of
     /// the tree instead of a guess about how close two attributes happen to be.</para>
+    /// <para><b>A Cancel button on screen all the time states no flag</b>, and its tab still has to answer
+    /// Escape while it runs. This guard once looked only at Cancel buttons with a visibility binding, so it
+    /// skipped nine tabs and Escape did nothing on them (#2597). For such a button the override must name its
+    /// command and return null when nothing runs, gated on the flag the command's own
+    /// <c>[RelayCommand(CanExecute = …)]</c> names where it names one.</para>
     /// </remarks>
     [Fact]
     public void EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand()
@@ -2884,6 +2889,7 @@ public partial class ArchitectureTests
 
         var offenders = new List<string>();
         var pairs = 0;
+        var alwaysShown = 0;
 
         foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
                      .OrderBy(p => p, StringComparer.Ordinal))
@@ -2893,14 +2899,16 @@ public partial class ArchitectureTests
             foreach (var element in document.Descendants())
             {
                 var command = binding.Match((string?)element.Attribute("Command") ?? string.Empty);
-                var visibility = binding.Match((string?)element.Attribute("Visibility") ?? string.Empty);
-                if (!command.Success || !visibility.Success) continue;
+                if (!command.Success) continue;
 
                 var commandName = command.Groups["name"].Value;
                 if (!commandName.StartsWith("Cancel", StringComparison.Ordinal)) continue;
 
-                var flag = visibility.Groups["name"].Value;
-                pairs++;
+                // Null for a Cancel button that is on screen all the time, which states no flag of its own.
+                var visibility = binding.Match((string?)element.Attribute("Visibility") ?? string.Empty);
+                var flag = visibility.Success ? visibility.Groups["name"].Value : null;
+                if (flag is null) alwaysShown++;
+                else pairs++;
 
                 var viewName = Path.GetFileNameWithoutExtension(view);
                 var vmPath = Path.Combine(app, "ViewModels", viewName + "Model.cs");
@@ -2920,7 +2928,9 @@ public partial class ArchitectureTests
                 if (overrideAt < 0)
                 {
                     offenders.Add($"{viewName}Model has no EscapeCancel override, so Escape does nothing "
-                                  + $"while {flag} is true and {commandName} is the button on screen");
+                                  + (flag is null
+                                      ? $"while {commandName}, always on screen, has something to stop"
+                                      : $"while {flag} is true and {commandName} is the button on screen"));
                     continue;
                 }
 
@@ -2932,24 +2942,58 @@ public partial class ArchitectureTests
                 if (!expression.Contains(commandName, StringComparison.Ordinal))
                     offenders.Add($"{viewName}Model gates Escape on something other than {commandName}, "
                                   + "which is the command its own Cancel button runs");
-                if (!expression.Contains(flag, StringComparison.Ordinal))
-                    offenders.Add($"{viewName}Model gates Escape on a different flag than {flag}, which is "
-                                  + "what shows its Cancel button — so Escape and the button disagree "
-                                  + "about when there is something to stop");
+
+                if (flag is not null)
+                {
+                    if (!expression.Contains(flag, StringComparison.Ordinal))
+                        offenders.Add($"{viewName}Model gates Escape on a different flag than {flag}, which is "
+                                      + "what shows its Cancel button — so Escape and the button disagree "
+                                      + "about when there is something to stop");
+                    continue;
+                }
+
+                // Always on screen: Escape still answers only while something runs.
+                if (!expression.Contains(": null", StringComparison.Ordinal))
+                    offenders.Add($"{viewName}Model's EscapeCancel does not return null when nothing runs, so "
+                                  + $"Escape would run {commandName} on a tab with nothing to stop");
+                if (CanExecuteFlagOf(vm, commandName) is { } gate
+                    && !expression.Contains(gate, StringComparison.Ordinal))
+                    offenders.Add($"{viewName}Model gates Escape on something other than {gate}, which is what "
+                                  + $"{commandName} itself says it can run on");
             }
         }
 
-        // Vacuity floor: twelve tabs bind Cancel with a visibility flag today. A parse that stopped
-        // finding them would report success having checked nothing.
+        // Vacuity floors: seventeen Cancel buttons carry a visibility flag today and eleven are on screen all the
+        // time. A parse that stopped finding either kind would report success having checked nothing.
         Assert.True(pairs >= 12,
             $"only {pairs} Cancel-with-visibility bindings were found across Views/ — the parse is "
             + "broken, not the views.");
+        Assert.True(alwaysShown >= 9,
+            $"only {alwaysShown} Cancel buttons without a visibility binding were found across Views/, out of 11 "
+            + "measured — the parse is broken, not the views.");
 
         Assert.True(offenders.Count == 0,
             "Escape must stop the operation the tab's own Cancel button stops, gated on the same flag:\n  "
             + string.Join("\n  ", offenders)
-            + $"\n({pairs} Cancel bindings checked)");
+            + $"\n({pairs + alwaysShown} Cancel bindings checked)");
     }
+
+    /// <summary>
+    /// The flag a command's own <c>[RelayCommand(CanExecute = nameof(…))]</c> names, or null when it names none.
+    /// </summary>
+    private static string? CanExecuteFlagOf(string viewModel, string commandName)
+    {
+        var method = commandName[..^"Command".Length];
+        foreach (Match m in RelayCommandWithCanExecute().Matches(viewModel))
+        {
+            var name = m.Groups["method"].Value;
+            if (name == method || name == method + "Async") return m.Groups["flag"].Value;
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"\[RelayCommand\(CanExecute = nameof\((?<flag>\w+)\)\)\]\s*(?:private|public|internal)\s+(?:async\s+Task|void)\s+(?<method>\w+)\(")]
+    private static partial Regex RelayCommandWithCanExecute();
 
     /// <summary>
     /// Every tab with something to re-read answers F5, with the command its own refresh button runs.
@@ -2960,30 +3004,34 @@ public partial class ArchitectureTests
     /// it is unreliable and stops reaching for it — so this asserts the whole set rather than a sample.
     /// <para>Derived from the VIEW, like <see cref="EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand"/>
     /// above: the toolbar button already states which command is this tab's refresh, and the view model's
-    /// <c>RefreshOnF5</c> must name the same one. The tabs do not agree on a name — 12 distinct spellings
+    /// <c>RefreshOnF5</c> must name the same one. The tabs do not agree on a name — 15 distinct spellings
     /// bind to a refresh-shaped button — which is exactly why the shell cannot match a convention and each
     /// view model has to say.</para>
-    /// <para><b>Two views bind two candidates each and are resolved here, not skipped.</b> Deep Cleanup
-    /// binds <c>ScanCommand</c> and <c>ScanLargeFilesCommand</c>; System Health binds <c>ScanCommand</c> and
-    /// <c>RefreshDrivesCommand</c>. In both, F5 is the tab's primary read: Deep Cleanup's large-files finder
-    /// is a sub-feature of the tab, and System Health's <c>RefreshDrivesAsync</c> only repopulates the
-    /// chkdsk drive picker while <c>ScanAsync</c> is the "Collecting system info…" pass the tab exists for.
-    /// Recording the choice here keeps it a decision rather than a gap.</para>
+    /// <para><b>Two views bind two candidates each and are resolved here, not skipped.</b> System Health binds
+    /// <c>ScanCommand</c> and <c>RefreshDrivesCommand</c>; Quick Cleanup binds <c>RescanCommand</c> and
+    /// <c>AnalyzeComponentStoreCommand</c>. In both, F5 is the tab's primary read: System Health's
+    /// <c>RefreshDrivesAsync</c> only repopulates the chkdsk drive picker while <c>ScanAsync</c> is the
+    /// "Collecting system info…" pass the tab exists for, and Quick Cleanup's component store check runs DISM
+    /// for minutes and needs administrator rights, while the rescan re-measures what can be cleaned. Recording
+    /// the choice here keeps it a decision rather than a gap.</para>
     /// <para><b>One view's F5 follows what is on screen.</b> Browser Cleaner shows its browsing data or its
     /// extensions, each with its own read — <c>ScanCommand</c> and <c>ScanExtensionsCommand</c> — and its
     /// <c>RefreshOnF5</c> returns the one on screen. The table names both, and the override must name each.</para>
     /// <para><b>Read-only only.</b> Every command the override names must begin with Refresh, Rescan, Reload,
-    /// Scan or Load, which mechanically keeps Clean, Delete, Apply, Uninstall and Kill off a bare keypress. An
-    /// accelerator with no confirmation behind it is only acceptable while that holds. EVERY command, not the
-    /// one looked for: this guard once checked only that the override contained the toolbar's command, so a
-    /// conditional's other branch could have run anything and passed.</para>
+    /// Scan, Load, List or Analyze, which mechanically keeps Clean, Delete, Apply, Uninstall and Kill off a bare
+    /// keypress. An accelerator with no confirmation behind it is only acceptable while that holds. EVERY
+    /// command, not the one looked for: this guard once checked only that the override contained the toolbar's
+    /// command, so a conditional's other branch could have run anything and passed.</para>
+    /// <para>List and Analyze joined the vocabulary when Drivers, Windows Update and Disk Analyzer turned out to
+    /// be off F5 with nothing failing: their refresh is spelled List drivers, List updates and Analyze, so this
+    /// guard never asked for it (#2598).</para>
     /// </remarks>
     [Fact]
     public void EveryRefreshableTab_AnswersF5WithItsOwnRefreshCommand()
     {
         var app = TestPaths.AppProject();
         // One vocabulary for what the toolbar binds and for what F5 may run, so the two cannot drift.
-        const string read = "(?:Refresh|Rescan|Reload|Scan|Load)[A-Za-z]*Command";
+        const string read = "(?:Refresh|Rescan|Reload|Scan|Load|List|Analyze)[A-Za-z]*Command";
         var binding = new Regex(@"Command=""\{Binding (" + read + ")", RegexOptions.CultureInvariant);
         var readOnly = new Regex("^" + read + "$", RegexOptions.CultureInvariant);
 
@@ -2991,8 +3039,8 @@ public partial class ArchitectureTests
         // follows what is on screen. See the remarks.
         var resolved = new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["DeepCleanupView"] = ["ScanCommand"],
             ["SystemHealthView"] = ["ScanCommand"],
+            ["CleanupView"] = ["RescanCommand"],
             ["BrowserCleanerView"] = ["ScanCommand", "ScanExtensionsCommand"],
         };
 
@@ -3075,13 +3123,13 @@ public partial class ArchitectureTests
             // Every command the override can return, not only the one looked for.
             foreach (var other in returned.Where(c => !readOnly.IsMatch(c)))
                 offenders.Add($"{viewName}Model's F5 can run {other}, which is not named as a read — F5 may only "
-                              + "run a command that begins with Refresh, Rescan, Reload, Scan or Load");
+                              + "run a command that begins with Refresh, Rescan, Reload, Scan, Load, List or Analyze");
         }
 
-        // Vacuity floor: 40 tabs bind a refresh-shaped command today. A parse that stopped finding them
+        // Vacuity floor: 44 tabs bind a refresh-shaped command today. A parse that stopped finding them
         // would report success having checked nothing.
-        Assert.True(wired >= 38,
-            $"only {wired} tabs were found wiring F5, out of 40 measured — the parse is broken, not the "
+        Assert.True(wired >= 42,
+            $"only {wired} tabs were found wiring F5, out of 44 measured — the parse is broken, not the "
             + "views, and every check above ran over a short list.");
         // And every one of them names at least the command it was checked for, so the read-only check ran over
         // as many commands as there are tabs, at least.

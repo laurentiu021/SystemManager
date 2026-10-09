@@ -468,6 +468,27 @@ public class DriversViewModelTests
         Assert.Equal("Done", vm.StatusMessage);
         Assert.Equal("4 drivers found.", vm.Summary);
     }
+
+    // ---------- F5 and Escape (#2597, #2598) ----------
+
+    [Fact]
+    public void F5_ListsTheDrivers()
+    {
+        var vm = NewVm();
+
+        Assert.Same(vm.ListDriversCommand, vm.RefreshOnF5);
+    }
+
+    [Fact]
+    public void Escape_CancelsTheList_OnlyWhileItLoads()
+    {
+        var vm = NewVm();
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsBusy = true;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }
 
 // ---------- DriverEntry model ----------

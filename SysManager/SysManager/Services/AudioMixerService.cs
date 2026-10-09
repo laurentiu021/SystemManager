@@ -57,7 +57,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
 
     // The session managers of the other active output devices, opened with the default's (#2652), and the ids of the
     // devices tried, whether or not they opened, to notice one plugged in or pulled out.
-    private readonly List<object> _otherManagers = []; // IAudioSessionManager2, one per other device
+    private readonly List<(string Id, object Manager)> _otherManagers = []; // IAudioSessionManager2 per other device
     private readonly HashSet<string> _otherIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
@@ -137,8 +137,22 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             ReleaseGroups();
 
             AbsorbSessionsLocked((IAudioSessionManager2)_manager!, acc);
-            foreach (var other in _otherManagers)
-                AbsorbSessionsLocked((IAudioSessionManager2)other, acc);
+            foreach (var (id, manager) in _otherManagers.ToArray())
+            {
+                try
+                {
+                    AbsorbSessionsLocked((IAudioSessionManager2)manager, acc);
+                }
+                catch (COMException ex)
+                {
+                    // A device that fails mid-read, most often one being unplugged, takes only its own apps with it this
+                    // pass. Forgetting its id makes the next read of the device list open it again if it is still there.
+                    Log.Debug("Audio session enumeration on {Device} failed: {Error}", id, ex.Message);
+                    Release(manager);
+                    _otherManagers.Remove((id, manager));
+                    _otherIds.Remove(id);
+                }
+            }
         }
         catch (COMException ex)
         {
@@ -813,7 +827,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                     var iid = IID_IAudioSessionManager2;
                     if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var manager) == 0
                         && manager is IAudioSessionManager2)
-                        _otherManagers.Add(manager);
+                        _otherManagers.Add((id, manager));
                     else
                         Release(manager);
                 }
@@ -830,7 +844,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         Release(_endpointVolume); _endpointVolume = null;
         _pcPeakFailureLogged = false;
         Release(_manager); _manager = null;
-        foreach (var other in _otherManagers) Release(other);
+        foreach (var (_, manager) in _otherManagers) Release(manager);
         _otherManagers.Clear();
         _otherIds.Clear();
         Release(_device); _device = null;

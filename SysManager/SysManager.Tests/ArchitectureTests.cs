@@ -12274,6 +12274,137 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every list rebuilt in bulk keeps keyboard focus on its rows, when a row holds something that can take it.
+    /// </summary>
+    /// <remarks>
+    /// #2609. <c>ReplaceWith</c> raises one <c>Reset</c>, WPF throws every row away, and the focused control goes with
+    /// its row, so focus fell back to the window. <c>RebuildFocus.Keep</c> puts it back. Every DataGrid has it from the
+    /// app's DataGrid style, so a grid only has to keep that style; any other list sets it itself. A list counts as
+    /// rebuilt in bulk when the property it binds is a <c>BulkObservableCollection</c> that something refills with
+    /// <c>ReplaceWith</c>, matched by name across the view models and models, because a list inside a row binds a
+    /// property of the row's item rather than of the tab. Its rows take focus when it is a ListBox or ListView, whose
+    /// rows are focusable themselves, or when its row template, written inline or a keyed DataTemplate, holds a button,
+    /// a checkbox, a switch, a text box, a combo box or a slider.
+    /// </remarks>
+    [Fact]
+    public void EveryListRebuiltInBulk_KeepsKeyboardFocusOnItsRows()
+    {
+        var appDir = TestPaths.AppProject();
+        var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        string[] focusable = ["Button", "CheckBox", "ToggleButton", "RadioButton", "TextBox", "ComboBox", "Slider"];
+        var code = string.Join("\n", new[] { "ViewModels", "Models" }
+            .SelectMany(folder => Directory.EnumerateFiles(Path.Combine(appDir, folder), "*.cs", SearchOption.AllDirectories))
+            .Select(path => WithoutComments(File.ReadAllText(path))));
+
+        var app = XDocument.Load(Path.Combine(appDir, "App.xaml"));
+        var gridStyles = app.Descendants()
+            .Where(e => e.Name.LocalName == "Style" && (string?)e.Attribute("TargetType") == "DataGrid"
+                        && e.Attribute(xamlNs + "Key") is null)
+            .ToList();
+        Assert.True(gridStyles.Count == 1, $"App.xaml has {gridStyles.Count} implicit DataGrid styles, where there was one.");
+        Assert.True(gridStyles[0].Elements().Any(s => s.Name.LocalName == "Setter"
+                                                       && (string?)s.Attribute("Property") == "h:RebuildFocus.Keep"
+                                                       && (string?)s.Attribute("Value") == "True"),
+            "the app's DataGrid style no longer sets h:RebuildFocus.Keep to True, so no grid keeps focus when its rows are "
+            + "rebuilt");
+
+        var offenders = new List<string>();
+        var kept = new List<string>();
+        var grids = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var doc = XDocument.Load(file, LoadOptions.SetLineInfo);
+            var templates = doc.Descendants().Concat(app.Descendants())
+                .Where(e => e.Name.LocalName == "DataTemplate" && e.Attribute(xamlNs + "Key") is not null)
+                .GroupBy(e => (string)e.Attribute(xamlNs + "Key")!)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var list in doc.Descendants()
+                         .Where(e => e.Name.LocalName is "ItemsControl" or "ListBox" or "ListView" or "DataGrid"))
+            {
+                var where = $"{Path.GetFileName(file)}:{((System.Xml.IXmlLineInfo)list).LineNumber}";
+                var keep = list.Attributes().FirstOrDefault(a => a.Name.LocalName == "RebuildFocus.Keep")?.Value;
+                if (list.Name.LocalName == "DataGrid")
+                {
+                    grids++;
+                    if (list.Attribute("Style") is not null)
+                        offenders.Add($"{where}: a DataGrid with a style of its own drops the app's DataGrid style, and "
+                                      + "RebuildFocus.Keep with it");
+                    if (keep is not null && keep != "True")
+                        offenders.Add($"{where}: a DataGrid sets RebuildFocus.Keep to {keep}");
+                    continue;
+                }
+
+                var binding = BulkListBinding().Match((string?)list.Attribute("ItemsSource") ?? "");
+                if (!binding.Success) continue;
+                var property = binding.Groups["name"].Value;
+                if (!Regex.IsMatch(code, $@"BulkObservableCollection<[^;]*?>\s+{property}\b")
+                    || !Regex.IsMatch(code, $@"\b{property}\.ReplaceWith\(")) continue;
+
+                var rowsTakeFocus = list.Name.LocalName is "ListBox" or "ListView"
+                                    || WithKeyedTemplates(list, templates).Any(e => focusable.Contains(e.Name.LocalName));
+                if (!rowsTakeFocus) continue;
+
+                kept.Add($"{Path.GetFileNameWithoutExtension(file)}.{property}");
+                if (keep != "True")
+                    offenders.Add($"{where}: the {list.Name.LocalName} bound to {binding.Groups["path"].Value} is rebuilt "
+                                  + "with ReplaceWith and its rows take focus, but it does not set "
+                                  + "helpers:RebuildFocus.Keep=\"True\"");
+            }
+        }
+
+        // The search finds what it is for: Undo Changes' list, where #2609 was found, Privacy's, whose rows come from a
+        // keyed template, and Privacy's groups, whose rows hold a list built from that template.
+        Assert.Contains("UndoChangesView.Changes", kept);
+        Assert.Contains("PrivacyView.FilteredToggles", kept);
+        Assert.Contains("PrivacyView.ReachGroups", kept);
+
+        // Vacuity floor: 35 DataGrids and 21 other lists today.
+        Assert.True(grids >= 30, $"only {grids} DataGrids were found across the views, out of 35 measured.");
+        Assert.True(kept.Count >= 18,
+            $"only {kept.Count} lists rebuilt in bulk with focusable rows were found, out of 21 measured — the search "
+            + "is broken, not the views.");
+
+        Assert.True(offenders.Count == 0,
+            "a list rebuilt in bulk drops keyboard focus with its rows:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The elements inside <paramref name="list"/>, with those of every keyed template it or a list inside it names as
+    /// an <c>ItemTemplate</c> or <c>ContentTemplate</c>, so a row built from <c>{StaticResource ...}</c> is read too.
+    /// </summary>
+    private static IEnumerable<XElement> WithKeyedTemplates(XElement list, IReadOnlyDictionary<string, XElement> templates)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Queue<XElement>([list]);
+        while (pending.TryDequeue(out var root))
+        {
+            foreach (var element in root.DescendantsAndSelf())
+            {
+                yield return element;
+                foreach (var attribute in element.Attributes()
+                             .Where(a => a.Name.LocalName is "ItemTemplate" or "ContentTemplate"))
+                {
+                    if (StaticResourceKey().Match(attribute.Value) is { Success: true } key
+                        && seen.Add(key.Groups["key"].Value)
+                        && templates.TryGetValue(key.Groups["key"].Value, out var template))
+                        pending.Enqueue(template);
+                }
+            }
+        }
+    }
+
+    /// <summary>A binding's path, and the last property on it, which is the collection a list shows.</summary>
+    [GeneratedRegex(@"^\{Binding\s+(?:Path=)?(?<path>[\w.]*?(?<name>\w+))\s*[,}]", RegexOptions.Compiled)]
+    private static partial Regex BulkListBinding();
+
+    /// <summary>The key a <c>StaticResource</c> markup extension names.</summary>
+    [GeneratedRegex(@"^\{StaticResource\s+(?<key>[\w.]+)\s*\}$", RegexOptions.Compiled)]
+    private static partial Regex StaticResourceKey();
+
+    /// <summary>
     /// A view model that collects console output has a view that shows it.
     /// </summary>
     /// <remarks>

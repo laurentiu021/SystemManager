@@ -1552,6 +1552,22 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `BulkObservableCollection<T>` — `ObservableCollection` subclass whose `ReplaceWith` swaps the
   whole contents with one `Reset` notification instead of one per item, and refuses to run from
   inside a change handler (in `ObservableCollectionExtensions.cs`).
+- `RebuildFocus` — keeps keyboard focus in a list across a rebuild (#2609). A `Reset` makes WPF
+  discard every row, so the focused control left the tree and WPF put focus on the window. The
+  attached `Keep` property gives a list a tracker that records where focus is: the row's item and
+  position, and the control's accessible name, place among the row's focusable controls, and type.
+  After any change to the list's items it queues a restore at `Loaded` priority, which runs after the
+  layout pass that builds the new rows and before the `Input`-priority pass in which WPF re-homes
+  focus. The row is the one holding the same item when the rebuild kept the objects, else the one
+  row with a control of the same accessible name (row controls are named after their item, as in
+  "Mark or unmark this service: Print Spooler"), else the row now at the same position. It acts only
+  when focus is nowhere, on the window, gone with its row, on the list, or on one of the list's
+  ancestors, which is where WPF moves focus from a control disabled for the job that rebuilt the
+  list. It also needs the window to be active and the keyboard to be the last input, the test WPF
+  makes before it draws a focus outline, so a list that refreshes on a timer never scrolls a mouse
+  user back. Every DataGrid has it from the implicit DataGrid style in `App.xaml`; the other lists
+  rebuilt with `ReplaceWith` whose rows take focus set it themselves, and
+  `ArchitectureTests.EveryListRebuiltInBulk_KeepsKeyboardFocusOnItsRows` fails when one does not.
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects.
 - `WingetFailure` — the one translation of winget outcomes into plain language:

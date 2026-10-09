@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Views.BrowserCleanerView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:v="clr-namespace:SysManager.Views"
              d:DataContext="{d:DesignInstance vm:BrowserCleanerViewModel}"
@@ -175,7 +176,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,4,12,12"
                               Visibility="{Binding HasExtensions, Converter={StaticResource FlexVis}}">
                     <StackPanel>
-                        <ItemsControl ItemsSource="{Binding ExtensionGroups}" AutomationProperties.Name="Browser extensions">
+                        <ItemsControl ItemsSource="{Binding ExtensionGroups}" helpers:RebuildFocus.Keep="True" AutomationProperties.Name="Browser extensions">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="6,10,6,4">

@@ -2,7 +2,11 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Exceptions;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 
 namespace SysManager.UITests;
 
@@ -78,6 +82,88 @@ public class FunctionalUiTests
             () => _fx.FindButtonById("btn-services-clear-marks", timeoutSeconds: 1) is not null,
             TimeSpan.FromSeconds(10)).Success;
         Assert.True(gone, "\"Clear marks\" stayed visible after every mark was cleared.");
+    }
+
+    /// <summary>
+    /// F5 rebuilds the Services list, and keyboard focus comes back to the control it was on (#2609).
+    /// </summary>
+    /// <remarks>
+    /// The refresh replaces every row, and the focused button went with its old row. WPF then put focus on the
+    /// window, so someone using the keyboard had to Tab back in from the sidebar after every refresh. The mark button
+    /// is the one focused here because its name carries the service, so the name of the element focused after F5
+    /// says whether focus came back to the same row, and because it stays enabled while the list reloads. The new
+    /// button has a runtime id of its own, which is what tells "focus came back" from "F5 rebuilt nothing".
+    /// </remarks>
+    [Fact]
+    public void Services_F5_PutsKeyboardFocusBackOnTheSameRow()
+    {
+        _fx.GoToTab("nav-services");
+        Assert.NotNull(_fx.WaitForText("total", 15));
+        var mark = _fx.FindButtonByAccessibleNamePrefix("Mark or unmark this service", timeoutSeconds: 15);
+        Assert.NotNull(mark);
+        var name = AppFixture.NameOf(mark!);
+        var before = RuntimeIdOf(mark!);
+        Assert.NotNull(name);
+        Assert.NotNull(before);
+
+        _fx.MainWindow.SetForeground();
+        mark!.Focus();
+        var focused = FlaUI.Core.Tools.Retry.WhileFalse(
+            () => FocusedElement() is { } f && AppFixture.NameOf(f) == name,
+            TimeSpan.FromSeconds(5)).Success;
+        Assert.True(focused, $"focus did not reach \"{name}\" before F5, so the test cannot say where F5 leaves it");
+
+        Keyboard.Type(VirtualKeyShort.F5);
+
+        AutomationElement? after = null;
+        var back = FlaUI.Core.Tools.Retry.WhileFalse(
+            () => (after = FocusedElement()) is { } f
+                  && AppFixture.NameOf(f) == name
+                  && RuntimeIdOf(f) is { } id && !id.SequenceEqual(before!),
+            TimeSpan.FromSeconds(20)).Success;
+        Assert.True(back, after is not null && RuntimeIdOf(after) is { } last && last.SequenceEqual(before!)
+            ? "focus is still on the button focused before F5, so F5 did not rebuild the Services list"
+            : $"after F5 rebuilt the list, focus was on {Describe(after)}, not back on \"{name}\"");
+    }
+
+    /// <summary>The element with keyboard focus, or null while focus is between two elements.</summary>
+    private AutomationElement? FocusedElement()
+    {
+        try
+        {
+            return _fx.Automation.FocusedElement();
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or COMException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The element's runtime id, or null once it has gone.</summary>
+    private static int[]? RuntimeIdOf(AutomationElement element)
+    {
+        try
+        {
+            return element.Properties.RuntimeId.ValueOrDefault;
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or PropertyNotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What a failure message says the focused element was.</summary>
+    private static string Describe(AutomationElement? element)
+    {
+        if (element is null) return "nothing";
+        try
+        {
+            return $"the {element.ControlType} \"{AppFixture.NameOf(element)}\"";
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or PropertyNotSupportedException)
+        {
+            return "an element that has gone";
+        }
     }
 
     [Fact]

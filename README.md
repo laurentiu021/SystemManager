@@ -234,6 +234,13 @@ or uninstalls is reachable from a bare keypress. On Drivers, Windows Update and 
 drivers, List updates and Analyze. Pressing it during a refresh that is already running does nothing
 rather than starting a second one.
 
+**Focus stays where you were when a list refreshes.** A refresh rebuilds a list's rows, and the button or cell
+you were on used to go with them, leaving focus at the top of the window. Now focus comes back to the same
+control in the same row: after F5 on Services, after putting a change back on Undo Changes, and on every table
+and every other list that reloads its rows the same way. If that row has gone, focus moves to the row now in its
+place. It only happens when you were using the keyboard, so a list that refreshes by itself never pulls the view
+back while you scroll with the mouse.
+
 **`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with
 nothing to filter it does nothing at all, rather than moving your caret somewhere unexpected.

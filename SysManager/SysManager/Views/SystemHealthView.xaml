@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Views.SystemHealthView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:v="clr-namespace:SysManager.Views">
 
     <Grid Background="{DynamicResource Surface0}">
@@ -321,7 +322,7 @@
                             </TextBlock>
                         </StackPanel>
 
-                        <ItemsControl ItemsSource="{Binding ChkdskDrives}">
+                        <ItemsControl ItemsSource="{Binding ChkdskDrives}" helpers:RebuildFocus.Keep="True">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Style="{StaticResource CardInner}" Margin="0,0,0,6" Padding="12,10">

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.0] - 2026-10-09
+
+**Volume Control can now send an app to another output device, and shows which device each app plays through**
+(#2584, #2088).
+
+### Added
+
+- **Volume Control shows where each app plays.** The Output picker in each app's row now reads the device Windows
+  sends that app to, instead of "Choose a device" because it could not tell. It reads it when the app appears and
+  again every ten seconds, so a change made in Windows' own sound settings shows up too, and a route set before a
+  restart is still shown after it. When Windows cannot say, the picker still says "Choose a device" (#2088).
+
+### Fixed
+
+- **Volume Control: moving an app to another output device works.** The check that decides whether an app can be
+  routed asked the wrong Windows object, so it always answered no and every row showed "Choose output device…",
+  which only opens Windows' settings. It now asks the Windows Runtime factory that carries the routing interface,
+  so on Windows 10 21H2 and later, and on Windows 11, each app row gets its Output picker. Where that factory is
+  missing, the row keeps the button to Windows' settings. Routing had never turned on since it arrived in 1.55.0
+  (#2584).
+
 ## [1.127.14] - 2026-10-09
 
 **After a list refreshes, keyboard focus goes back to the row you were on, instead of jumping to the top of the

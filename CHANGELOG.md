@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.2] - 2026-10-09
+
+**On the command line, an option SysManager does not know now stops the command wherever it appears, so a typo can no
+longer run a cleanup** (#2604).
+
+### Fixed
+
+- **CLI: an unknown option is a usage error even when a command follows it.** The parser let the next known command
+  replace the error, so `SysManager.exe -bogus --health` ran the health check while `--health -bogus` was refused, and
+  a script with a typo in a modifier, `-slient --cleanup`, deleted temporary files instead of stopping. Any option
+  SysManager does not know now ends the run with the usage message and exit code 2, and nothing runs. This had been so
+  since the command line arrived in 1.49.0.
+
 ## [1.128.1] - 2026-10-09
 
 **In Volume Control, an app sent to another output device keeps its row, with its level and a slider that works, and

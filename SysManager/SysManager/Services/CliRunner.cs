@@ -63,8 +63,9 @@ public sealed class CliRunner
 
     /// <summary>
     /// Parses the argument list into a <see cref="CliRequest"/>. The first recognized verb
-    /// wins; <c>--json</c> and <c>--silent</c> are modifiers. An unrecognized leading
-    /// <c>--flag</c> becomes <see cref="CliCommand.Unknown"/> (usage error). Pure.
+    /// wins; <c>--json</c> and <c>--silent</c> are modifiers. An unrecognized <c>--flag</c>
+    /// anywhere in the list makes the request <see cref="CliCommand.Unknown"/> (usage error), and
+    /// nothing runs. Pure.
     /// </summary>
     public static CliRequest Parse(string[] args)
     {
@@ -99,9 +100,11 @@ public sealed class CliRunner
         return new CliRequest(command, json, silent, unknown);
     }
 
-    // First explicit verb wins; later verbs are ignored (a single invocation does one thing).
+    // First explicit verb wins; later verbs are ignored (a single invocation does one thing). An unknown option stays a
+    // usage error when a verb follows it: a verb used to replace it, so a typo in a modifier ahead of the verb, as in
+    // "-slient --cleanup", deleted files instead of stopping (#2604).
     private static CliCommand Pick(CliCommand current, CliCommand next)
-        => current is CliCommand.None or CliCommand.Unknown ? next : current;
+        => current is CliCommand.None ? next : current;
 
     /// <summary>The recognized commands and one-line help, single source for help text and the in-app reference tab.</summary>
     public static IReadOnlyList<(string Flags, string Description)> Commands { get; } =

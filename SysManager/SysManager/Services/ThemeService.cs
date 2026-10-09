@@ -21,6 +21,9 @@ public sealed class ThemeService
     private readonly string _settingsPath;
     private readonly Func<bool> _windowsPrefersDark;
 
+    /// <summary>Whether <see cref="Apply"/> writes into the running application's resources.</summary>
+    private readonly bool _paintsTheApp;
+
     // What Load found, for Save. After a load that could not read the file, the theme on screen is the shipped one
     // and the file still holds the user's own, so Save does not write over it. A file that is not a theme
     // SysManager can use is set aside before the first write (#2521).
@@ -81,13 +84,19 @@ public sealed class ThemeService
     /// the real one reads HKCU, so a test without the seam would assert whatever the developer's own machine
     /// happens to be on, and would report the opposite result on another machine.
     /// </param>
-    internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null)
+    /// <param name="paintsTheApp">
+    /// False for a test that drives the theme through a view: <see cref="Apply"/> then leaves
+    /// <c>Application.Current.Resources</c> alone, so the brushes every later view test in the process reads are
+    /// not the ones this test picked.
+    /// </param>
+    internal ThemeService(string? configDir = null, Func<bool>? windowsPrefersDark = null, bool paintsTheApp = true)
     {
         _settingsPath = Path.Combine(
             configDir ?? Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SysManager"),
             "theme.json");
         _windowsPrefersDark = windowsPrefersDark ?? WindowsIsOnDark;
+        _paintsTheApp = paintsTheApp;
     }
 
     /// <summary>
@@ -474,7 +483,7 @@ public sealed class ThemeService
         // WPF touch-point in the service; guarding it lets Load/Initialize (and thus the persistence
         // seam) run in a headless unit test, and is harmless in production where Application.Current is
         // always set. Without it, every public entry point NPEs the moment it is reached off the UI app.
-        if (Application.Current is null) return;
+        if (!_paintsTheApp || Application.Current is null) return;
 
         var res = Application.Current.Resources;
         SetBrush(res, "Surface0", theme.Background);

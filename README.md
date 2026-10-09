@@ -192,7 +192,8 @@ with:
 - **Auto mode** — follow the Windows light/dark setting, and keep following it. It changes with Windows
   while the app is open, whether you flip it by hand, on a Windows schedule, or from SysManager's own
   Dark Mode tab. Your colour family is kept across the switch: on Warm Ember, going light gives you
-  Warm Sand rather than the default. Picking any preset turns Auto off
+  Warm Sand rather than the default. Picking any preset turns Auto off, and the panel then
+  shows Dark or Light selected, whichever the preset is
 - **Custom mode** — free hex input for accent, background, surface, and text colors
 - Background shade slider for fine-tuning lightness/darkness
 - **Reset to default theme** — one click back to the shipped dark theme and shade, from any mode

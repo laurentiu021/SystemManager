@@ -14,12 +14,20 @@ namespace SysManager.Views;
 
 public partial class ThemePopup : UserControl
 {
+    private readonly ThemeService _theme;
     private bool _suppressShadeEvent;
     private bool _isApplyingShade;
+    private bool _checkingModePill;
     private bool _initialized;
 
-    public ThemePopup()
+    public ThemePopup() : this(ThemeService.Instance)
     {
+    }
+
+    /// <summary>The popup over <paramref name="theme"/>, so a test can drive it without the app's own theme.</summary>
+    internal ThemePopup(ThemeService theme)
+    {
+        _theme = theme;
         InitializeComponent();
         Loaded += OnLoaded;
     }
@@ -54,7 +62,7 @@ public partial class ThemePopup : UserControl
     private void BuildPresetCards()
     {
         PresetPanel.Children.Clear();
-        var isDark = ThemeService.Instance.CurrentTheme.IsDark;
+        var isDark = _theme.CurrentTheme.IsDark;
         foreach (var (id, preset) in ThemePreset.Defaults)
         {
             if (preset.IsDark != isDark) continue;
@@ -116,7 +124,7 @@ public partial class ThemePopup : UserControl
             Padding = new Thickness(10),
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
-            BorderBrush = ThemeService.Instance.CurrentPresetId == id ? accentBrush : borderBrush,
+            BorderBrush = _theme.CurrentPresetId == id ? accentBrush : borderBrush,
             Cursor = Cursors.Hand,
             Margin = new Thickness(0, 0, 6, 8),
             Width = 140,
@@ -136,19 +144,13 @@ public partial class ThemePopup : UserControl
 
     private void SyncUiToService()
     {
-        var svc = ThemeService.Instance;
+        var svc = _theme;
 
         _suppressShadeEvent = true;
         ShadeSlider.Value = svc.ShadePosition;
         _suppressShadeEvent = false;
 
-        switch (svc.CurrentMode)
-        {
-            case "light": LightMode.IsChecked = true; break;
-            case "custom": CustomMode.IsChecked = true; break;
-            case ThemeService.AutoMode: FollowWindowsMode.IsChecked = true; break;
-            default: DarkMode.IsChecked = true; break;
-        }
+        CheckModePill();
 
         // The Mode_Changed handler (which flips panel visibility) is only wired up AFTER this
         // runs, and clicking an already-checked radio doesn't re-raise Checked — so for a
@@ -159,6 +161,31 @@ public partial class ThemePopup : UserControl
         UpdatePanels();
         if (svc.CurrentMode == "custom")
             PopulateCustomFields(svc.CurrentTheme);
+    }
+
+    /// <summary>Checks the mode pill for the mode the theme is in, without the pill applying a preset of its own.</summary>
+    /// <remarks>
+    /// Checking a pill raises <see cref="Mode_Changed"/>, which applies the mode's companion preset. That is right when
+    /// the user clicks the pill and wrong when the pill only follows a change already made: after a preset is
+    /// picked it would replace the pick.
+    /// </remarks>
+    private void CheckModePill()
+    {
+        _checkingModePill = true;
+        try
+        {
+            switch (_theme.CurrentMode)
+            {
+                case "light": LightMode.IsChecked = true; break;
+                case "custom": CustomMode.IsChecked = true; break;
+                case ThemeService.AutoMode: FollowWindowsMode.IsChecked = true; break;
+                default: DarkMode.IsChecked = true; break;
+            }
+        }
+        finally
+        {
+            _checkingModePill = false;
+        }
     }
 
     /// <summary>Shows the Custom editors or the Presets list to match the checked mode radio.</summary>
@@ -201,10 +228,13 @@ public partial class ThemePopup : UserControl
         }
     }
 
-    private void SelectPreset(Border card)
+    /// <summary>Applies the preset <paramref name="card"/> stands for and marks it as the chosen one.</summary>
+    internal void SelectPreset(Border card)
     {
         var id = (string)card.Tag;
-        ThemeService.Instance.SetPreset(id);
+        _theme.SetPreset(id);
+        // A preset pins its own mode, Dark or Light, so a pick made under Auto leaves Auto (#2599).
+        CheckModePill();
 
         var borderBrush = TryFindResource("Border1") as Brush ?? Brushes.DarkGray;
         var accentBrush = TryFindResource("Accent") as Brush ?? Brushes.Purple;
@@ -220,7 +250,7 @@ public partial class ThemePopup : UserControl
         _isApplyingShade = true;
         try
         {
-            ThemeService.Instance.SetShade(e.NewValue);
+            _theme.SetShade(e.NewValue);
         }
         finally
         {
@@ -230,16 +260,17 @@ public partial class ThemePopup : UserControl
 
     private void Mode_Changed(object sender, RoutedEventArgs e)
     {
+        if (_checkingModePill) return;
         UpdatePanels();
         if (CustomMode.IsChecked == true) return;
 
         // Auto resolves the arm from Windows and STAYS on auto; the other two pin one. Both end up applying a
         // companion preset, so the user's chosen family survives the switch either way.
         if (FollowWindowsMode.IsChecked == true)
-            ThemeService.Instance.FollowWindows();
+            _theme.FollowWindows();
         else
-            ThemeService.Instance.SetPreset(
-                ThemeService.Instance.GetCompanionPreset(LightMode.IsChecked == true ? "light" : "dark"));
+            _theme.SetPreset(
+                _theme.GetCompanionPreset(LightMode.IsChecked == true ? "light" : "dark"));
 
         BuildPresetCards();
     }
@@ -266,7 +297,7 @@ public partial class ThemePopup : UserControl
         // Checking it from Custom raises Checked, which applies the companion preset — harmless in itself, but
         // it must not be the last write.
         DarkMode.IsChecked = true;
-        ThemeService.Instance.ResetToDefault();
+        _theme.ResetToDefault();
 
         // Suppressed, or putting the slider back would raise Shade_Changed and save a shade position on top
         // of the one the reset just restored.
@@ -277,7 +308,7 @@ public partial class ThemePopup : UserControl
         UpdatePanels();
         // Seed the custom boxes from the default too, so switching to Custom after a reset starts from a
         // readable theme rather than from the colours that made the reset necessary.
-        PopulateCustomFields(ThemeService.Instance.CurrentTheme);
+        PopulateCustomFields(_theme.CurrentTheme);
         BuildPresetCards();
     }
 
@@ -307,7 +338,7 @@ public partial class ThemePopup : UserControl
         CustomSurfacePreview.Background = new SolidColorBrush(surface);
         CustomTextPreview.Background = new SolidColorBrush(text);
 
-        ThemeService.Instance.SetCustom(accent, bg, surface, text);
+        _theme.SetCustom(accent, bg, surface, text);
     }
 
     /// <summary>

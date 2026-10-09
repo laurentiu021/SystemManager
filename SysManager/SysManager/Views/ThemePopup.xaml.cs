@@ -17,6 +17,7 @@ public partial class ThemePopup : UserControl
     private readonly ThemeService _theme;
     private bool _suppressShadeEvent;
     private bool _isApplyingShade;
+    private bool _checkingModePill;
     private bool _initialized;
 
     public ThemePopup() : this(ThemeService.Instance)
@@ -149,13 +150,7 @@ public partial class ThemePopup : UserControl
         ShadeSlider.Value = svc.ShadePosition;
         _suppressShadeEvent = false;
 
-        switch (svc.CurrentMode)
-        {
-            case "light": LightMode.IsChecked = true; break;
-            case "custom": CustomMode.IsChecked = true; break;
-            case ThemeService.AutoMode: FollowWindowsMode.IsChecked = true; break;
-            default: DarkMode.IsChecked = true; break;
-        }
+        CheckModePill();
 
         // The Mode_Changed handler (which flips panel visibility) is only wired up AFTER this
         // runs, and clicking an already-checked radio doesn't re-raise Checked — so for a
@@ -166,6 +161,31 @@ public partial class ThemePopup : UserControl
         UpdatePanels();
         if (svc.CurrentMode == "custom")
             PopulateCustomFields(svc.CurrentTheme);
+    }
+
+    /// <summary>Checks the mode pill for the mode the theme is in, without the pill applying a preset of its own.</summary>
+    /// <remarks>
+    /// Checking a pill raises <see cref="Mode_Changed"/>, which applies the mode's companion preset. That is right when
+    /// the user clicks the pill and wrong when the pill only follows a change already made: after a preset is
+    /// picked it would replace the pick.
+    /// </remarks>
+    private void CheckModePill()
+    {
+        _checkingModePill = true;
+        try
+        {
+            switch (_theme.CurrentMode)
+            {
+                case "light": LightMode.IsChecked = true; break;
+                case "custom": CustomMode.IsChecked = true; break;
+                case ThemeService.AutoMode: FollowWindowsMode.IsChecked = true; break;
+                default: DarkMode.IsChecked = true; break;
+            }
+        }
+        finally
+        {
+            _checkingModePill = false;
+        }
     }
 
     /// <summary>Shows the Custom editors or the Presets list to match the checked mode radio.</summary>
@@ -213,6 +233,8 @@ public partial class ThemePopup : UserControl
     {
         var id = (string)card.Tag;
         _theme.SetPreset(id);
+        // A preset pins its own mode, Dark or Light, so a pick made under Auto leaves Auto (#2599).
+        CheckModePill();
 
         var borderBrush = TryFindResource("Border1") as Brush ?? Brushes.DarkGray;
         var accentBrush = TryFindResource("Accent") as Brush ?? Brushes.Purple;
@@ -238,6 +260,7 @@ public partial class ThemePopup : UserControl
 
     private void Mode_Changed(object sender, RoutedEventArgs e)
     {
+        if (_checkingModePill) return;
         UpdatePanels();
         if (CustomMode.IsChecked == true) return;
 

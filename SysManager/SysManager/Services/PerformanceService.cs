@@ -37,6 +37,10 @@ public sealed partial class PerformanceService : IDisposable
     private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly Func<string, RecordedAdapter> _findAdapter;
     private readonly Func<bool, (bool Found, bool Ok)> _writeGpu;
+    private readonly Action<bool> _setUiEffects;
+    private readonly Action<bool> _setGameMode;
+    private readonly Action<bool, bool> _setXboxGameBar;
+    private readonly Func<string, bool, bool> _restoreGpu;
     private readonly SemaphoreSlim _psGate = new(1, 1);
     private bool _disposed;
 
@@ -84,7 +88,11 @@ public sealed partial class PerformanceService : IDisposable
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "SysManager"),
             System.Diagnostics.Process.GetProcesses,
-            writeGpu: WriteGpuToRegistry)
+            writeGpu: WriteGpuToRegistry,
+            setUiEffects: SetUiEffects,
+            setGameMode: SetGameMode,
+            setXboxGameBar: SetXboxGameBar,
+            restoreGpu: SetGpuMaxPerformance)
     {
     }
 
@@ -107,6 +115,16 @@ public sealed partial class PerformanceService : IDisposable
     /// defaults to nothing: the public constructor passes the registry write, and a test that leaves it out finds no
     /// card rather than changing the graphics setting of the PC running the suite.
     /// </param>
+    /// <param name="setUiEffects">
+    /// The visual-effects write a restore makes. It defaults to nothing for the same reason: the public constructor
+    /// passes <see cref="SetUiEffects"/>, and a test that leaves it out restores nothing on the PC running the suite.
+    /// </param>
+    /// <param name="setGameMode">The Game Mode write a restore makes; nothing unless given, as above.</param>
+    /// <param name="setXboxGameBar">The Game Bar and Game DVR write a restore makes; nothing unless given.</param>
+    /// <param name="restoreGpu">
+    /// The write that puts the recorded NVIDIA adapter's setting back, by its subkey. Unless given it writes nothing
+    /// and says so, so a restore that reaches a card a test did not provide for fails rather than writing this PC's.
+    /// </param>
     internal PerformanceService(
         IPowerShellRunner ps,
         RestorePointService restorePoints,
@@ -114,7 +132,11 @@ public sealed partial class PerformanceService : IDisposable
         Func<System.Diagnostics.Process[]>? processes = null,
         Func<System.Diagnostics.Process, bool>? trimWorkingSet = null,
         Func<string, RecordedAdapter>? findAdapter = null,
-        Func<bool, (bool Found, bool Ok)>? writeGpu = null)
+        Func<bool, (bool Found, bool Ok)>? writeGpu = null,
+        Action<bool>? setUiEffects = null,
+        Action<bool>? setGameMode = null,
+        Action<bool, bool>? setXboxGameBar = null,
+        Func<string, bool, bool>? restoreGpu = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
@@ -123,6 +145,10 @@ public sealed partial class PerformanceService : IDisposable
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
         _findAdapter = findAdapter ?? FindRecordedAdapter;
         _writeGpu = writeGpu ?? (_ => (Found: false, Ok: false));
+        _setUiEffects = setUiEffects ?? (_ => { });
+        _setGameMode = setGameMode ?? (_ => { });
+        _setXboxGameBar = setXboxGameBar ?? ((_, _) => { });
+        _restoreGpu = restoreGpu ?? ((_, _) => false);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1041,17 +1067,17 @@ public sealed partial class PerformanceService : IDisposable
             await SetActivePlanAsync(snapshot.PowerPlanGuid, ct).ConfigureAwait(false);
 
         // Visual effects
-        SetUiEffects(snapshot.UiEffectsEnabled);
+        _setUiEffects(snapshot.UiEffectsEnabled);
 
         // Game Mode
-        SetGameMode(snapshot.GameModeEnabled);
+        _setGameMode(snapshot.GameModeEnabled);
 
         // Xbox Game Bar — restore each key from its own snapshot value; the two are
         // independent (Game Bar overlay vs per-game DVR) and must not be collapsed.
-        SetXboxGameBar(snapshot.XboxGameBarEnabled, snapshot.XboxGameDvrEnabled);
+        _setXboxGameBar(snapshot.XboxGameBarEnabled, snapshot.XboxGameDvrEnabled);
 
         // GPU — as the question found the card, so the restore does what it said; the write checks the card again.
-        RestoreGraphics(snapshot, card is { } found ? _ => found : _findAdapter, SetGpuMaxPerformance);
+        RestoreGraphics(snapshot, card is { } found ? _ => found : _findAdapter, _restoreGpu);
 
         // Processor state — only restore if we captured a real value. A null means the
         // snapshot couldn't read the original minimum (e.g. an unparseable powercfg output),

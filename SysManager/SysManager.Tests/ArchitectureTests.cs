@@ -3005,9 +3005,8 @@ public partial class ArchitectureTests
     /// it is unreliable and stops reaching for it — so this asserts the whole set rather than a sample.
     /// <para>Derived from the VIEW, like <see cref="EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand"/>
     /// above: the toolbar button already states which command is this tab's refresh, and the view model's
-    /// <c>RefreshOnF5</c> must name the same one. The tabs do not agree on a name — 15 distinct spellings
-    /// bind to a refresh-shaped button — which is exactly why the shell cannot match a convention and each
-    /// view model has to say.</para>
+    /// <c>RefreshOnF5</c> must name the same one. The tabs do not agree on a name, which is exactly why the
+    /// shell cannot match a convention and each view model has to say.</para>
     /// <para><b>Two views bind two candidates each and are resolved here, not skipped.</b> System Health binds
     /// <c>ScanCommand</c> and <c>RefreshDrivesCommand</c>; Quick Cleanup binds <c>RescanCommand</c> and
     /// <c>AnalyzeComponentStoreCommand</c>. In both, F5 is the tab's primary read: System Health's
@@ -4036,7 +4035,7 @@ public partial class ArchitectureTests
     /// needed and WHAT unlocks was enforced by 30 hand-copies, so nothing stopped copy 31 from drifting.
     /// <para><b>Two halves, because the control binds ambiently.</b> <c>IsElevated</c> and
     /// <c>RelaunchAsAdminCommand</c> come from the host's DataContext rather than from properties — the
-    /// command name is identical at every call site, and passing one uniform value 30 times is the
+    /// command name is identical at every call site, and passing one uniform value at each of them is the
     /// duplication being removed. The cost is that a host whose view model lacks either member renders a
     /// banner stuck in one state, or a button that does nothing, with no compiler error and no visible clue.
     /// The second assertion is what makes that cost safe.</para>
@@ -4060,13 +4059,13 @@ public partial class ArchitectureTests
         Assert.True(handRolled.Count == 0,
             "these views reference the AdminButton style directly instead of using <v:AdminBanner/>. The "
             + "elevation banner is one control so that a contrast, glyph, focus or screen-reader fix lands "
-            + "once rather than thirty times, and so the stripe's negative margin cannot drift away from the "
+            + "once rather than once per tab, and so the stripe's negative margin cannot drift away from the "
             + "padding it depends on:\n  " + string.Join("\n  ", handRolled));
 
         // One control means one place to get the announcement right, so assert it IS right rather than
         // trusting that having extracted it was enough. Its "Run as administrator" button is the elevation
         // control on every privileged tab: without HelpText a screen-reader user is told the button's name on
-        // thirty pages and never that pressing it closes SysManager and opens it again elevated.
+        // each of them and never that pressing it closes SysManager and opens it again elevated.
         var banner = XamlCode(Path.Combine(viewsDir, "AdminBanner.xaml"));
         var unreadable = ReadButtonElement(banner, "AdminBanner.xaml", "RelaunchAsAdminCommand", out var button);
         Assert.True(unreadable is null, unreadable);

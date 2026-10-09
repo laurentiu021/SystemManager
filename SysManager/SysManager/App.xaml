@@ -156,8 +156,9 @@
             <!-- so a contributor writing Margin="{StaticResource Space16}" for   -->
             <!-- "consistency" produced a view unlike all of its siblings, every  -->
             <!-- one of which uses raw Thickness literals. Spacing is governed by -->
-            <!-- the two layout strategies in the project docs. If a token scale  -->
-            <!-- is wanted, land it WITH the view migration, not before it.       -->
+            <!-- the three layout strategies the views follow: one root gutter, a -->
+            <!-- gutter per section, or one scrolling page. If a token scale is   -->
+            <!-- wanted, land it WITH the view migration, not before it.          -->
             <!-- ============================================================ -->
             <!-- MIGRATED: every on-scale raw value in the XAML now references one of these four   -->
             <!-- (69 of them, #1633). Two values stay RAW on purpose, and are not misses:            -->

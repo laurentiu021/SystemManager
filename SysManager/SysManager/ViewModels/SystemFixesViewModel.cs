@@ -16,9 +16,10 @@ namespace SysManager.ViewModels;
 /// <summary>
 /// ViewModel for the System Fixes tab — the one place in the app that repairs a broken Windows.
 /// Surfaces Windows' own two general-purpose repairs (SFC and DISM /RestoreHealth), two targeted
-/// ones (Windows Update, WinGet), plus a secure shortcut to the built-in auto-logon dialog. Each
-/// repair confirms first, streams its output to the shared console, and reports its result
-/// honestly. Repairs require administrator rights; the tab shows the standard elevation banner.
+/// ones (Windows Update, WinGet), two desktop fixes (restart Explorer, rebuild the icon cache), plus
+/// a secure shortcut to the built-in auto-logon dialog. Each repair confirms first, writes its output
+/// to the shared console, and reports its result honestly. The Windows repairs need administrator
+/// rights, and the tab shows the standard elevation banner for them; the desktop fixes run as the user.
 /// </summary>
 /// <remarks>
 /// SFC and DISM used to live on Quick Cleanup, whose own XAML called them "distinct from cleanup"

@@ -11,7 +11,7 @@ namespace SysManager.Views;
 /// The elevation banner every privileged tab shows at the top of the page: grey with a "Run as
 /// administrator" button when the session is not elevated, golden and stating what is now possible when
 /// it is. Single source of truth for the golden admin-control contract, so a contrast, glyph, focus or
-/// screen-reader fix lands once instead of thirty times.
+/// screen-reader fix lands once instead of once per tab.
 /// </summary>
 /// <remarks>
 /// Replaced 60 hand-copied <c>Border</c> blocks across 30 views. Only the two sentences varied; the

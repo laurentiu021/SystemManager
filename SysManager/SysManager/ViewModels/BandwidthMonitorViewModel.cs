@@ -22,7 +22,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Bandwidth Monitor tab (Monitor group). Shows machine-wide download/upload speed with a live
+/// Bandwidth Monitor tab (Network group). Shows machine-wide download/upload speed with a live
 /// history graph, plus a per-process list of who's using the network. Two measurement modes:
 /// <list type="bullet">
 /// <item><b>Connections (default, no admin):</b> accurate total throughput + per-app attribution

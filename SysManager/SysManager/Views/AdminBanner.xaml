@@ -16,11 +16,11 @@
 
          IsElevated and RelaunchAsAdminCommand are bound from the ambient DataContext rather than
          exposed as properties. #1618 proposed an ICommand property, but the command name is
-         RelaunchAsAdminCommand at all 31 existing call sites — passing one uniform value 30 times is
+         RelaunchAsAdminCommand at every call site — passing one uniform value at each of them is
          the duplication being removed, and IsElevated was already bound ambiently.
-         ArchitectureTests.EveryAdminBannerHost_ExposesWhatTheBannerBinds keeps that safe: a view model
-         missing either member fails there rather than silently rendering a banner whose button does
-         nothing. -->
+         ArchitectureTests.TheElevationBanner_LivesInOneControl_AndItsHostsExposeWhatItBinds keeps
+         that safe: a view model missing either member fails there rather than silently rendering a
+         banner whose button does nothing. -->
     <Grid>
         <!-- Not elevated: say what is locked, and offer the one button that unlocks it. -->
         <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border1}"
@@ -36,7 +36,7 @@
                      the consequence of pressing this belongs in the second one. "Run as administrator" says
                      what the control is; it does not say that the window you are looking at will close and
                      reopen, which is the part that surprises someone who cannot see it happen. Generic on
-                     purpose — this one control serves all 30 privileged tabs, and NotElevatedMessage is
+                     purpose — this one control serves every privileged tab, and NotElevatedMessage is
                      already where the per-tab "why" lives. -->
                 <Button Content="Run as administrator" Command="{Binding RelaunchAsAdminCommand}"
                         Style="{StaticResource AdminButton}" DockPanel.Dock="Right" Padding="14,8"

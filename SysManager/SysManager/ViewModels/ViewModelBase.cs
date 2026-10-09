@@ -100,8 +100,8 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// F5 is the most widely known shortcut in Windows and it did nothing anywhere in this app (#1549), on
     /// a tool whose tabs are almost all "go and look again".
     /// <para><b>A property per view model rather than a naming convention the shell matches.</b> The
-    /// tabs do not agree on what their refresh is called: measured across the views, 15 distinct spellings
-    /// bind to a refresh-shaped button — <c>RefreshCommand</c>, <c>ScanCommand</c>, <c>RescanCommand</c>,
+    /// tabs do not agree on what their refresh is called: the views bind a refresh-shaped button under many
+    /// names — <c>RefreshCommand</c>, <c>ScanCommand</c>, <c>RescanCommand</c>,
     /// <c>ReloadCommand</c>, <c>LoadHistoryCommand</c>, <c>RefreshDrivesCommand</c>,
     /// <c>ListDriversCommand</c>, <c>AnalyzeCommand</c> and more. A shell that matched names would have to
     /// guess, and on two tabs it would have had to pick between two candidates: Quick Cleanup binds both

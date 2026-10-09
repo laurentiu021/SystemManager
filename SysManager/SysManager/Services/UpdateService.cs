@@ -318,8 +318,9 @@ public sealed class UpdateService : IUpdateService
 
     /// <summary>
     /// Downloads the .sha256 file for a release and verifies the local file matches.
-    /// Returns true if the hash matches, false if mismatch or if the .sha256 file
-    /// is unavailable (verification is best-effort — network errors don't block install).
+    /// Returns true only when the hash matches. A mismatch, a .sha256 file that cannot be
+    /// downloaded or parsed, a local file that cannot be read and a cancellation all return
+    /// false: verification failed, and the update must not be installed (SEC-001).
     /// </summary>
     public async Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
         ReleaseInfo rel, string filePath, CancellationToken ct = default)

@@ -122,12 +122,12 @@ public sealed partial class NavItem : ObservableObject, IDisposable
     /// button without reaching into the view-model — or forcing a never-opened tab to build one.
     /// </summary>
     /// <remarks>
-    /// Both signals, not one. 38 view-models set <see cref="ViewModelBase.IsProgressIndeterminate"/> and 12
-    /// set <see cref="ViewModelBase.Progress"/>, and the three longest operations in the app — Deep Cleanup,
-    /// File Shredder and Speed Test — are in the second group only, through
-    /// <see cref="ViewModelBase.ShowOnTaskbar"/>, since each draws a bar of its own or none (#2596). A taskbar
-    /// driven off the indeterminate flag alone would be silent exactly where a user is most likely to have
-    /// minimised the window.
+    /// Both signals, not one. A running job reaches the shell through
+    /// <see cref="ViewModelBase.IsProgressIndeterminate"/>, through <see cref="ViewModelBase.Progress"/>, or
+    /// both, and the three longest operations in the app — Deep Cleanup, File Shredder and Speed Test — set only
+    /// the second, through <see cref="ViewModelBase.ShowOnTaskbar"/>, since each draws a bar of its own or none
+    /// (#2596). A taskbar driven off the indeterminate flag alone would be silent exactly where a user is most
+    /// likely to have minimised the window.
     /// </remarks>
     [ObservableProperty] private int _progress;
 

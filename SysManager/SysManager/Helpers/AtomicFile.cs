@@ -227,7 +227,7 @@ internal static class AtomicFile
     }
 
     /// <summary>
-    /// How long to wait before each retry of a refused swap. Three attempts in all.
+    /// How long to wait before each retry of a refused swap: three retries, so four attempts in all.
     /// </summary>
     /// <remarks>
     /// Sized for an antivirus or indexer read window, which is tens of milliseconds — long enough to

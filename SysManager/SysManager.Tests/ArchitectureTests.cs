@@ -6225,9 +6225,9 @@ public partial class ArchitectureTests
     /// reader is least able to check it: "announced on all 52 tabs that have one" while the real number was
     /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
     /// the same sentence is what tells a screen-reader user whether this app is worth trying.
-    /// <para>Five different denominators are claimed and they are NOT interchangeable: the total tab count
-    /// (59, from the sidebar), the number of tabs carrying an announced status line (53, fewer because a tab
-    /// with nothing long-running has nothing to report), and the three keyboard-accelerator subsets — tabs
+    /// <para>Five different denominators are claimed and they are NOT interchangeable: the total tab count,
+    /// from the sidebar, the number of tabs carrying an announced status line, fewer because a tab with nothing
+    /// long-running has nothing to report, and the three keyboard-accelerator subsets — tabs
     /// that override <c>EscapeCancel</c>, tabs that override <c>RefreshOnF5</c>, and tabs binding a filter
     /// box name Ctrl+F recognises. A guard that accepted any of them would pass on two being swapped, so
     /// each claim is classified by the phrase that follows it, first match winning.
@@ -6237,9 +6237,13 @@ public partial class ArchitectureTests
     /// fifteen tabs", "all forty tabs" — and this pattern requires a digit. They are digits now, which is
     /// what brings them inside the guard; the fix for the class is that a count only counts if it is written
     /// in a form the guard can read.</para>
-    /// <para>Order matters in the discriminator list below. Ctrl+F's claim reads "the 12 tabs that have one,
-    /// and selects…" and the status-line claim reads "all 53 tabs that have one" — the second phrase is a
+    /// <para>Order matters in the discriminator list below. Ctrl+F's claim reads "the N tabs that have one,
+    /// and selects…" and the status-line claim reads "all N tabs that have one" — the second phrase is a
     /// PREFIX of the first, so testing it first would compare Ctrl+F against the status count.</para></para>
+    /// <para>The status lines are counted per tab, from the sidebar, and not per line of markup (#2618). Summing
+    /// the bindings across the views counted <c>StatusFooter.xaml</c>'s own line, which is not a tab, and missed
+    /// Large Files', which binds <c>ScanStatus</c>; the two errors cancelled out, so the number was right for the
+    /// wrong reason and the next change to either side would have broken it in a way that pointed nowhere.</para>
     /// <para>The pattern requires the word "tabs" after the number rather than a digit anywhere, which is the
     /// difference between this and the sweep that first found the drift. It also kept screenshot filenames out
     /// of the population back when they carried a position prefix (<c>52-system-logs.png</c>); #1664 removed
@@ -6255,19 +6259,21 @@ public partial class ArchitectureTests
         var tabs = SidebarTabLabels().Count;
         Assert.True(tabs >= 50, $"only {tabs} tab labels were parsed — the count to compare against is wrong");
 
-        // Tabs with an announced status line: an inline TextBlock bound to StatusMessage, or a
-        // <v:StatusFooter/>, which renders that same line from its own file. Comments stripped, because
-        // DiskAnalyzerView explains in prose why it is NOT using the shared footer (#2274) and a text scan
-        // counts that mention as a call site.
-        var statusLines = Directory.EnumerateFiles(viewsDir, "*.xaml", SearchOption.TopDirectoryOnly)
-            .Select(f => WithoutXamlComments(File.ReadAllText(f)))
-            .Sum(markup =>
-                CountOccurrences(markup, "Text=\"{Binding StatusMessage}\"")
-                + StatusFooterElement().Matches(markup).Count);
+        // Tabs with an announced status line, one per tab whatever its view holds; see the remarks. Comments
+        // stripped, because DiskAnalyzerView explains in prose why it is NOT using the shared footer (#2274) and
+        // a text scan counts that mention as a call site.
+        var tabViews = NavEntry()
+            .Matches(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")))
+            .Select(m => m.Groups[3].Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var statusLines = tabViews.Count(view =>
+            HasAnnouncedStatusLine(WithoutXamlComments(File.ReadAllText(Path.Combine(viewsDir, view + ".xaml")))));
 
-        Assert.True(statusLines >= 52,
-            $"only {statusLines} announced status lines were counted, out of 53 measured — the count to "
-            + "compare against is wrong, so the assertions below would enforce a stale number.");
+        Assert.True(tabViews.Count >= 55 && statusLines >= 52,
+            $"{statusLines} of {tabViews.Count} tabs were found with an announced status line, against 54 of 60 "
+            + "measured — the count to compare against is wrong, so the assertions below would enforce a stale "
+            + "number.");
 
         // The accelerator subsets, each from the source that defines it rather than from a second list.
         var escapeTabs = ViewModelsOverriding("EscapeCancel");
@@ -6772,16 +6778,20 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"Text=""\{Binding\s+(?:Path=)?(?<path>[A-Za-z_]\w*)", RegexOptions.Compiled)]
     private static partial Regex TextBindingPath();
 
-    /// <summary>Occurrences of a literal, which <c>string.Split</c> would over-count by one.</summary>
-    private static int CountOccurrences(string haystack, string needle)
-    {
-        var count = 0;
-        for (var at = haystack.IndexOf(needle, StringComparison.Ordinal);
-             at >= 0;
-             at = haystack.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
-            count++;
-        return count;
-    }
+    /// <summary>
+    /// Whether a tab's view shows an announced status line: one bound to <c>StatusMessage</c>, which
+    /// <see cref="EveryStatusLine_IsALiveRegion_AndTheFastReadoutsAreNot"/> keeps a live region, one in either of
+    /// the two live status-line styles whatever it binds, or the shared footer, which renders the first from its
+    /// own file.
+    /// </summary>
+    private static bool HasAnnouncedStatusLine(string markup)
+        => markup.Contains("Text=\"{Binding StatusMessage}\"", StringComparison.Ordinal)
+           || AnnouncedStatusLineStyle().IsMatch(markup)
+           || StatusFooterElement().IsMatch(markup);
+
+    /// <summary>The two status-line styles, each a polite live region.</summary>
+    [GeneratedRegex(@"Style=""\{StaticResource (?:Subtle)?StatusLine\}""", RegexOptions.CultureInvariant)]
+    private static partial Regex AnnouncedStatusLineStyle();
 
     /// <summary>
     /// A "N tabs" claim, allowing one qualifier ("58 feature tabs"). The word is REQUIRED, so a bare digit

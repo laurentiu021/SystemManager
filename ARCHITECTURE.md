@@ -794,8 +794,10 @@ Key services:
   the question said. The lookup is a constructor seam, so what a question says does not depend on the graphics card
   of the PC running a test, and the read of the card's key behind `FindRecordedAdapter` is a parameter, so a read that
   fails is tested as not known rather than gone. `RestoreGraphics` takes the write as a parameter too, so its answers
-  are tested with a stand-in; the service's own restore passes the real `SetGpuMaxPerformance`, so no test runs a
-  whole restore of a record that names a card. Performance Mode's own NVIDIA Apply goes through
+  are tested with a stand-in. The restore takes each of its writes to the PC (visual effects, Game Mode, Xbox Game
+  Bar and the card's setting) from the constructor: the public one passes the real ones, and the test one writes
+  nothing unless a test passes its own, so Restore All runs end to end in a test that checks which card it wrote
+  (#2618). Performance Mode's own NVIDIA Apply goes through
   `WriteGpuMaxPerformance`, a constructor seam the public constructor fills with the registry write and the test
   constructor leaves finding no card (#2607).
 - `NetworkRepairService` — DNS flush, Winsock reset, TCP/IP reset via
@@ -1064,7 +1066,9 @@ Key services:
   are told apart: `InvalidDataException` (and `RestoreResult.InvalidBackup`) for a
   damaged one, which looking again will not change, and
   `BackupUnreadableException` (and `UnreadableBackup`) for one that could not be
-  read just now — another program had it open, say.
+  read just now — another program had it open, say. The two registry copies and
+  the legacy file are opened through two constructor seams, so a test makes each
+  read fail with each of the three failures Windows can give (#2618).
 - `RestorePointService` — lists (`Get-ComputerRestorePoint`), creates
   (`Checkpoint-Computer`), and restores (`Restore-Computer`) System Restore points
   through the `IPowerShellRunner` seam; the output parser is a pure, unit-tested

@@ -240,6 +240,63 @@ public class EnvironmentVariableServiceTests
         Assert.Null(env.GetUserBackupRaw());
     }
 
+    [Theory]
+    [InlineData("User registry", "IO")]
+    [InlineData("User registry", "security")]
+    [InlineData("User registry", "access")]
+    [InlineData("legacy file", "IO")]
+    [InlineData("legacy file", "security")]
+    [InlineData("legacy file", "access")]
+    [InlineData("Machine registry", "IO")]
+    [InlineData("Machine registry", "security")]
+    [InlineData("Machine registry", "access")]
+    public void ASafetyCopyWhoseReadFails_IsRefusedAsUnreadable_ButNotCalledDamaged(string copy, string failure)
+    {
+        // Each of the three safety copies is read inside the same three catches, an IO, a security and an access
+        // failure, and each makes the copy one that could not be read just now rather than a damaged one. Holding the
+        // legacy file open is the only one of those nine a test can cause for real, so here the read itself fails,
+        // through the service's seam (#2618), and every restore and every safety copy before a change refuses.
+        using var env = new RedirectedEnvironment();
+        env.SetUser("SAFE_USER", "changed");
+        Exception refusal = failure switch
+        {
+            "IO" => new IOException("The device is not ready."),
+            "security" => new System.Security.SecurityException("Requested registry access is not allowed."),
+            _ => new UnauthorizedAccessException("Access to the path is denied."),
+        };
+        switch (copy)
+        {
+            case "User registry":
+                env.WriteUserRegistryBackup("""{"User":{"SAFE_USER":"original"}}""");
+                break;
+            case "legacy file":
+                env.WriteLegacyUserBackup("""{"User":{"SAFE_USER":"original"}}""");
+                break;
+            default:
+                env.WriteMachineBackup("""{"Machine":{"SAFE_MACHINE":"original"}}""", RegistryValueKind.String);
+                break;
+        }
+
+        var service = new EnvironmentVariableService(
+            env.BackupDirectory,
+            env.UserRoot,
+            env.MachineRoot,
+            openBackupKey: (root, path) =>
+                (copy == "User registry" && root == env.UserRoot)
+                || (copy == "Machine registry" && root == env.MachineRoot)
+                    ? throw refusal
+                    : root.OpenSubKey(path),
+            openBackupFile: path => copy == "legacy file" ? throw refusal : File.OpenRead(path));
+
+        Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(() => service.PreviewRestore());
+        Assert.Throws<EnvironmentVariableService.BackupUnreadableException>(
+            () => service.EnsureBackup(includeUser: true, includeMachine: true));
+        var result = service.RestoreFromBackup();
+        Assert.True(result.InvalidBackup);
+        Assert.True(result.UnreadableBackup);
+        Assert.Equal("changed", env.GetUser("SAFE_USER"));
+    }
+
     [Fact]
     public void SetVariable_PreservesExpandSz_AndReadsRawTokens_EndToEnd()
     {

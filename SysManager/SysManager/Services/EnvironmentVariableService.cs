@@ -53,6 +53,8 @@ public sealed partial class EnvironmentVariableService
     private readonly RegistryKey _userRoot;
     private readonly RegistryKey _machineRoot;
     private readonly bool _enforceMachineBackupProtection;
+    private readonly Func<RegistryKey, string, RegistryKey?> _openBackupKey;
+    private readonly Func<string, Stream> _openBackupFile;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -76,11 +78,24 @@ public sealed partial class EnvironmentVariableService
     {
     }
 
+    /// <summary>The service over the given roots, for tests.</summary>
+    /// <param name="backupDir">The folder the legacy safety copy is kept in; the profile's own when null.</param>
+    /// <param name="userRoot">The hive standing in for HKCU.</param>
+    /// <param name="machineRoot">The hive standing in for HKLM.</param>
+    /// <param name="enforceMachineBackupProtection">Whether the Machine copy must be access-controlled.</param>
+    /// <param name="openBackupKey">
+    /// Opens the key a registry safety copy is read from, under the root it is given; a plain read-only open unless a
+    /// test passes its own. The two registry copies and the legacy file are read through these two parameters so a
+    /// test can make each read fail the way Windows can, which no test can cause on demand (#2618).
+    /// </param>
+    /// <param name="openBackupFile">Opens the legacy safety copy file for reading, by its path.</param>
     internal EnvironmentVariableService(
         string? backupDir,
         RegistryKey userRoot,
         RegistryKey machineRoot,
-        bool enforceMachineBackupProtection = false)
+        bool enforceMachineBackupProtection = false,
+        Func<RegistryKey, string, RegistryKey?>? openBackupKey = null,
+        Func<string, Stream>? openBackupFile = null)
     {
         _backupDir = backupDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -88,6 +103,14 @@ public sealed partial class EnvironmentVariableService
         _userRoot = userRoot;
         _machineRoot = machineRoot;
         _enforceMachineBackupProtection = enforceMachineBackupProtection;
+        _openBackupKey = openBackupKey ?? ((root, path) => root.OpenSubKey(path));
+        _openBackupFile = openBackupFile ?? (path => new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            FileOptions.SequentialScan));
     }
 
     // Variable names: letters, digits, underscore and a few shell-safe punctuation
@@ -700,7 +723,7 @@ public sealed partial class EnvironmentVariableService
     {
         try
         {
-            using var key = _userRoot.OpenSubKey(UserBackupPath);
+            using var key = _openBackupKey(_userRoot, UserBackupPath);
             if (key is null || !key.GetValueNames().Contains(
                     UserBackupValueName,
                     StringComparer.OrdinalIgnoreCase))
@@ -805,13 +828,7 @@ public sealed partial class EnvironmentVariableService
 
     private byte[] ReadBoundedBackupFile()
     {
-        using var stream = new FileStream(
-            BackupPath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            bufferSize: 4096,
-            FileOptions.SequentialScan);
+        using var stream = _openBackupFile(BackupPath);
 
         var length = stream.Length;
         if (length is <= 0 or > MaxBackupFileBytes)
@@ -836,7 +853,7 @@ public sealed partial class EnvironmentVariableService
     {
         try
         {
-            using var key = _machineRoot.OpenSubKey(MachineBackupPath);
+            using var key = _openBackupKey(_machineRoot, MachineBackupPath);
             if (key is null)
                 return BackupRead<MachineEnvBackup>.Missing;
 

@@ -175,6 +175,71 @@ public sealed class PerformanceSnapshotRestartTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RestoreAll_DoesWhatItsQuestionSaidAboutTheGraphicsCard_WhenTheCardChangesMeanwhile(
+        bool thereWhenAsked)
+    {
+        // The card is looked for when the question is asked, and is found the other way by the time the restore
+        // could look again. Restore All hands the restore the card its question found (#2618), so the setting is
+        // written to the card the question promised and not to one it said was gone. The whole restore runs: the
+        // service's writers are the constructor's defaults, which change nothing on the PC running the suite, and the
+        // graphics write is a stand-in that records what it was asked.
+        var dir = CreateTempDirectory();
+        var (asked, meanwhile) = thereWhenAsked
+            ? (PerformanceService.RecordedAdapter.Present, PerformanceService.RecordedAdapter.Gone)
+            : (PerformanceService.RecordedAdapter.Gone, PerformanceService.RecordedAdapter.Present);
+        var card = asked;
+        var gpuWrites = new List<(string SubKey, bool MaxPerformance)>();
+        try
+        {
+            var runner = NewRunner();
+            using var service = new PerformanceService(
+                runner, new RestorePointService(runner), dir,
+                findAdapter: _ => card,
+                restoreGpu: (subKey, maxPerformance) =>
+                {
+                    gpuWrites.Add((subKey, maxPerformance));
+                    return true;
+                });
+            Assert.True(service.SaveSnapshot(ValidSnapshot() with { GpuDynamicPstate = true, NvidiaSubKey = "0001" }));
+            using var vm = new PerformanceViewModel(service, NoGamingSession());
+            await vm.InitializationComplete;
+
+            var previousDialog = DialogService.Instance;
+            var dialog = Substitute.For<IDialogService>();
+            dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ =>
+            {
+                card = meanwhile;
+                return true;
+            });
+            DialogService.Instance = dialog;
+            try
+            {
+                await vm.RestoreAllCommand.ExecuteAsync(null);
+            }
+            finally
+            {
+                DialogService.Instance = previousDialog;
+            }
+
+            // Dynamic P-state was on when it was recorded, so putting it back writes "not max performance".
+            (string, bool)[] expected = thereWhenAsked ? [("0001", false)] : [];
+            Assert.Equal(expected, gpuWrites);
+            Assert.Null(service.LoadSnapshot());   // the restore ran to its end and cleared the record
+            Assert.Equal(
+                thereWhenAsked
+                    ? "Original settings restored. Reboot required for GPU changes."
+                    : "Original settings restored.",
+                vm.StatusMessage);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RestoreAll_ForAPlanTheRecordCouldNotRead_SaysItIsUnchanged()
     {

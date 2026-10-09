@@ -13,7 +13,10 @@ namespace SysManager.Services;
 /// <param name="WhenUtc">When the crash was recorded.</param>
 /// <param name="Version">The app version that crashed, so a marker can be matched to a release.</param>
 /// <param name="ExceptionType">The exception's full type name.</param>
-/// <param name="Message">The exception message. No stack trace and no paths — the log has the detail.</param>
+/// <param name="Message">
+/// The exception message, with the user-name folder in any path it holds replaced by [user], as in the log. No stack
+/// trace: the log has the detail.
+/// </param>
 public sealed record CrashMarker(
     DateTimeOffset WhenUtc, string Version, string ExceptionType, string Message);
 

@@ -1305,10 +1305,11 @@ Key services:
   ever shown it. A destructive read is exactly where an optional dependency must not be optional. One
   crash therefore notifies exactly once; markers older than 7 days, or future-dated ones (clock change,
   file copied from another machine), are dropped. It carries no stack trace — only the exception's type
-  and message, the message as written, so a path inside it is not scrubbed of the user name the way the
-  log is. It exists to answer "did the last run crash?", not to duplicate the log. Never written from `OnUi`,
-  which handles the exception and keeps running. Same shape as the persisted-preference services
-  above: injectable directory, pure unit-tested `Parse`, file IO that never throws.
+  and message, the message scrubbed of the user name the way the log is (#2605), since an IO
+  exception's message usually holds the full path. It exists to answer "did the last run crash?", not to
+  duplicate the log. Never written from `OnUi`, which handles the exception and keeps running. Same
+  shape as the persisted-preference services above: injectable directory, pure unit-tested `Parse`,
+  file IO that never throws.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

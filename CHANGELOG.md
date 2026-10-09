@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.14] - 2026-10-09
+
+**After a list refreshes, keyboard focus goes back to the row you were on, instead of jumping to the top of the
+window** (#2609).
+
+### Fixed
+
+- **Keyboard focus comes back to the same row after a list is rebuilt.** A list that refreshes replaces every row at
+  once, and the focused button or cell went with its old row. Focus then fell back to the window, so someone using
+  the keyboard or a screen reader had to Tab back in from the sidebar after F5 on Services, after putting a change
+  back on Undo Changes, and whenever another list reloaded. Focus now returns to the same control in the same row
+  when that row is still there, to the row now in its place when it is not, and to the list, or the control after
+  it, when no row is left. It does so only when the keyboard was the last thing used and focus had not been moved
+  somewhere else, so a list that refreshes on a timer never scrolls back under the mouse. Every table has it, and
+  the 21 other lists whose rows hold a button, a checkbox or a switch. Lists have lost focus this way since they
+  were first refreshed in place.
+- A test now fails when a list that is rebuilt this way, and whose rows can take focus, does not keep it.
+
 ## [1.127.13] - 2026-10-09
 
 **In the Appearance panel, picking a theme while Auto is on now shows Dark or Light selected, instead of leaving Auto

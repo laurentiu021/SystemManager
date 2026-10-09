@@ -10,6 +10,29 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.3] - 2026-10-09
+
+**Cancelling a tab's PowerShell work no longer freezes SysManager when the PowerShell behind it has died, and a
+PowerShell that stopped working is reported by the tab that was using it** (#2608).
+
+### Fixed
+
+- **Pressing Cancel while a script runs returns at once.** Cancelling waited for PowerShell to confirm the stop, on the
+  thread that draws the window. When the `powershell.exe` running the script had ended, closed from Task Manager for
+  example, that confirmation took about a minute to fail, and SysManager stopped responding for all of it. The stop
+  is now asked for in the background, and nothing it throws can come out of Cancel. Cancel has waited for the stop
+  since the first release; it could take that long whenever the script ran in a separate `powershell.exe`, which
+  every session has done since 1.114.4.
+- **A PowerShell session that stopped working is reported by the tab, not by the error window.** PowerShell raises
+  two kinds of error for a session that can no longer run anything, and neither was one the tabs' own handling
+  catches, so on Preinstalled Apps, Defender Tweaks, Edge/OneDrive Remover, Scheduled Maintenance, Restore Points,
+  System Fixes and Task Scheduler it reached the app-wide error handler. Both now arrive as the failure each of those
+  tabs already reports for a script that failed.
+- **The next script after a `powershell.exe` that ended starts a fresh one straight away.** SysManager keeps one
+  `powershell.exe` for a short burst of scripts. If it had ended in between, the next script still went to it, waited
+  about a minute and failed. It is now replaced before the script starts, without waiting for the old one to be
+  cleaned up. It had been reused that way since SysManager first kept it, in 1.78.7.
+
 ## [1.127.2] - 2026-10-09
 
 **The note SysManager leaves when it crashes no longer keeps your Windows user name.** The error message in it is now

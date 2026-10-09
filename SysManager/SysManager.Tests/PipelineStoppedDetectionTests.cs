@@ -136,6 +136,39 @@ public class PipelineStoppedDetectionTests
         Assert.False(PowerShellRunner.IsRemotingTornDownByOurStop(new PipelineStoppedException()));
     }
 
+    // ── A session that stopped working under a run (#2608) ──
+    //
+    // InvalidRunspaceStateException and InvalidPowerShellStateException derive from SystemException, so neither a
+    // service's catch (RuntimeException) nor a tab's catch (InvalidOperationException) caught them, and they reached
+    // the app-wide handler. The runner turns both into a RuntimeException; these pin which exceptions it treats so.
+
+    [Fact]
+    public void ARunspaceThatIsNotOpen_IsABrokenSession()
+        => Assert.True(PowerShellRunner.IsSessionBroken(
+            new System.Management.Automation.Runspaces.InvalidRunspaceStateException("not open")));
+
+    [Fact]
+    public void APipelineInAStateItCannotRunFrom_IsABrokenSession()
+        => Assert.True(PowerShellRunner.IsSessionBroken(new InvalidPowerShellStateException("failed")));
+
+    [Fact]
+    public void ABrokenSession_IsRecognisedWhenWrapped()
+        => Assert.True(PowerShellRunner.IsSessionBroken(
+            new InvalidOperationException("outer",
+                new System.Management.Automation.Runspaces.InvalidRunspaceStateException("not open"))));
+
+    [Fact]
+    public void WhatTheServicesAlreadyHandle_IsNotABrokenSession()
+    {
+        // These already reach a handler as themselves. Turning them into a new RuntimeException would bury what they
+        // said, and would turn a stop into a failure.
+        Assert.False(PowerShellRunner.IsSessionBroken(new RuntimeException("script error")));
+        Assert.False(PowerShellRunner.IsSessionBroken(new PipelineStoppedException()));
+        Assert.False(PowerShellRunner.IsSessionBroken(
+            new System.Management.Automation.Remoting.PSRemotingTransportException("closed")));
+        Assert.False(PowerShellRunner.IsSessionBroken(new InvalidOperationException("already started")));
+    }
+
     /// <summary>
     /// Builds a <see cref="RemoteException"/> carrying <paramref name="serialized"/>.
     /// </summary>

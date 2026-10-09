@@ -388,13 +388,16 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Real names and icons** — resolved from each audio session's process (with a safe
   fallback for protected processes), including the Windows "system sounds" session
 - **Per-app output routing** — send one app to your headset and another to your speakers.
-  Where Windows exposes the routing interface, each app gets an output-device picker in the
-  row; on builds where it doesn't, the row shows a "Choose output device…" button that opens
-  Windows' per-app sound settings so you're never left without a path. Plug a headset in while
-  the tab is open and it appears on its own — the device list is re-read every ten seconds, and
-  each app keeps the destination you picked for it. Windows does not report which device an app
-  is currently using, so the picker says "Choose a device" rather than guessing: the override
-  you set stays in force in Windows, but SysManager will not claim to know it after a restart
+  On Windows 10 21H2 and later, and on Windows 11, each app gets an output-device picker in the
+  row; where Windows lacks the routing interface, the row shows a "Choose output device…" button
+  that opens Windows' per-app sound settings so you're never left without a path. The picker
+  shows the device Windows sends each app to, read again every ten seconds along with the device
+  list, so a change made in Windows' own settings shows up too, and a route is still shown after
+  the app or SysManager restarts. Plug a headset in while the tab is open and it appears on its
+  own. When Windows cannot say where an app plays, the picker says "Choose a device" rather than
+  guessing. The list shows the apps playing on your default device, so an app you send to
+  another device leaves it once it restarts; Windows' per-app sound settings still show it and
+  can move it back
 - **Volume presets** — save the current per-app volumes and mutes as a named preset (e.g.
   "Gaming", "Focus") and re-apply it in one click; presets are keyed by app so they work
   across restarts, and are stored locally in `%LocalAppData%\SysManager`. The summary counts

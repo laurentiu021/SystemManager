@@ -1223,7 +1223,7 @@ Key services:
   All COM types stay inside the concrete class; the interface exposes only plain models so the VM
   unit-tests with no audio hardware. Also
   enumerates render devices (documented device API, with each device's kind from its documented
-  form factor) and performs per-app output routing via the UNDOCUMENTED `IAudioPolicyConfig`
+  form factor) and performs per-app output routing via the UNDOCUMENTED `IAudioPolicyConfigFactory`
   (see `AudioPolicyConfigFactory`), feature-detected so a build without it degrades to the
   guided fallback rather than failing. The whole PC's volume, mute and level come from the
   documented `IAudioEndpointVolume` and `IAudioMeterInformation` on the same default endpoint,
@@ -1239,14 +1239,20 @@ Key services:
   Its vtable slot is pinned by a test; the switch itself can only be runtime-verified on real
   audio hardware.
 - `AudioPolicyConfigFactory` — a defensive, isolated wrapper over the undocumented
-  `IAudioPolicyConfig` interface (the mechanism EarTrumpet uses to route one app to a specific
-  output device). Feature-detected (`TryCreate` returns null when it can't bind), guarded (the
-  SET call is invoked only after a successful `QueryInterface` for the exact IID and any failure
-  returns false), and its endpoint-id/process-token string helpers are pure + unit-tested. The
-  routing SET path can only be runtime-verified by running the app on real audio hardware. The READ path (`GetPersistedDefaultEndpoint`) is deliberately unimplemented and returns
-  null, so `IAudioMixerService.GetSessionOutputDevice` has a three-state contract — an endpoint id,
-  `string.Empty` for "read succeeded, no override", or null for "could not read" — and the row VM
-  renders null as unknown rather than as the default device.
+  `IAudioPolicyConfigFactory` interface (the mechanism EarTrumpet uses to route one app to a specific
+  output device). It is the activation factory of the Windows Runtime class
+  `Windows.Media.Internal.AudioPolicyConfig`, reached through `RoGetActivationFactory`; routing never
+  turned on until #2584 because it was asked of the policy-config client's COM class, which answers to
+  neither routing IID. The interface derives from `IInspectable`, which .NET's built-in COM interop no
+  longer projects, so it is declared on `IUnknown` with `IInspectable`'s three methods as its first
+  slots, and the device id travels as an `HSTRING`. Feature-detected (`TryCreate` returns null when it
+  can't bind), guarded (any failure returns false or null), and its endpoint-id wrap and unwrap are
+  pure + unit-tested. `IntegrationTests.AudioPolicyConfigBindingTests` binds it and reads a route on a
+  real Windows; setting a route was confirmed on real audio hardware, from one process and read back
+  from a new one, because Windows keeps the route per program. `IAudioMixerService.GetSessionOutputDevice`
+  has a three-state contract — an endpoint id, `string.Empty` for "read succeeded, no override", or null
+  for "could not read" — and the row VM renders null as unknown rather than as the default device. The
+  view model reads it when a row appears and again with each read of the device list (#2088).
 - `VolumePresetService` — persists named per-app volume/mute presets as JSON under
   `%LocalAppData%\SysManager\volume-presets.json`, keyed by exe name so a preset re-applies to
   whatever instance of an app is running. Save/parse/upsert and the "apply preset → live

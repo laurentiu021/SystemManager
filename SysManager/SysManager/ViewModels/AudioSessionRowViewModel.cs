@@ -286,9 +286,10 @@ public sealed partial class AudioSessionRowViewModel : ObservableObject, IAdjust
     /// <remarks>
     /// The three cases used to be two, and the missing one was a lie. Anything falsy selected the entry
     /// flagged <see cref="AudioDevice.IsDefault"/>, so a failed read and "this app follows the default" both
-    /// rendered as the default device's NAME — and since the read is currently a stub that always returns
-    /// null (see <c>AudioPolicyConfigFactory.GetPersistedDefaultEndpoint</c>), every picker claimed the app
-    /// was on the default device whatever Windows was really doing with it.
+    /// rendered as the default device's NAME — and while the read was a stub that always returned null, every
+    /// picker claimed the app was on the default device whatever Windows was really doing with it. The read
+    /// is real since #2088 (<c>AudioPolicyConfigFactory.GetPersistedDefaultEndpoint</c>), and null is still what
+    /// it answers when Windows cannot say.
     /// <para>An id that matches no device in the list is unknown too, not the default. If Windows persisted a
     /// route to an endpoint that is unplugged or gone, the app is routed somewhere this list cannot name;
     /// showing the default there is the same lie in a rarer case.</para>

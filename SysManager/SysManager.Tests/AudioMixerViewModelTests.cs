@@ -273,8 +273,8 @@ public class AudioMixerViewModelTests
     /// <c>IsDefault</c> and marks the row KNOWN — so the snapshot silently converted "we do not know" into "it
     /// is on the default device". That refresh runs every tenth pass of the 1 Hz reconcile loop, so every
     /// routable row reverted from the placeholder to naming a device about ten seconds after the tab opened,
-    /// undoing the fix that introduced the placeholder. The route read is still a stub returning null, so this
-    /// was every row on every machine, not an edge case.
+    /// undoing the fix that introduced the placeholder. The route read was a stub returning null then, so this
+    /// was every row on every machine, not an edge case. A row Windows still cannot answer for stays unknown.
     /// <para>Twelve passes, not ten: the refresh fires ON the tenth, and stopping there would leave the
     /// assertion sitting exactly on the boundary it is trying to cross.</para>
     /// </remarks>
@@ -285,7 +285,7 @@ public class AudioMixerViewModelTests
         using var vm = NewVm(RoutableService(writes, route: null));
         var row = vm.Sessions.Single();
 
-        Assert.True(row.OutputRouteUnknown, "the row should start unknown — the route read is a stub");
+        Assert.True(row.OutputRouteUnknown, "the row should start unknown — this route could not be read");
         Assert.Null(row.SelectedOutputDevice);
 
         for (var pass = 0; pass < 12; pass++) await vm.ReconcileAsync();
@@ -311,7 +311,7 @@ public class AudioMixerViewModelTests
         var writes = new List<(string Session, string Device)>();
         using var vm = NewVm(RoutableService(writes, route: null));
         var row = vm.Sessions.Single();
-        Assert.True(row.OutputRouteUnknown, "the row should start unknown — the route read is a stub");
+        Assert.True(row.OutputRouteUnknown, "the row should start unknown — this route could not be read");
 
         row.SelectedOutputDevice = row.OutputDevices.Single(d => d.Id == "{hdst}");
 
@@ -372,8 +372,8 @@ public class AudioMixerViewModelTests
     /// Routing an app to a device and then putting it back on the default must CLEAR the override, not pin
     /// the app to whichever device happens to be default right now.
     /// <para>Goes headset-then-default rather than selecting the default directly. It had to: the row used to
-    /// be built with the default already selected, because the route-read stub's empty answer resolved to that
-    /// entry, so assigning it again was not a property change, the write path never ran, and the test passed
+    /// be built with the default already selected, because the route read, a stub then, answered empty, which
+    /// resolved to that entry, so assigning it again was not a property change, the write path never ran, and the test passed
     /// while asserting nothing. The row now starts with no selection at all, so the first assignment is a real
     /// change too — but the two-step is kept, because it is the sequence a user actually performs and it still
     /// proves the second write clears rather than re-pins.</para>
@@ -412,7 +412,7 @@ public class AudioMixerViewModelTests
     /// <remarks>
     /// The service used to answer with two states where it needed three: an empty id meant both "this app
     /// follows the system default" and "the route could not be read", and the row turned either into the
-    /// default device's NAME. Since the read is a stub that always fails, every picker asserted the app was on
+    /// default device's NAME. While the read was a stub that always failed, every picker asserted the app was on
     /// the default device whatever Windows was doing with it. This test's earlier form pinned that: its own
     /// data row said "nothing is known about this app's route" while asserting the default was displayed.
     /// <para>An unresolvable id is unknown for the same reason. A route to an unplugged endpoint means the app
@@ -464,6 +464,71 @@ public class AudioMixerViewModelTests
         for (var i = 0; i < 3; i++) await vm.ReconcileAsync();
 
         Assert.Equal(1, enumerations);                // three passes later, still no re-read
+    }
+
+    /// <summary>
+    /// A route changed in Windows' own sound settings reaches the picker with the next read of the devices (#2088).
+    /// </summary>
+    /// <remarks>
+    /// The route used to be read only when a row was built, so a surviving row went on showing the device it was
+    /// built with. Twelve passes for the reason the neighbouring tests give: the refresh fires ON the tenth.
+    /// </remarks>
+    [Fact]
+    public async Task ARouteChangedInWindows_ReachesThePicker_WithTheNextReadOfTheDevices()
+    {
+        var route = string.Empty;
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        service.GetRenderDevices().Returns(_ => new List<AudioDevice> { Speakers, Headset });
+        service.GetSessionOutputDevice("s1").Returns(_ => route);
+        using var vm = NewVm(service);
+        var row = vm.Sessions.Single();
+        Assert.True(row.SelectedOutputDevice?.IsDefault, "the app starts on the default device");
+
+        // The user moves the app to the headset in Windows' settings.
+        route = "{hdst}";
+        for (var pass = 0; pass < 12; pass++) await vm.ReconcileAsync();
+
+        Assert.Equal("{hdst}", row.SelectedOutputDevice?.Id);
+        Assert.False(row.OutputRouteUnknown);
+    }
+
+    /// <summary>
+    /// The route is read when a row appears and again with each read of the devices, never on the passes between.
+    /// </summary>
+    /// <remarks>
+    /// Reading it is a call into the audio service per app, and the reconcile runs every second. Counted inside the
+    /// stub, as the device count above is, with the loops parked.
+    /// </remarks>
+    [Fact]
+    public async Task TheRoute_IsReadWithTheDevices_NotOnEveryPass()
+    {
+        var service = ServiceWith(Session("s1"));
+        service.IsRoutingSupported.Returns(true);
+        var enumerations = 0;
+        var reads = 0;
+        service.GetRenderDevices().Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref enumerations);
+            return new List<AudioDevice> { Speakers, Headset };
+        });
+        service.GetSessionOutputDevice("s1").Returns(_ =>
+        {
+            System.Threading.Interlocked.Increment(ref reads);
+            return string.Empty;
+        });
+
+        using var vm = NewVm(service);
+        // Init reads the devices once, before any row exists, and the route once, when the row appears.
+        Assert.Equal((1, 1), (enumerations, reads));
+
+        for (var pass = 0; pass < 12; pass++)
+        {
+            await vm.ReconcileAsync();
+            Assert.Equal(enumerations, reads);
+        }
+
+        Assert.True(enumerations >= 2, "twelve passes read the devices only once, so this checked no refresh at all");
     }
 
     /// <summary>

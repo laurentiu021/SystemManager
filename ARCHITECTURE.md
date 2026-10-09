@@ -291,8 +291,9 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   more when a look was asked for while one ran; Refresh is off while a look or a put-back runs. A look or a
   put-back that throws says so rather than leaving its progress line. Also lists the tabs whose switches are
   their own undo (`UndoSwitch`) and, looked for only when shown and outside Busy, the newest restore point —
-  asked for only as an administrator, one question at a time, called off when the tab is disposed. No "undo
-  everything".
+  asked for only as an administrator, one question at a time, called off when the tab is disposed, and given
+  `RestorePointPatience` (a minute, on an injectable `TimeProvider`) before the card says Windows did not answer,
+  so a question that never ends cannot keep Refresh from asking again (#2606). No "undo everything".
 - `RecentChangesViewModel` — the Recent Changes tab (#1507): one `IRecentChangesService.LookAsync` over
   `RecentChangesService.LongestPeriodDays`, which the period and kind chips then filter without looking again.
   `BuildDays` lays the changes out by day, newest first, folding two or more installed updates on one day into one

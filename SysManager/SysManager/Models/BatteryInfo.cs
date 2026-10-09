@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
@@ -21,6 +22,7 @@ public sealed partial class BatteryInfo : ObservableObject
     [NotifyPropertyChangedFor(nameof(HealthDisplay))]
     [NotifyPropertyChangedFor(nameof(WearDisplay))]
     [NotifyPropertyChangedFor(nameof(HasCapacityData))]
+    [NotifyPropertyChangedFor(nameof(DesignCapacityDisplay))]
     private uint _designCapacityMWh;       // milliwatt-hours
 
     [ObservableProperty]
@@ -29,8 +31,21 @@ public sealed partial class BatteryInfo : ObservableObject
     [NotifyPropertyChangedFor(nameof(HealthDisplay))]
     [NotifyPropertyChangedFor(nameof(WearDisplay))]
     [NotifyPropertyChangedFor(nameof(HasCapacityData))]
+    [NotifyPropertyChangedFor(nameof(FullChargeCapacityDisplay))]
     private uint _fullChargeCapacityMWh;
-    [ObservableProperty] private int _cycleCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CycleCountDisplay))]
+    private int _cycleCount;
+
+    /// <summary>
+    /// True when Windows answered with a cycle count. 0 is a real count for a new battery, so it cannot also mean
+    /// "not read", which is what it meant when the read needed administrator rights and was refused (#2623).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CycleCountDisplay))]
+    private bool _cycleCountRead;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(RuntimeDisplay))]
     private int _estimatedRuntimeMinutes;  // -1 = unlimited (AC)
@@ -74,4 +89,24 @@ public sealed partial class BatteryInfo : ObservableObject
 
     /// <summary>Formatted wear level. Same sentinel handling as <see cref="HealthDisplay"/>.</summary>
     public string WearDisplay => HasCapacityData ? $"{WearPercent}%" : "Not available";
+
+    /// <summary>The design capacity as the details card shows it, or "Not available" when Windows gave none.</summary>
+    /// <remarks>
+    /// A refused read leaves it at 0, and the card read "0 mWh", as if the battery were dead rather than not read
+    /// (#2623). 0 reads "Not available" for both capacities, as it already does for <see cref="HealthDisplay"/> and
+    /// <see cref="WearDisplay"/>, which are worked out from them.
+    /// </remarks>
+    public string DesignCapacityDisplay => DesignCapacityMWh > 0
+        ? string.Create(CultureInfo.InvariantCulture, $"{DesignCapacityMWh} mWh")
+        : "Not available";
+
+    /// <summary>The full charge capacity as the details card shows it, or "Not available" when Windows gave none.</summary>
+    public string FullChargeCapacityDisplay => FullChargeCapacityMWh > 0
+        ? string.Create(CultureInfo.InvariantCulture, $"{FullChargeCapacityMWh} mWh")
+        : "Not available";
+
+    /// <summary>The cycle count as the details card shows it, or "Not available" when Windows did not answer.</summary>
+    public string CycleCountDisplay => CycleCountRead
+        ? CycleCount.ToString(CultureInfo.InvariantCulture)
+        : "Not available";
 }

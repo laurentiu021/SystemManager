@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.8] - 2026-10-09
+
+**Battery Health now says "Not available" for a design capacity, full charge capacity or cycle count that Windows did
+not give, instead of 0** (#2623).
+
+### Fixed
+
+- **Battery Health: a capacity or cycle count Windows refused no longer reads as a measurement.** Without administrator
+  rights Windows does not give these three, and the details card showed "Design capacity 0 mWh", "Full charge
+  capacity 0 mWh" and "Cycle count 0", as if the battery were dead. Each now reads "Not available", as Health and Wear
+  above them already did. A cycle count of 0 that Windows did give, as it does for a new battery, still reads 0. The
+  card had shown them this way since Battery Health arrived in 0.10.0.
+
 ## [1.127.7] - 2026-10-09
 
 **System Health and Ping now show "—" for a figure that was not measured, instead of 100%, a bare unit or nothing**

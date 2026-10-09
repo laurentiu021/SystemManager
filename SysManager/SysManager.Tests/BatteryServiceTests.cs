@@ -129,6 +129,7 @@ public class BatteryServiceTests
         Assert.Equal(0u, info.DesignCapacityMWh);
         Assert.Equal(0u, info.FullChargeCapacityMWh);
         Assert.Equal(0, info.CycleCount);
+        Assert.False(info.CycleCountRead);
         Assert.Equal(0, info.EstimatedRuntimeMinutes);
         Assert.Equal("", info.Chemistry);
         Assert.Equal("", info.Manufacturer);
@@ -202,5 +203,26 @@ public class BatteryServiceTests
         Assert.NotNull(info);
         Assert.False(info.HasBattery);
         Assert.Equal("No battery detected", info.Status);
+    }
+
+    // ── A cycle count Windows did not give is not 0 (#2623) ──
+    //
+    // 0 is a real count for a new battery, so whether Windows answered is recorded apart from the number.
+
+    [Theory]
+    [InlineData(0u, true, 0)]
+    [InlineData(312u, true, 312)]
+    [InlineData(null, false, 0)]
+    [InlineData("not a number", false, 0)]
+    [InlineData(uint.MaxValue, false, 0)]
+    [InlineData(-5, false, 0)]
+    public void SetCycleCount_CountsAsReadOnlyAValueThatIsACount(object? value, bool read, int count)
+    {
+        var info = new BatteryInfo();
+
+        BatteryService.SetCycleCount(info, value);
+
+        Assert.Equal(read, info.CycleCountRead);
+        Assert.Equal(count, info.CycleCount);
     }
 }

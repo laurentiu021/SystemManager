@@ -192,4 +192,62 @@ public class BatteryInfoEdgeCaseTests
         Assert.Contains(nameof(BatteryInfo.WearDisplay), changed);
         Assert.Contains(nameof(BatteryInfo.HasCapacityData), changed);
     }
+
+    // ── Figures Windows did not give say "Not available" (#2623) ──
+    //
+    // Without administrator rights Windows refuses the three root\WMI reads, which left each at 0, and the details card
+    // showed that as a reading: "Design capacity 0 mWh", "Full charge capacity 0 mWh", "Cycle count 0".
+
+    [Fact]
+    public void TheDetails_WhenNothingWasRead_SayNotAvailable()
+    {
+        var info = new BatteryInfo { HasBattery = true };
+
+        Assert.Equal("Not available", info.DesignCapacityDisplay);
+        Assert.Equal("Not available", info.FullChargeCapacityDisplay);
+        Assert.Equal("Not available", info.CycleCountDisplay);
+    }
+
+    [Fact]
+    public void TheDetails_ShowWhatWindowsGave_AsTheyReadBefore()
+    {
+        var info = new BatteryInfo
+        {
+            DesignCapacityMWh = 57000,
+            FullChargeCapacityMWh = 51300,
+            CycleCountRead = true,
+            CycleCount = 312,
+        };
+
+        Assert.Equal("57000 mWh", info.DesignCapacityDisplay);
+        Assert.Equal("51300 mWh", info.FullChargeCapacityDisplay);
+        Assert.Equal("312", info.CycleCountDisplay);
+    }
+
+    [Fact]
+    public void ACycleCountOfZero_ThatWindowsGave_ReadsZero()
+    {
+        // A new battery has done no cycles, so 0 is a real answer and must not read as "Not available".
+        var info = new BatteryInfo { CycleCountRead = true, CycleCount = 0 };
+
+        Assert.Equal("0", info.CycleCountDisplay);
+    }
+
+    [Fact]
+    public void ChangingAFigure_RaisesItsDisplay()
+    {
+        Assert.Contains(nameof(BatteryInfo.DesignCapacityDisplay), RaisedBy(i => i.DesignCapacityMWh = 57000));
+        Assert.Contains(nameof(BatteryInfo.FullChargeCapacityDisplay), RaisedBy(i => i.FullChargeCapacityMWh = 51300));
+        Assert.Contains(nameof(BatteryInfo.CycleCountDisplay), RaisedBy(i => i.CycleCount = 312));
+        Assert.Contains(nameof(BatteryInfo.CycleCountDisplay), RaisedBy(i => i.CycleCountRead = true));
+    }
+
+    /// <summary>The property names a fresh <see cref="BatteryInfo"/> raises while <paramref name="change"/> runs on it.</summary>
+    private static IEnumerable<string> RaisedBy(Action<BatteryInfo> change)
+    {
+        var info = new BatteryInfo();
+        var raised = info.RecordPropertyChanges();
+        change(info);
+        return raised;
+    }
 }

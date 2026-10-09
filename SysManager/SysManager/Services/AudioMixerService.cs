@@ -11,16 +11,17 @@ using SysManager.Models;
 namespace SysManager.Services;
 
 /// <summary>
-/// Reads and controls per-application audio via Windows Core Audio (WASAPI) on the
-/// <b>default render endpoint</b>. Enumerates the render sessions, groups them by owning
-/// process (the Windows Volume Mixer mental model — one row per app), and gets/sets each
-/// group's volume, mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the seven
+/// Reads and controls per-application audio via Windows Core Audio (WASAPI) on <b>every active
+/// output device</b>. Enumerates the render sessions, groups them by owning app across devices
+/// (the Windows Volume Mixer mental model — one row per app), and gets/sets each group's volume,
+/// mute, and VU peak. Uses raw <c>[ComImport]</c> interop for the seven
 /// documented interfaces (<c>IMMDeviceEnumerator</c> → <c>IAudioSessionManager2</c> →
 /// <c>IAudioSessionEnumerator</c> → <c>IAudioSessionControl(2)</c> /
 /// <c>ISimpleAudioVolume</c> / <c>IAudioMeterInformation</c>, and <c>IAudioEndpointVolume</c>) so
 /// nothing but the .NET runtime is added to the single portable .exe.
 ///
-/// <para>Scope: enumerates sessions on the default render endpoint. Output devices are listed via
+/// <para>Scope: enumerates sessions on every active render endpoint, the default one first, so an app
+/// routed to another device keeps its row, its level and its slider (#2652). Output devices are listed via
 /// the documented device API (<see cref="GetRenderDevices"/>). Per-app output-device routing uses
 /// the UNDOCUMENTED <c>IAudioPolicyConfigFactory</c> interface (the same one EarTrumpet reverse-engineers)
 /// and is feature-detected at runtime: if it can't bind on this Windows build,
@@ -53,6 +54,11 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private object? _endpointVolume; // IAudioEndpointVolume — the whole PC's volume, on _device
     private object? _endpointMeter;  // IAudioMeterInformation — the whole PC's level, on _device
     private string? _deviceId;     // _device's endpoint id, to notice Windows moving the default elsewhere
+
+    // The session managers of the other active output devices, opened with the default's (#2652), and the ids of the
+    // devices tried, whether or not they opened, to notice one plugged in or pulled out.
+    private readonly List<(string Id, object Manager)> _otherManagers = []; // IAudioSessionManager2 per other device
+    private readonly HashSet<string> _otherIds = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
     // Per-app cached session interfaces, keyed by the group key (PID string, or the
@@ -111,10 +117,14 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     }
 
     /// <summary>
-    /// Phase 1 (under <see cref="_gate"/>): enumerate the render sessions, cache each session's
-    /// control RCW keyed by its stable session-instance identifier, and read the fast COM values
+    /// Phase 1 (under <see cref="_gate"/>): enumerate the render sessions on every active output device,
+    /// cache each session's control RCW under its app's group key, and read the fast COM values
     /// (volume/mute/state/peak/pid). Does NOT resolve process identity — that slow work is done by
     /// the caller after the lock is released. Returns the per-app accumulators.
+    /// <para>Every device, not only the default (#2652). An app routed to another device plays there, and the
+    /// session it leaves on the default device goes inactive: read alone, that showed the app with no level and
+    /// a slider that moved the stale session, and once the app restarted it had no row at all, so it could not be
+    /// routed back. The default device is read first.</para>
     /// </summary>
     private List<GroupAccumulator> EnumerateGroupsLocked()
     {
@@ -123,80 +133,25 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         {
             if (!EnsureManager()) return [];
 
-            var mgr = (IAudioSessionManager2)_manager!;
-            if (mgr.GetSessionEnumerator(out var sessionEnum) != 0 || sessionEnum is null)
-                return [];
-
             // Fresh enumeration → the old cached control RCWs are stale; release them.
             ReleaseGroups();
 
-            try
+            AbsorbSessionsLocked((IAudioSessionManager2)_manager!, acc);
+            foreach (var (id, manager) in _otherManagers.ToArray())
             {
-                if (sessionEnum.GetCount(out int count) != 0) return [];
-
-                for (int i = 0; i < count; i++)
+                try
                 {
-                    if (sessionEnum.GetSession(i, out var control) != 0 || control is null)
-                        continue;
-
-                    if (control is not IAudioSessionControl2 ctl2)
-                    {
-                        Release(control);
-                        continue;
-                    }
-
-                    // Drop dead streams; keep active + inactive.
-                    if (ctl2.GetState(out int rawState) == 0 &&
-                        (AudioSessionState)rawState == AudioSessionState.Expired)
-                    {
-                        Release(control);
-                        continue;
-                    }
-
-                    bool isSystemSounds = ctl2.IsSystemSoundsSession() == 0; // S_OK == true
-                    // Honor the HRESULT: on FAILURE (hr < 0) leave pid unknown so a genuine app
-                    // whose PID couldn't be read isn't later mislabeled "System Sounds". Note any
-                    // SUCCESS code counts — including AUDCLNT_S_NO_SINGLE_PROCESS (0x0008900F),
-                    // returned for a session spanning several processes, where pid IS still valid.
-                    bool pidKnown = ctl2.GetProcessId(out uint pid) >= 0;
-
-                    // Key on the session-INSTANCE identifier (stable per stream, PID-reuse-proof)
-                    // rather than the recyclable PID. All of an app's streams still collapse into
-                    // one row: sessions of the same process share a common prefix in the instance
-                    // id, so we group by the "…|<pid>|…%b<GUID>" up to the trailing per-stream GUID.
-                    string key = isSystemSounds
-                        ? "system-sounds"
-                        : GroupKeyFor(ctl2, pid);
-
-                    // Read this session's controls (same underlying COM object, so we keep
-                    // ONE RCW per session and cast to the sibling interfaces on demand).
-                    float volume = 0f;
-                    bool muted = false;
-                    if (control is ISimpleAudioVolume vol)
-                    {
-                        vol.GetMasterVolume(out volume);
-                        vol.GetMute(out muted);
-                    }
-                    float peak = 0f;
-                    if (control is IAudioMeterInformation meter)
-                        meter.GetPeakValue(out peak);
-
-                    var state = (AudioSessionState)rawState;
-
-                    if (!acc.TryGetValue(key, out var group))
-                    {
-                        group = new GroupAccumulator(key, pid, pidKnown, isSystemSounds);
-                        acc[key] = group;
-                        _groups[key] = [];
-                    }
-
-                    _groups[key].Add(control);          // cache the RCW for set/get later
-                    group.Absorb(volume, muted, state, peak);
+                    AbsorbSessionsLocked((IAudioSessionManager2)manager, acc);
                 }
-            }
-            finally
-            {
-                Release(sessionEnum);
+                catch (COMException ex)
+                {
+                    // A device that fails mid-read, most often one being unplugged, takes only its own apps with it this
+                    // pass. Forgetting its id makes the next read of the device list open it again if it is still there.
+                    Log.Debug("Audio session enumeration on {Device} failed: {Error}", id, ex.Message);
+                    Release(manager);
+                    _otherManagers.Remove((id, manager));
+                    _otherIds.Remove(id);
+                }
             }
         }
         catch (COMException ex)
@@ -212,20 +167,115 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     }
 
     /// <summary>
-    /// Group key for an app session: the session-instance identifier with its trailing per-stream
-    /// GUID stripped, so every stream of one process maps to one row (Windows Volume Mixer model)
-    /// while remaining stable across refreshes and immune to PID reuse. Falls back to the PID when
-    /// the instance id is unavailable.
+    /// Reads the sessions one device's manager lists into <paramref name="acc"/>, by app. Caller holds
+    /// <see cref="_gate"/>.
+    /// </summary>
+    private void AbsorbSessionsLocked(IAudioSessionManager2 mgr, Dictionary<string, GroupAccumulator> acc)
+    {
+        if (mgr.GetSessionEnumerator(out var sessionEnum) != 0 || sessionEnum is null) return;
+
+        try
+        {
+            if (sessionEnum.GetCount(out int count) != 0) return;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (sessionEnum.GetSession(i, out var control) != 0 || control is null)
+                    continue;
+
+                if (control is not IAudioSessionControl2 ctl2)
+                {
+                    Release(control);
+                    continue;
+                }
+
+                // Drop dead streams; keep active + inactive.
+                if (ctl2.GetState(out int rawState) == 0 &&
+                    (AudioSessionState)rawState == AudioSessionState.Expired)
+                {
+                    Release(control);
+                    continue;
+                }
+
+                bool isSystemSounds = ctl2.IsSystemSoundsSession() == 0; // S_OK == true
+                // Honor the HRESULT: on FAILURE (hr < 0) leave pid unknown so a genuine app
+                // whose PID couldn't be read isn't later mislabeled "System Sounds". Note any
+                // SUCCESS code counts — including AUDCLNT_S_NO_SINGLE_PROCESS (0x0008900F),
+                // returned for a session spanning several processes, where pid IS still valid.
+                bool pidKnown = ctl2.GetProcessId(out uint pid) >= 0;
+
+                // Key on the session-INSTANCE identifier (stable per stream, PID-reuse-proof)
+                // rather than the recyclable PID. All of an app's streams still collapse into
+                // one row: sessions of the same process share a common prefix in the instance
+                // id, so we group by the "…|<pid>|…%b<GUID>" up to the trailing per-stream GUID,
+                // and without the endpoint id it starts with, so the row covers every device.
+                string key = isSystemSounds
+                    ? "system-sounds"
+                    : GroupKeyFor(ctl2, pid);
+
+                // Read this session's controls (same underlying COM object, so we keep
+                // ONE RCW per session and cast to the sibling interfaces on demand).
+                float volume = 0f;
+                bool muted = false;
+                if (control is ISimpleAudioVolume vol)
+                {
+                    vol.GetMasterVolume(out volume);
+                    vol.GetMute(out muted);
+                }
+                float peak = 0f;
+                if (control is IAudioMeterInformation meter)
+                    meter.GetPeakValue(out peak);
+
+                var state = (AudioSessionState)rawState;
+
+                if (!acc.TryGetValue(key, out var group))
+                {
+                    group = new GroupAccumulator(key, pid, pidKnown, isSystemSounds);
+                    acc[key] = group;
+                    _groups[key] = [];
+                }
+
+                _groups[key].Add(control);          // cache the RCW for set/get later
+                group.Absorb(volume, muted, state, peak);
+            }
+        }
+        finally
+        {
+            Release(sessionEnum);
+        }
+    }
+
+    /// <summary>
+    /// Group key for an app session: <see cref="AppKeyOf"/> the session-instance identifier, so every
+    /// stream of one process maps to one row on every device (Windows Volume Mixer model) while
+    /// remaining stable across refreshes and immune to PID reuse. Falls back to the PID when the
+    /// instance id is unavailable.
     /// </summary>
     private static string GroupKeyFor(IAudioSessionControl2 ctl2, uint pid)
     {
         try
         {
             if (ctl2.GetSessionInstanceIdentifier(out string id) == 0 && !string.IsNullOrEmpty(id))
-                return StripStreamGuid(id);
+                return AppKeyOf(id);
         }
         catch (COMException) { /* fall back to PID below */ }
         return "pid:" + pid;
+    }
+
+    /// <summary>
+    /// The group key for one app's sessions on every device: <see cref="StripStreamGuid"/>'s key without the
+    /// endpoint id the session-instance identifier starts with (#2652). The identifier reads
+    /// <c>"{endpoint-id}|…%b{…}"</c>, and the same app playing on two devices differs only in that first part, so
+    /// with it the app was two rows, one of them stale. An identifier that does not start with <c>"{"</c> and a
+    /// <c>"|"</c> is a form this does not know and is left whole. Pure and internal so it is unit-tested without a
+    /// device.
+    /// </summary>
+    internal static string AppKeyOf(string instanceId)
+    {
+        var key = StripStreamGuid(instanceId);
+        if (string.IsNullOrEmpty(key) || key[0] != '{') return key;
+        var bar = key.IndexOf('|', StringComparison.Ordinal);
+        return bar > 0 && bar < key.Length - 1 ? key[(bar + 1)..] : key;
     }
 
     /// <summary>
@@ -479,8 +529,8 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                     Release(def);
                 }
 
-                // DEVICE_STATE_ACTIVE (0x1) render endpoints.
-                if (devEnum.EnumAudioEndpoints(EDataFlow.Render, 0x1, out var collPtr) != 0 || collPtr == IntPtr.Zero)
+                if (devEnum.EnumAudioEndpoints(EDataFlow.Render, DEVICE_STATE_ACTIVE, out var collPtr) != 0
+                    || collPtr == IntPtr.Zero)
                     return [];
                 var collection = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(collPtr);
                 try
@@ -512,6 +562,10 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
                     // the device the sound really goes to. Before, the endpoint was opened once and kept, and the tab
                     // went on listing the first default's apps for the rest of the session (#1588).
                     if (DefaultMoved(_deviceId, defaultId)) ResetManager();
+                    // A device plugged in, pulled out or disabled since the managers were opened: drop them, so the next
+                    // pass reads the apps on the devices there are now (#2652).
+                    else if (_manager is not null && OthersChanged(_otherIds, devices.Select(d => d.Id), defaultId))
+                        ResetManager();
                     return devices;
                 }
                 finally { Release(collection); Marshal.Release(collPtr); }
@@ -587,6 +641,19 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     /// </summary>
     internal static bool DefaultMoved(string? heldId, string defaultId) =>
         heldId is { Length: > 0 } && !string.Equals(heldId, defaultId, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the other devices whose sessions are read (<paramref name="heldIds"/>, every one tried, whether or not
+    /// it opened) are no longer the active devices other than the default: one was plugged in, pulled out or disabled.
+    /// Pure and internal so the decision is unit-tested without a device.
+    /// </summary>
+    internal static bool OthersChanged(IReadOnlySet<string> heldIds, IEnumerable<string> activeIds, string defaultId)
+    {
+        var others = activeIds
+            .Where(id => !string.Equals(id, defaultId, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return !others.SetEquals(heldIds);
+    }
 
     // ── Per-app output routing (UNDOCUMENTED IAudioPolicyConfigFactory — guarded) ──
 
@@ -730,7 +797,44 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
             return false;
         }
         _manager = mgrObj;
+        OpenOtherEndpointsLocked(devEnum);
         return true;
+    }
+
+    /// <summary>
+    /// Opens the session manager of every active output device other than the default, so an app routed to one of
+    /// them keeps its row (#2652). A device that will not open is left out, and stays out until the devices change.
+    /// </summary>
+    private void OpenOtherEndpointsLocked(IMMDeviceEnumerator devEnum)
+    {
+        if (devEnum.EnumAudioEndpoints(EDataFlow.Render, DEVICE_STATE_ACTIVE, out var collPtr) != 0
+            || collPtr == IntPtr.Zero)
+            return;
+
+        var collection = (IMMDeviceCollection)Marshal.GetObjectForIUnknown(collPtr);
+        try
+        {
+            if (collection.GetCount(out int count) != 0) return;
+            for (int i = 0; i < count; i++)
+            {
+                if (collection.Item(i, out var device) != 0 || device is null) continue;
+                try
+                {
+                    var id = EndpointIdOf(device);
+                    if (id.Length == 0 || string.Equals(id, _deviceId, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    _otherIds.Add(id);
+                    var iid = IID_IAudioSessionManager2;
+                    if (device.Activate(ref iid, CLSCTX_ALL, IntPtr.Zero, out var manager) == 0
+                        && manager is IAudioSessionManager2)
+                        _otherManagers.Add((id, manager));
+                    else
+                        Release(manager);
+                }
+                finally { Release(device); }
+            }
+        }
+        finally { Release(collection); Marshal.Release(collPtr); }
     }
 
     private void ResetManager()
@@ -740,6 +844,9 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         Release(_endpointVolume); _endpointVolume = null;
         _pcPeakFailureLogged = false;
         Release(_manager); _manager = null;
+        foreach (var (_, manager) in _otherManagers) Release(manager);
+        _otherManagers.Clear();
+        _otherIds.Clear();
         Release(_device); _device = null;
         _deviceId = null;
         Release(_enumerator); _enumerator = null;
@@ -829,7 +936,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     /// Holds only the fast COM values; the display name/path are supplied later by
     /// <see cref="ToInfo"/> once identity is resolved outside the lock.
     /// </summary>
-    private sealed class GroupAccumulator(string key, uint pid, bool pidKnown, bool isSystemSounds)
+    internal sealed class GroupAccumulator(string key, uint pid, bool pidKnown, bool isSystemSounds)
     {
         private bool _first = true;
         private float _volume;
@@ -844,9 +951,15 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
 
         public void Absorb(float volume, bool muted, AudioSessionState state, float peak)
         {
-            // The first session in the group defines the representative volume/mute the
-            // slider shows; every session gets the write on set (see SetVolume/SetMute).
-            if (_first) { _volume = volume; _muted = muted; _first = false; }
+            // The slider shows the volume and mute of a session that is playing, else of the first one: an app routed
+            // to another device keeps an inactive session on the device it left, and that one's volume is not what the
+            // app plays at (#2652). Every session gets the write on set (see SetVolume/SetMute).
+            if (_first || (state == AudioSessionState.Active && _state != AudioSessionState.Active))
+            {
+                _volume = volume;
+                _muted = muted;
+                _first = false;
+            }
             if (state == AudioSessionState.Active) _state = AudioSessionState.Active;
             if (peak > _peak) _peak = peak;
         }
@@ -860,6 +973,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private static readonly Guid CLSID_MMDeviceEnumerator = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
     private static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
     private const uint CLSCTX_ALL = 0x17;
+    private const uint DEVICE_STATE_ACTIVE = 0x1;
 
     private enum EDataFlow { Render = 0, Capture = 1, All = 2 }
     private enum ERole { Console = 0, Multimedia = 1, Communications = 2 }

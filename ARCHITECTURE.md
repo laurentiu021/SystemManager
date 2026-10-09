@@ -418,15 +418,23 @@ Key services:
   A runner REUSES its runspace across calls, because starting that child
   and completing a remoting handshake with it is the slow part and the services
   that use it call in bursts (`DnsService` six times, `EdgeOneDriveService` four).
-  Three properties make reuse safe: the runspace state is re-checked on every
-  lease, so a child killed from outside is discarded and rebuilt rather than
-  failing every later call; pipelines are serialised behind a gate, because a
-  runspace runs one at a time and a shared one turns concurrent calls into a
-  conflict; and the runspace is evicted after ~20 s idle, which matters because
-  eleven runners are constructed directly in `MainWindowViewModel`'s designer graph
-  and nothing ever disposes them — without eviction a dozen `powershell.exe`
-  processes would be resident for the whole run. `Dispose` releases it
-  deterministically where a consumer is disposed.
+  Three properties make reuse safe: the runspace state, and whether its child
+  process is still running, are re-checked on every lease, so a child killed from
+  outside is discarded and rebuilt rather than failing every later call (the state
+  alone goes on reading open for about a minute after the child dies, and tearing
+  that runspace down takes the same minute, so it is left to the thread pool, #2608);
+  pipelines are serialised behind a gate, because a runspace runs one at a time
+  and a shared one turns concurrent calls into a conflict; and the runspace is
+  evicted after ~20 s idle, which matters because eleven runners are constructed
+  directly in `MainWindowViewModel`'s designer graph and nothing ever disposes
+  them — without eviction a dozen `powershell.exe` processes would be resident for
+  the whole run. `Dispose` releases it deterministically where a consumer is disposed.
+  A session that stops working under a run surfaces as `RuntimeException`, the type
+  every service already turns into its failed state, rather than as the two
+  `SystemException`s PowerShell raises for it. Cancelling hands `Stop()` to the
+  thread pool: `Stop()` waits for the stop to land, and on a session whose child had
+  died that froze the caller of `Cancel()`, a Cancel button's UI thread, for about a
+  minute (#2608).
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs

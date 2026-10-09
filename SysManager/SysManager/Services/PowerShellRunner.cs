@@ -58,6 +58,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     private bool _disposed;
 
     private readonly Func<Action, Task> _scheduleProcessStart;
+    private readonly Func<Action, Task> _scheduleStop;
     private readonly Func<System.Diagnostics.Process, CancellationToken, Task> _waitForProcessExit;
     private readonly Action<System.Diagnostics.Process> _terminateProcessTree;
     private readonly Func<Runspace, Task> _openRunspace;
@@ -80,11 +81,13 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         Func<Runspace, Task>? openRunspace = null,
         Func<(Runspace Runspace, IDisposable? ProcessInstance, IDisposable? Process)>? createRunspace = null,
         TimeSpan? openRunspaceTimeout = null,
-        TimeSpan? idleRunspaceLifetime = null)
+        TimeSpan? idleRunspaceLifetime = null,
+        Func<Action, Task>? scheduleStop = null)
     {
         _idleRunspaceLifetime = idleRunspaceLifetime ?? IdleRunspaceLifetime;
         _scheduleProcessStart = scheduleProcessStart
             ?? throw new ArgumentNullException(nameof(scheduleProcessStart));
+        _scheduleStop = scheduleStop ?? (static action => Task.Run(action));
         _waitForProcessExit = waitForProcessExit
             ?? (static (process, cancellationToken) => process.WaitForExitAsync(cancellationToken));
         _terminateProcessTree = terminateProcessTree
@@ -218,34 +221,31 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
                 LineReceived?.Invoke(new PowerShellLine(OutputKind.Output, obj.BaseObject.ToString() ?? string.Empty, DateTime.Now));
         };
 
-        using var reg = cancellationToken.Register(() => { try { ps.Stop(); } catch (InvalidOperationException) { } });
-
-        var task = Task.Factory.FromAsync(
-            ps.BeginInvoke<PSObject, PSObject>(null, output),
-            ar => ps.EndInvoke(ar));
-
-        // The registration above can fire while this instance is still NotStarted, and Stop() then throws
-        // InvalidOperationException, which is swallowed — so nothing has asked the pipeline to stop, and
-        // BeginInvoke goes on to run the script in full. The window is real rather than theoretical: leasing
-        // and opening a runspace takes a few hundred milliseconds, which is the same order as the delay any
-        // caller puts before cancelling.
-        //
-        // Measured on CI: a cancel at 390 ms against a script that loops on 50 ms sleeps, and the run
-        // finished its whole 20 seconds reporting "not interrupted … completed on its own". A loop of that
-        // shape IS interruptible — the blocking-call test below measured the same script cancelling in
-        // 2.2 s — so the stop was not refused, it was lost.
-        //
-        // Re-asserting here closes the window, because BeginInvoke has returned by this point and the
-        // instance will accept a Stop. Idempotent either way: a second Stop on an already-stopping pipeline
-        // raises the same InvalidOperationException this swallows, and on a pipeline that is running it does
-        // exactly what the registration intended to do the first time.
-        if (cancellationToken.IsCancellationRequested)
-        {
-            try { ps.Stop(); } catch (InvalidOperationException) { }
-        }
+        using var reg = cancellationToken.Register(() => RequestStop(ps));
 
         try
         {
+            var task = Task.Factory.FromAsync(
+                ps.BeginInvoke<PSObject, PSObject>(null, output),
+                ar => ps.EndInvoke(ar));
+
+            // The registration above can fire while this instance is still NotStarted, and that stop is then
+            // lost — so nothing has asked the pipeline to stop, and BeginInvoke goes on to run the script in
+            // full. The window is real rather than theoretical: leasing and opening a runspace takes a few
+            // hundred milliseconds, which is the same order as the delay any caller puts before cancelling.
+            //
+            // Measured on CI: a cancel at 390 ms against a script that loops on 50 ms sleeps, and the run
+            // finished its whole 20 seconds reporting "not interrupted … completed on its own". A loop of that
+            // shape IS interruptible — the blocking-call test below measured the same script cancelling in
+            // 2.2 s — so the stop was not refused, it was lost.
+            //
+            // Re-asserting here closes the window, because BeginInvoke has returned by this point and the
+            // instance will accept a Stop. Idempotent either way: a second stop on an already-stopping pipeline
+            // is swallowed like the first, and on a pipeline that is running it does exactly what the
+            // registration intended to do the first time.
+            if (cancellationToken.IsCancellationRequested)
+                RequestStop(ps);
+
             await task.ConfigureAwait(false);
         }
         catch (Exception ex) when (cancellationToken.IsCancellationRequested
@@ -265,6 +265,11 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             // because the only evidence was an elapsed time.
             throw new OperationCanceledException(
                 "The PowerShell pipeline was stopped by cancellation.", cancellationToken);
+        }
+        catch (Exception ex) when (IsSessionBroken(ex))
+        {
+            // BeginInvoke on a runspace that is no longer open, or the session breaking under the run (#2608).
+            throw CreateSessionBrokenException(ex);
         }
 
         // A stopped pipeline does NOT always throw, and relying on the catch above alone reported a
@@ -766,6 +771,49 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         || ex.InnerException is System.Management.Automation.Remoting.PSRemotingDataStructureException;
 
     /// <summary>
+    /// A session that stopped being usable under a run: the runspace left the Opened state, or the pipeline was put
+    /// in a state it cannot run from.
+    /// </summary>
+    /// <remarks>
+    /// Both types derive from <see cref="SystemException"/>, not from <see cref="RuntimeException"/> or
+    /// <see cref="InvalidOperationException"/>, so they went past the services' handlers and the tabs' alike and
+    /// reached the app-wide handler (#2608). <c>BeginInvoke</c> throws the first one for a runspace that is not open,
+    /// which is what a session whose child process has died turns into.
+    /// </remarks>
+    internal static bool IsSessionBroken(Exception ex) =>
+        ex is InvalidRunspaceStateException or InvalidPowerShellStateException
+        || ex.InnerException is InvalidRunspaceStateException or InvalidPowerShellStateException;
+
+    /// <summary>
+    /// <see cref="RuntimeException"/>, like the open failures below it, because every service that runs a script
+    /// already turns that type into its own failed state.
+    /// </summary>
+    private static RuntimeException CreateSessionBrokenException(Exception innerException)
+        => new("The Windows PowerShell session stopped working while the script was running.", innerException);
+
+    /// <summary>
+    /// Asks the pipeline to stop, without waiting for the stop to land and without throwing.
+    /// </summary>
+    /// <remarks>
+    /// The cancellation registration runs on the thread that calls <c>Cancel()</c>, which for a Cancel button is the
+    /// UI thread, and <c>PowerShell.Stop()</c> waits for the stop to land. On a session whose child process had died
+    /// that wait lasted until the transport gave up: <c>Cancel()</c> returned after 58 seconds, with the app frozen
+    /// for all of it (#2608). So the stop is handed to <see cref="_scheduleStop"/>, the thread pool outside tests.
+    /// What a stop on a finished, disposed or broken pipeline throws is logged there, so cancelling cannot throw
+    /// either.
+    /// </remarks>
+    private void RequestStop(PowerShell ps)
+        => _ = _scheduleStop(() =>
+        {
+            try { ps.Stop(); }
+            catch (Exception ex) when (ex is InvalidOperationException or RuntimeException
+                                           or InvalidRunspaceStateException or InvalidPowerShellStateException)
+            {
+                Log.Debug("PowerShell: stopping the pipeline threw {Type}: {Error}", ex.GetType().Name, ex.Message);
+            }
+        });
+
+    /// <summary>
     /// Returns an open runspace: the cached one when it is still usable, otherwise a fresh one.
     /// </summary>
     /// <remarks>
@@ -776,7 +824,10 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <para><b>State is re-checked every time, not assumed.</b> A cached runspace can be broken by things
     /// outside this class — the child killed by a user or by cleanup, the remoting channel dropped — and a
     /// runspace that is not <c>Opened</c> cannot run a pipeline. Anything other than <c>Opened</c> means
-    /// discard and rebuild, which also covers the state this code cannot enumerate in advance.</para>
+    /// discard and rebuild, which also covers the state this code cannot enumerate in advance. So does a child
+    /// that has exited: the state goes on reading <c>Opened</c> for about a minute after that, and the next run
+    /// waited the whole minute before failing (#2608). Tearing that one down takes the same minute, so
+    /// <see cref="Retire"/> leaves it to the thread pool.</para>
     /// <para><b>A failed open leaves nothing cached.</b> The fresh resources are disposed and the exception
     /// propagates, so the next call starts clean rather than retrying against a half-opened runspace.</para>
     /// </remarks>
@@ -784,13 +835,14 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     {
         if (_cached is { } cached)
         {
-            if (cached.Runspace.RunspaceStateInfo.State == RunspaceState.Opened)
+            var childExited = cached.ChildHasExited;
+            if (!childExited && cached.Runspace.RunspaceStateInfo.State == RunspaceState.Opened)
                 return cached;
 
-            Log.Debug("PowerShell: cached runspace is {State}; rebuilding it",
-                      cached.Runspace.RunspaceStateInfo.State);
+            Log.Debug("PowerShell: cached runspace is {State}, child exited: {ChildExited}; rebuilding it",
+                      cached.Runspace.RunspaceStateInfo.State, childExited);
             _cached = null;
-            cached.Dispose();
+            Retire(cached);
         }
 
         var fresh = CreateRunspaceResources();
@@ -839,12 +891,41 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         {
             var idle = _cached;
             _cached = null;
-            idle?.Dispose();
+            if (idle is not null) Retire(idle);
         }
         finally
         {
             _pipeline.Release();
         }
+    }
+
+    /// <summary>
+    /// Tears down resources that are no longer cached: at once while their child is running, on the thread pool once
+    /// it has exited.
+    /// </summary>
+    /// <remarks>
+    /// Disposing an out-of-process runspace whose child has died waits about a minute, because the runspace still
+    /// reads Opened and closing it waits for an answer that will not come. In the lease that minute came before the
+    /// next run could start (#2608). Nothing else holds these resources by then, so nobody needs to wait for them. A
+    /// live child is still released at once, so a disposed runner leaves no child running behind it.
+    /// </remarks>
+    private static void Retire(RunspaceResources resources)
+    {
+        if (!resources.ChildHasExited)
+        {
+            resources.Dispose();
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try { resources.Dispose(); }
+            catch (Exception ex) when (ex is RuntimeException or InvalidOperationException
+                                           or InvalidRunspaceStateException or System.ComponentModel.Win32Exception)
+            {
+                Log.Debug(ex, "PowerShell: releasing a runspace whose child had exited failed");
+            }
+        });
     }
 
     /// <summary>
@@ -864,7 +945,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
 
         var cached = _cached;
         _cached = null;
-        cached?.Dispose();
+        if (cached is not null) Retire(cached);
 
         _pipeline.Dispose();
     }
@@ -1026,6 +1107,34 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         }
 
         public Runspace Runspace { get; }
+
+        /// <summary>
+        /// True when the child process behind the runspace has exited, or the handle no longer refers to one.
+        /// </summary>
+        /// <remarks>
+        /// The runspace goes on reporting Opened for about a minute after its child dies, until the transport gives
+        /// up, and a run started on it in that minute waited for all of it and then failed (#2608). Resources built
+        /// with no process at all, as most tests build them, never read as exited.
+        /// </remarks>
+        public bool ChildHasExited
+        {
+            get
+            {
+                try
+                {
+                    return _process is System.Diagnostics.Process { HasExited: true };
+                }
+                catch (InvalidOperationException)
+                {
+                    return true;
+                }
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    Log.Debug(ex, "PowerShell: could not tell whether the runspace's child process is still running");
+                    return false;
+                }
+            }
+        }
 
         public void Dispose()
             => DisposeRunspaceResources(Runspace, _processInstance, _process, _releaseProcess);

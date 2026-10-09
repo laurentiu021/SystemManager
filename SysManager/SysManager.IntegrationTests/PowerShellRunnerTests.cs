@@ -266,6 +266,46 @@ public class PowerShellRunnerTests
     }
 
     /// <summary>
+    /// A cached runspace whose child process has exited is rebuilt rather than run on.
+    /// </summary>
+    /// <remarks>
+    /// The out-of-process runspace goes on reading <c>Opened</c> for about a minute after its child dies, so the
+    /// state check above does not see it, and a run started on it in that minute waited the whole minute and then
+    /// failed with "The background process closed or ended abnormally" (#2608). A process that has really exited
+    /// stands in for the killed child; the runspace itself is in process and stays open, so only the lease's check
+    /// of the child can tell the difference.
+    /// </remarks>
+    [Fact]
+    public async Task Runner_RebuildsARunspaceWhoseChildHasExited()
+    {
+        using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", "/c exit 0")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true
+        })!;
+        using (var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+            await child.WaitForExitAsync(bounded.Token);
+
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            createRunspace: () =>
+            {
+                built++;
+                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                        null, built == 1 ? child : null);
+            });
+
+        await runner.RunAsync("2 + 2");
+        Assert.Equal(1, built);
+
+        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+        Assert.Equal(2, built);
+    }
+
+    /// <summary>
     /// Two calls that overlap on an ALREADY-CACHED runspace both complete.
     /// </summary>
     /// <remarks>

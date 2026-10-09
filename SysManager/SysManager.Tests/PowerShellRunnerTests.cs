@@ -468,6 +468,150 @@ public class PowerShellRunnerTests
             + "every script that uses a Utility, Management, Appx or Defender cmdlet fails and returns nothing");
     }
 
+    // ── A session that stops working (#2608) ───────────────────────────────
+
+    /// <summary>
+    /// A runspace that is not open under a run surfaces as the <see cref="RuntimeException"/> every service handles.
+    /// </summary>
+    /// <remarks>
+    /// <c>BeginInvoke</c> throws <see cref="InvalidRunspaceStateException"/> for a runspace that is not open, which is
+    /// what a session whose child process has died turns into. That type derives from <see cref="SystemException"/>,
+    /// so it went past the services' <c>catch (RuntimeException)</c> and the tabs' <c>catch
+    /// (InvalidOperationException)</c> alike, to the app-wide handler. An open that does nothing reaches the same
+    /// state without killing anything.
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_OnARunspaceThatIsNotOpen_ThrowsTheRuntimeExceptionServicesHandle()
+    {
+        var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: _ => Task.CompletedTask,
+            createRunspace: () => (runspace, null, null));
+
+        var ex = await Assert.ThrowsAsync<RuntimeException>(() => runner.RunAsync("'never-runs'"));
+
+        Assert.IsType<InvalidRunspaceStateException>(ex.InnerException);
+    }
+
+    /// <summary>
+    /// Cancelling only asks for the stop: <c>Cancel()</c> returns before the pipeline has stopped.
+    /// </summary>
+    /// <remarks>
+    /// The registration used to call <c>PowerShell.Stop()</c> itself, on the thread that called <c>Cancel()</c>, and
+    /// <c>Stop()</c> waits for the stop to land. On a session whose child process had died that took until the
+    /// transport gave up: 58 seconds, with the app frozen for all of it when Cancel was pressed. The stop is handed to
+    /// the scheduler instead, which here holds it until the test runs it, so the order is decided by the test and
+    /// not by timing: the loop's own deadline is 20 seconds away, so a run that had finished would mean the stop ran
+    /// inside <c>Cancel()</c>. The deadline is there so a stop that never lands cannot hang the suite.
+    /// </remarks>
+    [Fact]
+    public async Task Cancel_AsksForTheStop_WithoutWaitingForThePipelineToStop()
+    {
+        var stops = new List<Action>();
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null),
+            scheduleStop: stop =>
+            {
+                lock (stops) stops.Add(stop);
+                return Task.CompletedTask;
+            });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.LineReceived += line =>
+        {
+            if (line.Text == "started") started.TrySetResult();
+        };
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync(
+            "'started'; $deadline = [DateTime]::UtcNow.AddSeconds(20); "
+            + "while ([DateTime]::UtcNow -lt $deadline) { [System.Threading.Thread]::Sleep(10) }",
+            cancellationToken: cts.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        cts.Cancel();
+
+        Action stop;
+        lock (stops) stop = Assert.Single(stops);
+        Assert.False(run.IsCompleted, "the pipeline stopped inside Cancel(), so a stop that hangs freezes the caller");
+
+        stop();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => run);
+    }
+
+    /// <summary>
+    /// A cached runspace whose child process is gone is rebuilt rather than run on.
+    /// </summary>
+    /// <remarks>
+    /// The runspace goes on reading Opened for about a minute after its child dies, and a run started on it in that
+    /// minute waited the whole minute and then failed (#2608). A <see cref="Process"/> object with no process behind
+    /// it is the case this suite can build without starting one: <c>HasExited</c> throws for it, and that counts as
+    /// gone. A child that has really exited is in the integration suite.
+    /// </remarks>
+    [Fact]
+    public async Task ACachedRunspaceWhoseChildProcessIsGone_IsRebuilt()
+    {
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () =>
+            {
+                built++;
+                return (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, new Process());
+            });
+
+        await runner.RunAsync("2 + 2");
+        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+
+        Assert.Equal(2, built);
+    }
+
+    /// <summary>
+    /// The next run does not wait for the session it replaces to be torn down.
+    /// </summary>
+    /// <remarks>
+    /// Disposing a runspace whose child has died takes about a minute, and the lease used to do it before building the
+    /// replacement: with the check above alone, the next run measured 60 seconds against a killed child and then
+    /// succeeded. Here the old session's teardown is held until the end of the test, so the second run can only
+    /// finish if it did not wait for it. The bounded waits are there for a failing run, not for the assertions.
+    /// </remarks>
+    [Fact]
+    public async Task ReplacingASessionWhoseChildIsGone_DoesNotWaitForItsTeardown()
+    {
+        var teardownMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var teardownStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () =>
+            {
+                built++;
+                return built == 1
+                    ? (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()),
+                       new HeldDisposable(teardownStarted, teardownMayFinish.Task), new Process())
+                    : (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null);
+            });
+
+        try
+        {
+            await runner.RunAsync("2 + 2");
+            // From another thread: the lease runs inside the call until its first real wait, so a teardown that held it
+            // up would hold up this line too, and the bounded wait below would never be reached.
+            var second = Task.Run(() => runner.RunAsync("3 + 3"));
+            await teardownStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Equal(6, (int)(await second.WaitAsync(TimeSpan.FromSeconds(30)))[0].BaseObject);
+        }
+        finally
+        {
+            teardownMayFinish.TrySetResult();
+        }
+    }
+
     private static PowerShellRunner CreateRunnerWithOpenFailure(Exception exception, bool isElevated)
     {
         var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());
@@ -491,6 +635,21 @@ public class PowerShellRunnerTests
             order.Add(name);
             if (exception is not null)
                 throw exception;
+        }
+    }
+
+    /// <summary>A teardown that says it started and then waits to be let go.</summary>
+    /// <remarks>
+    /// For at most two minutes, which is longer than a test using it waits for anything. With an equal bound, a
+    /// teardown that held up the run gave up first, the run then finished inside the test's own wait, and the test
+    /// passed against the very defect it is there to catch.
+    /// </remarks>
+    private sealed class HeldDisposable(TaskCompletionSource started, Task mayFinish) : IDisposable
+    {
+        public void Dispose()
+        {
+            started.TrySetResult();
+            mayFinish.Wait(TimeSpan.FromMinutes(2));
         }
     }
 

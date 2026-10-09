@@ -333,6 +333,6 @@ internal static class AtomicFile
 
         try { File.Delete(temp); }
         catch (IOException) { /* leftover temp file; the destination is intact either way */ }
-        catch (UnauthorizedAccessException) { }
+        catch (UnauthorizedAccessException) { /* the same leftover, refused rather than in use */ }
     }
 }

@@ -128,9 +128,11 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             string dns = await _dnsService.GetCurrentDnsAsync(_cts.Token).ConfigureAwait(false);
             UiThread.Post(() => CurrentDns = dns);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException) { /* the tab is closing */ }
         catch (Exception ex)
         {
+            // Broad on purpose: the read runs through PowerShell, which can fail in any of its own ways, and any
+            // failure means the current server is unknown.
             Log.Warning(ex, "Failed to read current DNS");
             UiThread.Post(() => CurrentDns = "Unable to detect");
         }
@@ -256,6 +258,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: the change runs through PowerShell and netsh, which can fail in any of their own ways,
+            // and whatever fails, the undo is kept and the setting read again, because the change may have half
+            // happened.
             RetainAmbiguousDnsUndo(pendingUndo);
             if (pendingUndo is not null)
                 await RefreshDnsAsync();
@@ -340,6 +345,9 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: the change runs through PowerShell and netsh, which can fail in any of their own ways,
+            // and whatever fails, the undo is kept and the setting read again, because the change may have half
+            // happened.
             RetainAmbiguousDnsUndo(pendingUndo);
             if (pendingUndo is not null)
                 await RefreshDnsAsync();
@@ -405,6 +413,8 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         catch (OperationCanceledException) { /* expected when the view is closed mid-operation */ }
         catch (Exception ex)
         {
+            // Broad on purpose: the restore runs through PowerShell, which can fail in any of its own ways, and
+            // whatever fails, the setting is read again so the tab shows what is really set.
             await RefreshDnsAsync();
             SetStatusMessage($"Failed to restore DNS: {ex.Message}");
 
@@ -672,7 +682,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         if (disposing)
         {
             if (_putBack is not null) _putBack.PutBack -= OnPutBack;
-            try { _cts.Cancel(); } catch (ObjectDisposedException) { }
+            try { _cts.Cancel(); } catch (ObjectDisposedException) { /* an earlier Dispose got here first */ }
             _cts.Dispose();
         }
         base.Dispose(disposing);

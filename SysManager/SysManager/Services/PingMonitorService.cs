@@ -137,7 +137,10 @@ public sealed class PingMonitorService : IDisposable
             }
         }
         catch (OperationCanceledException) { return; }
-        catch (Exception ex)
+        // What SendPingAsync throws: a lookup or send that fails arrives as PingException, and the rest are its
+        // checks of the target, the timeout and its own state.
+        catch (Exception ex) when (ex is PingException or ArgumentException or InvalidOperationException
+                                       or NotSupportedException)
         {
             status = ex.GetType().Name;
         }

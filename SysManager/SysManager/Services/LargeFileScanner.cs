@@ -111,8 +111,13 @@ public sealed class LargeFileScanner
             FileInfo[] files = [];
             string[] dirs = [];
             var curDir = new DirectoryInfo(cur);
-            try { files = curDir.GetFiles(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-            try { dirs = Directory.GetDirectories(cur); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            // A folder that cannot be listed, for either reason, is skipped and the scan goes on.
+            try { files = curDir.GetFiles(); }
+            catch (IOException) { /* unreadable: skipped */ }
+            catch (UnauthorizedAccessException) { /* denied: skipped */ }
+            try { dirs = Directory.GetDirectories(cur); }
+            catch (IOException) { /* unreadable: skipped */ }
+            catch (UnauthorizedAccessException) { /* denied: skipped */ }
 
             foreach (var fi in files)
             {
@@ -166,8 +171,8 @@ public sealed class LargeFileScanner
                         }
                     }
                 }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
+                catch (IOException) { /* gone or unreadable since the listing: left out */ }
+                catch (UnauthorizedAccessException) { /* denied: left out */ }
             }
 
             // Throttle progress to every ~200 ms so the UI doesn't drown in events.

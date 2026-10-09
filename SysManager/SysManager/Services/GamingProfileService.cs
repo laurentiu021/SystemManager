@@ -178,6 +178,8 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             try { await applied[i].RevertAsync(ct).ConfigureAwait(false); }
             catch (Exception ex)
             {
+                // Broad on purpose: a step can fail in any way while it reverts, and each one that does is named while
+                // the rest still revert.
                 Log.Warning(ex, "Gaming Profile step '{Label}' threw during revert", applied[i].Label);
                 notRestored.Add(applied[i].Label);
             }
@@ -581,7 +583,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         var proc = _boundGame;
         if (proc is null) return;
         _boundGame = null;
-        try { proc.Exited -= OnGameExited; } catch (InvalidOperationException) { }
+        proc.Exited -= OnGameExited;
         proc.Dispose();
     }
 
@@ -599,6 +601,8 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
         }
         catch (Exception ex)
         {
+            // Broad on purpose: the last net of an async void event handler, where an escaping exception would end the
+            // process.
             Log.Warning(ex, "Gaming Profile auto-revert on game exit failed");
         }
     }

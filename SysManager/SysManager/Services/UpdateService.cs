@@ -100,6 +100,9 @@ public sealed class UpdateService : IUpdateService
             }
             catch (Exception ex)
             {
+                // Broad on purpose: past the two above, the body is read through decompression and the JSON reader,
+                // which fail in their own ways (a body cut off part way is an IOException, a corrupt gzip one an
+                // InvalidDataException), and whatever fails, the check says so and returns nothing.
                 LastError = $"Unexpected: {ex.GetType().Name}: {ex.Message}";
                 return null;
             }

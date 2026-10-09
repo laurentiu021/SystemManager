@@ -168,6 +168,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: winget runs through the process runner, which can fail in any of the ways starting a
+            // process can, and not knowing what is installed only leaves the ticks off.
             Log.Debug(ex, "Could not determine installed apps via winget list");
         }
     }
@@ -319,6 +321,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                 }
                 catch (Exception ex)
                 {
+                    // Broad on purpose: one app's install failing in a way not caught above marks that app and goes on
+                    // to the next.
                     app.Status = $"Error: {ex.Message}";
                     failed++;
                     Log.Warning(ex, "Failed to install {WingetId}", app.WingetId);
@@ -423,6 +427,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: a search that fails in a way not caught above still ends in a message rather than a
+            // crash.
             Log.Warning(ex, "Winget search failed for query {Query}", SearchQuery);
             StatusMessage = "Search failed. Ensure winget is available.";
         }

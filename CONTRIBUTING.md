@@ -114,9 +114,15 @@ guide. That said, a few explicit rules:
 - **Services are testable**: prefer constructor-injectable seams over
   statics. If a service must be static, keep it pure (`HealthAnalyzer`,
   `EventExplainer`).
-- **No silent failures**: catch exceptions close to the boundary
-  (PowerShell, file I/O, network) and surface them as log lines or UI
-  state. Never swallow.
+- **No silent failures**: catch the exceptions a call can throw, close to the
+  boundary (PowerShell, file I/O, network), and surface them as log lines or
+  UI state. A catch that lets one go on purpose says why in a comment, and an
+  empty catch body fails the build. A catch of everything, `catch (Exception)`
+  without a `when` filter or a `catch` with no type, is kept for code that can
+  fail in any way, such as a native driver, a third-party library or the last
+  net of an async void handler. It says why on the line above or first in its
+  body, and `ArchitectureTests.EveryCatch_SaysWhy_AndTheBroadOnesAreTheReviewedOnes`
+  counts them per file, so a new one fails until it is narrowed or reviewed.
 - **4 spaces, no tabs.** Braces on their own line (standard .NET style).
 - **`var` freely** when the type is obvious from the right-hand side.
 - **Async all the way down** for anything that touches I/O.

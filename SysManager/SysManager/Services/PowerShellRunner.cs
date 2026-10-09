@@ -852,6 +852,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         }
         catch
         {
+            // Broad on purpose: whatever stopped the runspace opening, the half-built one is released and the
+            // failure goes on to the caller unchanged.
             fresh.Dispose();
             throw;
         }

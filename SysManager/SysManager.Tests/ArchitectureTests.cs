@@ -17305,6 +17305,199 @@ public partial class ArchitectureTests
     private static partial Regex ParagraphBreak();
 
     /// <summary>
+    /// No catch in the app has an empty body, and the ones that catch everything say why and are exactly the ones
+    /// reviewed.
+    /// </summary>
+    /// <remarks>
+    /// #2615. The rule is specific exception types, and a catch that swallows one says why, but no test held either:
+    /// besides the three in App.xaml.cs, 39 catches named <c>Exception</c> with no filter, and 15 had an empty body.
+    /// Each was narrowed to what its call can throw, removed, or kept with its reason. The ones kept call native or
+    /// third-party code that fails in ways it does not document (LibreHardwareMonitor, NvAPI, TraceEvent, GDI+), run
+    /// an operation whose every failure means the same thing to the tab, release what a failed step built and
+    /// rethrow, or are the last net of an async void handler, where an escaping exception ends the process.
+    /// <para>A catch is broad when it names <c>Exception</c>, or no type, and has no <c>when</c> filter. Three rules
+    /// hold. No catch body is empty, though a comment saying why counts, as it does in the rest of the app. A broad
+    /// catch has a comment on its own line directly above it, or first in its body. And each file holds exactly its
+    /// reviewed number of broad catches, so a new one fails here until it is narrowed or reviewed, and narrowing one
+    /// means lowering its number: the list only shrinks. The reasons are beside the code they explain, not here.</para>
+    /// <para>Clauses are found with literals and comments blanked, so a PowerShell <c>catch</c> in a script string,
+    /// or one named in prose, is not read as C#.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryCatch_SaysWhy_AndTheBroadOnesAreTheReviewedOnes()
+    {
+        // Known answers, in order: bare and typed, bare and broad, broad with no reason, broad with its reason above,
+        // broad with its reason in the body, filtered, and typed. The catch quoted in a string and in a comment is not
+        // one of them, and the parenthesis quoted in the filter does not end it early.
+        const string sample = """
+            try { Run(); }
+            catch (IOException) { }
+            try { Run(); }
+            catch { }
+            try { Run(); }
+            catch (Exception ex) { Log(ex); }
+            try { Run(); }
+            // The reason.
+            catch (Exception ex) { Log(ex); }
+            try { Run(); }
+            catch (System.Exception)
+            {
+                /* The reason. */
+            }
+            try { Run(); }
+            catch (Exception ex) when (Seen(ex, ")")) { Log(ex); }
+            try { Run("catch (Exception) { }"); }
+            catch (IOException ex) { Log(ex); } // catch (Exception) { }
+            """;
+        (int Line, bool Parsed, bool Broad, bool Bare, bool Explained)[] expected =
+        [
+            (2, true, false, true, false), (4, true, true, true, false), (6, true, true, false, false),
+            (9, true, true, false, true), (11, true, true, false, true), (16, true, false, false, false),
+            (18, true, false, false, false),
+        ];
+        Assert.Equal(expected, CatchClauses(sample));
+
+        // Reviewed: each of these says why beside it.
+        var reviewed = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["App.xaml.cs"] = 3,
+            ["Services/EtwBandwidthSource.cs"] = 1,
+            ["Services/GamingProfileService.cs"] = 3,
+            ["Services/OperationLockService.cs"] = 1,
+            ["Services/PowerShellRunner.cs"] = 1,
+            ["Services/ResourceHistoryService.cs"] = 3,
+            ["Services/TemperatureService.cs"] = 5,
+            ["Services/ThemeService.cs"] = 1,
+            ["Services/TrayIconService.cs"] = 2,
+            ["Services/UpdateService.cs"] = 1,
+            ["ViewModels/AudioMixerViewModel.cs"] = 2,
+            ["ViewModels/BandwidthMonitorViewModel.cs"] = 1,
+            ["ViewModels/BulkInstallerViewModel.cs"] = 3,
+            ["ViewModels/DashboardViewModel.cs"] = 8,
+            ["ViewModels/DnsHostsViewModel.cs"] = 4,
+            ["ViewModels/ProcessManagerViewModel.cs"] = 1,
+            ["ViewModels/StandbyMemoryViewModel.cs"] = 1,
+            ["ViewModels/ViewModelBase.cs"] = 1,
+        };
+
+        var app = TestPaths.AppProject();
+        var clauses = 0;
+        var unparsed = new List<string>();
+        var bare = new List<string>();
+        var unexplained = new List<string>();
+        var broad = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var path in SourceFilesUnder(app, ".cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var file = Path.GetRelativePath(app, path).Replace(Path.DirectorySeparatorChar, '/');
+            foreach (var clause in CatchClauses(File.ReadAllText(path)))
+            {
+                clauses++;
+                if (!clause.Parsed) unparsed.Add($"{file}:{clause.Line}");
+                if (clause.Bare) bare.Add($"{file}:{clause.Line}");
+                if (!clause.Broad) continue;
+
+                broad[file] = broad.GetValueOrDefault(file) + 1;
+                if (!clause.Explained) unexplained.Add($"{file}:{clause.Line}");
+            }
+        }
+
+        Assert.True(unparsed.Count == 0,
+            "these catch clauses could not be read, so nothing below checked them. Teach CatchClauseHead the form "
+            + "they take:\n  " + string.Join("\n  ", unparsed));
+
+        // Floor: 1,387 clauses when this was written. Far fewer means the files or the keyword stopped being found,
+        // and then "nothing is empty" holds of nothing.
+        Assert.True(clauses >= 1300,
+            $"only {clauses} catch clauses were read in the app, so this checked almost none of them.");
+
+        Assert.True(bare.Count == 0,
+            "these catch clauses have an empty body, so a reader cannot tell a deliberate swallow from a forgotten "
+            + "one. Say why in a comment, or log it:\n  " + string.Join("\n  ", bare));
+
+        Assert.True(unexplained.Count == 0,
+            "these catch everything and do not say why. Narrow each one to the types its call can throw, or, where it "
+            + "calls code that can fail in any way, say so in a comment directly above it or first in its body:\n  "
+            + string.Join("\n  ", unexplained));
+
+        var drift = reviewed.Keys.Union(broad.Keys)
+            .Where(f => broad.GetValueOrDefault(f) != reviewed.GetValueOrDefault(f))
+            .Select(f => $"{f}: {broad.GetValueOrDefault(f)} broad, {reviewed.GetValueOrDefault(f)} reviewed")
+            .ToList();
+        Assert.True(drift.Count == 0,
+            "the broad catches are no longer the reviewed ones. A new one is narrowed to the types its call can "
+            + "throw, or reviewed and counted here with its reason beside it in the code; one narrowed or removed "
+            + "lowers its file's count, so the list only shrinks:\n  " + string.Join("\n  ", drift));
+    }
+
+    /// <summary>
+    /// Every catch clause in one C# file, in order: its line, whether its head could be read, whether it catches
+    /// everything, whether its body is empty, and whether a comment says why it is there.
+    /// </summary>
+    /// <remarks>
+    /// Broad is <c>Exception</c> or no type, without a <c>when</c> filter. Empty means nothing at all between the
+    /// braces, so a comment counts. The reason is a comment on its own line directly above a catch that starts its
+    /// line, or the first thing in its body. Clauses are found in <see cref="SourceBraces.CodeOnly"/>, so one quoted
+    /// in a literal or named in a comment is not counted, and read back from the source, where the comments are.
+    /// </remarks>
+    private static IEnumerable<(int Line, bool Parsed, bool Broad, bool Bare, bool Explained)> CatchClauses(
+        string source)
+    {
+        var code = SourceBraces.CodeOnly(source);
+        foreach (Match keyword in CatchKeyword().Matches(code))
+        {
+            var at = keyword.Index;
+            var line = source.AsSpan(0, at).Count('\n') + 1;
+            var head = CatchClauseHead().Match(code, at);
+            if (!head.Success)
+            {
+                yield return (line, false, false, false, false);
+                continue;
+            }
+
+            var open = head.Index + head.Length - 1;
+            var close = SourceBraces.MatchingBrace(source, open);
+            var body = close < 0 ? source[(open + 1)..] : source[(open + 1)..close];
+            var declaration = head.Groups["declaration"];
+            var broad = !head.Groups["filter"].Success
+                        && (!declaration.Success || CatchesEverything().IsMatch(declaration.Value.Trim()));
+
+            // The line above, as the text between the two line breaks before the keyword. It explains the catch
+            // only when the catch starts its own line and that line holds a comment and nothing else.
+            var lineStart = code.LastIndexOf('\n', at) + 1;
+            var aboveEnd = lineStart - 1;
+            var aboveStart = aboveEnd <= 0 ? 0 : code.LastIndexOf('\n', aboveEnd - 1) + 1;
+            var reasonAbove = aboveEnd > 0
+                              && string.IsNullOrWhiteSpace(code[lineStart..at])
+                              && !string.IsNullOrWhiteSpace(source[aboveStart..aboveEnd])
+                              && string.IsNullOrWhiteSpace(code[aboveStart..aboveEnd]);
+
+            var first = body.TrimStart();
+            var reasonFirst = first.StartsWith("//", StringComparison.Ordinal)
+                              || first.StartsWith("/*", StringComparison.Ordinal);
+
+            yield return (line, true, broad, string.IsNullOrWhiteSpace(body), reasonAbove || reasonFirst);
+        }
+    }
+
+    /// <summary>The keyword that opens a catch clause; <c>@catch</c> is an identifier.</summary>
+    [GeneratedRegex(@"(?<![@\w])catch\b", RegexOptions.Compiled)]
+    private static partial Regex CatchKeyword();
+
+    /// <summary>
+    /// A catch clause from its keyword to the brace that opens its body: the declaration, if it has one, and the
+    /// filter, if it has one, whose parentheses can nest.
+    /// </summary>
+    [GeneratedRegex(
+        @"\Gcatch\s*(?:\((?<declaration>[^()]*)\))?\s*"
+        + @"(?<filter>when\s*\((?>[^()]+|\((?<depth>)|\)(?<-depth>))*(?(depth)(?!))\))?\s*\{",
+        RegexOptions.Compiled)]
+    private static partial Regex CatchClauseHead();
+
+    /// <summary>A declaration that catches everything: <c>Exception</c>, with or without a namespace and a name.</summary>
+    [GeneratedRegex(@"^(?:global::)?(?:System\.)?Exception(?:\s+@?\w+)?$", RegexOptions.Compiled)]
+    private static partial Regex CatchesEverything();
+
+    /// <summary>
     /// How many arguments an invocation passes, given the index of its opening parenthesis. Nesting is
     /// skipped by depth, so a tuple key such as <c>(i.Browser, i.Category)</c> counts as the one argument it
     /// is rather than two.

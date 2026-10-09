@@ -320,6 +320,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
+                    // Broad on purpose: the live poll runs for as long as the tab is shown, and a tick that fails in
+                    // any way waits a second and goes on.
                     Log.Debug(ex, "Dashboard polling error");
                     await Task.Delay(1000, ct);
                 }
@@ -346,6 +348,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
+                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
+                // document: no driver, an old one, a remote session.
                 _nvApiAvailable = false;
                 Log.Debug("NVIDIA GPU API unavailable: {Error}", ex.Message);
             }
@@ -371,6 +375,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
+                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
+                // document: no driver, an old one, a remote session.
                 Log.Debug("NVIDIA GPU polling error: {Error}", ex.Message);
             }
         }
@@ -437,6 +443,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: the static card is filled once, at start, from WMI and the registry, and a failure of
+            // any kind leaves it blank rather than the tab half-built.
             Log.Warning("Dashboard static info failed: {Error}", ex.Message);
         }
     }
@@ -486,7 +494,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private async Task LoadTemperaturesAsync()
     {
         try { await RefreshTemperaturesAsync(); }
-        catch (Exception ex) { Log.Debug("Temperature load failed: {Error}", ex.Message); }
+        catch (Exception ex)
+        {
+            // Broad on purpose: the sensors are read through LibreHardwareMonitor and NvAPI, both native, and a first
+            // read that fails leaves the readings empty.
+            Log.Debug("Temperature load failed: {Error}", ex.Message);
+        }
     }
 
     private void StartTemperaturePolling(CancellationToken ct)
@@ -501,7 +514,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
                     await RefreshTemperaturesAsync();
                 }
                 catch (OperationCanceledException) { break; }
-                catch (Exception ex) { Log.Debug("Temp polling error: {Error}", ex.Message); }
+                catch (Exception ex)
+                {
+                    // Broad on purpose: the sensor poll runs for as long as the tab is shown, and a read that fails in
+                    // any way is skipped.
+                    Log.Debug("Temp polling error: {Error}", ex.Message);
+                }
             }
         }, ct);
     }
@@ -668,6 +686,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: each alert's check is its own function, and one that fails in any way marks that alert
+            // rather than the scan.
             Log.Debug(ex, "Dashboard alert scan failed: {Alert}", alert.Title);
             alert.Title = $"Check failed: {ex.Message}";
             alert.Severity = AlertSeverity.Yellow;
@@ -1210,6 +1230,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Broad on purpose: a quick action is any of the tab's operations, and whatever one throws is shown on its
+            // card instead of escaping the command.
             Log.Debug(ex, "Quick action {Name} failed", name);
             QuickActionStatus = "Failed";
             QuickActionDetail = ex.Message;

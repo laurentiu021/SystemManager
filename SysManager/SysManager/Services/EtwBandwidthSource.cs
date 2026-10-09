@@ -111,6 +111,8 @@ public sealed class EtwBandwidthSource : IBandwidthMonitorService
                 try { _session.Source.Process(); }
                 catch (Exception ex)
                 {
+                    // Broad on purpose: TraceEvent's native processing of the kernel session can fail with any
+                    // exception, and whichever it is, the source has ended and the view model falls back.
                     Log.Debug("Bandwidth ETW: processing ended: {Error}", ex.Message);
                     IsAvailable = false;
                 }

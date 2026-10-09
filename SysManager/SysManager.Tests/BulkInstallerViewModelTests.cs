@@ -15,7 +15,7 @@ namespace SysManager.Tests;
 /// filtering, selection commands, and category logic.
 /// </summary>
 // Serialized: the install tests swap the static DialogService.Instance, which is process-wide shared state.
-// Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+// Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
 [Collection("ProcessWideStatics")]
 public class BulkInstallerViewModelTests
 {

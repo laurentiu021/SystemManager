@@ -28,8 +28,8 @@ public sealed class ToastService
     /// waiting for a notification to have been raised. It was the most widely reached of the ten
     /// blocking marshals in #2152.
     /// <para>The no-window early return is kept deliberately rather than folded into
-    /// <see cref="UiThread.Post"/>. Post runs inline when there is no dispatcher, which is right for a
-    /// property assignment and wrong here: there is nothing to show a toast in, and running the body
+    /// <see cref="UiThread.Post(Action, DispatcherPriority)"/>. Post runs inline when there is no dispatcher, which
+    /// is right for a property assignment and wrong here: there is nothing to show a toast in, and running the body
     /// would construct a <see cref="DispatcherTimer"/> on a thread whose dispatcher never pumps. No
     /// window means no toast, which is what this did before.</para>
     /// </remarks>

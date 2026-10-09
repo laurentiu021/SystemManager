@@ -20,7 +20,7 @@ namespace SysManager.Services;
 /// when an action inside them requires it).
 /// <para>
 /// A hard-coded name is not the same as a hard-coded program. Every entry launches through
-/// <see cref="SysManager.Helpers.SystemPaths.ResolveSystemTool"/>, because <c>UseShellExecute=true</c>
+/// <see cref="SysManager.Helpers.SystemPaths.ResolveSystemTool(string)"/>, because <c>UseShellExecute=true</c>
 /// resolves an unrooted name through <c>HKCU</c>'s App Paths key and then PATH — both writable without
 /// elevation — so <c>"control.exe"</c> alone means whatever those lookups answer.
 /// </para>

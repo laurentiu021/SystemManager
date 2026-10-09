@@ -28,7 +28,7 @@ public static class ExplorerShell
     /// </summary>
     /// <remarks>
     /// A property rather than a field so callers cannot mutate a shared array. Deep Cleanup's
-    /// "Explorer thumbnail & icon cache" category uses this same list; its directory, though, comes from
+    /// "Explorer thumbnail &amp; icon cache" category uses this same list; its directory, though, comes from
     /// its own injected roots rather than from <see cref="CacheDirectory"/>, because that seam is what
     /// makes its scan testable.
     /// </remarks>

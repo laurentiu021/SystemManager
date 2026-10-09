@@ -43,8 +43,8 @@ public static partial class LogService
     /// <remarks>
     /// This was <c>static readonly</c>, which made it the last entry on the user-data-path ratchet: a
     /// resolved path in static state cannot be pointed at a temp directory by any test, because
-    /// <see cref="Environment.GetFolderPath"/> resolves through the Win32 known-folder function and
-    /// ignores the <c>LOCALAPPDATA</c> environment variable. That is not a hypothetical — a service
+    /// <see cref="Environment.GetFolderPath(Environment.SpecialFolder)"/> resolves through the Win32 known-folder
+    /// function and ignores the <c>LOCALAPPDATA</c> environment variable. That is not a hypothetical — a service
     /// holding its path this way had tests that wrote into the user's real speed-test history.
     /// <para>The usual fix, a constructor-injected <c>string? configDir = null</c>, does not apply here:
     /// this is a static class because Serilog's sink is configured once per process, so there is no

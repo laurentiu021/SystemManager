@@ -16,9 +16,9 @@ namespace SysManager.Tests;
 /// </summary>
 /// <remarks>
 /// Every tab is built once and kept for the session, so after a put-back from Undo Changes it went on showing the
-/// change: Gaming Profile kept Start off, DNS & Hosts would have saved the old entries over the restored file, and the
-/// rest showed values that were no longer on the PC. Every store here is a temp folder, a throwaway registry key or a
-/// stand-in.
+/// change: Gaming Profile kept Start off, DNS &amp; Hosts would have saved the old entries over the restored file,
+/// and the rest showed values that were no longer on the PC. Every store here is a temp folder, a throwaway registry
+/// key or a stand-in.
 /// </remarks>
 // Serialized: the tabs here reach the process-wide dialog, activity log and operation lock services. Required by
 // ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.

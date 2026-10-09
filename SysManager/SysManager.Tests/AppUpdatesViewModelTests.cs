@@ -11,7 +11,7 @@ using SysManager.ViewModels;
 namespace SysManager.Tests;
 
 // Serialized: the confirmation-gate tests swap the static DialogService.Instance, which is
-// process-wide shared state. Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+// process-wide shared state. Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
 [Collection("ProcessWideStatics")]
 public class AppUpdatesViewModelTests
 {

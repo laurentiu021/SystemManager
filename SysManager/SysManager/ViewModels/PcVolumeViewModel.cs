@@ -162,7 +162,7 @@ public sealed partial class PcVolumeViewModel : ObservableObject, IAdjustableVol
             _report($"Could not {(value ? "mute" : "unmute")} this PC — the speakers or headphones may have just been unplugged.");
     }
 
-    /// <summary>Flip the PC's mute; the change propagates via <see cref="OnIsMutedChanged"/>.</summary>
+    /// <summary>Flip the PC's mute; the change propagates via <see cref="OnIsMutedChanged(bool)"/>.</summary>
     [RelayCommand]
     private void ToggleMute() => IsMuted = !IsMuted;
 

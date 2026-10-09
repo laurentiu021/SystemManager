@@ -151,7 +151,7 @@ public sealed record GamingStepOutcome(string Label, GamingStepStatus Status, st
 /// <summary>
 /// Result of an <see cref="IGamingProfileService.ApplyAsync"/> batch: the per-step outcomes
 /// and whether a System Restore point was actually created (so the UI never over-promises a
-/// safety net that didn't materialize — mirrors <see cref="TweakApplyResult"/>).
+/// safety net that didn't materialize).
 /// </summary>
 /// <param name="Steps">Per-step outcomes; empty when the batch never ran.</param>
 /// <param name="RestorePointCreated">Whether a restore point was actually created.</param>

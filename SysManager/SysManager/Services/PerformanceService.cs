@@ -200,7 +200,7 @@ public sealed partial class PerformanceService : IDisposable
     /// <summary>
     /// Delete the persisted snapshot from disk. Called after "Restore All" so the next
     /// Apply captures a fresh baseline instead of reloading the now-reverted pre-restore
-    /// state via <see cref="LoadSnapshot"/>.
+    /// state via <see cref="LoadSnapshot()"/>.
     /// </summary>
     public bool DeleteSnapshot()
     {

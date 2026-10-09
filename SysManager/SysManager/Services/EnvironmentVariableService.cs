@@ -29,7 +29,7 @@ namespace SysManager.Services;
 /// broadcasts WM_SETTINGCHANGE once (see <see cref="BroadcastSettingChange"/>) so
 /// already-running processes (Explorer, new shells) pick the change up without a reboot.
 ///
-/// Machine-scope writes require administrator rights; <see cref="SetVariable"/> returns
+/// Machine-scope writes require administrator rights; <see cref="SetVariable(string, string, EnvVarScope)"/> returns
 /// <c>false</c> (rather than throwing) when the write is denied, mirroring
 /// <see cref="PrivacyService"/>. New backups are stored in their matching registry hive:
 /// User state under HKCU and Machine state under access-controlled HKLM. Legacy

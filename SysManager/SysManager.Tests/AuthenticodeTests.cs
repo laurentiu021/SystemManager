@@ -17,8 +17,8 @@ namespace SysManager.Tests;
 /// copies of a security policy drift in the way that matters least visibly: a weakened revocation mode in
 /// one of them changes the posture while every test stays green, because nothing compares them.
 /// <para>What can be asserted by execution here is the three-way split
-/// <see cref="Authenticode.ReadSigner"/> returns, which is the part both callers depend on and disagree
-/// about. Chain validation itself needs a genuinely signed file with a controllable publisher — a test
+/// <see cref="SysManager.Helpers.Authenticode.ReadSigner"/> returns, which is the part both callers depend on and
+/// disagree about. Chain validation itself needs a genuinely signed file with a controllable publisher — a test
 /// certificate and signtool, which this project does not have — so that half is pinned against the source,
 /// with the limitation stated rather than papered over.</para>
 /// </remarks>
@@ -130,8 +130,8 @@ public class AuthenticodeTests
     /// intermediate the local store did not have. That is a network request from a tab the user merely
     /// opened, and on a machine with no network it is a wait per unrecognised issuer — the exact stall the
     /// offline mode was chosen to avoid. The pairing is the whole point of
-    /// <see cref="Authenticode.PolicyFor"/>, so it is pinned in both directions: the fail-closed gates
-    /// must keep the download, because there a missing intermediate is what a legitimate signature needs
+    /// <see cref="SysManager.Helpers.Authenticode.PolicyFor"/>, so it is pinned in both directions: the fail-closed
+    /// gates must keep the download, because there a missing intermediate is what a legitimate signature needs
     /// fetched before it can validate.
     /// </remarks>
     [Fact]
@@ -150,7 +150,7 @@ public class AuthenticodeTests
     /// checked mechanically is that the policy above is the one handed to the chain, and that the failure
     /// path returns.
     /// <para>This guard replaces the equivalent assertions that used to live inside
-    /// <c>UpdateServiceAuthenticodeTests.VerifyAuthenticode_PinsThePublisherAndBuildsAChain</c>, which went
+    /// <c>UpdateServiceAuthenticodeTests.VerifyAuthenticode_PinsThePublisherAndValidatesTheChain</c>, which went
     /// RED the moment the chain build moved out of that method — correctly, and it is the reason this one
     /// exists rather than the assertions simply being dropped.</para>
     /// </remarks>

@@ -964,8 +964,8 @@ public partial class ArchitectureTests
     /// then asserted a recursive walk of the temp folders and the Recycle Bin had finished — which failed on a
     /// normally-used desktop and passed on a CI runner with an empty profile (#2084) — and five waits in
     /// <c>StartupViewModelTests</c> sampled <c>IsBusy</c> on the same 15-second budget. Every one of them was
-    /// waiting for a fire-and-forget constructor task that <see cref="ViewModelBase.InitializationComplete"/>
-    /// already exposes.
+    /// waiting for a fire-and-forget constructor task that
+    /// <see cref="SysManager.ViewModels.ViewModelBase.InitializationComplete"/> already exposes.
     /// <para>A bounded wait is a different thing and stays allowed: <c>Task.WhenAny(work, Task.Delay(5s))</c>
     /// fails a hang instead of hanging, and it is the delay that is never awaited on its own. The rule is
     /// therefore about <c>await Task.Delay</c> specifically, not about the method.</para>
@@ -2760,6 +2760,131 @@ public partial class ArchitectureTests
     /// <summary>A discussion-category deep link, capturing the slug.</summary>
     [GeneratedRegex(@"/discussions/categories/([a-z0-9-]+)", RegexOptions.Compiled)]
     private static partial Regex CategoryLink();
+
+    /// <summary>
+    /// Every test a comment or a document names with its class, as in
+    /// <c>ArchitectureTests.EverySourceFile_CarriesTheAuthorHeader</c>, still exists under that name.
+    /// </summary>
+    /// <remarks>
+    /// #2658. Eight comments named a test that had since been renamed or replaced, four of them a guard renamed when
+    /// it grew from the dialog swappers to every process-wide static, so someone looking for what pins a behaviour
+    /// found nothing. A <c>cref</c> is the compiler's to check, now that every project generates its documentation
+    /// file; this covers what the compiler never reads: plain comments, XAML and the Markdown documents.
+    /// <para>A name counts as declared when it appears in the code of a file that declares the class, so a nested
+    /// helper, a field or a constant is as citable as a test. Comments and strings are removed first, or a stale
+    /// citation in the cited class's own file, or this check's own example below, would vouch for itself.
+    /// CHANGELOG.md is history and is not read.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTestCitedWithItsClass_StillExists()
+    {
+        var root = TestPaths.RepoRoot();
+        var declared = TestClassMembers();
+
+        var offenders = new List<string>();
+        var citations = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in FilesThatCiteTests(root))
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var (type, member) in TestCitations(lines[i], declared))
+                {
+                    citations[Path.GetExtension(file)] = citations.GetValueOrDefault(Path.GetExtension(file)) + 1;
+                    if (!declared[type].Contains(member))
+                        offenders.Add($"{Path.GetRelativePath(root, file)}:{i + 1}  {type}.{member}");
+                }
+            }
+        }
+
+        // Known answers: a name that is there resolves, one that never was does not, and a citation behind the
+        // project's own name is still read.
+        var present = $"{nameof(ArchitectureTests)}.{nameof(EverySourceFile_CarriesTheAuthorHeader)}";
+        var absent = $"{nameof(ArchitectureTests)}.NoSuchGuard_EverExisted";
+        const string qualified =
+            "SysManager.UITests.FunctionalUiTests.RapidTabSwitching_DoesNotCrash_AndDashboardRecovers";
+        Assert.Contains(TestCitations(present, declared), c => declared[c.Type].Contains(c.Member));
+        Assert.Contains(TestCitations(absent, declared), c => !declared[c.Type].Contains(c.Member));
+        Assert.Contains(TestCitations(qualified, declared),
+            c => c.Type == "FunctionalUiTests" && declared[c.Type].Contains(c.Member));
+
+        // Vacuity floors: 407 test classes, and 137 citations when this was written, 105 in code, 3 in XAML and 29 in
+        // the documents. Each kind has its own floor, so losing the documents cannot hide inside the total.
+        Assert.True(declared.Count >= 350,
+            $"only {declared.Count} test classes were found, so a citation had almost nothing to resolve against");
+        foreach (var (kind, floor) in new[] { (".cs", 85), (".xaml", 2), (".md", 20) })
+        {
+            Assert.True(citations.GetValueOrDefault(kind) >= floor,
+                $"only {citations.GetValueOrDefault(kind)} citations were read in {kind} files, so the sweep is not "
+                + "seeing them");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these name a test that does not exist under that name. Use the name it has today, or, for a test that "
+            + "is gone, name it without its class:\n  " + string.Join("\n  ", offenders));
+    }
+
+    // Each test class of the three test projects, with the identifiers in the code of every file declaring it.
+    private static Dictionary<string, HashSet<string>> TestClassMembers()
+    {
+        var solution = TestPaths.SolutionDir();
+        string[] projects = ["SysManager.Tests", "SysManager.IntegrationTests", "SysManager.UITests"];
+        var declared = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var file in projects.SelectMany(p => SourceFilesUnder(Path.Combine(solution, p), ".cs")))
+        {
+            var code = WithStringsBlanked(WithoutComments(File.ReadAllText(file)));
+            var names = Identifier().Matches(code).Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
+            foreach (var type in TestClassDeclaration().Matches(code).Select(m => m.Groups[1].Value))
+            {
+                if (!declared.TryGetValue(type, out var members))
+                    declared[type] = members = new HashSet<string>(StringComparer.Ordinal);
+                members.UnionWith(names);
+            }
+        }
+
+        return declared;
+    }
+
+    // Where a test is cited in prose: the solution's code and markup, and the Markdown documents.
+    private static IEnumerable<string> FilesThatCiteTests(string root)
+        => SourceFilesUnder(Path.Combine(root, "SysManager"), ".cs", ".xaml")
+            .Concat(Directory.EnumerateFiles(root, "*.md", SearchOption.TopDirectoryOnly))
+            .Concat(SourceFilesUnder(Path.Combine(root, "docs"), ".md"))
+            .Concat(SourceFilesUnder(Path.Combine(root, ".github"), ".md"))
+            .Where(p => Path.GetFileName(p) != "CHANGELOG.md")
+            .OrderBy(p => p, StringComparer.Ordinal);
+
+    // The files below a folder with one of the extensions, build output left out.
+    private static IEnumerable<string> SourceFilesUnder(string folder, params string[] extensions)
+        => Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+            .Where(p => extensions.Any(e => p.EndsWith(e, StringComparison.OrdinalIgnoreCase)))
+            .Where(p => !Path.GetRelativePath(folder, p)
+                .Split(Path.DirectorySeparatorChar)
+                .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase)));
+
+    // The test citations on one line, as (class, member), for the classes that are test classes.
+    private static IEnumerable<(string Type, string Member)> TestCitations(
+        string line, IReadOnlyDictionary<string, HashSet<string>> declared)
+        => TestCitation().Matches(line)
+            .Select(m => (Type: m.Groups[1].Value, Member: m.Groups[2].Value))
+            .Where(c => declared.ContainsKey(c.Type));
+
+    /// <summary>
+    /// A test class followed by a member, the member read ahead so that in
+    /// <c>SysManager.UITests.FunctionalUiTests.RapidTabSwitching_DoesNotCrash_AndDashboardRecovers</c> the
+    /// project's name does not swallow the class's.
+    /// </summary>
+    [GeneratedRegex(@"\b([A-Z][A-Za-z0-9]*Tests)\.(?=([A-Z_][A-Za-z0-9_]*))", RegexOptions.CultureInvariant)]
+    private static partial Regex TestCitation();
+
+    /// <summary>The declaration of a class named like a test class.</summary>
+    [GeneratedRegex(@"\bclass\s+([A-Z][A-Za-z0-9]*Tests)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex TestClassDeclaration();
+
+    /// <summary>An identifier.</summary>
+    [GeneratedRegex(@"\b[A-Za-z_][A-Za-z0-9_]*\b", RegexOptions.CultureInvariant)]
+    private static partial Regex Identifier();
 
     /// <summary>
     /// Every JSON file the services persist must be a decision: carried by a profile, or deliberately
@@ -13107,7 +13232,8 @@ public partial class ArchitectureTests
 
     /// <summary>
     /// A progress callback that writes a value its own caller writes again after the await must report
-    /// through <see cref="SettlingProgress{T}"/>, so the last report cannot land on top of the outcome.
+    /// through <see cref="SysManager.Helpers.SettlingProgress{T}"/>, so the last report cannot land on top of the
+    /// outcome.
     /// </summary>
     /// <remarks>
     /// <para><b>The defect.</b> <c>Progress&lt;T&gt;</c> captures the <c>SynchronizationContext</c> in its
@@ -16194,10 +16320,11 @@ public partial class ArchitectureTests
     /// took the path would kill this machine's desktop, so there is no execution to observe. The
     /// alternative is trusting whoever adds the third caller to remember, which is the class of thing
     /// that has to be mechanical.</para>
-    /// <para>Scoped to <see cref="ExplorerShell.Stop"/> and <see cref="ExplorerShell.Restart"/>.
-    /// <see cref="ExplorerShell.Start"/> alone is NOT gated: relaunching a shell that is already
-    /// running is a no-op, and the fail-safe relaunch inside a <c>finally</c> must never be blocked by
-    /// a lock — leaving the user without a desktop is the outcome the lock exists to prevent.</para>
+    /// <para>Scoped to <see cref="SysManager.Helpers.ExplorerShell.Stop"/> and
+    /// <see cref="SysManager.Helpers.ExplorerShell.Restart"/>. <see cref="SysManager.Helpers.ExplorerShell.Start"/>
+    /// alone is NOT gated: relaunching a shell that is already running is a no-op, and the fail-safe relaunch
+    /// inside a <c>finally</c> must never be blocked by a lock — leaving the user without a desktop is the outcome
+    /// the lock exists to prevent.</para>
     /// </remarks>
     [Fact]
     public void EveryCallerThatEndsTheShell_HoldsTheShellLock()
@@ -16237,7 +16364,7 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// The shell may only be ended through <see cref="ExplorerShell"/> — never by killing
+    /// The shell may only be ended through <see cref="SysManager.Helpers.ExplorerShell"/> — never by killing
     /// <c>explorer</c> directly somewhere else.
     /// </summary>
     /// <remarks>

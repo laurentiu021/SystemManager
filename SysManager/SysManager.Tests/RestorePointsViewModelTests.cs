@@ -24,7 +24,7 @@ namespace SysManager.Tests;
 /// started and nothing on this machine's System Protection settings is touched.</para>
 /// </remarks>
 // Serialized: these swap the static DialogService.Instance, which is process-wide shared state.
-// Required by ArchitectureTests.DialogServiceSwappers_AreInTheSerializedCollection.
+// Required by ArchitectureTests.ProcessWideStaticUsers_AreInTheSerializedCollection.
 [Collection("ProcessWideStatics")]
 public class RestorePointsViewModelTests
 {

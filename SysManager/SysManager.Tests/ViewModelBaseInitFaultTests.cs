@@ -31,7 +31,7 @@ namespace SysManager.Tests;
 public sealed class ViewModelBaseInitFaultTests
 {
     /// <summary>
-    /// A view model whose only job is to run the init it is handed. <paramref name="rethrow"/> pins
+    /// A view model whose only job is to run the init it is handed. Its <c>rethrow</c> argument pins
     /// <see cref="ViewModelBase.RethrowsUnexpectedInitFaults"/> so each branch is testable without
     /// attaching a debugger or mutating anything process-wide.
     /// </summary>

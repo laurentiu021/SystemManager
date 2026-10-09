@@ -481,7 +481,8 @@ Edit Windows environment variables without the cramped built-in dialog:
 ### System Health
 - OS / CPU / RAM / storage overview
 - SMART data per disk: temperature, life remaining, power-on hours, read/write errors —
-  fullest when SysManager runs as administrator
+  fullest when SysManager runs as administrator. A figure the drive does not report reads "—",
+  with an empty bar, rather than a value it never measured
 - Colour-coded verdict per drive
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors. If the event log
   cannot be read, it says the check could not be done rather than reporting no errors
@@ -1254,7 +1255,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   point of the tab: "my internet is bad" is not actionable, "your router is fine, your ISP
   is not" is.
 - **Watches several hosts at once**, each with its own live latency, average, jitter and
-  loss, and its own colour on the shared chart
+  loss, and its own colour on the shared chart. A ping that got no reply, and an average or
+  jitter not measured yet, read "—"
 - **Five presets for gamers and streamers**, plus your own: type a hostname or IP to add a
   target, and only the ones you added carry a remove button
   - **Global** — Google DNS, Cloudflare, Quad9, google.com

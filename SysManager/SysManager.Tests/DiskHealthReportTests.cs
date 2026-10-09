@@ -177,7 +177,8 @@ public class DiskHealthReportTests
     public void WearGauge_InvertsWear()
     {
         Assert.Equal(80, new DiskHealthReport { WearPercent = 20 }.WearGauge);
-        Assert.Equal(100, new DiskHealthReport().WearGauge);
+        // Not reported is an empty bar, not a full one (#2600).
+        Assert.Equal(0, new DiskHealthReport().WearGauge);
     }
 
     // ---------- PowerOnDisplay ----------

@@ -2098,6 +2098,62 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No binding counts on <c>FallbackValue</c> to stand in for a value that is null.
+    /// </summary>
+    /// <remarks>
+    /// A fallback is used when a binding fails: no data context, or a path that does not resolve, as when the object
+    /// before its last dot is null. It is not used when the bound value itself is null, and a <c>StringFormat</c> is then
+    /// applied to an empty value. So <c>{Binding TemperatureC, StringFormat={}{0:F0} °C, FallbackValue=—}</c> read " °C"
+    /// for a drive with no temperature, <c>{Binding ReadErrors, FallbackValue=—}</c> read nothing, and Ping's latency read
+    /// " ms" after a timeout, while System Health's wear, which had no fallback at all, read 100% (#2600). A figure that
+    /// may be missing gets a <c>…Display</c> property that says "—" itself.
+    /// <para>A path of one name binds the value itself, so a fallback there covers only a missing data context, which is
+    /// not what anyone writing "—" meant. A dotted path keeps its fallback: it is what shows while the object before the
+    /// last dot is null, as on Display Profiles' current mode.</para>
+    /// </remarks>
+    [Fact]
+    public void NoBinding_CountsOnFallbackValueToStandInForANull()
+    {
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var bindings = 0;
+
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                || file.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+                continue;
+
+            XDocument doc;
+            try { doc = XDocument.Parse(File.ReadAllText(file)); }
+            catch (System.Xml.XmlException) { continue; }
+
+            foreach (var attribute in doc.Descendants().SelectMany(e => e.Attributes()))
+            {
+                var value = attribute.Value;
+                if (!value.StartsWith("{Binding", StringComparison.Ordinal)) continue;
+                bindings++;
+                if (!value.Contains("FallbackValue=", StringComparison.Ordinal)) continue;
+
+                var path = BindingPath().Match(value).Groups["path"].Value;
+                if (!path.Contains('.', StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)}: {attribute.Name.LocalName}=\"{value}\"");
+            }
+        }
+
+        // 2081 when written. Far fewer means the views were not read, and an empty list would pass.
+        Assert.True(bindings >= 1000, $"only {bindings} bindings were read out of the app's XAML, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "these bindings give a fallback for their own value, which WPF never shows for a null value: a StringFormat "
+            + "then renders its bare suffix and a plain binding renders nothing. Bind a …Display property that says "
+            + "\"—\" itself:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>The path a binding starts with, with or without <c>Path=</c>.</summary>
+    [GeneratedRegex(@"^\{Binding\s+(?:Path=)?(?<path>[^,\s}]*)")]
+    private static partial Regex BindingPath();
+
+    /// <summary>
     /// The two elevation banners that share a slot must share one geometry.
     /// </summary>
     /// <remarks>

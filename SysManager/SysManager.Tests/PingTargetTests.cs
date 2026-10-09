@@ -90,4 +90,42 @@ public class PingTargetTests
     // Stats_CanBeUpdated was removed: three doubles assigned and read back on a model with no
     // computed members over them. PingTarget's meaningful behaviour is in the ping service, which
     // has its own tests.
+
+    // ── What the row shows (#2600) ──────────────────────────────────────────
+    //
+    // The row bound the three figures through a StringFormat with a FallbackValue of "—". A fallback is for a binding
+    // that fails, not for a value that is null, so a ping that timed out read a bare " ms" and an unmeasured average or
+    // jitter read nothing.
+
+    [Fact]
+    public void Unmeasured_ReadsADash()
+    {
+        var t = new PingTarget();
+
+        Assert.Equal("—", t.LastLatencyDisplay);
+        Assert.Equal("—", t.AverageDisplay);
+        Assert.Equal("—", t.JitterDisplay);
+    }
+
+    [Fact]
+    public void Measured_ReadsAsBefore()
+    {
+        var t = new PingTarget { LastLatencyMs = 23.6, AverageMs = 21.04, JitterMs = 3.4 };
+
+        Assert.Equal("24 ms", t.LastLatencyDisplay);
+        Assert.Equal("21.0", t.AverageDisplay);
+        Assert.Equal("3", t.JitterDisplay);
+    }
+
+    [Fact]
+    public void ATimeoutAfterAReply_ReadsADashAgain_AndSaysSo()
+    {
+        var t = new PingTarget { LastLatencyMs = 18 };
+        var raised = t.RecordPropertyChanges();
+
+        t.LastLatencyMs = null;
+
+        Assert.Equal("—", t.LastLatencyDisplay);
+        Assert.Contains(nameof(PingTarget.LastLatencyDisplay), raised);
+    }
 }

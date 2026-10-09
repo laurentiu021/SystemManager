@@ -24,7 +24,7 @@ window** (#2609).
   when that row is still there, to the row now in its place when it is not, and to the list, or the control after
   it, when no row is left. It does so only when the keyboard was the last thing used and focus had not been moved
   somewhere else, so a list that refreshes on a timer never scrolls back under the mouse. Every table has it, and
-  the 21 other lists whose rows hold a button, a checkbox or a switch. Lists have lost focus this way since they
+  so do the 21 other lists rebuilt this way whose rows can take focus. Lists have lost focus this way since they
   were first refreshed in place.
 - A test now fails when a list that is rebuilt this way, and whose rows can take focus, does not keep it.
 

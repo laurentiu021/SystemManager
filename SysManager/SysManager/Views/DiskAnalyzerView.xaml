@@ -178,7 +178,7 @@
                                VerticalAlignment="Center"
                                Visibility="{Binding ShowMap, Converter={StaticResource FlexVis}}"/>
                 </DockPanel>
-                <ItemsControl ItemsSource="{Binding Map.Tiles}" Height="240" Margin="0,8,0,0"
+                <ItemsControl ItemsSource="{Binding Map.Tiles}" helpers:RebuildFocus.Keep="True" Height="240" Margin="0,8,0,0"
                               Focusable="False" UseLayoutRounding="True"
                               AutomationProperties.Name="{Binding SelectedPath, StringFormat='Map of folder sizes in {0}'}"
                               helpers:SizeObserver.Observe="True"
@@ -208,7 +208,7 @@
             </StackPanel>
 
             <Grid Grid.Row="1">
-            <ListView AutomationProperties.Name="Folder size list" ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0"
+            <ListView AutomationProperties.Name="Folder size list" ItemsSource="{Binding Entries}" helpers:RebuildFocus.Keep="True" Background="Transparent" BorderThickness="0"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                       HorizontalContentAlignment="Stretch">
                 <ListView.ItemContainerStyle>

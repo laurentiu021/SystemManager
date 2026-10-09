@@ -1415,6 +1415,8 @@
             <!-- DataGrid — dark-friendly rows, headers, and cell focus        -->
             <!-- ============================================================ -->
             <Style TargetType="DataGrid">
+                <!-- Keyboard focus comes back to the row it was on after the rows are rebuilt (#2609). -->
+                <Setter Property="h:RebuildFocus.Keep" Value="True"/>
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="BorderThickness" Value="0"/>

@@ -1040,6 +1040,27 @@ public class WindowsUpdateViewModelTests
         Assert.Equal("Cannot start — Windows Update reset is already running.", vm.StatusMessage);
         Assert.False(vm.IsBusy);
     }
+
+    // ---------- F5 and Escape (#2597, #2598) ----------
+
+    [Fact]
+    public void F5_ListsTheUpdates()
+    {
+        var vm = NewVm();
+
+        Assert.Same(vm.ListUpdatesCommand, vm.RefreshOnF5);
+    }
+
+    [Fact]
+    public void Escape_CancelsWhatRuns_OnlyWhileSomethingRuns()
+    {
+        var vm = NewVm();
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsBusy = true;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }
 
 // ---------- UpdateEntry model ----------

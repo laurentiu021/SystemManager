@@ -15,6 +15,13 @@ namespace SysManager.ViewModels;
 
 public sealed partial class WindowsUpdateViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => ListUpdatesCommand;
+
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     internal const string PsWindowsUpdateInstallScript = """
         $ErrorActionPreference = 'Stop'
         Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force

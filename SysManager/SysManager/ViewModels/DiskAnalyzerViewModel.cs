@@ -23,6 +23,9 @@ namespace SysManager.ViewModels;
 public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 {
     /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => AnalyzeCommand;
+
+    /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
         IsBusy ? CancelAnalysisCommand : null;
 

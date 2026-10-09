@@ -19,6 +19,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RescanCommand;
 
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsAnyRunning ? CancelCommand : null;
+
     private readonly IPowerShellRunner _runner;
 
     // The temp/Recycle-Bin sizing, behind a seam. It used to be inline here, which meant constructing this

@@ -695,4 +695,14 @@ public class DiskAnalyzerViewModelTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    // ---------- F5 (#2598) ----------
+
+    [Fact]
+    public void F5_AnalyzesTheFolderAgain()
+    {
+        var vm = NewVm();
+
+        Assert.Same(vm.AnalyzeCommand, vm.RefreshOnF5);
+    }
 }

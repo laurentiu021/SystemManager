@@ -18,6 +18,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class TracerouteViewModel : ViewModelBase
 {
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsTracing ? CancelTraceCommand : null;
+
     public NetworkSharedState Shared { get; }
     private CancellationTokenSource? _traceCts;
 

@@ -641,4 +641,17 @@ public class LogsViewModelTests
             Assert.Contains(vm.SelectedEntry, vm.Entries);
         });
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Fact]
+    public void Escape_CancelsTheLoad_OnlyWhileOneRuns()
+    {
+        var vm = new LogsViewModel(new EventLogService());
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsBusy = true;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }

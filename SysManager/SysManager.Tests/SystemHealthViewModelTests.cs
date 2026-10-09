@@ -337,4 +337,20 @@ public class SystemHealthViewModelTests
         Assert.Contains("D:", vm.StatusMessage);
         Assert.False(vm.IsChkdskRunning);
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Fact]
+    public async Task Escape_CancelsChkdsk_AndNotTheSystemScan_WhichCancelDoesNotStop()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsBusy = true;
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsChkdskRunning = true;
+        Assert.Same(vm.CancelScanCommand, vm.EscapeCancel);
+    }
 }

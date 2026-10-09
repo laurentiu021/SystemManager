@@ -30,6 +30,10 @@ public sealed partial class LogsViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
 
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsBusy ? CancelCommand : null;
+
     private readonly EventLogService _eventLogs;
     private readonly Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> _readEvents;
     private CancellationTokenSource? _cts;

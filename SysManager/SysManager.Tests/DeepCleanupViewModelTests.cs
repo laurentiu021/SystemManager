@@ -711,4 +711,20 @@ public class DeepCleanupViewModelTests : IDisposable
         Assert.Contains("cannot be recovered", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("emptying the Recycle Bin", prompt, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ---------- Escape (#2597) ----------
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Escape_CancelsTheScanOrTheClean_WhicheverRuns(bool scanning, bool cleaning)
+    {
+        var vm = NewVm();
+        Assert.Null(vm.EscapeCancel);
+
+        vm.IsScanning = scanning;
+        vm.IsCleaning = cleaning;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }

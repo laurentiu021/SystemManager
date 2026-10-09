@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.10] - 2026-10-09
+
+**Escape now stops what is running on every tab with a Cancel button, and F5 works on Drivers, Windows Update and
+Disk Analyzer** (#2597, #2598).
+
+### Fixed
+
+- **Escape cancels on the tabs whose Cancel button is always on screen.** Quick Cleanup, Deep Cleanup, App Updates,
+  Windows Update, System Health's chkdsk scan, Drivers, System Logs, Traceroute, and the Dashboard's Quick Tune-Up and
+  slowdown check did nothing on Escape, although their Cancel button worked. Escape now stops them by the same rules
+  as on the other tabs: only while something runs, and only after the control you are on has had its own use of the
+  key. None of them answered Escape, which arrived in 1.76.0, because the test that checks every tab looked only at
+  Cancel buttons that hide while nothing runs. It now checks every Cancel button.
+- **F5 lists the drivers, lists the updates and analyzes the folder again.** Drivers, Windows Update and Disk Analyzer
+  ignored F5, because their refresh is called List drivers, List updates and Analyze, and the test that checks every
+  tab answers F5 only knew refreshes spelled Refresh, Rescan, Reload, Scan or Load. As on every other tab, F5 runs
+  exactly what the tab's own button runs, and does nothing while that is already running. They had been off F5 since
+  it arrived in 1.86.0.
+
 ## [1.127.9] - 2026-10-09
 
 **System Logs now shows Information or Verbose events when you tick them, instead of only after the next Refresh, and

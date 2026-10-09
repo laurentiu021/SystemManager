@@ -222,19 +222,16 @@ on, the way it opens a folder in File Explorer. Opening the appearance panel mov
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
 `Escape` also stops whatever the open tab is doing — a disk scan, a duplicate search, a speed test — on
-the 16 tabs that can be cancelled from the keyboard, the ones whose Cancel button appears only once
-something is running. It only acts while something is running, and only after the control you are on has
-had its own chance to use the key, so it still closes a drop-down or undoes a text edit first. The tabs
-that keep their Cancel button on screen all the time are not reached by Escape yet: Quick Cleanup, Deep
-Cleanup, App Updates, Windows Update, System Health, Drivers, System Logs, Traceroute and the Dashboard's
-Quick Tune-Up.
+the 25 tabs that can be cancelled from the keyboard, which is every tab with a Cancel button. It only acts
+while something is running, and only after the control you are on has had its own chance to use the key,
+so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all 42 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 45 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
-or uninstalls is reachable from a bare keypress. Pressing it during a refresh that is already running
-does nothing rather than starting a second one. Drivers, Windows Update and Disk Analyzer are not on F5
-yet — use List drivers, List updates or Analyze.
+or uninstalls is reachable from a bare keypress. On Drivers, Windows Update and Disk Analyzer that is List
+drivers, List updates and Analyze. Pressing it during a refresh that is already running does nothing
+rather than starting a second one.
 
 **`Ctrl+F` jumps to the search box** on the 12 tabs that have one, and selects whatever is already
 typed there so you can replace it straight away — the same thing the key does in a browser. On a tab with

@@ -36,15 +36,15 @@ public sealed class ThemePopupUiTests : IDisposable
             AppResources.Ensure();
             var popup = new ThemePopup(theme);
             popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
-            Assert.True(popup.FollowWindowsMode.IsChecked);
+            Assert.True(popup.FollowWindowsMode.IsChecked, "Auto is not selected when the panel opens under Auto");
 
             var card = popup.PresetPanel.Children.OfType<Border>().First(c => (string)c.Tag != theme.CurrentPresetId);
             popup.SelectPreset(card);
 
             Assert.Equal("dark", theme.CurrentMode);
             Assert.Equal((string)card.Tag, theme.CurrentPresetId);
-            Assert.True(popup.DarkMode.IsChecked);
-            Assert.False(popup.FollowWindowsMode.IsChecked);
+            Assert.True(popup.DarkMode.IsChecked, "Dark is not selected after a dark preset was picked");
+            Assert.False(popup.FollowWindowsMode.IsChecked, "Auto is still selected after a preset was picked");
         });
     }
 

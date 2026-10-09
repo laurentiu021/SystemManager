@@ -2010,9 +2010,10 @@ public partial class ArchitectureTests
     /// <remarks>
     /// <c>GetSessionOutputDevice</c> used to return two states where it needed three: an empty id meant both
     /// "this app follows the default" and "the route could not be read", and the row resolved either into the
-    /// entry flagged <c>IsDefault</c> — by NAME, because the picker holds real endpoints only. The read is a
-    /// stub that always fails, so every picker asserted the app was on the default device whatever Windows was
-    /// really doing with it, and an app the user had routed to a headset displayed "Speakers".
+    /// entry flagged <c>IsDefault</c> — by NAME, because the picker holds real endpoints only. The read was a
+    /// stub that always failed, so every picker asserted the app was on the default device whatever Windows was
+    /// really doing with it, and an app the user had routed to a headset displayed "Speakers". The read is real
+    /// since #2088, and still answers null when Windows cannot say.
     /// <para>Three things have to hold together and each can be broken alone, which is why they are one test:
     /// the interface must keep the nullable return that lets "unknown" be expressed, the implementation must
     /// not collapse it back with <c>?? string.Empty</c>, and the view must actually bind the flag. The last is
@@ -14961,6 +14962,9 @@ public partial class ArchitectureTests
             // reading a header: the catalog lookup it opens verifies 12 real Windows binaries, which a
             // failed bind could not do (LibraryImport throws EntryPointNotFoundException at first use).
             "CryptCATAdminAcquireContext2",
+            // combase: the Windows Runtime string API is Unicode-only. It takes a PCNZWCH and ships no A/W pair.
+            // Confirmed by binding it: the per-app routing factory is activated with the class name it creates.
+            "WindowsCreateString",
         ];
 
         var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");

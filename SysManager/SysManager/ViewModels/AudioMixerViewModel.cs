@@ -345,9 +345,12 @@ public sealed partial class AudioMixerViewModel : ViewModelBase
         OutputDevices.ReplaceWith(devices ?? []);
         // Gated on the row's own routing capability, matching the construction-time gate in MergeInto: the
         // system-sounds pseudo-session shows no picker, so it must not be handed a destination it cannot use.
+        // Each row shows where Windows says the app plays now, so a route changed in Windows' own settings reaches
+        // the picker too, and keeps what it showed when Windows cannot say (#2088). Read on this slower cadence
+        // rather than on every one-second pass, because it is a call into the audio service for every app.
         foreach (var row in Sessions)
             if (row.RoutingSupported && chosen.TryGetValue(row.SessionId, out var id))
-                row.SetOutputDeviceFromService(id);
+                row.SetOutputDeviceFromService(_service.GetSessionOutputDevice(row.SessionId) ?? id);
 
         // The This PC picker shows the device the fresh list flags as in use, so a switch made outside SysManager
         // reaches it here too.

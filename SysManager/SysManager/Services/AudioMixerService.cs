@@ -22,7 +22,7 @@ namespace SysManager.Services;
 ///
 /// <para>Scope: enumerates sessions on the default render endpoint. Output devices are listed via
 /// the documented device API (<see cref="GetRenderDevices"/>). Per-app output-device routing uses
-/// the UNDOCUMENTED <c>IAudioPolicyConfig</c> interface (the same one EarTrumpet reverse-engineers)
+/// the UNDOCUMENTED <c>IAudioPolicyConfigFactory</c> interface (the same one EarTrumpet reverse-engineers)
 /// and is feature-detected at runtime: if it can't bind on this Windows build,
 /// <see cref="IsRoutingSupported"/> is false and the UI falls back to guiding the user to Windows'
 /// per-app sound settings. Volume presets live in a separate pure service.</para>
@@ -61,7 +61,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     private readonly Dictionary<string, List<object>> _groups = new(StringComparer.Ordinal);
 
     // Per-group (session id → owning PID + exe name), captured during enumeration so routing can
-    // build the app's audio-session identifier for IAudioPolicyConfig without re-walking COM.
+    // build the app's audio-session identifier for IAudioPolicyConfigFactory without re-walking COM.
     private readonly Dictionary<string, (uint Pid, string ExeName)> _routingKeys = new(StringComparer.Ordinal);
 
     /// <inheritdoc/>
@@ -588,7 +588,7 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     internal static bool DefaultMoved(string? heldId, string defaultId) =>
         heldId is { Length: > 0 } && !string.Equals(heldId, defaultId, StringComparison.OrdinalIgnoreCase);
 
-    // ── Per-app output routing (UNDOCUMENTED IAudioPolicyConfig — guarded) ──
+    // ── Per-app output routing (UNDOCUMENTED IAudioPolicyConfigFactory — guarded) ──
 
     private bool _routingProbed;
     private bool _routingSupported;
@@ -600,8 +600,8 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
     }
 
     /// <summary>
-    /// Lazily binds <c>IAudioPolicyConfig</c> once and caches whether it's available. The interface
-    /// is undocumented and its CLSID/IID/vtable are the community-reverse-engineered values; any
+    /// Lazily binds <c>IAudioPolicyConfigFactory</c> once and caches whether it's available. The interface
+    /// is undocumented and its class name, IID and vtable are the community-reverse-engineered values; any
     /// failure to activate leaves routing unsupported (the UI then uses the guided fallback).
     /// </summary>
     private bool ProbeRoutingLocked()
@@ -617,11 +617,11 @@ public sealed class AudioMixerService : IAudioMixerService, IDisposable
         catch (COMException ex) { Log.Debug("Audio routing probe failed: {Error}", ex.Message); }
         catch (InvalidCastException ex) { Log.Debug("Audio routing probe cast failed: {Error}", ex.Message); }
         if (!_routingSupported)
-            Log.Information("Audio routing: IAudioPolicyConfig unavailable on this build — using guided fallback");
+            Log.Information("Audio routing: IAudioPolicyConfigFactory unavailable on this build — using guided fallback");
         return _routingSupported;
     }
 
-    private object? _policyConfig; // IAudioPolicyConfig (undocumented)
+    private object? _policyConfig; // IAudioPolicyConfigFactory (undocumented)
 
     /// <inheritdoc/>
     public string? GetSessionOutputDevice(string sessionId)

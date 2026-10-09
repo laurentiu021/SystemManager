@@ -70,6 +70,13 @@ public interface IGamingProfileService
     PendingRecovery ReadPendingRecovery();
 
     /// <summary>
+    /// True the first time it is asked in this run, false after. The question about a session a previous run left on is
+    /// asked once a run, by whichever gets there first: the Dashboard when SysManager starts, or Gaming Profile if it is
+    /// opened before that (#2592).
+    /// </summary>
+    bool ClaimRecoveryQuestion();
+
+    /// <summary>
     /// Revert a leftover session found on disk from a previous run (crash recovery). Reports
     /// what could not be restored, as <see cref="RevertAsync"/> does.
     /// </summary>

@@ -34,7 +34,8 @@ public class DashboardViewModelTests
                                             SpeedTestHistoryService? speedHistory = null,
                                             ITuneUpService? tuneUp = null,
                                             MemoryTestService? memTest = null,
-                                            ISlowdownService? slowdown = null)
+                                            ISlowdownService? slowdown = null,
+                                            IGamingProfileService? gaming = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -67,7 +68,10 @@ public class DashboardViewModelTests
             appBlocker,
             // Null by default, which leaves "Why is it slow?" unable to run. A test that runs it passes a substitute:
             // the real check reads this machine's processes, drives and startup programs.
-            slowdown);
+            slowdown,
+            // Null by default, which asks nothing about a game mode session left on. A test that asks passes a
+            // substitute: the real one reads this machine's record of game mode.
+            gaming);
     }
 
     // ---------- empty states on the cards ----------
@@ -1035,6 +1039,62 @@ public class DashboardViewModelTests
         var vm = NewVm();
 
         Assert.DoesNotContain(vm.Alerts, a => a.Title.Contains("blocked", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ---------- a game mode session a previous run left on (#2592) ----------
+    //
+    // Only Gaming Profile asked about it, and that tab is built when it is first opened, so after a crash game mode's
+    // changes stayed applied until someone opened it. The Dashboard is built at startup and asks once it has loaded,
+    // unless Gaming Profile got there first in this run.
+
+    private static IGamingProfileService GamingLeftOn(bool notYetAsked = true)
+    {
+        var gaming = Substitute.For<IGamingProfileService>();
+        gaming.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        gaming.ClaimRecoveryQuestion().Returns(notYetAsked);
+        gaming.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
+        return gaming;
+    }
+
+    [Fact]
+    public async Task AtStartup_AGameModeSessionLeftOn_IsOfferedBack_AndPutBackOnYes()
+    {
+        var gaming = GamingLeftOn();
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = NewVm(gaming: gaming);
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        var asked = Assert.Single(dialog.Messages);
+        Assert.StartsWith("Gaming Profile — Restore\nSysManager closed while game mode was still active last time.", asked,
+            StringComparison.Ordinal);
+        await gaming.Received(1).RecoverPendingAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AtStartup_AnswerNo_PutsNothingBack()
+    {
+        var gaming = GamingLeftOn();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        var vm = NewVm(gaming: gaming);
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        Assert.Equal(1, dialog.Calls);
+        await gaming.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AtStartup_NothingIsAsked_WhenGamingProfileAskedFirst()
+    {
+        var gaming = GamingLeftOn(notYetAsked: false);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = NewVm(gaming: gaming);
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        Assert.Equal(0, dialog.Calls);
+        await gaming.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
     }
 
     // ---------- the alerts are checked again, and a check that fails says so (#2479) ----------

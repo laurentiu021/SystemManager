@@ -42,6 +42,8 @@ public class GamingProfileViewModelTests
         svc.LoadLastConfig().Returns(lastConfig ?? new GamingProfile());
         svc.IsActive.Returns(active);
         svc.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.None));
+        // Nothing has asked yet in this run, as when the tab is opened before the Dashboard got there.
+        svc.ClaimRecoveryQuestion().Returns(true);
         svc.RevertAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
         svc.RecoverPendingAsync(Arg.Any<CancellationToken>()).Returns(GamingRevertResult.Complete);
         return svc;
@@ -354,6 +356,23 @@ public class GamingProfileViewModelTests
 
         await service.Received(1).RecoverPendingAsync(Arg.Any<CancellationToken>());
         Assert.Contains("\"Ultimate Performance power plan\" was not restored", vm!.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Recovery_IsNotAskedAgain_WhenTheDashboardAlreadyAskedInThisRun()
+    {
+        // The Dashboard asks at startup (#2592). Opening the tab afterwards must not put the same question a second time,
+        // whatever the answer was.
+        var service = ServiceWith();
+        service.ReadPendingRecovery().Returns(new PendingRecovery(PendingRecoveryKind.LeftOn));
+        service.ClaimRecoveryQuestion().Returns(false);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var vm = new GamingProfileViewModel(service, CpuWith());
+        await vm.InitializationComplete;
+
+        Assert.Equal(0, dialog.Calls);
+        await service.DidNotReceive().RecoverPendingAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

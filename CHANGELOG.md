@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.6] - 2026-10-09
+
+**After SysManager closes with game mode on, it now asks at the next start whether to put game mode's changes back,
+not only once Gaming Profile is opened** (#2592).
+
+### Fixed
+
+- **Gaming Profile: a game mode session left on by a crash is offered back when SysManager starts.** The question that
+  puts back the power plan, visual effects, paused search indexing and silenced notifications was asked only by
+  Gaming Profile, and that tab is built the first time it is opened. So after SysManager crashed, or was ended from
+  Task Manager, during game mode, those changes stayed applied until someone opened the tab or found the row on Undo
+  Changes. The same question now comes once the Dashboard has loaded, or when Gaming Profile is opened if that comes
+  first, and only once a run. A yes puts the changes back and says what was put back. The question had waited for
+  the tab since game mode arrived, in 1.52.38.
+
 ## [1.127.5] - 2026-10-09
 
 **Undo Changes no longer says "Looking for the newest restore point…" for good when Windows does not answer** (#2606).

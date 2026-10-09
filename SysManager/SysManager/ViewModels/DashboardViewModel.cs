@@ -48,6 +48,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // parameter for why it is optional.
     private readonly ISlowdownService? _slowdown;
 
+    // Null when no caller supplied one, which leaves the question about a game mode session left on to Gaming Profile.
+    // See the constructor's gaming parameter.
+    private readonly IGamingProfileService? _gaming;
+
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _slowdownCts;
     private CancellationTokenSource? _pollingCts;
@@ -186,11 +190,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// container and the designer graph both supply the real one. A test passes a substitute, because the real one reads
     /// whatever machine runs it.
     /// </param>
+    /// <param name="gaming">
+    /// Asks, once the Dashboard has loaded, about a game mode session a previous run left on (#2592). Optional for the
+    /// same reason as <paramref name="appBlocker"/>; null asks nothing, and Gaming Profile then asks when it is opened.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
-        IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null)
+        IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null)
     {
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
@@ -198,6 +206,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         _speedHistory = speedHistory;
         _appBlocker = appBlocker;
         _slowdown = slowdown;
+        _gaming = gaming;
         _sys = sys;
         _tuneUp = tuneUp;
         _healthScore = healthScore;
@@ -219,6 +228,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
         await LoadHealthScoreAsync();
         _ = StartAlertScans();
         await LoadTemperaturesAsync();
+
+        // Last, so the question comes once the window is up and the Dashboard has filled in, rather than before either.
+        if (_gaming is not null && await GamingProfileViewModel.OfferToRevertLeftoverAsync(_gaming) is { } said)
+            ToastService.Instance.Show("Gaming Profile", said, autoHideMs: 9000);
     }
 
     /// <summary>

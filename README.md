@@ -2055,7 +2055,8 @@ offers, "rate us" prompts:
   current name, which says which of the two memory operations it is
 - `--json` emits machine-readable output; `--silent` (`-s`, `/silent`) prints nothing at all when the
   command succeeds, and still prints an error; conventional **exit codes** (0 success · 1 error · 2
-  usage) let a script branch on the result
+  usage) let a script branch on the result. An option SysManager does not know is a usage error
+  wherever it appears, so a typo such as `-slient --cleanup` runs nothing and exits 2
 - The CLI has no confirmation dialog, so it offers only the health score and two actions: the
   temp-file cleanup, which deletes the files for good without asking, and the standby purge, which
   loses no data. Everything else stays in the GUI behind a confirmation dialog

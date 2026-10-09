@@ -79,6 +79,27 @@ public class CliRunnerTests
         Assert.Equal("--frobnicate", r.UnknownArg);
     }
 
+    [Theory]
+    [InlineData("-bogus", "--health")]
+    [InlineData("--health", "-bogus")]
+    public void Parse_AnUnknownFlag_IsAUsageError_OnEitherSideOfAVerb(string first, string second)
+    {
+        // Before #2604 the verb after an unknown flag replaced it, so only one of these two orders was refused.
+        var r = CliRunner.Parse([first, second]);
+
+        Assert.Equal(CliCommand.Unknown, r.Command);
+        Assert.Equal("-bogus", r.UnknownArg);
+    }
+
+    [Fact]
+    public void Parse_ATypoInAModifier_DoesNotRunTheCleanupAfterIt()
+    {
+        var r = CliRunner.Parse(["-slient", "--cleanup"]);
+
+        Assert.Equal(CliCommand.Unknown, r.Command);
+        Assert.Equal("-slient", r.UnknownArg);
+    }
+
     [Fact]
     public void Parse_BareTokens_AreIgnored_NotUnknown()
     {

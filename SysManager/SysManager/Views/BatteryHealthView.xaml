@@ -216,19 +216,17 @@
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Design capacity"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
-                                    <Run Text="{Binding Battery.DesignCapacityMWh, Mode=OneWay}"/><Run Text=" mWh"/>
-                                </TextBlock>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Battery.DesignCapacityDisplay}"
+                                           Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Full charge capacity"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
-                                    <Run Text="{Binding Battery.FullChargeCapacityMWh, Mode=OneWay}"/><Run Text=" mWh"/>
-                                </TextBlock>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Battery.FullChargeCapacityDisplay}"
+                                           Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Cycle count"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Battery.CycleCount}"
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Battery.CycleCountDisplay}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="5" Grid.Column="0" Text="Estimated runtime"

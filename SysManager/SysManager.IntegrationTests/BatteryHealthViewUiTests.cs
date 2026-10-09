@@ -122,6 +122,58 @@ public sealed class BatteryHealthViewUiTests
         });
     }
 
+    // ── Figures Windows did not give (#2623) ──
+    //
+    // Without administrator rights the three reads are refused, and the details card read "0 mWh", "0 mWh" and "0".
+
+    [Fact]
+    public async Task TheDetails_SayNotAvailable_ForWhatWindowsDidNotGive()
+    {
+        var vm = await VmAsync(Laptop, History((0, 100), (182, 96)));
+
+        StaHelper.Run(() =>
+        {
+            var shown = ShownTexts(Laid(vm));
+
+            Assert.Equal("Not available", ValueOf(shown, "Design capacity"));
+            Assert.Equal("Not available", ValueOf(shown, "Full charge capacity"));
+            Assert.Equal("Not available", ValueOf(shown, "Cycle count"));
+        });
+    }
+
+    [Fact]
+    public async Task TheDetails_ShowWhatWindowsGave_IncludingACycleCountOfZero()
+    {
+        var battery = new BatteryInfo
+        {
+            HasBattery = true,
+            Name = "Primary",
+            ChargePercent = 80,
+            Status = "Charging",
+            DesignCapacityMWh = 57000,
+            FullChargeCapacityMWh = 51300,
+            CycleCountRead = true,
+        };
+        var vm = await VmAsync(battery, History((0, 100), (182, 96)));
+
+        StaHelper.Run(() =>
+        {
+            var shown = ShownTexts(Laid(vm));
+
+            Assert.Equal("57000 mWh", ValueOf(shown, "Design capacity"));
+            Assert.Equal("51300 mWh", ValueOf(shown, "Full charge capacity"));
+            Assert.Equal("0", ValueOf(shown, "Cycle count"));
+        });
+    }
+
+    /// <summary>The figure the details card shows beside <paramref name="label"/>, which comes right after it.</summary>
+    private static string ValueOf(List<string> shown, string label)
+    {
+        var at = shown.IndexOf(label);
+        Assert.True(at >= 0 && at + 1 < shown.Count, $"no \"{label}\" row: {string.Join(" | ", shown)}");
+        return shown[at + 1];
+    }
+
     /// <summary>
     /// The text actually on screen under <paramref name="root"/>: a collapsed element still holds its bound text, so its
     /// subtree is skipped rather than read.

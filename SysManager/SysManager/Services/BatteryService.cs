@@ -141,7 +141,7 @@ public sealed class BatteryService
             {
                 using (obj)
                 {
-                    info.CycleCount = ToInt32Safe(obj["CycleCount"]);
+                    SetCycleCount(info, obj["CycleCount"]);
                     break;
                 }
             }
@@ -149,6 +149,18 @@ public sealed class BatteryService
         catch (ManagementException) { /* WMI class not present on this device */ }
         catch (UnauthorizedAccessException) { /* needs elevation for root\WMI */ }
         catch (System.Runtime.InteropServices.COMException) { /* transient WMI COM fault — return what we have */ }
+    }
+
+    /// <summary>
+    /// Records the cycle count Windows answered with. Only a value that is a count marks it as read: 0 is a real count
+    /// for a new battery, so it cannot also stand for a read that was refused (#2623).
+    /// </summary>
+    internal static void SetCycleCount(BatteryInfo info, object? value)
+    {
+        // -1 is no answer, since a count is never negative.
+        var cycles = ToInt32Safe(value, fallback: -1);
+        info.CycleCountRead = cycles >= 0;
+        info.CycleCount = Math.Max(cycles, 0);
     }
 
     internal static string MapBatteryStatus(ushort code) => code switch

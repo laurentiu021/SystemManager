@@ -1567,7 +1567,8 @@ offers, "rate us" prompts:
   Windows that answers only an elevated process). Without it they read "Not available"
   and the page explains why, instead of showing a number that isn't a measurement.
   Design capacity, full-charge capacity and cycle count come from the same place, so
-  without administrator rights they show 0: read that as not measured
+  without administrator rights they read "Not available" too. A cycle count of 0 that
+  Windows did give, as it does for a new battery, still reads 0
 - **Capacity over time** — how much charge the battery holds when full, as a percentage
   of what it held when new, drawn from the history Windows keeps of it, so it shows
   months on the first visit. No administrator rights needed

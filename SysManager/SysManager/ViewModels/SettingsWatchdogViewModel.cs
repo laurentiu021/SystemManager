@@ -95,14 +95,27 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         Watched.ReplaceWith(_service.Catalog.Select(s =>
             new WatchedRow(s, current.TryGetValue(s.Key, out var v) ? v : null, drifted.Contains(s.Key))));
 
+        var notSet = NotSetCount();
         StatusMessage = _baselineUnusable
             ? "Your saved baseline could not be read, so nothing is compared with it. Save a new baseline to replace it."
             : !HasBaseline
                 ? "No baseline yet — save your current settings to start watching for changes."
                 : HasDrift
                     ? $"{Drifts.Count} setting(s) changed since your baseline."
+                      + (notSet switch
+                      {
+                          0 => "",
+                          1 => " One was not set when you saved it, which Restore cannot put back.",
+                          _ => $" {notSet} were not set when you saved it, which Restore cannot put back.",
+                      })
                     : "All watched settings match your baseline.";
     }
+
+    /// <summary>
+    /// The drifts Restore leaves alone because the baseline holds no value for them: putting "Not set" back would
+    /// mean deleting the value, and the watchdog never deletes one (#2594).
+    /// </summary>
+    private int NotSetCount() => Drifts.Count(d => d.Drift.CanRestore && !d.Drift.CanWriteBack);
 
     /// <summary>Captures the current settings as the new baseline (with confirmation).</summary>
     [RelayCommand]
@@ -136,20 +149,40 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         StatusMessage = "Baseline saved. The watchdog will flag future changes.";
     }
 
-    private bool CanRestore() => Drifts.Any(d => d.Drift.CanRestore);
+    // Picked by CanWriteBack, not CanRestore: a drift the baseline holds no value for was counted, and then reported as
+    // a write that failed for want of administrator rights (#2594).
+    private bool CanRestore() => Drifts.Any(d => d.Drift.CanWriteBack);
 
     /// <summary>Restores every restorable drifted setting to its baseline value (with confirmation).</summary>
     [RelayCommand(CanExecute = nameof(CanRestore))]
     private void RestoreSelected()
     {
-        var restorable = Drifts.Where(d => d.Drift.CanRestore).ToList();
+        var restorable = Drifts.Where(d => d.Drift.CanWriteBack).ToList();
         if (restorable.Count == 0) return;
+        var notSet = NotSetCount();
 
         if (!DialogService.Instance.Confirm(
                 $"Restore {restorable.Count} setting(s) to your saved baseline?\n\n" +
-                "Each will be written back to the value it had when you saved the baseline.",
+                "Each will be written back to the value it had when you saved the baseline." +
+                (notSet switch
+                {
+                    0 => "",
+                    1 => "\n\nOne other setting was not set when you saved the baseline. Restore cannot put that back, " +
+                         "so it is left as it is.",
+                    _ => $"\n\n{notSet} other settings were not set when you saved the baseline. Restore cannot put " +
+                         "that back, so they are left as they are.",
+                }),
                 "Restore Settings — Confirm"))
             return;
+
+        // Several of these values are ones Privacy & Telemetry writes, and its Apply waits for a restore point before
+        // writing: a Restore in that wait was written over a moment later (#2595). The lock its Apply takes.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Settings Watchdog");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
+            return;
+        }
 
         int restored = 0, failed = 0;
         foreach (var row in restorable)
@@ -159,12 +192,20 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
 
         if (restored > 0)
             ActivityLogService.Instance.Log("Settings Watchdog", $"Restored {restored} setting(s) to baseline");
-        Log.Information("Settings Watchdog restore: {Restored} ok, {Failed} failed", restored, failed);
+        Log.Information("Settings Watchdog restore: {Restored} ok, {Failed} failed, {NotSet} not set in the baseline",
+            restored, failed, notSet);
 
         Refresh();
-        StatusMessage = failed == 0
-            ? $"Restored {restored} setting(s) to your baseline."
-            : $"Restored {restored} setting(s) · {failed} could not be written (try running as administrator).";
+        StatusMessage = (failed == 0
+                ? $"Restored {restored} setting(s) to your baseline."
+                : $"Restored {restored} setting(s) · {failed} could not be written"
+                  + (IsElevated ? "." : " (try running as administrator)."))
+            + (notSet switch
+            {
+                0 => "",
+                1 => " One that was not set in your baseline was left as it is.",
+                _ => $" {notSet} that were not set in your baseline were left as they are.",
+            });
     }
 
     /// <summary>

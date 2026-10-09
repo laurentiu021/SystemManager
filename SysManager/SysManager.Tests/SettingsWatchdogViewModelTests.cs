@@ -4,6 +4,7 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -215,6 +216,118 @@ public class SettingsWatchdogViewModelTests
         var svc = NewService(Drift("a", canRestore: false));
         var vm = new SettingsWatchdogViewModel(svc);
         Assert.False(vm.RestoreSelectedCommand.CanExecute(null));
+    }
+
+    // ── A drift the baseline holds no value for (#2594) ───────────────────
+    //
+    // Putting "Not set" back would mean deleting the value, and Restore never deletes one, so the service refuses it.
+    // The view-model still counted it, promised it in the confirmation, and then reported it as a write that failed
+    // for want of administrator rights, which running as administrator does not change.
+
+    private static SettingDrift NotSet(string key) => new(Setting(key), BaselineValue: null, CurrentValue: 1);
+
+    [Fact]
+    public void RestoreSelected_LeavesADriftThatWasNotSet_AndSaysSoBeforeAndAfter()
+    {
+        var written = Drift("a");
+        var notSet = NotSet("b");
+        var svc = NewService(written, notSet);
+        svc.Restore(written).Returns(true);
+        svc.Restore(notSet).Returns(false);   // what the real service answers for it
+        var vm = new SettingsWatchdogViewModel(svc);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.RestoreSelectedCommand.Execute(null);
+
+        svc.Received(1).Restore(written);
+        svc.DidNotReceive().Restore(notSet);
+        var asked = Assert.Single(dialog.Messages);
+        Assert.Contains("Restore 1 setting(s)", asked, StringComparison.Ordinal);
+        Assert.Contains("One other setting was not set when you saved the baseline", asked, StringComparison.Ordinal);
+        Assert.Contains("One that was not set in your baseline was left as it is.", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("could not be written", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RestoreSelected_CanExecute_FalseWhenEveryDriftWasNotSet()
+    {
+        var vm = new SettingsWatchdogViewModel(NewService(NotSet("a"), NotSet("b")));
+
+        Assert.False(vm.RestoreSelectedCommand.CanExecute(null));
+        Assert.Contains("2 were not set when you saved it, which Restore cannot put back.", vm.StatusMessage,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Refresh_SaysWhichDriftsRestoreCannotPutBack()
+    {
+        var vm = new SettingsWatchdogViewModel(NewService(Drift("a"), NotSet("b")));
+
+        Assert.Equal(
+            "2 setting(s) changed since your baseline. One was not set when you saved it, which Restore cannot put back.",
+            vm.StatusMessage);
+    }
+
+    /// <summary>The administrator hint is only for a write that failed in a session that is not elevated.</summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void RestoreSelected_WhenAWriteFails_AsksForAdministratorOnlyWhenNotElevated(bool elevated, bool hinted)
+    {
+        var failing = Drift("a");
+        var svc = NewService(failing);
+        svc.Restore(failing).Returns(false);
+        SettingsWatchdogViewModel vm;
+        using (AdminHelper.ForceElevation(elevated))
+            vm = new SettingsWatchdogViewModel(svc);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.RestoreSelectedCommand.Execute(null);
+
+        Assert.Contains("1 could not be written", vm.StatusMessage, StringComparison.Ordinal);
+        Assert.Equal(hinted, vm.StatusMessage.Contains("administrator", StringComparison.Ordinal));
+    }
+
+    // ── Restore shares the lock Privacy & Telemetry's Apply takes (#2595) ──
+    //
+    // Several watched values are ones Privacy & Telemetry writes, and its Apply waits for a restore point before
+    // writing. A Restore pressed in that wait wrote at once, and the Apply then wrote over it.
+
+    [Fact]
+    public void RestoreSelected_WhileAnotherChangeRuns_SaysWhich_AndWritesNothing()
+    {
+        var drift = Drift("a");
+        var svc = NewService(drift);
+        svc.Restore(drift).Returns(true);
+        var vm = new SettingsWatchdogViewModel(svc);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Privacy & Telemetry");
+        Assert.NotNull(held);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.RestoreSelectedCommand.Execute(null);
+
+        svc.DidNotReceive().Restore(Arg.Any<SettingDrift>());
+        Assert.Equal("Cannot start — Privacy & Telemetry is already running.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void RestoreSelected_HoldsTheLockWhileItWrites_AndReleasesIt()
+    {
+        var drift = Drift("a");
+        var svc = NewService(drift);
+        string? heldBy = null;
+        svc.Restore(drift).Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification);
+            return true;
+        });
+        var vm = new SettingsWatchdogViewModel(svc);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.RestoreSelectedCommand.Execute(null);
+
+        Assert.Equal("Settings Watchdog", heldBy);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification));
     }
 
     [Fact]

@@ -1088,8 +1088,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Restore changed** writes the drifted settings back to your baseline values in
   one step, after one confirmation. Telemetry, activity history and Widgets are machine-wide
   policies and need administrator rights, surfaced not crashed. A setting that was not set at all
-  when you saved the baseline cannot be put back this way: it is listed, but Restore changed
-  reports it as not written
+  when you saved the baseline cannot be put back this way, because Restore never deletes a value:
+  it is listed, and the tab, the confirmation and the result each say that Restore changed leaves
+  it as it is. Restore changed does not start while Privacy & Telemetry or another tab that changes
+  Windows settings is at work, and says which one is
 - **Undo Changes links here** — the settings that drifted from your baseline, and that
   Restore changed can write back, are one row there that opens this tab
 - **Recent Changes says when** — each look records when a changed setting was first seen and when it

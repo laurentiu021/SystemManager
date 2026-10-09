@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.4] - 2026-10-09
+
+**Settings Watchdog's Restore changed now says which settings it cannot put back, and waits while Privacy & Telemetry
+is changing the same settings** (#2594, #2595).
+
+### Fixed
+
+- **Settings Watchdog: a setting that was not set when you saved the baseline is no longer reported as a failed
+  write.** Putting "Not set" back would mean deleting the value, which Restore changed never does, so it never wrote
+  one. It was still counted in the confirmation, and the result said it "could not be written (try running as
+  administrator)", which running as administrator does not change. Now the confirmation and the result say it is
+  left as it is, the status line says how many of the changes Restore cannot put back, and Restore changed is off
+  when that is all of them. Running as administrator is suggested only when a write was refused in a session that is
+  not elevated already.
+- **Settings Watchdog: Restore changed waits for other changes to Windows settings.** Several of the settings it
+  watches are ones Privacy & Telemetry writes, and Privacy & Telemetry's Apply first waits for a restore point. A
+  Restore changed in that wait was written over a moment later, so each tab could show a state that was no longer
+  true. Restore changed now takes the same lock as Apply: while another change is at work it says "Cannot start —
+  <that change> is already running" and writes nothing.
+- Both had been so since Settings Watchdog arrived in 1.48.0.
+
 ## [1.127.3] - 2026-10-09
 
 **Cancelling a tab's PowerShell work no longer freezes SysManager when the PowerShell behind it has died, and a

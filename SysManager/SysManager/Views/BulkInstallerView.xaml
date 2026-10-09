@@ -108,12 +108,15 @@
                               Visibility="{Binding SearchResults.Count, Converter={StaticResource FlexVis}}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Padding="8,6" Margin="0,1" CornerRadius="{StaticResource RadiusMd}" Background="Transparent">
+                            <Border Padding="8,6" Margin="0,1" CornerRadius="{StaticResource RadiusMd}">
                                 <Border.Style>
                                     <Style TargetType="Border">
+                                        <!-- A setter, not a local value: a local Background outranks the trigger below,
+                                             so the row never highlighted (#2610). -->
+                                        <Setter Property="Background" Value="Transparent"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+                                                <Setter Property="Background" Value="{DynamicResource RowHover}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -184,13 +187,16 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Padding="16,10" Margin="4,1"
-                                    CornerRadius="{StaticResource RadiusMd}" Background="Transparent"
+                                    CornerRadius="{StaticResource RadiusMd}"
                                     ToolTip="{Binding WingetId}">
                                 <Border.Style>
                                     <Style TargetType="Border">
+                                        <!-- As in the search list above: the default in the style, so the hover can
+                                             replace it, and RowHover, since AccentSoft is the selection tint (#2610). -->
+                                        <Setter Property="Background" Value="Transparent"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                                <Setter Property="Background" Value="{DynamicResource RowHover}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>

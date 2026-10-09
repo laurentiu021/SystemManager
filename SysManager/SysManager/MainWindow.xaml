@@ -533,7 +533,7 @@
                              Same 28x28 Border construction as the Appearance chip beside it, including
                              the explicit accessibility a Border needs and a Button would partly supply. -->
                         <Border x:Name="HelpBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
-                                Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
+                                Background="{DynamicResource Surface3}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="HelpBtn_Click"
                                 KeyDown="HelpBtn_KeyDown"
                                 Focusable="True" KeyboardNavigation.IsTabStop="True"
@@ -542,6 +542,9 @@
                                 Margin="0,0,6,0" VerticalAlignment="Center">
                             <Border.Style>
                                 <Style TargetType="Border">
+                                    <!-- A setter, not a local value: a local BorderBrush outranks both triggers, so
+                                         neither the hover nor keyboard focus ever showed the accent border (#2610). -->
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
@@ -563,7 +566,7 @@
                              honours Enter only where KeyboardNavigation.AcceptsReturn is set, which
                              is why the nav rows set it explicitly. -->
                         <Border x:Name="ThemeBtn" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}"
-                                Background="{DynamicResource Surface3}" BorderBrush="{DynamicResource Border1}"
+                                Background="{DynamicResource Surface3}"
                                 BorderThickness="1" Cursor="Hand" MouseLeftButtonUp="ThemeBtn_Click"
                                 KeyDown="ThemeBtn_KeyDown"
                                 Focusable="True" KeyboardNavigation.IsTabStop="True"
@@ -571,6 +574,8 @@
                                 ToolTip="Appearance" VerticalAlignment="Center">
                             <Border.Style>
                                 <Style TargetType="Border">
+                                    <!-- As on the help button beside it (#2610). -->
+                                    <Setter Property="BorderBrush" Value="{DynamicResource Border1}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
                                             <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>

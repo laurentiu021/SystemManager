@@ -443,11 +443,11 @@ Edit Windows environment variables without the cramped built-in dialog:
 - Each event gets a plain-English explanation and recommended next steps
 - Nothing is read until you press **Refresh** (or F5). The log, the time range, the maximum
   number of results and the severity boxes decide what Refresh reads. Unticking a severity or
-  typing in the search box filters what is loaded straight away, but a severity ticked after
-  the load — Information and Verbose start unticked — appears only after the next Refresh
+  typing in the search box filters what is loaded straight away. Ticking a severity the list
+  was loaded without — Information and Verbose start unticked — loads the list again with it
 - Mark any event with the flag button to keep it findable while you keep scrolling or
-  change filters. "Clear marks" removes them all, including any a filter is hiding, and a
-  Refresh clears them too
+  change filters. "Clear marks" removes them all, including any a filter is hiding. A load
+  keeps the marks, and the event open on the right, for every event it lists again
 - Export to CSV — every event loaded, including any a filter is hiding — with a "search
   online" link for unknown events
 - The Security log requires administrator rights. Without them the page says so

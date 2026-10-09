@@ -1930,9 +1930,10 @@ offers, "rate us" prompts:
   because closing stops it part-way
 - **Progress on the taskbar button** — a long job keeps reporting while the window is
   minimised. The SysManager button on the taskbar fills up as an SFC scan, a bulk
-  install or a deep cleanup progresses, and shows a moving bar for the tabs that know
-  they are working but not how far along. It follows the tab you have open, and it
-  goes blank when the job finishes rather than sitting at an empty bar
+  install, a deep cleanup, a speed test, a file shred, an update download or Quick
+  Tune-Up progresses, and shows a moving bar for the tabs that know they are working
+  but not how far along. It follows the tab you have open, and it goes blank when the
+  job finishes, rather than staying full or sitting at an empty bar
 
 ### About
 - **Version, build, license and source** in one place, with the update controls beside them

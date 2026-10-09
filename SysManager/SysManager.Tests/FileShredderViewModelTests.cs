@@ -646,4 +646,85 @@ public class FileShredderViewModelTests
 
         return body;
     }
+
+    // ---------- the taskbar button (#2596) ----------
+    //
+    // The tab draws no progress bar, so the taskbar button is the one place a shred's progress shows, and it shows
+    // the whole queue.
+
+    [Theory]
+    [InlineData(0, 2, 0, 0)]
+    [InlineData(0, 2, 100, 50)]
+    [InlineData(1, 2, 50, 75)]
+    [InlineData(1, 2, 100, 100)]
+    [InlineData(0, 1, 140, 100)]
+    [InlineData(0, 1, -5, 0)]
+    [InlineData(0, 0, 50, 0)]
+    public void QueuePercent_IsHowFarThroughTheWholeQueue(int place, int count, int itemPercent, int expected)
+        => Assert.Equal(expected, FileShredderViewModel.QueuePercent(place, count, itemPercent));
+
+    [Fact]
+    public async Task AShred_FillsTheTaskbarButton_AcrossTheWholeQueue()
+    {
+        var files = Enumerable.Range(0, 2)
+            .Select(_ => Path.Combine(Path.GetTempPath(), "smtest_shred_bar_" + Guid.NewGuid().ToString("N") + ".dat"))
+            .ToArray();
+        foreach (var file in files) File.WriteAllBytes(file, new byte[64 * 1024]);
+        using var dialog = new DialogAnswer(confirm: true);
+        // A shred is written to the activity log; this one goes to a folder of its own.
+        using var activity = new ActivityLogScope();
+        try
+        {
+            var vm = NewVm();
+            foreach (var file in files)
+                vm.Items.Add(new ShredItem { Path = file, Name = Path.GetFileName(file), SizeBytes = 64 * 1024, IsFolder = false });
+            var shown = new System.Collections.Concurrent.ConcurrentQueue<int>();
+            vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(vm.Progress)) shown.Enqueue(vm.Progress); };
+
+            // Started under a context that delivers each report as it is made, and restored before the await, so
+            // no report is dropped for arriving after its file is done and this thread keeps its own context.
+            Task shred;
+            var previous = SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(new ReportAsMadeContext());
+            try
+            {
+                shred = vm.ShredAllCommand.ExecuteAsync(null);
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previous);
+            }
+            await shred;
+
+            Assert.All(files, file => Assert.False(File.Exists(file)));
+            // Three passes a file, two files: half full once the first is done, rather than full twice.
+            Assert.Equal(new[] { 16, 33, 50, 66, 83, 100 }, shown.ToArray());
+        }
+        finally
+        {
+            foreach (var file in files)
+                if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    /// <summary>
+    /// Delivers a post on the thread that made it and is the current context while it runs, so a run that goes on
+    /// from a pooled thread still delivers its later reports as they are made.
+    /// </summary>
+    private sealed class ReportAsMadeContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            var previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                d(state);
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+    }
 }

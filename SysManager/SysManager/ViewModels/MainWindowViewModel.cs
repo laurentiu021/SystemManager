@@ -498,10 +498,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// a stale percentage would be worse than a marquee.</para>
     /// <para><c>Progress</c> of 0 maps to None rather than to an empty Normal bar: 0 is also the value a
     /// finished operation leaves behind, and an empty green bar reads as "starting" rather than "done".</para>
+    /// <para><b>Only while the tab is busy.</b> A finished job can leave its figure behind: App Updates, Bulk
+    /// Installer and Uninstaller end on 100, which their own bar shows as done, and the taskbar button stayed full
+    /// after the job had ended (#2596). Whatever the figure, the button goes blank when the tab stops being
+    /// busy.</para>
     /// </remarks>
     internal static (TaskbarItemProgressState State, double Value) MapTaskbarProgress(NavItem? tab)
     {
-        if (tab is null) return (TaskbarItemProgressState.None, 0);
+        if (tab is not { IsBusy: true }) return (TaskbarItemProgressState.None, 0);
         if (tab.IsProgressIndeterminate) return (TaskbarItemProgressState.Indeterminate, 0);
         if (tab.Progress is > 0 and <= 100)
             return (TaskbarItemProgressState.Normal, tab.Progress / 100.0);
@@ -585,9 +589,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
     private void OnSelectedTabProgressChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NavItem.Progress) or nameof(NavItem.IsProgressIndeterminate))
+        if (AffectsTaskbar(e.PropertyName))
             RaiseTaskbarProgressChanged();
     }
+
+    /// <summary>
+    /// Whether a change to the selected tab's <paramref name="property"/> can change what the taskbar button shows.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="NavItem.IsBusy"/> as well as the two progress signals, since <see cref="MapTaskbarProgress"/> reads
+    /// it: a job that ends often leaves its figure as it was, and only the busy flag changes then.
+    /// </remarks>
+    internal static bool AffectsTaskbar(string? property)
+        => property is nameof(NavItem.Progress) or nameof(NavItem.IsProgressIndeterminate) or nameof(NavItem.IsBusy);
 
     internal static void UpdateSelectionState(NavItem? oldValue, NavItem? newValue)
     {

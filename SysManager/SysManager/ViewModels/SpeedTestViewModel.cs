@@ -342,4 +342,7 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
 
     // Forward any running state to IsBusy so the sidebar progress indicator works
     partial void OnIsSpeedTestingChanged(bool value) => IsBusy = value;
+
+    // And the test's progress to the taskbar button, which follows Progress (#2596).
+    partial void OnSpeedProgressChanged(int value) => ShowOnTaskbar(value);
 }

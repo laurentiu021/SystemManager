@@ -63,11 +63,14 @@ constant rather than a repeated literal. It costs no view-model: the child rows 
 properties, none of which touches `Content`.
 `MainWindowViewModel.SelectedNav` mirrors selection into `NavItem.IsSelected`.
 `NavItem` also mirrors the tab's `IsBusy`, `Progress` and `IsProgressIndeterminate` out of its view-model,
-and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's pair into the Windows taskbar
-button's `ProgressState`/`ProgressValue` (bound in `MainWindow.xaml`). Both progress signals are read,
-not one: 37 view-models set the indeterminate flag and 7 set a percentage. Deep Cleanup, File Shredder
-and Speed Test set neither — they report progress through properties of their own — so their work does
-not reach the taskbar yet. The mapping reads
+and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's two progress signals into the Windows
+taskbar button's `ProgressState`/`ProgressValue` (bound in `MainWindow.xaml`), only while the tab is busy, so
+the button goes blank when a job ends whatever figure it left. Both progress signals are read, not one: 38
+view-models set the indeterminate flag and 12 set a percentage. A tab whose own bar binds a figure of its own,
+or that draws no bar, feeds the taskbar through `ViewModelBase.ShowOnTaskbar`: Deep Cleanup, Speed Test, File
+Shredder, the update download and the Dashboard's Quick Tune-Up and quick actions (#2596).
+`ArchitectureTests.EveryJobsProgressBar_AlsoFillsTheTaskbarButton` fails on a job's bar whose figure does not
+reach it. The mapping reads
 the MIRRORED values and never `NavItem.Content`, because touching Content materialises the view-model and
 would rebuild every lazy tab the shell asked about.
 The flat Dashboard row and grouped leaf rows are invokable buttons styled

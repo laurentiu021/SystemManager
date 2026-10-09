@@ -1231,7 +1231,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        IsBusy = true;
+        _refreshing = true;
+        FollowJobs();
         StatusMessage = "Scanning...";
         try
         {
@@ -1247,7 +1248,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
             StatusMessage = $"Last scan: {DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}";
             ToastService.Instance.Show("Dashboard refreshed", "All systems scanned");
         }
-        finally { IsBusy = false; }
+        finally
+        {
+            _refreshing = false;
+            FollowJobs();
+        }
     }
 
     [RelayCommand]
@@ -1395,6 +1400,35 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     [RelayCommand]
     private void DismissSlowdownReport() { HasSlowdownReport = false; SlowdownReport = null; }
+
+    // ── The sidebar and the taskbar follow every job on this tab (#2596) ──
+
+    /// <summary>True while the scan behind Refresh runs.</summary>
+    private bool _refreshing;
+
+    /// <summary>
+    /// Marks the tab busy while any of its jobs runs, and shows the running job's figure on the taskbar button.
+    /// </summary>
+    /// <remarks>
+    /// The sidebar's busy mark and the taskbar button follow <see cref="ViewModelBase.IsBusy"/>, and only Refresh
+    /// set it, so Quick Tune-Up, a quick action and the slowdown check ran with neither showing anything. Quick
+    /// Tune-Up and a quick action report a figure of their own; the slowdown check reports none, so it only marks
+    /// the tab busy. A quick action's card stays on screen once it is done, until it is dismissed, so done is not
+    /// running.
+    /// </remarks>
+    private void FollowJobs()
+    {
+        var quickActionRuns = IsQuickActionRunning && !IsQuickActionDone;
+        IsBusy = _refreshing || IsTuneUpRunning || quickActionRuns || IsSlowdownCheckRunning;
+        ShowOnTaskbar(IsTuneUpRunning ? TuneUpProgress : quickActionRuns ? QuickActionProgress : 0);
+    }
+
+    partial void OnIsTuneUpRunningChanged(bool value) => FollowJobs();
+    partial void OnTuneUpProgressChanged(int value) => FollowJobs();
+    partial void OnIsQuickActionRunningChanged(bool value) => FollowJobs();
+    partial void OnIsQuickActionDoneChanged(bool value) => FollowJobs();
+    partial void OnQuickActionProgressChanged(int value) => FollowJobs();
+    partial void OnIsSlowdownCheckRunningChanged(bool value) => FollowJobs();
 
     protected override void Dispose(bool disposing)
     {

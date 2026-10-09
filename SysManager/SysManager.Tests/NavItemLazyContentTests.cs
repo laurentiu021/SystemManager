@@ -177,7 +177,7 @@ public class NavItemLazyContentTests
     [InlineData(100, 1.0)]
     public void MapTaskbarProgress_APercentageBecomesANormalBar(int progress, double expected)
     {
-        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Progress = progress };
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), IsBusy = true, Progress = progress };
 
         var (state, value) = MainWindowViewModel.MapTaskbarProgress(item);
 
@@ -195,6 +195,7 @@ public class NavItemLazyContentTests
             Id = "t",
             Label = "T",
             ViewType = typeof(object),
+            IsBusy = true,
             Progress = 42,
             IsProgressIndeterminate = true,
         };
@@ -209,12 +210,51 @@ public class NavItemLazyContentTests
     [InlineData(101)]
     public void MapTaskbarProgress_NothingMeaningfulShowsNothing(int progress)
     {
-        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), Progress = progress };
+        var item = new NavItem { Id = "t", Label = "T", ViewType = typeof(object), IsBusy = true, Progress = progress };
 
         var (state, value) = MainWindowViewModel.MapTaskbarProgress(item);
 
         Assert.Equal(TaskbarItemProgressState.None, state);
         Assert.Equal(0, value);
+    }
+
+    // ---------- the button goes blank when the job ends (#2596) ----------
+    //
+    // App Updates, Bulk Installer and Uninstaller end on 100, which their own bar shows as done, and the taskbar
+    // button stayed full after the job had ended.
+
+    [Theory]
+    [InlineData(100, false)]
+    [InlineData(42, false)]
+    [InlineData(0, true)]
+    public void MapTaskbarProgress_ATabThatIsNotBusy_ShowsNothing_WhateverItLeftBehind(int progress, bool indeterminate)
+    {
+        var item = new NavItem
+        {
+            Id = "t",
+            Label = "T",
+            ViewType = typeof(object),
+            Progress = progress,
+            IsProgressIndeterminate = indeterminate,
+        };
+
+        var (state, value) = MainWindowViewModel.MapTaskbarProgress(item);
+
+        Assert.Equal(TaskbarItemProgressState.None, state);
+        Assert.Equal(0, value);
+    }
+
+    [Theory]
+    [InlineData(nameof(NavItem.Progress), true)]
+    [InlineData(nameof(NavItem.IsProgressIndeterminate), true)]
+    [InlineData(nameof(NavItem.IsBusy), true)]
+    [InlineData(nameof(NavItem.Label), false)]
+    [InlineData(nameof(NavItem.IsSelected), false)]
+    [InlineData(null, false)]
+    public void TheTaskbarIsReadAgain_WhenTheBusyFlagOrEitherProgressSignalChanges(string? property, bool affects)
+    {
+        // A job that ends often leaves its figure as it was, and only the busy flag changes then.
+        Assert.Equal(affects, MainWindowViewModel.AffectsTaskbar(property));
     }
 
     [Fact]

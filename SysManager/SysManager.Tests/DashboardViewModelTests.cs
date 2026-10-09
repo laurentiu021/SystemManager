@@ -1417,4 +1417,68 @@ public class DashboardViewModelTests
         vm.IsSlowdownCheckRunning = true;
         Assert.Same(vm.CancelSlowdownCheckCommand, vm.EscapeCancel);
     }
+
+    // ---------- the sidebar and the taskbar follow every job on the tab (#2596) ----------
+    //
+    // Only Refresh set IsBusy, so Quick Tune-Up, a quick action and the slowdown check ran with neither the
+    // sidebar's busy mark nor the taskbar button showing anything.
+
+    [Fact]
+    public async Task QuickTuneUp_MarksTheTabBusy_AndFillsTheTaskbarButton_UntilItEnds()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+        Assert.False(vm.IsBusy);
+
+        vm.IsTuneUpRunning = true;
+        vm.TuneUpProgress = 50;
+        Assert.True(vm.IsBusy);
+        Assert.Equal(50, vm.Progress);
+
+        vm.IsTuneUpRunning = false;
+        Assert.False(vm.IsBusy);
+        Assert.Equal(0, vm.Progress);
+    }
+
+    [Fact]
+    public async Task AQuickAction_IsBusyWhileItRuns_AndNotOnceItIsDone()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+
+        vm.IsQuickActionRunning = true;
+        vm.QuickActionProgress = 30;
+        Assert.True(vm.IsBusy);
+        Assert.Equal(30, vm.Progress);
+
+        // Its card stays on screen once it is done, until it is dismissed.
+        vm.IsQuickActionDone = true;
+        Assert.False(vm.IsBusy);
+        Assert.Equal(0, vm.Progress);
+    }
+
+    [Fact]
+    public async Task TheSlowdownCheck_MarksTheTabBusy_WithNoFigureForTheTaskbar()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+
+        vm.IsSlowdownCheckRunning = true;
+
+        Assert.True(vm.IsBusy);
+        Assert.Equal(0, vm.Progress);
+    }
+
+    [Fact]
+    public async Task ARefreshThatEndsWhileQuickTuneUpRuns_LeavesTheTabBusy()
+    {
+        // Refresh cleared the busy flag as it ended, whatever else was still running.
+        using var vm = NewVm(WingetListing(() => 0));
+        await vm.InitializationComplete.WaitAsync(Bound);
+        vm.IsTuneUpRunning = true;
+
+        await vm.RefreshCommand.ExecuteAsync(null).WaitAsync(Bound);
+
+        Assert.True(vm.IsBusy);
+    }
 }

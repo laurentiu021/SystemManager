@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.ServiceProcess;
 using Microsoft.Win32;
 using SysManager.Services;
 
@@ -38,34 +37,22 @@ public class AudioPolicyConfigBindingTests
     public void ThisProcess_WhichNothingRouted_ReadsAsFollowingTheDefault()
     {
         SkipUnlessWindowsHasTheFactory();
-        SkipUnlessTheAudioServiceRuns();
+
+        // The output devices are listed first, as the tab does before it reads a route. Windows answers E_INVALIDARG
+        // (0x80070057) for the route of a process that has not opened the audio device API yet: measured on Windows 11
+        // build 26200, the same read returned that before the listing and "" after it.
+        using var audio = new AudioMixerService();
+        if (audio.GetRenderDevices().Count == 0)
+            Assert.Skip("This machine has no active output device, so Windows keeps no route to read.");
+
         var config = AudioPolicyConfigFactory.TryCreate();
         if (config is null) Assert.Fail("the routing interface did not bind, so there is no route to read");
 
+        var route = AudioPolicyConfigFactory.ReadPersistedDefaultEndpoint(config, (uint)Environment.ProcessId, out var hr);
+
         // Empty is "read, and no override". Null would be "could not read", which the picker shows as unknown.
-        Assert.Equal(string.Empty,
-            AudioPolicyConfigFactory.GetPersistedDefaultEndpoint(config, (uint)Environment.ProcessId));
-    }
-
-    /// <summary>
-    /// A reported skip where the Windows Audio service is not running. It keeps the routes, so without it no route can
-    /// be read, and a build machine with no sound hardware may not run it.
-    /// </summary>
-    private static void SkipUnlessTheAudioServiceRuns()
-    {
-        ServiceControllerStatus? status;
-        try
-        {
-            using var audio = new ServiceController("Audiosrv");
-            status = audio.Status;
-        }
-        catch (InvalidOperationException)
-        {
-            status = null;
-        }
-
-        if (status != ServiceControllerStatus.Running)
-            Assert.Skip($"The Windows Audio service is {status?.ToString() ?? "not installed"} here, so no route can be read.");
+        Assert.True(hr >= 0, $"Windows refused to read this process's route: 0x{hr:X8}");
+        Assert.Equal(string.Empty, route);
     }
 
     /// <summary>A reported skip on a Windows without the factory, rather than a pass that bound nothing.</summary>

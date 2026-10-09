@@ -40,6 +40,9 @@ internal static partial class AudioPolicyConfigFactory
     private const string MMDeviceApiTokenPrefix = @"\\?\SWD#MMDEVAPI#";
     private const string RenderInterfaceGuid = "{e6327cad-dcec-4949-ae8a-991e976a79d2}"; // DEVINTERFACE_AUDIO_RENDER
 
+    // What a read reports when it was handed something that is not the routing interface.
+    private const int E_NOINTERFACE = unchecked((int)0x80004002);
+
     private enum EDataFlow { Render = 0, Capture = 1, All = 2 }
     private enum ERole { Console = 0, Multimedia = 1, Communications = 2 }
 
@@ -90,22 +93,35 @@ internal static partial class AudioPolicyConfigFactory
     /// <para>Windows keeps the route per program rather than per process, so a route set before SysManager or the app
     /// restarted still reads back. Only the Multimedia role is read: the write sets it and Console together.</para>
     /// </summary>
-    public static string? GetPersistedDefaultEndpoint(object policyConfig, uint processId)
+    public static string? GetPersistedDefaultEndpoint(object policyConfig, uint processId) =>
+        ReadPersistedDefaultEndpoint(policyConfig, processId, out _);
+
+    /// <summary>
+    /// <see cref="GetPersistedDefaultEndpoint"/>, with the HRESULT Windows answered, so a test that reads a route on a
+    /// real machine can say why a read failed rather than only that it did.
+    /// </summary>
+    internal static string? ReadPersistedDefaultEndpoint(object policyConfig, uint processId, out int result)
     {
+        result = E_NOINTERFACE;
         if (policyConfig is not IAudioPolicyConfigFactory cfg) return null;
         var route = IntPtr.Zero;
         try
         {
-            var hr = cfg.GetPersistedDefaultAudioEndpoint(processId, EDataFlow.Render, ERole.Multimedia, out route);
-            if (hr < 0)
+            result = cfg.GetPersistedDefaultAudioEndpoint(processId, EDataFlow.Render, ERole.Multimedia, out route);
+            if (result < 0)
             {
-                Log.Debug("GetPersistedDefaultAudioEndpoint failed: 0x{Result:X8}", hr);
+                Log.Debug("GetPersistedDefaultAudioEndpoint failed: 0x{Result:X8}", result);
                 return null;
             }
 
             return FromPolicyEndpointId(TextOf(route));
         }
-        catch (COMException ex) { Log.Debug("GetPersistedDefaultAudioEndpoint failed: {Error}", ex.Message); return null; }
+        catch (COMException ex)
+        {
+            result = ex.HResult;
+            Log.Debug("GetPersistedDefaultAudioEndpoint failed: {Error}", ex.Message);
+            return null;
+        }
         finally
         {
             if (route != IntPtr.Zero) WindowsDeleteString(route);

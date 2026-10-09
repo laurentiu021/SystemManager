@@ -1555,7 +1555,7 @@ offers, "rate us" prompts:
 - **Mute per app** with a switch — it flips the same per-app setting as Windows
   Settings > Notifications, so nothing is hooked or hacked, and Windows itself
   honors it
-- **Master switch** to silence everything at once (with a clear warning that it
+- **Main switch** to silence everything at once (with a clear warning that it
   also mutes calendar and reminder alerts)
 - **Pending-changes flow** — flips stay local until you press Apply, with a
   confirmation and a Discard to back out

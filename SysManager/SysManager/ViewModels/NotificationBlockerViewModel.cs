@@ -25,15 +25,15 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
 
     private readonly INotificationBlockerService _service;
     private readonly Dictionary<NotificationApp, bool> _baselineStates = [];
-    private bool _masterBaseline = true;
+    private bool _allowNotificationsBaseline = true;
 
     public BulkObservableCollection<NotificationApp> Apps { get; } = new();
     public BulkObservableCollection<NotificationApp> FilteredApps { get; } = new();
 
     [ObservableProperty] private string _searchText = "";
 
-    /// <summary>The user-wide master toggle (true = Windows may show any toasts at all).</summary>
-    [ObservableProperty] private bool _masterEnabled = true;
+    /// <summary>The user-wide main toggle (true = Windows may show any toasts at all).</summary>
+    [ObservableProperty] private bool _allowNotifications = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPendingChanges))]
@@ -58,14 +58,14 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
+            var (apps, allow) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
                 .ConfigureAwait(true);
-            LoadApps(apps, master);
+            LoadApps(apps, allow);
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
-    private void LoadApps(IReadOnlyList<NotificationApp> apps, bool masterEnabled)
+    private void LoadApps(IReadOnlyList<NotificationApp> apps, bool allowNotifications)
     {
         foreach (var a in Apps)
             a.PropertyChanged -= OnAppPropertyChanged;
@@ -79,10 +79,10 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
             a.PropertyChanged += OnAppPropertyChanged;
         }
 
-        // Baseline first: assigning MasterEnabled fires OnMasterEnabledChanged → RecomputePendingChanges,
+        // Baseline first: assigning AllowNotifications fires OnAllowNotificationsChanged → RecomputePendingChanges,
         // which must compare against the NEW baseline, not last load's.
-        _masterBaseline = masterEnabled;
-        MasterEnabled = masterEnabled;
+        _allowNotificationsBaseline = allowNotifications;
+        AllowNotifications = allowNotifications;
 
         ApplyFilter();
         RecomputePendingChanges();
@@ -91,7 +91,7 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
-    partial void OnMasterEnabledChanged(bool value)
+    partial void OnAllowNotificationsChanged(bool value)
     {
         RecomputePendingChanges();
         UpdateStatus();
@@ -118,7 +118,7 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
 
     private void RecomputePendingChanges()
     {
-        var pending = MasterEnabled != _masterBaseline ? 1 : 0;
+        var pending = AllowNotifications != _allowNotificationsBaseline ? 1 : 0;
         foreach (var a in Apps)
             if (_baselineStates.TryGetValue(a, out var baseline) && baseline != a.IsEnabled)
                 pending++;
@@ -137,10 +137,10 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
         var changedApps = Apps
             .Where(a => _baselineStates.TryGetValue(a, out var baseline) && baseline != a.IsEnabled)
             .ToList();
-        var masterChanged = MasterEnabled != _masterBaseline;
+        var mainSwitchChanged = AllowNotifications != _allowNotificationsBaseline;
 
-        var muteAllWarning = masterChanged && !MasterEnabled
-            ? "\n\nTurning the master switch off silences ALL notifications — including calendar and reminder alerts — until you turn it back on."
+        var muteAllWarning = mainSwitchChanged && !AllowNotifications
+            ? "\n\nTurning the main switch off silences ALL notifications — including calendar and reminder alerts — until you turn it back on."
             : "";
 
         if (!DialogService.Instance.Confirm(
@@ -157,9 +157,9 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
         var applied = 0;
         var failed = 0;
 
-        if (masterChanged)
+        if (mainSwitchChanged)
         {
-            if (_service.SetGlobalToastEnabled(MasterEnabled)) { _masterBaseline = MasterEnabled; applied++; }
+            if (_service.SetGlobalToastEnabled(AllowNotifications)) { _allowNotificationsBaseline = AllowNotifications; applied++; }
             else failed++;
         }
 
@@ -182,7 +182,7 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
         foreach (var a in Apps)
             if (_baselineStates.TryGetValue(a, out var baseline))
                 a.IsEnabled = baseline;
-        MasterEnabled = _masterBaseline;
+        AllowNotifications = _allowNotificationsBaseline;
         RecomputePendingChanges();
         StatusMessage = "Pending changes discarded.";
     }
@@ -195,9 +195,9 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            var (apps, master) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
+            var (apps, allow) = await Task.Run(() => (_service.GetApps(), _service.IsGlobalToastEnabled()))
                 .ConfigureAwait(true);
-            LoadApps(apps, master);
+            LoadApps(apps, allow);
             StatusMessage = "Notification senders refreshed.";
             Log.Information("Notification Blocker: refreshed sender list ({Count} apps)", Apps.Count);
         }
@@ -207,9 +207,9 @@ public sealed partial class NotificationBlockerViewModel : ViewModelBase
     private void UpdateStatus()
     {
         var muted = Apps.Count(a => !a.IsEnabled);
-        var summary = MasterEnabled
+        var summary = AllowNotifications
             ? $"{Apps.Count} notification sender{(Apps.Count == 1 ? "" : "s")} found · {muted} muted."
-            : $"All notifications are muted by the master switch · {Apps.Count} sender{(Apps.Count == 1 ? "" : "s")} found.";
+            : $"All notifications are muted by the main switch · {Apps.Count} sender{(Apps.Count == 1 ? "" : "s")} found.";
         if (PendingChangeCount > 0)
             summary += $" {PendingChangeCount} pending change{(PendingChangeCount == 1 ? "" : "s")} — press Apply.";
         StatusMessage = summary;

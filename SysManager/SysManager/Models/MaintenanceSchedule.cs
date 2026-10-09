@@ -32,7 +32,7 @@ public enum MaintenanceAction
 /// A user-defined recurring maintenance schedule. <c>MaintenanceSchedulerService</c> registers a single
 /// Windows scheduled task from this definition that launches SysManager headless with the matching
 /// CLI verb. Only the fields here are configurable — the command itself is built from a
-/// fixed whitelist, so no free-form text ever reaches the scheduler.
+/// fixed allowlist, so no free-form text ever reaches the scheduler.
 /// </summary>
 public sealed record MaintenanceSchedule(
     MaintenanceAction Action,
@@ -44,7 +44,7 @@ public sealed record MaintenanceSchedule(
     bool RunOnBattery = true,
     bool OnlyWhenIdle = false)
 {
-    /// <summary>The CLI argument string this schedule runs (whitelisted, no user text).</summary>
+    /// <summary>The CLI argument string this schedule runs (allowlisted, no user text).</summary>
     public string CliArguments => Action switch
     {
         MaintenanceAction.Cleanup => "--cleanup --silent",

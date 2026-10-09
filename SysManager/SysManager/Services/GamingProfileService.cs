@@ -422,7 +422,7 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             // Captured alongside the value it qualifies: on its own, a ToastEnabled of 0 at revert cannot
             // say whether this profile wrote it or the user did.
             ToastWriteCountAtApply = profile.SilenceNotifications
-                ? NotificationBlockerService.ReadMasterToggleWriteCount()
+                ? NotificationBlockerService.ReadMainToggleWriteCount()
                 : null,
         };
     }

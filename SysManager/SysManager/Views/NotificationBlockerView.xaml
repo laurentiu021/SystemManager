@@ -31,17 +31,17 @@
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 
-        <!-- Master switch -->
+        <!-- Main switch -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,0,0,12" Padding="14,12">
             <DockPanel>
                 <ToggleButton DockPanel.Dock="Right" Style="{StaticResource ToggleSwitch}"
-                              IsChecked="{Binding MasterEnabled}"
+                              IsChecked="{Binding AllowNotifications}"
                               AutomationProperties.Name="Allow notifications from all apps"
                               VerticalAlignment="Center" Margin="8,0,0,0"
                               ToolTip="Turn all Windows notifications on or off for your account"/>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="Allow notifications" FontWeight="SemiBold" Style="{StaticResource Body}"/>
-                    <TextBlock Text="The master switch. Off silences every notification — including calendar and reminder alerts — until you turn it back on."
+                    <TextBlock Text="The main switch. Off silences every notification — including calendar and reminder alerts — until you turn it back on."
                                Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                TextWrapping="Wrap" Margin="0,2,16,0"/>
                 </StackPanel>

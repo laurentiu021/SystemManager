@@ -124,6 +124,11 @@ guide. That said, a few explicit rules:
   find them.
 - **Admin elevation is opt-in**: never demand admin unless the feature
   genuinely requires it. Show a banner, never a modal.
+- **Inclusive terms**: main or primary, allowlist or denylist. A test fails
+  the build on the older words in any code, test, script or document; the few
+  uses that have to stay (Windows API names such as `SetMasterVolume`, a file
+  name already on users' PCs, and winget-pkgs' own branch) are listed in
+  `InclusiveTermsTests`.
 
 ### XAML conventions
 

@@ -17,7 +17,7 @@ namespace SysManager.Services;
 ///
 /// Safety: this service only ever touches the one task at <see cref="TaskFolder"/> +
 /// <see cref="TaskName"/> — it never enumerates or modifies other tasks. The command it
-/// registers is built from a whitelisted CLI argument string (no free-form user input),
+/// registers is built from an allowlisted CLI argument string (no free-form user input),
 /// pointed at the running executable's own path, and registered in the current user's
 /// context (no admin required, runs only when that user is logged on).
 /// </summary>
@@ -134,7 +134,7 @@ public sealed class MaintenanceSchedulerService
 
     // Register-ScheduledTask with -Force replaces any existing task of the same name, so
     // re-registering just updates the schedule. The action runs the app's own exe with the
-    // whitelisted CLI args; the trigger is daily or weekly at the chosen time. The task is
+    // allowlisted CLI args; the trigger is daily or weekly at the chosen time. The task is
     // pinned to the current interactive user at the LIMITED run level via an explicit
     // principal — so it needs no admin to register and runs only when that user is logged on,
     // never with elevation. (Previously this relied on the cmdlet's default principal; the
@@ -149,7 +149,7 @@ public sealed class MaintenanceSchedulerService
         } else {
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At
         }
-        # Splatted from typed [bool] parameters, so the policy is still a whitelisted value and never
+        # Splatted from typed [bool] parameters, so the policy is still an allowlisted value and never
         # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
         # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,
         # and -StartWhenAvailable then fired it late, whenever the condition next cleared.

@@ -38,10 +38,10 @@ public class MaintenanceSchedulerServiceTests
         return (new MaintenanceSchedulerService(ps), ps);
     }
 
-    // ── RegisterAsync: only whitelisted args reach PowerShell (security invariant) ──
+    // ── RegisterAsync: only allowlisted args reach PowerShell (security invariant) ──
 
     [Fact]
-    public async Task RegisterAsync_PassesWhitelistedArgs_NeverFreeText()
+    public async Task RegisterAsync_PassesAllowlistedArgs_NeverFreeText()
     {
         var (svc, ps) = NewService(StateRow("Ready"));
         var schedule = new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Weekly, 3, 30, DayOfWeek.Sunday);
@@ -54,7 +54,7 @@ public class MaintenanceSchedulerServiceTests
             Arg.Is<IDictionary<string, object?>?>(p =>
                 p != null &&
                 (string)p["Exe"]! == @"C:\Apps\SysManager.exe" &&
-                (string)p["Args"]! == "--cleanup --silent" &&     // whitelisted, never arbitrary
+                (string)p["Args"]! == "--cleanup --silent" &&     // allowlisted, never arbitrary
                 (string)p["Folder"]! == MaintenanceSchedulerService.TaskFolder &&
                 (string)p["Name"]! == MaintenanceSchedulerService.TaskName &&
                 (bool)p["Daily"]! == false &&

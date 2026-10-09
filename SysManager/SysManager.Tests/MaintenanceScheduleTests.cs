@@ -10,11 +10,11 @@ namespace SysManager.Tests;
 
 public class MaintenanceScheduleTests
 {
-    // ── CliArguments: must map to the whitelisted CLI verbs, never free text ──
+    // ── CliArguments: must map to the allowlisted CLI verbs, never free text ──
 
     [Theory]
     [InlineData(MaintenanceAction.Cleanup, "--cleanup --silent")]
-    public void CliArguments_MapToWhitelistedVerbs(MaintenanceAction action, string expected)
+    public void CliArguments_MapToAllowlistedVerbs(MaintenanceAction action, string expected)
     {
         var s = new MaintenanceSchedule(action, MaintenanceFrequency.Daily, 3, 0);
         Assert.Equal(expected, s.CliArguments);

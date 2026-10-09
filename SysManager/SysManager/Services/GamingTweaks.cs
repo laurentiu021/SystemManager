@@ -208,7 +208,7 @@ internal sealed class NotificationsTweak(
     string? configDir = null) : IGamingTweak
 {
     // The key path and value name are NOT redeclared here. They are owned by
-    // NotificationBlockerService, whose Notifications tab writes the same user-wide master toggle,
+    // NotificationBlockerService, whose Notifications tab writes the same user-wide main toggle,
     // and referenced from there so the two cannot drift — the situation Helpers/WingetId.cs exists
     // to prevent, where the same rule lived in three services and could diverge in one of them.
     // ToastEnabled = 0 suppresses toasts; absent/1 = normal.
@@ -248,7 +248,7 @@ internal sealed class NotificationsTweak(
     {
         // Undo only the value this tweak actually wrote. A NoChange apply is never tracked for
         // revert, so reaching here means ToastEnabled was set to 0 by us; if it is no longer 0 the
-        // user has since changed the master toggle themselves — most likely on the Notifications
+        // user has since changed the main toggle themselves — most likely on the Notifications
         // tab, which writes this very value — and restoring the pre-game snapshot would silently
         // overturn that newer decision. Leaving it alone is what "reversible" has to mean when the
         // user has already moved the switch.
@@ -256,7 +256,7 @@ internal sealed class NotificationsTweak(
         if (current != 0)
         {
             Log.Information(
-                "Gaming Profile: notifications master toggle was changed while the profile was active "
+                "Gaming Profile: notifications main toggle was changed while the profile was active "
                 + "(now {Current}); leaving the user's setting instead of restoring {Original}",
                 current, originalToastEnabled);
             return Task.CompletedTask;
@@ -270,11 +270,11 @@ internal sealed class NotificationsTweak(
         // write ledger and this compares against the count captured at apply.
         // Compared only when both counts are known. A count that could not be read, at apply or now, says
         // nothing about the user, and treating it as 0 left notifications muted after every such game (#2538).
-        var writesNow = NotificationBlockerService.ReadMasterToggleWriteCount(configDir);
+        var writesNow = NotificationBlockerService.ReadMainToggleWriteCount(configDir);
         if (writeCountAtApply is { } atApply && writesNow is { } now && now != atApply)
         {
             Log.Information(
-                "Gaming Profile: the user set the notifications master toggle themselves while the profile "
+                "Gaming Profile: the user set the notifications main toggle themselves while the profile "
                 + "was active (ledger {AtApply} -> {Now}); leaving it muted instead of restoring {Original}",
                 atApply, now, originalToastEnabled);
             return Task.CompletedTask;

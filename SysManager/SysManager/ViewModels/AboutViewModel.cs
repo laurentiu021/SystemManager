@@ -191,8 +191,10 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         // Load before any check can run, and suppress the save that binding the value would
         // otherwise trigger — restoring a preference must not rewrite the file it came from.
+        // A choice that could not be read shows the box clear, because the startup check does not
+        // run then either (#2614). Ticking it saves a choice again.
         _loadingPreference = true;
-        CheckForUpdatesOnStartup = _preferences.Load().CheckOnStartup;
+        CheckForUpdatesOnStartup = _preferences.Load()?.CheckOnStartup ?? false;
         _loadingPreference = false;
 
         RefreshRollbackAvailability();
@@ -263,12 +265,21 @@ public sealed partial class AboutViewModel : ViewModelBase
         // CheckForUpdatesAsync is deliberate: the manual button and Retry route through that same
         // command, and they must always work. This is the startup path only.
         var preference = _preferences.Load();
+        if (preference is null)
+        {
+            // The saved choice is there but could not be read, and it may be "off". Checking anyway is what this
+            // used to do (#2614). Nothing is written over it, so the next launch reads it again.
+            Log.Warning("Startup update check skipped: the saved setting could not be read");
+            UpdateStatus = "The saved setting for the startup check could not be read, so it did not run. Use Check for updates to look now.";
+            return;
+        }
+
         if (!UpdateCheckPreferenceService.ShouldCheckAtStartup(preference, DateTimeOffset.UtcNow))
         {
             Log.Debug("Startup update check skipped (enabled={Enabled}, last={Last})",
                 preference.CheckOnStartup, preference.LastCheckUtc);
-            // Still show the local version history — it is read from the app itself, not the
-            // network, so suppressing it would hide information the user already has.
+            // The release history is not fetched either: it comes from GitHub too, and Refresh loads
+            // it when asked.
             UpdateStatus = preference.CheckOnStartup
                 ? "Checked recently. Use Check for updates to look again."
                 : "Startup update check is off. Use Check for updates to look now.";

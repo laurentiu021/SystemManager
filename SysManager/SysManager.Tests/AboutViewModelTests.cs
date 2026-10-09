@@ -467,10 +467,10 @@ public class AboutViewModelTests
         // Each toggle must land in the redirected file. Checking the stored VALUE rather than that a file
         // exists keeps this honest now that the directory is seeded: existence proves nothing any more.
         vm.CheckForUpdatesOnStartup = true;
-        Assert.True(new UpdateCheckPreferenceService(dir).Load().CheckOnStartup,
+        Assert.True(AboutViewModelUpdateGateTests.Loaded(dir).CheckOnStartup,
             "the preference was not written to the override directory — configDir is accepted but unused");
         vm.CheckForUpdatesOnStartup = false;
-        Assert.False(new UpdateCheckPreferenceService(dir).Load().CheckOnStartup);
+        Assert.False(AboutViewModelUpdateGateTests.Loaded(dir).CheckOnStartup);
 
         Assert.Equal(existedBefore, File.Exists(realPath));
         if (existedBefore) Assert.Equal(contentBefore, File.ReadAllText(realPath));
@@ -618,6 +618,17 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
             autoCheck: true,
             preferences);
 
+    /// <summary>
+    /// The preference a fresh service reads from <paramref name="dir"/>, as the next launch would, asserted to have
+    /// been readable. Null is its own answer, "could not be read" (#2614).
+    /// </summary>
+    internal static UpdateCheckPreference Loaded(string dir)
+    {
+        var preference = new UpdateCheckPreferenceService(dir).Load();
+        Assert.NotNull(preference);
+        return preference;
+    }
+
     [Fact]
     public async Task WithTheCheckTurnedOff_NoVersionIsFetchedAndTheReasonIsShown()
     {
@@ -681,7 +692,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         await vm.InitializationComplete;
         vm.CheckForUpdatesOnStartup = false;
 
-        Assert.False(new UpdateCheckPreferenceService(_dir).Load().CheckOnStartup);
+        Assert.False(Loaded(_dir).CheckOnStartup);
     }
 
     [Fact]
@@ -712,6 +723,76 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         Assert.True(File.Exists(path));
     }
 
+    // ── A saved choice that cannot be read (#2614) ─────────────────────────
+    //
+    // It loaded as the default, "on", so the startup check asked GitHub for the newest version on a launch where the
+    // saved "off" could not be read. The file is held open with delete sharing only while the view-model starts.
+
+    [Fact]
+    public async Task WhenTheSavedChoiceCannotBeRead_NoVersionIsFetched_AndTheReasonIsShown()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckOnStartup(false);
+        var path = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+        var updates = NewUpdates();
+
+        AboutViewModel vm;
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+        {
+            vm = NewVm(prefs, updates);
+            await vm.InitializationComplete;
+        }
+
+        using (vm)
+        {
+            await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
+            await updates.DidNotReceive().GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Assert.False(vm.CheckForUpdatesOnStartup);  // the box says what happened: the check did not run
+            Assert.False(vm.UpdateCheckFailed);         // GitHub was not asked, so nothing failed
+            Assert.Contains("could not be read", vm.UpdateStatus, StringComparison.Ordinal);
+        }
+
+        // Nothing was written over it, so the next launch that can read it finds the "off".
+        var stored = Loaded(_dir);
+        Assert.False(stored.CheckOnStartup);
+        Assert.Null(stored.LastCheckUtc);
+    }
+
+    [Fact]
+    public async Task WhenTheSavedChoiceDoesNotParse_NoVersionIsFetched_AndTheFileIsLeftAsItIs()
+    {
+        var path = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+        File.WriteAllText(path, "{ not a preference");
+        var updates = NewUpdates();
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+
+        await updates.DidNotReceive().GetLatestAsync(Arg.Any<CancellationToken>());
+        await updates.DidNotReceive().GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        Assert.False(vm.CheckForUpdatesOnStartup);
+        Assert.Contains("could not be read", vm.UpdateStatus, StringComparison.Ordinal);
+        // Neither set aside nor written over: the next launch reads it again, and it can still be put right by hand.
+        Assert.Equal("{ not a preference", File.ReadAllText(path));
+        Assert.False(File.Exists(path + ".unreadable"));
+    }
+
+    [Fact]
+    public async Task TickingTheBox_AfterTheSavedChoiceCouldNotBeRead_SavesIt()
+    {
+        // The way out that About's message leaves. The box shows clear, so the change it offers is "on", and that is
+        // written, with the file that did not parse kept aside first.
+        var path = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+        File.WriteAllText(path, "{ not a preference");
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), NewUpdates());
+        await vm.InitializationComplete;
+        vm.CheckForUpdatesOnStartup = true;
+
+        Assert.True(Loaded(_dir).CheckOnStartup);
+        Assert.Equal("{ not a preference", File.ReadAllText(path + ".unreadable"));
+    }
+
     [Fact]
     public async Task AFailedCheck_DoesNotStartTheThrottle()
     {
@@ -731,7 +812,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         Assert.Contains("Couldn't reach GitHub", vm.UpdateStatus, StringComparison.Ordinal);
 
         // The timestamp, and then the decision it feeds: the next launch tries again.
-        var stored = new UpdateCheckPreferenceService(_dir).Load();
+        var stored = Loaded(_dir);
         Assert.Null(stored.LastCheckUtc);
         Assert.True(UpdateCheckPreferenceService.ShouldCheckAtStartup(stored, DateTimeOffset.UtcNow));
     }
@@ -747,7 +828,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         await vm.InitializationComplete;
 
         Assert.False(vm.UpdateCheckFailed);
-        var stored = new UpdateCheckPreferenceService(_dir).Load();
+        var stored = Loaded(_dir);
         Assert.NotNull(stored.LastCheckUtc);
         Assert.False(UpdateCheckPreferenceService.ShouldCheckAtStartup(stored, DateTimeOffset.UtcNow));
     }
@@ -783,7 +864,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
 
         Assert.False(vm.UpdateCheckFailed);     // the version answer arrived
         Assert.True(vm.HistoryUnavailable);     // the notes did not
-        Assert.NotNull(new UpdateCheckPreferenceService(_dir).Load().LastCheckUtc);
+        Assert.NotNull(Loaded(_dir).LastCheckUtc);
     }
 }
 

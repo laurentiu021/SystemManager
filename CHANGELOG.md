@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.1] - 2026-10-09
+
+**SysManager no longer checks GitHub for a new version at startup when it cannot read whether you switched that
+off.** It went ahead as if the check were on (#2614).
+
+### Fixed
+
+- **About: when the setting "Check GitHub for a new version when SysManager starts" cannot be read, the startup check
+  does not run.** Another program may have its file open, or the file may be damaged. The check used to run as if the
+  setting were on, so GitHub was asked even by someone who had switched it off. Now About says the setting could not
+  be read, the box shows clear, and **Check for updates** still works whenever you press it.
+  - Nothing is written over the setting, so it decides again once it can be read. A damaged one stays as it is, and
+    the check stays off, until you tick the box: that saves your choice and keeps the damaged file as
+    `update-check.json.unreadable`.
+  - With no setting saved yet, as on a first run, the check still runs.
+  - It had worked this way since the setting arrived in 1.58.0. 1.114.39 stopped the check from writing "on" back
+    over an "off" it could not read, but the check itself still ran.
+
 ## [1.127.0] - 2026-10-08
 
 **The Dashboard can now answer "why is my PC slow right now?".** One button looks at disk space, the program using the

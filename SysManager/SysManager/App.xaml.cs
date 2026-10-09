@@ -474,10 +474,10 @@ public partial class App : Application
             // release. Reading it is a static assembly-name lookup — no service involved.
             UpdateService.CurrentVersion.ToString(3),
             ex?.GetType().FullName ?? "(unknown)",
-            // The message only — never the stack trace or any path. The full detail is in the log,
-            // which is scrubbed of the user name on the way to disk; this file exists to answer
-            // "did the last run crash?", not to duplicate the log.
-            ex?.Message ?? ""));
+            // The message only, never the stack trace: this file exists to answer "did the last run
+            // crash?", not to duplicate the log. Scrubbed of the user name the way the log is, because
+            // an IO exception's message usually holds the full path, user-name folder and all (#2605).
+            LogService.SanitizePath(ex?.Message)));
 
     private static void OnTask(object? s, UnobservedTaskExceptionEventArgs e)
     {

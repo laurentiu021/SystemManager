@@ -294,7 +294,7 @@ see the last two rows.
 | Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
 | State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
 | Uninstaller leftovers waiting for administrator rights | `%LocalAppData%\SysManager` | The paths of folders an uninstalled app left under Program Files or ProgramData, so the Uninstaller can offer them again in a session that runs as administrator. Deleted once nothing is left on it |
-| Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message |
+| Crash marker | `%LocalAppData%\SysManager` | Whether the last session crashed, with the error's type and message, the message scrubbed of your account name as the log is |
 | Disk Analyzer history | `%LocalAppData%\SysManager` | The ten biggest folders, by name and size, of each of the last 20 locations you scanned, so the next scan can show what changed |
 | Bandwidth history | `%LocalAppData%\SysManager` | Total download and upload rates, kept seven days, for the Bandwidth Monitor graph |
 | Downloaded tools and icons | `%LocalAppData%\SysManager\tools`, `…\IconCache` | The Ookla speed-test CLI, downloaded the first time you run that test; app icons, only if you turned web icons on |
@@ -310,7 +310,7 @@ then no longer be put back: Undo Changes lists only the copies that are still th
 
 On every log line, including inside error messages, the folder name after
 `C:\Users\` in any path is replaced with `[user]`, so a log you choose to share does
-not carry your account name in its paths.
+not carry your account name in its paths. The crash marker's message is scrubbed the same way.
 
 ### When the app uses the network
 

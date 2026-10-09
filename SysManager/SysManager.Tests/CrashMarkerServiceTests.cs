@@ -182,19 +182,35 @@ public class CrashMarkerServiceTests : IDisposable
     }
 
     [Fact]
-    public void TheMarkerCarriesNoStackTraceOrFilePath()
+    public void TheMarkerCarriesNoStackTrace()
     {
-        // It exists to answer "did the last run crash?", not to duplicate the log — and unlike the
-        // log, this file is not scrubbed of the user name, so it must never carry a path.
+        // It exists to answer "did the last run crash?", not to duplicate the log.
         Exception caught;
-        try { throw new IOException(@"Cannot open C:\Users\someone\Documents\x.txt"); }
+        try { throw new IOException("Cannot open the file"); }
         catch (IOException ex) { caught = ex; }
 
         var written = App.BuildCrashMarker(caught, Now);
 
         Assert.DoesNotContain("StackTrace", written, StringComparison.OrdinalIgnoreCase);
-        // The message itself is preserved verbatim, but nothing beyond it is added.
         Assert.DoesNotContain("   at ", written);
+    }
+
+    [Fact]
+    public void TheMarkersMessage_HasTheUserNameInAPathReplaced_AsInTheLog()
+    {
+        // An IO exception's message usually holds the full path, and the marker kept it as written, user-name
+        // folder and all (#2605). The folder above the profile is the real one, as the log's scrubber reads it, so
+        // this holds on a PC whose profiles are not under C:\Users.
+        var users = Path.GetDirectoryName(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        Assert.NotNull(users);
+        Exception caught;
+        try { throw new IOException($"Cannot open {Path.Combine(users, "someone", "Documents", "x.txt")}"); }
+        catch (IOException ex) { caught = ex; }
+
+        var marker = CrashMarkerService.Parse(App.BuildCrashMarker(caught, Now));
+
+        Assert.NotNull(marker);
+        Assert.Equal($"Cannot open {Path.Combine(users, "[user]", "Documents", "x.txt")}", marker.Message);
     }
 
     // ---------- the sentence the user actually sees ----------

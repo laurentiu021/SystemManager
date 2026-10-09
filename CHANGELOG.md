@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.127.2] - 2026-10-09
+
+**The note SysManager leaves when it crashes no longer keeps your Windows user name.** The error message in it is now
+cleaned the way the log is (#2605).
+
+### Fixed
+
+- **The crash note, `last-crash.json`, has the user-name folder in any path replaced by `[user]`**, as every line of
+  the log already has. The note keeps the error's message so the next start can say the last session ended
+  unexpectedly, and an error about a file usually names its full path, `C:\Users\<your name>\…` included. The note
+  stays on your PC and is neither shown nor put in the diagnostics bundle, but since it arrived in 1.57.2 it had kept
+  that message exactly as written.
+
 ## [1.127.1] - 2026-10-09
 
 **SysManager no longer checks GitHub for a new version at startup when it cannot read whether you switched that

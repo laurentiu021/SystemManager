@@ -1588,6 +1588,16 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   emptied with `Clear` or one row at a time with `Remove` or `RemoveAt`, as Ping's targets and
   Audio Mixer's sessions are, and `ArchitectureTests.EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows`
   fails when one does not.
+- `LiveRegion` — makes a live line heard (#2670). `AutomationProperties.LiveSetting` only marks a
+  line as a live region; a screen reader speaks it when the app raises UI Automation's
+  `LiveRegionChanged` event, and WPF never raises that on its own. `LiveRegion.Announces` follows the
+  line's text through a binding to it and raises the event when the text changes to something to say
+  while the line is loaded, once per dispatcher pass, at `Background` priority so the line is laid out
+  and shown first, and only for a line on screen with its setting on. The `StatusLine` and
+  `SubtleStatusLine` styles set it beside the live setting; `Announce` covers a message shown again in
+  the same words, which the toast calls. `ArchitectureTests.EveryLiveLine_IsAnnouncedWhenItChanges`
+  fails on a line marked live that does not announce, on one that announces without being marked,
+  and on a live setting on an element with no automation peer, as the toast's Border was.
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects.
 - `WingetFailure` — the one translation of winget outcomes into plain language:

@@ -96,6 +96,13 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private int _downloadPercent;
     [ObservableProperty] private string _downloadStatus = string.Empty;
 
+    /// <summary>
+    /// The line under the download bar, counting the megabytes as they arrive. Its own property, so the progress
+    /// callback never writes <see cref="DownloadStatus"/>, which the rows saying how the download ended show and a
+    /// screen reader reads out (#2661).
+    /// </summary>
+    [ObservableProperty] private string _downloadProgressLine = string.Empty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowDownloadButton))]
     private string? _downloadedPath;
@@ -403,6 +410,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         AutoDownloadFailed = false;
         DownloadPercent = 0;
         DownloadStatus = "Downloading...";
+        DownloadProgressLine = DownloadStatus;
         try
         {
             var progress = new SettlingProgress<(long read, long? total)>(p =>
@@ -410,11 +418,11 @@ public sealed partial class AboutViewModel : ViewModelBase
                 if (p.total is long t && t > 0)
                 {
                     DownloadPercent = (int)(p.read * 100 / t);
-                    DownloadStatus = $"Downloading... {p.read / 1024 / 1024} / {t / 1024 / 1024} MB";
+                    DownloadProgressLine = $"Downloading... {p.read / 1024 / 1024} / {t / 1024 / 1024} MB";
                 }
                 else
                 {
-                    DownloadStatus = $"Downloading... {p.read / 1024 / 1024} MB";
+                    DownloadProgressLine = $"Downloading... {p.read / 1024 / 1024} MB";
                 }
             });
 

@@ -652,12 +652,13 @@
             </Grid>
         </Border>
 
-        <!-- Glass toast notification overlay. LiveSetting makes screen readers announce the
-             toast when it appears (it carries operation-completion feedback and auto-dismisses,
-             so Assertive ensures the announcement lands before it fades). -->
+        <!-- Glass toast notification overlay. Its title and detail are live regions, so screen readers
+             announce the toast when it appears: it carries operation-completion feedback and
+             auto-dismisses, so the title is Assertive, to be heard before it fades, and the detail
+             follows it. The setting used to sit on this Border, which has no automation peer, so it
+             reached no screen reader at all (#2670). -->
         <Border x:Name="ToastOverlay" Grid.Column="1"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                AutomationProperties.LiveSetting="Assertive"
                 Margin="0,0,20,20" Visibility="Collapsed">
             <!-- Themed status brushes, not literal greens. The container follows the theme via Surface2
                  while the three greens here were fixed at #22C55E — the DARK-mode value — so the tick
@@ -685,9 +686,13 @@
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="ToastTitle" Style="{StaticResource Body}" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextPrimary}"/>
+                                   Foreground="{DynamicResource TextPrimary}"
+                                   AutomationProperties.LiveSetting="Assertive"
+                                   helpers:LiveRegion.Announces="True"/>
                         <TextBlock x:Name="ToastDetail" Style="{StaticResource Caption}"
-                                   Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
+                                   Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   helpers:LiveRegion.Announces="True"/>
                     </StackPanel>
                     <!-- Real Button so the dismiss is keyboard-focusable and Enter/Space-activatable
                          (the previous Border handled MouseLeftButtonUp only). Minimal transparent

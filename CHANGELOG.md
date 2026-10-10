@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.7] - 2026-10-10
+
+**When the PowerShell process doing a tab's work dies in the middle of it, the tab says so at once instead of staying
+busy for a minute** (#2637).
+
+### Fixed
+
+- **A tab no longer stays busy for a minute after the `powershell.exe` running its script dies.** Ended from Task
+  Manager or crashed, the process was only reported gone when Windows PowerShell gave up waiting for it, about a
+  minute later, and until then the tab went on showing its work as running. SysManager now watches that process
+  beside the script, so the tab reports the failure as soon as the process exits, and the next action starts a fresh
+  one at once. A Cancel pressed before the process died still ends the run as cancelled. This had been so since
+  1.56.2 when SysManager runs as administrator, and since 1.114.4 for every session, when all scripts moved into their
+  own `powershell.exe`.
+
 ## [1.128.6] - 2026-10-10
 
 **Screen readers now hear what each tab is doing, how a repair or an update download ended, and the notification

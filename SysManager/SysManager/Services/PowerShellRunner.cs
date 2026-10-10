@@ -169,10 +169,11 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     {
         // Open the runspace on a thread-pool thread — this can take
         // several hundred milliseconds and must not block the UI.
-        var runspace = (await LeaseRunspaceAsync().ConfigureAwait(false)).Runspace;
+        var resources = await LeaseRunspaceAsync().ConfigureAwait(false);
 
-        using var ps = PowerShell.Create();
-        ps.Runspace = runspace;
+        using var pipeline = new PipelineRun();
+        var ps = pipeline.Shell;
+        ps.Runspace = resources.Runspace;
         ps.AddScript(script);
         if (parameters is not null)
         {
@@ -213,7 +214,7 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             LineReceived?.Invoke(new PowerShellLine(OutputKind.Progress, $"{rec.Activity}: {rec.StatusDescription} ({rec.PercentComplete}%)", DateTime.Now));
         };
 
-        using var output = new PSDataCollection<PSObject>();
+        var output = pipeline.Output;
         output.DataAdded += (s, e) =>
         {
             var obj = ((PSDataCollection<PSObject>)s!)[e.Index];
@@ -222,6 +223,8 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         };
 
         using var reg = cancellationToken.Register(() => RequestStop(ps));
+        using var childWatch = new CancellationTokenSource();
+        var childDied = false;
 
         try
         {
@@ -246,7 +249,13 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             if (cancellationToken.IsCancellationRequested)
                 RequestStop(ps);
 
-            await task.ConfigureAwait(false);
+            // The child process dying under the run is only reported by the transport about a minute later, and the
+            // tab stayed busy for all of it (#2637). Its exit is watched beside the pipeline, so the run fails then.
+            childDied = await ChildExitedFirstAsync(resources, task, childWatch.Token).ConfigureAwait(false);
+            if (childDied)
+                AbandonRun(resources, pipeline, task);
+            else
+                await task.ConfigureAwait(false);
         }
         catch (Exception ex) when (cancellationToken.IsCancellationRequested
                                    && (IsPipelineStopped(ex) || IsRemotingTornDownByOurStop(ex)))
@@ -270,6 +279,25 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         {
             // BeginInvoke on a runspace that is no longer open, or the session breaking under the run (#2608).
             throw CreateSessionBrokenException(ex);
+        }
+        finally
+        {
+            // A run that ended before its child did stops watching it.
+            childWatch.Cancel();
+        }
+
+        if (childDied)
+        {
+            // A Cancel pressed before the child died has stopped the run as far as the caller is concerned, and every
+            // consumer reads a cancelled run by this type.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(
+                    "The PowerShell run was cancelled, and its powershell.exe exited before the stop landed.",
+                    cancellationToken);
+            }
+
+            throw CreateSessionBrokenException(null);
         }
 
         // A stopped pipeline does NOT always throw, and relying on the catch above alone reported a
@@ -788,8 +816,50 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     /// <see cref="RuntimeException"/>, like the open failures below it, because every service that runs a script
     /// already turns that type into its own failed state.
     /// </summary>
-    private static RuntimeException CreateSessionBrokenException(Exception innerException)
+    /// <param name="innerException">
+    /// What the session threw, or null when nothing did yet: a child process that died under the run is noticed by its
+    /// exit, before the transport reports anything (#2637).
+    /// </param>
+    private static RuntimeException CreateSessionBrokenException(Exception? innerException)
         => new("The Windows PowerShell session stopped working while the script was running.", innerException);
+
+    /// <summary>
+    /// True when the child process behind the run's session exits while the pipeline is still running.
+    /// </summary>
+    /// <remarks>
+    /// False as soon as the pipeline finishes first, and when the child is not watched at all. The watch itself then
+    /// ends when the run's <paramref name="watchEnds"/> is cancelled.
+    /// </remarks>
+    private async Task<bool> ChildExitedFirstAsync(RunspaceResources resources, Task run, CancellationToken watchEnds)
+    {
+        var childExit = resources.ChildExitAsync(_waitForProcessExit, watchEnds);
+        return await Task.WhenAny(run, childExit).ConfigureAwait(false) == childExit
+               && await childExit.ConfigureAwait(false)
+               && !run.IsCompleted;
+    }
+
+    /// <summary>
+    /// Lets go of a run whose child process has died, without waiting on anything that waits on that child.
+    /// </summary>
+    /// <remarks>
+    /// The pipeline goes on waiting for the dead child until the transport gives up, about a minute later, and
+    /// disposing the PowerShell instance or the runspace before then waits for the same minute (#2637). So the session
+    /// leaves the cache now and is retired, which with its child gone happens on the thread pool, and the instance and
+    /// its output are disposed once the pipeline has failed on its own. Runs inside the pipeline gate, like the lease,
+    /// so nothing else is reading the cache.
+    /// </remarks>
+    private void AbandonRun(RunspaceResources resources, PipelineRun pipeline, Task run)
+    {
+        Log.Warning("PowerShell: the session's powershell.exe exited while a script was running; the run fails now "
+                    + "rather than when the transport gives up");
+        if (ReferenceEquals(_cached, resources))
+        {
+            _cached = null;
+            Retire(resources);
+        }
+
+        pipeline.ReleaseAfter(run);
+    }
 
     /// <summary>
     /// Asks the pipeline to stop, without waiting for the stop to land and without throwing.
@@ -1138,8 +1208,81 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             }
         }
 
+        /// <summary>
+        /// Completes true when the child process behind the runspace exits, and false when it is not watched: there is
+        /// no process, it cannot be waited on, or <paramref name="watchEnds"/> ends the watch first.
+        /// </summary>
+        /// <remarks>
+        /// A process object with nothing behind it, as most tests build, is not watched rather than read as exited:
+        /// waiting on it throws, and a run on a runspace that has no child of its own is no reason to fail.
+        /// </remarks>
+        public async Task<bool> ChildExitAsync(
+            Func<System.Diagnostics.Process, CancellationToken, Task> waitForExit,
+            CancellationToken watchEnds)
+        {
+            if (_process is not System.Diagnostics.Process child) return false;
+
+            try
+            {
+                await waitForExit(child, watchEnds).ConfigureAwait(false);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                Log.Debug(ex, "PowerShell: the runspace's child process cannot be watched for its exit");
+                return false;
+            }
+        }
+
         public void Dispose()
             => DisposeRunspaceResources(Runspace, _processInstance, _process, _releaseProcess);
+    }
+
+    /// <summary>
+    /// One run's PowerShell instance and output collection, disposed with the run unless the run is abandoned.
+    /// </summary>
+    private sealed class PipelineRun : IDisposable
+    {
+        private bool _released;
+
+        public PowerShell Shell { get; } = PowerShell.Create();
+
+        public PSDataCollection<PSObject> Output { get; } = new();
+
+        /// <summary>
+        /// Leaves both to be disposed once <paramref name="run"/> has ended, and logs how it ended, so its failure is
+        /// not left unobserved.
+        /// </summary>
+        public void ReleaseAfter(Task run)
+        {
+            _released = true;
+            _ = run.ContinueWith(ended =>
+            {
+                Log.Debug(ended.Exception?.GetBaseException(), "PowerShell: the abandoned pipeline ended");
+                Output.Dispose();
+                try
+                {
+                    Shell.Dispose();
+                }
+                catch (Exception ex) when (ex is RuntimeException or InvalidOperationException
+                                               or InvalidRunspaceStateException or InvalidPowerShellStateException)
+                {
+                    Log.Debug(ex, "PowerShell: disposing the abandoned pipeline failed");
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        }
+
+        /// <summary>The output first and then the instance, the order the run's own disposal always had.</summary>
+        public void Dispose()
+        {
+            if (_released) return;
+            Output.Dispose();
+            Shell.Dispose();
+        }
     }
 
     internal static void ApplyTrustedPowerShellModulePath(

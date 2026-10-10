@@ -441,7 +441,11 @@ Key services:
   the whole run. `Dispose` releases it deterministically where a consumer is disposed.
   A session that stops working under a run surfaces as `RuntimeException`, the type
   every service already turns into its failed state, rather than as the two
-  `SystemException`s PowerShell raises for it. Cancelling hands `Stop()` to the
+  `SystemException`s PowerShell raises for it. A run also watches its child process
+  beside the pipeline, so a child that dies under it fails the run then, not when the
+  transport gives up about a minute later; the pipeline and the runspace are let go on
+  the thread pool, because disposing either with the child gone waits for that same
+  minute (#2637). Cancelling hands `Stop()` to the
   thread pool: `Stop()` waits for the stop to land, and on a session whose child had
   died that froze the caller of `Cancel()`, a Cancel button's UI thread, for about a
   minute (#2608).

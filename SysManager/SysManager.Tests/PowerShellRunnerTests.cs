@@ -612,6 +612,118 @@ public class PowerShellRunnerTests
         }
     }
 
+    // ── A child process that dies under a run (#2637) ──────────────────────
+
+    /// <summary>A script that says it has started and then runs for a minute, unless it is stopped.</summary>
+    private const string MinuteLongScript =
+        "'started'; $deadline = [DateTime]::UtcNow.AddSeconds(60); "
+        + "while ([DateTime]::UtcNow -lt $deadline) { [System.Threading.Thread]::Sleep(10) }";
+
+    /// <summary>
+    /// A runner whose sessions run in process, each beside a stand-in child whose exit the test decides.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Process"/> object with nothing behind it stands in for the child, and the exit wait is the
+    /// <c>waitForProcessExit</c> seam, so nothing is started and nothing is killed. The pipeline itself keeps running
+    /// when the stand-in "exits", which is what the real one does for a minute when its child dies.
+    /// </remarks>
+    private static PowerShellRunner RunnerWithAChildThatExitsOn(
+        Task childExit, Func<Action, Task>? scheduleStop = null, Action<CancellationToken>? watched = null) =>
+        new(action => Task.Run(action),
+            waitForProcessExit: (_, watchEnds) =>
+            {
+                watched?.Invoke(watchEnds);
+                return childExit.WaitAsync(watchEnds);
+            },
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, new Process()),
+            scheduleStop: scheduleStop);
+
+    /// <summary>
+    /// A run fails as soon as its child process exits, rather than when the transport gives up.
+    /// </summary>
+    /// <remarks>
+    /// The transport reports a dead <c>powershell.exe</c> about a minute after it dies, and the tab stayed busy for
+    /// all of it (#2637). The pipeline here goes on running for its whole minute when the child "exits", so a run
+    /// that only ended with the pipeline would outlast the bounded wait, which is there for that failure and not as
+    /// the measurement. It fails with the <see cref="RuntimeException"/> a session that stopped working gives, which
+    /// every service already turns into its own failed state.
+    /// </remarks>
+    [Fact]
+    public async Task AChildThatDiesUnderARun_FailsTheRunAtOnce()
+    {
+        var childExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var runner = RunnerWithAChildThatExitsOn(childExit.Task);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.LineReceived += line =>
+        {
+            if (line.Text == "started") started.TrySetResult();
+        };
+
+        var run = runner.RunAsync(MinuteLongScript);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.False(run.IsCompleted, "the script ended before its child did, so nothing here is under test");
+
+        childExit.SetResult();
+
+        var ex = await Assert.ThrowsAsync<RuntimeException>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal("The Windows PowerShell session stopped working while the script was running.", ex.Message);
+    }
+
+    /// <summary>
+    /// A run that was cancelled before its child died ends as cancelled.
+    /// </summary>
+    /// <remarks>
+    /// The stop is held, so it has not landed when the child exits, as it would not on a session whose child is
+    /// dying. The caller asked for the run to stop and every consumer reads a cancelled run by
+    /// <see cref="OperationCanceledException"/>, so that is what it gets, at once, rather than a failure.
+    /// </remarks>
+    [Fact]
+    public async Task AChildThatDiesUnderACancelledRun_EndsItAsCancelled()
+    {
+        var childExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stops = 0;
+        using var runner = RunnerWithAChildThatExitsOn(
+            childExit.Task, scheduleStop: _ => { Interlocked.Increment(ref stops); return Task.CompletedTask; });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.LineReceived += line =>
+        {
+            if (line.Text == "started") started.TrySetResult();
+        };
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync(MinuteLongScript, cancellationToken: cts.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        cts.Cancel();
+        Assert.Equal(1, Volatile.Read(ref stops));
+
+        childExit.SetResult();
+
+        var ex = await Assert.ThrowsAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal("The PowerShell run was cancelled, and its powershell.exe exited before the stop landed.",
+                     ex.Message);
+    }
+
+    /// <summary>
+    /// A run that ends before its child does stops watching the child.
+    /// </summary>
+    /// <remarks>
+    /// The child serves the next run too, so a watch left behind by each run would pile up on it, and one left running
+    /// would answer for a run that is long over.
+    /// </remarks>
+    [Fact]
+    public async Task ARunThatEnds_StopsWatchingItsChild()
+    {
+        var childExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken watch = default;
+        using var runner = RunnerWithAChildThatExitsOn(childExit.Task, watched: token => watch = token);
+
+        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+
+        Assert.True(watch.CanBeCanceled, "the run never watched its child");
+        Assert.True(watch.IsCancellationRequested, "the run ended and went on watching its child");
+    }
+
     private static PowerShellRunner CreateRunnerWithOpenFailure(Exception exception, bool isElevated)
     {
         var runspace = RunspaceFactory.CreateRunspace(InitialSessionState.Create());

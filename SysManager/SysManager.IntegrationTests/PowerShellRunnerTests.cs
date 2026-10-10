@@ -271,38 +271,93 @@ public class PowerShellRunnerTests
     /// <remarks>
     /// The out-of-process runspace goes on reading <c>Opened</c> for about a minute after its child dies, so the
     /// state check above does not see it, and a run started on it in that minute waited the whole minute and then
-    /// failed with "The background process closed or ended abnormally" (#2608). A process that has really exited
-    /// stands in for the killed child; the runspace itself is in process and stays open, so only the lease's check
-    /// of the child can tell the difference.
+    /// failed with "The background process closed or ended abnormally" (#2608). A process that really exits stands in
+    /// for the killed child; the runspace itself is in process and stays open, so only the lease's check of the child
+    /// can tell the difference.
+    /// <para>The stand-in is alive for the first run and ended after it, as the child is when it is killed between two
+    /// runs. A child already gone when a run starts fails that run at once (#2637), so it could not be the setup
+    /// here. It is a loopback ping run from <c>cmd</c>, for the reason given on
+    /// <see cref="DisposingTheRunner_StopsTheChildItsRunspaceWasBuiltWith"/>.</para>
     /// </remarks>
     [Fact]
     public async Task Runner_RebuildsARunspaceWhoseChildHasExited()
     {
-        using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "cmd.exe", "/c exit 0")
+        var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", "/c ping -n 60 127.0.0.1 > nul")
         {
             UseShellExecute = false,
             CreateNoWindow = true
         })!;
-        using (var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
-            await child.WaitForExitAsync(bounded.Token);
+        using var observer = System.Diagnostics.Process.GetProcessById(child.Id);
 
-        var built = 0;
-        using var runner = new PowerShellRunner(
-            action => Task.Run(action),
-            createRunspace: () =>
-            {
-                built++;
-                return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
-                            System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
-                        null, built == 1 ? child : null);
-            });
+        try
+        {
+            var built = 0;
+            using var runner = new PowerShellRunner(
+                action => Task.Run(action),
+                createRunspace: () =>
+                {
+                    built++;
+                    return (System.Management.Automation.Runspaces.RunspaceFactory.CreateRunspace(
+                                System.Management.Automation.Runspaces.InitialSessionState.CreateDefault2()),
+                            null, built == 1 ? child : null);
+                });
 
-        await runner.RunAsync("2 + 2");
-        Assert.Equal(1, built);
+            await runner.RunAsync("2 + 2");
+            Assert.Equal(1, built);
 
-        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
-        Assert.Equal(2, built);
+            observer.Kill(entireProcessTree: true);
+            using (var bounded = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+                await observer.WaitForExitAsync(bounded.Token);
+
+            Assert.Equal(4, (int)(await runner.RunAsync("2 + 2"))[0].BaseObject);
+            Assert.Equal(2, built);
+        }
+        finally
+        {
+            try { if (!observer.HasExited) observer.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* already gone, which is the expected outcome */ }
+        }
+    }
+
+    /// <summary>
+    /// A run whose <c>powershell.exe</c> is killed under it fails then, not a minute later, and the next run works.
+    /// </summary>
+    /// <remarks>
+    /// The real transport, end to end: the script prints its own process id, and exactly that child is killed. The
+    /// transport only reports the dead child about a minute later, with "The background process closed or ended
+    /// abnormally", and the tab stayed busy for all of it (#2637). The bounded wait is shorter than that minute, so a
+    /// run that waited for the transport fails it, and the script's own deadline is longer, so a run cannot pass by
+    /// simply finishing. The next run starts a fresh child, because the dead one's session left the cache.
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_ChildKilledUnderARun_FailsTheRunAtOnce_AndTheNextRunWorks()
+    {
+        using var runner = new PowerShellRunner();
+        var pid = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        runner.LineReceived += line =>
+        {
+            if (line.Text.StartsWith("pid:", StringComparison.Ordinal)
+                && int.TryParse(line.Text.AsSpan(4), out var id))
+                pid.TrySetResult(id);
+        };
+
+        var run = runner.RunAsync(
+            "\"pid:$PID\"; $deadline = [DateTime]::UtcNow.AddSeconds(90); "
+            + "while ([DateTime]::UtcNow -lt $deadline) { [System.Threading.Thread]::Sleep(50) }");
+        var childId = await pid.Task.WaitAsync(TimeSpan.FromSeconds(90));
+
+        using (var child = System.Diagnostics.Process.GetProcessById(childId))
+        {
+            Assert.Equal("powershell", child.ProcessName, ignoreCase: true);   // the child, and nothing else
+            child.Kill();
+        }
+
+        var ex = await Assert.ThrowsAsync<System.Management.Automation.RuntimeException>(
+            () => run.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal("The Windows PowerShell session stopped working while the script was running.", ex.Message);
+
+        Assert.Equal(4, (int)(await runner.RunAsync("2 + 2").WaitAsync(TimeSpan.FromSeconds(90)))[0].BaseObject);
     }
 
     /// <summary>

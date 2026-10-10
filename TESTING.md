@@ -59,7 +59,7 @@ over SSH or in a non-interactive scheduled task.
 ./docs/manual-smoke.ps1
 ```
 
-It checks 11 of the 59 tabs (the list is at the top of the script), so treat a pass as
+It checks 11 of the 60 tabs (the list is at the top of the script), so treat a pass as
 "the shell starts and those tabs render", not as full coverage. Add a nav id to `$navIds`
 when a new tab is worth including in the quick check.
 
@@ -161,16 +161,28 @@ project defines them in `TestCollections.cs`:
   `DialogService.Instance`, acquiring `OperationLockService.Instance`, or pinning elevation with
   `AdminHelper.ForceElevation`. This was once two collections, `"DialogService"` and `"OperationLock"`.
   xUnit puts a class in one collection only, so a class that needed both statics could not declare
-  both; merging them is what lets one class swap the dialog and hold the lock. 62 of the 300 unit test
+  both; merging them is what lets one class swap the dialog and hold the lock. 63 of the 317 unit test
   files use it, and an `ArchitectureTests` guard fails the build when a class touches one of those
   statics without it.
 - `[Collection("ProcessEnvironment")]` — tests that mutate the process's environment variables.
 - `[Collection("IconCache")]` — tests touching the shared icon cache.
 - `[Collection("Network")]` — defined here for tests using ICMP sockets, and used by none of them today.
 
-`SysManager.IntegrationTests` defines its own `Network` collection, which 26 of its classes use, and
+`SysManager.IntegrationTests` defines its own `Network` collection, which 28 of its classes use, and
 `SysManager.UITests` defines `App` in `AppFixture.cs`. `CatalogSignatureTests` names a `Sequential`
 collection that nothing defines; the integration project runs serially anyway, so it changes nothing.
+
+### The test processes end when their last test does
+
+The STA tests build WPF objects on threads that end with the test, and each such thread is left with
+a `Dispatcher` that was never shut down and a weak-event table WPF registers for the process's exit.
+At exit WPF asks each table's thread to clear it and waits 300 ms for an answer, which an ended thread
+never gives, so the unit suite used to take about 7 s to exit after its last test, and the console
+runner, which allows 10 s, then forced it out with exit code 1 although every test had passed (#2671).
+`SysManager/Directory.Build.props` therefore sets WPF's
+`Switch.MS.Internal.DoNotInvokeInWeakEventTableShutdownListener` for every project that sets
+`IsTestProject`, and each table is cleared where it is. A new test project gets it by setting
+`IsTestProject`, as the three here do, and `TestHostTests` fails if one does not, or if the app does.
 
 ### Shared helpers
 

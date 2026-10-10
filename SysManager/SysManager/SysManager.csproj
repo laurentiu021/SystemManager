@@ -13,9 +13,9 @@
     <NoWarn>$(NoWarn);NU1603;NU1701</NoWarn>
     <!-- The documentation file exists for the compiler's checks; it is not part of what ships. -->
     <PublishDocumentationFile>false</PublishDocumentationFile>
-    <Version>1.128.6</Version>
-    <FileVersion>1.128.6.0</FileVersion>
-    <AssemblyVersion>1.128.6.0</AssemblyVersion>
+    <Version>1.128.7</Version>
+    <FileVersion>1.128.7.0</FileVersion>
+    <AssemblyVersion>1.128.7.0</AssemblyVersion>
     <Product>SysManager</Product>
     <Description>SysManager — Windows system monitoring toolkit by laurentiu021. Network, updates, health, logs, safe deep cleanup.</Description>
     <PackageProjectUrl>https://github.com/laurentiu021/SystemManager</PackageProjectUrl>

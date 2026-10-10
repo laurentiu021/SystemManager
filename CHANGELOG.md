@@ -5288,7 +5288,7 @@ works end to end.
   Because that confirmation refuses to proceed without the checksum, Roll back would stop being
   offered after the next download. The checksum is now kept alongside the saved build.
 
-## [1.75.3] - 2026-08-26
+## [1.75.3] - 2026-08-27
 
 A drive that Windows itself reports as failing could still show a green 100% health score. Disk Health
 would say "Drive is failing — back up now and replace it." on one line and 100% on the next, and the
@@ -5780,7 +5780,7 @@ setting, with nothing on screen to explain it.
   rather than yanking it back under your cursor. A change that succeeds stays silent, and the once-a-second
   background refresh never reports anything, so the message only ever appears for something you did.
 
-## [1.65.15] - 2026-08-17
+## [1.65.15] - 2026-08-18
 
 The "time remaining" estimate now tells the truth when an operation stalls or when Windows reports its
 progress in a burst — before, it could sit on "a few seconds" for the rest of a long repair. Speed Test also
@@ -5810,7 +5810,7 @@ stops leaving "done" printed under both of its cards after a finished test.
   it as ten minutes idle and dropped it. The counter restarted from zero on the app's next packet, so the
   running total for something downloading continuously could fall back to almost nothing.
 
-## [1.65.14] - 2026-08-17
+## [1.65.14] - 2026-08-18
 
 Turning off a startup program could fail on a PC where nothing had ever been turned off before — which is
 most PCs. That is fixed, along with two internal checks that were quietly passing when they should have
@@ -6298,7 +6298,7 @@ waits for a normal window.
 
 ---
 
-## [1.61.10] - 2026-08-11
+## [1.61.10] - 2026-08-12
 
 The Services tab can now actually filter by the things it always claimed to — including the gaming
 recommendations, which are the reason the list is more useful than the one in Windows.
@@ -6309,7 +6309,7 @@ recommendations, which are the reason the list is more useful than the one in Wi
 
 ---
 
-## [1.61.9] - 2026-08-11
+## [1.61.9] - 2026-08-12
 
 The Bandwidth Monitor no longer makes the window stutter while it is open.
 
@@ -6422,7 +6422,7 @@ before with one click.
 ### Added
 - **A way back from a bad update.** Until now, installing an update replaced the old SysManager permanently. If a new version turned out to have a problem — and this app has shipped two releases that wouldn't start — your only option was to work out on your own that you needed to find an older release on GitHub and download it by hand. The app now keeps the version you were running before the last update, and the About tab shows a **"Go back to the previous version"** button when there's something to go back to. It asks first, explains that anything the newer version fixed will come back too, and leaves your settings alone. Only one older version is kept, so this doesn't quietly fill your disk with copies of the app — and if there's no room to keep one, the update still installs as normal rather than failing.
 
-## [1.60.3] - 2026-08-10
+## [1.60.3] - 2026-08-11
 
 Closes a hole in the update check before it can ever matter: when SysManager starts being
 code-signed, an update signed by someone else will be refused instead of accepted.
@@ -6430,7 +6430,7 @@ code-signed, an update signed by someone else will be refused instead of accepte
 ### Fixed
 - **The update check would have trusted any signature, not just ours.** When you install an update from inside the app, the download is verified against the published checksum — that part was and remains the real protection, and it is what catches a tampered file. The app also looks at the file's digital signature. That second check only confirmed *a* signature existed; it never asked **whose**. SysManager isn't signed yet, so nothing was exposed — but the moment a signing certificate arrives, the reasonable assumption would be "we sign now, so that check protects us", and it would not have: a file signed by anyone at all, including someone who made their own certificate, would have passed exactly like a genuine build. Now a signature has to belong to the expected publisher *and* trace back to a trusted authority, or the update is refused. Unsigned builds keep installing normally, so nothing changes for you today.
 
-## [1.60.2] - 2026-08-10
+## [1.60.2] - 2026-08-11
 
 Disk Analyzer now tells you that its total leaves some Windows folders out, so the number no
 longer looks wrong when you compare it against the free space Windows shows.
@@ -6553,7 +6553,7 @@ Three buttons that permanently deleted something without asking now ask first.
 ### Changed
 - **That check now runs at most once a day instead of on every launch.** Opening and closing SysManager a few times used to ask GitHub twice each time, which could hit the limit GitHub allows for anonymous requests — after which the About tab reported an error for no real reason. Pressing "Check for updates" or "Retry" still asks immediately, every time.
 
-## [1.57.8] - 2026-08-06
+## [1.57.8] - 2026-08-10
 
 ### Fixed
 - **The log file can no longer grow big enough to be unusable.** SysManager keeps a diary of what it does, and that file is what you attach when reporting a problem. It had no size limit — one day's file was allowed to reach a gigabyte, which is far past what you could upload anywhere. Each file is now capped at 10 MB and a fresh one is started when it fills, keeping at most two weeks of them, so the diary stays small enough to send and takes a predictable amount of disk.
@@ -6708,7 +6708,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 - **Preserved PowerShell parameter and task-result semantics.** Defender mutation scripts now declare every bound parameter instead of silently receiving null variables, and Scheduled Maintenance correctly decodes unsigned high-bit Task Scheduler result codes after out-of-process serialization.
 - **Reported partial elevated operations honestly.** Edge disable/restore now reports failure when its registry policy changes but scheduled-task updates cannot run, and restore-point creation returns a clean failure state when the isolated PowerShell host is unavailable.
 
-## [1.56.1] - 2026-07-28
+## [1.56.1] - 2026-07-29
 
 ### Security
 - **Prevented the Uninstaller from acting as a privileged execution broker.** Scan remains available in an administrator session, but uninstall actions are disabled until SysManager is reopened normally. This applies to both direct registry commands and the WinGet route, so user-controlled package metadata can no longer inherit SysManager's elevated token.
@@ -6775,12 +6775,12 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **The app built every one of its ~55 tab view-models at startup, even the tabs you never open.** `MainWindowViewModel` eagerly constructed all tab VMs up front, and most of them kick off real work in their constructor — a background scan, a poll timer, a WMI/registry query — so launching the app fired ~40 of those at once regardless of which tab you actually used (e.g. opening the app to the Dashboard still spun up Services, Drivers, Debloater, Bulk Installer and dozens more). Each tab's view-model is now built lazily, the first time its tab is opened (`NavItem` carries a `ContentFactory` that resolves the VM from DI on first access), so a fresh launch constructs only what the initial view needs. Startup tab-VM construction drops from ~55 to a handful. A deliberately small set stays eager because its constructor drives always-on, app-wide behavior that must run whether or not you open its tab: the Dashboard (the tab shown at launch), the Dark Mode scheduler (owns the theme-schedule poll), and About (its startup update-check feeds the title-bar version label and the "update available" banner). The four Network tabs also stay eager — they share a single network-state object and their constructors do no work. Behavior is otherwise identical; nothing is disabled, only deferred.
 
-## [1.52.103] - 2026-07-11
+## [1.52.103] - 2026-07-21
 
 ### Accessibility
 - **Six admin-capable tabs showed no "Running as administrator" confirmation when the app was elevated.** Boot Analyzer, Gaming Profile, Settings Watchdog, Standby List Cleaner, Tweaks Hub and the Dashboard each had only the *not-elevated* banner (a grey "Run as administrator" prompt); when the app actually ran elevated the banner row simply collapsed, unlike the other 23 admin views which show a golden "Running as administrator — <what's unlocked>" confirmation. This broke the app's golden admin-control contract (grey when elevation is unavailable, golden when active) and the cross-tab uniformity the other views establish — most visibly on the hard-admin tabs (Boot Analyzer, Standby List Cleaner) where the core action requires elevation. Each of the six now shows the same golden elevated banner (matching `AppBlockerView`), with view-specific text describing what elevation unlocks, bound to `IsElevated` in the same grid row as the existing not-elevated banner.
 
-## [1.52.102] - 2026-07-11
+## [1.52.102] - 2026-07-21
 
 ### Fixed
 - **Keyboard focus was invisible on every toggle switch.** The shared `ToggleSwitch` style set `FocusVisualStyle` to null but — unlike every other interactive style (buttons, TextBox) — had no `IsKeyboardFocused` trigger, so a keyboard user tabbing onto a switch (severity filters, performance tweaks, startup entries, Windows features, …) got no focus cue while Space still flipped it (WCAG 2.4.7). The switch's Track now shows an accent focus ring when focused, matching the button styles; a reserved transparent 1.5px border keeps the layout from shifting when it lights up.
@@ -6793,12 +6793,12 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Changed
 - **App Blocker tab's bottom gutter now matches every other tab** (root margin `28,24,28,16` instead of `28,24,28,0`), so its footer no longer sits flush against the window edge when switching tabs.
 
-## [1.52.101] - 2026-07-11
+## [1.52.101] - 2026-07-21
 
 ### Fixed
 - **Reopening the theme popup on a saved custom theme showed the preset list instead of the color editors, and editing any one color silently reset the other three.** `SyncUiToService` checked the "Custom" mode radio for a persisted custom theme but never made the custom panel visible (the `Mode_Changed` handler that toggles panel visibility is wired up only afterward, and re-checking an already-checked radio raises no event), so the popup opened on the Presets list; the only way to reach the editors was to click Dark/Light — which immediately applied a preset over the custom theme — then Custom again. Worse, the four hex fields kept their XAML-default literals (`#6366F1`/`#070A0F`/`#0E1218`/`#F1F3F7`) and were never seeded from the saved theme, and `ApplyCustomFromInputs` reads all four on any field's `LostFocus` — so editing just the accent wrote the defaults for background/surface/text, destroying the user's saved custom colors on the next save. `SyncUiToService` now sets panel visibility (via a shared `UpdatePanels` helper `Mode_Changed` also uses) and, for a custom theme, seeds the four hex boxes and preview swatches from `ThemeService.CurrentTheme` so a single-field edit preserves the rest.
 
-## [1.52.100] - 2026-07-11
+## [1.52.100] - 2026-07-21
 
 ### Fixed
 - **App Blocker could block SysManager's own executable, making the app impossible to relaunch and impossible to unblock from within the app.** `BlockApp` writes an IFEO `Debugger` redirection for any executable name that passes validation, and it already refuses a fixed set of boot-critical processes (`winlogon.exe`, `lsass.exe`, …) precisely because an IFEO block on those is unrecoverable — but SysManager's own executable was not protected. A user could block it trivially (the Browse button fills in the real file name of any picked `.exe`, or they could just type it), after which the next launch is redirected to the non-existent `System32\SysManager_Blocked.exe` and fails; because `UnblockApp` requires the app to be running, recovery then needs `regedit` — beyond the non-technical target user. `BlockApp` now refuses to block SysManager's own executable (resolved once from `Environment.ProcessPath`, matching both the dev name `SysManager.exe` and the released `SysManager-vX.Y.Z.exe`), enforced at the service trust boundary alongside the existing boot-critical guard.
@@ -6813,37 +6813,37 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **`winget` was launched by its bare name, which — despite the System32 path-pinning added for other tools — could still let an attacker-planted `winget.exe` run with the app's privileges (local privilege escalation).** Every winget operation (Bulk Installer install/list/search, App Updates upgrade, Uninstaller list) routes through `PowerShellRunner.RunProcessAsync("winget", …)`, which hardens the target via `SystemPaths.ResolveSystemTool`. But winget is not a System32 tool — it is an MSIX app whose real binary lives under `%ProgramFiles%\WindowsApps\Microsoft.DesktopAppInstaller_*__8wekyb3d8bbwe\winget.exe`, and whose only PATH entry is a per-user execution alias in the **user-writable** `%LOCALAPPDATA%\Microsoft\WindowsApps`. `ResolveSystemTool` probes only System32, so both probes missed and it returned the **unrooted** bare string `"winget"`. Launched with `UseShellExecute=false`, Win32 `CreateProcess` searches the calling process's **own load directory first** — so a `winget.exe` planted next to SysManager's portable .exe (commonly run from a user-writable Downloads folder, sometimes elevated via the prominent "Run as administrator" buttons on the winget tabs) would execute with the app's rights. The previously-relied-on `WorkingDirectory=System32` pin does **not** cover this: the working directory is search item #2, the app-load directory is #1. Added `SystemPaths.ResolveWinget`, which resolves winget to the highest-versioned App Installer package under the admin-only-writable `WindowsApps` folder (verified by publisher hash and by actually containing `winget.exe`) and **fails closed** — if no trusted install is found it returns a rooted `System32\winget.exe` path (which normally doesn't exist, surfacing the same `Win32Exception` the callers already handle) rather than the plantable bare name. `ResolveSystemTool` now delegates winget/winget.exe to it. The per-user `%LOCALAPPDATA%` alias is deliberately never used for the (potentially elevated) launch. This closes the last winget binary-planting vector left open after the v1.52.91 (`powershell`) and v1.52.92 (Bulk Installer CWD) hardening.
 
-## [1.52.97] - 2026-07-11
+## [1.52.97] - 2026-07-10
 
 ### Fixed
 - **The Performance tab's system-mutating actions weren't serialized against each other, so "Restore All" could run while an "Apply" was still in flight and corrupt the reversible snapshot.** Every Apply command (power plan, visual effects, Game Mode, Xbox Game Bar, GPU, processor state) plus Restore All, Trim RAM, Create Restore Point and Toggle Hibernation is `async` and awaits real system work (registry writes, `powercfg`, `EmptyWorkingSet` across all processes). Nothing prevented a second command from starting mid-flight: the snapshot's own `SemaphoreSlim` only guards the load-modify of the `_snapshot` field, not the full apply→revert sequence. In the worst case, pressing **Restore All** while an Apply's registry write was still running let Restore All null `_snapshot` and delete the persisted baseline, leaving a tweak applied with nothing left to revert it (and other tabs that mutate the same system state — Tweaks, Cleanup's SFC/DISM — could interleave too). Every one of these ten commands now acquires the app-wide `OperationLockService` `SystemModification` lock (the same lock SFC/DISM and the Environment Variables editor already use) right after its confirmation dialog; if another system-modification operation is running, the command reports "Cannot start — <op> is already running." and bails before touching the system. Toggle-based commands re-sync their toggle from the live profile on that early return so the UI doesn't show a change that wasn't applied.
 
-## [1.52.96] - 2026-07-11
+## [1.52.96] - 2026-07-10
 
 ### Fixed
 - **Disabling an all-users (Common) startup-folder item did nothing, and such items could show the wrong enabled/disabled state.** Both the per-user Startup folder and the all-users Common Startup folder were scanned and tagged with the same `StartupSource.StartupFolder`, so `ApplyApprovedState` read the enabled/disabled state for *all* folder items only from HKCU, and `SetEnabledAsync` wrote the toggle blob for *all* folder items only to HKCU. But Windows stores the `StartupApproved\StartupFolder` state for all-users shortcuts under **HKLM**, not HKCU. Consequences for a shortcut in `%ProgramData%\...\Startup`: an item disabled via Task Manager (HKLM blob) was shown as "Enabled", and disabling it in SysManager wrote the blob to HKCU where Windows never looks — so it returned success yet the program still launched at logon. Added a distinct `StartupSource.CommonStartupFolder` (set in `ReadStartupFolder` based on which special folder produced the entry); `ApplyApprovedState` now reads HKLM for common-folder entries, and `SetEnabledAsync` routes them to HKLM (which needs administrator — a non-elevated attempt surfaces the same "requires elevation" message the HKLM Run path already produces). Per-user folder items are unchanged.
 
-## [1.52.95] - 2026-07-11
+## [1.52.95] - 2026-07-10
 
 ### Fixed
 - **Disabling a "run once" startup item in the Startup Manager reported success but did nothing — the item still ran at the next boot.** The scan lists both the `Run` and `RunOnce` registry keys, and `SetEnabledAsync` keyed purely off the entry's scope, so disabling a `RunOnce` entry wrote the "disabled" blob to `…\Explorer\StartupApproved\Run\{name}` and returned success. But Windows has no `StartupApproved\RunOnce` subkey and never consults `StartupApproved` for `RunOnce` keys, so the command still executed on the next boot while the UI showed "Disabled" — a system-mutation toggle that silently lied to the (non-technical) user. `SetEnabledAsync` now detects a `RunOnce` entry and returns a truthful non-success with a plain-language message ("Run-once item — runs next boot, then removes itself; cannot be disabled here.") instead of writing an ineffective blob. The item stays visible so the user still knows it's scheduled to run once.
 
-## [1.52.94] - 2026-07-11
+## [1.52.94] - 2026-07-10
 
 ### Fixed
 - **The Dashboard's 2-second temperature poll re-ran a Win32_DiskDrive WMI query and a per-disk SMART association walk on every tick, purely to relabel storage sensors with (unchanging) disk names.** `RefreshTemperaturesAsync` calls `TemperatureService.ReadAllAsync()` with `includeStorage` defaulting to `true`; on an elevated session that ran `GetDiskNamesFromWmi()` (a `Win32_DiskDrive` query) **and** `EnrichStorageNamesAsync` → `DiskHealthService.CollectAsync()` (an `MSFT_PhysicalDisk` enumeration plus a per-disk `MSFT_StorageReliabilityCounter` walk — by the code's own comments "by far the heaviest part of a read") every 2 seconds while the Dashboard (the app's default tab) was open. Disk friendly-names are static hardware identity, so both resolutions are now memoized once (mirroring the existing `_nvApiInitTried` "resolve static hardware once" pattern), with a `SemaphoreSlim` gate making the first resolution race-safe across the 2s poll, the user's Refresh, and the 10s resource sampler. After the first read the hot poll only calls LibreHardwareMonitor's `Update()` for live temperatures.
 
-## [1.52.93] - 2026-07-11
+## [1.52.93] - 2026-07-10
 
 ### Fixed
 - **The App Alerts tab froze the window while "Start Monitoring" took its baseline snapshot.** `StartMonitoring` was a synchronous command that called `AppAlertService.TakeBaseline()` directly on the UI thread — a walk of Program Files / Program Files (x86) / LocalAppData\Programs plus a full enumeration of both HKLM `Uninstall` registry trees (hundreds of subkeys), the same heavy scan the tab's own `RefreshInstalledAppsAsync` already offloads with `Task.Run`. On a machine with many installed apps or a slow disk the window hung for the whole scan. `StartMonitoring` is now an async command that runs `TakeBaseline()` + `Start()` on a background thread and resumes on the UI thread to set the monitoring state. This is safe: `FileSystemWatcher` creation is thread-agnostic and the service's `NewAppDetected` event is already marshaled via the `SynchronizationContext` captured at construction.
 
-## [1.52.92] - 2026-07-11
+## [1.52.92] - 2026-07-10
 
 ### Fixed
 - **The Bulk Installer launched `winget` by bare name from a hand-built process with no pinned working directory, enabling binary-planting privilege escalation, and interpolated the raw search box text into the winget arguments (argument injection).** `MarkInstalledAppsAsync` (runs automatically on tab open) and the package search both built their own `ProcessStartInfo { FileName = "winget", UseShellExecute = false }` with **no `WorkingDirectory`**. With `UseShellExecute=false`, Win32 `CreateProcess` searches the calling process's own directory before resolving the real winget App Execution Alias — so an attacker-planted `winget.exe` beside SysManager's portable .exe (often run from a user-writable folder, sometimes elevated) would run with the app's privileges. Separately, the search argument was built as `$"search \"{query}\" …"` from the unvalidated search box — the one process-launch trust boundary in the app without input validation — so a query containing a double-quote could break out and inject extra winget arguments. Both winget calls now route through `BulkInstallerService` (the `IPowerShellRunner` seam), which launches winget with `WorkingDirectory` pinned to System32 (removing the CWD from the search order, matching every other winget call in the app), and the search query is sanitized (double-quotes and control characters stripped) before interpolation. This also brings the two calls in line with the architecture rules — external process launches route through the single runner seam instead of a bespoke `ProcessStartInfo`.
 
-## [1.52.91] - 2026-07-11
+## [1.52.91] - 2026-07-10
 
 ### Fixed
 - **`WindowsFeaturesService` launched PowerShell by the extension-less name `"powershell"`, defeating the System32 path-pinning that blocks binary-planting privilege escalation on an elevated code path.** All three call sites (`ListFeaturesAsync`, `EnableFeatureAsync`, `DisableFeatureAsync` — the enable/disable paths run elevated) called `RunProcessAsync("powershell", …)`. `PowerShellRunner` hardens the target via `SystemPaths.ResolveSystemTool`, but that helper resolved by `File.Exists` and only ever probed the bare name — `File.Exists(@"…\System32\WindowsPowerShell\v1.0\powershell")` is `false` (the file is `powershell.exe`), so both probes missed and it returned the **unrooted** `"powershell"`. With `UseShellExecute=false`, Win32 `CreateProcess` then searches the calling process's own directory first — so an attacker-planted `powershell.exe` next to SysManager's portable .exe (often run from a user-writable folder, sometimes elevated) would execute with the app's privileges. Changed all three sites to `"powershell.exe"` (matching `PowerShellRunner.RunScriptViaPwshAsync` and every other system-tool caller, which all use the `.exe` suffix). **Fix-the-class:** `SystemPaths.ResolveSystemTool` now also probes `"<name>.exe"` when given an extension-less bare name, so a future caller that forgets the suffix can't silently reopen the same hole.
@@ -7155,37 +7155,37 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **A blank or malformed update checksum file no longer crashes the update check.** When verifying a downloaded update, SysManager reads the release's `.sha256` file; if that file came back empty or whitespace-only, parsing it threw an unhandled error instead of simply reporting the checksum as unverified. It now degrades cleanly to a verification failure (the update is treated as unverified rather than crashing), matching how a missing checksum file is already handled.
 
-## [1.52.33] - 2026-07-04
+## [1.52.33] - 2026-07-03
 
 ### Fixed
 - **Long names in the Boot Analyzer and Shortcut Cleaner tables now truncate with an ellipsis.** Their free-text columns clipped long values hard at the column edge with no "…", unlike the other data tables in the app. Both now trim consistently. Also aligned the Work-in-Progress placeholder title to the app's shared "Display" heading style instead of a one-off inline font, so all headings stay uniform.
 
-## [1.52.32] - 2026-07-04
+## [1.52.32] - 2026-07-03
 
 ### Fixed
 - **System Logs severity cards and the "missing folder" tag stay legible on the Light themes.** The System Logs Critical/Errors/Warnings/Info cards used hardcoded translucent backgrounds, slate-gray labels and a fixed white card border; the Environment Variables "missing folder" tag used a fixed light-red. These now use the app's theme-aware brushes, so they render correctly on every theme. (The Critical card keeps its distinct brighter-red hue so it stays visually separable from Error, and the glow effects are unchanged.)
 
-## [1.52.31] - 2026-07-04
+## [1.52.31] - 2026-07-03
 
 ### Fixed
 - **Screen readers now announce a clear label for the action buttons on System Health, Network Repair and Windows Features.** Several buttons (Scan, Check memory errors, Run SMART check, chkdsk scan/cancel, Flush DNS, Reset Winsock, Reset TCP/IP, Run as administrator) had no accessibility name, so assistive tech only had the raw content to read. They now carry a descriptive `AutomationProperties.Name`, matching the pattern already used elsewhere in those views.
 
-## [1.52.30] - 2026-07-04
+## [1.52.30] - 2026-07-03
 
 ### Fixed
 - **Refreshing the Privacy & Telemetry tab no longer briefly freezes the window.** The "Refresh" button read every privacy registry key synchronously on the UI thread, so the app hitched while the toggles reloaded. The refresh now reads the registry on a background thread (matching how the tab loads initially) and updates the UI when done, keeping the window responsive.
 
-## [1.52.29] - 2026-07-04
+## [1.52.29] - 2026-07-03
 
 ### Fixed
 - **Toggle switches and safety filter chips now follow the theme on the Light presets.** The "off" state of every toggle switch (Privacy toggles, feature switches, etc.) used a hardcoded dark-slate track that looked nearly black on the light themes; the safety filter chips (Safe / Caution / Critical) used hardcoded translucent status colors. Both now use the app's theme-aware brushes, so the off-toggle reads as a soft muted track and the chips stay legible on every theme. On the dark themes the look is unchanged.
 
-## [1.52.28] - 2026-07-04
+## [1.52.28] - 2026-07-03
 
 ### Fixed
 - **Ping target cards and Context Menu preview tooltips are now theme-aware on the Light themes.** The per-target cards on the Ping tab used a hardcoded translucent-white border and fixed slate-gray metric labels (LATENCY/AVG/JITTER/LOSS) that were nearly invisible on the light presets; the Context Menu style-preview tooltips used fixed `Gray`/`DimGray` text. Both now use the app's theme text and border brushes, so they stay legible on every theme. On the dark themes the look is unchanged.
 
-## [1.52.27] - 2026-07-04
+## [1.52.27] - 2026-07-03
 
 ### Fixed
 - **Dashboard "Run as admin" pill now follows the theme.** When SysManager isn't elevated, the small amber "Run as admin for all sensors" pill on the Dashboard used hardcoded amber tints that didn't adapt to the theme (and were tuned for dark). It now uses the app's theme-aware warning colors, so it stays legible on the light presets too.
@@ -7193,17 +7193,17 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Changed
 - **Dashboard metric colors are now named theme brushes.** The MEMORY (blue) and GPU (purple) accent colors were copy-pasted hex values repeated across the metric cards and quick-action list. They're now defined once as named `MetricBlue`/`MetricPurple` brushes and referenced everywhere — no visual change, just a single source of truth (matching how the CPU card already used a named brush).
 
-## [1.52.26] - 2026-07-04
+## [1.52.26] - 2026-07-03
 
 ### Fixed
 - **Long task names and paths on the Task Scheduler tab now truncate with an ellipsis.** The Task and Path columns rendered long text clipped hard at the column edge with no "…" indicator, unlike the other data tables in the app (Services, Drivers, Uninstaller, etc.) which trim cleanly. Both columns now use the same character-ellipsis trimming, so overflowing text ends in "…" and the layout stays tidy.
 
-## [1.52.25] - 2026-07-04
+## [1.52.25] - 2026-07-03
 
 ### Fixed
 - **Status badges (Startup, Windows Features, Uninstaller, Process Manager) are now readable on the Light themes.** The colored status pills — "Enabled"/"Disabled" on Startup Manager, "Done"/"Failed"/"Reboot required" on Windows Features, the "winget"/"Local" source tag and status on Uninstaller, and the process-state pill — used hardcoded colors tuned for the dark themes (pale green/amber text, translucent-white borders). On the six light presets they washed out to near-invisible (green-on-green text, no visible border). They now use the app's theme-aware status colors, so they stay legible on every theme. The "Irreversible" badge on Deep Cleanup was migrated the same way. On the dark themes the look is unchanged.
 
-## [1.52.24] - 2026-07-04
+## [1.52.24] - 2026-07-03
 
 ### Fixed
 - **Dropdowns (combo boxes) now match the theme and stay readable on the Light themes.** The folder/path pickers on Duplicate Finder and Disk Analyzer, and other dropdowns across the app, used the default Windows combo-box look — a fixed white popup with near-black text that ignored the selected theme. On the dark themes it clashed; on the light themes the editable text and dropdown items were low-contrast. Combo boxes now use a theme-aware style (matching the app's text fields — themed surface, border, rounded corners, accent focus, and a properly styled dropdown list), so they look consistent and stay legible on every theme.
@@ -7491,7 +7491,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **CPU Core Affinity now scrolls when there are many cores.** On a machine with a high logical-processor count (or a short window), the core tiles overflowed the card and the lower ones were cut off with no way to reach them. The core grid now scrolls, with the header and select buttons pinned, so every core is reachable regardless of core count or window size.
 
-## [1.45.0] - 2026-06-29
+## [1.45.0] - 2026-06-28
 
 ### Changed
 - **Consistent "empty list" messages across every tab.** Lists and tables that can start empty — App Updates, App Blocker, App Alerts, Shortcut Cleaner, File Shredder, Duplicate Finder, Context Menu, Task Scheduler, Display Profiles, Boot Analyzer, Defender exclusions and the live output console — now show the same centred placeholder (an icon, a short title and a one-line hint on how to populate the list) instead of a blank area or nothing at all. The handful of tabs that already had a placeholder (Debloater, Restore Points, Camera/Mic/Location, Browser Cleaner, System Logs, System Report) were moved onto the same shared component so the look can't drift between tabs again. A 📂 emoji in the Disk Analyzer and a shield emoji in Process Manager were also swapped for the proper icon font. Purely visual — no behaviour changes.
@@ -7585,7 +7585,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 - **Display Profiles applies and auto-reverts without freezing the window.** Switching resolution/refresh rate, picking a display, and the 15-second auto-revert all called the Windows display APIs (`EnumDisplaySettings` / `ChangeDisplaySettingsEx`) directly on the UI thread, so the app could briefly stop responding while the driver re-trained the panel — and that stall could hold up the very countdown meant to rescue you from a bad mode. These calls now run on a background thread, so the window and the auto-revert timer stay responsive throughout.
 - **Defender Tweaks no longer lets two changes overlap.** The PUA, Controlled Folder Access, exclusion-add and exclusion-remove actions could be triggered again while a previous change was still being written and verified, starting overlapping operations whose read-back checks could race and show a misleading "not changed" message. Each action now disables the others until it finishes, matching how the rest of the app serialises long-running operations. No change to what any action does.
 
-## [1.42.1] - 2026-06-27
+## [1.42.1] - 2026-06-26
 
 ### Fixed
 - **System Health now reads SMART/reliability data on Storage Spaces and similar setups.** On machines where Windows surfaces disks through the Storage provider, the physical-disk identifier embeds characters (`=` and `"`) that the previous safety check rejected, so temperature, wear, power-on hours and read/write error counts were silently dropped — the drive still showed as healthy but with no detail — and a warning was written to the rotating log on every few-second refresh. The reliability counters are now read by following the disk's WMI association directly instead of rebuilding a query from the identifier, which is robust to the identifier format and needs no text parsing. Drives that genuinely expose no counters (non-elevated sessions, virtual disks) are treated as a normal empty result rather than logged as a warning. No visible change on machines that already showed full SMART detail.
@@ -7726,12 +7726,12 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **Browser Cleaner now refuses to follow junctions or symbolic links out of a browser's own folders.** The reparse-point safety check failed *open* — if a folder's attributes couldn't be read it was treated as a normal folder and traversed — and the file-deletion path skipped the check entirely, so a junction or link placed inside a browser profile directory (something a standard user can create without administrator rights) could redirect a clean to measure or delete files outside the browser tree. The check now fails *safe* (an unreadable entry is treated as a link and skipped), runs before every measure and delete on both files and folders, and matches the behavior already used by Deep Cleanup and the File Shredder. The Firefox "Cache" entry now targets each profile's `cache2` cache folder specifically, instead of the whole profile directory — so a Firefox clean can never touch saved logins, bookmarks, or preferences.
 
-## [1.33.0] - 2026-06-25
+## [1.33.0] - 2026-06-24
 
 ### Added
 - **Boot Analyzer tab** (System group). The placeholder is now a working tab that reads the Windows boot-performance history (the Diagnostics-Performance log) and shows how long your PC takes to boot — total, core (main path), and desktop ready-up time — across recent boots, with a trend versus your recent average. A second list shows the apps, drivers, services, and devices Windows flagged as slowing boot, with the delay attributed to each. Read-only; reading the log requires administrator (the tab shows the standard elevation banner).
 
-## [1.32.0] - 2026-06-25
+## [1.32.0] - 2026-06-24
 
 ### Added
 - **Privacy Monitor tab** (Monitor group). The placeholder is now a working tab that shows which applications recently used your **camera, microphone, or location**, and when — read from the Windows access history (the CapabilityAccessManager consent store). Devices currently in use are flagged and sorted to the top. Read-only: to grant or revoke a permission, an **Open privacy settings** button hands off to Windows — SysManager never changes capability permissions itself.
@@ -7928,7 +7928,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 - **A corrupt cached app icon no longer sticks forever.** If a downloaded icon was truncated/corrupt, the bad cache file was kept and reused; it's now deleted and re-downloaded on next use.
 - **Shortcut Cleaner reports an accurate deletion count.** Moving a broken shortcut to the Recycle Bin could silently fail (the shell reports failure without throwing) yet still be counted as deleted; only genuinely recycled items are counted now.
 
-## [1.20.42] - 2026-06-17
+## [1.20.42] - 2026-06-18
 
 ### Fixed
 - **Deleting broken shortcuts no longer freezes the window.** The Shortcut Cleaner ran the shell delete on the UI thread, so removing many shortcuts could hang the app until it finished; the delete now runs in the background.
@@ -7936,13 +7936,13 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 - **Refreshing the System Logs twice in a row no longer mixes results.** Starting a second refresh while one was running could let the cancelled run's leftover batches land in the new list. The Refresh button is now disabled while a scan is in progress.
 - **Applying a Context Menu preset no longer freezes the window.** Applying a preset ran the registry changes and the Explorer restart on the UI thread, briefly hanging the app; that work now runs in the background.
 
-## [1.20.41] - 2026-06-17
+## [1.20.41] - 2026-06-18
 
 ### Fixed
 - **"Restore All" in Performance Mode now fully clears the saved baseline.** After restoring everything to the original state, the on-disk snapshot was left behind, so the next change reloaded the now-reverted values as its baseline — a later "Restore All" could then re-apply stale settings. The saved snapshot is now deleted when you restore all.
 - **Applying several performance tweaks at once can no longer race the baseline capture.** The independent Apply buttons (power plan, visual effects, Game Mode, Xbox Game Bar, GPU, processor state) each captured the "before" snapshot without coordination, so two run together could both think no baseline existed. Baseline capture is now serialized so the original state is recorded exactly once.
 
-## [1.20.40] - 2026-06-17
+## [1.20.40] - 2026-06-18
 
 ### Fixed
 - **The Health Score no longer fails outright when a system query hits a transient WMI error.** A repository or RPC fault while reading system info, disk health, or battery could throw an error the score didn't handle, failing the whole calculation; each source now degrades gracefully and the score is still produced from the rest.
@@ -8026,12 +8026,12 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **Deep Cleanup now empties the Recycle Bin through the Windows shell instead of deleting its files directly.** The "Recycle Bin (all drives)" category used the same raw file-delete path as ordinary caches, removing the internal `$Recycle.Bin` index/data files and per-account folders directly. That could leave the Recycle Bin in an inconsistent state (ghost or undeletable items in Explorer) until the next sign-in. It now empties the bin via the documented shell API, the same safe method used elsewhere in the app.
 
-## [1.20.26] - 2026-06-16
+## [1.20.26] - 2026-06-17
 
 ### Fixed
 - **The About → System Info diagnostics no longer leak system handles.** Building the environment summary (CPU, RAM, GPU, display, and OS lines) queried Windows for hardware details but never released the query result sets, leaking a small COM handle on each refresh. Every query now disposes its results, matching how the rest of the app handles these reads. No change to the information shown.
 
-## [1.20.25] - 2026-06-16
+## [1.20.25] - 2026-06-17
 
 ### Fixed
 - **Saving the hosts file now preserves its original permissions.** The atomic save introduced in 1.20.24 replaced the file by moving a freshly written temporary file over it, which left the new file with the folder's default permissions instead of the hosts file's own (more restrictive) access-control settings. Saving now replaces the file in place, keeping its existing permissions and attributes intact.
@@ -8103,32 +8103,32 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 ### Fixed
 - **The live-output console now matches the app's card styling.** Its container used a one-off border with a smaller corner radius than every other card; it now uses the shared `Card` style (same surface, border, and 10px radius) while keeping its zero inner padding, so the console looks consistent on the App Updates, Cleanup, System Health, and Windows Update tabs.
 
-## [1.20.12] - 2026-06-10
+## [1.20.12] - 2026-06-11
 
 ### Fixed
 - **Windows Update list has a real select-all checkbox.** The updates grid's checkbox column used a decorative `✓` header that did nothing and had no accessible name. It is now a working select-all checkbox ("Select all updates") that toggles every row, and it stays in sync with the existing Select all / Deselect all buttons.
 
-## [1.20.11] - 2026-06-10
+## [1.20.11] - 2026-06-11
 
 ### Fixed
 - **System Logs severity tiles are now screen-reader friendly and colorblind-safe.** The Critical / Errors / Warnings / Info count tiles conveyed their value only through color and an unlabeled number. Each tile now exposes an accessible name with its count (e.g. "Critical events: 3"), and the Critical and Errors tiles — both previously red and indistinguishable to colorblind users — are now told apart by a leading glyph (▲ vs ●) and weight, not hue alone.
 
-## [1.20.10] - 2026-06-10
+## [1.20.10] - 2026-06-11
 
 ### Fixed
 - **Console output toolbar is now consistent and screen-reader friendly.** The Clear and Copy buttons on the live-output console (shown on App Updates, Cleanup, System Health, and Windows Update) used the implicit default button style; they now use the standard `SecondaryButton` style like the rest of the app. The output list also gained an accessible name ("Live output").
 
-## [1.20.9] - 2026-06-10
+## [1.20.9] - 2026-06-11
 
 ### Fixed
 - **System Logs time-range chips now show which range is active and are keyboard-navigable.** The 1h / 24h / 7d / 30d / All chips were unlabeled buttons with no selected state, so you couldn't tell which range was applied. They are now a proper radio-button group (matching the Services tab filter chips): the active range is highlighted, the group is arrow-key navigable, and each chip is named for screen readers.
 
-## [1.20.8] - 2026-06-10
+## [1.20.8] - 2026-06-11
 
 ### Fixed
 - **Theme presets are now keyboard-accessible.** The preset cards in the appearance popup were mouse-only — not reachable by Tab, not activatable from the keyboard, and unnamed to screen readers. They are now focusable, activate with Enter or Space, and announce their preset name. The custom-color hex inputs (accent, background, surface, text) also gained accessible names.
 
-## [1.20.7] - 2026-06-10
+## [1.20.7] - 2026-06-11
 
 ### Fixed
 - **Search and filter boxes now have accessible names.** The category/filter/search inputs on Apps (Bulk Installer), Uninstaller, Process Manager, Services, and Windows Features had no `AutomationProperties.Name`, so screen readers announced them as anonymous edit fields. Each now states what it filters (e.g. "Filter installed apps", "Search winget packages", "Filter Windows features").
@@ -8216,7 +8216,7 @@ shipped in 1.56.8 below. Recorded here so the version history has no unexplained
 - **Page background — theme-aware.** 15 views were defining a hardcoded `LinearGradientBrush PageBg` (`#070A0F`/`#0B1220`/`#090D16`) and using `{StaticResource PageBg}` for their root `Grid.Background`. Replaced with `{DynamicResource Surface0}`. The gradient resource definitions are gone, the views are smaller, and a future light-theme switch will work without per-view edits.
 - **Admin elevation banner colors — theme-aware.** Replaced 4 hardcoded amber hex values (`#1AFBBF24`, `#40FBBF24`, `#FBBF24`, `#FCD34D`) used by elevation banners and warning pills across 17 views with new theme brushes: `WarningBgSubtle`, `WarningBg`, `WarningStripe`, `WarningText`. Defined once in `App.xaml`, used everywhere.
 
-## [1.18.3] - 2026-06-03
+## [1.18.3] - 2026-06-04
 
 The same code as 1.18.2, released a second time from the same commit under a new number. Nothing changed.
 
@@ -9357,19 +9357,18 @@ The same code as 1.7.18, released a second time from the same commit under a new
 
 ## [0.48.2] - 2026-05-14
 
-> **Note:** Versions 0.49.0–0.53.1 below were released under the previous
-> repository (`SysManager`). When the project migrated to `SystemManager`
-> (2026-05-14), the auto-release workflow reset to the last tag on the new
-> repo (v0.48.1). Subsequent releases continue from 0.48.2 onward.
-> The entries below are preserved for historical completeness.
-
 ### Fixed
 - **Security: SpeedTestService** — remove fabricated placeholder SHA-256 hashes
   that caused perpetual warning logs (alert fatigue). Security now relies on
   Authenticode signature verification of the extracted binary + zip structural
   integrity check (SEC-001).
 
-## [0.53.1] - 2026-05-14
+## [0.48.1] - 2026-05-14
+
+> **Note:** 0.47.2 to 0.48.1 were first written up as 0.49.0 to 0.53.1, numbers no release ever
+> had, and 0.47.1 as 0.48.0, the number the release after it took. Each heading was written by
+> hand before its release, and the release took the next number after the last tag. They are
+> filed here under the versions that shipped them, as they were written.
 
 ### Fixed
 - **Resource leak: NetworkSharedState** — dispose SKTypeface on LegendTextPaint
@@ -9379,7 +9378,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Resource leak: MemoryTestService** — dispose Process returned by
   Process.Start when launching mdsched.exe (LEAK-007).
 
-## [0.53.0] - 2026-05-13
+## [0.48.0] - 2026-05-13
 
 ### Added
 - **Navigation: 4 new groups** — Gaming & Profiles, Privacy & Security,
@@ -9404,7 +9403,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Placeholder descriptions** — improved all WIP placeholder descriptions with
   clearer feature explanations and correct issue references.
 
-## [0.52.0] - 2026-05-13
+## [0.47.5] - 2026-05-13
 
 ### Fixed
 - **Resource leak: BatteryService** — dispose WMI ManagementObject instances
@@ -9420,7 +9419,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Performance: BoolToElevationBadgeBrushConverter** — pre-create static frozen
   brush instances instead of allocating per Convert call (PERF-001, partial).
 
-## [0.51.0] - 2026-05-13
+## [0.47.4] - 2026-05-13
 
 ### Fixed
 - **Security: PowerShellRunner** — document ExecutionPolicy Bypass usage and
@@ -9430,7 +9429,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Testing: IntegrationTests** — align dependency versions with Tests project
   (coverlet 10.0.0, Test.Sdk 18.5.1, xunit.runner 3.1.5) (TEST-008).
 
-## [0.50.0] - 2026-05-13
+## [0.47.3] - 2026-05-13
 
 ### Fixed
 - **Performance: ConsoleViewModel** — fix O(n²) trim by removing from index 0
@@ -9442,7 +9441,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **CI: ci.yml** — add warning annotation when UI automation tests fail so
   failures are visible on PRs without blocking merge (TEST-005).
 
-## [0.49.0] - 2026-05-13
+## [0.47.2] - 2026-05-13
 
 ### Fixed
 - **Binding: BatteryInfo** — add NotifyPropertyChangedFor on DesignCapacityMWh,
@@ -9485,9 +9484,10 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - **Performance: DiskAnalyzerService** — use StringComparison.OrdinalIgnoreCase
   instead of allocating ToLowerInvariant copy on every path (PERF-006).
 
-## [0.48.0] - 2026-05-13
+## [0.47.1] - 2026-05-13
 
 ### Fixed
+- **Ten high-priority code-review findings** — a batch of correctness and security fixes from the code review, plus the SECURITY.md supported-versions update to the 0.47.x line.
 - **Security: UpdateService** — treat missing .sha256 hash file as verification
   failure instead of silently passing (SEC-001).
 - **Security: SpeedTestService** — pin expected SHA-256 hashes for Ookla CLI
@@ -9508,11 +9508,6 @@ The same code as 1.7.18, released a second time from the same commit under a new
   of calling File.Exists on every property evaluation (PERF-001).
 - **Bug: WindowsFeaturesViewModel** — add CanExecute guard on ToggleFeature
   command to prevent rapid-click race condition (BUG-006).
-
-## [0.47.1] - 2026-05-13
-
-### Fixed
-- **Ten high-priority code-review findings** — a batch of correctness and security fixes from the code review, plus the SECURITY.md supported-versions update to the 0.47.x line.
 
 ## [0.47.0] - 2026-05-13
 
@@ -9646,11 +9641,24 @@ The same code as 1.7.18, released a second time from the same commit under a new
   recommendations. Non-destructive, no admin required. Closes #261.
 - **IntGreaterThanZeroConverter** — value converter for conditional
   visibility when an integer is greater than zero.
+
+## [0.35.13] - 2026-05-12
+
+### Fixed
+- **Models** — deduplicated `FormatSize` from `DiskUsageEntry`, `InstalledApp`,
+  and `ProcessEntry`; all now use `CleanupCategory.HumanSize` (CQ-002).
+- **Console** — batch-remove excess lines from end-to-start instead of
+  repeated `RemoveAt(0)`, reducing O(n) per append to amortized O(1) (CQ-008).
+
+## [0.35.12] - 2026-05-12
+
+### Added
 - **IDialogService** — abstraction for user confirmation dialogs, replacing
   direct `MessageBox.Show` calls in ViewModels. Enables unit testing of
   confirmation-gated code paths (CQ-003).
 
 ### Fixed
+- **Code-review batch 2** — `IDialogService` extraction plus a set of QA and security fixes from the second code-review pass.
 - **Disk Health** — `TemperatureColorHex` returns grey (#9AA0A6) for drives
   without temperature sensors instead of misleading red (QA-004).
 - **Battery Health** — `HealthPercent` clamped to 0–100, `WearPercent`
@@ -9659,19 +9667,10 @@ The same code as 1.7.18, released a second time from the same commit under a new
   end-to-start, eliminating O(n²) array shifting (CQ-001).
 - **Shortcut Cleaner** — COM objects (`IShellLink`, `IPersistFile`) now
   released via `Marshal.ReleaseComObject` in finally block (SEC-006).
-- **Models** — deduplicated `FormatSize` from `DiskUsageEntry`, `InstalledApp`,
-  and `ProcessEntry`; all now use `CleanupCategory.HumanSize` (CQ-002).
-- **Console** — batch-remove excess lines from end-to-start instead of
-  repeated `RemoveAt(0)`, reducing O(n) per append to amortized O(1) (CQ-008).
 
 ### Security
 - **Speed Test** — improved download integrity comment and added
   Authenticode signature verification on extracted speedtest.exe (SEC-001).
-
-## [0.35.12] - 2026-05-12
-
-### Fixed
-- **Code-review batch 2** — `IDialogService` extraction plus a set of QA and security fixes from the second code-review pass.
 
 ## [0.35.11] - 2026-05-12
 
@@ -9847,7 +9846,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
 - `AppAlertsView` XAML with DataGrid and toolbar.
 - Unit tests for ViewModel and Model.
 
-## [0.32.0] - 2026-05-06
+## [0.32.0] - 2026-05-07
 
 ### Added
 - **Shortcut Cleaner** — fully implemented tab replacing the WIP placeholder.
@@ -10217,15 +10216,21 @@ The same code as 1.7.18, released a second time from the same commit under a new
 ## [0.28.6] - 2026-04-29
 
 ### Fixed
-- **Startup Manager: crash when scrolling** — WPF DataGrid virtualization
-  passed internal placeholder objects to command handlers, crashing the app.
-  Commands now accept `object?` with pattern matching (#326).
-- **About: What's New raw markdown** — release notes were displayed as plain
-  text. Added a lightweight markdown-to-Inlines renderer that formats headings,
-  bold, bullets, and inline code (#335).
-- **System Health: chkdsk false errors** — verdict relied solely on exit code,
-  which is non-zero even on healthy volumes. Now parses chkdsk output text for
-  known healthy/error patterns (#323).
+- **Traceroute: chart not rendering** — LiveChartsCore CartesianChart collapsed
+  to zero height. Added MinHeight=250 (#333).
+- **Speed Test: HTTP values too low** — increased parallel streams from 4 to 8
+  and payload from 25 MB to 50 MB to saturate 1 Gbps+ links (#334).
+
+## [0.28.5] - 2026-04-29
+
+### Fixed
+- **Ping: unreachable targets** — replaced 5 unreachable CS2 Europe IPs and
+  removed 3 unreachable FACEIT IPs. All new IPs verified with ICMP ping
+  (#330, #331, #332).
+
+## [0.28.4] - 2026-04-29
+
+### Fixed
 - **Quick Cleanup: Rescan not updating** — property changes fired from a
   background thread inside Task.Run. Refactored to set ObservableProperties on
   the UI thread after await (#327).
@@ -10233,18 +10238,27 @@ The same code as 1.7.18, released a second time from the same commit under a new
   forwarding from IsScanning/IsCleaning/IsLargeScanning to IsBusy (#328).
 - **Disk Analyzer: duplicate progress indicator** — removed the redundant
   background task tray entry; the NavItem slim bar is sufficient (#329).
-- **Ping: unreachable targets** — replaced 5 unreachable CS2 Europe IPs and
-  removed 3 unreachable FACEIT IPs. All new IPs verified with ICMP ping
-  (#330, #331, #332).
-- **Traceroute: chart not rendering** — LiveChartsCore CartesianChart collapsed
-  to zero height. Added MinHeight=250 (#333).
-- **Speed Test: HTTP values too low** — increased parallel streams from 4 to 8
-  and payload from 25 MB to 50 MB to saturate 1 Gbps+ links (#334).
+
+## [0.28.3] - 2026-04-29
+
+### Fixed
+- **System Health: chkdsk false errors** — verdict relied solely on exit code,
+  which is non-zero even on healthy volumes. Now parses chkdsk output text for
+  known healthy/error patterns (#323).
+
+## [0.28.2] - 2026-04-29
+
+### Fixed
+- **About: What's New raw markdown** — release notes were displayed as plain
+  text. Added a lightweight markdown-to-Inlines renderer that formats headings,
+  bold, bullets, and inline code (#335).
 
 ## [0.28.1] - 2026-04-29
 
 ### Fixed
-- **Startup Manager no longer crashes when scrolling the list** — fixed a DataGrid virtualization crash while scrolling the Startup Manager entries (#337).
+- **Startup Manager: crash when scrolling** — WPF DataGrid virtualization
+  passed internal placeholder objects to command handlers, crashing the app.
+  Commands now accept `object?` with pattern matching (#326, #337).
 
 ## [0.28.0] - 2026-04-28
 
@@ -10365,7 +10379,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
   when the window lost focus, making buttons appear disabled across the entire
   application (#252, #251, #248, #245).
 
-## [0.21.2] - 2026-04-26
+## [0.21.2] - 2026-04-25
 
 ### Fixed
 - **Startup toggle not working** — clicking the checkbox to disable a startup app
@@ -10373,7 +10387,7 @@ The same code as 1.7.18, released a second time from the same commit under a new
   flipped `IsEnabled` before the command ran, then the command inverted it back.
   Now uses the already-flipped value as the desired state and reverts on failure.
 
-## [0.21.1] - 2026-04-26
+## [0.21.1] - 2026-04-25
 
 ### Fixed
 - **Icon extraction quality** — drastically improved icon resolution for all three

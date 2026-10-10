@@ -219,7 +219,7 @@ public sealed class AppFixture : IDisposable
             {
                 return find();
             }
-            catch (Exception) when (elapsed() < budget)
+            catch (COMException ex) when (ex.HResult == TimedOut && elapsed() < budget)
             {
                 pause(AskAgainAfter);
             }

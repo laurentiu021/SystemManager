@@ -36,4 +36,17 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
   </ItemGroup>
 
+  <!-- The test processes have WPF clear its weak-event tables at exit where they are, rather than ask each table's
+       thread to (#2671). The STA tests build WPF objects on threads that end with the test, each leaving a
+       Dispatcher that was never shut down and a weak-event table registered for the process's exit. At exit WPF
+       asked each table's ended thread to clear it and waited 300 ms for an answer that could not come, one table
+       after another: the unit suite took about 7 s to exit after its last test, and past the xUnit console runner's
+       10 s it was forced out with exit code 1 although every test had passed. An item condition sees the
+       IsTestProject each test project sets further down, because items are evaluated after every property. The
+       app is left as it is. TestHostTests holds both halves of that. -->
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <RuntimeHostConfigurationOption Include="Switch.MS.Internal.DoNotInvokeInWeakEventTableShutdownListener"
+                                    Value="true" />
+  </ItemGroup>
+
 </Project>

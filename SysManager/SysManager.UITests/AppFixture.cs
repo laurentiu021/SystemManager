@@ -213,8 +213,17 @@ public sealed class AppFixture : IDisposable
     internal static T AskAgainWhileTimedOut<T>(
         Func<T> find, TimeSpan budget, Func<TimeSpan> elapsed, Action<TimeSpan> pause)
     {
-        _ = (budget, elapsed, pause);
-        return find();
+        while (true)
+        {
+            try
+            {
+                return find();
+            }
+            catch (Exception) when (elapsed() < budget)
+            {
+                pause(AskAgainAfter);
+            }
+        }
     }
 
     /// <summary>

@@ -2,6 +2,7 @@
 <UserControl x:Class="SysManager.Views.PingView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views">
 
@@ -111,7 +112,7 @@
                 </DockPanel>
                 <TextBlock Text="{Binding Shared.SelectedPreset.Description}"
                            Style="{StaticResource Subtle}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                <ItemsControl ItemsSource="{Binding Shared.Targets}" Margin="0,14,0,0">
+                <ItemsControl ItemsSource="{Binding Shared.Targets}" helpers:RebuildFocus.Keep="True" Margin="0,14,0,0">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <UniformGrid Columns="2"/>

@@ -1584,8 +1584,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   list. It also needs the window to be active and the keyboard to be the last input, the test WPF
   makes before it draws a focus outline, so a list that refreshes on a timer never scrolls a mouse
   user back. Every DataGrid has it from the implicit DataGrid style in `App.xaml`; the other lists
-  rebuilt with `ReplaceWith` whose rows take focus set it themselves, and
-  `ArchitectureTests.EveryListRebuiltInBulk_KeepsKeyboardFocusOnItsRows` fails when one does not.
+  whose rows take focus set it themselves when they lose rows, whether rebuilt with `ReplaceWith`,
+  emptied with `Clear` or one row at a time with `Remove` or `RemoveAt`, as Ping's targets and
+  Audio Mixer's sessions are, and `ArchitectureTests.EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows`
+  fails when one does not.
 - `WingetTableParser` — parses the fixed-width table output from `winget`
   CLI commands into structured objects.
 - `WingetFailure` — the one translation of winget outcomes into plain language:

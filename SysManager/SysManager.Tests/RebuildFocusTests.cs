@@ -241,6 +241,36 @@ public class RebuildFocusTests
     }
 
     [StaFact]
+    public void ARowRemovedOnItsOwn_SendsFocusToTheRowNowInItsPlace()
+    {
+        // Ping's remove button and an Audio Mixer session ending take one row out, with no rebuild around it (#2650).
+        var (list, rows) = ListOf("Audio", "BITS", "Spooler");
+        var place = RebuildFocus.PlaceOf(list, StopButtonIn(list, 1))!;
+
+        rows.RemoveAt(1);
+        Lay(list);
+
+        var target = RebuildFocus.TargetFor(list, place);
+        Assert.Equal(1, RowOf(list, target));
+        Assert.Same(StopButtonIn(list, 1), target);
+        Assert.Equal("Stop Spooler", AutomationProperties.GetName(target!));
+    }
+
+    [StaFact]
+    public void TheLastRowRemovedOnItsOwn_SendsFocusToTheRowNowLast()
+    {
+        var (list, rows) = ListOf("Audio", "BITS");
+        var place = RebuildFocus.PlaceOf(list, StopButtonIn(list, 1))!;
+
+        rows.RemoveAt(1);
+        Lay(list);
+
+        var target = RebuildFocus.TargetFor(list, place);
+        Assert.Equal(0, RowOf(list, target));
+        Assert.Equal("Stop Audio", AutomationProperties.GetName(target!));
+    }
+
+    [StaFact]
     public void ANameTwoRowsShare_DoesNotPickARow_SoThePositionDoes()
     {
         // Two rows named alike, the way two programs can share a display name. The name says nothing about which one

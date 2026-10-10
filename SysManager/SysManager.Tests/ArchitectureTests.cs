@@ -17223,6 +17223,81 @@ public partial class ArchitectureTests
     private static partial Regex RawElementNameRead();
 
     /// <summary>
+    /// The UI tests look elements up through <c>AppFixture.DescendantsOf</c> and <c>AppFixture.FirstDescendantOf</c>,
+    /// which ask again while UI Automation times out, and never with a bare FlaUI lookup.
+    /// </summary>
+    /// <remarks>
+    /// While the app is busy drawing a tab, UI Automation can fail a lookup with "Operation timed out" (0x80131505)
+    /// instead of answering it. <c>AppFixture.GoToTab</c> looked its nav item up with a bare
+    /// <c>FindFirstDescendant</c>, and a CI run of <c>RapidTabSwitching_DoesNotCrash_AndDashboardRecovers</c> failed
+    /// there (#2655). The bare calls belong in the two lookups and nowhere else.
+    /// </remarks>
+    [Fact]
+    public void NoUiTest_LooksAnElementUpOutsideTheFixturesLookups()
+    {
+        // The pattern still tells a bare lookup from the two that ask again.
+        Assert.Matches(BareUiaLookup(), "MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId))");
+        Assert.Matches(BareUiaLookup(), "_fx.MainWindow.FindAllDescendants()");
+        Assert.Matches(BareUiaLookup(), "row.FindAllChildren()");
+        Assert.Matches(BareUiaLookup(), "Retry.WhileNull(window.FindFirstChild, timeout)");
+        Assert.DoesNotMatch(BareUiaLookup(), "AppFixture.DescendantsOf(_fx.MainWindow)");
+        Assert.DoesNotMatch(BareUiaLookup(), "FirstDescendantOf(MainWindow, cf => cf.ByAutomationId(navId))");
+
+        var files = Directory.GetFiles(Path.Combine(TestPaths.SolutionDir(), "SysManager.UITests"), "*.cs");
+        Assert.True(files.Length >= 10, $"only {files.Length} UI test files were read, so this would check nothing.");
+
+        var offenders = new List<string>();
+        var bareInTheLookups = 0;
+        var throughTheLookups = 0;
+        foreach (var path in files.OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var file = Path.GetFileName(path);
+            var lines = WithoutComments(File.ReadAllText(path)).Replace("\r\n", "\n").Split('\n');
+            var inALookup = false;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                // The two lookups are expression-bodied: each runs from its declaration to the line its ; ends.
+                if (file == "AppFixture.cs" && LookupDeclaration().IsMatch(lines[i])) inALookup = true;
+
+                throughTheLookups += ThroughTheLookups().Matches(lines[i]).Count;
+                var bare = BareUiaLookup().Matches(lines[i]).Count;
+                if (inALookup) bareInTheLookups += bare;
+                else if (bare > 0) offenders.Add($"{file}:{i + 1}  {lines[i].Trim()}");
+
+                if (inALookup && lines[i].TrimEnd().EndsWith(';')) inALookup = false;
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these UI tests look an element up with a bare FlaUI call, which fails the test when UI Automation times "
+            + "out instead of answering. Use AppFixture.DescendantsOf or AppFixture.FirstDescendantOf:\n  "
+            + string.Join("\n  ", offenders));
+
+        // Known answer: the two lookups hold three bare calls, two in DescendantsOf (with and without a condition) and
+        // one in FirstDescendantOf. Another number means one moved out of them, or the declarations stopped matching.
+        Assert.Equal(3, bareInTheLookups);
+        // Floor: 15 uses of the two when this was written, the declarations among them.
+        Assert.True(throughTheLookups >= 12,
+            $"only {throughTheLookups} lookups go through the fixture's two, against the 15 when this was written.");
+    }
+
+    /// <summary>
+    /// A FlaUI lookup used directly: <c>FindFirstDescendant</c>, <c>FindAllChildren</c>, <c>FindAt</c> and the rest,
+    /// called or passed as a method group.
+    /// </summary>
+    [GeneratedRegex(@"\.Find(?:First|All|At)\w*\b", RegexOptions.Compiled)]
+    private static partial Regex BareUiaLookup();
+
+    /// <summary>A call to, or the declaration of, one of the fixture's two lookups.</summary>
+    [GeneratedRegex(@"\b(?:DescendantsOf|FirstDescendantOf)\(", RegexOptions.Compiled)]
+    private static partial Regex ThroughTheLookups();
+
+    /// <summary>The declaration line of one of the fixture's two lookups.</summary>
+    [GeneratedRegex(
+        @"\bpublic static AutomationElement(?:\[\]|\?) (?:DescendantsOf|FirstDescendantOf)\(", RegexOptions.Compiled)]
+    private static partial Regex LookupDeclaration();
+
+    /// <summary>
     /// How many services sit behind a constructor-injected interface seam is spelled out in ARCHITECTURE.md,
     /// and the list beside the number names each one — so both are derived here from the registrations
     /// themselves, which is the only place a seam actually becomes injectable.

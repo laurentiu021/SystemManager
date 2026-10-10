@@ -4,6 +4,7 @@
 
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using FlaUI.Core;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Conditions;
@@ -71,12 +72,12 @@ public sealed class AppFixture : IDisposable
         // All sidebar groups but one start collapsed (Cleanup opens with the app — #1519), so most
         // child nav items aren't in the automation tree until their group Expander is open. Drive the
         // UI like a user: try to find the item; if it isn't realized yet, expand every group and retry.
-        var item = MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId));
+        var item = FirstDescendantOf(MainWindow, cf => cf.ByAutomationId(navId));
         if (item is null)
         {
             ExpandAllNavGroups();
             item = Retry.WhileNull(() =>
-                MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(navId)),
+                FirstDescendantOf(MainWindow, cf => cf.ByAutomationId(navId)),
                 TimeSpan.FromSeconds(5)).Result;
         }
 
@@ -102,7 +103,7 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public void ExpandAllNavGroups()
     {
-        foreach (var e in MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Group)))
+        foreach (var e in DescendantsOf(MainWindow, cf => cf.ByControlType(ControlType.Group)))
         {
             try
             {
@@ -126,7 +127,7 @@ public sealed class AppFixture : IDisposable
     {
         try
         {
-            var lines = MainWindow.FindAllDescendants()
+            var lines = DescendantsOf(MainWindow)
                 .Take(120)
                 .Select(e =>
                 {
@@ -161,19 +162,74 @@ public sealed class AppFixture : IDisposable
         }
     }
 
+    /// <summary>The HRESULT UI Automation fails a call with when the app did not answer it in time.</summary>
+    internal const int TimedOut = unchecked((int)0x80131505);
+
+    /// <summary>How long one lookup goes on asking while UI Automation times out.</summary>
+    internal static readonly TimeSpan LookupBudget = TimeSpan.FromSeconds(5);
+
+    /// <summary>How long a lookup that timed out waits before it asks again.</summary>
+    internal static readonly TimeSpan AskAgainAfter = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Every descendant of <paramref name="root"/>, or every one that matches <paramref name="condition"/>, asked again
+    /// while UI Automation times out.
+    /// </summary>
+    /// <remarks>
+    /// Look elements up through here and <see cref="FirstDescendantOf"/>, never with <c>FindAllDescendants</c> or
+    /// <c>FindFirstDescendant</c> directly. While the app is busy drawing a tab, UI Automation can fail a lookup with
+    /// "Operation timed out" (0x80131505) instead of answering it, and a bare call ends the test there: one in
+    /// <see cref="GoToTab"/> failed a run of <c>RapidTabSwitching_DoesNotCrash_AndDashboardRecovers</c> that way
+    /// (#2655). <c>ArchitectureTests</c> holds the UI tests to this.
+    /// </remarks>
+    public static AutomationElement[] DescendantsOf(
+        AutomationElement root, Func<ConditionFactory, ConditionBase>? condition = null) =>
+        AskAgainWhileTimedOut(
+            () => condition is null ? root.FindAllDescendants() : root.FindAllDescendants(condition), LookupBudget);
+
+    /// <summary>
+    /// The first descendant of <paramref name="root"/> that matches <paramref name="condition"/>, or null, asked again
+    /// while UI Automation times out.
+    /// </summary>
+    public static AutomationElement? FirstDescendantOf(
+        AutomationElement root, Func<ConditionFactory, ConditionBase> condition) =>
+        AskAgainWhileTimedOut(() => root.FindFirstDescendant(condition), LookupBudget);
+
+    /// <summary>
+    /// What <paramref name="find"/> answers, asked again while UI Automation times out, for as long as
+    /// <paramref name="budget"/> lasts. Any other failure is thrown at once, and so is a timeout once the budget is
+    /// spent.
+    /// </summary>
+    internal static T AskAgainWhileTimedOut<T>(Func<T> find, TimeSpan budget)
+    {
+        var clock = Stopwatch.StartNew();
+        return AskAgainWhileTimedOut(find, budget, () => clock.Elapsed, Thread.Sleep);
+    }
+
+    /// <summary>
+    /// <see cref="AskAgainWhileTimedOut{T}(Func{T}, TimeSpan)"/> on the clock and the pause it is given, so a test can
+    /// run it without waiting.
+    /// </summary>
+    internal static T AskAgainWhileTimedOut<T>(
+        Func<T> find, TimeSpan budget, Func<TimeSpan> elapsed, Action<TimeSpan> pause)
+    {
+        _ = (budget, elapsed, pause);
+        return find();
+    }
+
     /// <summary>
     /// Wait up to <paramref name="timeoutSeconds"/> for any descendant whose
     /// Name contains <paramref name="text"/> (case-insensitive).
     /// </summary>
     public AutomationElement? WaitForText(string text, int timeoutSeconds = 5)
         => Retry.WhileNull(() =>
-            MainWindow.FindAllDescendants()
+            DescendantsOf(MainWindow)
                 .FirstOrDefault(e => NameOf(e)?.Contains(text, StringComparison.OrdinalIgnoreCase) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
     /// <summary>Find a control by its AutomationId.</summary>
     public AutomationElement? FindById(string automationId) =>
-        MainWindow.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+        FirstDescendantOf(MainWindow, cf => cf.ByAutomationId(automationId));
 
     /// <summary>
     /// Find a control in the currently rendered tab by its stable AutomationId.
@@ -204,8 +260,7 @@ public sealed class AppFixture : IDisposable
     /// </summary>
     public Button? FindButtonByAccessibleName(string accessibleName, int timeoutSeconds = 1) =>
         Retry.WhileNull(() =>
-            CurrentViewHost
-                .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+            DescendantsOf(CurrentViewHost, cf => cf.ByControlType(ControlType.Button))
                 .FirstOrDefault(button =>
                     string.Equals(NameOf(button), accessibleName, StringComparison.OrdinalIgnoreCase)),
             TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
@@ -226,8 +281,7 @@ public sealed class AppFixture : IDisposable
     /// </remarks>
     public Button? FindButtonByAccessibleNamePrefix(string prefix, int timeoutSeconds = 5) =>
         Retry.WhileNull(() =>
-            CurrentViewHost
-                .FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+            DescendantsOf(CurrentViewHost, cf => cf.ByControlType(ControlType.Button))
                 .FirstOrDefault(button =>
                     NameOf(button)?.StartsWith(prefix, StringComparison.Ordinal) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result?.AsButton();
@@ -236,7 +290,7 @@ public sealed class AppFixture : IDisposable
         AutomationElement root,
         string automationId)
     {
-        var matches = root.FindAllDescendants(cf => cf.ByAutomationId(automationId));
+        var matches = DescendantsOf(root, cf => cf.ByAutomationId(automationId));
         return matches.Length switch
         {
             0 => null,
@@ -257,7 +311,7 @@ public sealed class AppFixture : IDisposable
     /// <summary>Wait for named content inside the currently rendered tab only.</summary>
     public AutomationElement? WaitForTextInCurrentTab(string text, int timeoutSeconds = 5) =>
         Retry.WhileNull(() =>
-            CurrentViewHost.FindAllDescendants()
+            DescendantsOf(CurrentViewHost)
                 .FirstOrDefault(element => NameOf(element)?.Contains(text, StringComparison.OrdinalIgnoreCase) is true),
             TimeSpan.FromSeconds(timeoutSeconds)).Result;
 
@@ -270,7 +324,7 @@ public sealed class AppFixture : IDisposable
     /// an empty/crashed view.
     /// </summary>
     public int VisibleButtonCount()
-        => MainWindow.FindAllDescendants(cf => cf.ByControlType(ControlType.Button)).Length;
+        => DescendantsOf(MainWindow, cf => cf.ByControlType(ControlType.Button)).Length;
 
     /// <summary>Exit code of the launched app, or a marker if it can't be read.</summary>
     private string SafeExitCode()

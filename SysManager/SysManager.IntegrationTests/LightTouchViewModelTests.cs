@@ -36,9 +36,10 @@ public class LightTouchViewModelTests
     }
 
     [Fact]
-    public void CleanupVm_CancelBeforeStart_IsSafe()
+    public async Task CleanupVm_CancelBeforeStart_IsSafe()
     {
         var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }

@@ -49,6 +49,9 @@ public class SystemHealthMultiDriveTests
     public async Task RefreshDrives_PopulatesList()
     {
         var vm = Build();
+        // The start-up load fills the list too, so it is emptied after it: the refresh has to fill it.
+        await vm.InitializationComplete;
+        vm.ChkdskDrives.Clear();
         var t = vm.RefreshDrivesCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         Assert.NotEmpty(vm.ChkdskDrives);
@@ -58,6 +61,7 @@ public class SystemHealthMultiDriveTests
     public async Task RefreshDrives_CSelectedByDefault()
     {
         var vm = Build();
+        await vm.InitializationComplete;
         var t = vm.RefreshDrivesCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         var c = vm.ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, "C:", StringComparison.OrdinalIgnoreCase));
@@ -135,6 +139,7 @@ public class SystemHealthMultiDriveTests
     public async Task RunChkdsk_NullDriveLetter_NoOp()
     {
         var vm = Build();
+        await vm.InitializationComplete;
         var t = vm.RunChkdskCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         Assert.False(vm.IsChkdskRunning);

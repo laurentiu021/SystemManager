@@ -63,25 +63,28 @@ public class LargeFilesViewModelTests
     }
 
     [Fact]
-    public void CopyPathCommand_Null_DoesNotThrow()
+    public async Task CopyPathCommand_Null_DoesNotThrow()
     {
         var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.CopyPathCommand.Execute(null));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ShowInExplorerCommand_NullPath_DoesNotThrow()
+    public async Task ShowInExplorerCommand_NullPath_DoesNotThrow()
     {
         var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(null));
         Assert.Null(ex);
     }
 
     [Fact]
-    public void ShowInExplorerCommand_NonExistent_DoesNotThrow()
+    public async Task ShowInExplorerCommand_NonExistent_DoesNotThrow()
     {
         var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.ShowInExplorerCommand.Execute(@"C:\no_such_file_" + Guid.NewGuid().ToString("N")));
         Assert.Null(ex);
     }
@@ -89,7 +92,11 @@ public class LargeFilesViewModelTests
     [Fact]
     public async Task Scan_NoLocation_ReportsError()
     {
-        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService()) { SelectedLocation = null };
+        var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+        // After the start-up load, which ends by selecting the first location and would otherwise
+        // replace the null set here (#2668).
+        await vm.InitializationComplete;
+        vm.SelectedLocation = null;
         var t = vm.ScanCommand.ExecuteAsync(null);
         if (t is Task tt) await tt;
         Assert.Contains("location", vm.ScanStatus, StringComparison.OrdinalIgnoreCase);
@@ -103,12 +110,13 @@ public class LargeFilesViewModelTests
         File.WriteAllBytes(Path.Combine(root, "x.bin"), new byte[2 * 1024 * 1024]);
         try
         {
-            var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService())
-            {
-                SelectedLocation = new ScanLocation("Test", root),
-                MinSizeMB = 1,
-                TopCount = 10
-            };
+            var vm = new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService());
+            // After the start-up load, which ends by selecting the first location and would otherwise
+            // replace this one with Downloads (#2668).
+            await vm.InitializationComplete;
+            vm.SelectedLocation = new ScanLocation("Test", root);
+            vm.MinSizeMB = 1;
+            vm.TopCount = 10;
             var t = vm.ScanCommand.ExecuteAsync(null);
             if (t is Task tt) await tt;
             Assert.NotEmpty(vm.Files);

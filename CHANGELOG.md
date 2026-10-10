@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.4] - 2026-10-10
+
+**About's release notes say GitHub could not be reached when the list arrives but cannot be read, instead of showing
+an error** (#2663).
+
+### Fixed
+
+- **About: a release list that cannot be read is a failed load, not an error.** Reading the list of recent releases
+  failed in three ways the code did not name: a connection that dropped part way through the reply, and a compressed
+  reply, gzip or Brotli, that did not decompress. Each one escaped, so Refresh or F5 showed the "SysManager error"
+  dialog, and at startup the notes stayed blank with nothing saying why. The list now treats all three as it treats an
+  unreachable server: the notes say "Could not reach GitHub", and Refresh tries again. The update check already did,
+  and both now read the ways a reply can fail from one list, so they cannot drift apart again. This had been so since
+  0.28.17, when a catch of everything there was narrowed to three types.
+
 ## [1.128.3] - 2026-10-09
 
 **Notification Blocker's switch that silences every notification at once is now called the main switch** (#2617).

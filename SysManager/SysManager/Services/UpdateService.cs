@@ -35,26 +35,48 @@ public sealed class UpdateService : IUpdateService
         assetName.StartsWith("SysManager-", StringComparison.OrdinalIgnoreCase) &&
         assetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
-    private static readonly HttpClient Http = CreateClient();
+    // Explicit handler so TLS and redirect behaviour are deterministic.
+    private static readonly HttpClient SharedHttp = CreateClient(new SocketsHttpHandler
+    {
+        AutomaticDecompression = System.Net.DecompressionMethods.All,
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        AllowAutoRedirect = true
+    });
 
     // Version-suffix separators (pre-release / build / trailing space). Hoisted to a
     // SearchValues so ParseVersion's scan doesn't allocate a char[] per call.
     private static readonly SearchValues<char> VersionSuffixSeparators = SearchValues.Create("-+ ");
 
-    private static HttpClient CreateClient()
+    private readonly HttpClient _http;
+
+    /// <summary>The app's service, on one client for the life of the process.</summary>
+    public UpdateService() => _http = SharedHttp;
+
+    /// <summary>
+    /// Sends through <paramref name="handler"/> rather than the network, so a test can make GitHub's reply fail in
+    /// a given way. The client is set up as the app's is.
+    /// </summary>
+    internal UpdateService(HttpMessageHandler handler) => _http = CreateClient(handler);
+
+    private static HttpClient CreateClient(HttpMessageHandler handler)
     {
-        // Explicit handler so TLS and redirect behaviour are deterministic.
-        var handler = new SocketsHttpHandler
-        {
-            AutomaticDecompression = System.Net.DecompressionMethods.All,
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-            AllowAutoRedirect = true
-        };
         var c = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("SysManager-UpdateCheck/1.0");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return c;
     }
+
+    /// <summary>
+    /// The ways reading GitHub's reply fails once it has started to arrive: a body cut off part way
+    /// (<see cref="IOException"/>), a gzip body that does not decompress (<see cref="InvalidDataException"/>), a
+    /// Brotli one (<see cref="InvalidOperationException"/>), JSON that does not parse
+    /// (<see cref="System.Text.Json.JsonException"/>), or a shape the serializer cannot build
+    /// (<see cref="NotSupportedException"/>). A failure to connect is an <see cref="HttpRequestException"/>,
+    /// and each caller catches that and cancellation first.
+    /// </summary>
+    private static bool IsUnreadableReply(Exception ex) =>
+        ex is IOException or InvalidDataException or InvalidOperationException
+            or System.Text.Json.JsonException or NotSupportedException;
 
     public sealed record ReleaseInfo(
         Version Version,
@@ -83,7 +105,7 @@ public sealed class UpdateService : IUpdateService
         {
             try
             {
-                var dto = await Http.GetFromJsonAsync<GhRelease>(url, ct).ConfigureAwait(false);
+                var dto = await _http.GetFromJsonAsync<GhRelease>(url, ct).ConfigureAwait(false);
                 if (dto is null) { LastError = "GitHub returned an empty response."; return null; }
                 return Map(dto);
             }
@@ -98,11 +120,8 @@ public sealed class UpdateService : IUpdateService
                 if (attempt == 2) return null;
                 await Task.Delay(800, ct).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (IsUnreadableReply(ex))
             {
-                // Broad on purpose: past the two above, the body is read through decompression and the JSON reader,
-                // which fail in their own ways (a body cut off part way is an IOException, a corrupt gzip one an
-                // InvalidDataException), and whatever fails, the check says so and returns nothing.
                 LastError = $"Unexpected: {ex.GetType().Name}: {ex.Message}";
                 return null;
             }
@@ -118,7 +137,7 @@ public sealed class UpdateService : IUpdateService
         try
         {
             var url = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page={count}";
-            var dto = await Http.GetFromJsonAsync<GhRelease[]>(url, ct).ConfigureAwait(false);
+            var dto = await _http.GetFromJsonAsync<GhRelease[]>(url, ct).ConfigureAwait(false);
             if (dto is null) return [];
             return dto.Select(Map).OfType<ReleaseInfo>().ToList();
         }
@@ -131,9 +150,11 @@ public sealed class UpdateService : IUpdateService
             Serilog.Log.Warning(ex, "Failed to fetch recent releases (network)");
             return [];
         }
-        catch (System.Text.Json.JsonException ex)
+        // It caught only the JSON failure, so a body cut off part way or one that did not decompress reached About as
+        // an error dialog (#2663).
+        catch (Exception ex) when (IsUnreadableReply(ex))
         {
-            Serilog.Log.Warning(ex, "Failed to parse recent releases JSON");
+            Serilog.Log.Warning(ex, "Failed to read recent releases");
             return [];
         }
     }
@@ -222,7 +243,7 @@ public sealed class UpdateService : IUpdateService
         try
         {
             Directory.CreateDirectory(dir);
-            using var resp = await Http.GetAsync(rel.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var resp = await _http.GetAsync(rel.AssetUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             resp.EnsureSuccessStatusCode();
             var total = resp.Content.Headers.ContentLength ?? rel.AssetSize;
 
@@ -331,7 +352,7 @@ public sealed class UpdateService : IUpdateService
         try
         {
             var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
-            var hashText = await Http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
+            var hashText = await _http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
 
             var expectedHash = ParseExpectedHash(hashText);
             if (expectedHash is null)
@@ -390,7 +411,7 @@ public sealed class UpdateService : IUpdateService
         try
         {
             var sha256Url = $"https://github.com/{Owner}/{Repo}/releases/download/{rel.Tag}/SysManager-{rel.Tag}.exe.sha256";
-            var hashText = await Http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
+            var hashText = await _http.GetStringAsync(sha256Url, ct).ConfigureAwait(false);
 
             var expectedHash = ParseExpectedHash(hashText);
             if (expectedHash is null)

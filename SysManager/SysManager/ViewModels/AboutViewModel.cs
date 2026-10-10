@@ -240,12 +240,11 @@ public sealed partial class AboutViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The outer net for the fire-and-forget startup check. It looks redundant — everything it
-    /// catches, the two calls inside catch for themselves — but it is not: <c>GetRecentAsync</c> has
-    /// no catch-all, so a failure it does not name (an <see cref="InvalidOperationException"/> from
-    /// the shared <c>HttpClient</c>, say) reaches here. Without this, that becomes an unobserved task
-    /// exception on a task nobody awaits. The duplicate pair that used to sit inside
-    /// <see cref="CheckAtStartupAsync"/> was genuinely unreachable and was removed.
+    /// The outer net for the fire-and-forget startup check. The real service's two calls catch their own
+    /// failures, a reply that cannot be read included (#2663), so theirs do not end here. It stays for a
+    /// client that throws instead, as <see cref="LoadHistoryAsync"/>'s catches do, so that such a failure
+    /// is a warning here rather than the tab's initialisation failing. The duplicate pair that used to sit
+    /// inside <see cref="CheckAtStartupAsync"/> was genuinely unreachable and was removed.
     /// </summary>
     private async Task InitAsync()
     {

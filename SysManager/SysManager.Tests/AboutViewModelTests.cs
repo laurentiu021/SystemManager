@@ -334,6 +334,29 @@ public class AboutViewModelTests
         Assert.Empty(vm.ReleaseHistory);
     }
 
+    /// <summary>
+    /// Refresh says GitHub could not be reached when its reply arrives and cannot be read, through the real service.
+    /// </summary>
+    /// <remarks>
+    /// A body cut off part way, or one that did not decompress, escaped <c>GetRecentAsync</c>, and from Refresh or F5
+    /// it reached the app's last-resort handler, which showed the "SysManager error" dialog (#2663).
+    /// </remarks>
+    [Theory]
+    [InlineData("cut off")]
+    [InlineData("gzip")]
+    [InlineData("brotli")]
+    [InlineData("not JSON")]
+    public async Task LoadHistoryCommand_WhenTheReplyCannotBeRead_SaysSoInsteadOfThrowing(string failure)
+    {
+        var vm = NewVmWith(UpdateServiceUnreadableReplyTests.ServiceWhoseReplyFails(failure));
+
+        var ex = await Record.ExceptionAsync(() => vm.LoadHistoryCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);
+        Assert.True(vm.HistoryUnavailable);
+        Assert.Empty(vm.ReleaseHistory);
+    }
+
     [Fact]
     public void LatestVersionLabel_DefaultsEmpty()
     {

@@ -1086,12 +1086,7 @@ public partial class ArchitectureTests
             var bodies = MethodBodiesByName(source);
 
             // A helper in the same file that settles init makes every caller of it safe.
-            // EVERY overload must settle, not any. Two same-named NewVm helpers made a settle in one vouch
-            // for the other, so removing it from the one the racy tests called left this guard green.
-            var settling = bodies
-                .Where(b => b.Value.All(body => body.Contains("InitializationComplete", StringComparison.Ordinal)))
-                .Select(b => b.Key)
-                .ToHashSet(StringComparer.Ordinal);
+            var settling = SettlingMethods(bodies);
 
             foreach (var (name, overloads) in bodies)
             {
@@ -1122,6 +1117,133 @@ public partial class ArchitectureTests
             + "vm.InitializationComplete, or settle it in the file's NewVm() as five other files do:\n  "
             + string.Join("\n  ", offenders));
     }
+
+    /// <summary>
+    /// An integration test that runs a command on a view model whose constructor started <c>InitializeAsync</c> lets
+    /// that start-up work finish first.
+    /// </summary>
+    /// <remarks>
+    /// The integration suite builds its view models over the real services, so the start-up work a constructor starts
+    /// is still running when the test's next line runs, and with no UI thread for its awaits to come back to, it
+    /// carries on on the thread pool. A command run straight away runs at the same moment: Dashboard's Refresh and its
+    /// start-up each rebuilt the alert list, from two threads, and <c>List&lt;T&gt;.Insert</c> threw
+    /// <c>IndexOutOfRangeException</c> (#2668). In the app the two take turns on the UI thread, so the test failed on a
+    /// race the app cannot have, and where it passed it had tested an interleaving nobody chose. System Health's
+    /// chkdsk test met the same shape in #2300 and settled it in that one test.
+    /// <para>Every command, unlike <see cref="EveryTestAssertingAStatusMessage_SettlesTheConstructorInitFirst"/>, which
+    /// reads the unit suite and only what the start-up work writes. There the substitutes mostly answer at once, so the
+    /// start-up work has usually finished inside the constructor, and a rule this broad would mostly report tests that
+    /// cannot race. Over the real services it never has, and even a Cancel is affected: run during the start-up, it
+    /// can stop the start-up's own scan, which is not the "nothing running" its test is named for.</para>
+    /// <para>A view model counts as built in a method by <c>new</c>, by a target-typed <c>new()</c> assigned to its
+    /// type, or by a call to a helper in the file that returns it. The method settles it by awaiting
+    /// <c>InitializationComplete</c> before its first command, or by building it only through helpers every overload
+    /// of which does.</para>
+    /// <para>An object initializer does not count as settled, wherever the await is. It runs before the start-up work,
+    /// which can overwrite what it set: Large Files' start-up ends by selecting the first location, so the test that
+    /// set no location in its initializer could scan Downloads, and the one that set a temporary folder could scan
+    /// Downloads instead of it. The properties are set after the await.</para>
+    /// </remarks>
+    [Fact]
+    public void NoIntegrationTest_RunsACommandBeforeItsViewModelHasLoaded()
+    {
+        var loading = Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "ViewModels"), "*ViewModel.cs")
+            .Where(file => Regex.IsMatch(WithoutComments(File.ReadAllText(file)), @"\bInitializeAsync\("))
+            .Select(file => Path.GetFileNameWithoutExtension(file))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(loading.Count >= 40,
+            $"only {loading.Count} view models were found whose constructor starts InitializeAsync, out of 42 "
+            + "measured — the population this guard checks is wrong, so a pass means nothing.");
+
+        var dir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.IntegrationTests");
+        var offenders = new List<string>();
+        var checkedMethods = 0;
+
+        foreach (var path in Directory.GetFiles(dir, "*.cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var source = WithoutComments(File.ReadAllText(path));
+            var bodies = MethodBodiesByName(source);
+            var settling = SettlingMethods(bodies);
+
+            // The helpers in this file that hand back one of those view models, or a task of one.
+            var builders = ViewModelReturningMethod().Matches(source)
+                .Where(m => loading.Contains(m.Groups["vm"].Value))
+                .Select(m => m.Groups["name"].Value)
+                .ToHashSet(StringComparer.Ordinal);
+
+            foreach (var (name, overloads) in bodies)
+            {
+                foreach (var body in overloads)
+                {
+                    var command = CommandRun().Match(body);
+                    if (!command.Success) continue;
+
+                    var builds = ViewModelConstruction().Matches(body)
+                        .Where(m => loading.Contains(m.Groups["vm"].Value))
+                        .ToList();
+                    var helpers = Regex.Matches(body, @"\b(\w+)\s*\(")
+                        .Select(m => m.Groups[1].Value)
+                        .Where(call => call != name && builders.Contains(call))
+                        .ToList();
+                    if (builds.Count == 0 && helpers.Count == 0) continue;
+                    checkedMethods++;
+
+                    var settledAt = body.IndexOf("InitializationComplete", StringComparison.Ordinal);
+                    var settled = (settledAt >= 0 && settledAt < command.Index)
+                                  || (builds.Count == 0 && helpers.All(settling.Contains));
+                    if (builds.Any(m => m.Groups["init"].Success))
+                        offenders.Add($"{Path.GetFileName(path)}  {name}  sets its properties in an object initializer, "
+                                      + "which the start-up work can overwrite");
+                    else if (!settled)
+                        offenders.Add($"{Path.GetFileName(path)}  {name}");
+                }
+            }
+        }
+
+        Assert.True(checkedMethods >= 20,
+            $"only {checkedMethods} integration test methods were found building such a view model and running one "
+            + "of its commands, out of 25 measured — the method split or the patterns stopped matching.");
+
+        Assert.True(offenders.Count == 0,
+            "These integration tests run a command while the view model's own start-up work is still running, on "
+            + "the thread pool, so the two run at the same moment, which the app's UI thread never lets them do. "
+            + "Await vm.InitializationComplete before the first command, or build the view model through a "
+            + "helper that does, and set its properties after that rather than in an initializer:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The methods in one file that settle a view model's constructor init, which makes every caller of them safe.
+    /// </summary>
+    /// <remarks>
+    /// EVERY overload must settle, not any. Two same-named <c>NewVm</c> helpers made a settle in one vouch for the
+    /// other, so removing it from the one the racy tests called left
+    /// <see cref="EveryTestAssertingAStatusMessage_SettlesTheConstructorInitFirst"/> green.
+    /// </remarks>
+    private static HashSet<string> SettlingMethods(Dictionary<string, List<string>> bodies) =>
+        bodies
+            .Where(b => b.Value.All(body => body.Contains("InitializationComplete", StringComparison.Ordinal)))
+            .Select(b => b.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>A command run: <c>SomeCommand.Execute(</c> or <c>SomeCommand.ExecuteAsync(</c>.</summary>
+    [GeneratedRegex(@"Command\s*\.\s*Execute(?:Async)?\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex CommandRun();
+
+    /// <summary>
+    /// A view model built in place, <c>new X(...)</c> or <c>X name = new(...)</c>, with <c>init</c> matched when an object
+    /// initializer follows its arguments.
+    /// </summary>
+    [GeneratedRegex(@"(?:\bnew\s+(?<vm>\w+ViewModel)|\b(?<vm>\w+ViewModel)\s+\w+\s*=\s*new)\s*"
+                    + @"(?:\((?>[^()]+|\((?<d>)|\)(?<-d>))*(?(d)(?!))\))?(?<init>\s*\{)?",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ViewModelConstruction();
+
+    /// <summary>A method declared to return a view model or a task of one, with its name.</summary>
+    [GeneratedRegex(@"(?:\b(?<vm>\w+ViewModel)|\bTask<(?<vm>\w+ViewModel)>)\s+(?<name>\w+)\s*\(",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex ViewModelReturningMethod();
 
     /// <summary>
     /// True when <paramref name="entry"/>, or anything it calls within two further levels, assigns

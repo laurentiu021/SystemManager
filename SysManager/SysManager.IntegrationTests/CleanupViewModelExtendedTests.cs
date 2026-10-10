@@ -76,9 +76,10 @@ public class CleanupViewModelExtendedTests
     }
 
     [Fact]
-    public void CancelCommand_DoesNotThrow()
+    public async Task CancelCommand_DoesNotThrow()
     {
         var vm = new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.CancelCommand.Execute(null));
         Assert.Null(ex);
     }

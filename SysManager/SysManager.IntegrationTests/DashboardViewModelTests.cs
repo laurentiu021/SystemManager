@@ -48,6 +48,17 @@ public class DashboardViewModelTests
             new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-speed")));
     }
 
+    // Built, then left to finish what its constructor starts: the start-up load and the round of alert checks it
+    // begins. A test that refreshed straight away ran Refresh beside the start-up on the thread pool, where in the app
+    // the two take turns on the UI thread, and both rebuilt the alert list at once until List.Insert threw (#2668).
+    private static async Task<DashboardViewModel> LoadedVmAsync()
+    {
+        var vm = NewVm();
+        await vm.InitializationComplete;
+        await vm.AlertScans;
+        return vm;
+    }
+
     [Fact]
     public void Ctor_SetsElevationFlag()
     {
@@ -59,7 +70,7 @@ public class DashboardViewModelTests
     [Fact]
     public async Task RefreshCommand_CompletesAndPopulatesFields()
     {
-        var vm = NewVm();
+        var vm = await LoadedVmAsync();
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(string.IsNullOrWhiteSpace(vm.OsLine));
         Assert.False(string.IsNullOrWhiteSpace(vm.UptimeLine));
@@ -70,7 +81,7 @@ public class DashboardViewModelTests
     [Fact]
     public async Task RefreshCommand_ResetsBusyFlag_WhenDone()
     {
-        var vm = NewVm();
+        var vm = await LoadedVmAsync();
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
@@ -79,7 +90,7 @@ public class DashboardViewModelTests
     [Fact]
     public async Task RefreshCommand_SetsStatusMessage()
     {
-        var vm = NewVm();
+        var vm = await LoadedVmAsync();
         await vm.RefreshCommand.ExecuteAsync(null);
         Assert.False(string.IsNullOrWhiteSpace(vm.StatusMessage));
     }

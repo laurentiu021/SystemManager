@@ -39,6 +39,7 @@ public class SystemHealthViewModelExtendedTests
     public async Task CheckDiskHealth_PopulatesCollection()
     {
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
+        await vm.InitializationComplete;
         await vm.CheckDiskHealthCommand.ExecuteAsync(null);
         // Count depends on hardware. Only guarantee: not busy anymore and no crash.
         Assert.False(vm.IsBusy);
@@ -48,6 +49,7 @@ public class SystemHealthViewModelExtendedTests
     public async Task CheckMemoryErrors_UpdatesVerdict()
     {
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
+        await vm.InitializationComplete;
         var initialVerdict = vm.MemoryHealthVerdict;
         await vm.CheckMemoryErrorsCommand.ExecuteAsync(null);
         // Verdict should have changed (or at least still be non-empty).
@@ -56,9 +58,10 @@ public class SystemHealthViewModelExtendedTests
     }
 
     [Fact]
-    public void CancelScan_WithoutActive_IsSafe()
+    public async Task CancelScan_WithoutActive_IsSafe()
     {
         var vm = new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService());
+        await vm.InitializationComplete;
         var ex = Record.Exception(() => vm.CancelScanCommand.Execute(null));
         Assert.Null(ex);
     }

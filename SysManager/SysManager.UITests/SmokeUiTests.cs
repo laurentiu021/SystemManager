@@ -124,8 +124,7 @@ public class SmokeUiTests
 
     private AutomationElement FindSingleById(string automationId)
     {
-        var matches = _fx.MainWindow.FindAllDescendants(
-            condition => condition.ByAutomationId(automationId));
+        var matches = AppFixture.DescendantsOf(_fx.MainWindow, condition => condition.ByAutomationId(automationId));
         Assert.Single(matches);
         Assert.Equal(ControlType.Button, matches[0].ControlType);
         return matches[0];

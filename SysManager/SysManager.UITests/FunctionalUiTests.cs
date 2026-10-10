@@ -40,7 +40,7 @@ public class FunctionalUiTests
                 var totalText = _fx.WaitForText("total", 1);
                 // The summary reads e.g. "120 running / 250 total"; assert it isn't "0 total".
                 return totalText is not null
-                    && _fx.MainWindow.FindAllDescendants()
+                    && AppFixture.DescendantsOf(_fx.MainWindow)
                         .Any(e => AppFixture.NameOf(e) is { } name
                                   && name.Contains("total", StringComparison.OrdinalIgnoreCase)
                                   && !name.TrimStart().StartsWith("0 ", StringComparison.Ordinal));

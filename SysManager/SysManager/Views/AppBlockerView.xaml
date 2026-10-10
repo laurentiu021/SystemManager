@@ -30,7 +30,7 @@
                  keys (#1506). Reversibility is stated for the same reason every comparable tab states it. -->
             <TextBlock Text="Stop a specific program from starting — for example a game launcher that opens itself with Windows. Unblock any time; the program stays installed and nothing is deleted."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource Subtle}" Margin="0,2,0,0" />
+            <TextBlock Text="{Binding BlockStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,2,0,0" />
         </StackPanel>
 
         <!-- Rescue banner for a block that cannot be undone from here. Sits ABOVE the elevation banner

@@ -106,7 +106,7 @@
                                 IsEnabled="{Binding IsRepairing, Converter={StaticResource BoolInvert}}"/>
                     </DockPanel>
                 </Border>
-                <TextBlock Text="{Binding RepairStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                <TextBlock Text="{Binding RepairStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,4,0,0"
                            Visibility="{Binding RepairStatus, Converter={StaticResource FlexVis}}"/>
                 <TextBlock Text="⚠ A reboot is required for changes to take effect."
                            Foreground="{DynamicResource Danger}" Style="{StaticResource Subtle}" Margin="0,8,0,0"

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.6] - 2026-10-10
+
+**Screen readers now hear what each tab is doing, how a repair or an update download ended, and the notification
+in the corner** (#2670, #2661).
+
+### Fixed
+
+- **Status lines are read out.** Every tab's status line was marked as a live region, but a screen reader only
+  reads one out when the app tells it that the text changed, and WPF never does that on its own, so Narrator and
+  other screen readers heard none of them: not a scan starting, not a repair's verdict, not a cleanup's result.
+  SysManager now tells them, once for each change made while the line is on screen, so "Scanning…" and then
+  "Scan complete." are each read out, while what a tab says when you open it is not. This had been so since the
+  status lines were marked live in 1.77.1.
+- **The notification in the corner is read out.** Its live setting sat on the frame around it, which a screen
+  reader cannot see, so it was never heard either, since 1.52.67. Its title is now read out at once and its detail
+  after it, also when the same notification appears twice.
+- **Five tabs read out their work.** Speed Test, Network Repair, App Blocker, About and Shortcut Cleaner showed
+  their progress in lines that were not live regions at all. They are now, so every tab reads out what it is
+  doing, as the README says. About reads out how an update download ended, and not the megabytes as they arrive,
+  and the line explaining a failed download is read out with its reason rather than a fixed label.
+
 ## [1.128.5] - 2026-10-10
 
 **Removing a ping target, or an app's sound ending in Volume Control, leaves keyboard focus on the row now in its

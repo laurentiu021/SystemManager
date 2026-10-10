@@ -6225,21 +6225,22 @@ public partial class ArchitectureTests
     /// reader is least able to check it: "announced on all 52 tabs that have one" while the real number was
     /// 53. Understating by one is harmless in substance; a count claim that drifts silently is not, because
     /// the same sentence is what tells a screen-reader user whether this app is worth trying.
-    /// <para>Five different denominators are claimed and they are NOT interchangeable: the total tab count,
-    /// from the sidebar, the number of tabs carrying an announced status line, fewer because a tab with nothing
-    /// long-running has nothing to report, and the three keyboard-accelerator subsets — tabs
+    /// <para>Four different denominators are claimed and they are NOT interchangeable: the total tab count,
+    /// from the sidebar, and the three keyboard-accelerator subsets — tabs
     /// that override <c>EscapeCancel</c>, tabs that override <c>RefreshOnF5</c>, and tabs binding a filter
     /// box name Ctrl+F recognises. A guard that accepted any of them would pass on two being swapped, so
-    /// each claim is classified by the phrase that follows it, first match winning.
+    /// each claim is classified by the phrase that follows it, first match winning. The tabs carrying an
+    /// announced status line were a fifth, "all N tabs that have one", until every tab had one (#2661): the
+    /// README now claims the total for them, and no tab without one is allowed.</para>
     /// <para>The three accelerator claims were added after two of them went stale in exactly the way this
     /// guard exists to prevent (#2336): v1.109.0 added a tab that overrides both properties, so the README's
     /// Escape and F5 counts were each one short. They escaped because they were spelled as WORDS — "all
     /// fifteen tabs", "all forty tabs" — and this pattern requires a digit. They are digits now, which is
     /// what brings them inside the guard; the fix for the class is that a count only counts if it is written
     /// in a form the guard can read.</para>
-    /// <para>Order matters in the discriminator list below. Ctrl+F's claim reads "the N tabs that have one,
-    /// and selects…" and the status-line claim reads "all N tabs that have one" — the second phrase is a
-    /// PREFIX of the first, so testing it first would compare Ctrl+F against the status count.</para></para>
+    /// <para>Order matters in the discriminator list below: a phrase that is a prefix of another has to come after
+    /// it, or the shorter one classifies the longer claim. "the N tabs that have one" was such a prefix of
+    /// Ctrl+F's "the N tabs that have one, and selects…" while the status-line claim used it.</para>
     /// <para>The status lines are counted per tab, from the sidebar, and not per line of markup (#2618). Summing
     /// the bindings across the views counted <c>StatusFooter.xaml</c>'s own line, which is not a tab, and missed
     /// Large Files', which binds <c>ScanStatus</c>; the two errors cancelled out, so the number was right for the
@@ -6267,13 +6268,20 @@ public partial class ArchitectureTests
             .Select(m => m.Groups[3].Value)
             .Distinct(StringComparer.Ordinal)
             .ToList();
-        var statusLines = tabViews.Count(view =>
-            HasAnnouncedStatusLine(WithoutXamlComments(File.ReadAllText(Path.Combine(viewsDir, view + ".xaml")))));
+        var silentTabs = tabViews.Where(view =>
+            !HasAnnouncedStatusLine(WithoutXamlComments(File.ReadAllText(Path.Combine(viewsDir, view + ".xaml")))))
+            .ToList();
 
-        Assert.True(tabViews.Count >= 55 && statusLines >= 52,
-            $"{statusLines} of {tabViews.Count} tabs were found with an announced status line, against 54 of 60 "
-            + "measured — the count to compare against is wrong, so the assertions below would enforce a stale "
-            + "number.");
+        Assert.True(tabViews.Count >= 55,
+            $"only {tabViews.Count} tabs were read from the sidebar, out of 60 measured — the count to compare "
+            + "against is wrong, so the assertions below would enforce a stale number.");
+
+        // Every tab reads out what it is doing, which is what the README says (#2661). Five did not: Speed Test,
+        // Network Repair, App Blocker, About and Shortcut Cleaner showed their progress in lines no screen reader
+        // was told about.
+        Assert.True(silentTabs.Count == 0,
+            "these tabs announce nothing while they work: none of their lines is a live region. Give the line that "
+            + "says what the tab is doing the StatusLine or SubtleStatusLine style:\n  " + string.Join("\n  ", silentTabs));
 
         // The accelerator subsets, each from the source that defines it rather than from a second list.
         var escapeTabs = ViewModelsOverriding("EscapeCancel");
@@ -6293,7 +6301,6 @@ public partial class ArchitectureTests
                 "tabs override RefreshOnF5, so F5 reaches them"),
             ("tabs that have one, and selects", filterTabs,
                 "tabs bind a filter-box name Ctrl+F recognises"),
-            ("tabs that have one", statusLines, "tabs carry an announced status line"),
         ];
 
         var readme = File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md"));
@@ -6781,13 +6788,15 @@ public partial class ArchitectureTests
     /// <summary>
     /// Whether a tab's view shows an announced status line: one bound to <c>StatusMessage</c>, which
     /// <see cref="EveryStatusLine_IsALiveRegion_AndTheFastReadoutsAreNot"/> keeps a live region, one in either of
-    /// the two live status-line styles whatever it binds, or the shared footer, which renders the first from its
-    /// own file.
+    /// the two live status-line styles whatever it binds, the shared footer, which renders the first from its own
+    /// file, or a line marked live by its own attribute, as Deep Cleanup's summaries are.
+    /// <see cref="EveryLiveLine_IsAnnouncedWhenItChanges"/> holds each of them to being announced.
     /// </summary>
     private static bool HasAnnouncedStatusLine(string markup)
         => markup.Contains("Text=\"{Binding StatusMessage}\"", StringComparison.Ordinal)
            || AnnouncedStatusLineStyle().IsMatch(markup)
-           || StatusFooterElement().IsMatch(markup);
+           || StatusFooterElement().IsMatch(markup)
+           || markup.Contains("AutomationProperties.LiveSetting=\"Polite\"", StringComparison.Ordinal);
 
     /// <summary>The two status-line styles, each a polite live region.</summary>
     [GeneratedRegex(@"Style=""\{StaticResource (?:Subtle)?StatusLine\}""", RegexOptions.CultureInvariant)]
@@ -8937,10 +8946,11 @@ public partial class ArchitectureTests
         // the counts and the file name itself, so the one announced line changed five times a second, and
         // this guard recorded it as a deliberate exception because silencing it would have left a
         // screen-reader user with nothing at all. #2143 split the phase out into the status line and moved
-        // the fast half here.
+        // the fast half here. About's DownloadProgressLine came the same way (#2661): the megabyte count was
+        // written into DownloadStatus, which the rows saying how the download ended show, and those are live.
         string[] mustStaySilent =
         [
-            "ScanProgress", "CurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout",
+            "ScanProgress", "CurrentFolder", "SfcEtaText", "DismEtaText", "ScanReadout", "DownloadProgressLine",
         ];
 
         var appDir = TestPaths.AppProject();
@@ -9039,6 +9049,83 @@ public partial class ArchitectureTests
         Assert.True(overAnnounced.Count == 0,
             "these are fast-changing readouts and must NOT be live regions — announcing them talks over the "
             + "user instead of informing them:\n  " + string.Join("\n  ", overAnnounced));
+    }
+
+    /// <summary>
+    /// Every line marked as a live region is announced when its text changes, and only lines are marked.
+    /// </summary>
+    /// <remarks>
+    /// #2670. A screen reader speaks a live region only when the app raises <c>LiveRegionChanged</c> for it, which WPF
+    /// never does on its own, so <c>AutomationProperties.LiveSetting</c> by itself left every status line silent.
+    /// <c>LiveRegion.Announces</c> raises it. So a TextBlock marked live, by an attribute or by one of the two status
+    /// line styles, also sets <c>Announces</c>, and one that sets <c>Announces</c> is marked live, or it is never
+    /// heard. Only a TextBlock is marked: the toast set its live setting on a Border, which has no automation peer,
+    /// so the setting reached no screen reader. Read across the views and MainWindow, where the toast is.
+    /// </remarks>
+    [Fact]
+    public void EveryLiveLine_IsAnnouncedWhenItChanges()
+    {
+        string[] liveStyles = ["{StaticResource StatusLine}", "{StaticResource SubtleStatusLine}"];
+        var appDir = TestPaths.AppProject();
+        var files = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Append(Path.Combine(appDir, "MainWindow.xaml"))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        // Both styles set the two together, or every line that takes one of them is marked and never announced.
+        var appXaml = XamlCode(Path.Combine(appDir, "App.xaml"));
+        foreach (var style in (string[])["StatusLine", "SubtleStatusLine"])
+        {
+            var at = appXaml.IndexOf($"x:Key=\"{style}\"", StringComparison.Ordinal);
+            Assert.True(at >= 0, $"App.xaml has no {style} style.");
+            var body = appXaml[at..appXaml.IndexOf("</Style>", at, StringComparison.Ordinal)];
+            Assert.True(body.Contains("AutomationProperties.LiveSetting", StringComparison.Ordinal)
+                        && body.Contains("LiveRegion.Announces", StringComparison.Ordinal),
+                $"App.xaml's {style} style no longer sets both AutomationProperties.LiveSetting and "
+                + "h:LiveRegion.Announces, so the lines that take it are not announced.");
+        }
+
+        var offenders = new List<string>();
+        var markedDirectly = 0;
+        var styled = 0;
+        foreach (var path in files)
+        {
+            var doc = XDocument.Load(path, LoadOptions.SetLineInfo);
+            foreach (var element in doc.Descendants())
+            {
+                var where = $"{Path.GetFileName(path)}:{((System.Xml.IXmlLineInfo)element).LineNumber}";
+                var setting = element.Attributes().FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.LiveSetting")
+                    ?.Value;
+                var announces = element.Attributes().FirstOrDefault(a => a.Name.LocalName == "LiveRegion.Announces")
+                    ?.Value == "True";
+                var byStyle = liveStyles.Contains(Attr(element, "Style"));
+                if (byStyle) styled++;
+                var marked = byStyle || setting is not null && setting != "Off";
+
+                if (setting is not null && setting != "Off")
+                {
+                    markedDirectly++;
+                    if (element.Name.LocalName != "TextBlock")
+                        offenders.Add($"{where}: a {element.Name.LocalName} is marked live, and it has no automation "
+                                      + "peer, so no screen reader hears it. Mark the TextBlock that holds the words");
+                }
+
+                if (marked && element.Name.LocalName == "TextBlock" && !announces && !byStyle)
+                    offenders.Add($"{where}: a TextBlock marked live does not set helpers:LiveRegion.Announces, so "
+                                  + "the event a screen reader speaks it on is never raised");
+                if (announces && !marked)
+                    offenders.Add($"{where}: a line that sets helpers:LiveRegion.Announces is not marked live, so "
+                                  + "what it raises is heard by nothing");
+            }
+        }
+
+        // Floors: 11 lines marked directly and 41 taking a status line style when this was written. The shared footer
+        // is one of the styled ones, for the 21 tabs that show it.
+        Assert.True(markedDirectly >= 9, $"only {markedDirectly} lines marked live directly were found, out of 11.");
+        Assert.True(styled >= 36, $"only {styled} lines taking a status line style were found, out of 41.");
+
+        Assert.True(offenders.Count == 0,
+            "these live regions are never heard:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>
@@ -13046,6 +13133,10 @@ public partial class ArchitectureTests
             ("DeepCleanupViewModel", "CleanStatusLine", "same, for the clean pass"),
             ("DuplicateFileViewModel", "StatusMessage",
                 "writes only the coarse phase label; the fast half is ScanReadout (#2143)"),
+            ("SpeedTestViewModel", "HttpStatus",
+                "the HTTP test reports its phases, six a run: the ping, download, upload, their results and done"),
+            ("SpeedTestViewModel", "OoklaStatus",
+                "the Ookla test reports its phases, four a run: fetching the CLI, extracting it, running, done"),
         ];
 
         var appDir = TestPaths.AppProject();

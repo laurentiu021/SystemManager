@@ -120,13 +120,13 @@
                              to say, so the row does not reserve empty space. -->
                         <StackPanel Grid.Row="1" Grid.ColumnSpan="2">
                             <TextBlock Text="{Binding ReportStatus}"
-                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Style="{StaticResource SubtleStatusLine}" Margin="0,10,0,0" TextWrapping="Wrap"
                                        Visibility="{Binding ReportStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                             <!-- Rollback feedback lives beside its own button rather than in the update
                                  card below, for the same reason ReportStatus was moved here: writing to a
                                  shared status line makes one action overwrite another's message. -->
                             <TextBlock Text="{Binding RollBackStatus}"
-                                       Style="{StaticResource Subtle}" Margin="0,10,0,0" TextWrapping="Wrap"
+                                       Style="{StaticResource SubtleStatusLine}" Margin="0,10,0,0" TextWrapping="Wrap"
                                        Visibility="{Binding RollBackStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                         </StackPanel>
 
@@ -164,7 +164,7 @@
                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                 </StackPanel>
-                                <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Subtle}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button Content="Download" Command="{Binding DownloadCommand}"
@@ -183,7 +183,9 @@
                         <StackPanel Margin="0,14,0,0"
                                     Visibility="{Binding IsDownloading, Converter={StaticResource FlexVis}}">
                             <ProgressBar AutomationProperties.Name="Update download progress" Height="6" Minimum="0" Maximum="100" Value="{Binding DownloadPercent}"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                            <!-- Not announced: it counts the megabytes as they arrive, which read aloud is continuous
+                                 speech. The outcome rows below are, once the download ends. -->
+                            <TextBlock Text="{Binding DownloadProgressLine}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
                         </StackPanel>
 
                         <!-- What is actually IN the update being offered. LatestNotes was assigned from the
@@ -204,7 +206,8 @@
                         <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
                                     Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                             <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock VerticalAlignment="Center">
                                 <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
@@ -234,7 +237,7 @@
                                      VerticalAlignment="Top" Margin="0,5,8,0"/>
                             <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Warning}"
                                        FontWeight="SemiBold" TextWrapping="Wrap"
-                                       AutomationProperties.Name="Why the download failed"/>
+                                       AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                         </DockPanel>
                     </StackPanel>
                 </Border>
@@ -263,7 +266,8 @@
                             </Ellipse.Style>
                         </Ellipse>
                         <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
-                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                   VerticalAlignment="Center" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                         <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"
                                 Style="{StaticResource SecondaryButton}" Padding="14,6" Margin="12,0,0,0"
                                 IsEnabled="{Binding IsCheckingForUpdates, Converter={StaticResource BoolInvert}}"/>

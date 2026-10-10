@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -50,6 +51,10 @@ public partial class MainWindow : Window
         ToastTitle.Text = title;
         ToastDetail.Text = detail;
         ToastOverlay.Visibility = Visibility.Visible;
+        // A toast shown again with the same words is news too, and its text did not change, so it is announced
+        // here rather than left to the change.
+        LiveRegion.Announce(ToastTitle);
+        LiveRegion.Announce(ToastDetail);
         ToastOverlay.Opacity = 0;
         var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
         ToastOverlay.BeginAnimation(OpacityProperty, fade);

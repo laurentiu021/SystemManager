@@ -1068,29 +1068,13 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         // Both halves are asserted, because either alone passes on the broken code: the markup needs a
         // renderer whose gate a failure SETS, and the command has to actually set it. A substring check
         // for "DownloadStatus" would have passed before the fix, since the binding was already there.
-        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "AboutView.xaml")).Root;
-        Assert.NotNull(root);
+        var gateChains = DownloadStatusRenderers().Select(r => r.Gates).ToList();
 
-        var parents = root!.Descendants()
-            .SelectMany(p => p.Elements().Select(c => (Child: c, Parent: p)))
-            .ToDictionary(x => x.Child, x => x.Parent);
-
-        // Every gate above each element that renders DownloadStatus.
-        var gateChains = root.Descendants()
-            .Where(e => (string?)e.Attribute("Text") == "{Binding DownloadStatus}")
-            .Select(e =>
-            {
-                var gates = new List<string>();
-                for (var n = e; n is not null; n = parents.GetValueOrDefault(n))
-                    if ((string?)n.Attribute("Visibility") is { } v)
-                        gates.Add(v);
-                return gates;
-            })
-            .ToList();
-
-        Assert.True(gateChains.Count >= 3,
-            $"only {gateChains.Count} elements render DownloadStatus — expected the in-progress line, the "
-            + "success row and the failure row, so this test is no longer looking at what it thinks.");
+        // The line under the bar shows DownloadProgressLine since #2661, so the megabyte count stays out of the rows a
+        // screen reader reads out.
+        Assert.True(gateChains.Count >= 2,
+            $"only {gateChains.Count} elements render DownloadStatus — expected the success row and the failure "
+            + "row, so this test is no longer looking at what it thinks.");
 
         Assert.Contains(gateChains, chain =>
             chain.Any(g => g.Contains("AutoDownloadFailed", StringComparison.Ordinal)));
@@ -1102,6 +1086,70 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         var failureWrites = System.Text.RegularExpressions.Regex
             .Matches(command, @"AutoDownloadFailed\s*=\s*true").Count;
         Assert.Equal(4, failureWrites);   // returned-nothing, HttpRequestException, IOException, timeout
+    }
+
+    /// <summary>
+    /// A screen reader hears how the download ended, and not the megabytes as they arrive (#2661).
+    /// </summary>
+    /// <remarks>
+    /// The line under the bar counts the megabytes several times a second, which read aloud is continuous speech, so it
+    /// shows <c>DownloadProgressLine</c> and is not live. The rows shown on <c>DownloadedPath</c> and
+    /// <c>AutoDownloadFailed</c> say how it ended, show <c>DownloadStatus</c>, which the progress callback never
+    /// writes, and are live.
+    /// </remarks>
+    [Fact]
+    public void ADownloadsOutcome_IsAnnounced_AndItsProgressIsNot()
+    {
+        static bool Live(System.Xml.Linq.XElement e) =>
+            e.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.LiveSetting" && a.Value != "Off")
+            && e.Attributes().Any(a => a.Name.LocalName == "LiveRegion.Announces" && a.Value == "True")
+            || ((string?)e.Attribute("Style"))?.Contains("StatusLine", StringComparison.Ordinal) is true;
+
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "AboutView.xaml")).Root!;
+        var progress = Assert.Single(root.Descendants(),
+            e => (string?)e.Attribute("Text") == "{Binding DownloadProgressLine}");
+        Assert.False(Live(progress),
+            "the line that counts the download's megabytes is announced, so a screen reader reads every tick");
+
+        var renderers = DownloadStatusRenderers();
+        foreach (var gate in (string[])["DownloadedPath", "AutoDownloadFailed"])
+        {
+            var row = Assert.Single(renderers, r => r.Gates.Any(g => g.Contains(gate, StringComparison.Ordinal)));
+            Assert.True(Live(row.Element),
+                $"the row shown on {gate} is not announced, so a screen reader is not told how the download ended");
+        }
+
+        var command = MethodBody(File.ReadAllText(TestPaths.AppFile("ViewModels", "AboutViewModel.cs")),
+                                 "private async Task DownloadAsync()");
+        var start = command.IndexOf("new SettlingProgress", StringComparison.Ordinal);
+        var end = command.IndexOf("SettleAfterAsync", StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start, "the download's progress callback was not found in DownloadAsync");
+        var callback = command[start..end];
+        Assert.Contains("DownloadProgressLine =", callback, StringComparison.Ordinal);
+        Assert.DoesNotContain("DownloadStatus =", callback, StringComparison.Ordinal);
+    }
+
+    /// <summary>Each element that renders <c>DownloadStatus</c>, with every Visibility gate above it.</summary>
+    private static List<(System.Xml.Linq.XElement Element, List<string> Gates)> DownloadStatusRenderers()
+    {
+        var root = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "AboutView.xaml")).Root;
+        Assert.NotNull(root);
+
+        var parents = root!.Descendants()
+            .SelectMany(p => p.Elements().Select(c => (Child: c, Parent: p)))
+            .ToDictionary(x => x.Child, x => x.Parent);
+
+        return root.Descendants()
+            .Where(e => (string?)e.Attribute("Text") == "{Binding DownloadStatus}")
+            .Select(e =>
+            {
+                var gates = new List<string>();
+                for (var n = e; n is not null; n = parents.GetValueOrDefault(n))
+                    if ((string?)n.Attribute("Visibility") is { } v)
+                        gates.Add(v);
+                return (e, gates);
+            })
+            .ToList();
     }
 
     /// <summary>The body of a method, delimited by counting braces from its signature.</summary>

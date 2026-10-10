@@ -413,10 +413,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// which for System came to 175 characters in a slot about 26 characters wide: two of eleven tabs
     /// survived the ellipsis, and the same was true of ten other groups. It also answered the wrong
     /// question. Someone looking for why ads keep appearing does not scan a group for a tab name; the
-    /// subtitle now says "ads" in the words she would use. Two lines, so it fits whole.
+    /// subtitle now says "ads" in the words she would use. Two lines, so it fits whole.</para>
     /// <para>That example used to name the tab called "Debloater &amp; Ads". It is "Preinstalled Apps" now,
     /// because the name promised ad controls the tab never had — those are five toggles in Privacy &amp;
-    /// Telemetry, which is also where "ads" as a search word now leads (#1515).</para></para>
+    /// Telemetry, which is also where "ads" as a search word now leads (#1515).</para>
     /// <para>Written copy can drift from the tabs it describes when one moves group, which is why it lives
     /// on the same line as the group it belongs to — the two are edited together, and the full list of
     /// children is still available verbatim in the tooltip below.</para>

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.5] - 2026-10-10
+
+**Removing a ping target, or an app's sound ending in Volume Control, leaves keyboard focus on the row now in its
+place** (#2650).
+
+### Fixed
+
+- **Ping and Volume Control keep keyboard focus when a row goes.** Removing a custom target in Ping takes its row out
+  of the list, and so does an app's sound session ending in Volume Control. A button or slider focused in that row
+  took keyboard focus with it, which left focus on the list as a whole, so someone using the keyboard or a screen
+  reader had to find their place again. These lists now keep focus the way the lists that refresh have since 1.127.14:
+  it moves to the same control in the row now in the removed one's place, or in the last row when the last one went.
+  The console's output and the sidebar's search results, which are emptied and refilled, do the same. This had been
+  so for each list since it was added.
+
 ## [1.128.4] - 2026-10-10
 
 **About's release notes say GitHub could not be reached when the list arrives but cannot be read, instead of showing

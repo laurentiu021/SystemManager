@@ -12409,20 +12409,22 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
-    /// Every list rebuilt in bulk keeps keyboard focus on its rows, when a row holds something that can take it.
+    /// Every list that loses rows keeps keyboard focus on its rows, when a row holds something that can take it.
     /// </summary>
     /// <remarks>
     /// #2609. <c>ReplaceWith</c> raises one <c>Reset</c>, WPF throws every row away, and the focused control goes with
     /// its row, so focus fell back to the window. <c>RebuildFocus.Keep</c> puts it back. Every DataGrid has it from the
-    /// app's DataGrid style, so a grid only has to keep that style; any other list sets it itself. A list counts as
-    /// rebuilt in bulk when the property it binds is a <c>BulkObservableCollection</c> that something refills with
-    /// <c>ReplaceWith</c>, matched by name across the view models and models, because a list inside a row binds a
-    /// property of the row's item rather than of the tab. Its rows take focus when it is a ListBox or ListView, whose
-    /// rows are focusable themselves, or when its row template, written inline or a keyed DataTemplate, holds a button,
-    /// a checkbox, a switch, a text box, a combo box or a slider.
+    /// app's DataGrid style, so a grid only has to keep that style; any other list sets it itself. A list counts when
+    /// the property it binds is an <c>ObservableCollection</c> or a <c>BulkObservableCollection</c> that something
+    /// refills with <c>ReplaceWith</c> or empties with <c>Clear</c>, or takes a row out of with <c>Remove</c> or
+    /// <c>RemoveAt</c>, matched by name across the view models and models, because a list inside a row binds a
+    /// property of the row's item rather than of the tab. The last two were left out until #2650: Ping's remove button
+    /// and an Audio Mixer session ending each take one row away, and focus went with it all the same. Its rows take
+    /// focus when it is a ListBox or ListView, whose rows are focusable themselves, or when its row template, written
+    /// inline or a keyed DataTemplate, holds a button, a checkbox, a switch, a text box, a combo box or a slider.
     /// </remarks>
     [Fact]
-    public void EveryListRebuiltInBulk_KeepsKeyboardFocusOnItsRows()
+    public void EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows()
     {
         var appDir = TestPaths.AppProject();
         var xamlNs = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
@@ -12475,8 +12477,8 @@ public partial class ArchitectureTests
                 var binding = BulkListBinding().Match((string?)list.Attribute("ItemsSource") ?? "");
                 if (!binding.Success) continue;
                 var property = binding.Groups["name"].Value;
-                if (!Regex.IsMatch(code, $@"BulkObservableCollection<[^;]*?>\s+{property}\b")
-                    || !Regex.IsMatch(code, $@"\b{property}\.ReplaceWith\(")) continue;
+                if (!Regex.IsMatch(code, $@"\b(?:Bulk)?ObservableCollection<[^;]*?>\s+{property}\b")
+                    || !Regex.IsMatch(code, $@"\b{property}\.(?:ReplaceWith|Clear|Remove|RemoveAt)\(")) continue;
 
                 var rowsTakeFocus = list.Name.LocalName is "ListBox" or "ListView"
                                     || WithKeyedTemplates(list, templates).Any(e => focusable.Contains(e.Name.LocalName));
@@ -12484,26 +12486,29 @@ public partial class ArchitectureTests
 
                 kept.Add($"{Path.GetFileNameWithoutExtension(file)}.{property}");
                 if (keep != "True")
-                    offenders.Add($"{where}: the {list.Name.LocalName} bound to {binding.Groups["path"].Value} is rebuilt "
-                                  + "with ReplaceWith and its rows take focus, but it does not set "
-                                  + "helpers:RebuildFocus.Keep=\"True\"");
+                    offenders.Add($"{where}: the {list.Name.LocalName} bound to {binding.Groups["path"].Value} loses rows "
+                                  + "to ReplaceWith, Clear, Remove or RemoveAt and its rows take focus, but it does not "
+                                  + "set helpers:RebuildFocus.Keep=\"True\"");
             }
         }
 
         // The search finds what it is for: Undo Changes' list, where #2609 was found, Privacy's, whose rows come from a
-        // keyed template, and Privacy's groups, whose rows hold a list built from that template.
+        // keyed template, Privacy's groups, whose rows hold a list built from that template, and the two lists of #2650,
+        // which lose one row at a time: Ping's targets, an ObservableCollection, and Audio Mixer's sessions.
         Assert.Contains("UndoChangesView.Changes", kept);
         Assert.Contains("PrivacyView.FilteredToggles", kept);
         Assert.Contains("PrivacyView.ReachGroups", kept);
+        Assert.Contains("PingView.Targets", kept);
+        Assert.Contains("AudioMixerView.Sessions", kept);
 
-        // Vacuity floor: 35 DataGrids and 21 other lists today.
+        // Vacuity floor: 35 DataGrids and 25 other lists today.
         Assert.True(grids >= 30, $"only {grids} DataGrids were found across the views, out of 35 measured.");
-        Assert.True(kept.Count >= 18,
-            $"only {kept.Count} lists rebuilt in bulk with focusable rows were found, out of 21 measured — the search "
-            + "is broken, not the views.");
+        Assert.True(kept.Count >= 22,
+            $"only {kept.Count} lists that lose rows and have focusable rows were found, out of 25 measured — the "
+            + "search is broken, not the views.");
 
         Assert.True(offenders.Count == 0,
-            "a list rebuilt in bulk drops keyboard focus with its rows:\n  " + string.Join("\n  ", offenders));
+            "a list that loses rows drops keyboard focus with them:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

@@ -2,6 +2,7 @@
 <Window x:Class="SysManager.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:helpers="clr-namespace:SysManager.Helpers"
         xmlns:vm="clr-namespace:SysManager.ViewModels"
         Title="{Binding Title}"
         Width="1280" Height="820"
@@ -292,6 +293,7 @@
                               HorizontalScrollBarVisibility="Disabled"
                               Visibility="{Binding IsSearchingNav, Converter={StaticResource BoolToVis}}">
                     <ItemsControl ItemsSource="{Binding NavResults}"
+                                  helpers:RebuildFocus.Keep="True"
                                   Padding="10,0"
                                   Focusable="False"
                                   ItemTemplate="{StaticResource NavLeafRow}"/>

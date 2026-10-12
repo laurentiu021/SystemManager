@@ -52,6 +52,12 @@ public sealed class AppFixture : IDisposable
             TimeSpan.FromSeconds(5)).Result
             ?? throw new InvalidOperationException("The current-view automation host was not exposed.");
 
+        // The first launch on a PC opens with the Welcome screen over the window (#1635), and a CI runner is always a
+        // first launch. The sidebar and the page are disabled under it, so no test below could open a tab. Closed the
+        // way a user closes it, and what it showed is kept for WelcomeUiTests, since closing it here is the only time
+        // this collection sees it.
+        WelcomeAtLaunch = CloseTheWelcomeScreen();
+
         // Sidebar groups render as Expanders, and all but Cleanup start collapsed, so most child nav
         // items aren't realized in the UI Automation tree yet. Expand everything once up front so tests
         // that look up nav items directly (not via GoToTab) find them too.
@@ -61,6 +67,43 @@ public sealed class AppFixture : IDisposable
         // where it belongs instead — against a real view-model, in
         // MainWindowViewModelTests.NavGroups_ExactlyTheCleanupGroupStartsExpanded.
         ExpandAllNavGroups();
+    }
+
+    /// <summary>What the Welcome screen showed when the app started, or null when this launch did not show it.</summary>
+    public WelcomeShown? WelcomeAtLaunch { get; }
+
+    /// <summary>The Welcome screen as the app showed it, and whether closing it gave the window back.</summary>
+    /// <param name="AccessibleName">The screen's accessible name.</param>
+    /// <param name="Buttons">The accessible names of its buttons, in tree order.</param>
+    /// <param name="SidebarEnabledAfterClosing">Whether the sidebar's Dashboard entry was enabled once it closed.</param>
+    public sealed record WelcomeShown(string? AccessibleName, IReadOnlyList<string?> Buttons, bool SidebarEnabledAfterClosing);
+
+    /// <summary>
+    /// Closes the Welcome screen with its "Just look around" button, if this launch shows it, and says what it showed.
+    /// </summary>
+    /// <remarks>
+    /// Asked for briefly: the screen is part of the window's first frame, which is already up by the time this runs, so
+    /// a launch that does not show it costs a short wait rather than every test failing to open a tab. Closing it is
+    /// confirmed by the sidebar becoming usable, which is what the tests need, rather than by the screen leaving the
+    /// automation tree.
+    /// </remarks>
+    private WelcomeShown? CloseTheWelcomeScreen()
+    {
+        var overlay = Retry.WhileNull(
+            () => FindUniqueDescendantById(MainWindow, "WelcomeOverlay"), TimeSpan.FromSeconds(2)).Result;
+        // A screen already seen is collapsed, and a collapsed element can still be in the tree, reported off screen.
+        if (overlay is null || overlay.Properties.IsOffscreen.ValueOrDefault) return null;
+
+        var buttons = DescendantsOf(overlay, cf => cf.ByControlType(ControlType.Button)).Select(NameOf).ToList();
+        var lookAround = FirstDescendantOf(overlay, cf => cf.ByAutomationId("WelcomeLookAround"))
+            ?? throw new InvalidOperationException("The Welcome screen is up, and it has no \"Just look around\" button.");
+        var name = NameOf(overlay);
+        lookAround.AsButton().Invoke();
+
+        var enabled = Retry.WhileFalse(
+            () => FirstDescendantOf(MainWindow, cf => cf.ByAutomationId("nav-dashboard"))?.IsEnabled is true,
+            TimeSpan.FromSeconds(5)).Result;
+        return new WelcomeShown(name, buttons, enabled);
     }
 
     /// <summary>

@@ -224,6 +224,34 @@ public class AcceleratorRoutingTests
     }
 
     /// <summary>
+    /// While the Welcome screen is up, the shell handler asks it about a key before anything else.
+    /// </summary>
+    /// <remarks>
+    /// <c>WelcomeViewModelTests</c> pins what the screen answers, and every one of those tests would still pass with the
+    /// question deleted from the handler, or asked after the Ctrl+F or F1 branch: those keys would then act on the page
+    /// behind the screen while it covers it (#1635). The handler is code-behind, so a source check is the only thing that
+    /// reaches it without a window.
+    /// </remarks>
+    [Fact]
+    public void TheShell_GivesTheWelcomeScreenAKeyFirst()
+    {
+        var handler = MethodBody(System.IO.File.ReadAllText(TestPaths.AppFile("MainWindow.xaml.cs")), "private void Window_KeyDown");
+
+        var welcomeLookup = handler.IndexOf("KeyCommand(e.Key)", StringComparison.Ordinal);
+        Assert.True(welcomeLookup >= 0,
+            "the shell KeyDown handler no longer asks the Welcome screen about a key, so Escape cannot close it and F1, "
+            + "F5 and Ctrl+F reach the page behind it.");
+
+        foreach (var later in new[] { "Key.F && Keyboard.Modifiers", "ShellAcceleratorCommand(e.Key)", "Key.Escape or Key.F5" })
+        {
+            var at = handler.IndexOf(later, StringComparison.Ordinal);
+            Assert.True(at >= 0, $"\"{later}\" is gone from the handler — re-derive this guard against what replaced it.");
+            Assert.True(welcomeLookup < at,
+                $"the Welcome screen is asked about a key after \"{later}\", so that key acts on the page behind it first.");
+        }
+    }
+
+    /// <summary>
     /// One method's body, from its signature to its matching closing brace.
     /// </summary>
     /// <remarks>

@@ -261,6 +261,32 @@ public class ThemeStatusBrushTests
                         Lookup(ThemeService.StatusPalette(false), key));
     }
 
+    /// <summary>
+    /// The scrim behind the Welcome screen (#1635) dims the window in both modes without hiding it, lighter on light,
+    /// and its dark value is the App.xaml default, as the other dark entries are.
+    /// </summary>
+    /// <remarks>
+    /// Opaque, the screen would stand on a blank wall instead of over the app it introduces; clear, the page behind
+    /// would compete with the card. The dark value is read out of App.xaml rather than restated, so the two cannot
+    /// agree here while disagreeing in the files.
+    /// </remarks>
+    [Fact]
+    public void Scrim_DimsWithoutHiding_InBothModes_AndItsDarkValueIsTheAppXamlDefault()
+    {
+        var dark = Lookup(ThemeService.StatusPalette(isDark: true), "Scrim");
+        var light = Lookup(ThemeService.StatusPalette(isDark: false), "Scrim");
+
+        foreach (var scrim in new[] { dark, light })
+            Assert.True(scrim.A is > 0 and < 255, $"the scrim's alpha is {scrim.A}, so it either hides the window or does not dim it");
+        Assert.True(light.A < dark.A, $"the light scrim (alpha {light.A}) is not lighter than the dark one ({dark.A})");
+
+        System.Xml.Linq.XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var appXaml = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("App.xaml"));
+        var brush = Assert.Single(appXaml.Descendants(),
+            e => e.Name.LocalName == "SolidColorBrush" && (string?)e.Attribute(xaml + "Key") == "Scrim");
+        Assert.Equal(C((string?)brush.Attribute("Color") ?? ""), dark);
+    }
+
     [Theory]
     [InlineData("CriticalText")]
     [InlineData("BadgeIndigoText")]

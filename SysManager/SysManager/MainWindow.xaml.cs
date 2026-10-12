@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -43,6 +44,18 @@ public partial class MainWindow : Window
                 // Same combined condition as OnStateChanged: a window that is shown but still
                 // minimized is not on screen either, so one hook must never contradict the other.
                 vm.IsWindowVisible = visible && WindowState != WindowState.Minimized;
+        };
+
+        // When the Welcome screen goes, focus goes into the page it leaves on screen: System Health or Quick Cleanup
+        // after the two buttons that open them, the Dashboard after "Just look around". The button that had focus is
+        // gone, so without this focus fell back to the window and a keyboard user started again from the sidebar.
+        // The screen also stops being visible when the window is hidden to the notification area while it is up,
+        // which the view model's flag tells apart. Posted, so the page is enabled again before focus moves into it.
+        WelcomeOverlay.IsVisibleChanged += (_, e) =>
+        {
+            if (e.NewValue is false && DataContext is MainWindowViewModel { Welcome.IsVisible: false })
+                Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(
+                    () => ContentHost.MoveFocus(new TraversalRequest(FocusNavigationDirection.First))));
         };
     }
 
@@ -185,6 +198,11 @@ public partial class MainWindow : Window
         //
         // Ask once, remember the answer, and honour it silently afterwards. The tray icon's
         // own Exit command still quits directly, since that intent is already unambiguous.
+
+        // Closing the window is a way out of the Welcome screen too, so it is not shown again on the next launch. First,
+        // ahead of every return below, because each of them is a close. It stays on screen: the question below can
+        // still be cancelled, and then the window comes back as it was.
+        (DataContext as MainWindowViewModel)?.Welcome.RememberSeen();
 
         // A programmatic exit has already decided. Application.Shutdown() force-closes windows with
         // ignoreCancel: true, which still calls this override — so without this early return, clicking
@@ -376,6 +394,19 @@ public partial class MainWindow : Window
     /// </remarks>
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        // While the Welcome screen is up it answers Escape and nothing else does: F1 would open About, F5 refresh the
+        // Dashboard and Ctrl+F reach for a filter box, all behind a screen that covers them. No other key is marked
+        // handled, so Tab still moves between its buttons.
+        if (DataContext is MainWindowViewModel { Welcome: { IsVisible: true } welcome })
+        {
+            if (welcome.KeyCommand(e.Key) is { } welcomeCommand)
+            {
+                welcomeCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
+
         if (e.Key is Key.F && Keyboard.Modifiers is ModifierKeys.Control)
         {
             FocusTheFilterBox(e);

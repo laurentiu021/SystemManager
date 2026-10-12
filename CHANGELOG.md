@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.129.0] - 2026-10-12
+
+**The first time SysManager starts on a PC, a Welcome screen says what it is, what it does online on its own, and
+where to start** (#1635).
+
+### Added
+
+- **A Welcome screen, shown once.** SysManager used to open straight onto the Dashboard's live sensors, and nothing on
+  screen said what the app is or that it is safe. The first time it starts on a PC, a screen over the window now says
+  it in three points: what it does online without being asked, which is a check with GitHub for a newer version, at
+  most once a day and with a switch in About, and a check with winget for app updates; that it changes your PC only
+  when you tell it to, and that every tab that deletes files or removes apps asks first; and that every tab explains
+  itself. Three buttons close it: **Check my PC's health** opens System Health, **Clean up junk files** opens Quick
+  Cleanup, and **Just look around**, or Esc, stays on the Dashboard. Closing the window counts as well, so it does not
+  come back on that PC. Profile Export / Import does not carry it to another PC, and command-line runs never show it.
+  Screen readers announce it as a dialog with its title, focus starts on its first button, and Tab stays on its three
+  buttons.
+
 ## [1.128.8] - 2026-10-12
 
 **The camera, microphone and location tab, and the tab for the right-click menu, each go by one name now** (#2612).

@@ -279,7 +279,11 @@ public partial class ArchitectureTests
         Assert.True(at > 0, "BuildDesignerGraph was not found in MainWindowViewModel.cs, so nothing below is checked.");
         var graph = WithStringsBlanked(WithoutComments(shell[at..]));
 
-        foreach (var store in new[] { nameof(SettingsWatchdogService), nameof(InstalledProgramsHistory), nameof(AppAlertHistory) })
+        // FirstRunService writes only when the graph's Welcome screen is closed, which no constructor does. Kept out of
+        // the user's folder anyway: a test that closed it there would record the Welcome screen as seen, and the user
+        // would never be shown it.
+        foreach (var store in new[] { nameof(SettingsWatchdogService), nameof(InstalledProgramsHistory), nameof(AppAlertHistory),
+                                      nameof(FirstRunService) })
         {
             var built = Regex.Matches(graph, $@"\bnew\s+{store}\s*\((?<args>[^()]*)\)")
                 .Select(m => m.Groups["args"].Value.Trim())
@@ -5701,6 +5705,81 @@ public partial class ArchitectureTests
         RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex UnarmedPinDisclosure();
 
+    /// <summary>
+    /// Every place that says how many checks SysManager makes on its own when it starts gives the number SECURITY.md
+    /// gives.
+    /// </summary>
+    /// <remarks>
+    /// SECURITY.md's "When the app uses the network" is the full statement and the one source: "Only for things you
+    /// explicitly ask for, plus two checks that run on their own". The README repeats the count three times and
+    /// ARCHITECTURE.md once, and the app says it twice: on the About tab's Legal card, and on the Welcome screen
+    /// (#1635), where someone reads it before anything else. The count is what a third check at startup would change,
+    /// and the copies are where it would be missed. The Welcome screen's own first draft said the version check was
+    /// the only thing the app sends, while the Dashboard asks winget at every launch.
+    /// <para>Each app surface must make the claim at least once, so taking the sentence off the Welcome screen fails
+    /// here instead of leaving the count unchecked where it matters most.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryCountOfTheChecksAtStartup_IsTheOneSecurityMdGives()
+    {
+        var root = TestPaths.RepoRoot();
+        var security = Collapse(File.ReadAllText(Path.Combine(root, "SECURITY.md")));
+        var source = SecurityStartupChecks().Match(security);
+        Assert.True(source.Success,
+            "SECURITY.md no longer says \"plus N checks that run on their own\", so there is no count to hold the "
+            + "other surfaces to. Re-derive this guard from what it says now.");
+        var count = source.Groups["count"].Value.ToLowerInvariant();
+
+        var offenders = new List<string>();
+        var inTheDocs = 0;
+
+        foreach (var doc in new[] { "README.md", "SECURITY.md", "ARCHITECTURE.md" })
+        {
+            var path = Path.Combine(root, doc);
+            Assert.True(File.Exists(path), $"{doc} not found — the guard would pass vacuously");
+            inTheDocs += CheckCounts(doc, Collapse(File.ReadAllText(path)));
+        }
+
+        // Vacuity floor, on the documents alone: one in SECURITY.md, three in the README, one in ARCHITECTURE.md. A view
+        // that stops saying it is reported by name below, rather than as a pattern that stopped matching.
+        Assert.True(inTheDocs >= 5,
+            $"only {inTheDocs} statements of the count were found in the documents, out of 5 measured — the pattern "
+            + "stopped matching, so a pass would prove nothing.");
+
+        foreach (var view in new[] { "AboutView.xaml", "WelcomeOverlay.xaml" })
+        {
+            if (CheckCounts(view, RenderableText(TestPaths.AppFile("Views", view))) == 0)
+                offenders.Add($"{view} — no longer says how many checks run when SysManager starts");
+        }
+
+        Assert.True(offenders.Count == 0,
+            $"SECURITY.md says {count} checks run on their own when SysManager starts. These say otherwise, or no "
+            + "longer say it:\n  " + string.Join("\n  ", offenders));
+
+        int CheckCounts(string where, string text)
+        {
+            var matches = StartupCheckCount().Matches(text);
+            foreach (var m in matches.Cast<Match>().Where(m => !m.Groups["count"].Value.Equals(count, StringComparison.OrdinalIgnoreCase)))
+                offenders.Add($"{where} — \"{m.Value}\"");
+            return matches.Count;
+        }
+    }
+
+    /// <summary>SECURITY.md's statement of the count: "plus two checks that run on their own".</summary>
+    [GeneratedRegex(@"\bplus (?<count>one|two|three|four|five|six) checks? that runs? on (?:their|its) own\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex SecurityStartupChecks();
+
+    /// <summary>
+    /// Any statement of the count, in the shapes the copies use: "two checks run on their own", "plus two checks when
+    /// it starts", "the two network calls the app makes on its own".
+    /// </summary>
+    [GeneratedRegex(
+        @"\b(?<count>one|two|three|four|five|six) (?:checks?|network calls?) (?:that )?"
+        + @"(?:runs? on (?:their|its) own|when (?:it|the app) starts|(?:the app )?makes on its own)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex StartupCheckCount();
+
     /// <summary>The <c>feat|fix</c> alternation auto-release matches to decide a bump.</summary>
     [GeneratedRegex(@"\^\((feat\|fix)\)", RegexOptions.Compiled)]
     private static partial Regex ReleasingPrefixAlternation();
@@ -7450,6 +7529,7 @@ public partial class ArchitectureTests
             "DashboardViewModel",      // the initially selected tab, built immediately regardless
             "NetworkSharedState",      // shared by the four network tabs; starts nothing on construction
             "StandbyMemoryViewModel",  // owns the auto-purge poll, set-and-forget like the schedule (#2481)
+            "WelcomeViewModel",        // not a tab: the Welcome screen, up on a first launch's first frame (#1635)
         ];
 
         Assert.Equal(justified, resolved);
@@ -9261,9 +9341,10 @@ public partial class ArchitectureTests
     /// was blocked. Its only descriptive text was the elevation banner, which explains the PERMISSION and
     /// never the purpose or how to undo it (#1506).</para>
     /// <para>The population needs no allowlist, which is what makes this rule survivable: a file with no
-    /// <c>Display</c> header is not a tab and is skipped mechanically. The six that skip are exactly the
-    /// non-tab controls (AdminBanner, ConsoleView, DevelopmentBanner, EmptyState, StatusFooter, ThemePopup),
-    /// so a new tab is covered the moment it exists rather than when someone remembers to list it.</para>
+    /// <c>Display</c> header is not a tab and is skipped mechanically. The seven that skip are exactly the
+    /// non-tab controls (AdminBanner, ConsoleView, DevelopmentBanner, EmptyState, StatusFooter, ThemePopup) and
+    /// the shell's Welcome screen (WelcomeOverlay, whose title is a Heading), so a new tab is covered the moment it
+    /// exists rather than when someone remembers to list it.</para>
     /// <para>BOTH spellings of a bound subtitle are rejected. The sweep that first counted these found three
     /// because it read the <c>Text</c> ATTRIBUTE; a <c>TextBlock</c> with no <c>Text</c> attribute whose
     /// <c>&lt;Run&gt;</c> children carry the bindings reads as empty rather than as bound, and that is the

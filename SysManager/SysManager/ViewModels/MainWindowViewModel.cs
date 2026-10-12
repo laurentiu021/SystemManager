@@ -36,6 +36,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     //  • About     — its constructor runs the startup update-check that drives the app-shell
     //                update banner (MainWindow binds About.UpdateAvailable / .CurrentVersion). If it
     //                were lazy, the banner and version label would stay blank until the tab was opened.
+    //  • Welcome   — not a tab: the one-time Welcome screen over the window, which has to be up on the
+    //                first frame of a first launch. Building it reads whether one file exists.
     private readonly DashboardViewModel? _dashboard;
 
     /// <summary>
@@ -44,6 +46,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// constructor runs the startup update-check that populates those bindings.
     /// </summary>
     public AboutViewModel About { get; }
+
+    /// <summary>
+    /// The one-time Welcome screen (#1635). The shell binds the overlay to it, and disables the sidebar and the
+    /// page behind while it is up.
+    /// </summary>
+    public WelcomeViewModel Welcome { get; }
 
     /// <summary>Grouped sidebar tree (12 categories).</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
@@ -152,6 +160,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // About is resolved eagerly so its constructor's startup update-check runs immediately —
         // the app-shell update banner and version label bind to it (see the About property above).
         About = Eager<AboutViewModel>();
+        // The Welcome screen decides at construction whether it is up, and on a first launch it has to be up before
+        // the window's first frame.
+        Welcome = Eager<WelcomeViewModel>();
 
         InitNavigation();
     }
@@ -854,6 +865,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
                 new RecentChangesService(new WmiReliabilityHistory(), new InstalledProgramsHistory(lookRecords, UninstallEntries.ReadAll),
                     appAlertHistory, watchdog),
                 designerNavigation),
+            // Over lookRecords too: a test closing this graph's Welcome screen would otherwise record it as seen in the
+            // user's own folder, and the user would never be shown it.
+            [typeof(WelcomeViewModel)] = new WelcomeViewModel(new FirstRunService(lookRecords), designerNavigation),
         };
     }
 }

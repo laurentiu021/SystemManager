@@ -738,6 +738,11 @@ public sealed class ThemeService
             // mode-aware Success brush — one crisp card beside two washed-out ones. Dark values mirror
             // App.xaml exactly (no visual change on dark).
             ("MetricBlue", C("#3B82F6")), ("MetricPurple", C("#A855F7")),
+
+            // The scrim behind the Welcome screen (#1635): the window shows through it, dimmed, so the card
+            // over it is the one thing to read. 72% near-black on dark, where less leaves the Dashboard's bright
+            // numbers competing with the card. Mirrors the App.xaml default.
+            ("Scrim", C("#B804060A")),
         ]
         :
         [
@@ -781,6 +786,10 @@ public sealed class ThemeService
             ("OutOutputBrush", C("#1E1B4B")), ("OutVerboseBrush", C("#475569")),
             ("OutInfoBrush", C("#075985")), ("OutWarnBrush", C("#9A3412")), ("OutErrorBrush", C("#B91C1C")),
             ("OutDebugBrush", C("#6D28D9")), ("OutProgressBrush", C("#166534")),
+
+            // The same near-black at 40%. The dark mode's 72% over a near-white window is a grey wall; this
+            // greys the page out and leaves the light card standing on it.
+            ("Scrim", C("#6604060A")),
         ];
 
     private static Color C(string hex) => (Color)ColorConverter.ConvertFromString(hex);

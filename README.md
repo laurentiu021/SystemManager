@@ -2532,7 +2532,10 @@ Windows 10 / 11 x64 machine.
 
 ## First-time flow
 
-1. Launch the app — it opens on the Dashboard.
+1. Launch the app. The first time, a Welcome screen says what SysManager is, what it does online on its
+   own, and that it changes nothing you did not ask for, and offers two places to start: **Check my PC's
+   health** opens System Health, **Clean up junk files** opens Quick Cleanup, and **Just look around** (or
+   Esc) closes it on the Dashboard. It is shown once on each PC; after that the app opens on the Dashboard.
 2. If the PC feels slow, press **Why is it slow?** at the top of the Dashboard. It lists what it
    found, worst first, each with the tab that deals with it.
 3. Open **Network › Ping** and press **Start** — live ping begins.

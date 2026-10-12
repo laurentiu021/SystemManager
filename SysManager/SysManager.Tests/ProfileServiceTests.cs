@@ -374,6 +374,9 @@ public class ProfileServiceTests : IDisposable
     [InlineData("installed-programs.json")]
     [InlineData("app-alerts.json")]
     [InlineData("settings-drift.json")]
+    // That the Welcome screen has been seen on THIS PC (#1635). Carried over, a new PC's first launch would not say what
+    // the app is.
+    [InlineData("welcome.json")]
     public void AvailableSections_NeverCarriesMachineSpecificState(string fileName)
     {
         WriteConfig(fileName, "{\"machine\":\"specific\"}");

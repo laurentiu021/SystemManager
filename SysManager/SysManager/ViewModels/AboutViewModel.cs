@@ -130,8 +130,9 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     /// <summary>
     /// Whether SysManager checks GitHub for a newer version when it starts. Bound to the About
-    /// tab's checkbox and persisted, so the app's one outbound call is something the user can see
-    /// and switch off — the manual "Check for updates" button always works regardless.
+    /// tab's checkbox and persisted, so this check, one of the two the app makes on its own, is
+    /// something the user can see and switch off — the manual "Check for updates" button always
+    /// works regardless.
     /// </summary>
     [ObservableProperty] private bool _checkForUpdatesOnStartup = true;
 

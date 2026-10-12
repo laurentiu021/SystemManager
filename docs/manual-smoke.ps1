@@ -65,6 +65,18 @@ try {
     $scope = [System.Windows.Automation.TreeScope]::Descendants
     $failures = @()
 
+    # The first launch on a PC opens with the Welcome screen over the window, and the tabs under it are
+    # disabled until it closes. Close it the way a user would, with its "Just look around" button.
+    $lookAroundCond = New-Object System.Windows.Automation.PropertyCondition (
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'WelcomeLookAround'
+    )
+    $lookAround = $window.FindFirst($scope, $lookAroundCond)
+    if ($lookAround -and -not $lookAround.Current.IsOffscreen) {
+        $lookAround.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+        Write-Host "Welcome screen closed." -ForegroundColor Green
+        Start-Sleep -Milliseconds 500
+    }
+
     foreach ($id in $navIds) {
         $idCond = New-Object System.Windows.Automation.PropertyCondition (
             [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id

@@ -83,6 +83,8 @@ public sealed class ProfileService
     ///   checkbox for one integer costs the user more attention than it saves.</item>
     /// <item><c>disk-analyzer-preference.json</c> — whether the Disk Analyzer map is shown, one yes or no, for the
     ///   same reason.</item>
+    /// <item><c>welcome.json</c> — that the Welcome screen has been seen on THIS PC (#1635). Carried over, a new PC's
+    ///   first launch would open without saying what the app is.</item>
     /// </list>
     /// </summary>
     private static readonly (string Key, string DisplayName, string FileName, Base Base,

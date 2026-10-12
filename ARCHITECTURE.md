@@ -18,8 +18,9 @@ SystemManager/                      # the repository
 │   │   ├── Data/                   # static data files (ProcessDescriptions.json)
 │   │   ├── Models/                 # POCOs (snapshots, samples, reports, cleanup categories)
 │   │   ├── Services/               # Windows / PowerShell / CLI wrappers
-│   │   ├── ViewModels/             # one VM per tab, MainWindowViewModel, and the row and chart
-│   │   │                           #   view-models the tabs build (NavItem, UndoChangeRow, …)
+│   │   ├── ViewModels/             # one VM per tab, MainWindowViewModel, the WelcomeViewModel it shows
+│   │   │                           #   on a first launch, and the row and chart view-models the tabs
+│   │   │                           #   build (NavItem, UndoChangeRow, …)
 │   │   ├── Views/                  # XAML views + code-behind, plus six shared controls:
 │   │   │                           #   AdminBanner (the elevation banner, 31 tabs)
 │   │   │                           #   EmptyState  (icon + title + message for an empty list)
@@ -27,6 +28,7 @@ SystemManager/                      # the repository
 │   │   │                           #   StatusFooter (progress bar + status line, 22 tabs)
 │   │   │                           #   ConsoleView (the live output console, five tabs)
 │   │   │                           #   ThemePopup (the Appearance panel)
+│   │   │                           #   and the shell's WelcomeOverlay (the first-launch Welcome screen)
 │   │   ├── Helpers/                # AdminHelper, converters, collections, parsers, the signature
 │   │   │                           #   and path checks
 │   │   ├── Resources/              # icons and assets
@@ -341,12 +343,20 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   instance; lines capped at 5000 to bound memory) backing the in-app Console mirror
   used by Cleanup, Windows Update, System Health, App Updates, and System Fixes —
   the views whose XAML references it.
+- `WelcomeViewModel` — not a tab: the Welcome screen `MainWindow.xaml` draws over both columns the first time
+  SysManager starts on a PC (#1635), while the sidebar and the page under it are disabled. It says what the app is,
+  what it does online on its own (the short form of SECURITY.md's "When the app uses the network"), that it changes
+  nothing unasked, and that every tab explains itself, and offers three ways out: "Check my PC's health" (System
+  Health), "Clean up junk files" (Quick Cleanup) and "Just look around", which Escape also runs. Each records the
+  screen as seen through `IFirstRunService`; closing the window does too, through `RememberSeen`, without hiding
+  it, since the close can still be cancelled. Navigation only, through `INavigationService`. While it is up, the
+  shell's `KeyDown` handler asks `KeyCommand` first and gives no other key to anything behind it.
 
 ## Services
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-one are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-two are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
@@ -362,7 +372,8 @@ Dashboard's quick test; it forwards to the concrete singleton the network tabs t
 profile), `IPrivacyChoicesHandoff` (PrivacyChoicesHandoff), `IUndoChangesService` (UndoChangesService, the Undo
 Changes tab), `IPutBackSignal` (PutBackSignal, which tells a tab that Undo Changes put its change back),
 `IRecentChangesService` (RecentChangesService, the Recent Changes tab, over `IReliabilityHistory`,
-`IInstalledProgramsHistory` and `IAppAlertHistory`, which New App Alerts writes),
+`IInstalledProgramsHistory` and `IAppAlertHistory`, which New App Alerts writes), `IFirstRunService`
+(FirstRunService, whether the Welcome screen has been seen on this PC),
 `IGamingProfileService`, and `ISessionRestorePoint` (the last two via a factory). `INavigationService`, like
 `ISpeedTestService`, forwards to the concrete singleton.
 
@@ -1283,6 +1294,12 @@ Key services:
   unit-tested `Serialize`/`Parse`, file IO that never throws. Every untrusted or unrecognized
   value degrades to `Ask` rather than to a concrete action, so a damaged file can never exit an
   app the user wanted kept in the tray.
+- `FirstRunService` (`IFirstRunService`) — whether the Welcome screen has been seen on this PC (#1635), as
+  `%LocalAppData%\SysManager\welcome.json`, holding when it was first closed. The file being there is the record:
+  only the app writes it, when the screen goes, so one that does not parse still means "seen", and reading it as
+  unseen would show the screen on every launch while it stayed damaged. A record that cannot be written is logged
+  and tried again at the next way out; the screen closes either way. Local and left out of `ProfileService.Catalog`,
+  because "seen here" is about this PC and a profile carried to a new one should not keep its first launch quiet.
 - `UpdateCheckPreferenceService` — gates the startup version check, one of the two network calls the app
   makes on its own (the other is the Dashboard's `winget upgrade` alert, which has no switch yet). Persists
   whether the startup version check may run, plus when it last ran, as JSON under
@@ -1707,6 +1724,8 @@ guards the nav table, and `TheShellConstructor_ResolvesExactlyTheJustifiedViewMo
 what the shell constructor resolves, both with the same reasons. The Network tabs were the last
 exception to go: their view-models are lazy now, while the one `NetworkSharedState` they share is
 still resolved at startup, so the shell can dispose it explicitly — its constructor starts nothing.
+`WelcomeViewModel` is resolved there too, and is not a tab: the Welcome screen has to be up on the first frame of
+a first launch, and building it reads whether one file exists.
 
 In tests/designer (no DI container) every VM is built eagerly via a manual dependency graph.
 
@@ -1768,6 +1787,11 @@ the distinction by asserting both lookups side by side, and
 `AcceleratorRoutingTests.TheShell_AsksForAShellAccelerator_BeforeTheOpenTabsOwn` pins the ORDER in the
 handler — the per-tab branch returns early for anything that is not Escape or F5, so a shell lookup placed
 after it would resolve F1 correctly and never be reached.
+
+None of the four reaches anything while the first-launch Welcome screen is up. The handler asks
+`WelcomeViewModel.KeyCommand` before everything else: Escape runs "Just look around", and every other key is left
+to the screen's own buttons, so F1, F5 and Ctrl+F cannot act on the page behind it.
+`AcceleratorRoutingTests.TheShell_GivesTheWelcomeScreenAKeyFirst` pins that the question comes first.
 
 `MainWindowViewModel.AcceleratorCommand(NavItem?, Key)` is the pure routing decision, extracted
 so it is testable without a `Window`; `MainWindow.xaml.cs`'s bubbling `KeyDown` handler executes

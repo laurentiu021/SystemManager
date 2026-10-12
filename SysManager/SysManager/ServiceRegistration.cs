@@ -138,6 +138,9 @@ public static class ServiceRegistration
         services.AddSingleton<NavigationService>();
         services.AddSingleton<INavigationService>(sp => sp.GetRequiredService<NavigationService>());
 
+        // Whether the one-time Welcome screen has been seen on this PC (#1635).
+        services.AddSingleton<IFirstRunService, FirstRunService>();
+
         // One signal for the whole app: Undo Changes raises it and the tab that made the change listens, so a
         // second instance would put a change back without that tab hearing of it (#1525).
         services.AddSingleton<IPutBackSignal, PutBackSignal>();
@@ -206,6 +209,8 @@ public static class ServiceRegistration
         services.AddSingleton<NotificationBlockerViewModel>();
         services.AddSingleton<UndoChangesViewModel>();
         services.AddSingleton<RecentChangesViewModel>();
+        // Not a tab: the Welcome screen over the window, built by the shell at startup.
+        services.AddSingleton<WelcomeViewModel>();
 
         return services;
     }

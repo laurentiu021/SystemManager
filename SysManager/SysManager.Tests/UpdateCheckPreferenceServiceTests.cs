@@ -9,7 +9,8 @@ using SysManager.Services;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for <see cref="UpdateCheckPreferenceService"/> — the gate on the app's only outbound call.
+/// Tests for <see cref="UpdateCheckPreferenceService"/> — the gate on the startup version check, one of the two checks
+/// the app makes on its own.
 /// <para>Before this, two requests went to api.github.com on EVERY launch (latest release, plus the
 /// last ten) with no setting, no UI and no record of the previous check. So the "no telemetry,
 /// fully local" claim had an exception the user could neither see nor switch off, and restarting

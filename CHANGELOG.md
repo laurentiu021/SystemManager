@@ -24,7 +24,8 @@ where to start** (#1635).
   when you tell it to, and that every tab that deletes files or removes apps asks first; and that every tab explains
   itself. Three buttons close it: **Check my PC's health** opens System Health, **Clean up junk files** opens Quick
   Cleanup, and **Just look around**, or Esc, stays on the Dashboard. Closing the window counts as well, so it does not
-  come back on that PC. Profile Export / Import does not carry it to another PC, and command-line runs never show it.
+  come back on that PC. If you already use SysManager, you will see it once after this update too, since no PC has
+  seen it yet. Profile Export / Import does not carry it to another PC, and command-line runs never show it.
   Screen readers announce it as a dialog with its title, focus starts on its first button, and Tab stays on its three
   buttons.
 

@@ -13,7 +13,7 @@ namespace SysManager.Helpers;
 /// icon/thumbnail cache files that can only be deleted while it is stopped.
 /// </summary>
 /// <remarks>
-/// Two tabs restart Explorer — Context Menu, to apply a menu-style change, and System Fixes, because
+/// Two tabs restart Explorer — Right-Click Menu, to apply a menu-style change, and System Fixes, because
 /// "my taskbar is frozen" and "my desktop disappeared" are what a user actually reports. Routing both
 /// through one helper keeps the kill loop from drifting between copies, the same reason
 /// <see cref="RecycleBinHelper"/> exists.

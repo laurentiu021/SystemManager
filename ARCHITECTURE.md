@@ -1637,7 +1637,7 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   take is never deleted for good without Windows asking.
 - `ExplorerShell` — stops, starts and restarts the Windows shell, and owns the
   `thumbcache_*.db` / `iconcache_*.db` pattern list that Deep Cleanup's cache category
-  shares. Shared by Context Menu (applying a menu style) and System Fixes (a frozen
+  shares. Shared by Right-Click Menu (applying a menu style) and System Fixes (a frozen
   taskbar, a rebuilt icon cache) so the kill loop has one source of truth — it ends each
   instance individually, so one unkillable process cannot abort the loop and leave the
   user with no shell. `Stop`/`Start` are exposed separately from `Restart` because the

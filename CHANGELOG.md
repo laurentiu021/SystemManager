@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.128.8] - 2026-10-12
+
+**The camera, microphone and location tab, and the tab for the right-click menu, each go by one name now** (#2612).
+
+### Fixed
+
+- **One name for each of two tabs.** The page under Camera/Mic/Location in the sidebar was titled "Privacy Monitor",
+  and the page under Context Menu was titled "Context Menu Manager", so the name to look for changed once the page
+  opened. The camera page now carries its sidebar name, and the menu tab is called Right-Click Menu in the sidebar
+  and on its page, in the words you would use for it. Searching the sidebar for "privacy monitor" or "context menu"
+  still finds them, and Undo Changes and the tab's own notifications use the new name.
+
 ## [1.128.7] - 2026-10-10
 
 **When the PowerShell process doing a tab's work dies in the middle of it, the tab says so at once instead of staying

@@ -311,7 +311,7 @@ public static partial class LeftoverFinder
     /// <summary>Whether a key path is one SysManager may pass to <c>reg.exe</c> and delete.</summary>
     /// <remarks>
     /// Exactly <c>Software\&lt;Publisher&gt;\&lt;App&gt;</c>, with no quote or NUL that could break out of the
-    /// argument, the same rule <see cref="ContextMenuService.IsSafeRegistryPath"/> holds Context Menu to.
+    /// argument, the same rule <see cref="ContextMenuService.IsSafeRegistryPath"/> holds Right-Click Menu to.
     /// </remarks>
     internal static bool IsSafeKeyPath(string key)
     {

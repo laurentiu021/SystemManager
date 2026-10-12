@@ -47,7 +47,7 @@ public enum OperationCategory
     SystemModification,
 
     /// <summary>
-    /// Restarting the Windows shell: the Context Menu tab applying a menu style, and System Fixes
+    /// Restarting the Windows shell: the Right-Click Menu tab applying a menu style, and System Fixes
     /// repairing a frozen taskbar or rebuilding the icon cache.
     /// </summary>
     /// <remarks>

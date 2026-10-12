@@ -9951,10 +9951,11 @@ public partial class ArchitectureTests
     /// small dose of doubt about having clicked the right thing, and it costs nothing to remove. The point
     /// of asserting it is that the invariant survives the NEXT tab: a label and a header are edited in two
     /// different files, so they drift silently, and nothing else in the build compares them.</para>
-    /// <para>Three pairs are deliberate and listed with the reason and the issue that owns them. An
-    /// exception must state the exact header it expects, so a tab in the list is still pinned — it just
-    /// pins a different value — and a tab whose mismatch is silently "fixed" fails until its entry is
-    /// removed.</para>
+    /// <para>One pair is deliberate and listed with its reason: About. An exception must state the exact
+    /// header it expects, so a tab in the list is still pinned — it just pins a different value — and a tab
+    /// whose mismatch is silently "fixed" fails until its entry is removed. Camera/Mic/Location and Context
+    /// Menu sat in the list too, waiting on a rename no issue owned, until #2612 gave each one name: the
+    /// camera page took its sidebar name, and the menu tab became Right-Click Menu on both sides.</para>
     /// <para>Header text is HTML-decoded before comparison. Without that, <c>DNS &amp;amp; Hosts</c> in
     /// XAML reads as a mismatch against the label <c>DNS &amp; Hosts</c>, which is the same text — a
     /// first pass at this check reported 8 mismatches, and 3 of them were that artifact.</para>
@@ -9968,11 +9969,6 @@ public partial class ArchitectureTests
             ["nav-about"] = ("About SysManager",
                 "\"About\" is the universal convention for the sidebar and the expanded header is standard; "
                 + "forcing parity here would be churn for its own sake (#1516 says so explicitly)"),
-            ["nav-context-menu"] = ("Context Menu Manager",
-                "the label is proposed to become \"Right-Click Menu\" in a separate rename issue; aligning "
-                + "it to \"Context Menu Manager\" now would have to be undone by that change"),
-            ["nav-privacy-monitor"] = ("Privacy Monitor",
-                "the Camera/Mic/Location naming is owned by its own issue, which decides both sides at once"),
         };
 
         var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));

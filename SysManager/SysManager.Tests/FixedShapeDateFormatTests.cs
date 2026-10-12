@@ -42,7 +42,7 @@ public sealed class FixedShapeDateFormatTests
     [MemberData(nameof(HostileCultures))]
     public void PrivacyAccessEntry_LastUsedDisplay_StaysISO(string culture)
     {
-        // Shown in the Privacy Monitor grid under a "Last used" column and sorted as text, so a
+        // Shown in the Camera/Mic/Location grid under a "Last used" column and sorted as text, so a
         // Buddhist year would both misreport the date and break the ordering.
         var entry = new PrivacyAccessEntry("Camera", "Camera app", Moment, false);
 

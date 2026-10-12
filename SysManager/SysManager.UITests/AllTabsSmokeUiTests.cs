@@ -49,7 +49,7 @@ public class AllTabsSmokeUiTests
         // ── Monitor ──
         new object[] { "nav-processes", "Process Manager" },
         new object[] { "nav-resource-history", "Resource History" },
-        new object[] { "nav-privacy-monitor", "Privacy Monitor" },
+        new object[] { "nav-privacy-monitor", "Camera/Mic/Location" },
         new object[] { "nav-app-alerts", "New App Alerts" },
         new object[] { "nav-file-lock", "File Lock Detector" },
         new object[] { "nav-settings-watchdog", "Settings Watchdog" },
@@ -83,7 +83,7 @@ public class AllTabsSmokeUiTests
         new object[] { "nav-defender-tweaks", "Defender Tweaks" },
         new object[] { "nav-notification-blocker", "Notification Blocker" },
         // ── Customization ──
-        new object[] { "nav-context-menu", "Context Menu" },
+        new object[] { "nav-context-menu", "Right-Click Menu" },
         new object[] { "nav-dark-mode", "Dark Mode Scheduler" },
         new object[] { "nav-volume-control", "Volume Control" },
         // ── Info ──

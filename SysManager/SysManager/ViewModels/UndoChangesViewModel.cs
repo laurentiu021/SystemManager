@@ -64,7 +64,7 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
     internal static readonly IReadOnlyList<UndoSwitch> SwitchTabs =
     [
         new("Privacy & Telemetry", "tracking and ad settings", "nav-privacy-settings"),
-        new("Context Menu", "hidden right-click entries", "nav-context-menu"),
+        new("Right-Click Menu", "hidden right-click entries", "nav-context-menu"),
         new("Startup Manager", "programs kept from starting", "nav-startup"),
         new("App Blocker", "programs blocked from running", "nav-app-blocker"),
         new("Notification Blocker", "muted notifications", "nav-notification-blocker"),

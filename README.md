@@ -155,7 +155,7 @@ row and every group header is also keyboard-operable with a visible focus cue. A
 | 🌐 Network | Ping · Traceroute · Speed Test · Bandwidth Monitor · Network Repair · DNS & Hosts |
 | 📦 Apps | App Updates · Bulk Installer · New App Alerts · Uninstaller |
 | 🛡️ Privacy & Security | Privacy & Telemetry · File Shredder · App Blocker · Preinstalled Apps · Browser Cleaner · Edge/OneDrive Remover · Defender Tweaks |
-| 🎨 Customization | Context Menu · Dark Mode Scheduler · Volume Control · Notification Blocker 🔬 |
+| 🎨 Customization | Right-Click Menu · Dark Mode Scheduler · Volume Control · Notification Blocker 🔬 |
 | ℹ️ Info | Drivers · Battery Health · Recent Changes · System Logs · System Report · Legacy Panels · About |
 | ⚙️ Advanced | Profile Export / Import · CLI Interface 🔬 · Environment Variables |
 
@@ -297,7 +297,7 @@ of an update being downloaded. Reading those aloud would talk over you without t
 tab announces the coarsest line it has and leaves the fast-moving numbers on screen only. Both halves of that
 are enforced by a test, because a change that announced everything would look like an improvement.
 
-### Context Menu Manager
+### Right-Click Menu
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything. Plain menu entries use the standard `LegacyDisable` registry
 mechanism; add-ons use Windows' own blocked-extensions list. Neither removes
@@ -540,7 +540,7 @@ Edit Windows environment variables without the cramped built-in dialog:
   still different. Each change put back shows in the Dashboard's Recent activity
 - **Only what SysManager has a record of.** A switch that is on may have been set by Windows, by an
   organisation or by you long ago, so the tabs whose switches are their own undo — Privacy & Telemetry,
-  Context Menu, Startup Manager, App Blocker, Notification Blocker, and DNS & Hosts for DNS — are links,
+  Right-Click Menu, Startup Manager, App Blocker, Notification Blocker, and DNS & Hosts for DNS — are links,
   never rows
 - **The whole PC at once** points to Restore Points and names the newest restore point when SysManager
   runs as administrator. If Windows has not answered about its restore points within a minute, the card

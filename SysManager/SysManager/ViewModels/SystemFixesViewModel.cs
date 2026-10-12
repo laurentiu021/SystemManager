@@ -526,7 +526,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     /// Shared body for the two shell fixes: cross-tab lock, off the UI thread, honest status.
     /// </summary>
     /// <remarks>
-    /// The <see cref="OperationCategory.Shell"/> lock is what stops this racing the Context Menu tab's
+    /// The <see cref="OperationCategory.Shell"/> lock is what stops this racing the Right-Click Menu tab's
     /// restart. Two overlapping restarts can leave the user with no desktop at all, and
     /// <see cref="IsAnyRunning"/> is per-view-model so it cannot see the other tab.
     /// </remarks>

@@ -96,7 +96,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Context Menu Manager" Style="{StaticResource Display}"/>
+            <TextBlock Text="Right-Click Menu" Style="{StaticResource Display}"/>
             <TextBlock Text="Manage entries that appear when you right-click files, folders, or the desktop in Windows Explorer. Toggle entries to show or hide them — changes are non-destructive and reversible."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
             <!-- Says the export exists. It was written before every change and mentioned nowhere, so a file a
@@ -226,7 +226,7 @@
         <!-- Context menu entries list -->
         <Border Grid.Row="4" Style="{StaticResource Card}" Padding="0">
             <Grid>
-            <DataGrid AutomationProperties.Name="Context menu entries"
+            <DataGrid AutomationProperties.Name="Right-click menu entries"
                       ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
                       CanUserAddRows="False"
@@ -339,6 +339,6 @@
         </Border>
 
         <!-- Status bar -->
-        <v:StatusFooter Grid.Row="5" Margin="0,8,0,0" ProgressName="Context menu scan progress"/>
+        <v:StatusFooter Grid.Row="5" Margin="0,8,0,0" ProgressName="Right-click menu scan progress"/>
     </Grid>
 </UserControl>

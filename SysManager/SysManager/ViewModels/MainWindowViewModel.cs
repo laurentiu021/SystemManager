@@ -321,7 +321,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         Group("grp-monitor", "Monitor", "\uE9D9", "What is running, and what it is using",  // Diagnostic
             Tab<ProcessManagerViewModel>("nav-processes",       "Process Manager",    typeof(Views.ProcessManagerView), keywords: "task manager, whats running, end task, cpu usage"),
             Tab<ResourceHistoryViewModel>("nav-resource-history", "Resource History", typeof(Views.ResourceHistoryView), inDevelopment: true, keywords: "cpu history, usage over time, graph"),
-            Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView), keywords: "webcam, camera, microphone, spying, watching, listening, location"),
+            Tab<PrivacyMonitorViewModel>("nav-privacy-monitor", "Camera/Mic/Location", typeof(Views.PrivacyMonitorView), keywords: "webcam, camera, microphone, spying, watching, listening, location, privacy monitor"),
             Tab<SettingsWatchdogViewModel>("nav-settings-watchdog", "Settings Watchdog", typeof(Views.SettingsWatchdogView), inDevelopment: true, keywords: "settings changed, something changed my settings")),
 
         Group("grp-cleanup", "Cleanup", "\uE74D", "Free up space and tidy up",  // Delete
@@ -369,7 +369,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             Tab<DefenderViewModel>("nav-defender-tweaks",   "Defender Tweaks",       typeof(Views.DefenderView), keywords: "antivirus, defender, virus protection")),
 
         Group("grp-customization", "Customization", "\uE790", "Right-click menu, dark mode, volume",  // Personalize
-            Tab<ContextMenuViewModel>("nav-context-menu",   "Context Menu",          typeof(Views.ContextMenuView), keywords: "right click, menu, shell, explorer menu"),
+            Tab<ContextMenuViewModel>("nav-context-menu",   "Right-Click Menu",      typeof(Views.ContextMenuView), keywords: "right click, menu, shell, explorer menu, context menu"),
             // DarkMode is eager (schedule poll must run app-wide); hand the DI singleton to its NavItem.
             EagerItem("nav-dark-mode", "Dark Mode Scheduler", typeof(Views.DarkModeView), Eager<DarkModeViewModel>(),
                       keywords: "dark mode, light mode, night, theme"),

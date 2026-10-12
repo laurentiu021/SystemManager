@@ -15,7 +15,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// Context Menu Manager tab — lists all shell context menu entries grouped
+/// Right-Click Menu tab — lists all shell context menu entries grouped
 /// by location, lets the user toggle them, switch between Win10/Win11 style,
 /// and customize which entries appear on right-click.
 /// </summary>
@@ -127,7 +127,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
             ApplyFilter();
             StatusMessage = $"Found {_allEntries.Count} context menu entries.";
-            ToastService.Instance.Show("Context Menu scan complete", $"Found {_allEntries.Count} entries");
+            ToastService.Instance.Show("Right-Click Menu scan complete", $"Found {_allEntries.Count} entries");
         }
         catch (InvalidOperationException ex)
         {

@@ -64,7 +64,7 @@ public interface ILeftoverService
 /// </remarks>
 public sealed class LeftoverService : ILeftoverService
 {
-    /// <summary>How many exports are kept for one key, as Context Menu keeps.</summary>
+    /// <summary>How many exports are kept for one key, as Right-Click Menu keeps.</summary>
     private const int BackupsKeptPerKey = ContextMenuService.BackupsKeptPerKey;
 
     /// <summary>

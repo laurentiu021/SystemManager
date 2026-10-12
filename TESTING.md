@@ -191,7 +191,7 @@ runner, which allows 10 s, then forced it out with exit code 1 although every te
   `using var _ = new DialogAnswer(false);`. Its `Calls` counter lets a test assert a dialog was
   *not* shown — asserting the side effect alone cannot distinguish "the user said yes" from
   "no gate ran at all". Its `Messages` collection carries the wording shown, for the gates where the
-  wording IS the behaviour: Context Menu explains a failed toggle one way without admin rights and
+  wording IS the behaviour: Right-Click Menu explains a failed toggle one way without admin rights and
   another way with them, and swapping those two would send every user down a path that cannot help
   while a call count stayed green (#2180). Requires `[Collection("ProcessWideStatics")]` on the test
   class — a fitness function in `ArchitectureTests` fails the build if a class swaps a process-wide

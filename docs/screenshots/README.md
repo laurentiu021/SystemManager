@@ -25,9 +25,9 @@ the image now says the old name too, so the file needs recapturing and not just 
 The guard tells you which files, by name.
 
 42 of the 60 tabs have a shot. The 18 without one are Bandwidth Monitor,
-Camera/Mic/Location, Context Menu, DNS & Hosts, Duplicate Finder, Edge/OneDrive
-Remover, Environment Variables, Large Files, Legacy Panels, Notification Blocker,
-Process Manager, Recent Changes, Services, Startup Manager, Task Scheduler, Undo Changes,
+Camera/Mic/Location, DNS & Hosts, Duplicate Finder, Edge/OneDrive Remover,
+Environment Variables, Large Files, Legacy Panels, Notification Blocker, Process Manager,
+Recent Changes, Right-Click Menu, Services, Startup Manager, Task Scheduler, Undo Changes,
 Uninstaller and Volume Control. One of those — Notification Blocker — is still marked as a
 preview tab. Twelve of the rest are list-heavy pages: a usable shot of them is a screenful of
 real service names, installed programs, file paths or environment values, and the

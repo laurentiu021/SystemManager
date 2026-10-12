@@ -17,7 +17,7 @@ using SysManager.Services;
 namespace SysManager.ViewModels;
 
 /// <summary>
-/// ViewModel for the Privacy Monitor tab. Shows which apps recently used the camera,
+/// ViewModel for the Camera/Mic/Location tab. Shows which apps recently used the camera,
 /// microphone, or location, read from the Windows consent store. Read-only history — the
 /// "Open privacy settings" action hands off to Windows for granting/revoking permissions,
 /// which SysManager never changes itself.

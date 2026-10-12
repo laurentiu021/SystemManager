@@ -20,7 +20,7 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
-            <TextBlock Text="Privacy Monitor" Style="{StaticResource Display}"/>
+            <TextBlock Text="Camera/Mic/Location" Style="{StaticResource Display}"/>
             <TextBlock Text="See which apps recently used your camera, microphone, or location, and when — read from the Windows access history. Read-only: to grant or revoke a permission, open Windows privacy settings."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>

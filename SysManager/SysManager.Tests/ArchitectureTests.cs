@@ -5622,6 +5622,57 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// An icon glyph is written as an escape, never as the raw character (#2693).
+    /// </summary>
+    /// <remarks>
+    /// Segoe Fluent Icons draws from the private-use range, U+E000 to U+F8FF, where a code font has no glyph. A raw
+    /// one shows as an empty string in an editor, in a diff and on GitHub, so a reviewer cannot tell which icon a
+    /// line draws, or whether it draws one at all, and a copy and paste can drop it unseen. Written as
+    /// <c>"\uE80F"</c> in C# or <c>&amp;#xE80F;</c> in XAML, it compiles to the same character and reads as what it
+    /// is. Twenty-six raw ones had built up in four files before this guard.
+    /// </remarks>
+    [Fact]
+    public void EveryIconGlyph_IsWrittenAsAnEscape()
+    {
+        const char firstPrivateUse = (char)0xE000;
+        const char lastPrivateUse = (char)0xF8FF;
+        var solution = Path.Combine(TestPaths.RepoRoot(), "SysManager");
+
+        var offenders = new List<string>();
+        var scanned = 0;
+        var escapes = 0;
+        foreach (var path in SourceFilesUnder(solution, ".cs", ".xaml").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            scanned++;
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                escapes += GlyphEscape().Count(lines[i]);
+                foreach (var c in lines[i].Where(ch => ch is >= firstPrivateUse and <= lastPrivateUse))
+                    offenders.Add($"{Path.GetRelativePath(solution, path)}:{i + 1}  U+{(int)c:X4}");
+            }
+        }
+
+        // Vacuity floors: the four projects hold ~690 files, and their views and view models write well over a
+        // hundred glyphs as escapes, so a scan that saw few of either was not reading what it claims to.
+        Assert.True(scanned >= 600,
+            $"only {scanned} source files were scanned — fix this guard rather than trusting its pass.");
+        Assert.True(escapes >= 150,
+            $"only {escapes} escaped glyphs were found where the sources hold well over a hundred, so the match is "
+            + "out of date and a clean result below would mean nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "these lines hold an icon glyph as the raw private-use character, which shows as an empty string in an "
+            + "editor and in a diff. Write it as \"\\uXXXX\" in C# or &#xXXXX; in XAML:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    // A private-use glyph written as an escape: "\uE80F" in C#, &#xE80F; in XAML.
+    [GeneratedRegex(@"\\u(?:e[0-9a-f]{3}|f[0-8][0-9a-f]{2})|&#x(?:e[0-9a-f]{3}|f[0-8][0-9a-f]{2});",
+                    RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex GlyphEscape();
+
+    /// <summary>
     /// No public document may claim the update path enforces a publisher while
     /// <c>UpdateService.ExpectedSignerSubject</c> is still empty.
     /// <para>The README said, in the present tense, that a signed update "must belong to the expected

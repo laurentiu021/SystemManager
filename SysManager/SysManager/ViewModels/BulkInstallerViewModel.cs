@@ -498,18 +498,18 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     private static string GlyphForCategory(string category) => category switch
     {
-        "Browsers" => "",
-        "Communication" => "",
-        "Media" => "",
-        "Development" => "",
-        "Utilities" => "",
-        "Gaming" => "",
-        "Security" => "",
-        "Office & Productivity" => "",
-        "Creativity" => "",
-        "Networking & VPN" => "",
-        "Runtimes & Frameworks" => "",
-        _ => ""
+        "Browsers" => "\uE774",
+        "Communication" => "\uE8BD",
+        "Media" => "\uE8D6",
+        "Development" => "\uE943",
+        "Utilities" => "\uE90F",
+        "Gaming" => "\uE7FC",
+        "Security" => "\uE72E",
+        "Office & Productivity" => "\uE8A5",
+        "Creativity" => "\uE790",
+        "Networking & VPN" => "\uE72E",
+        "Runtimes & Frameworks" => "\uE713",
+        _ => "\uE7B8"
     };
 
     private static List<InstallableApp> BuildCuratedApps()

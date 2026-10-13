@@ -142,6 +142,10 @@ guide. That said, a few explicit rules:
   `ArchitectureTests.EverySourceFile_CarriesTheAuthorHeader`, and
   `ArchitectureTests.EveryTestCitedWithItsClass_StillExists` checks that the
   test still has that name.
+- **Icon glyphs as escapes**: write a Segoe Fluent Icons glyph as `"\uE80F"`
+  in C# and `&#xE80F;` in XAML, never as the character itself, which shows as
+  an empty string in an editor and in a diff.
+  `ArchitectureTests.EveryIconGlyph_IsWrittenAsAnEscape` fails on a raw one.
 
 ### XAML conventions
 

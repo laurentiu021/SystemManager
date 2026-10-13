@@ -108,7 +108,7 @@ public class HitTargetSizeTests
             var button = new Button
             {
                 Style = style,
-                Content = "",
+                Content = "\uE711",
                 Padding = new Thickness(4, 0, 4, 0),
                 FontSize = 10,
                 Width = 20,

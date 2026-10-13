@@ -119,7 +119,11 @@ public sealed class SidebarRowFitTests
             }
             surface.NavGroups.Add(all);
 
-            var window = new MainWindow { DataContext = surface };
+            // The window's XAML builds a whole MainWindowViewModel as its DataContext. Only the sidebar is measured
+            // here, so the stub takes its place, and the built one is disposed with the window.
+            var window = new MainWindow();
+            var built = window.DataContext as MainWindowViewModel;
+            window.DataContext = surface;
             try
             {
                 // A short window, so the whole list cannot fit and the tree scrolls, with its bar showing.
@@ -171,6 +175,7 @@ public sealed class SidebarRowFitTests
             finally
             {
                 window.Close();
+                built?.Dispose();
             }
         });
     }

@@ -693,9 +693,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
     public void Dispose()
     {
-        // Idempotency guard: Dispose is wired to two shutdown paths (OnClosed and
-        // Application.Exit), so it can run more than once. Disposing the SkiaSharp
-        // paint handles (via NetworkShared) twice is undefined behavior.
+        // Idempotency guard: Dispose is wired to two shutdown paths, OnClosed and
+        // Application.Exit. OnClosed unwires Exit as it runs, but a second call from
+        // anywhere must still do nothing, because disposing the SkiaSharp paint handles
+        // (via NetworkShared) twice is undefined behavior.
         if (_disposed) return;
         _disposed = true;
 

@@ -585,14 +585,12 @@ jobs:
 
           # winget-releaser takes a CLASSIC token only: its README says fine-grained tokens are not supported
           # (its issue #172). The least it needs is public_repo for the manifest pull request, plus workflow so
-          # the fork sync can bring in upstream changes to winget-pkgs' own workflow files. A full repo scope
-          # also reaches every private repository on the account, which nothing here needs (#1676).
+          # the fork sync can bring in upstream changes to winget-pkgs' own workflow files. The token in use has
+          # the full repo scope and no expiry, and it stays that way by the account holder's decision (#1676):
+          # its scopes are printed here, and only a scope the publish cannot do without is warned about.
           if [ -n "$scopes" ]; then
             echo "Token kind: CLASSIC personal access token"
             echo "Scopes: $scopes"
-            case ",$(printf '%s' "$scopes" | tr -d ' ')," in
-              *,repo,*) echo "::warning::WINGET_TOKEN has the full repo scope, which also reaches private repositories. public_repo and workflow are all the winget steps need (#1676)." ;;
-            esac
             # A token without workflow passes every other check here and then fails all three publish attempts
             # with HTTP 422 the first time upstream has touched its own workflow files, which reads as a winget
             # outage rather than a missing box (1.115.0 to 1.116.1 never reached winget that way). Name it here.

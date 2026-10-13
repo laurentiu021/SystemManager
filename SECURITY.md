@@ -463,8 +463,9 @@ reviews, and who approves a release for signing.
     reach this repository too. What makes misuse detectable is the attestation, recorded
     before the token is first used: a replaced `.exe` fails `gh attestation verify`. The
     app's own update check compares against the `.sha256` on the same release, so it would
-    not catch an asset and a hash replaced together. Replacing this token is tracked in
-    [#1676](https://github.com/laurentiu021/SystemManager/issues/1676).
+    not catch an asset and a hash replaced together. Before every publish, the release
+    workflow prints the token's kind, scopes and expiry, and warns if it lacks a scope the
+    publish needs ([#1676](https://github.com/laurentiu021/SystemManager/issues/1676)).
   - **What it could affect** is the winget manifest: the URL and hash that a
     `winget install laurentiu021.SysManager` reads. Microsoft's own review sits between
     that pull request and users, but the manifest is the one place where the download

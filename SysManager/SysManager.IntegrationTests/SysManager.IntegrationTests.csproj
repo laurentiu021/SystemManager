@@ -30,13 +30,18 @@
          here needs `using SysManager.Tests;`, which is the visible price of not having two of them. -->
     <Compile Include="..\SysManager.Tests\PropertyChangeRecorder.cs"
              Link="PropertyChangeRecorder.cs" />
+    <!-- The one place that knows where the repository is, for the test that reads the registered tabs from
+         MainWindowViewModel.cs (SidebarRowFitTests). Linked for the same reason: a copy of a path search
+         drifts the same way StaHelper's did. -->
+    <Compile Include="..\SysManager.Tests\TestPaths.cs"
+             Link="TestPaths.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <!-- For the linked PropertyChangeRecorder below, which keeps its own project's namespace. A global
-         using rather than one per file: it imports nothing else, because the only type compiled into THIS
-         assembly under SysManager.Tests is that one linked file. -->
+    <!-- For the linked PropertyChangeRecorder and TestPaths above, which keep their own project's namespace. A
+         global using rather than one per file: it imports nothing else, because the only types compiled into
+         THIS assembly under SysManager.Tests are those two linked files. -->
     <Using Include="SysManager.Tests" />
   </ItemGroup>
 

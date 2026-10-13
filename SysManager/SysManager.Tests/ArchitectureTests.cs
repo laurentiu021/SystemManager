@@ -7243,11 +7243,10 @@ public partial class ArchitectureTests
     /// Until #1634 the first rule was conditional at 11, 12 and 14: the token was demanded only where it could not
     /// change what is drawn, so a new <c>FontSize="12"</c> with no colour of its own passed forever. It is
     /// unconditional now, because a token plus the element's own colour reproduces any look a raw size had.
-    /// <para><b>The exceptions are named, not inferred.</b> About's product name, 24 SemiBold: the app's own name on its
-    /// own page, with no text token within two points. And the sidebar's two PREVIEW pills, still 9: at <c>Micro</c>'s
-    /// 10 a pill grows 4.4 px, and the name beside it, which already has too little room (#2686), trims for "Resource
-    /// History" as well. The guard fails if an exception no longer finds exactly its elements, so none can outlive
-    /// what it names.</para>
+    /// <para><b>The exception is named, not inferred.</b> About's product name, 24 SemiBold: the app's own name on its
+    /// own page, with no text token within two points. The guard fails if it no longer finds exactly that element, so
+    /// it cannot outlive what it names. The sidebar's PREVIEW pills were a second one, at 9, until #2686 moved
+    /// "Preview" under the name, where it takes <c>Micro</c> without costing the name any room.</para>
     /// <para><b>Every token a view references must be defined.</b> A <c>{StaticResource}</c> inside a
     /// <c>DataTemplate</c> resolves at RUNTIME, so a misspelled or deleted token compiles cleanly and throws when the
     /// tab is opened. Several of these call sites are inside templates.</para>
@@ -7298,7 +7297,6 @@ public partial class ArchitectureTests
         (string View, string Text, string Size, int Count, string What)[] exceptions =
         [
             ("AboutView.xaml", "SysManager", "24", 1, "About's product name"),
-            ("MainWindow.xaml", "PREVIEW", "9", 2, "the sidebar's PREVIEW pills, until #2686 gives a pilled row room for 10"),
         ];
         var seen = new int[exceptions.Length];
 
@@ -10177,88 +10175,59 @@ public partial class ArchitectureTests
     private static partial Regex NavEntry();
 
     /// <summary>
-    /// No sidebar label may be longer than the longest one that already ships, counted separately for the
-    /// entries that render a PREVIEW pill beside the text.
+    /// A sidebar row keeps its name alone on its line, with "Preview" as a line of its own under it.
     /// </summary>
     /// <remarks>
-    /// The sidebar is a fixed 220px column (MainWindow.xaml). A leaf row's <c>Padding="28,9,14,9"</c> leaves
-    /// the label 178px — roughly 27 characters at FontSize 13. The longest label that ships, "Profile Export /
-    /// Import", is 23. So this budget says "no longer than what is already there", NOT "proven to fit":
-    /// whether that one already ellipsizes cannot be settled without running the app.
-    /// <para>The derivation used to subtract "the 13px glyph and its 10px margin" as well, leaving 155px.
-    /// Leaf rows carry no glyph — <c>NavItem</c> has no such member, and the only two glyph bindings left in
-    /// MainWindow.xaml are the group header's own and the single-item row reading its group's — so the budget
-    /// was charging every leaf 23px it does not spend.</para>
-    /// <para>Two budgets, because one number cannot express the constraint. A PREVIEW pill takes fixed
-    /// width out of the same column, so a pilled row has less room for text — and the pill is exactly
-    /// where this went wrong before: a horizontal StackPanel measured with infinite width pushed it past
-    /// the sidebar edge and clipped it to "PR" (documented at MainWindow.xaml:308-311). That layout is
-    /// fixed and the label now ellipsizes instead, which is a softer failure but still a nav entry whose
-    /// name cannot be read.</para>
-    /// <para>Both numbers are measured from the current source, not carried over: the issue that asked
-    /// for this cited a maximum of 20-21 characters, and the real maximum had already moved to 23.</para>
+    /// This guard used to count characters, 21 for a PREVIEW name and 23 for the rest, against a width it took as
+    /// 178 px. The rail leaves 155 px for a row's content and the PREVIEW pill beside the name took 56 of them, so
+    /// three PREVIEW names trimmed while it passed (#2686). A character count cannot say whether text fits; only
+    /// layout can, and <c>SysManager.IntegrationTests.SidebarRowFitTests</c> lays the real window out to measure it.
+    /// What the source can pin cheaply, in the blocking suite, is the shape the fix rests on: nothing shares the
+    /// name's line on either row template, and no pill shown by <c>IsInDevelopment</c> comes back beside it.
     /// </remarks>
     [Fact]
-    public void EverySidebarLabel_FitsTheColumnItIsDrawnIn()
+    public void TheSidebarRow_KeepsItsNameAloneOnItsLine()
     {
-        const int PilledBudget = 21;   // "Scheduled Maintenance"
-        const int PlainBudget = 23;    // "Profile Export / Import"
+        var doc = XDocument.Parse(WithoutXamlComments(
+            File.ReadAllText(Path.Combine(TestPaths.AppProject(), "MainWindow.xaml"))));
+        XNamespace p = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        var vm = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "ViewModels", "MainWindowViewModel.cs"));
-        var nav = MemberSlice(vm, "private NavGroup[] BuildNavGroups()");
-        Assert.True(nav.Length > 2000,
-            $"the BuildNavGroups slice is {nav.Length} chars — too short to hold the sidebar, so this "
-            + "guard would measure almost nothing.");
+        // The names: the grouped leaf row's and the single-item row's.
+        var names = doc.Descendants(p + "TextBlock")
+            .Where(t => (string?)t.Attribute("Text") == "{Binding Label}"
+                        && (string?)t.Attribute("Style") == "{StaticResource SidebarNavText}")
+            .ToList();
+        Assert.True(names.Count >= 2,
+            $"only {names.Count} sidebar name TextBlocks were found in MainWindow.xaml, out of the 2 row templates "
+            + "that draw one. The match is out of date, so this guard is checking nothing.");
 
-        // Reuses NavEntry() rather than a second pattern for the same construct: two regexes for one
-        // shape drift, and then one of them silently stops seeing entries the other still finds.
-        var entries = NavEntry().Matches(nav).Cast<Match>().ToArray();
-        Assert.True(entries.Length >= 50,
-            $"only {entries.Length} nav entries parsed — the shape of BuildNavGroups changed and this "
-            + "guard is no longer reading the sidebar; fix the pattern rather than trusting the pass.");
-
-        var offenders = new List<string>();
-        var pilled = 0;
-        var atBudget = 0;
-
-        for (var i = 0; i < entries.Length; i++)
+        foreach (var name in names)
         {
-            var navId = entries[i].Groups[1].Value;
-            var label = entries[i].Groups[2].Value;
+            var line = name.Parent!;
+            Assert.True(line.Name == p + "StackPanel" && (string?)line.Attribute("Orientation") is null or "Vertical",
+                $"a sidebar name sits in a <{line.Name.LocalName}> rather than a vertical StackPanel, so something can "
+                + "share its line and take the width it needs (#2686).");
+            Assert.Null(name.Attribute("Grid.Column"));
 
-            // The flag is a trailing argument, so it lives between this entry and the next one.
-            var from = entries[i].Index + entries[i].Length;
-            var to = i + 1 < entries.Length ? entries[i + 1].Index : nav.Length;
-            var showsPill = nav[from..to].Contains("inDevelopment: true", StringComparison.Ordinal);
-            if (showsPill) pilled++;
-
-            var budget = showsPill ? PilledBudget : PlainBudget;
-            if (label.Length == budget) atBudget++;
-            if (label.Length > budget)
-            {
-                offenders.Add($"{navId} \"{label}\" is {label.Length} chars, over the "
-                              + $"{(showsPill ? "PREVIEW" : "plain")} budget of {budget}");
-            }
+            // "Preview" is the line under it, in the same stack, and the only other text there.
+            var below = line.Elements(p + "TextBlock").Where(t => t != name).ToList();
+            var mark = Assert.Single(below);
+            Assert.Equal("Preview", (string?)mark.Attribute("Text"));
+            Assert.Equal("{StaticResource Micro}", (string?)mark.Attribute("Style"));
+            Assert.Contains("IsInDevelopment", (string?)mark.Attribute("Visibility") ?? "", StringComparison.Ordinal);
+            Assert.True(line.Elements().ToList().IndexOf(mark) > line.Elements().ToList().IndexOf(name),
+                "\"Preview\" is drawn above the name it belongs to.");
         }
 
-        // Both populations must be seen. The pill flag is optional, so a capture that stopped finding it
-        // would classify every row as plain and quietly hand seven of them two extra characters.
-        Assert.True(pilled >= 5,
-            $"only {pilled} PREVIEW entries were recognised — the inDevelopment detection is broken, not "
-            + "the sidebar. Fix this guard rather than trusting its pass.");
-
-        // And at least one label must sit exactly ON its budget, or the numbers have drifted above the
-        // real maximum and the guard has quietly stopped being a ratchet.
-        Assert.True(atBudget >= 1,
-            $"no label reaches either budget ({PilledBudget}/{PlainBudget}), so both are now looser than "
-            + "the longest label that ships. Re-measure and lower them, or this permits growth silently.");
-
-        Assert.True(offenders.Count == 0,
-            "these sidebar labels are longer than anything that currently ships, in a fixed 220px column "
-            + "where the text already ellipsizes near this length — shorten the label, or re-measure and "
-            + "raise the budget deliberately with the reason:\n  "
-            + string.Join("\n  ", offenders)
-            + $"\n({entries.Length} entries, {pilled} with a PREVIEW pill, {atBudget} exactly at budget)");
+        // No pill anywhere: nothing else in the window shows itself by IsInDevelopment.
+        var pills = doc.Descendants()
+            .Where(e => ((string?)e.Attribute("Visibility") ?? "").Contains("IsInDevelopment", StringComparison.Ordinal)
+                        && (string?)e.Attribute("Text") != "Preview")
+            .Select(e => e.Name.LocalName)
+            .ToList();
+        Assert.True(pills.Count == 0,
+            "an element other than the \"Preview\" line is shown by IsInDevelopment, which is how the pill that "
+            + "took the name's width looked: " + string.Join(", ", pills));
     }
 
     [GeneratedRegex(@"Text=""([^""]*)""", RegexOptions.Compiled)]

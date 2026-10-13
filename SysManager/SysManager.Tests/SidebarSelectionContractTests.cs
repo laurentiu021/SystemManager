@@ -148,14 +148,14 @@ public class SidebarSelectionContractTests
             singleRow,
             idBinding: "{Binding Children[0].Id}",
             nameBinding: "{Binding Children[0].Label}",
-            statusBinding: "{Binding Children[0].SelectionStatus}",
+            statusBinding: "{Binding Children[0].ItemStatus}",
             tagBinding: "{Binding Children[0]}",
             clickHandler: "SingleGroup_Click");
         AssertNavButton(
             groupedRow,
             idBinding: "{Binding Id}",
             nameBinding: "{Binding Label}",
-            statusBinding: "{Binding SelectionStatus}",
+            statusBinding: "{Binding ItemStatus}",
             tagBinding: "{Binding}",
             clickHandler: "NavChild_Click");
 

@@ -103,17 +103,30 @@ public sealed partial class NavItem : ObservableObject, IDisposable
 
     /// <summary>
     /// True for features that are implemented but not yet QA-verified. The sidebar
-    /// shows a small "PREVIEW" pill next to the label, and the view shows a
+    /// shows "Preview" under the label, and the view shows a
     /// <see cref="Views.DevelopmentBanner"/> so users know the feature is new.
     /// </summary>
     public bool IsInDevelopment { get; init; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(ItemStatus))]
     private bool _isSelected;
 
-    /// <summary>Selection state exposed to the sidebar's UI Automation peers.</summary>
-    public string SelectionStatus => IsSelected ? "Selected" : string.Empty;
+    /// <summary>
+    /// What the sidebar row's UI Automation peer reports after its name: "Selected" for the open tab,
+    /// "Preview" for one still being verified, both when both apply.
+    /// </summary>
+    /// <remarks>
+    /// "Preview" is here because the word drawn under the name is not part of the row's accessible name,
+    /// which is the label alone, so a screen reader never said it (#2686).
+    /// </remarks>
+    public string ItemStatus => (IsSelected, IsInDevelopment) switch
+    {
+        (true, true) => "Selected, preview",
+        (true, false) => "Selected",
+        (false, true) => "Preview",
+        _ => string.Empty,
+    };
 
     [ObservableProperty] private bool _isBusy;
 

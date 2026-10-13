@@ -291,6 +291,13 @@ public partial class MainWindow : Window
         // ThemeService is a singleton that outlives the window, so a surviving subscription would
         // keep this instance alive and fire against a dead handle on the next theme switch.
         ThemeService.Instance.ThemeChanged -= OnThemeChangedForTitleBar;
+        // The same for the toast service and the application's Exit, which the constructor subscribes to. The app
+        // closes this window only on its way out, but a window that a test builds and closes (SidebarRowFitTests)
+        // would otherwise stay alive for the rest of the run and take every later toast.
+        ToastService.Instance.ToastRequested -= OnToastRequested;
+        ToastService.Instance.DismissRequested -= OnToastDismiss;
+        if (Application.Current != null)
+            Application.Current.Exit -= OnApplicationExit;
         (DataContext as MainWindowViewModel)?.Dispose();
         base.OnClosed(e);
     }

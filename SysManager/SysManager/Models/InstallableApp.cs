@@ -21,5 +21,5 @@ public sealed partial class InstallableApp : ObservableObject
     public required string WingetId { get; init; }
     public required string Category { get; init; }
     public string Description { get; init; } = "";
-    public string IconGlyph { get; init; } = "";
+    public string IconGlyph { get; init; } = "\uE7B8";
 }

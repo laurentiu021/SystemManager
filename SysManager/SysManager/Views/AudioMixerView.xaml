@@ -182,13 +182,13 @@
                                        VerticalAlignment="Center"/>
                         </WrapPanel>
                         <Button Margin="0,8,0,0" HorizontalAlignment="Left"
-                                Style="{StaticResource GhostButton}" Padding="8,4"
+                                Style="{StaticResource GhostButton}" FontSize="12" Padding="8,4"
                                 Command="{Binding OpenOutputSettingsCommand}"
                                 AutomationProperties.Name="Change the device this PC plays sound through, in Windows sound settings">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                            FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <TextBlock Text="Change in Windows sound settings…" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="Change in Windows sound settings…" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -286,14 +286,14 @@
                                                 </Grid>
                                             </StackPanel>
                                             <Button Margin="0,8,0,0" HorizontalAlignment="Left"
-                                                    Style="{StaticResource GhostButton}" Padding="8,4"
+                                                    Style="{StaticResource GhostButton}" FontSize="12" Padding="8,4"
                                                     Command="{Binding OpenSoundSettingsCommand}"
                                                     Visibility="{Binding ShowGuidedRouting, Converter={StaticResource FlexVis}}"
                                                     AutomationProperties.Name="{Binding DisplayName, StringFormat='Choose output device for {0} in Windows settings'}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="&#xE7F5;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                                                FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                                    <TextBlock Text="Choose output device…" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Choose output device…" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
                                         </StackPanel>

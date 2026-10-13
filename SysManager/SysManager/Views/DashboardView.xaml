@@ -129,7 +129,7 @@
                                 AutomationProperties.Name="Dismiss what the slowness check found"
                                 Style="{StaticResource GhostButton}" Padding="10,2" Margin="12,0,0,0"/>
                         <StackPanel>
-                            <TextBlock Text="Why is this PC slow?" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="Why is this PC slow?" Style="{StaticResource SectionTitle}"/>
                             <TextBlock Text="{Binding SlowdownReport.Summary}" Style="{StaticResource Caption}" Margin="0,2,0,0"/>
                         </StackPanel>
                     </DockPanel>
@@ -247,7 +247,7 @@
                             <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons" FontSize="15"
                                        VerticalAlignment="Center" Margin="0,0,8,0"
                                        Foreground="{Binding TuneUpResult.OverallColorHex, Converter={StaticResource HexBrush}}"/>
-                            <TextBlock Text="Tune-Up complete" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center"/>
+                            <TextBlock Text="Tune-Up complete" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                             <Border Background="{DynamicResource Surface2}" CornerRadius="{StaticResource RadiusMd}" Padding="8,2" Margin="10,0,0,0"
                                     VerticalAlignment="Center">
                                 <TextBlock Text="{Binding TuneUpResult.OverallVerdict}" Style="{StaticResource Caption}" FontWeight="SemiBold"
@@ -361,13 +361,13 @@
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                             <TextBlock Text="{Binding HealthResult.Score}" Style="{StaticResource MetricLarge}" FontWeight="Bold"
                                        HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock Text="{Binding HealthResult.Label}" FontSize="10"
+                            <TextBlock Text="{Binding HealthResult.Label}" Style="{StaticResource Micro}"
                                        HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
                         </StackPanel>
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="System Health Score" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,8"/>
+                        <TextBlock Text="System Health Score" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                         <ItemsControl ItemsSource="{Binding HealthResult.Recommendations}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -521,11 +521,11 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Run as admin for all sensors" Foreground="{DynamicResource WarningText}"
-                                               FontSize="10" VerticalAlignment="Center"/>
+                                               Style="{StaticResource Micro}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
-                        <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}" FontStyle="Italic"
+                        <TextBlock Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}" FontStyle="Italic"
                                    Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
                                    Text="Without admin, only NVIDIA GPU and disk SMART temperatures are available."/>
                     </StackPanel>
@@ -545,9 +545,9 @@
                                                    Foreground="{Binding ColorHex, Converter={StaticResource HexBrush}}"
                                                    VerticalAlignment="Center" MinWidth="65"/>
                                         <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding SensorName}" FontSize="12" FontWeight="Medium"
+                                            <TextBlock Text="{Binding SensorName}" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}" FontWeight="Medium"
                                                        TextWrapping="Wrap" MaxWidth="180"/>
-                                            <TextBlock Text="{Binding Component}" FontSize="10"
+                                            <TextBlock Text="{Binding Component}" Style="{StaticResource Micro}"
                                                        Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
@@ -615,38 +615,38 @@
                                    Foreground="{DynamicResource TextMuted}" Margin="0,0,0,12"/>
                         <Button Command="{Binding QuickCleanupCommand}"
                                 AutomationProperties.Name="Run Quick Cleanup"
-                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Run Quick Cleanup" VerticalAlignment="Center" FontSize="12"/>
+                                <TextBlock Text="Run Quick Cleanup" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickUpdateAppsCommand}"
                                 AutomationProperties.Name="Update All Apps"
-                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Update All Apps" VerticalAlignment="Center" FontSize="12"/>
+                                <TextBlock Text="Update All Apps" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickWindowsUpdateCommand}"
                                 AutomationProperties.Name="Check Windows Updates"
-                                Style="{StaticResource SecondaryButton}" Padding="10,8" Margin="0,0,0,6"
+                                Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8" Margin="0,0,0,6"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE777;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Check Windows Updates" VerticalAlignment="Center" FontSize="12"/>
+                                <TextBlock Text="Check Windows Updates" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Command="{Binding QuickSpeedTestCommand}"
                                 AutomationProperties.Name="Run Speed Test"
-                                Style="{StaticResource SecondaryButton}" Padding="10,8"
+                                Style="{StaticResource SecondaryButton}" FontSize="12" Padding="10,8"
                                 HorizontalContentAlignment="Left" HorizontalAlignment="Stretch">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xEC05;" FontFamily="Segoe Fluent Icons" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Run Speed Test" VerticalAlignment="Center" FontSize="12"/>
+                                <TextBlock Text="Run Speed Test" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
 
@@ -656,7 +656,7 @@
                                 Visibility="{Binding IsQuickActionRunning, Converter={StaticResource BoolToVis}}">
                             <StackPanel>
                                 <DockPanel Margin="0,0,0,6">
-                                    <TextBlock Text="{Binding QuickActionName}" FontSize="12" FontWeight="Medium"
+                                    <TextBlock Text="{Binding QuickActionName}" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}" FontWeight="Medium"
                                                DockPanel.Dock="Left" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding QuickActionStatus}" Style="{StaticResource Caption}"
                                                DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -731,7 +731,7 @@
                                                        TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                         <!-- ETA (visible only if scan takes >5s) -->
-                                        <TextBlock Text="{Binding Eta}" FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                        <TextBlock Text="{Binding Eta}" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
                                                    Margin="22,2,0,0"
                                                    Visibility="{Binding ShowEta, Converter={StaticResource BoolToVis}}"/>
                                         <!--
@@ -783,12 +783,12 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:ActivityEntry}">
                                     <DockPanel Margin="0,0,0,8">
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding TimeAgo}" FontSize="10"
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding TimeAgo}" Style="{StaticResource Micro}"
                                                    Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                         <StackPanel>
                                             <TextBlock Text="{Binding Action}" Style="{StaticResource Subtle}" FontWeight="Medium"
                                                        Foreground="{DynamicResource TextSecondary}"/>
-                                            <TextBlock Text="{Binding Detail}" FontSize="10"
+                                            <TextBlock Text="{Binding Detail}" Style="{StaticResource Micro}"
                                                        Foreground="{DynamicResource TextMuted}"
                                                        Visibility="{Binding Detail, Converter={StaticResource FlexVis}}"/>
                                         </StackPanel>

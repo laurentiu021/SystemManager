@@ -151,7 +151,7 @@
                                                     <TextBlock Text="{Binding KeepLabel}" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource SuccessText}"/>
                                                 </Border>
-                                                <TextBlock VerticalAlignment="Center" FontSize="12"
+                                                <TextBlock VerticalAlignment="Center" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding Path}">
                                                     <Run Text="{Binding Name, Mode=OneWay}" FontWeight="Medium"/>

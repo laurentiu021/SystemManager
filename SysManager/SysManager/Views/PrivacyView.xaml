@@ -49,7 +49,7 @@
                         <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"
                                    Foreground="{DynamicResource TextMuted}"
                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
-                        <TextBlock Text="{Binding Category}" FontSize="10"
+                        <TextBlock Text="{Binding Category}" Style="{StaticResource Micro}"
                                    Foreground="{DynamicResource TextMuted}"
                                    Margin="0,2,0,0" Opacity="0.6"/>
                     </StackPanel>

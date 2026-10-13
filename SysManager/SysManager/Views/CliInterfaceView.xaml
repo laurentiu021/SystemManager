@@ -38,7 +38,7 @@
                 <StackPanel>
                     <TextBlock Text="EXAMPLE" Style="{StaticResource SectionLabel}"/>
                     <TextBlock Text="{Binding Example}" FontFamily="Consolas,Cascadia Mono,monospace"
-                               FontSize="14" Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
+                               Style="{StaticResource Body}" Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                 </StackPanel>
             </DockPanel>
         </Border>

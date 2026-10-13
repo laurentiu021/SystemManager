@@ -26,7 +26,7 @@
         <!-- DNS Section -->
         <Border Grid.Row="2" Style="{StaticResource Card}" Margin="28,16,28,0">
             <StackPanel>
-                <TextBlock Text="DNS Server" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,12"/>
+                <TextBlock Text="DNS Server" Style="{StaticResource SectionTitle}" Margin="0,0,0,12"/>
 
                 <DockPanel Margin="0,0,0,12">
                     <TextBlock Text="Current DNS:" VerticalAlignment="Center" Margin="0,0,8,0"
@@ -84,7 +84,7 @@
 
                 <!-- Hosts header -->
                 <DockPanel Grid.Row="0" Margin="0,0,0,12">
-                    <TextBlock Text="Hosts File" FontWeight="SemiBold" FontSize="16"
+                    <TextBlock Text="Hosts File" Style="{StaticResource SectionTitle}"
                                VerticalAlignment="Center"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
                         <Button Content="Refresh" Command="{Binding RefreshHostsCommand}"

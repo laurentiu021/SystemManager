@@ -111,7 +111,7 @@
                                         <TextBlock Text="{Binding ActivitySummary, Mode=OneTime}" Style="{StaticResource Caption}"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"/>
-                                        <TextBlock Text="{Binding Aumid, Mode=OneTime}" FontSize="10"
+                                        <TextBlock Text="{Binding Aumid, Mode=OneTime}" Style="{StaticResource Micro}"
                                                    Foreground="{DynamicResource TextMuted}"
                                                    Margin="0,2,0,0" Opacity="0.6"/>
                                     </StackPanel>

@@ -50,7 +50,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="CURRENT" Style="{StaticResource SectionLabel}"/>
-                    <TextBlock Text="{Binding CurrentMode.Display, FallbackValue=—}" FontSize="15" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding CurrentMode.Display, FallbackValue=—}" Style="{StaticResource MetricCompact}"
                                Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>
                 </StackPanel>
             </Grid>

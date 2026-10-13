@@ -1175,7 +1175,8 @@
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
             </Style>
 
-            <!-- The text scale runs Display (28) → Heading (20) → SectionTitle (14) → Subtle → Caption.
+            <!-- The text scale runs Display (28) → Heading (20) → SectionTitle (14) → Body (13) → Subtle (12) →
+                 Caption (11) → Micro (10).
                  Heading was deleted once, because no view used it and that made it a trap: a reviewer
                  enforcing "use an existing style" would point at a style that had never rendered. The
                  condition set for its return — "only alongside a view that needs it" — is met now, by the
@@ -1197,7 +1198,7 @@
                  default, so the titles already render that way. The real delta is TextRenderingMode, Auto to
                  ClearType, exactly what the four above just took. Left out anyway: the decision was made on
                  the larger claim, and the smaller one deserves its own look at 28px on a machine that runs
-                 the app rather than being folded in as a rounding error.
+                 the app rather than being folded in as a rounding error (#2688).
 
                  SectionLabel moved here from the control-template block above. It had to: BasedOn is a
                  StaticResource reference, and a StaticResource cannot resolve a key defined LATER in the
@@ -1211,6 +1212,20 @@
             <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+            </Style>
+
+            <!-- Micro (10) is the smallest text token: the pills, legends and fine print — Services' safety
+                 pills, Environment Variables' "missing folder", Browser Cleaner's "signs you out", the
+                 Dashboard's time-ago lines, the sidebar's group counts. 26 TextBlocks drew it with a raw
+                 FontSize="10" and none of them had a name for it; Bulk Installer's "Installed" pill came up to it
+                 from 9 (#1634). The sidebar's PREVIEW pills are the one text still below it, because at 10 a pill
+                 takes room the tab name beside it does not have (#2686).
+
+                 FontSize ONLY, like Body: nearly every one of those sets its own colour, and a token that also
+                 declared one would read as if it controlled them while doing nothing. BasedOn the implicit style
+                 for the same reason the others are — without it a TextBlock taking this would lose ClearType. -->
+            <Style x:Key="Micro" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <Setter Property="FontSize" Value="10"/>
             </Style>
 
             <Style x:Key="Subtle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -1284,12 +1299,11 @@
                  moves. Every one of those call sites states its own FontWeight and Foreground, and a local
                  attribute beats a style setter, so nothing about them renders differently.
 
-                 BasedOn the implicit TextBlock style, unlike Metric and Display above. That is
-                 load-bearing rather than tidiness: an explicit style REPLACES the keyless
-                 `<Style TargetType="TextBlock">`, so without BasedOn a repointed TextBlock would quietly
-                 lose its TextFormattingMode="Ideal" and TextRenderingMode="ClearType". Metric and Display
-                 have that gap today; widening it was not part of this change, and closing it for them is a
-                 separate one because it would alter how existing views render. -->
+                 BasedOn the implicit TextBlock style. That is load-bearing rather than tidiness: an
+                 explicit style REPLACES the keyless `<Style TargetType="TextBlock">`, so without BasedOn a
+                 repointed TextBlock would quietly lose its TextFormattingMode="Ideal" and
+                 TextRenderingMode="ClearType". Metric has since taken it too; Display is the one token left
+                 without it, deliberately — see the comment above the four body-text tokens. -->
             <Style x:Key="MetricSmall" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="20"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
@@ -1311,11 +1325,11 @@
                  16/SemiBold — as with the rungs above, the sizes are unchanged and only the source of the
                  number moves (#1634).
 
-                 Named for what it holds rather than for its size, like the rest of this block. Two other
-                 16/SemiBold TextBlocks exist — the "DNS Server" and "Hosts File" headings on DNS & Hosts —
-                 and they deliberately do NOT take this: they are headings, not values, and the nearest
-                 heading token (SectionTitle, 14) would shrink them. Giving them a name is a separate
-                 decision because it changes how they render. -->
+                 Named for what it holds rather than for its size, like the rest of this block. The "DNS
+                 Server" and "Hosts File" headings on DNS & Hosts were 16/SemiBold too and deliberately did NOT
+                 take this, because they are headings, not values; #1634 moved them onto SectionTitle with
+                 every other card heading. Display Profiles' current mode, a CURRENT label over a value, did
+                 take it then, up from 15. -->
             <Style x:Key="MetricCompact" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                 <Setter Property="FontSize" Value="16"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>

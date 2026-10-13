@@ -281,7 +281,7 @@
                             </Grid>
 
                             <!-- Size text -->
-                            <TextBlock Grid.Column="3" Text="{Binding SizeDisplay}" FontSize="12"
+                            <TextBlock Grid.Column="3" Text="{Binding SizeDisplay}" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}"
                                        FontWeight="Medium" VerticalAlignment="Center"
                                        HorizontalAlignment="Right"/>
 

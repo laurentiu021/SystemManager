@@ -46,7 +46,7 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="18" Foreground="{DynamicResource Warning}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="PSWindowsUpdate module is required" FontSize="15" FontWeight="SemiBold"
+                        <TextBlock Text="PSWindowsUpdate module is required" Style="{StaticResource SectionTitle}"
                                    Foreground="{DynamicResource Warning}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource Subtle}" Margin="28,6,0,0" TextWrapping="Wrap"/>

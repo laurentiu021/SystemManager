@@ -285,7 +285,7 @@
                                     <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
                                              Fill="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
                                     <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource SafetyText}}"
-                                               FontSize="10" FontWeight="SemiBold"
+                                               Style="{StaticResource Micro}" FontWeight="SemiBold"
                                                Foreground="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
                                 </StackPanel>
                             </Border>

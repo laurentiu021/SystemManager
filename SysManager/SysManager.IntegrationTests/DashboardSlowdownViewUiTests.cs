@@ -87,6 +87,7 @@ public sealed class DashboardSlowdownViewUiTests
             new WindowsUpdateService(),
             new SpeedTestService(),
             new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-slow-speed")),
+            new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-slow-update-check")),
             slowdown: new UnusedSlowdown());
 
         // The load fills the drives and the alerts from another thread. Waited for, so none of it changes a list the

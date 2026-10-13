@@ -206,6 +206,26 @@ public class ProfileServiceTests : IDisposable
         Assert.Contains(sections, s => s.Key == "speedtest");
     }
 
+    /// <summary>
+    /// The switch for the Dashboard's app-update check at startup travels with a profile, in the version check's section
+    /// (#2613): someone who turned it off on one PC finds it off on the next.
+    /// </summary>
+    [Fact]
+    public void TheAppUpdateCheckSwitch_TravelsWithTheUpdateCheckSection()
+    {
+        new UpdateCheckPreferenceService(_dir).SetCheckAppUpdatesOnStartup(false);
+        var exported = _svc.BuildProfile(new DateTime(2026, 10, 13, 9, 0, 0, DateTimeKind.Local), ["updatecheck"]);
+
+        var otherPc = Path.Combine(_dir, "other-pc");
+        Directory.CreateDirectory(otherPc);
+        Assert.Equal(1, new ProfileService(FakePrivacy.AllOff(), otherPc).ApplySections(exported.Sections));
+
+        var carried = new UpdateCheckPreferenceService(otherPc).Load();
+        Assert.NotNull(carried);
+        Assert.False(carried.CheckAppUpdatesOnStartup);
+        Assert.True(carried.CheckOnStartup);
+    }
+
     // ---------- Export / Import file round-trip ----------
 
     [Fact]

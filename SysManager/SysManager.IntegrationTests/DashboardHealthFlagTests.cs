@@ -36,7 +36,8 @@ public class DashboardHealthFlagTests
             new NavigationService(),
             new WindowsUpdateService(),
             new SpeedTestService(),
-            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-speed")));
+            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-speed")),
+            new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-health-update-check")));
     }
 
     /// <summary>

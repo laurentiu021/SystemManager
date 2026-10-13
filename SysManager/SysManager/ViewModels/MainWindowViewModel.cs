@@ -795,7 +795,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
 
         return new Dictionary<Type, object>
         {
+            // The switch for the app-updates check at startup over lookRecords, which holds no setting, so this graph checks
+            // as a first launch does, whatever the user has ticked in About (#2613).
             [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
+                new UpdateCheckPreferenceService(lookRecords),
                 slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),

@@ -5,6 +5,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using SysManager.Services;
 using SysManager.ViewModels;
 using SysManager.Views;
 
@@ -90,4 +91,56 @@ public class AboutViewUiTests
         });
     }
 
+    /// <summary>
+    /// Both of About's switches for the checks SysManager makes on its own are on the page, show what is saved, and a
+    /// tick on the new one reaches the file through the view model (#2613).
+    /// </summary>
+    /// <remarks>
+    /// The view model's tests prove the property loads and saves. They cannot prove the box is bound to it: a binding
+    /// on the wrong path compiles, draws a box, and changes nothing. The startup check is not started, so nothing here
+    /// asks GitHub, and the setting lives in a folder of this test's own.
+    /// </remarks>
+    [Fact]
+    public void TheTwoSwitchesForTheChecksAtStartup_ShowWhatIsSaved_AndATickIsSaved()
+    {
+        const string versionBox = "Check GitHub for a new version when SysManager starts";
+        const string appUpdatesBox = "Check winget for app updates when SysManager starts";
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        var prefs = new UpdateCheckPreferenceService(dir);
+        prefs.SetCheckAppUpdatesOnStartup(false);
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            using var vm = new AboutViewModel(new UpdateService(),
+                new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
+                autoCheck: false, preferences: prefs, updatesDir: dir);
+            var view = new AboutView { DataContext = vm };
+            view.Measure(new Size(1200, 2400));
+            view.Arrange(new Rect(0, 0, 1200, 2400));
+            view.UpdateLayout();
+
+            var boxes = Descendants<CheckBox>(view).Where(b => b.Content is versionBox or appUpdatesBox).ToList();
+            Assert.Equal(2, boxes.Count);
+            Assert.True(boxes.Single(b => (string)b.Content == versionBox).IsChecked);
+            var appUpdates = boxes.Single(b => (string)b.Content == appUpdatesBox);
+            Assert.False(appUpdates.IsChecked);
+
+            appUpdates.SetCurrentValue(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, true);
+
+            Assert.True(vm.CheckAppUpdatesOnStartup);
+            Assert.True(new UpdateCheckPreferenceService(dir).Load()?.CheckAppUpdatesOnStartup);
+        });
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var deeper in Descendants<T>(child)) yield return deeper;
+        }
+    }
 }

@@ -55,7 +55,7 @@
                                      words as the About tab's Legal card. ArchitectureTests holds every count of
                                      the checks at startup to the one in SECURITY.md. -->
                                 <TextBlock x:Name="NetworkPromise" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,2,0,0"
-                                           Text="No account, no cloud, no tracking. SysManager goes online only for what you ask it to do, plus two checks when it starts: it asks GitHub whether a newer version is out, at most once a day and with a switch in About, and it asks winget, Microsoft's app installer, which of your apps have updates. It adds nothing about you to either."/>
+                                           Text="No account, no cloud, no tracking. SysManager goes online only for what you ask it to do, plus two checks when it starts: it asks GitHub whether a newer version is out, at most once a day, and it asks winget, Microsoft's app installer, which of your apps have updates. It adds nothing about you to either, and you can switch either off in About."/>
                             </StackPanel>
                         </Grid>
 

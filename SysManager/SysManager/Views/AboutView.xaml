@@ -29,6 +29,8 @@
                             <RowDefinition Height="Auto"/>
                             <!-- Startup update-check preference. -->
                             <RowDefinition Height="Auto"/>
+                            <!-- Startup app-update check preference (#2613). -->
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal">
@@ -130,16 +132,24 @@
                                        Visibility="{Binding RollBackStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                         </StackPanel>
 
-                        <!-- The app's only outbound call, now something the user can see and switch
-                             off. Same shape and wording style as Bulk Installer's "Load app icons
-                             from the web" toggle: plain language, plus a tooltip naming exactly what
-                             does and does not leave the machine. Unchecking does NOT disable the
-                             "Check for updates" button above — that stays available on demand. -->
+                        <!-- The two checks SysManager makes on its own when it starts, each something the
+                             user can see and switch off. Same shape and wording style as Bulk Installer's
+                             "Load app icons from the web" toggle: plain language, plus a tooltip naming
+                             exactly what does and does not leave the machine. Unchecking the first does NOT
+                             disable the "Check for updates" button above — that stays available on demand. -->
                         <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Margin="0,10,0,0"
                                   Content="Check GitHub for a new version when SysManager starts"
                                   IsChecked="{Binding CheckForUpdatesOnStartup, Mode=TwoWay}"
                                   AutomationProperties.Name="Check GitHub for a new version when SysManager starts"
                                   ToolTip="On by default, so you hear about fixes. SysManager asks GitHub's public releases page which version is newest — nothing about you or your PC is sent. Turn it off and the check runs only when you press Check for updates."/>
+                        <!-- The Dashboard's app-updates alert asked winget at every launch, with no way to turn it
+                             off (#2613). Only the check at startup: Scan system, Update All Apps and the App
+                             Updates tab still ask winget when they are pressed, as the tooltip says. -->
+                        <CheckBox Grid.Row="3" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                                  Content="Check winget for app updates when SysManager starts"
+                                  IsChecked="{Binding CheckAppUpdatesOnStartup, Mode=TwoWay}"
+                                  AutomationProperties.Name="Check winget for app updates when SysManager starts"
+                                  ToolTip="On by default, so the Dashboard can say which of your apps have updates. SysManager asks winget, and winget asks Microsoft's package sources — nothing about you is added. Turn it off and the check runs only when you press Scan system on the Dashboard, or on the App Updates tab."/>
                     </Grid>
                 </Border>
 
@@ -344,7 +354,7 @@
                             SysManager is released under the MIT License. The software is provided "AS IS", without warranty of any kind.
                             No telemetry, no accounts. SysManager goes online only for what you ask it to do, plus two checks when it
                             starts: GitHub's list of releases, for the update check, and winget's list of app updates, which reaches
-                            Microsoft. SECURITY.md on GitHub lists every connection.
+                            Microsoft. Both can be switched off at the top of this page. SECURITY.md on GitHub lists every connection.
                         </TextBlock>
                         <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}">
                             Some tools change system settings, the registry, or delete files. Use them at your own risk: review each

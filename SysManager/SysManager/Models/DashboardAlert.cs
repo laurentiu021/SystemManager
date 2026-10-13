@@ -6,7 +6,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace SysManager.Models;
 
-public enum AlertSeverity { Green, Yellow, Red }
+/// <summary>How an alert's finding is judged, which colours its dot.</summary>
+/// <remarks>
+/// <see cref="Neutral"/> is a check that was not made, so there is nothing to judge: grey, neither "all good" nor a
+/// warning. The app-updates alert is the one that can be, when its check at startup is switched off (#2613). Green would
+/// say "all good" without having looked, the colour #2479 took away from a check that had failed.
+/// </remarks>
+public enum AlertSeverity { Green, Yellow, Red, Neutral }
 public enum AlertLoadingState { Loading, Complete }
 
 public sealed partial class DashboardAlert : ObservableObject
@@ -35,6 +41,14 @@ public sealed partial class DashboardAlert : ObservableObject
     /// <c>NoPropertyIsAssignedTwiceInARow</c> covers that half.</para>
     /// </remarks>
     [ObservableProperty] private string _navTargetId = "";
+
+    /// <summary>The words on the alert's button: "Fix this" for a finding, unless the alert names its own.</summary>
+    /// <remarks>
+    /// An alert with nothing wrong can still have somewhere to go. The app-updates alert whose check at startup was
+    /// switched off sends the user to App Updates, where the check is one button away, and "Fix this" beside "App
+    /// updates not checked at startup" would call that a fault (#2613).
+    /// </remarks>
+    [ObservableProperty] private string _actionLabel = "Fix this";
 
     /// <summary>True when this alert has somewhere to send the user, so the view can hide the button.</summary>
     /// <remarks>

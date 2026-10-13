@@ -5780,6 +5780,51 @@ public partial class ArchitectureTests
         RegexOptions.Compiled | RegexOptions.IgnoreCase)]
     private static partial Regex StartupCheckCount();
 
+    /// <summary>
+    /// The README and SECURITY.md name each switch for a check at startup by the words on its box in About.
+    /// </summary>
+    /// <remarks>
+    /// Both documents said of the Dashboard's app-update check that there was no way to turn it off, which stopped being
+    /// true when About gained a box for it (#2613). A document that names a switch in other words sends the reader
+    /// looking for a box that does not say them, and one that does not name it leaves them believing there is none. The
+    /// labels are read from the two boxes rather than restated here, so renaming one fails until the documents follow.
+    /// <para>It also holds each box to its own choice. The second box bound to the version choice would still compile,
+    /// draw, and pass every guard that goes by a property's name, since the preference record has one of each name.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySwitchForACheckAtStartup_IsNamedInTheDocsByTheWordsOnItsBox()
+    {
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var boxes = XDocument.Load(TestPaths.AppFile("Views", "AboutView.xaml")).Descendants(presentation + "CheckBox").ToList();
+
+        // Exactly one box per choice. A name-keyed guard cannot tell the second box bound to the wrong choice: the
+        // preference record has properties of the same names, so each still reads as used somewhere.
+        string LabelOf(string choice)
+        {
+            var box = Assert.Single(boxes, b => (string?)b.Attribute("IsChecked") == $"{{Binding {choice}, Mode=TwoWay}}");
+            var label = (string?)box.Attribute("Content") ?? "";
+            Assert.True(label.Length > 0, $"About's box for {choice} has no words, so there is nothing to name it by.");
+            return label;
+        }
+
+        string[] labels = [LabelOf("CheckForUpdatesOnStartup"), LabelOf("CheckAppUpdatesOnStartup")];
+
+        // Two choices, so the two boxes cannot carry the same words either.
+        Assert.True(labels[0] != labels[1], $"About's two boxes for the checks at startup both read \"{labels[0]}\".");
+
+        var offenders = new List<string>();
+        foreach (var doc in new[] { "README.md", "SECURITY.md" })
+        {
+            var text = Collapse(File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), doc)));
+            offenders.AddRange(labels.Where(label => !text.Contains($"\"{label}\"", StringComparison.Ordinal))
+                                     .Select(label => $"{doc} — does not name the box \"{label}\""));
+        }
+
+        Assert.True(offenders.Count == 0,
+            "a switch for a check SysManager makes on its own is not named by the words on it, so a reader cannot find "
+            + "it, or is told there is none:\n  " + string.Join("\n  ", offenders));
+    }
+
     /// <summary>The <c>feat|fix</c> alternation auto-release matches to decide a bump.</summary>
     [GeneratedRegex(@"\^\((feat\|fix)\)", RegexOptions.Compiled)]
     private static partial Regex ReleasingPrefixAlternation();

@@ -137,6 +137,13 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty] private bool _checkForUpdatesOnStartup = true;
 
     /// <summary>
+    /// Whether the Dashboard asks winget for app updates when SysManager starts, the other check it makes on its own
+    /// (#2613). Bound to the box under the version check and kept in the same file. Scan system, Update All Apps and
+    /// the App Updates tab still ask winget when they are pressed, whatever this says.
+    /// </summary>
+    [ObservableProperty] private bool _checkAppUpdatesOnStartup = true;
+
+    /// <summary>
     /// Production/designer constructor. <paramref name="configDir"/> exists so these convenience
     /// overloads are not a way AROUND the seam on the core constructor below.
     /// </summary>
@@ -200,9 +207,11 @@ public sealed partial class AboutViewModel : ViewModelBase
         // Load before any check can run, and suppress the save that binding the value would
         // otherwise trigger — restoring a preference must not rewrite the file it came from.
         // A choice that could not be read shows the box clear, because the startup check does not
-        // run then either (#2614). Ticking it saves a choice again.
+        // run then either (#2614). Ticking it saves a choice again. Both boxes, from one read of the file.
         _loadingPreference = true;
-        CheckForUpdatesOnStartup = _preferences.Load()?.CheckOnStartup ?? false;
+        var saved = _preferences.Load();
+        CheckForUpdatesOnStartup = saved?.CheckOnStartup ?? false;
+        CheckAppUpdatesOnStartup = UpdateCheckPreferenceService.ShouldCheckAppUpdatesAtStartup(saved);
         _loadingPreference = false;
 
         RefreshRollbackAvailability();
@@ -247,6 +256,12 @@ public sealed partial class AboutViewModel : ViewModelBase
         _preferences.SetCheckOnStartup(value);
     }
 
+    partial void OnCheckAppUpdatesOnStartupChanged(bool value)
+    {
+        if (_loadingPreference) return;
+        _preferences.SetCheckAppUpdatesOnStartup(value);
+    }
+
     /// <summary>
     /// The outer net for the fire-and-forget startup check. The real service's two calls catch their own
     /// failures, a reply that cannot be read included (#2663), so theirs do not end here. It stays for a
@@ -277,7 +292,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             // The saved choice is there but could not be read, and it may be "off". Checking anyway is what this
             // used to do (#2614). Nothing is written over it, so the next launch reads it again.
             Log.Warning("Startup update check skipped: the saved setting could not be read");
-            UpdateStatus = "The saved setting for the startup check could not be read, so it did not run. Use Check for updates to look now.";
+            UpdateStatus = "The saved settings for the checks at startup could not be read, so neither ran. Use Check for updates to look now.";
             return;
         }
 

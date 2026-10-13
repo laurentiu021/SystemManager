@@ -141,6 +141,10 @@ public static class ServiceRegistration
         // Whether the one-time Welcome screen has been seen on this PC (#1635).
         services.AddSingleton<IFirstRunService, FirstRunService>();
 
+        // About's two switches for the checks at startup. The Dashboard reads it for the app-updates alert (#2613); About
+        // builds the instance it writes through itself.
+        services.AddSingleton<UpdateCheckPreferenceService>();
+
         // One signal for the whole app: Undo Changes raises it and the tab that made the change listens, so a
         // second instance would put a change back without that tab hearing of it (#1525).
         services.AddSingleton<IPutBackSignal, PutBackSignal>();

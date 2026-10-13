@@ -109,8 +109,8 @@ public partial class WelcomeOverlayContractTests
 
     /// <summary>
     /// The sentence about the network says what the app does online on its own, both halves: the version check with
-    /// how often it runs and where it is switched off, and the app-update check. A first draft named only the version
-    /// check, as "the only thing" the app sends, while the Dashboard asks winget at every launch.
+    /// how often it runs, the app-update check, and where both are switched off (#2613). A first draft named only the
+    /// version check, as "the only thing" the app sends, while the Dashboard asks winget at every launch.
     /// <c>ArchitectureTests.EveryCountOfTheChecksAtStartup_IsTheOneSecurityMdGives</c> holds its count to SECURITY.md.
     /// </summary>
     [Fact]
@@ -120,7 +120,7 @@ public partial class WelcomeOverlayContractTests
             t => (string?)t.Attribute(Xaml + "Name") == "NetworkPromise");
         var text = (string?)promise.Attribute("Text") ?? "";
 
-        foreach (var part in new[] { "GitHub", "at most once a day", "About", "winget" })
+        foreach (var part in new[] { "GitHub", "at most once a day", "winget", "switch either off in About" })
             Assert.Contains(part, text, StringComparison.Ordinal);
     }
 

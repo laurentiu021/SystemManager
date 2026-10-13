@@ -17312,6 +17312,11 @@ public partial class ArchitectureTests
         Assert.Contains("*,workflow,*) ;;", body, StringComparison.Ordinal);
         Assert.Contains("has no workflow scope", body, StringComparison.Ordinal);
 
+        // The full repo scope is kept on purpose (#1676). A warning about it printed on every release, and each
+        // one reopened a decision the account holder had already made, so the check reports the scopes and warns
+        // only about one the publish cannot do without.
+        Assert.DoesNotContain("has the full repo scope", body, StringComparison.Ordinal);
+
         // Non-fatal, or a token expiring next month stops a release that is otherwise fine.
         Assert.Contains("continue-on-error: true",
             string.Join('\n', lines.Skip(check).Take(4)), StringComparison.Ordinal);

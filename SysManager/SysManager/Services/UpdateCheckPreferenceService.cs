@@ -1,4 +1,4 @@
-// SysManager · UpdateCheckPreferenceService — whether and when to check GitHub for a new version
+// SysManager · UpdateCheckPreferenceService — the two checks SysManager makes on its own when it starts
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
@@ -10,8 +10,8 @@ using SysManager.Helpers;
 namespace SysManager.Services;
 
 /// <summary>
-/// The user's answer to "check for a new version when SysManager starts?", plus when the last
-/// check actually ran.
+/// The user's answers to "check for a new version when SysManager starts?" and "check winget for app updates when
+/// SysManager starts?", plus when the last version check actually ran.
 /// </summary>
 /// <param name="CheckOnStartup">
 /// Whether the startup check may run at all. Defaults to true: an update check is how a user on
@@ -21,10 +21,18 @@ namespace SysManager.Services;
 /// <param name="LastCheckUtc">
 /// When the last successful startup check ran, or null if never. Drives the throttle.
 /// </param>
-public sealed record UpdateCheckPreference(bool CheckOnStartup, DateTimeOffset? LastCheckUtc);
+/// <param name="CheckAppUpdatesOnStartup">
+/// Whether the Dashboard's app-updates alert asks winget when SysManager starts (#2613). Defaults to true, which is
+/// what it always did before it had a switch: the alert is the one people find useful, and it adds nothing about
+/// them. Off, the alert says it did not check, and Scan system, Update All Apps and the App Updates tab still ask
+/// winget when they are pressed. Kept beside the version check, so Profile Export / Import carries both.
+/// </param>
+public sealed record UpdateCheckPreference(bool CheckOnStartup, DateTimeOffset? LastCheckUtc,
+    bool CheckAppUpdatesOnStartup = true);
 
 /// <summary>
-/// Persists whether the startup update check runs, and when it last ran.
+/// Persists whether the startup update check runs, and when it last ran, and whether the Dashboard asks winget for
+/// app updates at startup (#2613) — the two checks SysManager makes on its own, both switched from About.
 /// <para>Before this, every launch made two unconditional calls to api.github.com — one for the
 /// latest release and one for the last ten — with no setting, no UI and no record of the previous
 /// check. Two consequences: the product's "no telemetry, fully local" claim had a visible
@@ -52,13 +60,14 @@ public sealed class UpdateCheckPreferenceService
     private readonly string _path;
 
     /// <summary>
-    /// Serializes <see cref="RecordCheck"/> against <see cref="SetCheckOnStartup"/>. Both are a
-    /// <see cref="Load"/> followed by a <see cref="Save"/> over one file, and both run on the one
+    /// Serializes <see cref="RecordCheck"/>, <see cref="SetCheckOnStartup"/> and <see cref="SetCheckAppUpdatesOnStartup"/>.
+    /// Each is a <see cref="Load"/> followed by a <see cref="Save"/> over one file, and all three run on the one
     /// instance <see cref="ViewModels.AboutViewModel"/> holds: the startup check records itself from
-    /// a continuation once the GitHub calls return, while the user's tick arrives on the UI thread.
+    /// a continuation once the GitHub calls return, while the user's ticks arrive on the UI thread.
     /// <see cref="AtomicFile"/> makes each WRITE atomic but not the read-then-write pair, so without
     /// this whichever saves last persists a snapshot taken before the other landed — and when that
-    /// is the recorder, the "off" the user just chose silently comes back on.
+    /// is the recorder, the "off" the user just chose silently comes back on. The Dashboard holds an
+    /// instance of its own and only reads, which an atomic write keeps whole.
     /// </summary>
     private readonly Lock _mutateLock = new();
 
@@ -73,7 +82,11 @@ public sealed class UpdateCheckPreferenceService
     }
 
     /// <summary>The stored state to serialize. A record so the JSON shape stays explicit.</summary>
-    private sealed record Stored(bool CheckOnStartup, DateTimeOffset? LastCheckUtc);
+    /// <remarks>
+    /// <c>CheckAppUpdatesOnStartup</c> is nullable because files written before it existed do not have it, and those
+    /// mean "on": the app-update check ran at every launch until it had a switch (#2613).
+    /// </remarks>
+    private sealed record Stored(bool CheckOnStartup, DateTimeOffset? LastCheckUtc, bool? CheckAppUpdatesOnStartup);
 
     /// <summary>
     /// Loads the preference: <see cref="Default"/> when nothing is saved yet, or null when a file is there and the
@@ -115,8 +128,8 @@ public sealed class UpdateCheckPreferenceService
     }
 
     /// <summary>
-    /// Records that a check just ran, keeping the user's on/off choice. Serialized against
-    /// <see cref="SetCheckOnStartup"/> by <see cref="_mutateLock"/>.
+    /// Records that a check just ran, keeping the user's on/off choices. Serialized against the two
+    /// setters by <see cref="_mutateLock"/>.
     /// </summary>
     /// <remarks>
     /// Writes nothing over a file that could not be read. It may hold "off", and writing the default back with the
@@ -134,20 +147,45 @@ public sealed class UpdateCheckPreferenceService
     }
 
     /// <summary>
-    /// Turns the startup check on or off, keeping the last-checked timestamp. Serialized against
-    /// <see cref="RecordCheck"/> by <see cref="_mutateLock"/>.
+    /// Turns the startup check on or off, keeping the other choice and the last-checked timestamp. Serialized against
+    /// the other two writers by <see cref="_mutateLock"/>.
     /// </summary>
     /// <remarks>
-    /// The user's own choice is written even over a file that could not be read: all that can be lost is when the
-    /// last check ran. A file that does not parse is set aside first, when it can be (#2521).
+    /// The user's own choice is written even over a file that could not be read (#2521). See <see cref="Update"/> for
+    /// what the other choice is saved as then.
     /// </remarks>
-    public void SetCheckOnStartup(bool enabled)
+    public void SetCheckOnStartup(bool enabled) => Update(p => p with { CheckOnStartup = enabled });
+
+    /// <summary>
+    /// Turns the Dashboard's app-update check at startup on or off (#2613), keeping the version check's choice and its
+    /// last-checked timestamp. Serialized against the other two writers by <see cref="_mutateLock"/>.
+    /// </summary>
+    public void SetCheckAppUpdatesOnStartup(bool enabled) => Update(p => p with { CheckAppUpdatesOnStartup = enabled });
+
+    /// <summary>
+    /// What the two setters save when the file could not be read or does not parse: both choices off, before the one
+    /// being made is applied.
+    /// </summary>
+    private static readonly UpdateCheckPreference NothingReadable =
+        new(CheckOnStartup: false, LastCheckUtc: null, CheckAppUpdatesOnStartup: false);
+
+    /// <summary>
+    /// Saves one of the user's choices over what the file holds.
+    /// </summary>
+    /// <remarks>
+    /// Written even over a file that could not be read, because it is the user's own choice; one that does not parse is
+    /// set aside first, when it can be (#2521). The file then holds a second choice nobody could read, and About shows
+    /// both of its boxes clear for a setting it could not read, so the other choice is saved as the box shows it, off.
+    /// Building on the default would have saved it on: someone turning the version check back on, while the file held
+    /// "off" for the app-update check, would have turned the app-update check on without seeing it happen (#2613).
+    /// </remarks>
+    private void Update(Func<UpdateCheckPreference, UpdateCheckPreference> change)
     {
         lock (_mutateLock)
         {
             var (current, unparsable) = Read();
             if (unparsable) StoreFile.SetAside(_path);
-            Save((current ?? Default) with { CheckOnStartup = enabled });
+            Save(change(current is null || unparsable ? NothingReadable : current));
         }
     }
 
@@ -171,10 +209,22 @@ public sealed class UpdateCheckPreferenceService
         return nowUtc - last >= ThrottleWindow;
     }
 
+    /// <summary>
+    /// Whether the Dashboard asks winget for app updates when SysManager starts (#2613).
+    /// </summary>
+    /// <remarks>
+    /// A <paramref name="preference"/> of null is a file that is there and could not be read, which may hold "off", so
+    /// the check does not run, as the version check does not (#2614). No throttle, unlike the version check: the alert
+    /// says what this PC needs now, as it did at every launch before it had a switch.
+    /// </remarks>
+    public static bool ShouldCheckAppUpdatesAtStartup(UpdateCheckPreference? preference) =>
+        preference?.CheckAppUpdatesOnStartup ?? false;
+
     /// <summary>Serializes the preference to indented JSON.</summary>
     public static string Serialize(UpdateCheckPreference preference) =>
         JsonSerializer.Serialize(
-            new Stored(preference.CheckOnStartup, preference.LastCheckUtc), JsonOptions);
+            new Stored(preference.CheckOnStartup, preference.LastCheckUtc, preference.CheckAppUpdatesOnStartup),
+            JsonOptions);
 
     /// <summary>
     /// Parses the stored preference; returns <see cref="Default"/> for null, blank or malformed input. The startup
@@ -190,7 +240,8 @@ public sealed class UpdateCheckPreferenceService
         {
             var stored = JsonSerializer.Deserialize<Stored>(json);
             if (stored is null) return Default;
-            return new UpdateCheckPreference(stored.CheckOnStartup, stored.LastCheckUtc);
+            return new UpdateCheckPreference(stored.CheckOnStartup, stored.LastCheckUtc,
+                stored.CheckAppUpdatesOnStartup ?? true);
         }
         catch (JsonException ex) { Log.Debug("Update-check preference parse failed: {Error}", ex.Message); return null; }
     }

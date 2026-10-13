@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.0] - 2026-10-13
+
+**The Dashboard's check for app updates when SysManager starts can now be switched off in About, like the version
+check** (#2613).
+
+### Added
+
+- **A switch for the app-update check at startup.** Each time SysManager started, the Dashboard asked winget which
+  of your apps have updates, and winget asks Microsoft's package sources, with no way to turn it off. About now has
+  a box for it, "Check winget for app updates when SysManager starts", under the one for the version check, and it
+  is on, as the check always was. Off, the Dashboard's app-updates line reads "App updates not checked at startup"
+  in grey, with a link to App Updates, and **Scan system**, **Update All Apps** and the App Updates tab still ask
+  winget when you press them. The choice is kept beside the version check's, so Profile Export / Import carries
+  both, and a setting that cannot be read keeps both checks from running.
+
+### Changed
+
+- **The README and SECURITY.md, which said there was no switch, now name both boxes by the words on them**, and the
+  Welcome screen and About's privacy text say either check can be switched off.
+
 ## [1.129.0] - 2026-10-12
 
 **The first time SysManager starts on a PC, a Welcome screen says what it is, what it does online on its own, and

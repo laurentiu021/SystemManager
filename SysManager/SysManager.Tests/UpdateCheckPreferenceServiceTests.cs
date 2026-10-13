@@ -203,6 +203,113 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
         Assert.Equal(Now, Loaded().LastCheckUtc);
     }
 
+    // ── The switch for the Dashboard's app-update check at startup (#2613) ──
+    //
+    // The app-updates alert asked winget at every launch, with no way to turn it off. Its switch sits in the same file as
+    // the version check's, so a profile carries both.
+
+    [Fact]
+    public void WithNothingSaved_TheAppUpdateCheckRunsAtStartup()
+    {
+        var pref = Loaded();
+        Assert.True(pref.CheckAppUpdatesOnStartup);
+        Assert.True(UpdateCheckPreferenceService.ShouldCheckAppUpdatesAtStartup(pref));
+    }
+
+    [Fact]
+    public void AFileFromBeforeTheSwitch_MeansTheAppUpdateCheckIsOn()
+    {
+        // The check ran at every launch until it had a switch, so a file written before then holds no answer for it, and
+        // that means on, whatever it says about the version check.
+        File.WriteAllText(PreferenceFile, "{ \"CheckOnStartup\": false, \"LastCheckUtc\": null }");
+
+        var pref = Loaded();
+        Assert.False(pref.CheckOnStartup);
+        Assert.True(pref.CheckAppUpdatesOnStartup);
+    }
+
+    [Fact]
+    public void TurningTheAppUpdateCheckOff_PersistsAcrossInstances_AndKeepsEverythingElse()
+    {
+        var service = NewService();
+        service.SetCheckOnStartup(false);
+        service.RecordCheck(Now);
+
+        service.SetCheckAppUpdatesOnStartup(false);
+
+        var pref = Loaded();
+        Assert.False(pref.CheckAppUpdatesOnStartup);
+        Assert.False(UpdateCheckPreferenceService.ShouldCheckAppUpdatesAtStartup(pref));
+        Assert.False(pref.CheckOnStartup);
+        Assert.Equal(Now, pref.LastCheckUtc);
+    }
+
+    [Fact]
+    public void TheVersionSwitchAndARecordedCheck_KeepTheAppUpdateChoice()
+    {
+        var service = NewService();
+        service.SetCheckAppUpdatesOnStartup(false);
+
+        service.SetCheckOnStartup(false);
+        service.SetCheckOnStartup(true);
+        service.RecordCheck(Now);
+
+        Assert.False(Loaded().CheckAppUpdatesOnStartup);
+    }
+
+    [Fact]
+    public void TurningTheAppUpdateCheckOffThenOnAgain_RestoresIt()
+    {
+        var service = NewService();
+        service.SetCheckAppUpdatesOnStartup(false);
+        service.SetCheckAppUpdatesOnStartup(true);
+
+        Assert.True(Loaded().CheckAppUpdatesOnStartup);
+    }
+
+    [Fact]
+    public void ASettingThatCouldNotBeRead_KeepsTheAppUpdateCheckFromRunning()
+        => Assert.False(UpdateCheckPreferenceService.ShouldCheckAppUpdatesAtStartup(null));
+
+    /// <summary>
+    /// About shows both of its boxes clear for a setting it could not read, so a tick on one saves the other as the box
+    /// shows it, off. Building on the default saved it on, so turning the version check back on while the file held "off"
+    /// for the app-update check turned that one on too, without the user seeing it happen.
+    /// </summary>
+    [Fact]
+    public void SavingOneChoiceOverAFileThatCannotBeRead_SavesTheOtherOff()
+    {
+        NewService().SetCheckAppUpdatesOnStartup(false);
+
+        using (new FileStream(PreferenceFile, FileMode.Open, FileAccess.Read, FileShare.Delete))
+            NewService().SetCheckOnStartup(true);
+
+        var pref = Loaded();
+        Assert.True(pref.CheckOnStartup);
+        Assert.False(pref.CheckAppUpdatesOnStartup);
+    }
+
+    [Fact]
+    public void SavingOneChoiceOverAFileThatDoesNotParse_KeepsItAside_AndSavesTheOtherOff()
+    {
+        File.WriteAllText(PreferenceFile, "{ not a preference");
+
+        NewService().SetCheckAppUpdatesOnStartup(true);
+
+        Assert.Equal("{ not a preference", File.ReadAllText(PreferenceFile + ".unreadable"));
+        var pref = Loaded();
+        Assert.True(pref.CheckAppUpdatesOnStartup);
+        Assert.False(pref.CheckOnStartup);
+    }
+
+    [Fact]
+    public void SerializeThenParse_RoundTripsTheAppUpdateChoice()
+    {
+        var original = new UpdateCheckPreference(CheckOnStartup: true, LastCheckUtc: Now, CheckAppUpdatesOnStartup: false);
+
+        Assert.Equal(original, UpdateCheckPreferenceService.Parse(UpdateCheckPreferenceService.Serialize(original)));
+    }
+
     // ── The 24h throttle ────────────────────────────────────────────────────
 
     [Fact]

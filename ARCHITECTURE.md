@@ -194,6 +194,11 @@ QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) inste
   alerts (checked at launch, on Scan system and after Update All Apps; a check that
   could not run is amber, never green), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
+  The launch's round of alerts asks winget for app updates only when About's switch allows it, read
+  through the required `UpdateCheckPreferenceService` parameter (#2613); otherwise the alert is
+  `AppUpdatesNotCheckedAtStartup`, `AlertSeverity.Neutral` (a grey dot) with an "Open App Updates"
+  link, since `DashboardAlert.ActionLabel` lets an alert name its own button. The other two rounds
+  are asked for, so they always check.
   "Why is it slow?" (#1529) runs `ISlowdownService.CheckAsync` under the Disk lock, ticks off the five things
   it looks at through a `SettlingProgress`, and shows the ranked `SlowdownReport`, whose buttons only open a tab
   through `OpenTabCommand`. The service is an optional constructor parameter, like `IAppBlockerService`.
@@ -1301,7 +1306,9 @@ Key services:
   and tried again at the next way out; the screen closes either way. Local and left out of `ProfileService.Catalog`,
   because "seen here" is about this PC and a profile carried to a new one should not keep its first launch quiet.
 - `UpdateCheckPreferenceService` — gates the startup version check, one of the two network calls the app
-  makes on its own (the other is the Dashboard's `winget upgrade` alert, which has no switch yet). Persists
+  makes on its own, and since #2613 the other one too, the Dashboard's `winget upgrade` alert
+  (`CheckAppUpdatesOnStartup`, on by default and when a file from before the switch lacks it;
+  `ShouldCheckAppUpdatesAtStartup` answers false for a setting that could not be read). Persists
   whether the startup version check may run, plus when it last ran, as JSON under
   `%AppData%\SysManager\update-check.json` (Roaming, like `theme.json`: a stated preference should
   follow the user between machines). The check used to be hardcoded on with no setting and no
@@ -1319,8 +1326,11 @@ Key services:
   `AboutViewModel` applies it on the startup path only — the manual "Check for updates" and "Retry"
   buttons always bypass the throttle. Registered in `ProfileService`'s catalog so it survives profile
   export/import. `RecordCheck` writes nothing over a file it could not read, since that file may
-  hold "off"; `SetCheckOnStartup` writes the user's choice regardless, losing at most the last-run
-  time. A file that does not parse is set aside first.
+  hold "off"; `SetCheckOnStartup` and `SetCheckAppUpdatesOnStartup` write the user's choice
+  regardless, and save the other choice off then, as About's box for it shows, rather than the
+  default "on" the user never saw. A file that does not parse is set aside first. About writes
+  through an instance of its own, under one lock for all three writers; the Dashboard's, from the
+  container, only reads.
 - `DiskAnalyzerPreferenceService` — whether the Disk Analyzer map is shown, as JSON under
   `%LocalAppData%\SysManager\disk-analyzer-preference.json`, in the same shape as
   `StandbyPreferenceService` below. Anything unreadable shows the map. Deliberately absent from

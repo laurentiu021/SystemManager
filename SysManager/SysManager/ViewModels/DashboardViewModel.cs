@@ -45,6 +45,10 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private readonly ISpeedTestService _speedTest;
     private readonly SpeedTestHistoryService _speedHistory;
 
+    // About's two switches for what SysManager does online on its own. Read once, at startup, for the app-updates
+    // alert (#2613); Scan system and Update All Apps check whatever it says, because they are asked for.
+    private readonly UpdateCheckPreferenceService _updateCheck;
+
     // Null when no caller supplied one, which omits the stranded-block alert entirely. See the
     // constructor's appBlocker parameter for why it is optional.
     private readonly IAppBlockerService? _appBlocker;
@@ -182,6 +186,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// The Speed Test tab's history, shared, so a quick test from here shows up there. Tests pass one over a
     /// temporary folder, never the user's own file.
     /// </param>
+    /// <param name="updateCheck">
+    /// Whether the app-updates alert may ask winget when SysManager starts (#2613). Required, as
+    /// <paramref name="crashMarkers"/> is: a default would read the user's own setting, so a test could pass or fail on
+    /// what someone had ticked in About, and leaving it out of a construction would be a way past the switch. Tests pass
+    /// one over a temporary folder.
+    /// </param>
     /// <param name="appBlocker">
     /// Reads the IFEO blocked list for the stranded-machine alert. Optional so the six existing
     /// construction sites keep compiling unchanged — the same shape <see cref="AboutViewModel"/> uses for
@@ -203,12 +213,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
+        UpdateCheckPreferenceService updateCheck,
         IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null)
     {
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
         _speedHistory = speedHistory;
+        _updateCheck = updateCheck;
         _appBlocker = appBlocker;
         _slowdown = slowdown;
         _gaming = gaming;
@@ -231,7 +243,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         LoadActivity();
         StartPollingLoop();   // starts BOTH the vitals and temperature loops
         await LoadHealthScoreAsync();
-        _ = StartAlertScans();
+        _ = StartAlertScans(atStartup: true);
         await LoadTemperaturesAsync();
 
         // Last, so the question comes once the window is up and the Dashboard has filled in, rather than before either.
@@ -548,13 +560,20 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// <para>A new set rather than the old alerts reset. A check still running from an earlier round keeps writing
     /// to the alert it was handed, and that alert has left the list, so a slow old result cannot land over a newer
     /// one.</para>
+    /// <para><paramref name="atStartup"/> is the round the launch starts, the one About can keep from asking winget
+    /// (#2613). The other two rounds are asked for, so they check app updates whatever the switch says.</para>
     /// </remarks>
-    private Task StartAlertScans()
+    private Task StartAlertScans(bool atStartup = false)
     {
         Alerts.Clear();
 
+        // A setting that could not be read keeps the check from running, as it does the version check (#2614).
+        var askWinget = !atStartup || UpdateCheckPreferenceService.ShouldCheckAppUpdatesAtStartup(_updateCheck.Load());
+
         var smartAlert = new DashboardAlert { Title = "Checking disk health...", State = AlertLoadingState.Loading };
-        var appUpdateAlert = new DashboardAlert { Title = "Checking app updates...", State = AlertLoadingState.Loading };
+        var appUpdateAlert = askWinget
+            ? new DashboardAlert { Title = "Checking app updates...", State = AlertLoadingState.Loading }
+            : AppUpdatesNotCheckedAtStartup();
         var memoryAlert = new DashboardAlert { Title = "Checking memory health...", State = AlertLoadingState.Loading };
         var eventLogAlert = new DashboardAlert { Title = "Checking Event Log...", State = AlertLoadingState.Loading };
         var rebootAlert = new DashboardAlert { Title = "Checking for a pending reboot...", State = AlertLoadingState.Loading };
@@ -568,7 +587,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         var scans = new List<Task>
         {
             RunAlertScanAsync(smartAlert, ScanSmartHealthAsync),
-            RunAlertScanAsync(appUpdateAlert, ScanAppUpdatesAsync),
+            askWinget ? RunAlertScanAsync(appUpdateAlert, ScanAppUpdatesAsync) : Task.CompletedTask,
             RunAlertScanAsync(memoryAlert, ScanMemoryHealthAsync),
             RunAlertScanAsync(eventLogAlert, ScanEventLogAsync),
             RunAlertScanAsync(rebootAlert, ScanPendingRebootAsync),
@@ -765,6 +784,28 @@ public sealed partial class DashboardViewModel : ViewModelBase
             alert.NavTargetId = NavTargetFor(severity, "nav-app-updates");
         });
     }
+
+    /// <summary>What the app-updates alert reads when About keeps its check at startup from running (#2613).</summary>
+    internal const string AppUpdatesNotCheckedTitle = "App updates not checked at startup";
+
+    /// <summary>
+    /// The app-updates alert when its check at startup did not run: switched off in About, or its setting could not
+    /// be read (#2613).
+    /// </summary>
+    /// <remarks>
+    /// Grey, the colour of nothing to judge: green would say "all up to date" without having looked, and leaving the
+    /// line out would make the card quietly check one thing fewer. Complete from the start, so it never shows the
+    /// "Checking…" of a check that is not going to happen. Its button opens App Updates, where the check is one button
+    /// away, and is labelled for that, since nothing here is a fault to fix.
+    /// </remarks>
+    internal static DashboardAlert AppUpdatesNotCheckedAtStartup() => new()
+    {
+        Title = AppUpdatesNotCheckedTitle,
+        Severity = AlertSeverity.Neutral,
+        State = AlertLoadingState.Complete,
+        NavTargetId = "nav-app-updates",
+        ActionLabel = "Open App Updates",
+    };
 
     /// <summary>Pure decision for the App Updates alert. Testable without WPF.</summary>
     /// <remarks>

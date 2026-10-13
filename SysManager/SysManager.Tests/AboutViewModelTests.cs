@@ -732,6 +732,57 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         Assert.False(Loaded(_dir).CheckOnStartup);
     }
 
+    // ── The switch for the Dashboard's app-update check at startup (#2613) ──
+
+    [Fact]
+    public async Task TheAppUpdateBox_IsTicked_WithNothingSaved()
+    {
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), NewUpdates());
+        await vm.InitializationComplete;
+
+        Assert.True(vm.CheckAppUpdatesOnStartup);
+    }
+
+    [Fact]
+    public async Task TheAppUpdateBox_ShowsTheStoredChoice_ApartFromTheVersionChoice()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckAppUpdatesOnStartup(false);
+
+        using var vm = NewVm(prefs, NewUpdates());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.CheckAppUpdatesOnStartup);
+        Assert.True(vm.CheckForUpdatesOnStartup);
+    }
+
+    [Fact]
+    public async Task TogglingTheAppUpdateBox_SavesIt_AndKeepsTheVersionChoice()
+    {
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        prefs.SetCheckOnStartup(false);
+        using var vm = NewVm(prefs, NewUpdates());
+        await vm.InitializationComplete;
+
+        vm.CheckAppUpdatesOnStartup = false;
+
+        var stored = Loaded(_dir);
+        Assert.False(stored.CheckAppUpdatesOnStartup);
+        Assert.False(stored.CheckOnStartup);
+    }
+
+    [Fact]
+    public async Task WhenTheSavedChoicesDoNotParse_TheAppUpdateBoxShowsClear()
+    {
+        // As the version box does: the Dashboard's check does not run then either.
+        File.WriteAllText(Path.Combine(_dir, UpdateCheckPreferenceService.FileName), "{ not a preference");
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), NewUpdates());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.CheckAppUpdatesOnStartup);
+    }
+
     [Fact]
     public async Task LoadingThePreference_DoesNotRewriteTheFile()
     {

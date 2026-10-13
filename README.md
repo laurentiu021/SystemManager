@@ -70,7 +70,10 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 >   for updates** button still works on demand either way.
 > - **The Dashboard's app-updates alert** asks winget which of your installed apps have
 >   updates (`winget upgrade`), and winget answers from its package sources, which
->   Microsoft runs. SysManager adds nothing about you to it. There is no switch for it yet.
+>   Microsoft runs. SysManager adds nothing about you to it. The About tab has a checkbox —
+>   "Check winget for app updates when SysManager starts" — that switches it off, and when
+>   that setting cannot be read, the check does not run either. "Scan system" on the
+>   Dashboard and the App Updates tab still ask winget when you press them.
 >
 > Everything else happens only when you use it: the network diagnostics (ping and
 > traceroute, and the speed test — Cloudflare's servers, or Ookla's through the Ookla
@@ -1850,7 +1853,9 @@ offers, "rate us" prompts:
 - **System Alerts** — disk health, app updates, memory errors in the last 30 days, critical events in the
   last 7 days, a pending reboot, and any app block that cannot be undone normally. They are checked when
   SysManager starts, again when you press "Scan system", and after Update All Apps. A check that could not
-  run says so in amber rather than reading as good news
+  run says so in amber rather than reading as good news. With the app-update check at startup switched off
+  in About, that line reads "App updates not checked at startup" in grey, with a link to App Updates, and
+  "Scan system" still checks it
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots. GPU usage is read from NVIDIA cards only.
@@ -1977,6 +1982,12 @@ offers, "rate us" prompts:
   shows clear, and About says why. Nothing is written over the saved choice, so it decides again once
   it can be read, and ticking the box turns the check on and saves that. What that check does and
   does not send is described under [What it is](#what-it-is).
+- **The Dashboard's app-update check at startup is the box under it** — "Check winget for app
+  updates when SysManager starts" — on by default. Off, the Dashboard's app-updates line reads "App
+  updates not checked at startup" and links to App Updates, and "Scan system", Update All Apps and
+  the App Updates tab still ask winget when you press them. The two choices are kept in the same
+  file, so Profile Export / Import carries both, and a setting that cannot be read keeps both checks
+  from running. Ticking one box then saves the other as it shows, clear.
 
 ### Updates (for SysManager itself)
 - Auto-check on startup against the GitHub Releases API, at most once a day, plus a manual
@@ -2457,8 +2468,8 @@ a public workflow run against a public commit", which anyone can check with
 unless specifically requested by the user or the person installing or operating it. The full
 policy — including a table of the files the app keeps on your own machine, and every case in
 which it uses the network — is in [SECURITY.md](SECURITY.md#privacy). Two checks run on their own
-when SysManager starts: the version check against the GitHub Releases API, at most once a day and
-switched off from the About tab, and the Dashboard's app-updates alert, which asks winget.
+when SysManager starts: the version check against the GitHub Releases API, at most once a day, and
+the Dashboard's app-updates alert, which asks winget. The About tab can switch off either.
 Everything else that uses the network runs only when you use it, and
 [When SysManager uses the network](#what-it-is) lists each case.
 
@@ -2609,9 +2620,9 @@ attach; nothing is sent.
 
 SysManager runs entirely on your machine. It sends no usage data, collects no telemetry,
 and does not require an account. Two checks run on their own when it starts — the version
-check against GitHub's releases API, which the About tab can switch off, and the
-Dashboard's app-updates alert, which asks winget — and everything else that uses the network
-runs only when you use it. [When SysManager uses the network](#what-it-is) lists each one.
+check against GitHub's releases API and the Dashboard's app-updates alert, which asks winget,
+and the About tab can switch off either — and everything else that uses the network runs only
+when you use it. [When SysManager uses the network](#what-it-is) lists each one.
 
 ## Contributing
 

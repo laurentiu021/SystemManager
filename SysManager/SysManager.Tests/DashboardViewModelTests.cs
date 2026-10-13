@@ -35,7 +35,8 @@ public class DashboardViewModelTests
                                             ITuneUpService? tuneUp = null,
                                             MemoryTestService? memTest = null,
                                             ISlowdownService? slowdown = null,
-                                            IGamingProfileService? gaming = null)
+                                            IGamingProfileService? gaming = null,
+                                            UpdateCheckPreferenceService? updateCheck = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -63,6 +64,9 @@ public class DashboardViewModelTests
             // per construction, which nothing writes to unless a test runs the quick speed test.
             speedTest ?? Substitute.For<ISpeedTestService>(),
             speedHistory ?? new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
+            // About's switches over a folder of their own, never the user's: with nothing saved, the app-updates check runs
+            // at startup, as on a first launch (#2613).
+            updateCheck ?? new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))),
             // Null by default, which omits the stranded-block alert entirely — so the 58 tests written
             // before it existed keep asserting against the same five alerts they always did.
             appBlocker,
@@ -1171,6 +1175,102 @@ public class DashboardViewModelTests
         var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(null).Title);
         Assert.Equal(AlertSeverity.Yellow, alert.Severity);
         Assert.Equal("nav-app-updates", alert.NavTargetId);
+    }
+
+    // ---------- About's switch for the app-update check at startup (#2613) ----------
+    //
+    // The alert asked winget at every launch, and winget asks Microsoft's package sources, with no way to turn it off.
+    // Off, the launch does not ask and the alert says so; Scan system is asked for, so it still checks.
+
+    private static UpdateCheckPreferenceService AppUpdatesAtStartup(bool on)
+    {
+        var prefs = new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N")));
+        prefs.SetCheckAppUpdatesOnStartup(on);
+        return prefs;
+    }
+
+    [Fact]
+    public async Task WithTheSwitchOff_TheLaunchDoesNotAskWinget_AndTheAlertSaysSoInGrey()
+    {
+        var winget = WingetListing(() => 3);
+        using var vm = NewVm(winget, updateCheck: AppUpdatesAtStartup(on: false));
+        await LoadedWithAlertsAsync(vm);
+
+        await winget.DidNotReceive().ListUpgradableAsync(Arg.Any<CancellationToken>());
+        var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.AppUpdatesNotCheckedTitle);
+        Assert.Equal(AlertSeverity.Neutral, alert.Severity);
+        Assert.Equal(AlertLoadingState.Complete, alert.State);
+        // It still goes somewhere: App Updates, where the check is one button away, and it is not called a fault.
+        Assert.Equal("nav-app-updates", alert.NavTargetId);
+        Assert.Equal("Open App Updates", alert.ActionLabel);
+    }
+
+    [Fact]
+    public async Task WithTheSwitchOff_ScanSystemStillAsksWinget()
+    {
+        var winget = WingetListing(() => 3);
+        using var vm = NewVm(winget, updateCheck: AppUpdatesAtStartup(on: false));
+        await LoadedWithAlertsAsync(vm);
+
+        await vm.RefreshCommand.ExecuteAsync(null).WaitAsync(Bound);
+
+        await winget.Received(1).ListUpgradableAsync(Arg.Any<CancellationToken>());
+        Assert.Contains(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(3).Title);
+        Assert.DoesNotContain(vm.Alerts, a => a.Title == DashboardViewModel.AppUpdatesNotCheckedTitle);
+    }
+
+    [Fact]
+    public async Task WithTheSwitchOn_TheLaunchAsksWinget()
+    {
+        var winget = WingetListing(() => 3);
+        using var vm = NewVm(winget, updateCheck: AppUpdatesAtStartup(on: true));
+        await LoadedWithAlertsAsync(vm);
+
+        await winget.Received(1).ListUpgradableAsync(Arg.Any<CancellationToken>());
+        var alert = Assert.Single(vm.Alerts, a => a.Title == DashboardViewModel.ClassifyAppUpdates(3).Title);
+        Assert.Equal("Fix this", alert.ActionLabel);
+    }
+
+    [Fact]
+    public async Task ASettingThatDoesNotParse_KeepsTheLaunchFromAskingWinget()
+    {
+        // It may hold "off", so it is not taken for the default, as the version check does not take it either (#2614).
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, UpdateCheckPreferenceService.FileName), "{ not a preference");
+        var winget = WingetListing(() => 3);
+
+        using var vm = NewVm(winget, updateCheck: new UpdateCheckPreferenceService(dir));
+        await LoadedWithAlertsAsync(vm);
+
+        await winget.DidNotReceive().ListUpgradableAsync(Arg.Any<CancellationToken>());
+        Assert.Contains(vm.Alerts, a => a.Title == DashboardViewModel.AppUpdatesNotCheckedTitle);
+    }
+
+    /// <summary>
+    /// Every severity but green has a colour of its own on the alert's dot, and a check that was not made is grey.
+    /// </summary>
+    /// <remarks>
+    /// The dot's style starts green and each other severity has a trigger, so a severity added without one is drawn
+    /// green: "all good" for a check nobody made, the colour #2479 took off a check that had failed. Read from the
+    /// shipped markup, because the view model is right either way.
+    /// </remarks>
+    [Fact]
+    public void EverySeverityButGreen_HasItsOwnDotColour_AndNotCheckedIsGrey()
+    {
+        var presentation = System.Xml.Linq.XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var view = System.Xml.Linq.XDocument.Load(TestPaths.AppFile("Views", "DashboardView.xaml"));
+        var dot = Assert.Single(view.Descendants(presentation + "Ellipse"),
+            e => e.Descendants(presentation + "DataTrigger").Any(t => (string?)t.Attribute("Binding") == "{Binding Severity}"));
+
+        var fills = dot.Descendants(presentation + "DataTrigger")
+            .Where(t => (string?)t.Attribute("Binding") == "{Binding Severity}")
+            .ToDictionary(t => (string)t.Attribute("Value")!,
+                          t => (string?)t.Elements(presentation + "Setter").Single(s => (string?)s.Attribute("Property") == "Fill").Attribute("Value"));
+
+        Assert.Equal(Enum.GetNames<AlertSeverity>().Where(n => n != nameof(AlertSeverity.Green)).Order(),
+                     fills.Keys.Order());
+        Assert.Equal("{DynamicResource TextMuted}", fills[nameof(AlertSeverity.Neutral)]);
     }
 
     [Fact]

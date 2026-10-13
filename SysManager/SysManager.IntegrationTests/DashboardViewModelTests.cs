@@ -45,7 +45,8 @@ public class DashboardViewModelTests
             new NavigationService(),
             new WindowsUpdateService(),
             new SpeedTestService(),
-            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-speed")));
+            new SpeedTestHistoryService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-speed")),
+            new UpdateCheckPreferenceService(Path.Combine(Path.GetTempPath(), "SysManagerTests", "dash-update-check")));
     }
 
     // Built, then left to finish what its constructor starts: the start-up load and the round of alert checks it

@@ -12,8 +12,8 @@ older build, the first step is usually to update.
 
 | Version  | Supported          |
 | -------- | ------------------ |
-| 1.129.x  | :white_check_mark: |
-| < 1.129  | :x:                |
+| 1.130.x  | :white_check_mark: |
+| < 1.130  | :x:                |
 
 The supported line is always the newest minor on the
 [releases page](https://github.com/laurentiu021/SystemManager/releases/latest) — if that page shows a
@@ -290,7 +290,7 @@ see the last two rows.
 | Resource history | `%LocalAppData%\SysManager` | CPU / RAM / temperature samples, for the history graphs |
 | Diagnostic log | `%LocalAppData%\SysManager\logs` | Up to 14 rolling files — a new one each day, or sooner at 10 MB — so a problem can be diagnosed |
 | Downloaded updates | `%LocalAppData%\SysManager\updates` | The build you downloaded, plus one previous version for rollback |
-| Startup version-check on/off | `%AppData%\SysManager` | The About-tab checkbox that controls the once-a-day version check |
+| Startup checks on/off | `%AppData%\SysManager` | The two About-tab checkboxes that control the once-a-day version check and the Dashboard's app-update check |
 | Whether the Welcome screen has been seen | `%LocalAppData%\SysManager` | When you first closed it, so it is shown only once on this PC |
 | Your saved sets and choices | `%LocalAppData%\SysManager` | Gaming profiles, volume presets, what closing the window does, the standby-cleaner choice, whether the Bulk Installer may load icons from the web, whether the Disk Analyzer map is shown |
 | State the app keeps to undo its own changes | `%LocalAppData%\SysManager` | Performance Mode's record of your original settings, the startup type of each service it turned off, game mode's record of a session still on, a counter Gaming Profile uses to put notifications back, a `.reg` export of each right-click menu key before it changes (`Backups\ContextMenu`, newest three per key), and a `.reg` export of each registry key the Uninstaller removes as a leftover (`Backups\Uninstaller`, newest three per key) |
@@ -322,14 +322,17 @@ starts:
   which release is newest, so it can tell you when a fix is available, and fetches
   the notes of the last ten releases for the About tab. Nothing about you or your PC
   is sent. Once a check has succeeded it waits a day before the next one, and the
-  About tab has a checkbox that switches it off entirely. When that setting cannot be
-  read, the check does not run. The manual **Check for updates** button still works
-  either way.
+  About tab has a checkbox, "Check GitHub for a new version when SysManager starts",
+  that switches it off entirely. When that setting cannot be read, the check does not
+  run. The manual **Check for updates** button still works either way.
 - **App update check** — each time SysManager starts, the Dashboard asks winget which
   of your installed apps have updates (`winget upgrade`, accepting winget's source
   agreements). winget answers from its package sources, which Microsoft runs, so this
-  reaches Microsoft on every launch. SysManager adds nothing about you to it. There is
-  currently no switch to turn it off.
+  reaches Microsoft on every launch. SysManager adds nothing about you to it. The About
+  tab has a checkbox, "Check winget for app updates when SysManager starts", that
+  switches it off; the Dashboard then says app updates were not checked at startup.
+  When that setting cannot be read, the check does not run either. **Scan system**,
+  **Update All Apps** and the App Updates tab still ask winget when you press them.
 - **Network diagnostics** — ping and traceroute contact the targets on the Ping tab
   (your router and, until you change the preset, Google DNS, Cloudflare, Quad9 and
   google.com), and only after you press Start, plus the host you enter on the

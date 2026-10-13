@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.2] - 2026-10-13
+
+**Every tab's name fits in the sidebar now, the ones marked Preview included** (#2686).
+
+### Fixed
+
+- **Three Preview tabs' names were cut short in the sidebar**: Scheduled Maintenance, Notification Blocker and
+  Settings Watchdog, with Resource History on the edge. The PREVIEW pill beside a name took room the name needed.
+  "Preview" now has its own line under the name, the way a closed group already puts a line under its own name.
+- **A screen reader now says "Preview" on those tabs.** The pill was never part of the tab's name, so it was not
+  read.
+
 ## [1.130.1] - 2026-10-13
 
 **Card and section titles that some tabs drew larger now match the rest, and Ping's smallest labels are easier to

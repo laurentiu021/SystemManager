@@ -35,9 +35,11 @@ namespace SysManager.Tests;
 /// delegated to a sibling helper. That is why the guard below looks for <c>AppContext.BaseDirectory</c>, the
 /// one thing all of them had to name.</para>
 /// <para>Every resolver here verifies the thing it returns rather than something beside it, and throws with
-/// the starting directory in the message. <see cref="ArchitectureTests.EveryRepositoryPathATestNeeds_IsAskedForInOnePlace"/>
+/// the starting directory in the message. <c>ArchitectureTests.EveryRepositoryPathATestNeeds_IsAskedForInOnePlace</c>
 /// keeps the walk here — copy 32 would restore the drift in silence, since a walk that lands in the wrong
 /// place still yields a confident verdict. See <c>SourceBraces</c> and <c>Symlinks</c> for the same shape.</para>
+/// <para>The integration project compiles this file too, linked rather than copied, which is why the guard above is
+/// named in plain text rather than with a <c>cref</c>: that test is not in the integration assembly.</para>
 /// </remarks>
 internal static class TestPaths
 {

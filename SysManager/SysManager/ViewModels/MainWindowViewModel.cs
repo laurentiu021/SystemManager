@@ -235,7 +235,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // arrives with, and its four children are the four things they came to do.
             //
             // Costs nothing at startup: the child rows bind only Id, Label, IsBusy,
-            // IsInDevelopment and SelectionStatus, all of them NavItem's own properties. None
+            // IsInDevelopment and ItemStatus, all of them NavItem's own properties. None
             // touches NavItem.Content, so no view-model is materialised by expanding a group —
             // which is the property OnlyTheJustifiedTabs_AreBuiltAtStartup exists to protect.
             g.IsExpanded = g.Id == InitiallyExpandedGroupId;

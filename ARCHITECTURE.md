@@ -77,9 +77,10 @@ the MIRRORED values and never `NavItem.Content`, because touching Content materi
 would rebuild every lazy tab the shell asked about.
 The flat Dashboard row and grouped leaf rows are invokable buttons styled
 `SidebarNavButton`. Their inner visuals consume selection through the shared `SidebarNavRow`,
-`SidebarNavText`, and `SidebarActiveMark` styles, while `SelectionStatus` exposes
-the same state to UI Automation. Group headers are keyboard-focusable toggles;
-collapsed content is disabled so visually hidden leaves cannot receive focus.
+`SidebarNavText`, and `SidebarActiveMark` styles, while `ItemStatus` exposes
+the same state to UI Automation, with "Preview" for a tab still being verified. Group
+headers are keyboard-focusable toggles; collapsed content is disabled so visually hidden
+leaves cannot receive focus.
 
 Keyboard focus is drawn by ONE shared resource, `FocusRing` in `App.xaml`, applied through
 `FocusVisualStyle` on the button, toggle and chip styles whose template replaces the default one — a
@@ -165,11 +166,11 @@ on a text `TextBlock` at any size; on a token whose size is overwritten on the e
 with `FontSize="11"` hid fifteen times from a scan that skipped every styled element; and on a reference to a
 token `App.xaml` does not define, because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and
 would otherwise crash a tab rather than fail a build. It names its exceptions rather than inferring them, and
-fails if one no longer finds exactly its elements: About's product name at 24, and the sidebar's two PREVIEW
-pills at 9 until #2686 gives a pilled row the room for 10. It skips icon glyphs, because a `FontSize` on a
-Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon dimensions as well as
-text ones; styles that are not typography tokens, such as the sidebar's `SidebarNavText`; and the elements
-that set `Style` through a `<TextBlock.Style>` child, which an attribute scan cannot see.
+fails if one no longer finds exactly its elements; About's product name at 24 is the only one left. It skips
+icon glyphs, because a `FontSize` on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13
+and 16 are icon dimensions as well as text ones; styles that are not typography tokens, such as the sidebar's
+`SidebarNavText`; and the elements that set `Style` through a `<TextBlock.Style>` child, which an attribute
+scan cannot see.
 `EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a `TextBlock` under a token that resolves
 no colour, and which names none itself, would render in the WPF default brush.
 `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight, foreground and rendering
@@ -179,7 +180,11 @@ use, which is the only way to check that `BasedOn` is actually doing its job —
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was
 removed rather than left as unreachable code. A tab that is implemented but not yet
-QA-verified is marked with `IsInDevelopment` (surfaced as a PREVIEW badge) instead.
+QA-verified is marked with `IsInDevelopment`, surfaced as "Preview" under its name in
+the sidebar and as a `DevelopmentBanner` on its page. The word has a line of its own
+because beside the name it took the room the name needed (#2686); `SidebarRowFitTests`
+lays the real sidebar out and fails on any name that trims, with the tree long enough
+to scroll.
 
 | Group | View Models |
 |-------|-------------|

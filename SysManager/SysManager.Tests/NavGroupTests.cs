@@ -115,7 +115,7 @@ public class NavGroupTests
         var item = CreateNavItem();
 
         Assert.False(item.IsSelected);
-        Assert.Equal(string.Empty, item.SelectionStatus);
+        Assert.Equal(string.Empty, item.ItemStatus);
     }
 
     [Fact]
@@ -127,9 +127,38 @@ public class NavGroupTests
         item.IsSelected = true;
 
         Assert.True(item.IsSelected);
-        Assert.Equal("Selected", item.SelectionStatus);
+        Assert.Equal("Selected", item.ItemStatus);
         Assert.Contains(nameof(NavItem.IsSelected), changed);
-        Assert.Contains(nameof(NavItem.SelectionStatus), changed);
+        Assert.Contains(nameof(NavItem.ItemStatus), changed);
+    }
+
+    /// <summary>
+    /// A tab still being verified says so to a screen reader, selected or not.
+    /// </summary>
+    /// <remarks>
+    /// The word "Preview" under the name is drawn inside the row, but the row's accessible name is the label alone,
+    /// so without this a screen reader never said it (#2686). A plain tab keeps exactly the status it had, because
+    /// the UI tests and Narrator users already rely on "Selected".
+    /// </remarks>
+    [Theory]
+    [InlineData(false, false, "")]
+    [InlineData(true, false, "Selected")]
+    [InlineData(false, true, "Preview")]
+    [InlineData(true, true, "Selected, preview")]
+    public void NavItem_ItemStatus_SaysPreviewForATabStillBeingVerified(bool selected, bool preview, string expected)
+    {
+        var item = new NavItem
+        {
+            Id = "a",
+            Label = "A",
+            Content = new object(),
+            ViewType = typeof(object),
+            IsInDevelopment = preview,
+        };
+
+        item.IsSelected = selected;
+
+        Assert.Equal(expected, item.ItemStatus);
     }
 
     [Fact]

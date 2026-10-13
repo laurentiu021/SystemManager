@@ -1218,8 +1218,8 @@
                  pills, Environment Variables' "missing folder", Browser Cleaner's "signs you out", the
                  Dashboard's time-ago lines, the sidebar's group counts. 26 TextBlocks drew it with a raw
                  FontSize="10" and none of them had a name for it; Bulk Installer's "Installed" pill came up to it
-                 from 9 (#1634). The sidebar's PREVIEW pills are the one text still below it, because at 10 a pill
-                 takes room the tab name beside it does not have (#2686).
+                 from 9 (#1634), and the sidebar's "Preview" line did once #2686 moved it under the tab name,
+                 where it no longer takes room the name needs.
 
                  FontSize ONLY, like Body: nearly every one of those sets its own colour, and a token that also
                  declared one would read as if it controlled them while doing nothing. BasedOn the implicit style

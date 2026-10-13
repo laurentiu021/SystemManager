@@ -46,7 +46,7 @@
                                 <TextBlock Text="LICENSE" Style="{StaticResource SectionLabel}"/>
                                 <TextBlock Text="MIT" Margin="8,0,24,0" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}"/>
                                 <TextBlock Text="SOURCE" Style="{StaticResource SectionLabel}"/>
-                                <TextBlock Margin="8,0,0,0" FontSize="12">
+                                <TextBlock Margin="8,0,0,0" Style="{StaticResource Subtle}">
                                     <Hyperlink Command="{Binding OpenRepoCommand}" Foreground="{DynamicResource Accent}">github.com/laurentiu021/SystemManager</Hyperlink>
                                 </TextBlock>
                             </StackPanel>
@@ -318,7 +318,7 @@
                                                      not phone home — the user should be able to tell when a
                                                      click opens a browser. Hidden when the entry carries no
                                                      url. -->
-                                                <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12"
+                                                <TextBlock VerticalAlignment="Center" Margin="10,0,0,0" Style="{StaticResource Subtle}"
                                                            Visibility="{Binding Url, Converter={StaticResource FlexVis}}">
                                                     <Hyperlink Command="{Binding DataContext.OpenReleaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                CommandParameter="{Binding Url}"

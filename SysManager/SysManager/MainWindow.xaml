@@ -405,7 +405,7 @@
                                                         <TextBlock Text="{Binding ChildCount, StringFormat=' ({0})'}"
                                                                    VerticalAlignment="Center"
                                                                    FontFamily="{StaticResource UiFont}"
-                                                                   FontSize="10" Foreground="{DynamicResource TextSecondary}"
+                                                                   Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}"
                                                                    Opacity="0.7" Margin="2,0,0,0"/>
                                                     </StackPanel>
                                                     <!-- Subtitle: visible only when collapsed. Wraps to

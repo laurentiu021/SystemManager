@@ -111,7 +111,7 @@ public class TypographyTokenTests
     }
 
     /// <summary>
-    /// The four body-text tokens resolve their own size, weight and colour AND the two rendering options the
+    /// The body-text tokens resolve their own size, weight and colour AND the two rendering options the
     /// keyless <c>&lt;Style TargetType="TextBlock"&gt;</c> hands out.
     /// </summary>
     /// <remarks>
@@ -125,12 +125,15 @@ public class TypographyTokenTests
     /// a WPF default black. The other three deliberately differ from the inherited colour and keep their own
     /// setter; asserting the difference is what stops a later "tidy-up" dropping those too on the theory that
     /// BasedOn covers them.</para>
+    /// <para><c>Micro</c>, the 10 added later in #1634, declares only a size, like <c>Body</c>, so its colour is
+    /// the inherited one too.</para>
     /// </remarks>
     [Theory]
     [InlineData("SectionTitle", 14, "SemiBold", "TextPrimary")]
     [InlineData("Caption", 11, "Normal", "TextMuted")]
     [InlineData("Subtle", 12, "Normal", "TextSecondary")]
     [InlineData("SectionLabel", 11, "SemiBold", "TextMuted")]
+    [InlineData("Micro", 10, "Normal", "TextPrimary")]
     public void EveryBodyTextToken_ResolvesItsOwnLookAndTheImplicitRendering(
         string key, int expectedSize, string expectedWeight, string expectedColourKey)
     {
@@ -157,6 +160,47 @@ public class TypographyTokenTests
     }
 
     /// <summary>
+    /// Each conversion #1634 made to keep an element's look resolves exactly the look the raw size gave it.
+    /// </summary>
+    /// <remarks>
+    /// The views follow one rule now: the size comes from a token, the colour and weight may be the element's
+    /// own. Where a token's colour differs from what the element drew, the element names its colour beside the
+    /// token, and these are the pairs the views use. Each must come out as the implicit style plus the old size:
+    /// the element's colour, Normal weight, the app's UI font, ClearType and Ideal.
+    /// <list type="bullet">
+    /// <item><c>Micro</c> alone replaced a raw 10, because it declares only a size.</item>
+    /// <item><c>Subtle</c> with <c>TextPrimary</c> replaced a raw 12 on text that was primary.</item>
+    /// <item><c>Caption</c> with <c>TextSecondary</c> replaced <c>Subtle</c> overwritten to 11, fifteen times.</item>
+    /// </list>
+    /// The colour is attached as a resource reference, which is what <c>{DynamicResource}</c> in the views does,
+    /// so a theme switch still reaches it.
+    /// </remarks>
+    [Theory]
+    [InlineData("Micro", null, 10, "TextPrimary")]
+    [InlineData("Subtle", "TextPrimary", 12, "TextPrimary")]
+    [InlineData("Caption", "TextSecondary", 11, "TextSecondary")]
+    public void EveryConversionThatKeepsItsLook_ResolvesTheLookItReplaced(
+        string key, string? ownColourKey, int expectedSize, string expectedColourKey)
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+
+            var resources = Application.Current!.Resources;
+            var block = new TextBlock { Style = (Style)resources[key] };
+            if (ownColourKey is not null) block.SetResourceReference(TextBlock.ForegroundProperty, ownColourKey);
+            block.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+            Assert.Equal((double)expectedSize, block.FontSize);
+            Assert.Equal(FontWeights.Normal, block.FontWeight);
+            Assert.Equal(((Brush)resources[expectedColourKey]).ToString(), block.Foreground.ToString());
+            Assert.Equal(((FontFamily)resources["UiFont"]).Source, block.FontFamily.Source);
+            Assert.Equal(TextRenderingMode.ClearType, TextOptions.GetTextRenderingMode(block));
+            Assert.Equal(TextFormattingMode.Ideal, TextOptions.GetTextFormattingMode(block));
+        });
+    }
+
+    /// <summary>
     /// <c>Display</c> is deliberately left off <c>BasedOn</c>, and that stays a decision rather than an
     /// oversight until someone looks at it on a running machine.
     /// </summary>
@@ -169,7 +213,7 @@ public class TypographyTokenTests
     /// <para>Left out anyway, because the decision was made on the larger claim and the smaller one deserves
     /// its own look at 28px rather than being folded in as a rounding error. These two assertions are what
     /// make that a decision instead of an oversight: the test fails the moment someone completes the set,
-    /// which is the prompt to check it on a machine that runs the app.</para>
+    /// which is the prompt to check it on a machine that runs the app (#2688).</para>
     /// <para>What it must NOT lose meanwhile is its colour: <c>Display</c> restates <c>TextPrimary</c>
     /// itself, and that is load-bearing precisely because it inherits nothing.</para>
     /// </remarks>

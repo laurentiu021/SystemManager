@@ -128,15 +128,15 @@
                                                Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
                                         <StackPanel Margin="0,0,12,0">
-                                            <TextBlock Text="Default (clean)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Default (clean)" Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
                                             <Image Source="/Resources/ctx-win10-default.png" MaxHeight="200" Stretch="Uniform"/>
                                         </StackPanel>
                                         <StackPanel>
-                                            <TextBlock Text="Custom (all entries ON)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Custom (all entries ON)" Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
                                             <Image Source="/Resources/ctx-win10-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
                                         </StackPanel>
                                     </StackPanel>
-                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
+                                    <TextBlock Text="ⓘ Hover for preview" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
                                 </StackPanel>
                             </ToolTip>
                         </Button.ToolTip>
@@ -152,19 +152,19 @@
                                                Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Caption}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                                     <StackPanel Orientation="Horizontal">
                                         <StackPanel Margin="0,0,12,0">
-                                            <TextBlock Text="Default (compact)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Default (compact)" Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
                                             <Image Source="/Resources/ctx-win11-default.png" MaxHeight="200" Stretch="Uniform"/>
                                         </StackPanel>
                                         <StackPanel Margin="0,0,12,0">
-                                            <TextBlock Text="Custom (compact)" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <TextBlock Text="Custom (compact)" Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
                                             <Image Source="/Resources/ctx-win11-custom-max.png" MaxHeight="200" Stretch="Uniform"/>
                                         </StackPanel>
                                         <StackPanel>
-                                            <TextBlock Text="After &quot;Show more options&quot;" FontSize="10" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+                                            <TextBlock Text="After &quot;Show more options&quot;" Style="{StaticResource Micro}" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center" Margin="0,0,0,3"/>
                                             <Image Source="/Resources/ctx-win11-show-more.png" MaxHeight="200" Stretch="Uniform"/>
                                         </StackPanel>
                                     </StackPanel>
-                                    <TextBlock Text="ⓘ Hover for preview" FontSize="10" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
+                                    <TextBlock Text="ⓘ Hover for preview" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0" FontStyle="Italic"/>
                                 </StackPanel>
                             </ToolTip>
                         </Button.ToolTip>

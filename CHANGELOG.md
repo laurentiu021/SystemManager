@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.1] - 2026-10-13
+
+**Card and section titles that some tabs drew larger now match the rest, and Ping's smallest labels are easier to
+read.** A card's title was drawn at 14, 15 or 16 points depending on the tab, and a few labels were as small as 9.
+Each moves by a point or two; nothing else about them changes (#1634).
+
+### Changed
+
+- **Eighteen titles that were 15 or 16 points match the others at 14.** The Dashboard's three card titles ("Why is
+  this PC slow?", "Tune-Up complete", "System Health Score"), Performance Mode's ten section headings, DNS & Hosts'
+  two cards, the Appearance popup, Windows Update's module notice and System Health's drive rows take the size 72
+  other titles already used. Performance Mode's headings were the only bold ones and are now semibold like the
+  rest.
+- **Ping's LATENCY, AVG, JITTER and LOSS labels are larger** (9 → 11), in the same style as the labels over System
+  Health's readings, and Bulk Installer's "Installed" pill goes from 9 to 10.
+- **Display Profiles' current mode is drawn like the app's other small figures** (15 → 16).
+- **System Health's drive readings, Battery Health's "no battery" message and the CLI tab's examples** are set at
+  the size the app writes in (14 → 13), because the 14 they used is the heading size and would have made them bold.
+- 57 other labels keep exactly their size, colour and weight; only where their size is defined moved, so the next
+  change to the scale reaches all of them.
+
 ## [1.130.0] - 2026-10-13
 
 **The Dashboard's check for app updates when SysManager starts can now be switched off in About, like the version

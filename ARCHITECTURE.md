@@ -117,18 +117,25 @@ only free while it does not reshape what was already large enough; the other pin
 resolution, because the intuitive belief is the opposite one.
 
 The type scale in `App.xaml` runs in two families. **Text**: `Display` (28) → `Heading` (20) →
-`SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` (11). **Numbers**: `MetricHero` (30),
-`MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16). Every rung except `Display`
-was added for a size views were *already* rendering with raw `FontSize` attributes, so adopting one has
-never changed how anything looks — only where the number comes from. `Body` is the largest of those: 13 is
-what the app writes in, 54 TextBlocks set it by hand before the rung existed, and having no name for it was
-why a contributor reached for the raw value (#1634). `Heading` was restored alongside its first real user —
-the sidebar wordmark — having been deleted once for having none (#1630).
+`SectionTitle` (14) → `Body` (13) → `Subtle` (12) → `Caption` and `SectionLabel` (11) → `Micro` (10).
+**Numbers**: `MetricHero` (30), `MetricLarge` (26), `Metric` (22), `MetricSmall` (20), `MetricCompact` (16).
+Every rung except `Display` was added for a size views were *already* rendering with raw `FontSize`
+attributes, so adopting one changed nothing about how anything looks — only where the number comes from.
+`Body` is the largest of those: 13 is what the app writes in, 54 TextBlocks set it by hand before the rung
+existed, and having no name for it was why a contributor reached for the raw value (#1634). `Micro` is the
+smallest, for the pills, legends and fine print 26 TextBlocks drew at a raw 10. `Heading` was restored
+alongside its first real user — the sidebar wordmark — having been deleted once for having none (#1630).
+
+**The rule the views follow: a TextBlock's size comes from a token; its colour and weight may be its own.** A
+local `Foreground` or `FontWeight` beats the token's, so text that wants 12 in the primary colour takes
+`Subtle` and names `TextPrimary`, and text that wanted `Subtle`'s colour at 11 takes `Caption` and names
+`TextSecondary`. Text inside a `Button` takes the size the Button sets, the way the compact buttons set theirs.
 
 `Heading` and `MetricSmall` share a size and are deliberately separate: one is text, the other a number,
-and System Logs' severity counts take the metric one for that reason. Two 16/SemiBold headings on DNS &
-Hosts stay raw for the mirror-image reason — they are headings, and the nearest heading token would shrink
-them.
+and System Logs' severity counts take the metric one for that reason. Card and section headings used to be
+drawn at 14, 15 and 16; #1634 moved the 15s and 16s onto `SectionTitle`, the 14 the other 72 already used, and
+the regular text at 14 (System Health's drive readings, Battery Health's no-battery line, the CLI examples)
+onto `Body`, because `SectionTitle` would have made it bold.
 
 Every rung except `Display` is `BasedOn` the implicit `TextBlock` style, and that is load-bearing rather
 than tidy: an explicit style REPLACES the keyless `<Style TargetType="TextBlock">`, so without it a
@@ -139,10 +146,8 @@ black text on a dark surface.
 
 `Caption`, `Subtle`, `SectionTitle` and `SectionLabel` were the four still missing it, which is what blocked
 the rest of #1634: while they lacked `BasedOn`, swapping a raw `FontSize="11"` for the token *looked* like a
-no-op and was not. With it the swap is appearance-neutral wherever the token's colour and weight are already
-what the element gets, and those are the ones now converted. The elements where the token would visibly
-differ — no colour of their own at 11 or 12, no weight of their own at 14 — deliberately keep their raw size,
-and the guard's condition below is what tells the two apart, so no allowlist is involved.
+no-op and was not. With it, a token plus the element's own colour or weight reproduces exactly what the raw
+size drew, which is what let the last raw sizes go.
 
 `SectionLabel` is defined next to the other text tokens rather than beside the control templates it used to
 sit in, and it had to move: `BasedOn` is a `StaticResource` reference, and a `StaticResource` cannot resolve a
@@ -152,22 +157,24 @@ key defined later in the same dictionary. Left where it was it would have thrown
 `TextFormattingMode=Display` to `Ideal`; measured on a real TextBlock, that premise is wrong — `Ideal` is
 WPF's default, so they already render that way, and the only difference `BasedOn` would make is
 `TextRenderingMode`, `Auto` to `ClearType`. Left out because the decision was taken on the larger claim and
-the smaller one deserves its own look at 28px. `TypographyTokenTests.Display_StillStandsAloneAndStillResolvesItsColour`
+the smaller one deserves its own look at 28px (#2688). `TypographyTokenTests.Display_StillStandsAloneAndStillResolvesItsColour`
 fails if someone completes the set, which is the prompt to do that look first.
 
-Two guards hold the scale. `ArchitectureTests.EveryMetricRungSize_IsReachedThroughItsRung` enforces both
-directions — no raw `FontSize` on a styleless text `TextBlock` at a rung's size, and no reference to a rung
-`App.xaml` does not define, the latter because a `{StaticResource}` inside a `DataTemplate` resolves at
-runtime and would otherwise crash a tab rather than fail a build. It skips icon glyphs, because a
-`FontSize` on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon
-dimensions as well as text ones, and it skips the five elements that set `Style` through a
-`<TextBlock.Style>` child, which an attribute scan cannot see. At 11, 12 and 14 it demands the token only
-where the swap cannot change what is drawn, which is the same condition described above.
-`EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a
-`TextBlock` under a token that resolves no colour, and which names none itself, would render in the WPF
-default brush. `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight,
-foreground and rendering mode off a real `TextBlock` on an STA thread, which is the only way to check that
-`BasedOn` is actually doing its job — XAML compiles either way.
+Two guards hold the scale. `ArchitectureTests.EveryTextBlockSize_ComesFromAToken` fails on a raw `FontSize`
+on a text `TextBlock` at any size; on a token whose size is overwritten on the element, which is how `Subtle`
+with `FontSize="11"` hid fifteen times from a scan that skipped every styled element; and on a reference to a
+token `App.xaml` does not define, because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and
+would otherwise crash a tab rather than fail a build. It names its exceptions rather than inferring them, and
+fails if one no longer finds exactly its elements: About's product name at 24, and the sidebar's two PREVIEW
+pills at 9 until #2686 gives a pilled row the room for 10. It skips icon glyphs, because a `FontSize` on a
+Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon dimensions as well as
+text ones; styles that are not typography tokens, such as the sidebar's `SidebarNavText`; and the elements
+that set `Style` through a `<TextBlock.Style>` child, which an attribute scan cannot see.
+`EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a `TextBlock` under a token that resolves
+no colour, and which names none itself, would render in the WPF default brush.
+`SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight, foreground and rendering
+mode off a real `TextBlock` on an STA thread, for every token and for each token-and-own-colour pair the views
+use, which is the only way to check that `BasedOn` is actually doing its job — XAML compiles either way.
 
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was

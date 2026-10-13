@@ -64,7 +64,7 @@
                 <StackPanel>
 
                     <!-- ═══ Power Plan ═══ -->
-                    <TextBlock Text="Power Plan" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Power Plan" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <RadioButton x:Name="RbBalanced"
@@ -89,7 +89,7 @@
                     </Border>
 
                     <!-- ═══ Visual Effects ═══ -->
-                    <TextBlock Text="Visual Effects" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Visual Effects" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -97,7 +97,7 @@
                                 <TextBlock Text="Reduce visual effects (disable animations, fades, shadows)" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Uses SystemParametersInfo — takes effect instantly, no logout needed."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
+                                       Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,8"/>
                             <Button Content="Apply Visual Effects" Command="{Binding ApplyVisualEffectsCommand}"
                                     AutomationProperties.Name="Apply visual effects"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
@@ -105,7 +105,7 @@
                     </Border>
 
                     <!-- ═══ Game Mode ═══ -->
-                    <TextBlock Text="Game Mode" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Game Mode" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
@@ -119,7 +119,7 @@
                     </Border>
 
                     <!-- ═══ Overlays ═══ -->
-                    <TextBlock Text="Overlays" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Overlays" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -127,15 +127,15 @@
                                 <TextBlock Text="Disable Xbox Game Bar / Game DVR overlay" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Disables AppCaptureEnabled and GameDVR_Enabled via registry. Instant, reversible."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,8"/>
+                                       Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,8"/>
                             <Button Content="Apply Xbox Game Bar" Command="{Binding ApplyXboxGameBarCommand}"
                                     AutomationProperties.Name="Apply Xbox Game Bar setting"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
                                     Margin="0,0,0,12"/>
 
                             <TextBlock Text="Other overlays (disable manually in each app):"
-                                       FontWeight="SemiBold" FontSize="12" Margin="0,4,0,6"/>
-                            <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="4,0,0,0"
+                                       FontWeight="SemiBold" Style="{StaticResource Subtle}" Foreground="{DynamicResource TextPrimary}" Margin="0,4,0,6"/>
+                            <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="4,0,0,0"
                                        TextWrapping="Wrap">
                                 • Discord: Settings → Game Overlay → disable "Enable in-game overlay"
                                 <LineBreak/>
@@ -149,21 +149,21 @@
                     </Border>
 
                     <!-- ═══ GPU ═══ -->
-                    <TextBlock Text="GPU" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="GPU" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGpuMaxPerformance}" IsEnabled="{Binding HasNvidiaGpu}" AutomationProperties.Name="NVIDIA GPU prefer maximum performance" VerticalAlignment="Center"/>
                                 <TextBlock Text="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
-                            <TextBlock Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"
+                            <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,4"
                                        Visibility="{Binding HasNvidiaGpu, Converter={StaticResource BoolToVis}}">
                                 <Run Text="Detected:"/>
                                 <Run Text="{Binding NvidiaGpuName, Mode=OneWay}"/>
                                 <Run Text="— Sets DisableDynamicPstate=1 to force P0 (max clocks)."/>
                             </TextBlock>
                             <TextBlock Text="No NVIDIA GPU detected on this system."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,2,0,4"
+                                       Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,2,0,4"
                                        Visibility="{Binding HasNvidiaGpu, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                             <Button Content="Apply GPU Setting" Command="{Binding ApplyGpuCommand}"
                                     AutomationProperties.Name="Apply GPU setting"
@@ -173,7 +173,7 @@
                     </Border>
 
                     <!-- ═══ Processor State ═══ -->
-                    <TextBlock Text="Processor State" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Processor State" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
@@ -181,7 +181,7 @@
                                 <TextBlock Text="Processor min state 100% (force max CPU frequency)" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="20,0,0,4"/>
+                                       Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,4"/>
                             <TextBlock Text="⚠ Locked to 100 % by the current power plan (High / Ultimate). Switch to Balanced to adjust."
                                        Foreground="{DynamicResource Warning}" Style="{StaticResource Caption}" Margin="20,0,0,4"
                                        TextWrapping="Wrap"
@@ -195,11 +195,11 @@
                     </Border>
 
                     <!-- ═══ Restore Point ═══ -->
-                    <TextBlock Text="Restore Point" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Restore Point" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
                             <TextBlock Text="Create a Windows System Restore point before making changes. Requires admin."
-                                       Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,8"/>
+                                       Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,8"/>
                             <Button Content="Create Restore Point" Command="{Binding CreateRestorePointCommand}"
                                     AutomationProperties.Name="Create Restore Point"
                                     Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
@@ -207,10 +207,10 @@
                     </Border>
 
                     <!-- ═══ RAM Trim ═══ -->
-                    <TextBlock Text="RAM Working Set Trim" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="RAM Working Set Trim" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,4">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,4">
                                 Frees physical RAM by trimming the working set of all processes.
                                 Pages move to the standby list and are soft-faulted back on demand — no data is lost.
                                 Same as "Empty Working Set" in RAMMap. Useful before launching a game.
@@ -224,10 +224,10 @@
                     </Border>
 
                     <!-- ═══ Hibernation ═══ -->
-                    <TextBlock Text="Hibernation" FontWeight="Bold" FontSize="15" Margin="0,0,0,8"/>
+                    <TextBlock Text="Hibernation" Style="{StaticResource SectionTitle}" Margin="0,0,0,8"/>
                     <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" FontSize="11" Margin="0,0,0,4">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,4">
                                 Hibernation saves your session to disk (hiberfil.sys) so the PC can power off completely
                                 and resume later. Disabling it deletes hiberfil.sys and frees several GB of disk space,
                                 and also turns off Fast Startup and hybrid sleep, which need that file. Requires admin.
@@ -248,7 +248,7 @@
                     </Border>
 
                     <!-- ═══ Current State ═══ -->
-                    <TextBlock Text="Current State" FontWeight="Bold" FontSize="15" Margin="0,8,0,12"/>
+                    <TextBlock Text="Current State" Style="{StaticResource SectionTitle}" Margin="0,8,0,12"/>
                     <Border Style="{StaticResource Card}" Padding="16">
                         <Grid>
                             <Grid.ColumnDefinitions>

@@ -173,7 +173,7 @@
                                                 <TextBlock Text="{Binding ProcessName}" FontWeight="SemiBold" Style="{StaticResource Body}"
                                                            Foreground="{DynamicResource TextPrimary}"/>
                                                 <TextBlock Text="{Binding RemoteSummary, StringFormat='ports: {0}'}"
-                                                           FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                                           Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
                                                            Visibility="{Binding RemoteSummary, Converter={StaticResource FlexVis}}"/>
                                             </StackPanel>
                                         </StackPanel>

@@ -98,18 +98,18 @@
                                             <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsProtected, Converter={StaticResource FlexVis}}">
-                                                <TextBlock Text="Protected" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
+                                                <TextBlock Text="Protected" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"/>
                                             </Border>
                                             <Border Background="{DynamicResource Surface3}" CornerRadius="{StaticResource RadiusSm}" Padding="6,1" Margin="8,0,0,0"
                                                     VerticalAlignment="Center"
                                                     Visibility="{Binding IsCommonBloat, Converter={StaticResource FlexVis}}">
-                                                <TextBlock Text="Common bloat" FontSize="10" Foreground="{DynamicResource TextMuted}"/>
+                                                <TextBlock Text="Common bloat" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"/>
                                             </Border>
                                         </StackPanel>
                                         <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                                    TextWrapping="Wrap" Margin="0,2,16,0"
                                                    Visibility="{Binding Description, Converter={StaticResource FlexVis}}"/>
-                                        <TextBlock Text="{Binding Name}" FontSize="10" Foreground="{DynamicResource TextMuted}"
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}"
                                                    Opacity="0.6" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </DataTemplate>

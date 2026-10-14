@@ -36,7 +36,7 @@
                         <TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                    FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0"/>
                         <StackPanel>
-                            <TextBlock Text="Safe by design" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
+                            <TextBlock Text="Safe by design" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}"/>
                             <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" MaxWidth="900" Margin="0,4,0,0" Style="{StaticResource Subtle}">
                                 Only a fixed list of folders is scanned: driver installer leftovers, Windows' own caches, logs and leftovers, the Recycle Bin, and
                                 game launchers' caches and logs.
@@ -73,9 +73,9 @@
                                 <!-- Announced: this is the coarse "what is happening" line. The percentage
                                      beside it deliberately is not — a live region on a number that changes
                                      every tick produces continuous speech instead of information. -->
-                                <TextBlock Grid.Column="0" Text="{Binding ScanStatusLine}" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="0" Text="{Binding ScanStatusLine}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"
                                            AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
-                                <TextBlock Grid.Column="1" Text="{Binding ScanProgress, StringFormat={}{0}%}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding ScanProgress, StringFormat={}{0}%}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
                             <ProgressBar AutomationProperties.Name="Scan progress" Height="6" Minimum="0" Maximum="100" Value="{Binding ScanProgress}" Margin="0,6,0,0"/>
                             <!-- The VM already runs an EtaCalculator over ScanProgress; nothing bound the
@@ -134,7 +134,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Selected total:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Selected total:" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                     <TextBlock Text="{Binding TotalSelectedDisplay}" Style="{StaticResource MetricCompact}"
                                                Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                                 </StackPanel>
@@ -156,9 +156,9 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{Binding CleanStatusLine}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"
+                                <TextBlock Grid.Column="0" Text="{Binding CleanStatusLine}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}" VerticalAlignment="Center"
                                            AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
-                                <TextBlock Grid.Column="1" Text="{Binding CleanProgress, StringFormat={}{0}%}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CleanProgress, StringFormat={}{0}%}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                             </Grid>
                             <ProgressBar AutomationProperties.Name="Cleanup progress" Height="6" Minimum="0" Maximum="100" Value="{Binding CleanProgress}" Margin="0,6,0,0"/>
                             <!-- Same for the clean phase, which deletes real files — knowing how long is

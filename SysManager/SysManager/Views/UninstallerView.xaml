@@ -349,10 +349,10 @@
                                                     </Style>
                                                 </Ellipse.Style>
                                             </Ellipse>
-                                            <TextBlock FontSize="11" FontWeight="SemiBold"
+                                            <TextBlock FontWeight="SemiBold"
                                                        VerticalAlignment="Center" Margin="6,0,0,0">
                                                 <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                         <Setter Property="Text" Value="{Binding Source}"/>
                                                         <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                                                         <Style.Triggers>

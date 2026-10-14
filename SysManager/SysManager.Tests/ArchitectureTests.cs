@@ -7302,10 +7302,11 @@ public partial class ArchitectureTests
     /// <c>DataTemplate</c> resolves at RUNTIME, so a misspelled or deleted token compiles cleanly and throws when the
     /// tab is opened. Several of these call sites are inside templates.</para>
     /// <para>Skipped: icon glyphs, because a <c>FontSize</c> on a Segoe Fluent <c>TextBlock</c> is a glyph box and 13
-    /// and 16 are icon sizes as well as text ones; styles that are not typography tokens, such as the sidebar's
-    /// <c>SidebarNavText</c>; and the elements that build a <c>Style</c> through a <c>&lt;TextBlock.Style&gt;</c>
-    /// child, which an attribute scan cannot see — giving one a <c>Style</c> attribute as well is "property has
-    /// already been set and can be set only once".</para>
+    /// and 16 are icon sizes as well as text ones; and styles that are not typography tokens, such as the sidebar's
+    /// <c>SidebarNavText</c>. An element that builds its <c>Style</c> through a <c>&lt;TextBlock.Style&gt;</c> child is
+    /// read like the rest since #2694: a raw <c>FontSize</c> on it is an offender, and so is one set inside the inline
+    /// style, which builds on a token instead (<see cref="EveryStyleInAView_BuildsOnTheAppStyleItReplaces"/>). A
+    /// TextBlock that names no size at all is <see cref="EveryTextBlock_TakesItsSizeFromATokenOrTheControlAroundIt"/>.</para>
     /// <para>Text inside a <c>Button</c> takes the size the Button sets, the way the 23 compact buttons below 13 set
     /// theirs. The Dashboard's quick actions and Audio Mixer's two settings links moved their 12 from the label onto
     /// the Button in #1634, and the label inherits it.</para>
@@ -7366,14 +7367,24 @@ public partial class ArchitectureTests
             {
                 var flat = WhitespaceRun().Replace(tag.Value, " ");
                 inspected++;
-                var size = Regex.Match(flat, @"FontSize=""(?<size>[\d.]+)""");
-                if (!size.Success) continue;
-                var raw = size.Groups["size"].Value;
                 if (flat.Contains("Segoe Fluent", StringComparison.Ordinal)
                     || flat.Contains("Segoe MDL2", StringComparison.Ordinal))
                 {
                     continue;
                 }
+
+                // An inline <TextBlock.Style> owns no size either. It builds on a token, which the element then takes
+                // like any other; a FontSize setter inside it is a raw size moved one level in (#2694).
+                if (InlineStyleOf(markup, tag) is { } inline
+                    && Regex.Match(inline, @"Property=""FontSize"" Value=""(?<size>[\d.]+)""") is { Success: true } setter)
+                {
+                    offenders.Add($"{name}: an inline TextBlock style sets FontSize=\"{setter.Groups["size"].Value}\" — "
+                                  + "base the style on the token for that size instead");
+                }
+
+                var size = Regex.Match(flat, @"FontSize=""(?<size>[\d.]+)""");
+                if (!size.Success) continue;
+                var raw = size.Groups["size"].Value;
 
                 // \b, because FontStyle="Italic" ends in Style=" too. Reading it as a style is how the earlier
                 // version of this guard skipped three italic 10s it was meant to see.
@@ -7393,7 +7404,6 @@ public partial class ArchitectureTests
                                           : $"no token draws {raw}; the scale is {scale}"));
                     continue;
                 }
-                if (SetsStyleAsAChildElement(markup, tag)) continue;
 
                 var exception = Array.FindIndex(exceptions, e => e.View == name && e.Size == raw
                     && flat.Contains($"Text=\"{e.Text}\"", StringComparison.Ordinal));
@@ -7464,24 +7474,297 @@ public partial class ArchitectureTests
     private static partial Regex TypographyStyleBlock();
 
     /// <summary>
-    /// Whether a <c>TextBlock</c> sets its <c>Style</c> through a <c>&lt;TextBlock.Style&gt;</c> child rather
-    /// than an attribute.
+    /// The inline style a <c>TextBlock</c> builds through a <c>&lt;TextBlock.Style&gt;</c> child, or null when it
+    /// has none.
     /// </summary>
     /// <remarks>
-    /// Five elements build a Style inline for its <c>Triggers</c>. An attribute scan cannot see that, and
-    /// #1634's sweep tried to give all five a <c>Style</c> attribute as well — "property has already been set
-    /// and can be set only once", five build errors. TextBlocks do not nest, so the first closing tag after
-    /// the start tag is the matching one.
+    /// Sixteen elements build a Style inline, most for its <c>Triggers</c>, and an attribute scan cannot see one.
+    /// Until #2694 this guard skipped them, and ten raw sizes sat inside them unread. #1634's sweep had tried to give
+    /// five of them a <c>Style</c> attribute as well, which is "property has already been set and can be set only
+    /// once", five build errors; the token goes in the inline style's <c>BasedOn</c> instead. TextBlocks do not nest,
+    /// so the first closing tag after the start tag is the matching one.
     /// </remarks>
-    private static bool SetsStyleAsAChildElement(string markup, Match startTag)
+    private static string? InlineStyleOf(string markup, Match startTag)
     {
-        if (startTag.Value.TrimEnd().EndsWith("/>", StringComparison.Ordinal)) return false;
+        if (startTag.Value.TrimEnd().EndsWith("/>", StringComparison.Ordinal)) return null;
 
         var after = startTag.Index + startTag.Length;
         var close = markup.IndexOf("</TextBlock>", after, StringComparison.Ordinal);
         var body = close < 0 ? markup[after..] : markup[after..close];
-        return body.Contains("<TextBlock.Style", StringComparison.Ordinal);
+        var open = body.IndexOf("<TextBlock.Style", StringComparison.Ordinal);
+        return open < 0 ? null : body[open..];
     }
+
+    /// <summary>
+    /// A text TextBlock that names no size takes one from the control around it (#2694).
+    /// </summary>
+    /// <remarks>
+    /// WPF-UI's <c>ControlsDictionary</c> raises TextBlock's default size from WPF's 12 to 14. A TextBlock with no
+    /// token, no <c>FontSize</c> and nothing around it that sets one therefore draws at 14, a step above <c>Body</c>
+    /// and outside the scale <see cref="EveryTextBlockSize_ComesFromAToken"/> holds. 117 did until #2694 put each
+    /// on <c>Body</c>, or on <c>SectionTitle</c> where the text was already 14 and semi-bold.
+    /// <para>Text inside a control whose style sets a size, such as a button, a checkbox, a combo box item or a
+    /// grid, takes that size, so the walk up a TextBlock's ancestors accepts any of them, and any element that sets
+    /// <c>FontSize</c> itself. Which styles set a size is read from App.xaml and the view's own resources, following
+    /// <c>BasedOn</c>, rather than listed here, and a row template kept as a keyed resource is followed to where it
+    /// is used. Audio Mixer's device names are the known case: they sit in a <c>ComboBoxItem</c> style's template
+    /// and take that style's size, and the guard fails if it stops finding them that way.</para>
+    /// <para><c>SysManager.IntegrationTests.TypographyTokenTests.EveryLaidOutText_TakesItsSizeFromSomething</c>
+    /// checks the same on a real layout, which also sees text a control makes for itself, such as a RadioButton's
+    /// label. This sees what an off-screen layout never builds: a collapsed expander's content, a list box's rows
+    /// and the main window.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryTextBlock_TakesItsSizeFromATokenOrTheControlAroundIt()
+    {
+        var appDir = TestPaths.AppProject();
+        XNamespace p = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var appStyles = StylesIn(XDocument.Load(Path.Combine(appDir, "App.xaml")));
+
+        var offenders = new List<string>();
+        var sizedAround = new List<string>();
+        var inspected = 0;
+
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var doc = XDocument.Load(file, LoadOptions.SetLineInfo);
+            var name = Path.GetFileName(file);
+
+            // The view's own styles over App.xaml's: a key it defines hides the app's.
+            var styles = new Dictionary<string, XElement>(appStyles, StringComparer.Ordinal);
+            foreach (var (key, style) in StylesIn(doc)) styles[key] = style;
+
+            bool SetsSize(string? key) =>
+                key is not null && styles.TryGetValue(key, out var style) && StyleSetsFontSize(style, styles);
+
+            XElement? InlineStyle(XElement element) =>
+                element.Element(XName.Get(element.Name.LocalName + ".Style", element.Name.NamespaceName))
+                    ?.Element(p + "Style");
+
+            // Whether an element sets the size of the text in it: an attribute, its style, or the app's style for its
+            // type when it names none.
+            bool SizesItsText(XElement element) =>
+                element.Attribute("FontSize") is not null
+                || element.Attributes().Any(a => a.Name.LocalName == "TextElement.FontSize")
+                || (element.Attribute("Style") is { } styleAttribute
+                    ? SetsSize(StyleKey(styleAttribute.Value))
+                    : InlineStyle(element) is { } inline
+                        ? StyleSetsFontSize(inline, styles)
+                        : element.Name.Namespace == p && SetsSize("type:" + element.Name.LocalName));
+
+            bool SizedFromAround(XElement element, int depth)
+            {
+                for (var around = element.Parent; around is not null; around = around.Parent)
+                {
+                    var local = around.Name.LocalName;
+                    if (local.Contains('.', StringComparison.Ordinal)
+                        || local is "ControlTemplate" or "ItemsPanelTemplate" or "HierarchicalDataTemplate")
+                    {
+                        continue;
+                    }
+
+                    // Inside a style's template, the control the style dresses is what the text sits in.
+                    if (local == "Style") return StyleSetsFontSize(around, styles);
+
+                    if (local == "DataTemplate")
+                    {
+                        if ((string?)around.Attribute(x + "Key") is not { } key) continue;
+
+                        // A keyed row template sits in whatever uses it.
+                        var uses = doc.Descendants()
+                            .Where(e => e.Attributes().Any(a => a.Value == $"{{StaticResource {key}}}"
+                                                                || a.Value == $"{{DynamicResource {key}}}"))
+                            .ToList();
+                        return uses.Count > 0 && depth < 5
+                               && uses.All(use => SizesItsText(use) || SizedFromAround(use, depth + 1));
+                    }
+
+                    if (SizesItsText(around)) return true;
+                }
+                return false;
+            }
+
+            foreach (var block in doc.Descendants(p + "TextBlock"))
+            {
+                var family = (string?)block.Attribute("FontFamily") ?? "";
+                if (family.Contains("Segoe Fluent", StringComparison.Ordinal)
+                    || family.Contains("Segoe MDL2", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                inspected++;
+                if (SizesItsText(block)) continue;
+                if (SizedFromAround(block, 0))
+                {
+                    sizedAround.Add($"{name}: {(string?)block.Attribute("Text")}");
+                    continue;
+                }
+                offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)block).LineNumber}: a TextBlock "
+                              + ((string?)block.Attribute("Text") is { } text ? $"showing \"{text}\" " : "")
+                              + "names no size and nothing around it sets one, so it draws at WPF-UI's default of 14. "
+                              + "Give it Style=\"{StaticResource Body}\", or SectionTitle where it is semi-bold");
+            }
+        }
+
+        // Vacuity floors: 965 text TextBlocks, 27 of them sized by the control around them, measured for #2694.
+        Assert.True(inspected >= 850,
+            $"only {inspected} text TextBlocks were inspected, out of 965 measured — the walk is reading almost nothing.");
+        Assert.True(sizedAround.Count >= 20,
+            $"only {sizedAround.Count} TextBlocks were found sized by the control around them, out of 27 measured — the "
+            + "ancestor walk stopped recognising buttons, grids and checkboxes, so a pass would mean nothing.");
+        Assert.Contains("AudioMixerView.xaml: {Binding FriendlyName}", sizedAround);
+
+        Assert.True(offenders.Count == 0,
+            "these TextBlocks take their size from nothing:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A style in a view for a type App.xaml styles builds on App.xaml's style rather than replacing it (#2694).
+    /// </summary>
+    /// <remarks>
+    /// An explicit style replaces the implicit one for its type instead of adding to it. Sixteen inline
+    /// <c>&lt;TextBlock.Style&gt;</c> elements with no <c>BasedOn</c> lost the app's TextBlock defaults, so they drew in
+    /// Segoe UI rather than the app's font and lost the forced ClearType, and ten of them wrote a raw size the
+    /// type-scale guard did not read. File Shredder's queue did the same with <c>&lt;DataGrid.Style&gt;</c>: it lost the
+    /// app's grid style, so its rows drew at 14 in Segoe UI with no stripes, and without <c>RebuildFocus.Keep</c>
+    /// removing a file from the keyboard dropped focus to the window (#2609). The types are read from App.xaml's
+    /// implicit styles.
+    /// <para><b>Excepted by name:</b> Disk Analyzer's <c>MapTile</c>, a button drawn entirely by its own template with
+    /// its fill and text colour from the data, which wants none of the app's button look. A grid column's element
+    /// style is left out as well: a text or checkbox column gives its element the column's own style and never the
+    /// app's, with or without <c>ElementStyle</c>, so <c>BasedOn</c> there changes a look rather than restoring one.
+    /// The checkbox columns are #2696.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStyleInAView_BuildsOnTheAppStyleItReplaces()
+    {
+        var appDir = TestPaths.AppProject();
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var styledTypes = StylesIn(XDocument.Load(Path.Combine(appDir, "App.xaml"))).Keys
+            .Where(k => k.StartsWith("type:", StringComparison.Ordinal))
+            .Select(k => k["type:".Length..])
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.True(styledTypes.Count >= 12 && styledTypes.Contains("TextBlock") && styledTypes.Contains("DataGrid"),
+            $"only {styledTypes.Count} implicit styles were read from App.xaml, out of 15 there, so this guard would "
+            + "check almost nothing.");
+
+        string[] columnStyles =
+        [
+            "DataGridTextColumn.ElementStyle", "DataGridTextColumn.EditingElementStyle",
+            "DataGridCheckBoxColumn.ElementStyle", "DataGridCheckBoxColumn.EditingElementStyle",
+        ];
+        (string View, string Key)[] exceptions = [("DiskAnalyzerView.xaml", "MapTile")];
+        var seen = new int[exceptions.Length];
+
+        var offenders = new List<string>();
+        var inspected = 0;
+        var columns = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var name = Path.GetFileName(file);
+            foreach (var style in XDocument.Load(file, LoadOptions.SetLineInfo).Descendants()
+                         .Where(e => e.Name.LocalName == "Style"))
+            {
+                var type = TargetTypeName((string?)style.Attribute("TargetType"));
+                if (type is null || !styledTypes.Contains(type)) continue;
+                if (columnStyles.Contains(style.Parent?.Name.LocalName))
+                {
+                    columns++;
+                    continue;
+                }
+                inspected++;
+                if (style.Attribute("BasedOn") is not null) continue;
+
+                var exception = Array.FindIndex(exceptions,
+                    e => e.View == name && e.Key == (string?)style.Attribute(x + "Key"));
+                if (exception >= 0)
+                {
+                    seen[exception]++;
+                    continue;
+                }
+                offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)style).LineNumber}: a {type} style with no BasedOn "
+                              + $"replaces App.xaml's {type} style instead of adding to it. Base it on that style, or on "
+                              + "the token or keyed style it is a variant of");
+            }
+        }
+
+        // Vacuity floors: 38 styles for app-styled types and 56 column element styles, measured for #2694.
+        Assert.True(inspected >= 30,
+            $"only {inspected} view styles for app-styled types were inspected, out of 38 measured.");
+        Assert.True(columns >= 45,
+            $"only {columns} grid column element styles were set aside, out of 56 measured — the parent match broke, "
+            + "and the count above is no longer what it says.");
+        for (var i = 0; i < exceptions.Length; i++)
+        {
+            Assert.True(seen[i] == 1,
+                $"the exception for {exceptions[i].Key} in {exceptions[i].View} found {seen[i]} styles where it was "
+                + "written for one. Update or delete it rather than leave it allowing something else.");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these styles drop the app's style for their type:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every <c>Style</c> a XAML document defines as a resource, by the key a reference uses: <c>key:Name</c> for a
+    /// keyed one, <c>type:TextBlock</c> for one that applies to every element of its type.
+    /// </summary>
+    /// <remarks>
+    /// Only resources: an inline style or a column's element style belongs to the one element it is set on, and no
+    /// reference can name it.
+    /// </remarks>
+    private static Dictionary<string, XElement> StylesIn(XDocument doc)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var styles = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        foreach (var style in doc.Descendants().Where(e => e.Name.LocalName == "Style"))
+        {
+            var holder = style.Parent?.Name.LocalName ?? "";
+            if (!holder.EndsWith(".Resources", StringComparison.Ordinal) && holder != "ResourceDictionary") continue;
+            var key = (string?)style.Attribute(x + "Key");
+            styles[key is not null ? "key:" + key : "type:" + TargetTypeName((string?)style.Attribute("TargetType"))] = style;
+        }
+        return styles;
+    }
+
+    /// <summary>Whether a style sets <c>FontSize</c>, itself or through the styles it is <c>BasedOn</c>.</summary>
+    private static bool StyleSetsFontSize(XElement style, IReadOnlyDictionary<string, XElement> styles, int depth = 0)
+    {
+        if (style.Elements().Any(s => s.Name.LocalName == "Setter" && (string?)s.Attribute("Property") == "FontSize"))
+            return true;
+        return depth < 20
+               && StyleKey((string?)style.Attribute("BasedOn")) is { } basedOn
+               && styles.TryGetValue(basedOn, out var parent)
+               && StyleSetsFontSize(parent, styles, depth + 1);
+    }
+
+    /// <summary>
+    /// The key a <c>{StaticResource Name}</c> or <c>{StaticResource {x:Type Name}}</c> reference names, in the form
+    /// <see cref="StylesIn"/> files styles under, or null for anything else.
+    /// </summary>
+    private static string? StyleKey(string? reference)
+    {
+        if (reference is null) return null;
+        var m = StyleReference().Match(reference.Trim());
+        if (!m.Success) return null;
+        return m.Groups["type"].Success ? "type:" + m.Groups["type"].Value : "key:" + m.Groups["key"].Value;
+    }
+
+    /// <summary>A style's <c>TargetType</c> as a type name, unwrapping <c>{x:Type …}</c>.</summary>
+    private static string? TargetTypeName(string? targetType) =>
+        targetType is null ? null : TypeMarkup().Replace(targetType.Trim(), "${name}");
+
+    [GeneratedRegex(@"^\{(?:Static|Dynamic)Resource\s+(?:\{x:Type\s+(?<type>[\w:]+)\}|(?<key>[\w.]+))\s*\}$",
+                    RegexOptions.Compiled)]
+    private static partial Regex StyleReference();
+
+    [GeneratedRegex(@"^\{x:Type\s+(?<name>[\w:]+)\}$", RegexOptions.Compiled)]
+    private static partial Regex TypeMarkup();
 
     /// <summary>
     /// The startup expansion is driven by <c>InitiallyExpandedGroupId</c>, not by a repeated literal.
@@ -12829,6 +13112,13 @@ public partial class ArchitectureTests
                     if (list.Attribute("Style") is not null)
                         offenders.Add($"{where}: a DataGrid with a style of its own drops the app's DataGrid style, and "
                                       + "RebuildFocus.Keep with it");
+                    // The same through a <DataGrid.Style> child that does not build on the app's style: File
+                    // Shredder's queue had one, so removing a file from the keyboard dropped focus (#2694).
+                    if (list.Elements().FirstOrDefault(e => e.Name.LocalName == "DataGrid.Style")?
+                            .Elements().FirstOrDefault(e => e.Name.LocalName == "Style") is { } inline
+                        && inline.Attribute("BasedOn") is null)
+                        offenders.Add($"{where}: a DataGrid whose <DataGrid.Style> has no BasedOn drops the app's "
+                                      + "DataGrid style, and RebuildFocus.Keep with it");
                     if (keep is not null && keep != "True")
                         offenders.Add($"{where}: a DataGrid sets RebuildFocus.Keep to {keep}");
                     continue;

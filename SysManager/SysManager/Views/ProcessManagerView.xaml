@@ -58,7 +58,7 @@
                             ToolTip="Hide system processes and show only applications with a visible window">
                     <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ShowOnlyApps}" VerticalAlignment="Center"
                                   AutomationProperties.Name="Show only apps"/>
-                    <TextBlock Text="Show only apps" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <TextBlock Text="Show only apps" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
             </WrapPanel>
         </Border>
@@ -162,12 +162,11 @@
                                              is exactly what the database covers best. PlainDescription already falls
                                              back to the raw text, so the trigger below only fires when neither exists.
                                              Same shape as StartupView's Description/Command fallback. -->
-                                        <TextBlock FontSize="11"
-                                                   Foreground="{DynamicResource TextMuted}"
+                                        <TextBlock Foreground="{DynamicResource TextMuted}"
                                                    TextTrimming="CharacterEllipsis" MaxWidth="400"
                                                    ToolTip="{Binding PlainDescription}">
                                             <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                     <Setter Property="Text" Value="{Binding PlainDescription}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding PlainDescription}" Value="">

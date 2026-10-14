@@ -66,8 +66,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
-                           Foreground="{DynamicResource WarningText}" FontWeight="SemiBold">
+                <TextBlock Style="{StaticResource SectionTitle}" Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningText}">
                     <Run Text="Keep these settings? Reverting in"/>
                     <Run Text="{Binding RevertCountdown, Mode=OneWay}"/><Run Text="s."/>
                 </TextBlock>

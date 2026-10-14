@@ -125,7 +125,7 @@
                                                 CommandParameter="{Binding NavId}"
                                                 AutomationProperties.Name="{Binding ButtonName}"
                                                 Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
-                                        <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
+                                        <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}">
                                             <Run Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                             <Run Text="—"/>
                                             <Run Text="{Binding What, Mode=OneWay}"/>
@@ -148,7 +148,7 @@
                                     Command="{Binding OpenTabCommand}" CommandParameter="nav-restore-points"
                                     AutomationProperties.Name="Open Restore Points"
                                     Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
-                            <TextBlock Text="{Binding RestorePointText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                            <TextBlock Text="{Binding RestorePointText}" Style="{StaticResource Body}" VerticalAlignment="Center" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextSecondary}"/>
                         </DockPanel>
                     </StackPanel>

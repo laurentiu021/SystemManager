@@ -118,9 +118,9 @@
                     <DataGridTemplateColumn Header="State" Width="90" MinWidth="70" SortMemberPath="IsEnabled">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="11">
+                                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                             <Setter Property="Text" Value="Disabled"/>
                                             <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                             <Style.Triggers>
@@ -211,11 +211,11 @@
                                                     </Style>
                                                 </Ellipse.Style>
                                             </Ellipse>
-                                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold"
+                                            <TextBlock Text="{Binding Status}" FontWeight="SemiBold"
                                                        VerticalAlignment="Center" Margin="6,0,0,0"
                                                        TextTrimming="CharacterEllipsis">
                                                 <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                         <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding Status}" Value="Done">

@@ -217,7 +217,7 @@
                                     VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <TextBlock FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="14">
                                     <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                                             <Setter Property="Text" Value="&#xEB4F;"/>
                                             <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                             <Style.Triggers>

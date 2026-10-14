@@ -83,7 +83,7 @@
                 <DockPanel>
                     <Ellipse Width="10" Height="10" DockPanel.Dock="Left" VerticalAlignment="Center"
                              Margin="0,0,10,0" Fill="{DynamicResource Info}"/>
-                    <TextBlock Text="{Binding ModuleStatus}" FontWeight="SemiBold"
+                    <TextBlock Text="{Binding ModuleStatus}" Style="{StaticResource SectionTitle}"
                                Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
                                TextWrapping="Wrap"/>
                 </DockPanel>
@@ -124,20 +124,20 @@
                         <TextBlock Text="{Binding PolicySummary}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                         <WrapPanel VerticalAlignment="Center" Margin="0,0,0,6">
-                            <TextBlock Text="Defer feature updates by" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="Defer feature updates by" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding DeferDays}" Width="60" VerticalContentAlignment="Center"
                                      AutomationProperties.Name="Days to defer feature updates" Margin="0,0,6,0"/>
-                            <TextBlock Text="days" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="days" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                             <Button Content="Apply deferral" Command="{Binding DeferFeatureUpdatesCommand}"
                                     AutomationProperties.Name="Apply deferral — defer feature updates"
                                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                         </WrapPanel>
 
                         <WrapPanel VerticalAlignment="Center" Margin="0,0,0,6">
-                            <TextBlock Text="Pause all updates for" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="Pause all updates for" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Text="{Binding PauseDays}" Width="60" VerticalContentAlignment="Center"
                                      AutomationProperties.Name="Days to pause updates" Margin="0,0,6,0"/>
-                            <TextBlock Text="days (max 35)" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="days (max 35)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                             <Button Content="Pause updates" Command="{Binding PauseUpdatesCommand}"
                                     AutomationProperties.Name="Pause updates"
                                     Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
@@ -305,14 +305,14 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <TextBlock Text="{Binding Category}" FontSize="11" FontWeight="SemiBold">
+                                    <TextBlock Text="{Binding Category}" FontWeight="SemiBold">
                                         <TextBlock.Style>
                                             <!-- Category badge text uses the per-preset status/badge brushes
                                                  (recomputed by ThemeService.ApplyStatusBrushes for light-theme
                                                  legibility) rather than hardcoded pale dark-theme tints, which
                                                  fell to ~1.8:1 on the light presets. Matches the Cumulative
                                                  trigger that was already migrated. -->
-                                            <Style TargetType="TextBlock">
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Category}" Value="Security">

@@ -13,7 +13,7 @@
     <UserControl.Resources>
         <!-- The mute button's glyph, shared by the This PC card and the app rows: a speaker, or a struck-through
              one in Danger red while muted. -->
-        <Style x:Key="MuteGlyph" TargetType="TextBlock">
+        <Style x:Key="MuteGlyph" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
             <Setter Property="Text" Value="&#xE767;"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
             <Style.Triggers>

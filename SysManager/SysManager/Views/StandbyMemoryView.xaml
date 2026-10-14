@@ -79,13 +79,13 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Threshold" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="0" Text="Threshold" Style="{StaticResource Body}" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextSecondary}" Margin="0,0,12,0"/>
                     <Slider Grid.Column="1" Minimum="256" Maximum="8192" Value="{Binding ThresholdMb}"
                             TickFrequency="256" IsSnapToTickEnabled="True" VerticalAlignment="Center"
                             AutomationProperties.Name="Auto-purge threshold in megabytes"/>
-                    <TextBlock Grid.Column="2" Text="{Binding ThresholdMb, StringFormat={}{0:F0} MB}"
-                               VerticalAlignment="Center" Margin="12,0,0,0" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="2" Text="{Binding ThresholdMb, StringFormat={}{0:F0} MB}" Style="{StaticResource SectionTitle}"
+                               VerticalAlignment="Center" Margin="12,0,0,0"
                                Foreground="{DynamicResource TextSecondary}"/>
                 </Grid>
             </StackPanel>

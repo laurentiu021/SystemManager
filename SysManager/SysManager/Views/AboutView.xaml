@@ -169,10 +169,10 @@
                                                FontSize="18" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <TextBlock Text="Update available" Style="{StaticResource MetricCompact}"
                                                Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LatestVersionLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestVersionLabel}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LatestPublishedLabel}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
@@ -216,10 +216,10 @@
                         <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
                                     Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
                             <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"
+                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}" VerticalAlignment="Center"
                                        AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
-                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock VerticalAlignment="Center">
+                            <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center">
                                 <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
                             </TextBlock>
                         </StackPanel>
@@ -245,8 +245,8 @@
                                    Visibility="{Binding AutoDownloadFailed, Converter={StaticResource FlexVis}}">
                             <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{DynamicResource Warning}"
                                      VerticalAlignment="Top" Margin="0,5,8,0"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Foreground="{DynamicResource Warning}"
-                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Warning}"
+                                       TextWrapping="Wrap"
                                        AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                         </DockPanel>
                     </StackPanel>
@@ -275,7 +275,7 @@
                                 </Style>
                             </Ellipse.Style>
                         </Ellipse>
-                        <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Foreground="{DynamicResource TextSecondary}"
+                        <TextBlock Grid.Column="1" Text="{Binding UpdateStatus}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" TextWrapping="Wrap"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
                         <Button Grid.Column="2" Content="Retry" Command="{Binding CheckForUpdatesCommand}"
@@ -307,9 +307,9 @@
                                                         Style="{StaticResource BadgeAccent}">
                                                     <TextBlock Text="Current" Foreground="{DynamicResource TextOnAccent}" Style="{StaticResource Caption}" FontWeight="SemiBold"/>
                                                 </Border>
-                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                                <TextBlock Text="{Binding Title}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding PublishedAt}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                                                 <!-- A named link rather than a card-wide click target: these
                                                      cards hold selectable text, and a clickable card fights
@@ -326,7 +326,7 @@
                                                                AutomationProperties.Name="{Binding Version, StringFormat='View {0} on GitHub'}">View on GitHub ↗</Hyperlink>
                                                 </TextBlock>
                                             </StackPanel>
-                                            <TextBlock helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"
+                                            <TextBlock Style="{StaticResource Body}" helpers:MarkdownTextBlock.Markdown="{Binding Body}" Foreground="{DynamicResource TextSecondary}"
                                                        TextWrapping="Wrap" Margin="0,8,0,0"/>
                                         </StackPanel>
                                     </Border>

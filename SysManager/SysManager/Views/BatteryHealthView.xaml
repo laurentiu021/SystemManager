@@ -206,37 +206,37 @@
 
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Battery name"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Battery.Name}"
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Battery.Name}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="Chemistry"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Battery.Chemistry}"
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Battery.Chemistry}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Design capacity"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Battery.DesignCapacityDisplay}"
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Battery.DesignCapacityDisplay}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Full charge capacity"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Battery.FullChargeCapacityDisplay}"
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Battery.FullChargeCapacityDisplay}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Cycle count"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Battery.CycleCountDisplay}"
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Battery.CycleCountDisplay}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="5" Grid.Column="0" Text="Estimated runtime"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Battery.RuntimeDisplay}"
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding Battery.RuntimeDisplay}" Style="{StaticResource Body}"
                                            Margin="0,0,0,8"/>
 
                                 <TextBlock Grid.Row="6" Grid.Column="0" Text="Device ID"
                                            Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Battery.Manufacturer}"
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding Battery.Manufacturer}" Style="{StaticResource Body}"
                                            TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
                             </Grid>
                         </Border>

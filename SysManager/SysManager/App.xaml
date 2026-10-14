@@ -1438,6 +1438,17 @@
                 </Setter>
             </Style>
 
+            <!-- The app's checkbox, for a grid (#2696). A checkbox column gives the checkbox it draws a style of its
+                 own, its default element style or the ElementStyle it sets, and either replaces the implicit style
+                 above instead of adding to it, so the six row-picking columns drew WPF's default checkbox with the
+                 default focus rectangle. Each column bases both element styles on this. No padding, because a grid
+                 checkbox has no label to space from, and centred: a cell keeps 10 px each side, so the 18 px box
+                 needs a column of 38, and a column header, which keeps 12, one of 42. -->
+            <Style x:Key="GridCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+            </Style>
+
             <!-- ============================================================ -->
             <!-- DataGrid — dark-friendly rows, headers, and cell focus        -->
             <!-- ============================================================ -->

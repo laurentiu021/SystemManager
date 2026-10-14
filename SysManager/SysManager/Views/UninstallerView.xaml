@@ -244,18 +244,16 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="" Width="32" MinWidth="32" CanUserResize="False"
+                    <DataGridCheckBoxColumn Header="" Width="40" MinWidth="40" CanUserResize="False"
                                             Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                             CanUserSort="False">
                         <DataGridCheckBoxColumn.ElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for uninstall'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.ElementStyle>
                         <DataGridCheckBoxColumn.EditingElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for uninstall'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>

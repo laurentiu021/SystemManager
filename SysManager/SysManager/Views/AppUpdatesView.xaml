@@ -47,16 +47,12 @@
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="" Width="50" MinWidth="50" CanUserResize="False" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" CanUserSort="False">
                         <DataGridCheckBoxColumn.ElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="Margin" Value="4,0"/>
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.ElementStyle>
                         <DataGridCheckBoxColumn.EditingElementStyle>
-                            <Style TargetType="CheckBox">
-                                <Setter Property="HorizontalAlignment" Value="Center"/>
-                                <Setter Property="Margin" Value="4,0"/>
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>

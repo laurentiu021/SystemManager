@@ -86,12 +86,12 @@
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40" MinWidth="40" CanUserResize="False">
                     <DataGridCheckBoxColumn.ElementStyle>
-                        <Style TargetType="CheckBox">
+                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                             <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
                         </Style>
                     </DataGridCheckBoxColumn.ElementStyle>
                     <DataGridCheckBoxColumn.EditingElementStyle>
-                        <Style TargetType="CheckBox">
+                        <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                             <Setter Property="AutomationProperties.Name" Value="{Binding Name, StringFormat='Select {0} for deletion'}"/>
                         </Style>
                     </DataGridCheckBoxColumn.EditingElementStyle>

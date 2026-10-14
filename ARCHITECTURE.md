@@ -85,10 +85,13 @@ leaves cannot receive focus.
 Keyboard focus is drawn by ONE shared resource, `FocusRing` in `App.xaml`, applied through
 `FocusVisualStyle` on the button, toggle and chip styles whose template replaces the default one — a
 custom template otherwise takes the framework's focus adorner with it. The ComboBox and its items, the
-DataGrid column headers and the sidebar's group headers do not set it. It is a two-`Rectangle` adorner (white inner
-stroke, near-black outer) rather than a themed border, because the ring must stay visible on
-`PrimaryButton`'s accent fill, `DangerButton`'s red, a raised grey and a card surface; any single
-colour, accent included, falls to 1.00:1 against at least one of those.
+DataGrid column headers and the sidebar's group headers do not set it. A checkbox in a grid gets it with
+the rest of the app's checkbox through `GridCheckBox`, which a checkbox column has to name in both of its
+element styles: the column otherwise gives its checkbox a style of its own, and that replaces the app's
+(#2696). It is a two-`Rectangle` adorner (white inner stroke, near-black outer) rather than a themed
+border, because the ring must stay visible on `PrimaryButton`'s accent fill, `DangerButton`'s red, a
+raised grey and a card surface; any single colour, accent included, falls to 1.00:1 against at least
+one of those.
 `ArchitectureTests.NoStyle_SuppressesTheKeyboardFocusIndicator` forbids
 `FocusVisualStyle="{x:Null}"` anywhere and asserts the ring keeps both strokes.
 
@@ -185,8 +188,8 @@ text ones, and styles that are not typography tokens, such as the sidebar's `Sid
 names no size and sits in nothing that sets one, reading which styles set a size from `App.xaml` and the view's own
 resources through `BasedOn`. `ArchitectureTests.EveryStyleInAView_BuildsOnTheAppStyleItReplaces` fails on a view
 style with no `BasedOn` for a type `App.xaml` styles. It excepts Disk Analyzer's `MapTile`, a button drawn entirely
-by its own template, and grid column element styles, which never took the app's style in the first place; the
-checkbox columns are #2696.
+by its own template, and text-column element styles, which never took the app's style in the first place. Checkbox
+columns build on `GridCheckBox`, which `ArchitectureTests.EveryCheckBoxInAGrid_IsTheAppsCheckBox` holds (#2696).
 `EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a `TextBlock` under a token that resolves
 no colour, and which names none itself, would render in the WPF default brush.
 `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight, foreground and rendering

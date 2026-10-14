@@ -40,7 +40,7 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Location:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="0" Text="Location:" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ComboBox Grid.Column="1" AutomationProperties.Name="Scan location" ItemsSource="{Binding ScanLocations}" SelectedItem="{Binding SelectedLocation, Mode=TwoWay}"
                               MaxWidth="380" HorizontalAlignment="Left" TextSearch.TextPath="Label">
                         <ComboBox.ItemTemplate>
@@ -49,9 +49,9 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <TextBlock Grid.Column="2" Text="Min size (MB):" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                    <TextBlock Grid.Column="2" Text="Min size (MB):" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
                     <TextBox Grid.Column="3" AutomationProperties.Name="Minimum file size in megabytes" Text="{Binding MinSizeMB, Mode=TwoWay}" Width="80"/>
-                    <TextBlock Grid.Column="4" Text="Top:" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                    <TextBlock Grid.Column="4" Text="Top:" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" Margin="16,0,8,0"/>
                     <TextBox Grid.Column="5" AutomationProperties.Name="Number of top results to show" Text="{Binding TopCount, Mode=TwoWay}" Width="60"/>
                     <Button Grid.Column="6" Content="Scan" Command="{Binding ScanCommand}" Margin="16,0,0,0"
                             AutomationProperties.AutomationId="btn-large-files-scan"
@@ -72,9 +72,9 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding FilesScanned, StringFormat={}{0:N0} files}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding BytesScannedDisplay, StringFormat=scanned {0}}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="{Binding FilesScanned, StringFormat={}{0:N0} files}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{Binding BytesScannedDisplay, StringFormat=scanned {0}}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                         <Button Grid.Column="3" Content="Cancel" AutomationProperties.Name="Cancel large file scan" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Padding="10,4"/>
                     </Grid>
                     <TextBlock Text="{Binding CurrentFolder}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>

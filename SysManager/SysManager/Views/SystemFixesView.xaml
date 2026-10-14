@@ -115,8 +115,8 @@
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
                             Visibility="{Binding IsSfcRunning, Converter={StaticResource FlexVis}}">
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Success}"/>
-                    <TextBlock Text="Repairing Windows files — " Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SfcStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Repairing Windows files — " Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SfcStatus}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding SfcEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Center"
                                Visibility="{Binding SfcEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
@@ -128,7 +128,7 @@
                          inert — it is measured with infinite width, so long verdicts were clipped
                          rather than wrapped. -->
                     <DockPanel>
-                        <TextBlock Text="SFC result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                        <TextBlock Text="SFC result:" Style="{StaticResource SectionTitle}" DockPanel.Dock="Left"
                                    Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <!-- Announced: an SFC repair runs for many minutes with the window in the
@@ -136,7 +136,7 @@
                              Windows files" label above is static text, so a live region could not
                              announce it even if it carried one — what changes there is visibility, not
                              content. Start and progress are covered by the status line at the bottom. -->
-                        <TextBlock Text="{Binding SfcVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                        <TextBlock Text="{Binding SfcVerdict}" Style="{StaticResource Body}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"
                                    Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>
@@ -144,8 +144,8 @@
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
                             Visibility="{Binding IsDismRunning, Converter={StaticResource FlexVis}}">
                     <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,8,0" Fill="{DynamicResource Info}"/>
-                    <TextBlock Text="Repairing the component store — " Foreground="{DynamicResource Info}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DismStatus}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="Repairing the component store — " Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Info}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DismStatus}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding DismEtaText}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Center"
                                Visibility="{Binding DismEtaText, Converter={StaticResource FlexVis}}"/>
                 </StackPanel>
@@ -155,10 +155,10 @@
                         Visibility="{Binding DismVerdict, Converter={StaticResource FlexVis}}">
                     <!-- DockPanel for the same reason as the SFC verdict above. -->
                     <DockPanel>
-                        <TextBlock Text="DISM result:" DockPanel.Dock="Left" FontWeight="SemiBold"
+                        <TextBlock Text="DISM result:" Style="{StaticResource SectionTitle}" DockPanel.Dock="Left"
                                    Foreground="{DynamicResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Text="{Binding DismVerdict}" TextWrapping="Wrap" VerticalAlignment="Center"
+                        <TextBlock Text="{Binding DismVerdict}" Style="{StaticResource Body}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"
                                    Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
                     </DockPanel>

@@ -4,6 +4,8 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace SysManager.IntegrationTests;
@@ -267,5 +269,99 @@ public class TypographyTokenTests
             Assert.Equal(ExpectedForeground().ToString(), block.Foreground.ToString());
             Assert.NotEqual(Brushes.Black.ToString(), block.Foreground.ToString());
         });
+    }
+
+    /// <summary>
+    /// Every text TextBlock a view lays out takes its size from something: a token, its own control, or a parent
+    /// that sets one. None takes it from nothing (#2694).
+    /// </summary>
+    /// <remarks>
+    /// WPF-UI's <c>ControlsDictionary</c> raises TextBlock's default size from WPF's 12 to 14, so a TextBlock that no
+    /// style, attribute or parent sizes draws at 14, a step above <c>Body</c> and outside the scale. Built off screen
+    /// with App.xaml's resources, 97 did, in 22 views, and 22 more in list rows, until #2694 put each on a token.
+    /// This builds every view, gives every empty list one placeholder item so its row template is built as well, lays
+    /// it out, and fails on any text TextBlock whose size is the default. It sees what source cannot: text a control
+    /// makes for itself, such as Performance's power-plan RadioButtons, and a size inherited through a control's
+    /// style. <c>ArchitectureTests.EveryTextBlock_TakesItsSizeFromATokenOrTheControlAroundIt</c> sees what this
+    /// cannot: the content of a collapsed expander, a list box's rows, and the main window, which is left out here
+    /// because building it builds every tab's view model.
+    /// </remarks>
+    [Fact]
+    public void EveryLaidOutText_TakesItsSizeFromSomething()
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+
+            var views = typeof(App).Assembly.GetTypes()
+                .Where(t => t.Namespace == "SysManager.Views" && typeof(UserControl).IsAssignableFrom(t)
+                            && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) is not null)
+                .OrderBy(t => t.Name, StringComparer.Ordinal)
+                .ToList();
+            Assert.True(views.Count >= 60, $"only {views.Count} views were found, where there are 67.");
+
+            var offenders = new List<string>();
+            var laidOut = 0;
+            foreach (var type in views)
+            {
+                var view = (UserControl)Activator.CreateInstance(type)!;
+                var host = new Grid { Width = 1280, Height = 900 };
+                host.Children.Add(view);
+                Lay(host);
+
+                // A row template is only built for a row, so every empty list gets one.
+                foreach (var list in Descendants<ItemsControl>(view).ToList())
+                {
+                    if (list is ComboBox || list.Items.Count > 0) continue;
+                    list.ItemsSource = new object[] { new() };
+                }
+                Lay(host);
+
+                foreach (var block in Descendants<TextBlock>(view))
+                {
+                    var family = block.FontFamily.Source;
+                    if (family.Contains("Segoe Fluent", StringComparison.Ordinal)
+                        || family.Contains("Segoe MDL2", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+                    laidOut++;
+                    if (DependencyPropertyHelper.GetValueSource(block, TextElement.FontSizeProperty).BaseValueSource
+                        != BaseValueSource.Default)
+                    {
+                        continue;
+                    }
+                    var shown = BindingOperations.GetBinding(block, TextBlock.TextProperty)?.Path?.Path is { } path
+                        ? "{" + path + "}"
+                        : $"\"{block.Text}\"";
+                    offenders.Add($"{type.Name}: {shown} draws at {block.FontSize} because nothing sizes it");
+                }
+            }
+
+            // Vacuity floor: 1,934 text TextBlocks laid out across the views, rows included, measured for #2694.
+            Assert.True(laidOut >= 1700,
+                $"only {laidOut} text TextBlocks were laid out, out of 1,934 measured, so a pass means little.");
+            Assert.True(offenders.Count == 0,
+                "these TextBlocks take their size from nothing, so they draw at WPF-UI's default of 14:\n  "
+                + string.Join("\n  ", offenders));
+        });
+    }
+
+    private static void Lay(FrameworkElement host)
+    {
+        host.Measure(new Size(1280, 900));
+        host.Arrange(new Rect(0, 0, 1280, 900));
+        host.UpdateLayout();
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var deeper in Descendants<T>(child)) yield return deeper;
+        }
     }
 }

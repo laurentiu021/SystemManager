@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.3] - 2026-10-14
+
+**Text on 19 tabs now matches the size of the text around it, and File Shredder's list looks and works like the other
+lists** (#2694).
+
+### Fixed
+
+- **Text that named no size drew a step larger than the app's body text.** 95 lines, among them Performance's power
+  plans and tweaks, Battery Health's readings, System Logs' event details and the console's output, drew at 14
+  points where the app's body text is 13. They are 13 now, on 19 tabs and in the update banner. Bold headings and
+  status lines that were already 14 look exactly as they did.
+- **Sixteen labels and icons dropped the app's text style when they set one of their own**, so the labels among them,
+  such as the status tags on Startup, Windows Features, Windows Update and Uninstaller and the sidebar's group
+  descriptions, drew in Segoe UI instead of the app's font. They use the app's font now, at the same size and colour.
+- **File Shredder's list is like every other list in the app**: the app's font and size, striped rows, and keyboard
+  focus that stays in the list when a file is removed. A style of its own had replaced the app's list style.
+
 ## [1.130.2] - 2026-10-13
 
 **Every tab's name fits in the sidebar now, the ones marked Preview included** (#2686).

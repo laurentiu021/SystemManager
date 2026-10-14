@@ -94,7 +94,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantVisualEffectsReduced}" AutomationProperties.Name="Reduce visual effects" VerticalAlignment="Center"/>
-                                <TextBlock Text="Reduce visual effects (disable animations, fades, shadows)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="Reduce visual effects (disable animations, fades, shadows)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Uses SystemParametersInfo — takes effect instantly, no logout needed."
                                        Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,8"/>
@@ -110,7 +110,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGameModeOff}" AutomationProperties.Name="Disable Game Mode" VerticalAlignment="Center"/>
-                                <TextBlock Text="Disable Game Mode (stop Windows from prioritizing game processes)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="Disable Game Mode (stop Windows from prioritizing game processes)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <Button Content="Apply Game Mode" Command="{Binding ApplyGameModeCommand}"
                                     AutomationProperties.Name="Apply Game Mode"
@@ -124,7 +124,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantXboxGameBarOff}" AutomationProperties.Name="Disable Xbox Game Bar overlay" VerticalAlignment="Center"/>
-                                <TextBlock Text="Disable Xbox Game Bar / Game DVR overlay" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="Disable Xbox Game Bar / Game DVR overlay" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Disables AppCaptureEnabled and GameDVR_Enabled via registry. Instant, reversible."
                                        Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,8"/>
@@ -154,7 +154,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantGpuMaxPerformance}" IsEnabled="{Binding HasNvidiaGpu}" AutomationProperties.Name="NVIDIA GPU prefer maximum performance" VerticalAlignment="Center"/>
-                                <TextBlock Text="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="NVIDIA GPU — Prefer Maximum Performance (requires reboot)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,4"
                                        Visibility="{Binding HasNvidiaGpu, Converter={StaticResource BoolToVis}}">
@@ -178,7 +178,7 @@
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <ToggleButton Style="{StaticResource ToggleSwitch}" IsChecked="{Binding WantProcessorMaxState}" IsEnabled="{Binding IsProcessorStateEditable}" AutomationProperties.Name="Processor minimum state 100 percent" VerticalAlignment="Center"/>
-                                <TextBlock Text="Processor min state 100% (force max CPU frequency)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                <TextBlock Text="Processor min state 100% (force max CPU frequency)" Style="{StaticResource Body}" VerticalAlignment="Center" Margin="8,0,0,0"/>
                             </StackPanel>
                             <TextBlock Text="Prevents CPU from downclocking. Increases power consumption."
                                        Style="{StaticResource Caption}" Foreground="{DynamicResource TextSecondary}" Margin="20,0,0,4"/>
@@ -234,11 +234,11 @@
                             </TextBlock>
                             <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                 <TextBlock Text="Currently: " Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Enabled" Foreground="{DynamicResource Success}"
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Enabled" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource BoolToVis}}"/>
-                                <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                                           Text="Disabled" Foreground="{DynamicResource Danger}"
+                                <TextBlock VerticalAlignment="Center"
+                                           Text="Disabled" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Danger}"
                                            Visibility="{Binding IsHibernationEnabled, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                             </StackPanel>
                             <Button Content="Toggle Hibernation" Command="{Binding ToggleHibernationCommand}"
@@ -268,37 +268,37 @@
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Active power plan"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="0" Grid.Column="1"
-                                       Text="{Binding Profile.ActivePlanName}" Margin="0,0,0,8"/>
+                                       Text="{Binding Profile.ActivePlanName}" Style="{StaticResource Body}" Margin="0,0,0,8"/>
 
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Plan GUID"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="1" Grid.Column="1"
-                                       Text="{Binding Profile.ActivePlanGuid}"
+                                       Text="{Binding Profile.ActivePlanGuid}" Style="{StaticResource Body}"
                                        TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
 
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Visual effects"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.VisualEffectsReduced, StringFormat='Reduced: {0}'}"/>
+                                       Text="{Binding Profile.VisualEffectsReduced, StringFormat='Reduced: {0}'}" Style="{StaticResource Body}"/>
 
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Game Mode"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.GameModeEnabled, StringFormat='Enabled: {0}'}"/>
+                                       Text="{Binding Profile.GameModeEnabled, StringFormat='Enabled: {0}'}" Style="{StaticResource Body}"/>
 
                             <TextBlock Grid.Row="4" Grid.Column="0" Text="Xbox Game Bar"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.XboxGameBarDisabled, StringFormat='Disabled: {0}'}"/>
+                                       Text="{Binding Profile.XboxGameBarDisabled, StringFormat='Disabled: {0}'}" Style="{StaticResource Body}"/>
 
                             <TextBlock Grid.Row="5" Grid.Column="0" Text="GPU max performance"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
                             <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"
-                                       Text="{Binding Profile.GpuMaxPerformance, StringFormat='Enabled: {0}'}"/>
+                                       Text="{Binding Profile.GpuMaxPerformance, StringFormat='Enabled: {0}'}" Style="{StaticResource Body}"/>
 
                             <TextBlock Grid.Row="6" Grid.Column="0" Text="Processor min state"
                                        Style="{StaticResource Subtle}" Margin="0,0,0,8"/>
-                            <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
+                            <TextBlock Style="{StaticResource Body}" Grid.Row="6" Grid.Column="1" Margin="0,0,0,8">
                                 <Run Text="{Binding Profile.ProcessorMinPercent, Mode=OneWay}"/><Run Text="%"/>
                             </TextBlock>
                         </Grid>

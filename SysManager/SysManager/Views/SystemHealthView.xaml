@@ -97,9 +97,9 @@
                                 <Ellipse Width="10" Height="10" DockPanel.Dock="Left" VerticalAlignment="Center"
                                          Margin="0,0,10,0"
                                          Fill="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"/>
-                                <TextBlock Text="{Binding MemoryHealthVerdict}"
+                                <TextBlock Text="{Binding MemoryHealthVerdict}" Style="{StaticResource SectionTitle}"
                                            Foreground="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"
-                                           FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="620"
+                                           TextWrapping="Wrap" MaxWidth="620"
                                            HorizontalAlignment="Left" VerticalAlignment="Center"/>
                             </DockPanel>
                             <TextBlock Text="Scans the last 30 days of the System event log for hardware errors (WHEA) and Windows Memory Diagnostic results."
@@ -129,12 +129,12 @@
                         <StackPanel Grid.Column="0" Margin="0,0,16,0">
                             <TextBlock Text="BIOS &amp; firmware" Style="{StaticResource SectionTitle}"/>
                             <StackPanel Margin="0,8,0,0" DataContext="{Binding Bios}">
-                                <TextBlock Margin="0,2"><Run Text="Motherboard: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BoardDisplay, Mode=OneWay}"/></TextBlock>
-                                <TextBlock Margin="0,2"><Run Text="BIOS version: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Version, Mode=OneWay}"/></TextBlock>
-                                <TextBlock Margin="0,2"><Run Text="BIOS date: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding ReleaseDate, Mode=OneWay}"/></TextBlock>
-                                <TextBlock Margin="0,2"><Run Text="BIOS vendor: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Manufacturer, Mode=OneWay}"/></TextBlock>
-                                <TextBlock Margin="0,2"><Run Text="Boot mode: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BootMode, Mode=OneWay}"/></TextBlock>
-                                <TextBlock Margin="0,2"><Run Text="Secure Boot: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding SecureBoot, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="Motherboard: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BoardDisplay, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="BIOS version: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Version, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="BIOS date: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding ReleaseDate, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="BIOS vendor: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding Manufacturer, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="Boot mode: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding BootMode, Mode=OneWay}"/></TextBlock>
+                                <TextBlock Style="{StaticResource Body}" Margin="0,2"><Run Text="Secure Boot: " Foreground="{DynamicResource TextMuted}"/><Run Text="{Binding SecureBoot, Mode=OneWay}"/></TextBlock>
                             </StackPanel>
                             <TextBlock Text="Read-only. Updating a BIOS carries risk if interrupted — only flash from the manufacturer's file, on stable power. SysManager never flashes firmware itself."
                                        Style="{StaticResource Subtle}" Margin="0,8,0,0" TextWrapping="Wrap"/>
@@ -198,16 +198,16 @@
                                                 <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,10,0"
                                                          Fill="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"/>
                                                 <TextBlock Text="{Binding FriendlyName}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                                                <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding MediaType}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding BusType}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Verdict}"
+                                            <TextBlock Text="{Binding Verdict}" Style="{StaticResource SectionTitle}"
                                                        Foreground="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"
-                                                       FontWeight="SemiBold" Margin="22,8,0,0" TextWrapping="Wrap"/>
+                                                       Margin="22,8,0,0" TextWrapping="Wrap"/>
                                             <WrapPanel Orientation="Horizontal" Margin="22,10,0,0">
                                                 <!-- Health score gauge -->
                                                 <StackPanel Margin="0,0,24,6" Width="120">
@@ -308,9 +308,9 @@
                                     </Style>
                                 </Ellipse.Style>
                             </Ellipse>
-                            <TextBlock Text="{Binding ChkdskStatus}" FontWeight="SemiBold" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ChkdskStatus}" VerticalAlignment="Center">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}">
                                         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChkdskRunning}" Value="True">
@@ -341,8 +341,8 @@
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Letter}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}"/>
-                                                    <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}"/>
-                                                    <TextBlock Text="{Binding Label}" Foreground="{DynamicResource TextSecondary}"/>
+                                                    <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}"/>
+                                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}"/>
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                                     <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
@@ -355,11 +355,11 @@
                                                     <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"
                                                                Visibility="{Binding MediaType, Converter={StaticResource FlexVis}}"/>
                                                     <TextBlock Text="{Binding MediaType}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
-                                                    <TextBlock Text="  "/>
+                                                    <TextBlock Text="  " Style="{StaticResource Body}"/>
                                                     <TextBlock Text="{Binding BusType}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Subtle}"/>
                                                 </StackPanel>
                                             </StackPanel>
-                                            <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{DynamicResource TextSecondary}"
+                                            <TextBlock Grid.Column="2" Text="{Binding Status}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}"
                                                        VerticalAlignment="Center" Margin="10,0,10,0"/>
                                             <Button Grid.Column="3" Content="Scan"
                                                     Command="{Binding DataContext.RunChkdskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"

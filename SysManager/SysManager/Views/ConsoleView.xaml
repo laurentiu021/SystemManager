@@ -14,7 +14,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="8,6" >
-                <TextBlock Text="Live output" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                <TextBlock Text="Live output" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                 <Button Margin="12,0,0,0" Padding="8,2" Content="Clear" Command="{Binding ClearCommand}"
                         Style="{StaticResource SecondaryButton}"/>
                 <Button Margin="6,0,0,0" Padding="8,2" Content="Copy" Command="{Binding CopyAllCommand}"
@@ -47,10 +47,10 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="{Binding Timestamp, StringFormat='HH:mm:ss '}"
+                            <TextBlock Text="{Binding Timestamp, StringFormat='HH:mm:ss '}" Style="{StaticResource Body}"
                                        FontFamily="{StaticResource MonoFont}"
                                        Foreground="{DynamicResource TextMuted}"/>
-                            <TextBlock Text="{Binding Text}"
+                            <TextBlock Text="{Binding Text}" Style="{StaticResource Body}"
                                        FontFamily="{StaticResource MonoFont}"
                                        Foreground="{Binding Kind, Converter={StaticResource KindBrush}}"
                                        TextWrapping="NoWrap"/>

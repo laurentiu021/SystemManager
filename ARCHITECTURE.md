@@ -132,6 +132,17 @@ local `Foreground` or `FontWeight` beats the token's, so text that wants 12 in t
 `Subtle` and names `TextPrimary`, and text that wanted `Subtle`'s colour at 11 takes `Caption` and names
 `TextSecondary`. Text inside a `Button` takes the size the Button sets, the way the compact buttons set theirs.
 
+A TextBlock that names no size does not escape the rule. WPF-UI's `ControlsDictionary` raises TextBlock's default
+size from WPF's 12 to 14, so text with no token and no control around it that sets a size draws at 14, a step above
+`Body`. 117 TextBlocks did, across 21 views and the main window, and so did Performance's three power-plan
+RadioButtons, whose implicit style named no size until it took `Body`'s 13. #2694 put the regular ones on `Body` and
+the semi-bold ones, which were already 14, on `SectionTitle`. An inline `<TextBlock.Style>` builds on a token as well,
+`BasedOn="{StaticResource Caption}"`, or on the implicit style where the control around it sets the size; based on
+nothing, it replaces the implicit style instead of adding to it. Sixteen were, so they drew in Segoe UI rather than
+the app's font, without the forced ClearType, and ten of them kept raw sizes no guard read. File Shredder's queue had
+the same with its `<DataGrid.Style>`: it lost the app's grid style, so its rows drew at 14 with no stripes, and
+without `RebuildFocus.Keep` removing a file from the keyboard dropped focus to the window.
+
 `Heading` and `MetricSmall` share a size and are deliberately separate: one is text, the other a number,
 and System Logs' severity counts take the metric one for that reason. Card and section headings used to be
 drawn at 14, 15 and 16; #1634 moved the 15s and 16s onto `SectionTitle`, the 14 the other 72 already used, and
@@ -161,21 +172,28 @@ WPF's default, so they already render that way, and the only difference `BasedOn
 the smaller one deserves its own look at 28px (#2688). `TypographyTokenTests.Display_StillStandsAloneAndStillResolvesItsColour`
 fails if someone completes the set, which is the prompt to do that look first.
 
-Two guards hold the scale. `ArchitectureTests.EveryTextBlockSize_ComesFromAToken` fails on a raw `FontSize`
+These guards hold the scale. `ArchitectureTests.EveryTextBlockSize_ComesFromAToken` fails on a raw `FontSize`
 on a text `TextBlock` at any size; on a token whose size is overwritten on the element, which is how `Subtle`
-with `FontSize="11"` hid fifteen times from a scan that skipped every styled element; and on a reference to a
-token `App.xaml` does not define, because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and
-would otherwise crash a tab rather than fail a build. It names its exceptions rather than inferring them, and
-fails if one no longer finds exactly its elements; About's product name at 24 is the only one left. It skips
-icon glyphs, because a `FontSize` on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13
-and 16 are icon dimensions as well as text ones; styles that are not typography tokens, such as the sidebar's
-`SidebarNavText`; and the elements that set `Style` through a `<TextBlock.Style>` child, which an attribute
-scan cannot see.
+with `FontSize="11"` hid fifteen times from a scan that skipped every styled element; on a `FontSize` set inside an
+inline `<TextBlock.Style>`, which it has read since #2694; and on a reference to a token `App.xaml` does not
+define, because a `{StaticResource}` inside a `DataTemplate` resolves at runtime and would otherwise crash a tab
+rather than fail a build. It names its exceptions rather than inferring them, and fails if one no longer finds
+exactly its elements; About's product name at 24 is the only one left. It skips icon glyphs, because a `FontSize`
+on a Segoe Fluent `TextBlock` is a glyph box rather than typography, and 13 and 16 are icon dimensions as well as
+text ones, and styles that are not typography tokens, such as the sidebar's `SidebarNavText`.
+`ArchitectureTests.EveryTextBlock_TakesItsSizeFromATokenOrTheControlAroundIt` fails on a text `TextBlock` that
+names no size and sits in nothing that sets one, reading which styles set a size from `App.xaml` and the view's own
+resources through `BasedOn`. `ArchitectureTests.EveryStyleInAView_BuildsOnTheAppStyleItReplaces` fails on a view
+style with no `BasedOn` for a type `App.xaml` styles. It excepts Disk Analyzer's `MapTile`, a button drawn entirely
+by its own template, and grid column element styles, which never took the app's style in the first place; the
+checkbox columns are #2696.
 `EveryTypographyStyleUse_ResolvesAColour` covers the other failure: a `TextBlock` under a token that resolves
 no colour, and which names none itself, would render in the WPF default brush.
 `SysManager.IntegrationTests.TypographyTokenTests` reads the resolved size, weight, foreground and rendering
 mode off a real `TextBlock` on an STA thread, for every token and for each token-and-own-colour pair the views
-use, which is the only way to check that `BasedOn` is actually doing its job — XAML compiles either way.
+use, which is the only way to check that `BasedOn` is actually doing its job — XAML compiles either way. Its
+`EveryLaidOutText_TakesItsSizeFromSomething` lays every view out off screen, list rows included, and fails on text
+whose size comes from nothing, which also catches the text a control makes for itself.
 
 Every tab is backed by a real view and view-model. A shared WIP placeholder view
 existed while tabs were still being built; the last tab graduated off it, so it was

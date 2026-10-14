@@ -368,6 +368,9 @@
             <Style TargetType="RadioButton">
                 <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+                <!-- Body's size, as the CheckBox style sets it. Without it the label took the 14 that WPF-UI gives a
+                     TextBlock which names no size, a step above the text around it (#2694). -->
+                <Setter Property="FontSize" Value="13"/>
                 <Style.Resources>
                     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{DynamicResource AccentColor}"/>
                 </Style.Resources>

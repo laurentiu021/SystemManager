@@ -404,14 +404,14 @@
                                                          as the backstop for copy that outgrows even two. -->
                                                     <TextBlock Text="{Binding Subtitle}"
                                                                FontFamily="{StaticResource UiFont}"
-                                                               FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                                                               Foreground="{DynamicResource TextSecondary}"
                                                                Opacity="0.65" Margin="23,2,0,0"
                                                                TextWrapping="Wrap"
                                                                LineHeight="14" LineStackingStrategy="BlockLineHeight"
                                                                MaxHeight="28"
                                                                TextTrimming="CharacterEllipsis">
                                                         <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource Caption}">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsExpanded}" Value="True">
@@ -433,7 +433,7 @@
                                                         <RotateTransform x:Name="ChevronRotate" Angle="0"/>
                                                     </TextBlock.RenderTransform>
                                                     <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsExpanded}" Value="True">
                                                                     <DataTrigger.EnterActions>
@@ -485,7 +485,7 @@
                                        FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                        FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                                         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                         <Style.Triggers>
                                             <!-- Elevated cue uses the amber/gold admin colour (WarningStripe),
@@ -623,10 +623,10 @@
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
                             <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets"
                                        FontSize="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="Update available" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
-                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding About.LatestVersionLabel}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
-                            <TextBlock Text="  ·  " Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="Update available" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding About.LatestVersionLabel}" Style="{StaticResource Body}" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding About.LatestPublishedLabel}" Foreground="{DynamicResource TextSecondary}" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         </StackPanel>
                         <Button Grid.Column="1" Content="View details" Command="{Binding OpenAboutTabCommand}"

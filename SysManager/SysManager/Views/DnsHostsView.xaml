@@ -31,8 +31,8 @@
                 <DockPanel Margin="0,0,0,12">
                     <TextBlock Text="Current DNS:" VerticalAlignment="Center" Margin="0,0,8,0"
                                Style="{StaticResource Subtle}"/>
-                    <TextBlock Text="{Binding CurrentDns}" VerticalAlignment="Center"
-                               FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
+                    <TextBlock Text="{Binding CurrentDns}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"
+                               Foreground="{DynamicResource Accent}"/>
                 </DockPanel>
 
                 <DockPanel Margin="0,0,0,12">

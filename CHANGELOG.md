@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.4] - 2026-10-14
+
+**The checkboxes in six lists are the app's own checkbox now, with the focus ring, and none is cut off** (#2696).
+
+### Fixed
+
+- **The row checkboxes in App Blocker, App Updates, DNS & Hosts, Shortcut Cleaner, Uninstaller and Windows Update
+  drew the plain Windows checkbox**, with a dotted focus rectangle and the arrow cursor, unlike every other checkbox in
+  the app. A list's checkbox column gave its checkboxes a style of its own, which replaced the app's. They are the
+  app's dark checkbox with the purple fill and the focus ring now, centred in their column.
+- **Three checkboxes in lists were cut off**: Windows Update's select-all checkbox in its column header, shown 12 px of
+  its 18, and the row checkboxes in Browser Cleaner and Debloater, 2 px short. They fit now, and Uninstaller's and
+  Windows Update's checkbox columns are wider to make room for the app's box.
+
 ## [1.130.3] - 2026-10-14
 
 **Text on 19 tabs now matches the size of the text around it, and File Shredder's list looks and works like the other

@@ -7633,10 +7633,12 @@ public partial class ArchitectureTests
     /// removing a file from the keyboard dropped focus to the window (#2609). The types are read from App.xaml's
     /// implicit styles.
     /// <para><b>Excepted by name:</b> Disk Analyzer's <c>MapTile</c>, a button drawn entirely by its own template with
-    /// its fill and text colour from the data, which wants none of the app's button look. A grid column's element
-    /// style is left out as well: a text or checkbox column gives its element the column's own style and never the
-    /// app's, with or without <c>ElementStyle</c>, so <c>BasedOn</c> there changes a look rather than restoring one.
-    /// The checkbox columns are #2696.</para>
+    /// its fill and text colour from the data, which wants none of the app's button look. A text column's element
+    /// style is left out as well: a text column gives its TextBlock the column's own style and never the app's, with
+    /// or without <c>ElementStyle</c>, and the grid already sets its font and size, so <c>BasedOn</c> there would change
+    /// a look rather than restore one. Checkbox columns were left out the same way until #2696 found that what theirs
+    /// lose is the app's whole checkbox; they build on <c>GridCheckBox</c> now, which
+    /// <see cref="EveryCheckBoxInAGrid_IsTheAppsCheckBox"/> holds.</para>
     /// </remarks>
     [Fact]
     public void EveryStyleInAView_BuildsOnTheAppStyleItReplaces()
@@ -7651,11 +7653,7 @@ public partial class ArchitectureTests
             $"only {styledTypes.Count} implicit styles were read from App.xaml, out of 15 there, so this guard would "
             + "check almost nothing.");
 
-        string[] columnStyles =
-        [
-            "DataGridTextColumn.ElementStyle", "DataGridTextColumn.EditingElementStyle",
-            "DataGridCheckBoxColumn.ElementStyle", "DataGridCheckBoxColumn.EditingElementStyle",
-        ];
+        string[] columnStyles = ["DataGridTextColumn.ElementStyle", "DataGridTextColumn.EditingElementStyle"];
         (string View, string Key)[] exceptions = [("DiskAnalyzerView.xaml", "MapTile")];
         var seen = new int[exceptions.Length];
 
@@ -7693,11 +7691,11 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floors: 38 styles for app-styled types and 56 column element styles, measured for #2694.
-        Assert.True(inspected >= 30,
-            $"only {inspected} view styles for app-styled types were inspected, out of 38 measured.");
-        Assert.True(columns >= 45,
-            $"only {columns} grid column element styles were set aside, out of 56 measured — the parent match broke, "
+        // Vacuity floors: 50 styles for app-styled types and 44 text-column element styles, measured for #2696.
+        Assert.True(inspected >= 40,
+            $"only {inspected} view styles for app-styled types were inspected, out of 50 measured.");
+        Assert.True(columns >= 35,
+            $"only {columns} text-column element styles were set aside, out of 44 measured — the parent match broke, "
             + "and the count above is no longer what it says.");
         for (var i = 0; i < exceptions.Length; i++)
         {
@@ -7708,6 +7706,88 @@ public partial class ArchitectureTests
 
         Assert.True(offenders.Count == 0,
             "these styles drop the app's style for their type:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Every checkbox in a grid is the app's checkbox, through <c>GridCheckBox</c> (#2696).
+    /// </summary>
+    /// <remarks>
+    /// A checkbox column gives the checkbox it draws a style of its own, its default element style or the
+    /// <c>ElementStyle</c> it sets, and either replaces the app's implicit CheckBox style instead of adding to it. The
+    /// six row-picking columns drew WPF's default checkbox, with the default focus rectangle and the arrow cursor,
+    /// until #2696 based both of each column's element styles on <c>GridCheckBox</c>. A checkbox placed in a grid by
+    /// hand, in a template column or a column header, kept the app's template but also its 8 px label padding, which
+    /// cut the box in all three; it takes <c>GridCheckBox</c> too. <c>GridCheckBox</c> has to stay what it is for:
+    /// based on the app's checkbox, with no padding, and centred.
+    /// <para><c>SysManager.IntegrationTests.GridCheckBoxTests.EveryCheckBoxInAGrid_IsTheAppsCheckBox_AndFits</c> lays
+    /// the grids out and checks the template, the focus ring, and that each box fits the room its column leaves.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryCheckBoxInAGrid_IsTheAppsCheckBox()
+    {
+        var appDir = TestPaths.AppProject();
+        var appStyles = StylesIn(XDocument.Load(Path.Combine(appDir, "App.xaml")));
+
+        Assert.True(appStyles.TryGetValue("key:GridCheckBox", out var gridCheckBox), "App.xaml no longer defines GridCheckBox.");
+        static string? SetterValue(XElement style, string property) => style.Elements()
+            .FirstOrDefault(s => s.Name.LocalName == "Setter" && (string?)s.Attribute("Property") == property)
+            ?.Attribute("Value")?.Value;
+        Assert.Equal("{StaticResource {x:Type CheckBox}}", (string?)gridCheckBox.Attribute("BasedOn"));
+        Assert.Equal("0", SetterValue(gridCheckBox, "Padding"));
+        Assert.Equal("Center", SetterValue(gridCheckBox, "HorizontalAlignment"));
+
+        var offenders = new List<string>();
+        var columns = 0;
+        var placed = 0;
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .Append(Path.Combine(appDir, "MainWindow.xaml"))
+                     .OrderBy(f => f, StringComparer.Ordinal))
+        {
+            var doc = XDocument.Load(file, LoadOptions.SetLineInfo);
+            var name = Path.GetFileName(file);
+            var styles = new Dictionary<string, XElement>(appStyles, StringComparer.Ordinal);
+            foreach (var (key, style) in StylesIn(doc)) styles[key] = style;
+
+            bool IsGridCheckBox(string? key, int depth = 0) =>
+                key == "key:GridCheckBox"
+                || (key is not null && depth < 20 && styles.TryGetValue(key, out var style)
+                    && IsGridCheckBox(StyleKey((string?)style.Attribute("BasedOn")), depth + 1));
+
+            foreach (var column in doc.Descendants().Where(e => e.Name.LocalName == "DataGridCheckBoxColumn"))
+            {
+                columns++;
+                foreach (var part in new[] { "ElementStyle", "EditingElementStyle" })
+                {
+                    var style = column.Elements()
+                        .FirstOrDefault(e => e.Name.LocalName == $"DataGridCheckBoxColumn.{part}")
+                        ?.Elements().FirstOrDefault(e => e.Name.LocalName == "Style");
+                    if (style is null || !IsGridCheckBox(StyleKey((string?)style.Attribute("BasedOn"))))
+                    {
+                        offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)column).LineNumber}: a checkbox column whose "
+                                      + $"{part} does not build on GridCheckBox draws WPF's default checkbox");
+                    }
+                }
+            }
+
+            foreach (var box in doc.Descendants().Where(e => e.Name.LocalName == "CheckBox"
+                                                              && e.Ancestors().Any(a => a.Name.LocalName == "DataGrid")))
+            {
+                placed++;
+                if (!IsGridCheckBox(StyleKey((string?)box.Attribute("Style"))))
+                {
+                    offenders.Add($"{name}:{((System.Xml.IXmlLineInfo)box).LineNumber}: a checkbox in a grid without "
+                                  + "Style=\"{StaticResource GridCheckBox}\" keeps the 8 px label padding, which cuts the "
+                                  + "box in a narrow column");
+                }
+            }
+        }
+
+        // Vacuity floors: six checkbox columns and three checkboxes placed in grids by hand, measured for #2696.
+        Assert.True(columns >= 6, $"only {columns} checkbox columns were found, out of 6 measured.");
+        Assert.True(placed >= 3, $"only {placed} checkboxes placed in grids by hand were found, out of 3 measured.");
+
+        Assert.True(offenders.Count == 0,
+            "these checkboxes in a grid are not the app's checkbox:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>

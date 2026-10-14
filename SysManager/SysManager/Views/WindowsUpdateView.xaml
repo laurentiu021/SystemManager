@@ -175,22 +175,22 @@
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="36" MinWidth="36" CanUserResize="False">
+                    <DataGridCheckBoxColumn Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="44" MinWidth="44" CanUserResize="False">
                         <DataGridCheckBoxColumn.Header>
                             <CheckBox IsChecked="{Binding DataContext.AllSelected, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                       AutomationProperties.Name="Select all updates"
                                       ToolTip="Select all updates"
-                                      HorizontalAlignment="Center"/>
+                                      Style="{StaticResource GridCheckBox}"/>
                         </DataGridCheckBoxColumn.Header>
                         <!-- Per-row name so a screen reader announces which update each checkbox selects
                              (the header checkbox is named, the rows were not) — matches AppUpdatesView. -->
                         <DataGridCheckBoxColumn.ElementStyle>
-                            <Style TargetType="CheckBox">
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Title, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.ElementStyle>
                         <DataGridCheckBoxColumn.EditingElementStyle>
-                            <Style TargetType="CheckBox">
+                            <Style TargetType="CheckBox" BasedOn="{StaticResource GridCheckBox}">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Title, StringFormat='Select {0}'}"/>
                             </Style>
                         </DataGridCheckBoxColumn.EditingElementStyle>

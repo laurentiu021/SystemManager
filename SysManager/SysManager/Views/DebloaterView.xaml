@@ -84,7 +84,7 @@
                                     <CheckBox IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
                                               IsEnabled="{Binding IsProtected, Converter={StaticResource BoolInvert}}"
                                               AutomationProperties.Name="{Binding DisplayName, StringFormat='Select {0} for removal'}"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                              Style="{StaticResource GridCheckBox}" VerticalAlignment="Center"/>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

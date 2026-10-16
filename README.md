@@ -2076,7 +2076,7 @@ offers, "rate us" prompts:
   as having come from the command line. So a scheduled cleanup that ran while you were
   away is visible next time you open SysManager, instead of leaving no trace. `--health`
   deliberately records nothing: it changes nothing, and a script polling it would push
-  the real entries out of a history that only keeps the last 60
+  the real entries out of a history that only keeps the last 200
 - The in-app **CLI Interface** tab is a reference: it lists every command with a
   one-click copy button. Example: `SysManager.exe --cleanup --silent`
 

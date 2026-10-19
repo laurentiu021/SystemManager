@@ -21,7 +21,8 @@ permissions:
 jobs:
   verify:
     name: Every version tag has a release
-    runs-on: ubuntu-latest
+    # Pinned like every Linux job here; auto-release.yml says why.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:

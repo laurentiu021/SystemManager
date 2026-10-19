@@ -5530,6 +5530,68 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every Linux job in the workflows runs on one pinned Ubuntu image, never on <c>ubuntu-latest</c>.
+    /// </summary>
+    /// <remarks>
+    /// The four Linux jobs are the tagging path: auto-release computes and pushes the next version tag, CI
+    /// checks that the tag landed, and the release guard and the weekly integrity check read the releases.
+    /// <c>ubuntu-latest</c> moves to each new Ubuntu release when GitHub decides, which changes the shell
+    /// tools under that arithmetic with no diff in this repository. Why they are pinned is written at
+    /// auto-release.yml's <c>runs-on</c>. This keeps an edit or a new job from going back to the moving
+    /// label, and keeps all of them on one image, so moving to the next one is a deliberate change to the
+    /// constant below and to every job at once.
+    /// </remarks>
+    [Fact]
+    public void EveryLinuxJob_RunsOnThePinnedUbuntuImage()
+    {
+        const string pinned = "ubuntu-24.04";
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var offenders = new List<string>();
+        var jobs = 0;
+        var linux = 0;
+
+        foreach (var path in Directory.EnumerateFiles(dir, "*.yml").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var lines = File.ReadAllLines(path);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var runsOn = RunsOnLabel().Match(lines[i]);
+                if (!runsOn.Success) continue;
+
+                jobs++;
+                var label = runsOn.Groups["label"].Value;
+                if (!label.StartsWith("ubuntu", StringComparison.Ordinal)) continue;
+
+                linux++;
+                if (!label.Equals(pinned, StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(path)}:{i + 1}  runs-on: {label}");
+            }
+        }
+
+        // Nine jobs name a runner when measured: four on Linux, five on Windows. Fewer means the pattern or
+        // the path stopped matching, and every absence below would be an absence of looking. The floor counts
+        // runs-on lines whatever their label, so a wrong label can never trip it ahead of the rule.
+        Assert.True(jobs >= 9,
+            $"only {jobs} runs-on line(s) were found in .github/workflows, out of 9 measured. The pattern "
+            + "or the path is out of date, so a pass proves nothing.");
+        Assert.True(linux > 0,
+            "no job runs on Ubuntu, so the pin this checks has nothing to apply to. If the Linux jobs moved "
+            + "to another runner on purpose, remove this guard with them.");
+
+        Assert.True(offenders.Count == 0,
+            $"a Linux job is not on {pinned}. ubuntu-latest changes image whenever GitHub moves it, and a "
+            + "second label splits the tagging path across two images. Use the pinned label, or move every "
+            + "Linux job and this constant together once the new image has been seen to pass:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The runner label on a job's <c>runs-on:</c> line, without a trailing comment.
+    /// </summary>
+    [GeneratedRegex(@"^\s+runs-on:\s*(?<label>[^\s#]+)")]
+    private static partial Regex RunsOnLabel();
+
+    /// <summary>
     /// Every private-reporting route must point at a channel that exists. SECURITY.md and
     /// CODE_OF_CONDUCT.md both told reporters to email "the address on the GitHub profile" — that profile
     /// publishes no email, so the one page a security reporter reads named a dead end. A vulnerability

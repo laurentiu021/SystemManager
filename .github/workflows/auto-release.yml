@@ -24,7 +24,11 @@ concurrency:
 jobs:
   bump-and-tag:
     name: Bump version & tag
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: GitHub moves that label to each new Ubuntu release on its own
+    # schedule (to 26.04 between 2026-10-19 and 2026-11-19). This job computes and pushes the next
+    # version tag, so a new image under it should arrive as a reviewed change that is seen to pass.
+    # Every Linux job here uses the same label, and ArchitectureTests holds them to it.
+    runs-on: ubuntu-24.04
     # Don't run on commits that are already tagged (avoids infinite loop)
     if: "!startsWith(github.event.head_commit.message, 'chore: release')"
     timeout-minutes: 5

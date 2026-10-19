@@ -483,11 +483,11 @@ jobs:
   #
   # A separate job on purpose, not a step in build-and-test: it waits for auto-release, which runs in
   # parallel on the same push, and adding minutes of waiting to a job that already runs ~8 of its
-  # 10-minute budget would make CI fail for timing rather than for correctness. ubuntu-latest because
-  # this is git-only work.
+  # 10-minute budget would make CI fail for timing rather than for correctness. Linux because this is
+  # git-only work, on the ubuntu-24.04 every Linux job here is pinned to (auto-release.yml says why).
   tag-published:
     name: Merged version is tagged
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # main only: on a PR, csproj is SUPPOSED to be ahead of the newest tag — that is the point of
     # bumping it in the PR. It is only a defect once the merge has landed.

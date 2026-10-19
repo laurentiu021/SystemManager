@@ -33,7 +33,8 @@ env:
 jobs:
   guard:
     name: Skip if release already exists (tag move / re-push)
-    runs-on: ubuntu-latest
+    # Pinned like every Linux job here; auto-release.yml says why.
+    runs-on: ubuntu-24.04
     outputs:
       should_release: ${{ steps.check.outputs.should_release }}
     steps:

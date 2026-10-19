@@ -11113,7 +11113,7 @@ public partial class ArchitectureTests
     /// files and really drops the standby memory list; a test may not do either. The recording helper's
     /// own behaviour IS covered, in <c>CliRunnerTests</c>.</para>
     /// <para>The NEGATIVE half is the load-bearing one: <c>--health</c> must NOT record. It changes
-    /// nothing, and a script polling it would evict all 60 entries — including the record of the
+    /// nothing, and a script polling it would evict every entry in the history — including the record of the
     /// destructive operations this exists to preserve. Bodies are read one method at a time, because a
     /// whole-file search would see the call in a sibling and vouch for a method that has none.</para>
     /// </remarks>

@@ -1569,7 +1569,7 @@ Key services:
   never trigger CLI mode. The two MUTATING verbs write to `ActivityLogService` on success,
   under the same action names the GUI uses, with the command-line origin in the detail — so
   an unattended scheduled run is visible in the app's own history. `--health` deliberately
-  does not: it changes nothing, and polling it would evict the 60-entry history that is the
+  does not: it changes nothing, and polling it would evict the whole history that is the
   only record of what the app changed. `OnlyTheMutatingCliVerbs_RecordAHeadlessRun` pins both
   halves.
 - `MaintenanceSchedulerService` — registers/reads/removes a single SysManager-owned Windows

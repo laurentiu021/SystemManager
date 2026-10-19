@@ -214,7 +214,7 @@ public sealed class CliRunner
     /// run "this was not you" is the part worth knowing.</para>
     /// <para>Only successful runs are recorded, and only the two MUTATING verbs. <c>--health</c> is
     /// deliberately excluded: it changes nothing, and a script polling it would evict the whole
-    /// 60-entry history — including the record of the destructive operations this is here to preserve.
+    /// history — including the record of the destructive operations this is here to preserve.
     /// </para>
     /// </remarks>
     internal static void RecordHeadlessRun(string action, string detail) =>

@@ -216,6 +216,10 @@ public sealed class MaintenanceSchedulerService
             } else {
                 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At -ErrorAction Stop
             }
+            # The cmdlet stores the start with today's UTC offset, and Task Scheduler then repeats the task at that UTC
+            # moment, which it shows as "Synchronize across time zones": an hour off the picked time once the clocks
+            # change (#2868). A start written without an offset is local time, so the task follows the local clock.
+            $trigger.StartBoundary = ([datetime]$At).ToString('s')
             # Splatted from typed [bool] parameters, so the policy is still an allowlisted value and never
             # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
             # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,

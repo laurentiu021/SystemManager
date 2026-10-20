@@ -260,6 +260,20 @@ public class MaintenanceScheduleTests
     }
 
     [Fact]
+    public void RegisterScript_StartsTheTriggerInLocalTime()
+    {
+        // New-ScheduledTaskTrigger -At stores the start with today's UTC offset, and Task Scheduler then repeats the
+        // task at that UTC moment, an hour off the picked time once the clocks change (#2868). The start is
+        // rewritten after both triggers, as the sortable form, which carries no offset.
+        var lines = CodeOnly(MaintenanceSchedulerService.RegisterScript).Split('\n').Select(l => l.Trim()).ToList();
+        var start = lines.FindIndex(l => l == "$trigger.StartBoundary = ([datetime]$At).ToString('s')");
+
+        Assert.True(start > 0, "the trigger's start is left as the cmdlet wrote it, with today's UTC offset");
+        Assert.True(start > lines.FindLastIndex(l => l.Contains("New-ScheduledTaskTrigger", StringComparison.Ordinal)),
+                    "the start is rewritten before a trigger that is built after it");
+    }
+
+    [Fact]
     public void RegisterScript_StopsAtTheFirstStepThatFails()
     {
         // The runner keeps a runspace for the next script, so a step that failed without stopping left Register to

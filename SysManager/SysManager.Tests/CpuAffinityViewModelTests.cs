@@ -527,7 +527,8 @@ public class CpuAffinityViewModelTests
     {
         // A protected or exiting process returns no mask, so nothing gets captured. The button must
         // stay disabled rather than being offered for a restore that would silently do nothing —
-        // "selected" is not the same as "we know what to put back".
+        // "selected" is not the same as "we know what to put back". Apply is off too: a process
+        // Windows will not let SysManager read is not one it lets SysManager change (#2839).
         var service = Substitute.For<ICpuAffinityService>();
         service.LogicalProcessorCount.Returns(4);
         service.GetCores().Returns(new List<CpuCore>
@@ -542,8 +543,8 @@ public class CpuAffinityViewModelTests
         vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 4242);
 
         Assert.NotNull(vm.SelectedProcess);
-        Assert.True(vm.ApplyCommand.CanExecute(null));    // pinning is still allowed
-        Assert.False(vm.RestoreCommand.CanExecute(null)); // restoring is not
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+        Assert.False(vm.RestoreCommand.CanExecute(null));
     }
 
     [Fact]
@@ -692,5 +693,109 @@ public class CpuAffinityViewModelTests
         vm.RestoreCommand.Execute(null);
 
         Assert.Equal(0b0001, writes[^1]);
+    }
+
+    // ---------- a process whose cores cannot be read (#2839) ----------
+    // GetAffinity returns null for a process Windows keeps closed to SysManager and for one that has closed. The grid
+    // kept the previous process's ticks then, so they read as this one's, Apply was offered for a change Windows
+    // refuses, and the status line did not change.
+
+    private const string Prompt = "Pick a process, choose cores, then apply.";
+
+    private const string CannotReadMsMpEng =
+        "Windows did not let SysManager read which cores MsMpEng uses, so they cannot be changed. It may need "
+        + "administrator rights, and some Windows processes stay closed even to those.";
+
+    /// <summary>game (pid 10) may run on cores 0 and 1, and can be read. MsMpEng (pid 20) cannot, and is running.</summary>
+    private static ICpuAffinityService ServiceWithAnUnreadableProcess()
+    {
+        var service = ServiceWithProcesses(new(10, "game", 0b0011, Started), new(20, "MsMpEng", 0, Started));
+        service.GetAffinity(10, Started).Returns(0b0011L);
+        service.GetAffinity(20, Started).Returns((long?)null);
+        return service;
+    }
+
+    [Fact]
+    public void Selecting_AProcessWhoseCoresCannotBeRead_ClearsTheGrid_OffersNoApply_AndSaysWhy()
+    {
+        var vm = NewVm(ServiceWithAnUnreadableProcess());
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 10);
+        Assert.Equal([true, true, false, false], vm.Cores.Select(c => c.IsSelected));   // the premise: game's cores
+
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 20);
+
+        Assert.All(vm.Cores, c => Assert.False(c.IsSelected));
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+        Assert.False(vm.RestoreCommand.CanExecute(null));
+        Assert.Equal(CannotReadMsMpEng, vm.StatusMessage);
+    }
+
+    [Fact]
+    public void Selecting_AProcessWhoseCoresCanBeRead_AfterOneWhoseCannot_TicksItsCores_AndPutsThePromptBack()
+    {
+        var vm = NewVm(ServiceWithAnUnreadableProcess());
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 20);
+        Assert.Equal(CannotReadMsMpEng, vm.StatusMessage);
+
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 10);
+
+        Assert.Equal([true, true, false, false], vm.Cores.Select(c => c.IsSelected));
+        Assert.True(vm.ApplyCommand.CanExecute(null));
+        Assert.Equal(Prompt, vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Refresh_KeepsSayingWhyTheSelectedProcessShowsNoCores()
+    {
+        var vm = NewVm(ServiceWithAnUnreadableProcess());
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 20);
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+
+        Assert.Equal(20, vm.SelectedProcess?.ProcessId);
+        Assert.Equal(CannotReadMsMpEng, vm.StatusMessage);
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Selecting_AProcessThatHasClosed_ReadsTheListAgain_AndSaysSo()
+    {
+        var service = ServiceWithProcesses();
+        service.GetProcesses().Returns(
+            new List<RunningProcess> { new(10, "game", 0b0011, Started), new(30, "setup", 0b1111, Started) },
+            new List<RunningProcess> { new(10, "game", 0b0011, Started) });
+        service.GetAffinity(30, Started).Returns((long?)null);
+        service.HasExited(30, Started).Returns(true);
+        var vm = NewVm(service);
+
+        vm.SelectedProcess = vm.Processes.Single(p => p.ProcessId == 30);
+        await vm.ClosedProcessRefresh;
+
+        Assert.Null(vm.SelectedProcess);
+        Assert.Equal(10, Assert.Single(vm.Processes).ProcessId);
+        Assert.False(vm.ApplyCommand.CanExecute(null));
+        Assert.Equal("setup (30) had already closed, so the list was read again.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AProcessThatClosesDuringARefresh_DoesNotStartAnotherRefresh()
+    {
+        // The refresh lists it and selects it again, but by then it has closed. A refresh started from there would
+        // overlap the one running, and could repeat for as long as Windows still lists the process.
+        var service = ServiceWithProcesses();
+        service.GetProcesses().Returns(
+            new List<RunningProcess> { new(30, "setup", 0b0001, Started) },
+            new List<RunningProcess> { new(30, "setup", 0b0011, Started) });
+        service.GetAffinity(30, Started).Returns(0b0001L, (long?)null);
+        service.HasExited(30, Started).Returns(true);
+        var vm = NewVm(service);
+        vm.SelectedProcess = vm.Processes.Single();
+
+        await vm.RefreshProcessesCommand.ExecuteAsync(null);
+        await vm.ClosedProcessRefresh;
+
+        service.Received(2).GetProcesses();
+        Assert.Equal("setup (30) had already closed.", vm.StatusMessage);
+        Assert.False(vm.ApplyCommand.CanExecute(null));
     }
 }

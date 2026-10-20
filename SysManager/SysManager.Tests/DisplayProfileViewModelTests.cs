@@ -3,6 +3,8 @@
 // License: MIT
 
 using CommunityToolkit.Mvvm.Input;
+using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 using Xunit;
@@ -129,5 +131,194 @@ public class DisplayProfileViewModelTests
         // The older completion saw a newer generation and left the flag alone.
         Assert.True(vm.IsBusy);
         Assert.True(vm.IsProgressIndeterminate);
+    }
+
+    // ---------- reading the displays again (#2886) ----------
+    // The displays were read once, when the tab was first built, and the view model lives as long as SysManager, which
+    // keeps running in the notification area. A screen connected later never appeared until SysManager restarted.
+
+    private static readonly DisplayDevice Laptop = new(@"\\.\DISPLAY1", "Built-in display", IsPrimary: true, IsActive: true);
+    private static readonly DisplayDevice Monitor = new(@"\\.\DISPLAY2", "Gaming monitor", IsPrimary: false, IsActive: true);
+    private static readonly DisplayMode At60 = new(1920, 1080, 60, 32);
+    private static readonly DisplayMode At144 = new(1920, 1080, 144, 32);
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A substitute listing <paramref name="first"/> at construction and <paramref name="after"/> on every read after it.
+    /// Every display offers 144 and 60 Hz, and runs at 60.
+    /// </summary>
+    private static IDisplayProfileService Listing(IReadOnlyList<DisplayDevice> first, IReadOnlyList<DisplayDevice> after)
+    {
+        var service = Substitute.For<IDisplayProfileService>();
+        service.GetDisplays().Returns(first, after);
+        service.GetSupportedModes(Arg.Any<string>()).Returns([At144, At60]);
+        service.GetCurrentMode(Arg.Any<string>()).Returns(At60);
+        return service;
+    }
+
+    /// <summary>
+    /// Waits for a read of the displays and the mode load it starts. Each runs through <c>InitializeAsync</c>, which
+    /// replaces <c>InitializationComplete</c>, so the property is read again after the first wait.
+    /// </summary>
+    private static async Task Settled(DisplayProfileViewModel vm)
+    {
+        await vm.InitializationComplete;
+        await vm.InitializationComplete;
+    }
+
+    private static async Task<DisplayProfileViewModel> Loaded(IDisplayProfileService service)
+    {
+        var vm = new DisplayProfileViewModel(service);
+        await Settled(vm);
+        return vm;
+    }
+
+    [Fact]
+    public async Task F5_ReadsTheDisplaysAgain()
+    {
+        var vm = await Loaded(Listing([Laptop], [Laptop]));
+
+        Assert.Same(vm.RefreshDisplaysCommand, vm.RefreshOnF5);
+    }
+
+    [Fact]
+    public async Task Refresh_ListsAScreenConnectedSinceTheTabWasBuilt()
+    {
+        var vm = await Loaded(Listing([Laptop], [Laptop, Monitor]));
+        Assert.Equal([Laptop], vm.Displays);
+
+        await vm.RefreshDisplaysCommand.ExecuteAsync(null);
+        await Settled(vm);
+
+        Assert.Equal([Laptop, Monitor], vm.Displays);
+        Assert.Equal(Laptop, vm.SelectedDisplay);
+        Assert.Equal("Pick a resolution and refresh rate, then apply.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Refresh_KeepsTheSelectedDisplay_AndReadsItsModesAgain()
+    {
+        var service = Listing([Laptop, Monitor], [Monitor, Laptop]);
+        var vm = await Loaded(service);
+        vm.SelectedDisplay = Monitor;
+        await Settled(vm);
+        // Set to 144 Hz in Windows' settings meanwhile. The same display is selected again, so only reading its modes
+        // again shows it.
+        service.GetCurrentMode(Monitor.DeviceName).Returns(At144);
+
+        await vm.RefreshDisplaysCommand.ExecuteAsync(null);
+        await Settled(vm);
+
+        Assert.Equal(Monitor, vm.SelectedDisplay);
+        Assert.Equal(At144, vm.CurrentMode);
+        Assert.Equal(At144, vm.SelectedMode);
+    }
+
+    [Fact]
+    public async Task Refresh_AfterTheSelectedScreenWasRemoved_SelectsThePrimary()
+    {
+        var vm = await Loaded(Listing([Laptop, Monitor], [Laptop]));
+        vm.SelectedDisplay = Monitor;
+        await Settled(vm);
+
+        await vm.RefreshDisplaysCommand.ExecuteAsync(null);
+        await Settled(vm);
+
+        Assert.Equal([Laptop], vm.Displays);
+        Assert.Equal(Laptop, vm.SelectedDisplay);
+    }
+
+    [Fact]
+    public async Task AWindowsDisplayChange_ReadsTheDisplaysAgain_AndLeavesTheStatusLineAlone()
+    {
+        // The change may be SysManager's own, and the status line can hold what an apply or a revert said.
+        var service = Listing([Laptop], [Laptop, Monitor]);
+        var vm = await Loaded(service);
+        vm.KeepSettingsCommand.Execute(null);
+        Assert.Equal("Display set to 1920 × 1080 @ 60 Hz.", vm.StatusMessage);   // the premise: a line of the tab's own
+
+        service.DisplaysChanged += Raise.Event();
+        await Settled(vm);
+
+        Assert.Equal([Laptop, Monitor], vm.Displays);
+        Assert.Equal("Display set to 1920 × 1080 @ 60 Hz.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AWindowsDisplayChange_WhileAChangeWaitsToBeKept_IsReadOnceItIsKept()
+    {
+        var service = Listing([Laptop], [Laptop, Monitor]);
+        var vm = await Loaded(service);
+        vm.IsAwaitingConfirm = true;   // the countdown after an apply, without its timer
+
+        Assert.False(vm.RefreshDisplaysCommand.CanExecute(null));
+        service.DisplaysChanged += Raise.Event();
+        service.Received(1).GetDisplays();
+        Assert.Equal([Laptop], vm.Displays);
+
+        vm.KeepSettingsCommand.Execute(null);
+        await Settled(vm);
+
+        service.Received(2).GetDisplays();
+        Assert.Equal([Laptop, Monitor], vm.Displays);
+        Assert.True(vm.RefreshDisplaysCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AnOlderReadFinishingLast_DoesNotPutBackAScreenThatANewerReadFoundGone()
+    {
+        // A burst of display changes starts reads that overlap. The older one is held until the newer one is done,
+        // and still lists the monitor that was unplugged since. Answered by how many reads came before, and the newer
+        // read is started only once the older one has made its call, so the pool's order cannot swap them.
+        var entered = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        var reads = 0;
+        var service = Listing([Laptop, Monitor], [Laptop]);
+        service.GetDisplays().Returns(_ =>
+        {
+            switch (Interlocked.Increment(ref reads))
+            {
+                case 1:
+                    return [Laptop, Monitor];
+                case 2:
+                    entered.Set();
+                    release.Wait(Bound);
+                    return [Laptop, Monitor];
+                default:
+                    return [Laptop];
+            }
+        });
+        try
+        {
+            var vm = await Loaded(service);
+
+            service.DisplaysChanged += Raise.Event();
+            var older = vm.InitializationComplete;
+            Assert.True(entered.Wait(Bound), "the older read never started");
+            service.DisplaysChanged += Raise.Event();
+            await Settled(vm);
+            Assert.Equal([Laptop], vm.Displays);   // the premise: the newer read is shown
+
+            release.Set();
+            await older;
+
+            Assert.Equal([Laptop], vm.Displays);
+            Assert.False(vm.IsBusy);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_StopsListeningForDisplayChanges()
+    {
+        var service = Listing([Laptop], [Laptop]);
+        var vm = await Loaded(service);
+
+        vm.Dispose();
+
+        service.Received(1).DisplaysChanged -= Arg.Any<EventHandler>();
     }
 }

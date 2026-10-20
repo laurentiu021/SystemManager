@@ -108,7 +108,7 @@ public static class ServiceRegistration
         services.AddSingleton<IWindowsUpdateService, WindowsUpdateService>();
         services.AddSingleton<ITimerResolutionService, TimerResolutionService>();
         services.AddSingleton<IFileLockService, FileLockService>();
-        services.AddSingleton<DisplayProfileService>();
+        services.AddSingleton<IDisplayProfileService, DisplayProfileService>();
         services.AddSingleton<ICpuAffinityService, CpuAffinityService>();
         services.AddSingleton<DefenderService>();
         services.AddSingleton<TaskSchedulerService>();

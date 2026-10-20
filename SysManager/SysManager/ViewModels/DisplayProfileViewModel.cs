@@ -21,7 +21,10 @@ namespace SysManager.ViewModels;
 /// </summary>
 public sealed partial class DisplayProfileViewModel : ViewModelBase
 {
-    private readonly DisplayProfileService _service;
+    /// <inheritdoc/>
+    protected internal override IRelayCommand? RefreshOnF5 => RefreshDisplaysCommand;
+
+    private readonly IDisplayProfileService _service;
     private DispatcherTimer? _revertTimer;
     private DisplayMode? _previousMode;
     // The display the pending revert belongs to, captured at Apply time. The user can
@@ -32,6 +35,13 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     // Incremented per mode load so only the newest one clears the busy flag (see LoadModesAsync).
     // UI-thread only — every mutation happens in a continuation marshalled back with ConfigureAwait(true).
     private int _modeLoadGeneration;
+    // The same for reading the displays, which a burst of display changes can start several times over.
+    private int _displayLoadGeneration;
+    // A mode is being applied or reverted (see ChangingMode).
+    private bool _changingMode;
+    // Windows reported a display change while a mode was applied, reverted or waited to be kept. The displays are
+    // read again once that is over, so a screen connected meanwhile is not missed.
+    private bool _displaysChangedMeanwhile;
     private const int RevertSeconds = 15;
 
     public BulkObservableCollection<DisplayDevice> Displays { get; } = new();
@@ -43,39 +53,114 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     [ObservableProperty] private bool _isSupported = true;
 
     // Pending-confirmation state (the auto-revert window).
-    [ObservableProperty] private bool _isAwaitingConfirm;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshDisplaysCommand))]
+    private bool _isAwaitingConfirm;
     [ObservableProperty] private int _revertCountdown;
 
-    public DisplayProfileViewModel(DisplayProfileService service)
+    public DisplayProfileViewModel(IDisplayProfileService service)
     {
         _service = service;
         StatusMessage = "Reading displays…";
-        InitializeAsync(LoadDisplaysAsync);
+        _service.DisplaysChanged += OnDisplaysChanged;
+        InitializeAsync(() => LoadDisplaysAsync(announce: true));
     }
 
-    private async Task LoadDisplaysAsync()
+    /// <summary>
+    /// Reads the displays, keeps the selected one while it is still connected, and reads its modes again.
+    /// </summary>
+    /// <param name="announce">
+    /// Whether the status line then says what to do next. Not after a change Windows reported, which may be
+    /// SysManager's own: the line can hold what an apply or a revert said, such as how to recover when a revert failed.
+    /// </param>
+    private async Task LoadDisplaysAsync(bool announce)
     {
+        int generation = ++_displayLoadGeneration;
         IReadOnlyList<DisplayDevice> displays;
         IsBusy = true;
         IsProgressIndeterminate = true;
         try
         {
             displays = await Task.Run(_service.GetDisplays).ConfigureAwait(true);
-            Displays.ReplaceWith(displays);
-            IsSupported = displays.Count > 0;
-            if (!IsSupported)
-            {
-                StatusMessage = "No active displays were found.";
-                return;
-            }
         }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally
+        {
+            if (generation == _displayLoadGeneration) { IsBusy = false; IsProgressIndeterminate = false; }
+        }
+
+        // A newer read started while this one ran, and its list is the one to show: this one's could still hold a
+        // screen that has since been removed.
+        if (generation != _displayLoadGeneration) return;
+
+        // Taken before the picker's items are replaced, which can clear its selection.
+        var selectedName = SelectedDisplay?.DeviceName;
+        Displays.ReplaceWith(displays);
+        IsSupported = displays.Count > 0;
+        if (!IsSupported)
+        {
+            // A read can find none where the last one found some, and the modes shown were that display's.
+            SelectedDisplay = null;
+            Modes.ReplaceWith([]);
+            CurrentMode = null;
+            if (announce) StatusMessage = "No active displays were found.";
+            return;
+        }
+
+        var keep = displays.FirstOrDefault(d => d.DeviceName == selectedName)
+                   ?? displays.FirstOrDefault(d => d.IsPrimary) ?? displays[0];
 
         // Assigned after the block above, not inside it: this setter starts the mode load, which
         // owns IsBusy for its own span. Nested inside, our finally would clear the flag while that
-        // load was still running and the bar would vanish mid-work.
-        SelectedDisplay = displays.FirstOrDefault(d => d.IsPrimary) ?? displays[0];
-        StatusMessage = "Pick a resolution and refresh rate, then apply.";
+        // load was still running and the bar would vanish mid-work. The same display read again is
+        // an equal record, so the setter would not start that load, yet its modes and its current
+        // mode may have changed with it.
+        if (Equals(keep, SelectedDisplay)) InitializeAsync(() => LoadModesAsync(keep.DeviceName));
+        else SelectedDisplay = keep;
+        if (announce) StatusMessage = "Pick a resolution and refresh rate, then apply.";
+    }
+
+    /// <summary>Reads the displays again, from the Refresh button or F5.</summary>
+    /// <remarks>
+    /// The displays were read once, when the tab was first built, and the view model lives as long as SysManager,
+    /// which keeps running in the notification area, so a monitor or TV connected later never appeared and could not
+    /// be set until SysManager restarted (#2886). Not while a mode is applied or reverted, or waits to be kept: what
+    /// the tab shows then is the change being made, and the displays are read once it is over.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanRefreshDisplays))]
+    private Task RefreshDisplaysAsync() => LoadDisplaysAsync(announce: true);
+
+    private bool CanRefreshDisplays => !_changingMode && !IsAwaitingConfirm;
+
+    /// <summary>Whether a mode is being applied or reverted. Windows reports that as a display change too.</summary>
+    private bool ChangingMode
+    {
+        get => _changingMode;
+        set
+        {
+            _changingMode = value;
+            RefreshDisplaysCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    // Windows reported a display change: a screen connected or removed, or a mode set, SysManager's own included. It
+    // comes in on whichever thread Windows' notification arrived on, so it is marshalled.
+    private void OnDisplaysChanged(object? sender, EventArgs e) => UiThread.Post(() =>
+    {
+        if (IsDisposed) return;
+        if (!CanRefreshDisplays)
+        {
+            _displaysChangedMeanwhile = true;
+            return;
+        }
+        InitializeAsync(() => LoadDisplaysAsync(announce: false));
+    });
+
+    /// <summary>Reads the displays again if Windows reported a change while a mode was applied, reverted or kept.</summary>
+    private void ReadDisplaysChangedMeanwhile()
+    {
+        if (!_displaysChangedMeanwhile) return;
+        _displaysChangedMeanwhile = false;
+        InitializeAsync(() => LoadDisplaysAsync(announce: false));
     }
 
     partial void OnSelectedDisplayChanged(DisplayDevice? value)
@@ -100,8 +185,9 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
             var modes = await Task.Run(() => _service.GetSupportedModes(deviceName)).ConfigureAwait(true);
             var current = await Task.Run(() => _service.GetCurrentMode(deviceName)).ConfigureAwait(true);
             // If the selection moved on while this one was running, drop its results so a slow
-            // earlier load can't overwrite the newer display's modes (last-writer-wins).
-            if (SelectedDisplay is null || SelectedDisplay.DeviceName != deviceName) return;
+            // earlier load can't overwrite the newer display's modes (last-writer-wins). The same
+            // for a newer load of this display, which reading the displays again starts.
+            if (generation != _modeLoadGeneration || SelectedDisplay is null || SelectedDisplay.DeviceName != deviceName) return;
             Modes.ReplaceWith(modes);
             CurrentMode = current;
             SelectedMode = modes.FirstOrDefault(m =>
@@ -137,6 +223,8 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         // waiting 15 s for the user to confirm is not the app being busy.
         IsBusy = true;
         IsProgressIndeterminate = true;
+        ChangingMode = true;
+        var applied = false;
         try
         {
             _previousDevice = display;
@@ -155,8 +243,17 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
             Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
             CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+            applied = true;
         }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+            ChangingMode = false;
+
+            // A change Windows refused starts no countdown, so a display change it reported meanwhile is read now.
+            if (!applied) ReadDisplaysChangedMeanwhile();
+        }
 
         // Begin the auto-revert window — the user must confirm to keep the change.
         BeginRevertCountdown();
@@ -171,6 +268,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         _previousDevice = null;
         StatusMessage = $"Display set to {CurrentMode?.Display}.";
         ApplyCommand.NotifyCanExecuteChanged();
+        ReadDisplaysChangedMeanwhile();
     }
 
     [RelayCommand]
@@ -205,6 +303,8 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     private async Task RevertToPreviousAsync(string message)
     {
         StopRevertTimer();
+        // Before the countdown ends, so the displays are not read again in between: the revert changes a mode too.
+        ChangingMode = true;
         IsAwaitingConfirm = false;
 
         // Revert the device the change was APPLIED to (captured at Apply time), not the
@@ -238,14 +338,16 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
                 if (ReferenceEquals(device, SelectedDisplay))
                     CurrentMode = await Task.Run(() => _service.GetCurrentMode(device.DeviceName)).ConfigureAwait(true);
             }
-            finally { IsBusy = false; IsProgressIndeterminate = false; }
+            finally { IsBusy = false; IsProgressIndeterminate = false; ChangingMode = false; }
         }
+        else ChangingMode = false;
         _previousMode = null;
         _previousDevice = null;
         StatusMessage = revertFailed
             ? "Couldn't restore the previous display mode — if the screen looks wrong, press Esc or use Windows Settings ▸ System ▸ Display to reset it."
             : message;
         ApplyCommand.NotifyCanExecuteChanged();
+        ReadDisplaysChangedMeanwhile();
     }
 
     private void StopRevertTimer()
@@ -258,7 +360,14 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) StopRevertTimer();
+        if (disposing)
+        {
+            StopRevertTimer();
+
+            // Windows' display notification keeps its handlers in a static list, so one left there would keep this
+            // view model alive, reading displays, for the rest of the process.
+            _service.DisplaysChanged -= OnDisplaysChanged;
+        }
         base.Dispose(disposing);
     }
 }

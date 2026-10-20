@@ -461,7 +461,7 @@ public class DuplicateFileServiceTests : IDisposable
         finally { Symlinks.RemoveLinkThenTree(link, root); }
     }
 
-    // ── Files stored online only are not read (R7-04) ─────────────────────────
+    // ── Files stored online only are not read ─────────────────────────────────
 
     [Fact]
     public async Task Scan_LeavesAFileStoredOnlineOnlyUnread_AndCountsIt()

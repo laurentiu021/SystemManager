@@ -281,4 +281,76 @@ public sealed class AppBlockerServiceRegistryTests : IDisposable
         Assert.Empty(blocked);
         Assert.False(_svc.IsBlocked("notepad.exe"));
     }
+
+    // ── Blocks an older build wrote, wherever Windows is installed ────────────
+
+    private void Seed(string exeName, string debugger)
+    {
+        using var appKey = _root.CreateSubKey($@"{IfeoPath}\{exeName}", writable: true)!;
+        appKey.SetValue("Debugger", debugger, RegistryValueKind.String);
+    }
+
+    [Fact]
+    public void ABlockWhoseFolderIsNotThisPCsSystemFolder_IsStillOurs()
+    {
+        // Builds before #1061 wrote C:\Windows\System32\SysManager_Blocked.exe, and where Windows is on another
+        // drive that never equalled the path derived from the system folder. On this PC the same mismatch is made the
+        // other way round: the stored folder is not this PC's.
+        var elsewhere = System.IO.Path.Combine(@"Q:\WINDOWS\system32", AppBlockerService.BlockerFileName);
+        Seed("oldblock.exe", elsewhere);
+
+        Assert.True(_svc.IsBlocked("oldblock.exe"));
+        Assert.Contains(_svc.GetBlockedApps()!, a => a.ExecutableName == "oldblock.exe");
+        Assert.Equal(AppBlockerService.BlockResult.Success, _svc.TryBlockApp("oldblock.exe"));   // not "another program's"
+
+        Assert.True(_svc.UnblockApp("oldblock.exe"));
+        Assert.Null(ReadDebugger("oldblock.exe"));
+        Assert.False(_svc.IsBlocked("oldblock.exe"));
+    }
+
+    [Fact]
+    public void TheValueOlderBuildsWrote_IsStillOurs()
+    {
+        Seed("legacy.exe", @"C:\Windows\System32\SysManager_Blocked.exe");
+
+        Assert.True(_svc.IsBlocked("legacy.exe"));
+        Assert.True(_svc.UnblockApp("legacy.exe"));
+        Assert.Null(ReadDebugger("legacy.exe"));
+    }
+
+    [Fact]
+    public void ADebuggerOfAnotherName_IsStillNotOurs()
+    {
+        // The negative half: recognising by file name must not take over a real debugger.
+        Seed("debugged.exe", @"C:\Program Files\Tools\SysManager_Blocked.exe.debugger.exe");
+
+        Assert.False(_svc.IsBlocked("debugged.exe"));
+        Assert.Equal(AppBlockerService.BlockResult.ExternalDebuggerPresent, _svc.TryBlockApp("debugged.exe"));
+        Assert.True(_svc.UnblockApp("debugged.exe"));
+        Assert.NotNull(ReadDebugger("debugged.exe"));   // left as it was
+    }
+
+    // ── The longest name a registry key allows ─────────────────────────────────
+
+    [Fact]
+    public void ANameAsLongAsARegistryKeyAllows_CanBeBlockedAndLifted()
+    {
+        var longest = new string('a', 251) + ".exe";   // 255, the limit for a key name
+
+        Assert.Equal(AppBlockerService.BlockResult.Success, _svc.TryBlockApp(longest));
+        Assert.True(_svc.IsBlocked(longest));
+        Assert.True(_svc.UnblockApp(longest));
+    }
+
+    [Fact]
+    public void ANameLongerThanARegistryKeyAllows_IsRefused_RatherThanThrown()
+    {
+        // OpenSubKey and CreateSubKey throw ArgumentException past 255 characters, which nothing caught, so a pasted
+        // name crashed Block. Against the test's own hive, so nothing outside it is opened.
+        var tooLong = new string('a', 252) + ".exe";
+
+        Assert.Equal(AppBlockerService.BlockResult.InvalidName, _svc.TryBlockApp(tooLong));
+        Assert.False(_svc.IsBlocked(tooLong));
+        Assert.False(_svc.UnblockApp(tooLong));
+    }
 }

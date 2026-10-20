@@ -926,7 +926,9 @@ Key services:
   `GetBlockedApps` stamps that verdict onto each row it returns. Detection only —
   the service never removes a block without going through the confirmed unblock path.
   When the IFEO key cannot be read, `GetBlockedApps` and `IsBlocked` return null, so a
-  failed read is never reported as "nothing blocked".
+  failed read is never reported as "nothing blocked". `IsOwnBlock` recognises a block by the
+  sentinel's file name, so the `C:\Windows\System32` literal older builds wrote still counts where
+  Windows is on another drive, and names are capped at the 255 characters a registry key allows.
 - `NotificationBlockerService` — mutes app notification nags via the documented
   per-user registry switches Windows Settings writes (per-app `Enabled` under
   `Notifications\Settings`, plus the `ToastEnabled` main toggle). Injectable

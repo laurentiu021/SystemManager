@@ -57,7 +57,7 @@
 
         <!-- Block input -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4"
+            <TextBox Text="{Binding NewExeName, UpdateSourceTrigger=PropertyChanged}" Width="250" Padding="6,4" MaxLength="255"
                      VerticalAlignment="Center" Margin="0,0,8,0"
                      AutomationProperties.Name="Executable name to block" />
             <Button Content="Block" Command="{Binding BlockAppCommand}" Style="{StaticResource PrimaryButton}" Padding="12,6" Margin="0,0,8,0" />

@@ -26,12 +26,29 @@ public sealed partial class AppBlockerService : IAppBlockerService
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
 
+    /// <summary>The file name of the "Debugger" a block points at, a file that does not exist.</summary>
+    internal const string BlockerFileName = "SysManager_Blocked.exe";
+
     // Sentinel "Debugger" path written into IFEO to block an app: it points at a file that
     // does not exist, so the launch fails. Derived from the real system directory rather than
     // hardcoding C:\Windows\System32 (Windows can be installed on another drive/directory).
-    // Compared case-insensitively on read, so blocks written with the old literal still match.
+    // A stored value is recognised by IsOwnBlock, which also knows the values older builds wrote.
     private static readonly string BlockerDebugger =
-        Path.Combine(Environment.SystemDirectory, "SysManager_Blocked.exe");
+        Path.Combine(Environment.SystemDirectory, BlockerFileName);
+
+    /// <summary>
+    /// True when a stored Debugger value is a block SysManager wrote, by this build or an older one.
+    /// </summary>
+    /// <remarks>
+    /// Recognised by its file name, not by the whole path. Builds before #1061 wrote the literal
+    /// <c>C:\Windows\System32\SysManager_Blocked.exe</c>, which matches the path derived from the system directory
+    /// only where Windows is in C:\Windows. Elsewhere such a block stayed in force but was not listed, so it had
+    /// no Unblock button, and a second Block was refused as another program's debugger. No other program writes
+    /// a debugger of that name.
+    /// </remarks>
+    internal static bool IsOwnBlock(string? debugger) =>
+        !string.IsNullOrWhiteSpace(debugger)
+        && string.Equals(Path.GetFileName(debugger.Trim()), BlockerFileName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Executables that must never be blocked, because the block cannot be undone.
@@ -241,8 +258,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
             // belong to a legitimately-debugged app, and overwriting it would both
             // break that setup and be unrecoverable (Unblock only removes OUR value).
             var existingDebugger = appKey.GetValue("Debugger") as string;
-            if (!string.IsNullOrEmpty(existingDebugger) &&
-                !existingDebugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(existingDebugger) && !IsOwnBlock(existingDebugger))
             {
                 Log.Warning("Refusing to block {ExeName}: an external Debugger value is already set ({Debugger})",
                     exeName, existingDebugger);
@@ -296,8 +312,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
             using var appKey = ifeo.OpenSubKey(exeName, writable: true);
             if (appKey is null) return true;
 
-            var debugger = appKey.GetValue("Debugger") as string;
-            if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+            if (IsOwnBlock(appKey.GetValue("Debugger") as string))
             {
                 appKey.DeleteValue("Debugger", throwOnMissingValue: false);
 
@@ -342,6 +357,10 @@ public sealed partial class AppBlockerService : IAppBlockerService
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
+        // Checked as Block and Unblock check it. A name longer than a registry key name can be reached OpenSubKey,
+        // which throws ArgumentException for it, and the tab asks this before anything else when Block is pressed.
+        if (!ExeNamePattern().IsMatch(exeName)) return false;
+
         try
         {
             using var ifeo = _baseKey.OpenSubKey(IfeoPath);
@@ -350,8 +369,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
             using var appKey = ifeo.OpenSubKey(exeName);
             if (appKey is null) return false;
 
-            var debugger = appKey.GetValue("Debugger") as string;
-            return debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase);
+            return IsOwnBlock(appKey.GetValue("Debugger") as string);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
         {
@@ -388,8 +406,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
                     using var appKey = ifeo.OpenSubKey(subKeyName);
                     if (appKey is null) continue;
 
-                    var debugger = appKey.GetValue("Debugger") as string;
-                    if (debugger is not null && debugger.Equals(BlockerDebugger, StringComparison.OrdinalIgnoreCase))
+                    if (IsOwnBlock(appKey.GetValue("Debugger") as string))
                     {
                         // Classified here rather than in the view model so the flag travels with the data
                         // and cannot be derived a second, differing way by whoever displays it.
@@ -414,7 +431,9 @@ public sealed partial class AppBlockerService : IAppBlockerService
         return blocked;
     }
 
-    // \A…\z (absolute anchors): ^…$ would accept a trailing newline after ".exe".
-    [System.Text.RegularExpressions.GeneratedRegex(@"\A[A-Za-z0-9_\-. ]+\.exe\z", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    // \A…\z (absolute anchors): ^…$ would accept a trailing newline after ".exe". At most 251 characters before
+    // ".exe", because a registry key name is at most 255: OpenSubKey and CreateSubKey throw ArgumentException for a
+    // longer one, and a pasted name crashed Block with the app's generic error box.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\A[A-Za-z0-9_\-. ]{1,251}\.exe\z", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex ExeNamePattern();
 }

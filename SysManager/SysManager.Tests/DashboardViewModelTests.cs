@@ -1581,4 +1581,18 @@ public class DashboardViewModelTests
 
         Assert.True(vm.IsBusy);
     }
+
+    [Fact]
+    public void TheAppUpdatesAlert_LeavesOutAppsWhoseInstalledVersionIsUnknown()
+    {
+        // Counted, they kept the alert yellow for good: Update All Apps leaves them out, so nothing could clear it.
+        AppPackage[] upgradable =
+        [
+            new() { Id = "Git.Git", CurrentVersion = "2.47.0", AvailableVersion = "2.48.0" },
+            new() { Id = "Contoso.Helper", CurrentVersion = AppPackage.UnknownVersion, AvailableVersion = "3.1.0" },
+        ];
+
+        Assert.Equal(1, DashboardViewModel.CountForTheAlert(upgradable));
+        Assert.Equal(0, DashboardViewModel.CountForTheAlert([upgradable[1]]));
+    }
 }

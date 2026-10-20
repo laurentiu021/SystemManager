@@ -62,7 +62,7 @@ public sealed partial class WingetService : IWingetService
         {
             if (string.IsNullOrWhiteSpace(row.Available)) continue;
 
-            packages.Add(new AppPackage
+            var package = new AppPackage
             {
                 Name = row.Name,
                 Id = row.Id,
@@ -70,7 +70,10 @@ public sealed partial class WingetService : IWingetService
                 AvailableVersion = row.Available,
                 Source = string.IsNullOrWhiteSpace(row.Source) ? "winget" : row.Source,
                 Status = "Pending"
-            });
+            };
+            // Listed, but not ticked: winget cannot tell whether what it offers is newer than what is installed.
+            package.IsSelected = !package.HasUnknownVersion;
+            packages.Add(package);
         }
         return packages;
     }
@@ -96,7 +99,9 @@ public sealed partial class WingetService : IWingetService
 
     public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
     {
-        var args = "upgrade --all --silent --no-progress --accept-source-agreements --accept-package-agreements --disable-interactivity --include-unknown";
+        // Without --include-unknown, as winget's own upgrade --all: an app whose installed version winget cannot read
+        // was reinstalled on every press, and the Dashboard's count leaves those apps out too.
+        var args = "upgrade --all --silent --no-progress --accept-source-agreements --accept-package-agreements --disable-interactivity";
         int code = await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
         return WingetResult.From(code);
     }

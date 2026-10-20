@@ -695,7 +695,9 @@ Across the tab:
   streamed to the console as it happens
 - Per-row Status column updated in real time
   (`Pending…` → `Downloading…` → `Installing…` → `Installed` /
-  `Installed (reboot required)` / `Failed` / `Not applied`)
+  `Installed (reboot required)` / `Failed` / `Not applied`). A failed row names the error code
+  Windows reported, such as `Failed (install 0x800F0922)`, the code to search for, and the failure
+  is written to the log, so a diagnostics bundle carries it
 - Honest aggregate reporting:
   `Installed X/Y. Failed: Z. Not applied: W.`
 - Reboot detection — toast notification if any update requires reboot
@@ -722,6 +724,10 @@ Across the tab:
 - Select all or individual packages — every package found starts ticked — and bulk upgrade with
   per-package status, after a confirmation that warns an upgrade cannot be undone and names the
   apps when there are five or fewer
+- **An app whose installed version winget cannot read is listed but not ticked.** winget offers
+  such an app on every scan, because reinstalling it does not tell winget the version, so it is
+  left for you to tick, the status line says how many there are, and the Dashboard's count and
+  its Update All Apps leave those apps out
 - **Unticking a package survives a rescan** — including when the rescan finds a newer
   version on offer, since "don't upgrade this one" doesn't stop being true because the
   version changed

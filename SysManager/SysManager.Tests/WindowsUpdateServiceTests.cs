@@ -54,4 +54,32 @@ public class WindowsUpdateServiceTests
     {
         Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));
     }
+
+    // ── A failed download or install ─────────────────────────────────────────
+
+    [Fact]
+    public void AFailure_ShowsTheErrorWindowsReported()
+    {
+        // The row showed WUA's result code alone, 4 for nearly every failure, which no search can explain.
+        Assert.Equal("Failed (install 0x800F0922)", WindowsUpdateService.FailureStatus("install", 4, unchecked((int)0x800F0922)));
+        Assert.Equal("Failed (download 0x80240438)", WindowsUpdateService.FailureStatus("download", 4, unchecked((int)0x80240438)));
+    }
+
+    [Fact]
+    public void AFailureWithNoError_FallsBackToTheResultCode()
+        => Assert.Equal("Failed (install code 5)", WindowsUpdateService.FailureStatus("install", 5, 0));
+
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(4, 4)]
+    public void TheUpdatesOwnCode_DecidesASucceededWithErrorsResult(int forTheUpdate, int expected)
+        => Assert.Equal(expected, WindowsUpdateService.EffectiveResultCode(3, () => forTheUpdate));
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void AnyOtherOverallCode_StandsWithoutAskingTheUpdate(int overall)
+        => Assert.Equal(overall, WindowsUpdateService.EffectiveResultCode(overall,
+            () => throw new InvalidOperationException("the update's own result must not be read")));
 }

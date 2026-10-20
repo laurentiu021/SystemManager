@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Reflection;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -149,5 +150,42 @@ public class WingetParserDeepTests
         var result = Parse(lines);
         Assert.Single(result);
         Assert.Contains("Super.Long.Package", result[0].Id);
+    }
+
+    // ── An installed version winget cannot read ─────────────────────────────
+
+    [Fact]
+    public void ARowWithAnUnknownInstalledVersion_IsListedButNotTicked()
+    {
+        // winget lists such an app only with --include-unknown, and reinstalling it does not tell winget the version,
+        // so it came back on every scan, ticked, and was reinstalled each time.
+        var result = Parse(
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Contoso Helper               Contoso.Helper                 Unknown   3.1.0       winget",
+        ]);
+
+        Assert.Equal(2, result.Count);
+        Assert.True(result.Single(p => p.Id == "Git.Git").IsSelected);
+        var unknown = result.Single(p => p.Id == "Contoso.Helper");
+        Assert.True(unknown.HasUnknownVersion);
+        Assert.False(unknown.IsSelected);
+    }
+
+    [Fact]
+    public async Task UpdateAll_LeavesOutAppsWhoseInstalledVersionIsUnknown()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        string? args = null;
+        ps.RunProcessAsync("winget", Arg.Do<string>(a => args = a),
+            Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>()).Returns(0);
+
+        await new WingetService(ps).UpgradeAllAsync();
+
+        Assert.NotNull(args);
+        Assert.Contains("upgrade --all", args, StringComparison.Ordinal);
+        Assert.DoesNotContain("--include-unknown", args, StringComparison.Ordinal);
     }
 }

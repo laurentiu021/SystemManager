@@ -10,6 +10,35 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.7] - 2026-10-20
+
+**A Windows Update that fails now names the error Windows reported, and App Updates, Bandwidth Monitor and Gaming
+Profile each stop counting or keeping something they should not.**
+
+### Fixed
+
+- **A failed Windows Update showed "code 4" and left nothing in the log.** The Windows Update tab read only Windows
+  Update's overall result code, which is 4 for nearly every failed download or install, so the row read "Failed
+  (install code 4)" and the error Windows reported, the code to search for (0x800F0922, 0x80073712 and so on), never
+  appeared. The row names that error now, for example "Failed (install 0x800F0922)", and every failed download or
+  install is written to the log with its result code and error, so a diagnostics bundle carries it. A result of
+  "succeeded with errors" is decided by the update's own result instead of counting as a failure. Since 1.18.0.
+- **Apps whose installed version winget cannot read stayed on the update list for good.** winget offers such an app on
+  every scan, and reinstalling it does not tell winget the version, so App Updates listed it ticked every time, the
+  Dashboard counted it, and Update All Apps reinstalled it on every press without the count going down. Those apps
+  are listed unticked now, the status line says how many there are, and the Dashboard's count and Update All Apps
+  leave them out, as winget's own `upgrade --all` does. Since 1.52.38.
+- **Bandwidth Monitor's first reading after you came back to it was an average of the whole time away.** It takes no
+  samples while the tab is hidden, so the first one after it was shown again covered everything sent and received
+  since you left it, and it was shown as the current rate, plotted as "now", saved to the history and checked
+  against the alert threshold. That sample only restarts the measurement now, and the next one, a second later, is
+  shown. Since the tab was added (1.54.0).
+- **Game mode could leave Windows Search stopped.** "Pause search indexing" waits up to 30 seconds for Windows Search
+  to stop. When Windows took longer, the step counted as failed, so ending game mode did not start Windows Search
+  again, though it finished stopping a moment later and stayed stopped until the next restart. A stop Windows
+  accepted counts as done now, and ending game mode waits for Windows Search to finish stopping before starting it
+  again. Since 1.52.38.
+
 ## [1.130.6] - 2026-10-20
 
 **SysManager opens even when its theme file names no theme, and Environment Variables, Traceroute, CLI Interface and

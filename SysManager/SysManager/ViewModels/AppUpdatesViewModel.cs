@@ -107,6 +107,16 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         Helpers.SelectionCarry.Apply(previous, fresh, p => p.Id, StringComparer.OrdinalIgnoreCase);
     }
 
+    /// <summary>The status line after a scan: how many updates, and how many winget cannot compare and left unticked.</summary>
+    internal static string DescribeScan(IReadOnlyCollection<AppPackage> packages)
+    {
+        var unknown = packages.Count(p => p.HasUnknownVersion);
+        var found = $"{packages.Count} upgradable package(s) found";
+        return unknown == 0
+            ? found
+            : $"{found}; {unknown} not ticked, because winget cannot read the installed version";
+    }
+
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(IsBusy)) return;
@@ -149,7 +159,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             CarryForwardSelection(previous, list);
             Packages.ReplaceWith(list);
             HasScanned = true;
-            StatusMessage = $"{Packages.Count} upgradable package(s) found";
+            StatusMessage = DescribeScan(Packages);
         }
         catch (OperationCanceledException) { StatusMessage = "Scan cancelled."; }
         // The query failed rather than finding nothing. The reason is already a sentence (#2461).

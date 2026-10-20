@@ -225,6 +225,51 @@ public class ThemeServiceTests : IDisposable
     }
 
     [Fact]
+    public void AnAutoFileWithNoPreset_StartsOnTheShippedTheme_AndIsSetAsideAtTheNextChoice()
+    {
+        // The mode used to be taken before the preset was checked, so the preset stayed null and the Auto lookup
+        // threw inside Initialize: at start-up that is before the main window exists.
+        const string content = """{"Mode":"auto","ShadePosition":0.5}""";
+        File.WriteAllText(ThemeFile, content);
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true);
+
+        svc.Initialize();
+
+        Assert.False(string.IsNullOrEmpty(svc.CurrentPresetId));
+        Assert.Equal("dark", svc.CurrentMode);
+        svc.SetPreset("deep-ocean");
+        Assert.Equal(content, File.ReadAllText(ThemeFile + ".unreadable"));
+    }
+
+    [Fact]
+    public void AFileWithNoPreset_LeavesTheModeButtonsWorking()
+    {
+        // In dark or light mode the start survived, but the Follow Windows button then threw on the null preset.
+        File.WriteAllText(ThemeFile, """{"Mode":"dark","ShadePosition":0.5}""");
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => false);
+        svc.Initialize();
+
+        svc.FollowWindows();
+
+        Assert.Equal(ThemeService.AutoMode, svc.CurrentMode);
+        Assert.False(string.IsNullOrEmpty(svc.CurrentPresetId));
+    }
+
+    [Fact]
+    public void AFileWithAModeTheAppNeverWrites_IsNotATheme()
+    {
+        const string content = """{"PresetId":"deep-ocean","Mode":"sideways","ShadePosition":0.5}""";
+        File.WriteAllText(ThemeFile, content);
+        var svc = new ThemeService(_dir, windowsPrefersDark: () => true);
+
+        svc.Initialize();
+
+        Assert.Equal("dark", svc.CurrentMode);
+        svc.SetPreset("warm-ember");
+        Assert.Equal(content, File.ReadAllText(ThemeFile + ".unreadable"));
+    }
+
+    [Fact]
     public void AChoice_WhenAFileThatIsNotAThemeCannotBeSetAside_WritesNothing()
     {
         File.WriteAllText(ThemeFile, "{ not a theme");

@@ -247,9 +247,10 @@ public sealed partial class EnvironmentVariableService
 
     /// <summary>
     /// Sets (or, when <paramref name="value"/> is null, deletes) a variable, writing
-    /// directly to the registry so the value KIND is preserved. An existing variable
-    /// keeps its kind (REG_EXPAND_SZ stays expandable); a new variable is written as
-    /// REG_EXPAND_SZ when its value contains a %VAR% token, else REG_SZ. Returns
+    /// directly to the registry so the value KIND is preserved. An existing REG_EXPAND_SZ
+    /// stays expandable; an existing REG_SZ becomes REG_EXPAND_SZ once its value holds a
+    /// %NAME% token, so the token is expanded; a new variable is written as REG_EXPAND_SZ
+    /// when its value contains a %VAR% token, else REG_SZ. Returns
     /// <c>false</c> if the name fails validation or the write is denied — never throws
     /// for these cases, so callers (RestoreFromBackup, ApplyChanges) can count failures
     /// and continue instead of aborting.
@@ -326,14 +327,25 @@ public sealed partial class EnvironmentVariableService
     }
 
     /// <summary>
-    /// Decides the registry value kind for a write: keep an existing variable's kind so a
-    /// REG_EXPAND_SZ (e.g. PATH) is never flattened to REG_SZ; for a NEW variable use
-    /// REG_EXPAND_SZ when the value contains a %VAR% token, else REG_SZ. Pure for testing.
+    /// Decides the registry value kind for a write: an existing REG_EXPAND_SZ (e.g. PATH) is never flattened to
+    /// REG_SZ; an existing REG_SZ is promoted to REG_EXPAND_SZ when the value now holds a %NAME% token, because
+    /// Windows expands a token only in REG_EXPAND_SZ and the edit would otherwise save it as literal text; for a
+    /// NEW variable, REG_EXPAND_SZ when the value contains a %VAR% token, else REG_SZ. Pure for testing.
     /// </summary>
-    public static RegistryValueKind ChooseKind(RegistryValueKind? existingKind, string value)
-        => existingKind is RegistryValueKind.String or RegistryValueKind.ExpandString
-            ? existingKind.Value
-            : value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String;
+    /// <remarks>
+    /// The promotion asks for a whole token, a name between two percent signs, rather than any '%', so a REG_SZ
+    /// that holds a percentage or an escaped URL ("50%", "a%20b") keeps its kind when it is edited.
+    /// </remarks>
+    public static RegistryValueKind ChooseKind(RegistryValueKind? existingKind, string value) => existingKind switch
+    {
+        RegistryValueKind.ExpandString => RegistryValueKind.ExpandString,
+        RegistryValueKind.String => VariableToken().IsMatch(value) ? RegistryValueKind.ExpandString : RegistryValueKind.String,
+        _ => value.Contains('%') ? RegistryValueKind.ExpandString : RegistryValueKind.String,
+    };
+
+    /// <summary>A %NAME% token: a name of letters, digits and the punctuation variable names use, between two '%'.</summary>
+    [GeneratedRegex(@"%[A-Za-z_][A-Za-z0-9_.()\-]*%")]
+    private static partial Regex VariableToken();
 
     /// <summary>Deletes a variable. Returns false if the write is denied.</summary>
     public bool DeleteVariable(string name, EnvVarScope scope) => SetVariable(name, null, scope);

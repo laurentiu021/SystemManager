@@ -85,12 +85,10 @@ public class TracerouteHopTests
         h.HopNumber = 5;
         h.Address = "1.2.3.4";
         h.LatencyMs = 12;
-        h.HostName = "host.example";
         h.Status = "Success";
         Assert.Contains(nameof(TracerouteHop.HopNumber), raised);
         Assert.Contains(nameof(TracerouteHop.Address), raised);
         Assert.Contains(nameof(TracerouteHop.LatencyMs), raised);
-        Assert.Contains(nameof(TracerouteHop.HostName), raised);
         Assert.Contains(nameof(TracerouteHop.Status), raised);
     }
 }

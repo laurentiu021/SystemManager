@@ -32,7 +32,8 @@ public sealed partial class EnvVariable : ObservableObject
     /// True when the variable is stored as REG_EXPAND_SZ (its value may contain %VAR%
     /// tokens that Windows expands). Preserved on write so editing a PATH never flips it
     /// to a plain REG_SZ and freezes its tokens. Defaults to false for new variables; the
-    /// service promotes a new value containing '%' to expandable automatically.
+    /// service promotes a new value containing '%', or an edited REG_SZ that now holds a
+    /// %NAME% token, to expandable automatically.
     /// </summary>
     public bool IsExpandable { get; init; }
 

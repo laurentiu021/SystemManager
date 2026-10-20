@@ -14,7 +14,6 @@ public sealed partial class TracerouteHop : ObservableObject
 {
     [ObservableProperty] private int _hopNumber;
     [ObservableProperty] private string _address = "*";
-    [ObservableProperty] private string _hostName = "";
     [ObservableProperty] private double? _latencyMs;
     [ObservableProperty] private string _status = "";
 }

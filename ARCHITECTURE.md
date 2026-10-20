@@ -338,6 +338,8 @@ to scroll.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot, opening with a health verdict and recent problems, and export it as text, HTML, or JSON.
 - `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
+  Each PATH folder is checked once per selection, by a task off the UI thread kept per folder, and a folder on a share
+  (`IsOnTheNetwork`) is not checked at all (#2873).
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.
 - `ScheduledMaintenanceViewModel` — register/update/remove a single recurring Windows task that runs SysManager headless (temp cleanup) daily/weekly; shows last/next run + last result. Create and remove are confirmed; only SysManager's own task is touched. The standby purge is not offered: it needs administrator rights the task does not have, and `StandbyPurgeWarning` says so for a purge schedule saved before it was taken out (#2593).
 - `UndoChangesViewModel` — the Undo Changes tab (#1525): lists what `IUndoChangesService.ScanAsync` finds as

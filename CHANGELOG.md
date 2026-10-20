@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.26] - 2026-10-21
+
+**Environment Variables no longer freezes while it checks a PATH folder on a network share.**
+
+### Fixed
+
+- **One PATH folder on an unreachable network share froze Environment Variables.** The editor checked every folder of
+  PATH while the window waited, each time the variable was selected, on every keystroke in its value and after every
+  edit, and Windows takes tens of seconds to give up on a share it cannot reach. The folders are now checked in the
+  background, each once while the variable is selected, and a folder on a share is not checked or called missing.
+  Since Environment Variables was added (1.22.0).
+
 ## [1.130.25] - 2026-10-20
 
 **Defender Tweaks shows whether Defender is really scanning, and says when another antivirus is in charge.**

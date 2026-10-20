@@ -345,7 +345,10 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **In-place value editing**, plus add and remove variables
 - **Dedicated PATH editor** for PATH-like variables — reorder directories, remove
   entries, and strip duplicates in one click
-- **Missing folders highlighted** so you can spot dead PATH entries at a glance
+- **Missing folders highlighted** so you can spot dead PATH entries at a glance. The folders are
+  checked in the background, each once while the variable is selected, so the window stays
+  responsive. A folder on a network share is not checked, and not called missing: Windows can
+  take tens of seconds to give up on a share it cannot reach
 - **Local until Apply:** changes are staged and each scope gets a one-time safety
   snapshot before its first write. New User snapshots stay under HKCU; System
   snapshots use access-controlled HKLM storage, and only that protected source can

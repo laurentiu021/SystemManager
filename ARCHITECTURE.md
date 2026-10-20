@@ -767,7 +767,9 @@ Key services:
   that polls. `CatalogSignatureTests` (integration) is the only place this can be verified for real:
   no file a unit test can create is catalog-signed.
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
-  partial hash pre-filter → full SHA-256). Read-only, never deletes.
+  partial hash pre-filter → full SHA-256). Read-only, never deletes. `IsOnlineOnly` leaves a file
+  stored online only (offline or recall-on-access attributes) unread, because reading it downloads it,
+  and the final progress report counts them for the summary.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
   or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),

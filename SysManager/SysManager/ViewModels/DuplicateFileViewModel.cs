@@ -145,6 +145,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = ScanningLabel;
+        _onlineOnlySkipped = 0;
         Groups.Clear();
         TotalWasted = 0;
         GroupCount = 0;
@@ -170,9 +171,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             TotalWasted = Groups.Sum(g => g.WastedBytes);
 
             HasScanned = true;
-            ScanSummary = GroupCount == 0
-                ? "No duplicates found."
-                : $"{GroupCount} groups · {DuplicateFileCount} files · {FormatSize(TotalWasted)} wasted";
+            ScanSummary = Summarize(GroupCount, DuplicateFileCount, TotalWasted, _onlineOnlySkipped);
             StatusMessage = "Scan complete.";
             ToastService.Instance.Show("Duplicate Scan complete", $"{GroupCount} groups, {FormatSize(TotalWasted)} wasted");
             Log.Information("Duplicate scan completed: {Groups} groups, {Files} files, {Wasted} wasted",
@@ -220,12 +219,38 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     {
         // The final report exists so a consumer sees settled counts, and its CurrentFile is the placeholder
         // "Done" rather than a file. The lines after the await say the same thing in a full sentence, so
-        // rendering it here would both show a file that does not exist and announce completion twice.
-        if (string.Equals(p.Phase, DuplicateFileService.CompletePhase, StringComparison.Ordinal)) return;
+        // rendering it here would both show a file that does not exist and announce completion twice. Its count
+        // of files stored online only is kept for that sentence.
+        if (string.Equals(p.Phase, DuplicateFileService.CompletePhase, StringComparison.Ordinal))
+        {
+            _onlineOnlySkipped = p.OnlineOnlySkipped;
+            return;
+        }
 
         CurrentFile = p.CurrentFile;
         StatusMessage = string.IsNullOrWhiteSpace(p.Phase) ? ScanningLabel : p.Phase;
         ScanReadout = BuildScanReadout(p);
+    }
+
+    /// <summary>Files the last scan left unread because they are stored online only, from its final report.</summary>
+    private long _onlineOnlySkipped;
+
+    /// <summary>
+    /// The summary under the results: the groups found and, when some files were stored online only, that they were
+    /// not checked, so nobody reads "No duplicates found." as covering files the scan never opened.
+    /// </summary>
+    internal static string Summarize(int groupCount, int fileCount, long wastedBytes, long onlineOnlySkipped)
+    {
+        var found = groupCount == 0
+            ? "No duplicates found."
+            : $"{groupCount} groups · {fileCount} files · {FormatSize(wastedBytes)} wasted";
+        if (onlineOnlySkipped == 0) return found;
+
+        var one = onlineOnlySkipped == 1;
+        var skipped = string.Create(CultureInfo.InvariantCulture,
+            $"{onlineOnlySkipped:N0} file{(one ? "" : "s")} stored online only {(one ? "was" : "were")} not checked")
+            + ", so nothing was downloaded";
+        return groupCount == 0 ? $"{found} {skipped}." : $"{found} · {skipped}";
     }
 
     /// <summary>The largest <see cref="MinSizeKb"/> that still scales into a <c>long</c> byte count.</summary>

@@ -460,4 +460,36 @@ public class DuplicateFileServiceTests : IDisposable
         }
         finally { Symlinks.RemoveLinkThenTree(link, root); }
     }
+
+    // ── Files stored online only are not read (R7-04) ─────────────────────────
+
+    [Fact]
+    public async Task Scan_LeavesAFileStoredOnlineOnlyUnread_AndCountsIt()
+    {
+        // Reading one makes OneDrive download it and keep it, and the scan reads every same-size candidate. Marked
+        // here with the Offline attribute, the one of the three a test can set on an ordinary file.
+        var content = new byte[2048];
+        Array.Fill(content, (byte)0x5A);
+        CreateFile("local.bin", content);
+        var online = CreateFile("online.bin", content);
+        File.SetAttributes(online, File.GetAttributes(online) | FileAttributes.Offline);
+        var progress = new SyncProgress<DuplicateFileService.ScanProgress>();
+
+        var result = await _service.ScanAsync(_root, progress: progress);
+
+        Assert.Empty(result);   // the only copy beside it was never read
+        var complete = Assert.Single(progress.Reports, r => r.Phase == DuplicateFileService.CompletePhase);
+        Assert.Equal(1, complete.OnlineOnlySkipped);
+    }
+
+    [Theory]
+    [InlineData(0x00001000, true)]    // FILE_ATTRIBUTE_OFFLINE
+    [InlineData(0x00040000, true)]    // FILE_ATTRIBUTE_RECALL_ON_OPEN
+    [InlineData(0x00400000, true)]    // FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+    [InlineData(0x00400020, true)]    // and the archive bit beside it, as Windows reports it
+    [InlineData(0x00000020, false)]   // archive
+    [InlineData(0x00000080, false)]   // normal
+    [InlineData(0x00000003, false)]   // read-only, hidden
+    public void OnlyTheAttributesOfAFileNotOnThisPC_MarkItOnlineOnly(int attributes, bool expected)
+        => Assert.Equal(expected, DuplicateFileService.IsOnlineOnly((FileAttributes)attributes));
 }

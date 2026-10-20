@@ -394,13 +394,14 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-two are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-three are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
 `IAppBlockerService` (AppBlockerService), `IBatteryReportService` (BatteryReportService, Battery Health's capacity
 history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
-`ICleanupPreScanService`, `IContextMenuService`, `ILeftoverService`,
+`ICleanupPreScanService`, `IRecycleBin` (ShellRecycleBin, the Recycle Bin that Quick Cleanup, Deep Cleanup and
+the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`,
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
@@ -437,8 +438,8 @@ finds nothing:
   (`ConnectionBandwidthSource` and `EtwBandwidthSource`), injected as factories so the Bandwidth
   Monitor can switch source at runtime. See the sources note further down.
 - `ICleanupRoots` — the directories Deep Cleanup's scan is built from, taken by
-  `DeepCleanupService`'s second constructor. Production's constructor takes only the `IPowerShellRunner`
-  and passes `SystemCleanupRoots`, so `AddSingleton<DeepCleanupService>()` needs no change; a test that
+  `DeepCleanupService`'s second constructor. Production's constructor takes the `IPowerShellRunner` and the
+  `IRecycleBin` and passes `SystemCleanupRoots`, so `AddSingleton<DeepCleanupService>()` needs no change; a test that
   wants the real roots passes `new SystemCleanupRoots()` itself (#2602). It exists because the scan read
   `Environment.GetFolderPath` and `DriveInfo.GetDrives()` inline, which left its logic assertable only
   as "the size is non-negative"; with the roots injected a test points it at a tree it built and asserts
@@ -542,7 +543,8 @@ Key services:
   `SystemHealthViewModel`.
 - `TuneUpService` — orchestrates the Quick Tune-Up wizard: temp cleanup,
   Recycle Bin, shortcut scan, disk SMART, uptime/RAM checks. Deletes the temp files outright and empties the
-  Recycle Bin, both behind the Dashboard's confirmation. Behind `ITuneUpService` for
+  Recycle Bin, both behind the Dashboard's confirmation. The bin goes through `IRecycleBin`, and what it held
+  is in `TuneUpResult`, so the status line, the card and Recent activity say what went. Behind `ITuneUpService` for
   the Dashboard, whose tests run both quick actions against a substitute. The temp sweep itself is also a
   static method, shared with the Cleanup tab and the CLI. The shortcut, disk and vitals checks are internal
   static methods handed the call to make. Each returns null when it could not run, which the result lists in
@@ -588,7 +590,8 @@ Key services:
   on its folders before and after; without a runner, or when Windows refuses, it reports that and deletes
   nothing itself (#2602).
 - `CleanupPreScanService` (`ICleanupPreScanService`) — sizes the temp folders and the current user's
-  Recycle Bin for the two labels Quick Cleanup shows before the user asks for anything. Behind an
+  Recycle Bin for the two labels Quick Cleanup shows before the user asks for anything. The bin's figure is
+  the shell's own count, through `IRecycleBin`, not a walk of its folders. Behind an
   interface because the work used to sit inline in `CleanupViewModel`, whose constructor fires it and
   forgets it: building the view-model started a recursive walk of both locations, 30 times over in one
   unit-test file, and one test then asserted the walk finished inside fifteen seconds.
@@ -1696,9 +1699,11 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
   breaks a running program's later lazy loads, which no in-use check can
   prevent because nothing holds those files open yet.
-- `RecycleBinHelper` — empties the Recycle Bin via the shell API (`SHEmptyRecycleBin`); shared
-  by Quick Cleanup, Deep Cleanup and the Dashboard's Quick Tune-Up so the interop has one source
-  of truth. `SendToRecycleBin` is the one `SHFileOperation` recycle, shared by Shortcut Cleaner and the
+- `RecycleBinHelper` — measures the Recycle Bin (`SHQueryRecycleBin`) and empties it
+  (`SHEmptyRecycleBin`) through the shell API, asking first and leaving an empty bin alone, and judging a
+  failure code by whether the bin is empty afterwards. Quick Cleanup, Deep Cleanup and the Dashboard's
+  Quick Tune-Up reach it through `IRecycleBin` (`ShellRecycleBin`), so the interop has one source
+  of truth and their tests never touch the real bin. `SendToRecycleBin` is the one `SHFileOperation` recycle, shared by Shortcut Cleaner and the
   Uninstaller's leftovers; its `RecycleFlags` include `FOF_WANTNUKEWARNING`, so an item the bin cannot
   take is never deleted for good without Windows asking.
 - `ExplorerShell` — stops, starts and restarts the Windows shell, and owns the
@@ -1886,7 +1891,8 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   `appcache`, `htmlcache`, `depotcache`, `logs` and shader cache, and the League of Legends logs.
 - Every walk goes through `Helpers/SafeFileWalk`, so no link is followed and the folders single-file
   apps unpack into under TEMP are left alone. The servicing-logs bucket takes only files older than
-  30 days, and the Recycle Bin is emptied through `RecycleBinHelper`, not by deleting its folders. The
+  30 days, and the Recycle Bin is sized and emptied by the shell through `IRecycleBin`, not by walking or
+  deleting its folders. The
   Delivery Optimization cache is emptied through Windows' `Delete-DeliveryOptimizationCache` for the same
   reason: the files belong to the service that keeps them.
 - Windows.old is tagged **Irreversible** and never selected by default, as are the

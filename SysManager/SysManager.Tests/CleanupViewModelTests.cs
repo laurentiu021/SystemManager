@@ -42,8 +42,9 @@ public class CleanupViewModelTests
         return preScan;
     }
 
-    private static CleanupViewModel NewVm(ICleanupPreScanService? preScan = null) =>
-        new(new PowerShellRunner(), preScan ?? StubPreScan());
+    /// <summary>A view-model over a substitute Recycle Bin unless a test hands it one, so none empties the real bin.</summary>
+    private static CleanupViewModel NewVm(ICleanupPreScanService? preScan = null, IRecycleBin? recycleBin = null) =>
+        new(new PowerShellRunner(), preScan ?? StubPreScan(), recycleBin ?? Substitute.For<IRecycleBin>());
 
     // ---------- construction & defaults ----------
 
@@ -214,7 +215,7 @@ public class CleanupViewModelTests
     public void RunnerLineReceived_AppendsToConsole()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner, StubPreScan());
+        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>());
         var before = vm.Console.Lines.Count;
 
         // Simulate the runner emitting a line. The VM subscribes in its
@@ -234,7 +235,7 @@ public class CleanupViewModelTests
     public void RunnerProgressChanged_UpdatesProgressProperty()
     {
         var runner = new PowerShellRunner();
-        var vm = new CleanupViewModel(runner, StubPreScan());
+        var vm = new CleanupViewModel(runner, StubPreScan(), Substitute.For<IRecycleBin>());
 
         var ev = typeof(PowerShellRunner)
             .GetField(nameof(PowerShellRunner.ProgressChanged), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
@@ -426,41 +427,107 @@ public class CleanupViewModelTests
     }
 
     // ---------- the Recycle Bin must not claim a success it did not get ----------
+    //
+    // Driven through a substitute bin. These were a single check on the source, because the command called the shell
+    // itself and driving it would have emptied the Recycle Bin of the PC running the tests.
+
+    /// <summary>A bin whose empty reports <paramref name="result"/>.</summary>
+    private static IRecycleBin Bin(RecycleBinEmptyResult result)
+    {
+        var bin = Substitute.For<IRecycleBin>();
+        bin.Empty().Returns(result);
+        return bin;
+    }
 
     [Fact]
-    public void EmptyRecycleBin_UsesTheShellResult_RatherThanAssumingSuccess()
+    public async Task EmptyRecycleBin_WhenWindowsRefuses_SaysSo_AndRecordsNothing()
     {
-        // RecycleBinHelper.EmptyAllDrives wraps SHEmptyRecycleBin, a LibraryImport that returns an
-        // HRESULT: a refusal (bin open in Explorer, a file still locked) comes back as `false`, never as
-        // an exception. The VM discarded that bool, so the try block always fell through to
-        // StatusMessage = "Done" and a "Operation finished successfully" toast — the app told the user
-        // it had emptied a bin that was still full. For a cleanup tool that is the worst possible lie,
-        // and it is invisible: nothing throws, nothing logs, the label just reads Done.
-        //
-        // Asserted at source level on purpose, and this is the one place where that is not a compromise
-        // but the only safe option: driving the command would empty THIS machine's real Recycle Bin.
-        // There is no seam to fake — the helper is a static shell P/Invoke — and inventing one to make a
-        // three-line status branch mockable would be a larger change than the fix. The check is precise
-        // regardless: it looks at the call statement's shape, so it can only pass if the result is bound
-        // to something, and only fail if the call stands alone as a discarded statement.
-        var source = File.ReadAllText(
-            Path.Combine(TestPaths.AppProject(), "ViewModels", "CleanupViewModel.cs"));
+        // A refusal (the bin open in Explorer, a file still locked) comes back in the result, never as an exception.
+        // The result used to be discarded, so the status read "Done" over a bin that was still full.
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = NewVm(recycleBin: Bin(new RecycleBinEmptyResult(Emptied: false, new RecycleBinContents(4096, 2))));
 
-        var callSites = source
-            .Split('\n')
-            .Select(l => l.Trim())
-            .Where(l => l.Contains("RecycleBinHelper.EmptyAllDrives", StringComparison.Ordinal))
-            .ToList();
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
 
-        Assert.NotEmpty(callSites); // guards the test itself: a rename must fail loudly, not vacuously
-        Assert.All(callSites, line =>
-            Assert.False(line.StartsWith("await Task.Run", StringComparison.Ordinal),
-                "The Recycle Bin result is discarded — a refused empty would still report success: " + line));
-        Assert.Contains(callSites, l => l.Contains("= await Task.Run", StringComparison.Ordinal));
+        Assert.Equal("Could not empty the Recycle Bin — Windows refused the request.", vm.StatusMessage);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
 
-        // …and the failure path has to actually SAY something different. Capturing the bool but
-        // printing "Done" either way would satisfy the check above and fix nothing.
-        Assert.Contains("Could not empty the Recycle Bin", source, StringComparison.Ordinal);
+    [Fact]
+    public async Task EmptyRecycleBin_OfAnEmptyBin_SaysItWasAlreadyEmpty()
+    {
+        // It used to ask the shell to empty it anyway, and the code the shell returns for an empty bin is not one it
+        // documents, so this could end in "Windows refused the request" (#2800).
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = NewVm(recycleBin: Bin(new RecycleBinEmptyResult(Emptied: true, new RecycleBinContents(0, 0))));
+
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
+
+        Assert.Equal("The Recycle Bin was already empty.", vm.StatusMessage);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task EmptyRecycleBin_RecordsWhatWentInRecentActivity()
+    {
+        // Nothing recorded it, so someone looking later for a file they had deleted found no trace that SysManager
+        // had emptied the bin.
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var vm = NewVm(recycleBin: Bin(new RecycleBinEmptyResult(Emptied: true, new RecycleBinContents(3L << 30, 12))));
+
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
+
+        Assert.Equal("Done", vm.StatusMessage);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10));
+        Assert.Equal(("Quick Cleanup", "Permanently emptied the Recycle Bin (12 items, 3.0 GB)"), (entry.Action, entry.Detail));
+    }
+
+    [Fact]
+    public void TheRecordOfAnEmptiedBin_StillSaysSo_WhenTheShellCouldNotSayWhatItHeld()
+        => Assert.Equal("Permanently emptied the Recycle Bin", CleanupViewModel.DescribeEmptied(null));
+
+    // ---------- Empty Recycle Bin takes the Disk lock (#2891) ----------
+
+    [Fact]
+    public async Task EmptyRecycleBin_WhileAnotherDeletionHoldsTheDiskLock_EmptiesNothing()
+    {
+        using var confirm = new DialogAnswer(confirm: true);
+        var bin = Substitute.For<IRecycleBin>();
+        var vm = NewVm(recycleBin: bin);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
+        Assert.NotNull(held);
+
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
+
+        bin.DidNotReceive().Empty();
+        Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBinRunning);
+    }
+
+    [Fact]
+    public async Task EmptyRecycleBin_HoldsTheDiskLockWhileItEmpties_SoClosingNamesIt()
+    {
+        // Without the lock, closing SysManager while the bin was being emptied asked nothing and stopped it part-way.
+        using var confirm = new DialogAnswer(confirm: true);
+        string? heldBy = null;
+        var warning = "";
+        var bin = Substitute.For<IRecycleBin>();
+        bin.Empty().Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk);
+            warning = QuitGuard.ActiveWorkWarning();
+            return new RecycleBinEmptyResult(Emptied: true, new RecycleBinContents(0, 0));
+        });
+        var vm = NewVm(recycleBin: bin);
+
+        await vm.EmptyRecycleBinCommand.ExecuteAsync(null);
+
+        Assert.Equal("Empty Recycle Bin", heldBy);
+        Assert.Contains("Empty Recycle Bin", warning, StringComparison.Ordinal);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
     }
 
     // ---------- Escape (#2597) ----------

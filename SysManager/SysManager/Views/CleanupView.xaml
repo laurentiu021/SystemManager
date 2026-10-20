@@ -57,9 +57,10 @@
                     <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-clean-temp"
                             AutomationProperties.Name="Clean TEMP — clean temporary files"/>
-                    <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
+                    <Button Content="Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Style="{StaticResource DangerButton}" Margin="0,0,8,8"
                             AutomationProperties.AutomationId="btn-cleanup-empty-recycle-bin"
-                            AutomationProperties.Name="Empty Recycle Bin"/>
+                            AutomationProperties.Name="Empty Recycle Bin"
+                            AutomationProperties.HelpText="Deletes everything in the Recycle Bin on every drive for good. It cannot be put back afterwards. SysManager asks you to confirm first."/>
                     <Button Content="Rescan" Command="{Binding RescanCommand}" Style="{StaticResource SecondaryButton}" Margin="0,0,8,8"
                             AutomationProperties.Name="Rescan cleanup sizes"/>
                 </WrapPanel>

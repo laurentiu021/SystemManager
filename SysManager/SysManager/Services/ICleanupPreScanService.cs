@@ -11,8 +11,8 @@ namespace SysManager.Services;
 /// figure. A folder it could not open at all therefore reads as "Empty".
 /// </param>
 /// <param name="RecycleBinLabel">
-/// The same for the current user's Recycle Bin, which can also be "Unable to scan" — enumerating the per-SID
-/// folders across every fixed drive can fail outright, and reporting "Empty" for that would be a claim.
+/// The same for the current user's Recycle Bin, which can also be "Unable to scan" — the shell can fail to say
+/// what the bin holds, and reporting "Empty" for that would be a claim.
 /// </param>
 public sealed record CleanupPreScan(string TempLabel, string RecycleBinLabel);
 

@@ -89,6 +89,7 @@
                             Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                     <Button Content="Clean selected" Command="{Binding CleanCommand}"
                             AutomationProperties.Name="Clean selected browser data"
+                            AutomationProperties.HelpText="Deletes the ticked browser data for good. Clearing cookies or sessions signs you out of websites. SysManager asks you to confirm first."
                             Style="{StaticResource DangerButton}" Margin="0,0,8,0"/>
                     <Button Content="Cancel" Command="{Binding CancelCommand}"
                             AutomationProperties.Name="Cancel current operation"

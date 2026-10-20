@@ -20,6 +20,8 @@ public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelecta
     public required string Description { get; init; }
     public required IReadOnlyList<string> Paths { get; init; }
     public long TotalSizeBytes { get; init; }
+
+    /// <summary>The files in the category. For the Recycle Bin, the items in it, as Explorer counts them.</summary>
     public int FileCount { get; init; }
     public int SkippedCount { get; init; }
     public TimeSpan? OlderThan { get; init; }
@@ -72,17 +74,56 @@ public sealed partial class CleanupCategory : ObservableObject, Helpers.ISelecta
     public bool IsDeliveryOptimizationCache { get; init; }
 
     public string SizeDisplay => FormatHelper.FormatSize(TotalSizeBytes);
-    public string CountDisplay => SkippedCount > 0 ? string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files · {SkippedCount:N0} skipped") : string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} files");
+
+    /// <summary>
+    /// "412 files", or "412 files · 3 skipped". The Recycle Bin counts items, as Explorer does: a deleted folder is
+    /// one, however many files it holds.
+    /// </summary>
+    public string CountDisplay
+    {
+        get
+        {
+            var counted = string.Create(CultureInfo.InvariantCulture, $"{FileCount:N0} {(IsRecycleBin ? "items" : "files")}");
+            return SkippedCount > 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{counted} · {SkippedCount:N0} skipped")
+                : counted;
+        }
+    }
 }
 
 public sealed record CleanupResult
 {
     public long BytesFreed { get; init; }
+
+    /// <summary>The files deleted, not counting the Recycle Bin's items, which are in <see cref="RecycleBinEmptied"/>.</summary>
     public int FilesDeleted { get; init; }
     public IReadOnlyList<string> Errors { get; init; } = [];
-    public string Summary =>
-        string.Create(CultureInfo.InvariantCulture, $"Freed {FormatHelper.FormatSize(BytesFreed)} across {FilesDeleted:N0} files") +
-        (Errors.Count > 0 ? $" · {Errors.Count} skipped" : string.Empty);
+
+    /// <summary>
+    /// What the Recycle Bin held when this clean emptied it, as the shell counted it. Null when the clean did not empty
+    /// it, or it was already empty. Its bytes are in <see cref="BytesFreed"/> as well.
+    /// </summary>
+    public RecycleBinContents? RecycleBinEmptied { get; init; }
+
+    /// <summary>
+    /// The result in one line, which Deep Cleanup also writes to Recent activity. An emptied Recycle Bin is named,
+    /// because it is the part of a clean someone may later come looking for.
+    /// </summary>
+    public string Summary
+    {
+        get
+        {
+            var freed = FormatHelper.FormatSize(BytesFreed);
+            var what = (FilesDeleted, RecycleBinEmptied) switch
+            {
+                (0, { } bin) => $"Freed {freed} by emptying the Recycle Bin ({bin.Display})",
+                (var files, { } bin) => string.Create(CultureInfo.InvariantCulture,
+                    $"Freed {freed} across {files:N0} files, and emptied the Recycle Bin ({bin.Display})"),
+                (var files, null) => string.Create(CultureInfo.InvariantCulture, $"Freed {freed} across {files:N0} files"),
+            };
+            return Errors.Count > 0 ? $"{what} · {Errors.Count} skipped" : what;
+        }
+    }
 }
 
 /// <summary>Single large file surfaced by the size scanner.</summary>

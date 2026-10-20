@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
@@ -281,7 +282,16 @@ public sealed class DeepCleanupScanLogicTests
     /// </summary>
     [Fact]
     public void Constructor_WithoutARunner_Throws()
-        => Assert.Throws<ArgumentNullException>(() => new DeepCleanupService((IPowerShellRunner)null!));
+        => Assert.Throws<ArgumentNullException>(
+            () => new DeepCleanupService((IPowerShellRunner)null!, Substitute.For<IRecycleBin>()));
+
+    /// <summary>
+    /// Nor a missing Recycle Bin, which would leave production's bin category neither measured nor emptied.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithoutARecycleBin_Throws()
+        => Assert.Throws<ArgumentNullException>(
+            () => new DeepCleanupService(Substitute.For<IPowerShellRunner>(), null!));
 
     /// <summary>
     /// The default roots are the values the scan read inline before the seam existed, so production

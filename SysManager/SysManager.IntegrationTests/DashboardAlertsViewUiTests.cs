@@ -52,7 +52,7 @@ public sealed class DashboardAlertsViewUiTests
         var diskHealth = new DiskHealthService();
         var vm = new DashboardViewModel(
             sys,
-            new TuneUpService(new ShortcutCleanerService(), diskHealth, sys),
+            new TuneUpService(new ShortcutCleanerService(), diskHealth, sys, new ShellRecycleBin()),
             new HealthScoreService(sys, diskHealth, new BatteryService()),
             new TemperatureService(diskHealth, skipHardwareInit: true),
             new QuietWinget(),

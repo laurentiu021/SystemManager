@@ -5,6 +5,7 @@
 using System.IO;
 using Microsoft.Win32;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -425,5 +426,46 @@ public sealed class UninstallerViewModelLeftoverTests : IDisposable
         Assert.Equal("Removed 1 leftover item (1.0 KB). 1 could not be removed. C:\\B: denied.",
             UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([item], 1024, [@"C:\B: denied."])));
         Assert.Equal("Nothing was removed.", UninstallerViewModel.DescribeRemovalResult(new LeftoverRemoval([], 0, [])));
+    }
+
+    // ── The Disk lock (#2891) ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Removing_WhileAnotherDeletionHoldsTheDiskLock_RemovesNothing()
+    {
+        var vm = await ShowingAsync(Group("Acme Notes", Item(@"C:\Program Files\Acme Notes")));
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Deep Cleanup");
+        Assert.NotNull(held);
+
+        using (new DialogAnswer(confirm: true))
+            await vm.RemoveLeftoversCommand.ExecuteAsync(null);
+
+        await _leftovers.DidNotReceiveWithAnyArgs().RemoveAsync(default!, default);
+        Assert.Equal("Cannot start — Deep Cleanup is already running.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Removing_HoldsTheDiskLock_SoClosingSysManagerNamesIt()
+    {
+        // Without the lock, closing SysManager asked nothing and stopped the removal part-way.
+        var certain = Item(@"C:\Program Files\Acme Notes");
+        var vm = await ShowingAsync(Group("Acme Notes", certain));
+        string? heldBy = null;
+        var warning = "";
+        _leftovers.RemoveAsync(Arg.Any<IReadOnlyList<LeftoverItem>>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            heldBy = OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk);
+            warning = QuitGuard.ActiveWorkWarning();
+            return Task.FromResult(new LeftoverRemoval([certain], 1024, []));
+        });
+        using var log = new ActivityLogScope();
+
+        using (new DialogAnswer(confirm: true))
+            await vm.RemoveLeftoversCommand.ExecuteAsync(null);
+
+        Assert.Equal("Remove leftovers", heldBy);
+        Assert.Contains("Remove leftovers", warning, StringComparison.Ordinal);
+        Assert.Null(OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk));
     }
 }

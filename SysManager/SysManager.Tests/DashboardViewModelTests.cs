@@ -1595,4 +1595,31 @@ public class DashboardViewModelTests
         Assert.Equal(1, DashboardViewModel.CountForTheAlert(upgradable));
         Assert.Equal(0, DashboardViewModel.CountForTheAlert([upgradable[1]]));
     }
+
+    // ---------- the Tune-Up reports and records the emptied Recycle Bin ----------
+
+    [Fact]
+    public async Task RunTuneUp_ReportsAndRecordsTheEmptiedBin()
+    {
+        // The status line, the notification and Recent activity reported the temp files alone.
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TuneUpResult
+            {
+                TempBytesFreed = 120L * 1024 * 1024,
+                RecycleBinEmptied = true,
+                RecycleBinBefore = new SysManager.Helpers.RecycleBinContents(3L << 30, 12),
+            }));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Equal("Tune-Up complete — 3.1 GB freed", vm.StatusMessage);
+        var entry = Assert.Single(ActivityLogService.Instance.GetRecent(10), e => e.Action == "Quick Tune-Up");
+        Assert.Equal("Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin (12 items, 3.0 GB)",
+            entry.Detail);
+    }
 }

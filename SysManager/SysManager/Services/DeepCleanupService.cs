@@ -23,17 +23,19 @@ public sealed class DeepCleanupService
 {
     private readonly ICleanupRoots _roots;
     private readonly IPowerShellRunner? _ps;
+    private readonly IRecycleBin? _recycleBin;
 
     /// <summary>
-    /// Builds the service production uses: the real machine's roots, and the runner the Delivery Optimization
-    /// cache is emptied through.
+    /// Builds the service production uses: the real machine's roots, the runner the Delivery Optimization
+    /// cache is emptied through, and the Recycle Bin.
     /// </summary>
     /// <remarks>
     /// It passes the same roots the service read inline before that seam existed, so the default behaviour is
     /// unchanged by construction rather than by inspection (#2176).
     /// </remarks>
-    public DeepCleanupService(IPowerShellRunner ps)
-        : this(new SystemCleanupRoots(), ps ?? throw new ArgumentNullException(nameof(ps)))
+    public DeepCleanupService(IPowerShellRunner ps, IRecycleBin recycleBin)
+        : this(new SystemCleanupRoots(), ps ?? throw new ArgumentNullException(nameof(ps)),
+               recycleBin ?? throw new ArgumentNullException(nameof(recycleBin)))
     {
     }
 
@@ -44,11 +46,14 @@ public sealed class DeepCleanupService
     /// Without <paramref name="ps"/> the Delivery Optimization cache is left as it is, and its clean reports that it
     /// was not emptied. A test that leaves the runner out cannot empty the cache of the PC running it, and the bucket
     /// never falls back to deleting the service's files itself (#2602).
+    /// <para>Without <paramref name="recycleBin"/> the Recycle Bin is neither measured nor emptied, for the same
+    /// reason: a test that leaves it out cannot empty the bin of the PC running it.</para>
     /// </remarks>
-    public DeepCleanupService(ICleanupRoots roots, IPowerShellRunner? ps = null)
+    public DeepCleanupService(ICleanupRoots roots, IPowerShellRunner? ps = null, IRecycleBin? recycleBin = null)
     {
         _roots = roots ?? throw new ArgumentNullException(nameof(roots));
         _ps = ps;
+        _recycleBin = recycleBin;
     }
 
     public sealed record ScanProgress(int Current, int Total, string CategoryName);
@@ -56,7 +61,7 @@ public sealed class DeepCleanupService
     public Task<IReadOnlyList<CleanupCategory>> ScanAsync(
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Scan(_roots, progress, ct), ct);
+        => Task.Run(() => Scan(_roots, _recycleBin, progress, ct), ct);
 
     public Task<CleanupResult> CleanAsync(
         IReadOnlyList<CleanupCategory> categories,
@@ -283,7 +288,7 @@ public sealed class DeepCleanupService
     // ---------- scanning ----------
 
     private static IReadOnlyList<CleanupCategory> Scan(
-        ICleanupRoots roots, IProgress<ScanProgress>? progress, CancellationToken ct)
+        ICleanupRoots roots, IRecycleBin? recycleBin, IProgress<ScanProgress>? progress, CancellationToken ct)
     {
         var defs = BuildDefinitions(roots);
         var results = new List<CleanupCategory>(defs.Count);
@@ -301,7 +306,26 @@ public sealed class DeepCleanupService
             long size = 0; var files = 0; var skipped = 0;
             var cutoff = d.OlderThan.HasValue ? DateTime.UtcNow - d.OlderThan.Value : (DateTime?)null;
 
-            foreach (var p in existing)
+            // The Recycle Bin is sized by the shell, as Explorer sizes it and as the clean empties it, and its folders
+            // are not walked: the walk counted the shell's bookkeeping with the contents, so an empty bin read as one
+            // file of 129 bytes and arrived ticked, and a bin of N files read as 2N + 1. FileCount is items here, and a
+            // deleted folder is one. A bin the shell cannot read is counted as skipped rather than shown as empty.
+            // Without a bin to ask, which only a test leaves out, there is nothing to report.
+            if (d.IsRecycleBin)
+            {
+                if (recycleBin?.Query() is { } bin)
+                {
+                    size = bin.Bytes;
+                    files = (int)Math.Min(bin.Items, int.MaxValue);
+                }
+                else if (recycleBin is not null)
+                {
+                    skipped = 1;
+                }
+            }
+            string[] walked = d.IsRecycleBin ? [] : existing;
+
+            foreach (var p in walked)
             {
                 if (ct.IsCancellationRequested) break;
                 foreach (var file in EnumerateTargets(p, d.FilePatterns, ct))
@@ -430,6 +454,7 @@ public sealed class DeepCleanupService
         long freed = 0;
         List<string> errors = [];
         var filesDeleted = 0;
+        RecycleBinContents? emptiedBin = null;
         var selected = categories.Where(c => c.IsSelected).ToList();
         var total = selected.Count;
 
@@ -447,15 +472,26 @@ public sealed class DeepCleanupService
             // Empty it through the documented shell API instead, matching TuneUp.
             if (cat.IsRecycleBin)
             {
-                var sizeBefore = cat.TotalSizeBytes;
-                if (RecycleBinHelper.EmptyAllDrives())
+                // Without a bin, which only a test leaves out, nothing is emptied (see the constructor).
+                if (_recycleBin is null)
                 {
-                    freed += sizeBefore;
-                    filesDeleted += cat.FileCount;
+                    errors.Add($"{cat.Name}: not emptied, because the Recycle Bin is not available here.");
+                    continue;
                 }
-                else
+
+                // What went is what the shell said the bin held just before emptying it, which is newer than the
+                // scan's figure; the scan's stands in only when the shell could not say. Kept apart from the file
+                // count, so that the summary can name the bin: it is the part of a clean someone may later come
+                // looking for.
+                var bin = _recycleBin.Empty();
+                if (!bin.Emptied)
                 {
                     errors.Add($"{cat.Name}: the Recycle Bin could not be emptied.");
+                }
+                else if (!bin.WasAlreadyEmpty)
+                {
+                    emptiedBin = bin.Before ?? new RecycleBinContents(cat.TotalSizeBytes, cat.FileCount);
+                    freed += emptiedBin.Value.Bytes;
                 }
                 continue;
             }
@@ -534,7 +570,13 @@ public sealed class DeepCleanupService
         ct.ThrowIfCancellationRequested();
 
         progress?.Report(new ScanProgress(total, total, "Done"));
-        return new CleanupResult { BytesFreed = freed, FilesDeleted = filesDeleted, Errors = errors };
+        return new CleanupResult
+        {
+            BytesFreed = freed,
+            FilesDeleted = filesDeleted,
+            Errors = errors,
+            RecycleBinEmptied = emptiedBin,
+        };
     }
 
     /// <summary>
@@ -665,6 +707,6 @@ public sealed class DeepCleanupService
         return false;
     }
 
-    // Recycle Bin is emptied via the shared RecycleBinHelper (shell API, not raw file
-    // delete) so the SHEmptyRecycleBin interop has a single source of truth.
+    // The Recycle Bin is measured and emptied through IRecycleBin, which goes to the shell (RecycleBinHelper), never
+    // by deleting its folders, so the shell interop has a single source of truth.
 }

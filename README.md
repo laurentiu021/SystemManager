@@ -742,7 +742,9 @@ Across the tab:
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
 System → System Fixes, where the tab name matches what they do.
 - Clear TEMP folders
-- Empty the Recycle Bin
+- Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
+  empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
+  records it with what it held
 - **Component store (WinSxS), reported before it is touched.** WinSxS routinely holds
   several gigabytes of superseded Windows components, and it is where the free editions of
   the mainstream cleaners find their biggest number. "Check component store" runs the
@@ -773,6 +775,10 @@ System → System Fixes, where the tab name matches what they do.
   Update cache, Delivery Optimization cache, Windows Installer patch
   cache, TEMP, Prefetch, crash dumps, old CBS logs, DirectX shader cache,
   Recycle Bin on every drive.
+- **The Recycle Bin is counted the way Explorer counts it.** Its size and item count come
+  from Windows, so an empty bin reads as empty and starts unticked, and a deleted folder is
+  one item however many files it holds. When a clean empties the bin, the result in Recent
+  activity says so
 - **The Delivery Optimization cache is emptied the way Windows empties it.** It is measured
   where current Windows keeps it, in the Network Service profile, and emptied through Windows'
   own `Delete-DeliveryOptimizationCache` rather than file by file, so the service that owns it
@@ -1886,6 +1892,8 @@ offers, "rate us" prompts:
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
   a summary card with freed space, warnings, and links to relevant tabs.
+  The space freed includes what the Recycle Bin held, and the card and Recent activity say
+  that the bin was emptied and what was in it.
   A check that could not run is named on the card ("Not checked this time:
   the disks") rather than counted as fine, so "All good" means every check
   ran and found nothing. The confirmation says that the Recycle Bin's contents

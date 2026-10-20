@@ -726,7 +726,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var diskHealth = new DiskHealthService();
         var battery = new BatteryService();
         var shortcuts = new ShortcutCleanerService();
-        var tuneUp = new TuneUpService(shortcuts, diskHealth, sysInfo);
+        var recycleBin = new ShellRecycleBin();
+        var tuneUp = new TuneUpService(shortcuts, diskHealth, sysInfo, recycleBin);
         var healthScore = new HealthScoreService(sysInfo, diskHealth, battery);
         var fixedDrives = new FixedDriveService();
         var pinger = new PingMonitorService();
@@ -804,8 +805,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
-            [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService()),
-            [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService(runner)),
+            [typeof(CleanupViewModel)] = new CleanupViewModel(runner, new CleanupPreScanService(recycleBin), recycleBin),
+            [typeof(DeepCleanupViewModel)] = new DeepCleanupViewModel(new DeepCleanupService(runner, recycleBin)),
             [typeof(LargeFilesViewModel)] = new LargeFilesViewModel(new LargeFileScanner(), fixedDrives),
             [typeof(DuplicateFileViewModel)] = new DuplicateFileViewModel(new DuplicateFileService()),
             [typeof(DiskAnalyzerViewModel)] = new DiskAnalyzerViewModel(new DiskAnalyzerService(), new DiskScanHistoryService()),

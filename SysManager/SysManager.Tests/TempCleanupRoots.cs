@@ -38,8 +38,11 @@ public sealed class TempCleanupRoots : ICleanupRoots, IDisposable
     /// <summary>Empty: a real drive root would put the launcher probes back on the machine.</summary>
     public IReadOnlyList<string> FixedDriveRoots { get; } = [];
 
-    /// <summary>Empty: the real bins are what made these tests take 48 seconds instead of 0.2.</summary>
-    public IReadOnlyList<string> RecycleBinPaths { get; } = [];
+    /// <summary>
+    /// Empty: the real bins are what made these tests take 48 seconds instead of 0.2. A test may point it at a folder
+    /// it planted, to show that the scan does not walk the bin's folders.
+    /// </summary>
+    public IReadOnlyList<string> RecycleBinPaths { get; set; } = [];
 
     public TempCleanupRoots()
     {

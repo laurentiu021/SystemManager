@@ -68,6 +68,8 @@ public interface ICleanupRoots
     /// theoretical: with only the special folders redirected, the eleven deterministic scan tests took 48
     /// seconds, because every one of them still walked the real Recycle Bin on every drive of the machine
     /// running them. A "deterministic" test whose result depends on what is in the bin is not one.
+    /// <para>The scan no longer walks them: the bin's size and item count come from the shell, through
+    /// <see cref="IRecycleBin"/>. They stay as the folders the Recycle Bin category names.</para>
     /// </remarks>
     IReadOnlyList<string> RecycleBinPaths { get; }
 }

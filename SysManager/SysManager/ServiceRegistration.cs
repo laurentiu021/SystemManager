@@ -52,6 +52,8 @@ public static class ServiceRegistration
         // use (#1529).
         services.AddSingleton<ISlowdownService, SlowdownService>();
         services.AddSingleton<IAppBlockerService, AppBlockerService>();
+        // One Recycle Bin for Quick Cleanup, Deep Cleanup and the Tune-Up, behind a seam so that no test empties the real one.
+        services.AddSingleton<IRecycleBin, ShellRecycleBin>();
         services.AddSingleton<DeepCleanupService>();
         services.AddSingleton<ICleanupPreScanService, CleanupPreScanService>();
         services.AddSingleton<DiskAnalyzerService>();

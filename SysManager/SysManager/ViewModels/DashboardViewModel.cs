@@ -1371,9 +1371,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             TuneUpResult = await _tuneUp.RunAsync(true, progress, _tuneUpCts.Token);
             HasTuneUpResult = true;
-            StatusMessage = $"Tune-Up complete — {TuneUpResult.FreedDisplay} freed";
-            ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.FreedDisplay} freed");
-            ActivityLogService.Instance.Log("Quick Tune-Up", $"Freed {TuneUpResult.FreedDisplay}");
+            // Everything it freed, the Recycle Bin included. These reported the temp files alone, so a Tune-Up that
+            // permanently emptied gigabytes from the bin left nothing in Recent activity to say so.
+            StatusMessage = $"Tune-Up complete — {TuneUpResult.TotalFreedDisplay} freed";
+            ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.TotalFreedDisplay} freed");
+            ActivityLogService.Instance.Log("Quick Tune-Up", TuneUpResult.ActivityDetail);
             LoadActivity();
         }
         catch (OperationCanceledException) { StatusMessage = "Tune-Up cancelled."; }

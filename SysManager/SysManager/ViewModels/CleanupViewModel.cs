@@ -30,6 +30,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     // times over in one unit-test file, one of which then asserted the walk finished inside fifteen seconds.
     private readonly ICleanupPreScanService _preScan;
 
+    // The Recycle Bin, behind a seam. Empty Recycle Bin used to call the shell itself, so what it reported and recorded
+    // could not be tested without emptying the bin of the PC running the tests.
+    private readonly IRecycleBin _recycleBin;
+
     private readonly EtaCalculator _storeEta = new();
 
     private CancellationTokenSource? _tempCts;
@@ -82,10 +86,11 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// <summary>True whenever any background task is running — for a small badge.</summary>
     public bool IsAnyRunning => IsTempRunning || IsBinRunning || IsStoreRunning;
 
-    public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan)
+    public CleanupViewModel(IPowerShellRunner runner, ICleanupPreScanService preScan, IRecycleBin recycleBin)
     {
         _runner = runner;
         _preScan = preScan;
+        _recycleBin = recycleBin;
         _runner.LineReceived += OnRunnerLineReceived;
         _runner.ProgressChanged += OnRunnerProgressChanged;
         IsElevated = AdminHelper.IsElevated();
@@ -282,34 +287,48 @@ public sealed partial class CleanupViewModel : ViewModelBase
         {
             return;
         }
+        // The Disk lock, which every other command that deletes takes (#2891). Without it, closing SysManager or
+        // restarting it as administrator asked nothing and stopped the empty part-way, and it could start while Deep
+        // Cleanup or the Quick Tune-Up was emptying the same bin.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Empty Recycle Bin");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
         IsBinRunning = true;
         StatusMessage = "Emptying Recycle Bin...";
         _binCts?.Dispose();
         _binCts = new CancellationTokenSource();
         try
         {
-            // Use the shared shell-API helper (the single source of truth) rather than an
+            // Through the shell API (RecycleBinHelper is the single source of truth) rather than an
             // inline Clear-RecycleBin: the shell API reliably removes ghosted entries that
             // Clear-RecycleBin can leave behind, and keeps this in step with Deep Cleanup
             // and the One-Click Tune-Up. Run off the UI thread.
-            var ct = _binCts.Token;
-            // EmptyAllDrives reports failure through its RETURN VALUE, not an exception:
-            // SHEmptyRecycleBin is a LibraryImport returning an HRESULT, so there is nothing to catch.
-            // The result used to be discarded, which meant "Done — Operation finished successfully"
-            // appeared even when the shell refused and the bin was still full. A cleanup tool claiming
-            // it cleaned when it did not is the one thing it must never do.
-            var emptied = await Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
-            if (emptied)
-            {
-                StatusMessage = "Done";
-                ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
-            }
-            else
+            //
+            // A refusal comes back in the result, never as an exception. The result used to be discarded, which
+            // meant "Done — Operation finished successfully" appeared even when the shell refused and the bin was
+            // still full. A cleanup tool claiming it cleaned when it did not is the one thing it must never do.
+            var result = await Task.Run(_recycleBin.Empty, _binCts.Token);
+            if (!result.Emptied)
             {
                 StatusMessage = "Could not empty the Recycle Bin — Windows refused the request.";
                 ToastService.Instance.Show("Recycle Bin not emptied",
                     "Windows would not empty it. It may be open in Explorer, or a file may be in use.");
                 Log.Warning("Empty Recycle Bin: the shell API reported failure");
+            }
+            else if (result.WasAlreadyEmpty)
+            {
+                StatusMessage = "The Recycle Bin was already empty.";
+            }
+            else
+            {
+                StatusMessage = "Done";
+                ToastService.Instance.Show("Cleanup complete", "Operation finished successfully");
+                // Recorded, because nothing else records it: someone looking later for a file they had deleted
+                // finds here that SysManager emptied the bin, and when.
+                ActivityLogService.Instance.Log("Quick Cleanup", DescribeEmptied(result.Before));
             }
             // The operation's own flag still holds the bar (it clears in finally), so this
             // refresh must not take it over. Runs either way, so the size shown matches reality
@@ -320,6 +339,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBinRunning = false; }
     }
+
+    /// <summary>The Recent activity line for an emptied Recycle Bin: what it held, when the shell could say.</summary>
+    internal static string DescribeEmptied(RecycleBinContents? before) =>
+        before is { } bin ? $"Permanently emptied the Recycle Bin ({bin.Display})" : "Permanently emptied the Recycle Bin";
 
     // ---------- component store (WinSxS) ----------
 

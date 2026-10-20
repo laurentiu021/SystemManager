@@ -517,6 +517,16 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         if (ticked.Count == 0) return;
         if (!DialogService.Instance.Confirm(DescribeRemoval(ticked), "Remove Leftovers — Confirm")) return;
 
+        // The Disk lock, which every other command that removes files takes (#2891). Without it, closing SysManager or
+        // restarting it as administrator asked nothing and stopped the removal part-way, with nothing in Recent activity
+        // for what had already gone.
+        using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Remove leftovers");
+        if (opLock is null)
+        {
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+            return;
+        }
+
         IsBusy = true;
         IsProgressIndeterminate = true;
         try

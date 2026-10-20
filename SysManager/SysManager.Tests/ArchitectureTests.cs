@@ -3801,6 +3801,12 @@ public partial class ArchitectureTests
         ("DeleteSelectedCommand", "ShortcutCleanerView.xaml", ["DangerButton"]),
         ("ShredAllCommand", "FileShredderView.xaml", ["DangerButton"]),
         ("UninstallSelectedCommand", "UninstallerView.xaml", ["DangerButton"]),
+        // What is in the Recycle Bin cannot be put back once it is emptied, and this button wore SecondaryButton, the
+        // look of Rescan beside it (#2800). The two "Clean selected" buttons delete outright too; they already wore
+        // DangerButton, and are listed so that they keep it and say what they do.
+        ("EmptyRecycleBinCommand", "CleanupView.xaml", ["DangerButton"]),
+        ("CleanCommand", "DeepCleanupView.xaml", ["DangerButton"]),
+        ("CleanCommand", "BrowserCleanerView.xaml", ["DangerButton"]),
     ];
 
     /// <summary>
@@ -3890,7 +3896,7 @@ public partial class ArchitectureTests
     /// (<c>ProcessManagerView</c>'s "Kill process", <c>DiskAnalyzerView</c>'s "Show in Explorer"), and a
     /// tooltip is mouse-hover-only — it is not reliably surfaced to a screen reader, and a keyboard user
     /// tabbing onto the button never triggers it at all.</para>
-    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the five
+    /// <para><b>Deliberately narrow.</b> HelpText makes navigation more verbose, so this covers the eight
     /// controls that do something the user cannot take back, not the ~461 buttons in the app. The list is
     /// the same one <see cref="EveryImmediatelyDestructiveButton_WearsADestructiveStyle"/> uses, so a
     /// control added there is required to explain itself here without anyone remembering to.</para>
@@ -3936,8 +3942,8 @@ public partial class ArchitectureTests
         // row would satisfy it while quietly dropping a control from both guards. The absolute count is what
         // catches that. It is a measured population: raise it when a destructive control is added, and only
         // lower it with a reason, never to make a red go away.
-        Assert.True(DestructiveControls.Length >= 5,
-            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 5 "
+        Assert.True(DestructiveControls.Length >= 8,
+            $"the shared destructive-control list is down to {DestructiveControls.Length} rows, from 8 "
             + "measured. A control was removed from it rather than from the app, which silently narrows both "
             + "guards over this list.");
 
@@ -14952,11 +14958,11 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor, re-measured against the new shape: six calls across three files — TuneUpService and
-        // DeepCleanupService each make a Files and a DirectoriesDeepestFirst call, CleanupPreScanService makes
-        // two Files calls. Unchanged in count from the previous shape, which is the point: the exclusions
-        // moved from the arguments into a named options object without any call site disappearing.
-        Assert.True(callsChecked >= 6,
+        // Vacuity floor, re-measured: five calls across three files. TuneUpService and DeepCleanupService each
+        // make a Files and a DirectoriesDeepestFirst call, and CleanupPreScanService makes one Files call, for the
+        // temp folders. It made two until the Recycle Bin's size came from the shell instead of a walk of the
+        // bin's folders, and that is the only reason the count went down: no temp walk disappeared.
+        Assert.True(callsChecked >= 5,
             $"only {callsChecked} SafeFileWalk calls were matched across {callers.Count} file(s) — the pattern "
             + "no longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
             + "pass.");
@@ -17023,9 +17029,10 @@ public partial class ArchitectureTests
     /// so.</para>
     /// <para>Flat greps over the whole comment-stripped file rather than a slice of the scan methods,
     /// because a guard that slices source between markers passes vacuously the moment a marker moves.
-    /// <c>RecycleBinHelper.EmptyAllDrives</c> is deliberately NOT banned: it is the shell call that empties
-    /// the bin, it lives on the clean side, and <c>CleanAsync</c> is already testable because it is handed
-    /// the paths it acts on.</para>
+    /// The Recycle Bin's own shell calls are banned too, on both sides: the scan measures the bin and the
+    /// clean empties it through <c>IRecycleBin</c>, so a direct <c>RecycleBinHelper.Query</c> or
+    /// <c>RecycleBinHelper.Empty</c> would reach the real bin from a test that handed the service a temp
+    /// tree.</para>
     /// </remarks>
     [Fact]
     public void DeepCleanupsScan_TakesItsRootsFromTheSeam()
@@ -17047,6 +17054,8 @@ public partial class ArchitectureTests
             ("DriveInfo.GetDrives", "ICleanupRoots.FixedDriveRoots"),
             ("RecycleBinHelper.CurrentUserBinPaths", "ICleanupRoots.RecycleBinPaths"),
             ("Path.GetTempPath", "ICleanupRoots.UserTemp"),
+            ("RecycleBinHelper.Query", "IRecycleBin.Query"),
+            ("RecycleBinHelper.Empty", "IRecycleBin.Empty"),
         };
 
         var offenders = banned
@@ -17055,10 +17064,10 @@ public partial class ArchitectureTests
             .ToList();
 
         Assert.True(offenders.Count == 0,
-            "DeepCleanupService's scan reads the machine directly again. Every one of these has a property "
-            + "on ICleanupRoots, and using the property is what lets a test point the scan at a tree it "
+            "DeepCleanupService's scan reads the machine directly again. Every one of these has a seam, "
+            + "ICleanupRoots or IRecycleBin, and using it is what lets a test point the scan at a tree it "
             + "built — without it the scan's file counts, byte totals and age cutoff can only be asserted "
-            + "as \"non-negative\":\n  "
+            + "as \"non-negative\", and its clean empties the real Recycle Bin:\n  "
             + string.Join("\n  ", offenders));
     }
 

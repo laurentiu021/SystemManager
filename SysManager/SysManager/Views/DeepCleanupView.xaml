@@ -140,6 +140,8 @@
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Button Content="Clean selected" Command="{Binding CleanCommand}"
+                                            AutomationProperties.Name="Clean selected categories"
+                                            AutomationProperties.HelpText="Deletes the files in the ticked categories for good, and empties the Recycle Bin if it is ticked. SysManager asks you to confirm first."
                                             Style="{StaticResource DangerButton}"/>
                                     <Button Content="Cancel" AutomationProperties.Name="Cancel cleanup" Command="{Binding CancelCommand}" Style="{StaticResource GhostButton}" Margin="8,0,0,0"/>
                                 </StackPanel>

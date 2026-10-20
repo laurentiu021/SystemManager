@@ -17,7 +17,8 @@ namespace SysManager.Tests;
 public class TuneUpServiceTests
 {
     private static TuneUpService CreateService()
-        => new(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService());
+        => new(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(),
+            NSubstitute.Substitute.For<IRecycleBin>());
 
     // ---------- construction ----------
 
@@ -510,4 +511,85 @@ public class TuneUpServiceTests
             [],
             DateTime.Now)));
     }
+
+    // ── Step 2: the Recycle Bin, and what the result says about it ─────────────
+
+    [Fact]
+    public async Task TheBin_IsLeftAlone_WhenTheUserDidNotAgree()
+    {
+        var asked = 0;
+
+        var result = await TuneUpService.EmptyRecycleBinAsync(false, () =>
+        {
+            asked++;
+            return default;
+        }, CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public async Task TheBin_IsEmptied_AndWhatItHeldIsKept()
+    {
+        var emptied = new RecycleBinEmptyResult(Emptied: true, new RecycleBinContents(3L << 30, 12));
+
+        Assert.Equal(emptied, await TuneUpService.EmptyRecycleBinAsync(true, () => emptied, CancellationToken.None));
+    }
+
+    private static TuneUpResult Ran(bool emptied, RecycleBinContents? before) => new()
+    {
+        TempBytesFreed = 120L * 1024 * 1024,
+        TempFilesDeleted = 300,
+        RecycleBinEmptied = emptied,
+        RecycleBinBefore = before,
+    };
+
+    [Fact]
+    public void AnEmptiedBin_IsInTheTotal_OnTheCard_AndInRecentActivity()
+    {
+        // Only a bool was kept, so a Tune-Up that permanently emptied gigabytes from the bin reported "Freed 120 MB",
+        // and Recent activity never said that the bin had been emptied.
+        var result = Ran(emptied: true, new RecycleBinContents(3L << 30, 12));
+
+        Assert.Equal("120.0 MB", result.FreedDisplay);
+        Assert.Equal("3.1 GB", result.TotalFreedDisplay);
+        Assert.Equal("Recycle Bin emptied (12 items, 3.0 GB).", result.RecycleBinDisplay);
+        Assert.Equal("Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin (12 items, 3.0 GB)",
+            result.ActivityDetail);
+    }
+
+    [Fact]
+    public void AnAlreadyEmptyBin_AddsNothing_AndIsSaidToBeEmpty()
+    {
+        var result = Ran(emptied: true, new RecycleBinContents(0, 0));
+
+        Assert.Equal("120.0 MB", result.TotalFreedDisplay);
+        Assert.Equal("The Recycle Bin was already empty.", result.RecycleBinDisplay);
+        Assert.Equal("Freed 120.0 MB of temporary files", result.ActivityDetail);
+    }
+
+    [Fact]
+    public void ABinThatCouldNotBeEmptied_IsSaidSo_AndNotCounted()
+    {
+        var result = Ran(emptied: false, new RecycleBinContents(3L << 30, 12));
+
+        Assert.Equal("120.0 MB", result.TotalFreedDisplay);
+        Assert.Equal("The Recycle Bin could not be emptied.", result.RecycleBinDisplay);
+        Assert.Equal("Freed 120.0 MB of temporary files", result.ActivityDetail);
+    }
+
+    [Fact]
+    public void ABinEmptiedWithoutAMeasurement_IsStillRecorded()
+    {
+        var result = Ran(emptied: true, before: null);
+
+        Assert.Equal("120.0 MB", result.TotalFreedDisplay);
+        Assert.Equal("Recycle Bin emptied.", result.RecycleBinDisplay);
+        Assert.Equal("Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin", result.ActivityDetail);
+    }
+
+    [Fact]
+    public void ABinTheTuneUpWasNotAskedToEmpty_HasNoLineOnTheCard()
+        => Assert.Equal("", (Ran(emptied: false, before: null) with { RecycleBinSkipped = true }).RecycleBinDisplay);
 }

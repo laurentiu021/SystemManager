@@ -10,6 +10,43 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.8] - 2026-10-20
+
+**The Recycle Bin is measured the way Windows counts it, so an empty one reads as empty, and every way SysManager
+empties it now says so in Recent activity.**
+
+### Fixed
+
+- **An empty Recycle Bin read as one file to delete.** Deep Cleanup and Quick Cleanup sized the bin by walking its
+  folders, which also counted the files Windows keeps there for itself: the `desktop.ini` each bin folder holds even
+  when the bin is empty, and an index file beside every deleted item. On Deep Cleanup an empty bin still showed 129
+  bytes in 1 file for each drive and arrived ticked, and a bin of 10 files on one drive read as 21; Quick Cleanup's
+  label read "0.0 MB in Recycle Bin" for an empty bin. Both take the size and the item count from Windows now, which is what Explorer shows and what emptying
+  removes: an empty bin reads "Empty" and is not ticked, and a deleted folder counts as one item however many files it
+  holds. A bin Windows cannot measure is shown as skipped rather than as empty. Deep Cleanup since its Recycle Bin
+  category was added (0.5.0), the Quick Cleanup label since it was added (0.12.2).
+- **Emptying the Recycle Bin left no trace in Recent activity.** Quick Cleanup's Empty Recycle Bin wrote nothing
+  there, and the Quick Tune-Up recorded only the temporary files it removed ("Freed 120 MB"), even after permanently
+  emptying gigabytes from the bin; its status line and notification left the bin out too. Someone looking later for a
+  file they had deleted could not tell that SysManager had emptied the bin. Both record it now with what the bin held,
+  for example "Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin (12 items, 3.0 GB)". The
+  Tune-Up's freed total includes the bin, and its card says what the bin held, that it was already empty, or that it
+  could not be emptied. Deep Cleanup's result names the bin as well when a clean empties it. Since Recent activity was
+  added (1.17.0).
+- **Emptying an empty Recycle Bin could end in "Windows refused the request".** Empty Recycle Bin asked Windows to empty
+  the bin whatever it held, and counted every answer but two as a refusal, though Windows does not document what it
+  answers for an empty bin. It looks first now: an empty bin is reported as already empty and left alone, and when
+  Windows answers with an error, whether the bin is empty afterwards decides the result. Since 1.61.5.
+- **Empty Recycle Bin looked as harmless as Rescan.** It wore the same grey style as the Rescan button beside it, though
+  what it removes cannot be put back. It is red now, like the other buttons that delete for good, and it, Deep
+  Cleanup's Clean selected and Browser Cleaner's Clean selected tell a screen reader what they do before they are
+  pressed. Since the button was added (0.3.0).
+- **Closing SysManager could cut off Empty Recycle Bin or Remove leftovers without a word.** Every other command that
+  deletes takes the lock that makes closing SysManager, or restarting it as administrator, ask first; these two did
+  not, so either could be stopped part-way, and Empty Recycle Bin could run while Deep Cleanup or the Quick Tune-Up was
+  emptying the same bin. Both take it now. Empty Recycle Bin since it was added (0.3.0), Remove leftovers since it was
+  added (1.124.0).
+
 ## [1.130.7] - 2026-10-20
 
 **A Windows Update that fails now names the error Windows reported, and App Updates, Bandwidth Monitor and Gaming

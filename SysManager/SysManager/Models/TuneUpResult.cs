@@ -18,8 +18,20 @@ public sealed record TuneUpResult
     public int TempErrors { get; init; }
 
     // ── Recycle Bin ────────────────────────────────────────────────────
+
+    /// <summary>True when the bin is empty after the Tune-Up: emptied by it, or already empty.</summary>
     public bool RecycleBinEmptied { get; init; }
     public bool RecycleBinSkipped { get; init; }
+
+    /// <summary>
+    /// What the Recycle Bin held just before the Tune-Up emptied it, as the shell counted it. Null when the shell could
+    /// not say, or the Tune-Up was not asked to empty it.
+    /// </summary>
+    public RecycleBinContents? RecycleBinBefore { get; init; }
+
+    /// <summary>What the Tune-Up emptied from the bin, or null when it emptied nothing it could measure.</summary>
+    private RecycleBinContents? RecycleBinFreed =>
+        RecycleBinEmptied && RecycleBinBefore is { Items: > 0 } bin ? bin : null;
 
     // ── Broken shortcuts ───────────────────────────────────────────────
     public int BrokenShortcutsFound { get; init; }
@@ -38,7 +50,37 @@ public sealed record TuneUpResult
     public bool RamWarning => RamUsedPercent >= 85;
 
     // ── Summary helpers ────────────────────────────────────────────────
+
+    /// <summary>What the temp clean freed, for the card's line about the temp files.</summary>
     public string FreedDisplay => FormatHelper.FormatSize(TempBytesFreed);
+
+    /// <summary>
+    /// Everything the Tune-Up freed: the temp files, and what the Recycle Bin held when it was emptied. The status line
+    /// and the notification used to report the temp files alone.
+    /// </summary>
+    public string TotalFreedDisplay => FormatHelper.FormatSize(TempBytesFreed + (RecycleBinFreed?.Bytes ?? 0));
+
+    /// <summary>The card's line about the Recycle Bin, or empty when the Tune-Up was not asked to empty it.</summary>
+    public string RecycleBinDisplay => this switch
+    {
+        { RecycleBinSkipped: true } => "",
+        { RecycleBinEmptied: false } => "The Recycle Bin could not be emptied.",
+        { RecycleBinBefore: { Items: 0 } } => "The Recycle Bin was already empty.",
+        { RecycleBinBefore: { } bin } => $"Recycle Bin emptied ({bin.Display}).",
+        _ => "Recycle Bin emptied.",
+    };
+
+    /// <summary>
+    /// The Recent activity line: what was freed, and that the Recycle Bin was emptied for good. Someone who later looks
+    /// for a file they had deleted finds here that the Tune-Up emptied the bin, and when.
+    /// </summary>
+    public string ActivityDetail => (RecycleBinEmptied, RecycleBinBefore) switch
+    {
+        (true, { Items: > 0 } bin) =>
+            $"Freed {FreedDisplay} of temporary files and permanently emptied the Recycle Bin ({bin.Display})",
+        (true, null) => $"Freed {FreedDisplay} of temporary files and permanently emptied the Recycle Bin",
+        _ => $"Freed {FreedDisplay} of temporary files",
+    };
 
     /// <summary>
     /// How many things the Tune-Up found worth mentioning. Drives <see cref="OverallVerdict"/> and

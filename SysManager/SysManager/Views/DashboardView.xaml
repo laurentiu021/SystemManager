@@ -264,8 +264,9 @@
                         <Run Text="{Binding TuneUpResult.TempFilesDeleted, Mode=OneWay, StringFormat={}{0:N0}}" FontWeight="SemiBold"/>
                         <Run Text="temporary files."/>
                     </TextBlock>
-                    <TextBlock Text="Recycle Bin emptied." Style="{StaticResource Subtle}" Margin="0,4,0,0"
-                               Visibility="{Binding TuneUpResult.RecycleBinEmptied, Converter={StaticResource FlexVis}}"/>
+                    <TextBlock Text="{Binding TuneUpResult.RecycleBinDisplay}" Style="{StaticResource Subtle}" Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding TuneUpResult.RecycleBinDisplay, Converter={StaticResource FlexVis}}"/>
 
                     <!-- What it found, each with the tab that can act on it -->
                     <StackPanel Margin="0,12,0,0"

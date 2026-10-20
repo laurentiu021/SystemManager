@@ -9,7 +9,8 @@ using SysManager.Helpers;
 namespace SysManager.Services;
 
 /// <inheritdoc cref="ICleanupPreScanService"/>
-public sealed class CleanupPreScanService : ICleanupPreScanService
+/// <param name="recycleBin">Where the Recycle Bin's figure comes from: the shell's own count of it.</param>
+public sealed class CleanupPreScanService(IRecycleBin recycleBin) : ICleanupPreScanService
 {
     /// <inheritdoc/>
     public Task<CleanupPreScan> MeasureAsync() =>
@@ -21,12 +22,11 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
     // profile with no override. As statics these two were called for real, walking the entire temp tree and
     // every per-SID Recycle Bin folder, and that guard sat there for twenty minutes. They return a size LABEL
     // rather than a path, so it was not even reporting anything — pure collateral cost.
-    // Both walks go through SafeFileWalk rather than SearchOption.AllDirectories, which was wrong three ways
-    // at once. AllDirectories throws UnauthorizedAccessException out of MoveNext(), and the catch has to sit
-    // outside the foreach — so one protected subfolder ended the whole walk and the headline reported
+    // The temp walk goes through SafeFileWalk rather than SearchOption.AllDirectories, which was wrong three
+    // ways at once. AllDirectories throws UnauthorizedAccessException out of MoveNext(), and the catch has to
+    // sit outside the foreach — so one protected subfolder ended the whole walk and the headline reported
     // whatever had been summed up to that point, silently low. It also follows junctions, so bytes living
-    // outside the tree counted as freeable; in the Recycle Bin that is the common case, because deleting a
-    // junction puts a reparse point IN the bin. And the temp figure has to exclude what the sweep refuses to
+    // outside the tree counted as freeable. And the temp figure has to exclude what the sweep refuses to
     // delete, or it promises space Clean TEMP will correctly leave alone.
     private string MeasureTemp()
     {
@@ -46,27 +46,18 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
         return Describe(bytes, "can be freed");
     }
 
-    private string MeasureRecycleBin()
+    /// <summary>The Recycle Bin's label, from the shell's count of the current user's bin on every drive.</summary>
+    /// <remarks>
+    /// The shell's count is what Empty Recycle Bin then empties, and like the empty it covers the current user's bin
+    /// only. Walking the bin's folders counted the shell's own bookkeeping as well, the <c>desktop.ini</c> every bin
+    /// folder holds, so an empty bin read "0.0 MB in Recycle Bin" rather than "Empty".
+    /// </remarks>
+    internal string MeasureRecycleBin() => recycleBin.Query() switch
     {
-        try
-        {
-            long bytes = 0;
-            // The Recycle Bin lives in a hidden $Recycle.Bin folder on EVERY fixed drive, one per-SID
-            // subfolder per user. Empty (SHEmptyRecycleBin) only clears the CURRENT user's bin, so size only
-            // THIS user's per-SID folders — summing the whole tree over-reports what emptying can actually
-            // free on a multi-user box.
-            foreach (var path in RecycleBinHelper.CurrentUserBinPaths())
-            {
-                if (!Directory.Exists(path)) continue;
-                bytes += SumFileLengths(
-                    SafeFileWalk.Files(path, CancellationToken.None, TuneUpService.TempWalk));
-            }
-
-            return Describe(bytes, "in Recycle Bin");
-        }
-        catch (IOException) { return "Unable to scan"; }
-        catch (UnauthorizedAccessException) { return "Unable to scan"; }
-    }
+        null => "Unable to scan",
+        { Items: 0 } => "Empty",
+        { } bin => Megabytes(bin.Bytes, "in Recycle Bin"),
+    };
 
     /// <summary>Total size of the given files, skipping any that cannot be read.</summary>
     private static long SumFileLengths(IEnumerable<string> files)
@@ -82,8 +73,8 @@ public sealed class CleanupPreScanService : ICleanupPreScanService
         return bytes;
     }
 
-    private static string Describe(long bytes, string suffix) =>
-        bytes > 0
-            ? string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0 / 1024.0:F1} MB {suffix}")
-            : "Empty";
+    private static string Describe(long bytes, string suffix) => bytes > 0 ? Megabytes(bytes, suffix) : "Empty";
+
+    private static string Megabytes(long bytes, string suffix) =>
+        string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024.0 / 1024.0:F1} MB {suffix}");
 }

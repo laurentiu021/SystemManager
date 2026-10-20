@@ -42,11 +42,11 @@ public class AllViewModelsSweepTests
     private static UpdateCheckPreferenceService TempUpdateCheck()
         => new(Path.Combine(Path.GetTempPath(), "SysManagerTests", "sweep-update-check"));
 
-    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory(), TempUpdateCheck()));
+    [Fact] public void Dashboard_Constructs() => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(), new ShellRecycleBin()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory(), TempUpdateCheck()));
     [Fact] public void AppUpdates_Constructs() => Assert.NotNull(new AppUpdatesViewModel(new WingetService(new PowerShellRunner())));
     [Fact] public void WindowsUpdate_Constructs() => Assert.NotNull(new WindowsUpdateViewModel(new PowerShellRunner(), new WindowsUpdateService(), new WindowsUpdatePolicyService()));
     [Fact] public void SystemHealth_Constructs() => Assert.NotNull(new SystemHealthViewModel(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(), new PowerShellRunner(), new BiosService()));
-    [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService()));
+    [Fact] public void Cleanup_Constructs() => Assert.NotNull(new CleanupViewModel(new PowerShellRunner(), new CleanupPreScanService(new ShellRecycleBin()), new ShellRecycleBin()));
     [Fact] public void DeepCleanup_Constructs() => Assert.NotNull(new DeepCleanupViewModel(new DeepCleanupService(new SystemCleanupRoots())));
     [Fact] public void LargeFiles_Constructs() => Assert.NotNull(new LargeFilesViewModel(new LargeFileScanner(), new FixedDriveService()));
     [Fact] public void Drivers_Constructs() => Assert.NotNull(new DriversViewModel(new PowerShellRunner()));
@@ -56,7 +56,7 @@ public class AllViewModelsSweepTests
 
     [Fact]
     public void Dashboard_HasNonEmptySummaryOrEmpty()
-        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory(), TempUpdateCheck()));
+        => Assert.NotNull(new DashboardViewModel(new SystemInfoService(), new TuneUpService(new ShortcutCleanerService(), new DiskHealthService(), new SystemInfoService(), new ShellRecycleBin()), new HealthScoreService(new SystemInfoService(), new DiskHealthService(), new BatteryService()), new TemperatureService(new DiskHealthService(), skipHardwareInit: true), new WingetService(new PowerShellRunner()), TempCrashMarkers(), new MemoryTestService(), new NavigationService(), new WindowsUpdateService(), new SpeedTestService(), TempSpeedHistory(), TempUpdateCheck()));
 
     [Fact]
     public void AppUpdates_HasCollections()

@@ -25,15 +25,18 @@ public sealed class TuneUpService : ITuneUpService
     private readonly ShortcutCleanerService _shortcuts;
     private readonly DiskHealthService _diskHealth;
     private readonly SystemInfoService _sysInfo;
+    private readonly IRecycleBin _recycleBin;
 
     public TuneUpService(
         ShortcutCleanerService shortcuts,
         DiskHealthService diskHealth,
-        SystemInfoService sysInfo)
+        SystemInfoService sysInfo,
+        IRecycleBin recycleBin)
     {
         _shortcuts = shortcuts;
         _diskHealth = diskHealth;
         _sysInfo = sysInfo;
+        _recycleBin = recycleBin;
     }
 
     /// <summary>
@@ -54,12 +57,7 @@ public sealed class TuneUpService : ITuneUpService
 
         // Step 2: Recycle Bin
         progress?.Report((1, "Emptying Recycle Bin…"));
-        bool binEmptied = false;
-        bool binSkipped = !emptyRecycleBin;
-        if (emptyRecycleBin)
-        {
-            binEmptied = await EmptyRecycleBinAsync(ct).ConfigureAwait(false);
-        }
+        var bin = await EmptyRecycleBinAsync(emptyRecycleBin, _recycleBin.Empty, ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
 
         // Step 3: Broken shortcuts scan
@@ -83,8 +81,9 @@ public sealed class TuneUpService : ITuneUpService
             TempBytesFreed = tempFreed,
             TempFilesDeleted = tempDeleted,
             TempErrors = tempErrors,
-            RecycleBinEmptied = binEmptied,
-            RecycleBinSkipped = binSkipped,
+            RecycleBinEmptied = bin?.Emptied ?? false,
+            RecycleBinSkipped = !emptyRecycleBin,
+            RecycleBinBefore = bin?.Before,
             BrokenShortcutsFound = brokenCount ?? 0,
             DiskResults = diskSummaries ?? [],
             Uptime = snapshot?.Os.Uptime ?? TimeSpan.Zero,
@@ -278,6 +277,16 @@ public sealed class TuneUpService : ITuneUpService
 
     // ── Recycle Bin ────────────────────────────────────────────────────
 
-    private static Task<bool> EmptyRecycleBinAsync(CancellationToken ct)
-        => Task.Run(RecycleBinHelper.EmptyAllDrives, ct);
+    /// <summary>Step 2: empties the Recycle Bin when the user agreed to it, or returns null when they did not.</summary>
+    /// <remarks>
+    /// The result carries what the bin held just before, which the card, the status line and Recent activity report.
+    /// Only a bool was kept, so a Tune-Up that permanently emptied gigabytes from the bin reported the temp files alone,
+    /// and nothing in Recent activity said that the bin had been emptied.
+    /// </remarks>
+    internal static async Task<RecycleBinEmptyResult?> EmptyRecycleBinAsync(
+        bool emptyRecycleBin, Func<RecycleBinEmptyResult> empty, CancellationToken ct)
+    {
+        if (!emptyRecycleBin) return null;
+        return await Task.Run(empty, ct).ConfigureAwait(false);
+    }
 }

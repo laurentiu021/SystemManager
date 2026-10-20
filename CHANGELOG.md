@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.14] - 2026-10-20
+
+**Nothing one of SysManager's PowerShell steps leaves behind reaches the next one, and a step cancelled as it
+starts is reported as cancelled and never starts.**
+
+### Fixed
+
+- **A PowerShell step could see what an earlier one had left behind.** SysManager keeps a PowerShell session open
+  between the steps a tab runs, so that a burst of them starts faster, and every step ran in that session's shared
+  scope. A setting one step changed, such as whether an error stops it, carried into the next step on the same
+  session, and a value a step failed to set kept whatever an earlier step had left in it. That is how Scheduled
+  Maintenance's save could go on with an action an earlier step had left, which 1.130.13 fixed for that tab. Each
+  step now runs in a scope of its own. Since PowerShell sessions began to be kept between steps (1.78.7).
+- **Cancelling a step as it began could show an error, or let it start anyway.** A tab's first PowerShell step takes
+  a few hundred milliseconds to open its session, and a Cancel pressed in that time asked a step that had not started
+  to stop. Starting it was then refused with an error the tab's cancel handling did not expect, so an error showed
+  where "Cancelled" should have, or, once the stop had gone through, the step started anyway and was stopped again a
+  moment later, so a change you had cancelled could begin. A step cancelled before it starts now never starts, and
+  is reported as cancelled. The error since 1.127.3; the late start before that too.
+
 ## [1.130.13] - 2026-10-20
 
 **Scheduled Maintenance can save a schedule, and each Windows account on the PC has its own.**

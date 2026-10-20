@@ -140,8 +140,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     }
 
     /// <summary>
-    /// Execute a script and return the collected PSObject results. Every run is isolated
-    /// in a Windows PowerShell 5.1 child process with a sanitized module path.
+    /// Execute a script and return the collected PSObject results. Every run happens in a
+    /// Windows PowerShell 5.1 child process with a sanitized module path, in a scope of its own:
+    /// the runspace is kept for the next run, and nothing one script sets reaches it.
     /// All streams are forwarded via <see cref="LineReceived"/> for live UI display.
     /// </summary>
     public async Task<Collection<PSObject>> RunAsync(
@@ -171,10 +172,24 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         // several hundred milliseconds and must not block the UI.
         var resources = await LeaseRunspaceAsync().ConfigureAwait(false);
 
+        // A cancel that landed while the runspace was being leased: nothing has started, so nothing starts. The
+        // registration below fires at once for a token already cancelled, on an instance that has not run, and
+        // BeginInvoke refuses an instance that is still stopping. That arrived as an InvalidOperationException no
+        // caller's cancel branch catches; once the stop had landed, the script started anyway and was stopped again
+        // a moment later, so a change the user had cancelled could begin. A cold runner's lease takes a few hundred
+        // milliseconds, the same order as the delay before a Cancel click.
+        if (cancellationToken.IsCancellationRequested)
+            throw new OperationCanceledException(CancelledBeforeItStarted, cancellationToken);
+
         using var pipeline = new PipelineRun();
         var ps = pipeline.Shell;
         ps.Runspace = resources.Runspace;
-        ps.AddScript(script);
+        // A scope of its own on the reused runspace. In the runspace's global scope, which is where AddScript runs a
+        // script by default, every variable and preference one script set was still there for the next: an
+        // $ErrorActionPreference of 'Stop' changed how a later script failed, and a step that failed to assign
+        // left the value an earlier script had given that variable. Scheduled Maintenance's save went on with a
+        // $action left that way. Kept since 1.78.7, when the runspace began to outlive a single call.
+        ps.AddScript(script, useLocalScope: true);
         if (parameters is not null)
         {
             foreach (var kv in parameters)
@@ -228,9 +243,18 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
 
         try
         {
-            var task = Task.Factory.FromAsync(
-                ps.BeginInvoke<PSObject, PSObject>(null, output),
-                ar => ps.EndInvoke(ar));
+            IAsyncResult invocation;
+            try
+            {
+                invocation = ps.BeginInvoke<PSObject, PSObject>(null, output);
+            }
+            catch (InvalidOperationException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The same cancel, landing between the check above and here: the stop it asked for is still landing,
+                // BeginInvoke refuses the instance, and nothing has run.
+                throw new OperationCanceledException(CancelledBeforeItStarted, cancellationToken);
+            }
+            var task = Task.Factory.FromAsync(invocation, ar => ps.EndInvoke(ar));
 
             // The registration above can fire while this instance is still NotStarted, and that stop is then
             // lost — so nothing has asked the pipeline to stop, and BeginInvoke goes on to run the script in
@@ -860,6 +884,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
 
         pipeline.ReleaseAfter(run);
     }
+
+    /// <summary>What a run cancelled before its script started reports.</summary>
+    internal const string CancelledBeforeItStarted = "The PowerShell run was cancelled before it started.";
 
     /// <summary>
     /// Asks the pipeline to stop, without waiting for the stop to land and without throwing.

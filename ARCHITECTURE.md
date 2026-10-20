@@ -311,7 +311,9 @@ to scroll.
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
-  Recent Changes lists them; Clear History clears that record too (#1507).
+  Recent Changes lists them; Clear History clears that record too (#1507). A folder alert that a new uninstall entry
+  claims is renamed after the program by `Identify`, in the list and in the record, with no second row or
+  notification (#2878).
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
@@ -921,7 +923,10 @@ Key services:
   needs a handful rather than the whole list, and `IsDisabled` is the one test for
   the state Enable undoes.
 - `AppAlertService` — monitors for new application installations via
-  FileSystemWatcher and registry polling.
+  FileSystemWatcher and registry polling. A new uninstall entry that points into a folder announced within
+  `RecentChangesService.SameInstall` claims that folder's alert, once, and raises `AppIdentified` instead of
+  `NewAppDetected`. `FoldersOf` reads the folders of the entry's uninstaller and icon, the uninstaller by
+  `UninstallerService.ParseUninstallCommand`, and `BelongsTo` decides through `SystemPaths.IsInsideSubtree` (#2878).
 - `AppAlertHistory` (`IAppAlertHistory`) — New App Alerts' detections, newest first, the last 200, in
   `app-alerts.json` (#1507). Reads before it writes under one lock, sets a file that does not parse aside, and
   writes nothing over one it could not read.
@@ -932,7 +937,9 @@ Key services:
   whose window, widened by the same ten minutes, holds neither. Windows' history is asked first and the local
   sources are read while it answers. A source that could not be read is named in `RecentChangesLook.Unreadable`,
   never read as empty, and when the activity log is full `ActivityKeptFrom` says how far back it reaches. `KeptFor`
-  is how long the records it reads keep a change: past the 90-day longest period. Changes nothing on the PC.
+  is how long the records it reads keep a change: past the 90-day longest period. `OneAlertPerInstall` leaves out a
+  folder detection kept beside the uninstall entry that points into it, which lists kept before #2878 hold. Changes
+  nothing on the PC.
 - `WmiReliabilityHistory` (`IReliabilityHistory`) — `Win32_ReliabilityRecords` since a time, filtered by WMI,
   which needs no administrator rights, with a 30-second timeout. `ReliabilityChanges.Parse` turns the records into
   changes and problem counts without touching the PC: Windows Update installs and failures (a Store app by its

@@ -427,7 +427,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   known. The first look only starts the list, and the page says so. A new version of a program, from the
   same publisher, is one update rather than one program removed and another installed
 - **What New App Alerts noticed**, at the time it noticed. A program that Windows Installer and New App
-  Alerts both saw within ten minutes is listed once, from Windows' record
+  Alerts both saw within ten minutes is listed once, from Windows' record, and so is a new folder and the
+  program found in it within ten minutes, under the program's name
 - **Settings that changed from the ones you saved**, from when Settings Watchdog first noticed: each look at
   either tab records it, and when the setting went back or changed again. When a setting changed is not
   known, only when it was noticed, so its row shows a dash where the time goes and says when it was noticed
@@ -1447,6 +1448,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   both, and asks first, since it cannot be undone
 - Notifies you when a new install is detected, so you find out even when you are
   on another tab or the window is in the notification area
+- **One install, one alert.** An installer creates its folder first and registers the program
+  minutes later. When a new program turns out to live in a folder announced in the last ten
+  minutes, that alert takes the program's name, "VLC media player" rather than "VideoLAN", and
+  no second notification comes
 
 ### App Blocker
 - Blocks applications from executing using Image File Execution Options (IFEO)

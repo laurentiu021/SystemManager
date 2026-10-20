@@ -34,6 +34,12 @@ public interface IAppAlertHistory
     /// <summary>Marks every detection kept as looked at.</summary>
     void AcknowledgeAll();
 
+    /// <summary>
+    /// Names the kept detection <paramref name="alert"/> after the program found behind it. Nothing changes when it is
+    /// not kept.
+    /// </summary>
+    void Rename(AppInstallEntry alert, string name, string publisher);
+
     /// <summary>Forgets every detection. Returns false when the record could not be removed.</summary>
     bool Clear();
 }
@@ -86,6 +92,20 @@ public sealed class AppAlertHistory : IAppAlertHistory
         {
             if (ReadStore() is not { } stored || stored.All(a => a.IsAcknowledged)) return;
             Save([.. stored.Select(a => a with { IsAcknowledged = true })]);
+        }
+    }
+
+    public void Rename(AppInstallEntry alert, string name, string publisher)
+    {
+        ArgumentNullException.ThrowIfNull(alert);
+        lock (_lock)
+        {
+            if (ReadStore() is not { } stored) return;
+            var at = stored.FindIndex(a => a.Name == alert.Name && a.InstallPath == alert.InstallPath
+                                           && a.Source == alert.Source && a.DetectedAt == alert.DetectedAt);
+            if (at < 0) return;
+            stored[at] = stored[at] with { Name = name, Publisher = publisher.Length > 0 ? publisher : stored[at].Publisher };
+            Save(stored);
         }
     }
 

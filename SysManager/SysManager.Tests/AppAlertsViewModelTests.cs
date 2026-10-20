@@ -192,6 +192,40 @@ public class AppAlertsViewModelTests
     }
 
     [Fact]
+    public void AFolderAlertAProgramClaims_TakesItsName_RatherThanASecondRow()
+    {
+        // One install was listed twice, as its folder and as its uninstall entry, with two notifications (#2878).
+        var history = NoHistory();
+        using var vm = NewVm(history);
+        var folder = new AppInstallEntry { Name = "VideoLAN", InstallPath = @"C:\Program Files\VideoLAN", Source = "FileSystem" };
+        vm.Record(folder);
+
+        vm.Identify(folder, new AppInstallEntry { Name = "VLC media player", Publisher = "VideoLAN", Source = "Registry" });
+
+        Assert.Same(folder, Assert.Single(vm.Alerts));
+        Assert.Equal(("VLC media player", "VideoLAN", @"C:\Program Files\VideoLAN", "FileSystem"),
+            (folder.Name, folder.Publisher, folder.InstallPath, folder.Source));
+        Assert.Equal((1, 1), (vm.AlertCount, vm.UnacknowledgedCount));
+        Assert.Equal("New app detected: VLC media player", vm.MonitorStatus);
+        history.Received(1).Add(Arg.Any<AppInstallEntry>());
+        history.Received(1).Rename(folder, "VLC media player", "VideoLAN");
+    }
+
+    [Fact]
+    public void AFolderAlertClearedBeforeItsProgramIsFound_LeavesTheProgramAsADetectionOfItsOwn()
+    {
+        var history = NoHistory();
+        using var vm = NewVm(history);
+        var program = new AppInstallEntry { Name = "VLC media player", Source = "Registry" };
+
+        vm.Identify(new AppInstallEntry { Name = "VideoLAN", Source = "FileSystem" }, program);
+
+        Assert.Same(program, Assert.Single(vm.Alerts));
+        history.Received(1).Add(program);
+        history.DidNotReceive().Rename(Arg.Any<AppInstallEntry>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Fact]
     public void ADetection_GoesAboveWhatWasKept()
     {
         var history = NoHistory();

@@ -25,6 +25,12 @@ public sealed class AppAlertService : IDisposable
     private readonly ConcurrentDictionary<string, bool> _knownRegistryApps = new(StringComparer.OrdinalIgnoreCase);
     private readonly SynchronizationContext? _syncContext;
     private readonly Func<IReadOnlyList<AppInstallEntry>> _readRegistryApps;
+    private readonly TimeProvider _clock;
+
+    // The folders announced lately, each until an uninstall entry claims it. An installer creates its folder first and
+    // writes its uninstall entry minutes later, and the two were announced as two installs (#2878).
+    private readonly List<AppInstallEntry> _recentFolders = [];
+    private readonly Lock _recentFoldersLock = new();
     private Timer? _registryTimer;
     private bool _disposed;
 
@@ -34,6 +40,13 @@ public sealed class AppAlertService : IDisposable
     public event Action<AppInstallEntry>? NewAppDetected;
 
     /// <summary>
+    /// Raised instead of <see cref="NewAppDetected"/> when a new uninstall entry points into a folder announced within
+    /// <see cref="RecentChangesService.SameInstall"/> before it: the folder's alert first, then the entry, whose name
+    /// is the program's. Marshaled like <see cref="NewAppDetected"/>.
+    /// </summary>
+    public event Action<AppInstallEntry, AppInstallEntry>? AppIdentified;
+
+    /// <summary>
     /// Creates a new instance, capturing the current <see cref="SynchronizationContext"/>
     /// so that events are raised on the UI thread.
     /// </summary>
@@ -41,12 +54,13 @@ public sealed class AppAlertService : IDisposable
 
     /// <summary>
     /// Reads the installed-programs list from <paramref name="readRegistryApps"/> instead of the registry, so a
-    /// test decides what is installed before and after the baseline.
+    /// test decides what is installed before and after the baseline, and the time from <paramref name="clock"/>.
     /// </summary>
-    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps)
+    internal AppAlertService(Func<IReadOnlyList<AppInstallEntry>> readRegistryApps, TimeProvider? clock = null)
     {
         _syncContext = SynchronizationContext.Current;
         _readRegistryApps = readRegistryApps;
+        _clock = clock ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -168,7 +182,9 @@ public sealed class AppAlertService : IDisposable
                             Name = name,
                             Publisher = sub.GetValue("Publisher") as string ?? "",
                             InstallPath = sub.GetValue("InstallLocation") as string ?? "",
-                            Source = "Registry"
+                            Source = "Registry",
+                            Locations = FoldersOf(sub.GetValue("UninstallString") as string,
+                                                  sub.GetValue("DisplayIcon") as string),
                         });
                     }
                     catch (IOException) { /* skip inaccessible key */ }
@@ -184,20 +200,61 @@ public sealed class AppAlertService : IDisposable
         return apps;
     }
 
-    private void OnDirectoryCreated(object sender, FileSystemEventArgs e)
+    /// <summary>
+    /// The folders an uninstall entry's uninstaller and icon are in. Its command is read by the rule the Uninstaller
+    /// runs it with, so <c>MsiExec.exe /X{…}</c> names no folder. An icon's index (<c>,0</c>), and the quote before
+    /// it, follow the file's name, so they never reach its folder.
+    /// </summary>
+    internal static IReadOnlyList<string> FoldersOf(string? uninstallCommand, string? displayIcon)
     {
-        if (!_knownFolders.TryAdd(e.FullPath, true)) return;
+        List<string> folders = [];
+        if (!string.IsNullOrWhiteSpace(uninstallCommand))
+        {
+            try { AddFolderOf(UninstallerService.ParseUninstallCommand(uninstallCommand).Exe); }
+            catch (InvalidOperationException) { /* a command the Uninstaller refuses to read names no folder here */ }
+            catch (ArgumentException) { /* ditto */ }
+        }
+
+        if (!string.IsNullOrWhiteSpace(displayIcon)) AddFolderOf(displayIcon.Trim().Trim('"'));
+
+        return folders;
+
+        void AddFolderOf(string file)
+        {
+            if (Path.IsPathFullyQualified(file) && Path.GetDirectoryName(file) is { Length: > 0 } folder)
+                folders.Add(folder);
+        }
+    }
+
+    /// <summary>
+    /// Whether the uninstall entry <paramref name="app"/> points into <paramref name="folder"/>: its install location,
+    /// or the folder its uninstaller or its icon is in, is that folder or inside it.
+    /// </summary>
+    internal static bool BelongsTo(AppInstallEntry app, string folder) =>
+        app.Locations.Prepend(app.InstallPath)
+           .Select(l => l.Trim().Trim('"'))
+           .Any(l => Path.IsPathFullyQualified(l) && SystemPaths.IsInsideSubtree(l, folder));
+
+    private void OnDirectoryCreated(object sender, FileSystemEventArgs e) => AnnounceFolder(e.FullPath);
+
+    /// <summary>Announces a new folder in a watched place once, and keeps it for its uninstall entry.</summary>
+    internal void AnnounceFolder(string fullPath)
+    {
+        if (!_knownFolders.TryAdd(fullPath, true)) return;
 
         var entry = new AppInstallEntry
         {
-            Name = Path.GetFileName(e.FullPath),
-            InstallPath = e.FullPath,
-            DetectedAt = DateTime.Now,
+            Name = Path.GetFileName(fullPath),
+            InstallPath = fullPath,
+            DetectedAt = _clock.GetLocalNow().DateTime,
             Source = "FileSystem"
         };
 
-        Log.Information("New app folder detected: {Path}", e.FullPath);
+        Log.Information("New app folder detected: {Path}", fullPath);
         RaiseNewAppDetected(entry);
+
+        // Kept once it is raised, so that the entry which claims it is raised after it and finds it on the list.
+        lock (_recentFoldersLock) _recentFolders.Add(entry);
     }
 
     /// <summary>
@@ -231,9 +288,18 @@ public sealed class AppAlertService : IDisposable
                          .Where(a => !_knownRegistryApps.ContainsKey(a.Name))
                          .Where(a => _knownRegistryApps.TryAdd(a.Name, true)))
             {
-                app.DetectedAt = DateTime.Now;
-                Log.Information("New app detected in registry: {Name}", app.Name);
-                RaiseNewAppDetected(app);
+                app.DetectedAt = _clock.GetLocalNow().DateTime;
+                if (ClaimFolder(app) is { } folder)
+                {
+                    Log.Information("New app {Name} is the folder {Path} announced before it", app.Name,
+                                    folder.InstallPath);
+                    Raise(() => AppIdentified?.Invoke(folder, app));
+                }
+                else
+                {
+                    Log.Information("New app detected in registry: {Name}", app.Name);
+                    RaiseNewAppDetected(app);
+                }
                 found++;
             }
         }
@@ -244,15 +310,33 @@ public sealed class AppAlertService : IDisposable
     }
 
     /// <summary>
-    /// Raises <see cref="NewAppDetected"/> on the captured synchronization context
-    /// (UI thread) if available, otherwise invokes directly on the current thread.
+    /// The folder announced within <see cref="RecentChangesService.SameInstall"/> before <paramref name="app"/> that it
+    /// points into, taken off the list so that no other entry claims it, or null.
     /// </summary>
-    private void RaiseNewAppDetected(AppInstallEntry entry)
+    private AppInstallEntry? ClaimFolder(AppInstallEntry app)
+    {
+        var since = app.DetectedAt - RecentChangesService.SameInstall;
+        lock (_recentFoldersLock)
+        {
+            _recentFolders.RemoveAll(f => f.DetectedAt < since);
+            var folder = _recentFolders.FirstOrDefault(f => BelongsTo(app, f.InstallPath));
+            if (folder is not null) _recentFolders.Remove(folder);
+            return folder;
+        }
+    }
+
+    private void RaiseNewAppDetected(AppInstallEntry entry) => Raise(() => NewAppDetected?.Invoke(entry));
+
+    /// <summary>
+    /// Raises an event on the captured synchronization context (UI thread) if available, otherwise invokes it directly
+    /// on the current thread.
+    /// </summary>
+    private void Raise(Action raise)
     {
         if (_syncContext is not null)
-            _syncContext.Post(_ => NewAppDetected?.Invoke(entry), null);
+            _syncContext.Post(_ => raise(), null);
         else
-            NewAppDetected?.Invoke(entry);
+            raise();
     }
 
     private static List<string> GetMonitoredDirectories()

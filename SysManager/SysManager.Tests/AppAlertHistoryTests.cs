@@ -113,6 +113,39 @@ public sealed class AppAlertHistoryTests : IDisposable
     }
 
     [Fact]
+    public void Rename_NamesTheKeptFolderAfterItsProgram_AndLeavesTheRestAsItWas()
+    {
+        // A detection's time has ticks below the second, and the kept one is found by it after its trip through the file.
+        var folder = Alert("Contoso", minute: 5);
+        folder.DetectedAt = folder.DetectedAt.AddTicks(1_234_567);
+        folder.Source = "FileSystem";
+        folder.Publisher = "";
+        NewHistory().Add(Alert("Contoso Notes", minute: 1));
+        NewHistory().Add(folder);
+
+        NewHistory().Rename(folder, "Contoso Player", "Contoso Ltd");
+
+        var kept = NewHistory().Load().Alerts;
+        Assert.Equal(["Contoso Player", "Contoso Notes"], kept.Select(a => a.Name));
+        Assert.Equal(("Contoso Ltd", @"C:\Program Files\Contoso", "FileSystem", folder.DetectedAt),
+            (kept[0].Publisher, kept[0].InstallPath, kept[0].Source, kept[0].DetectedAt));
+        Assert.Equal("Contoso", kept[1].Publisher);
+    }
+
+    [Fact]
+    public void Rename_OfADetectionThatIsNotKept_WritesNothing()
+    {
+        NewHistory().Add(Alert("Contoso Notes"));
+        var stamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(StoreFile, stamp);
+
+        NewHistory().Rename(Alert("Contoso Notes", minute: 30), "Contoso Player", "");
+
+        Assert.Equal("Contoso Notes", Assert.Single(NewHistory().Load().Alerts).Name);
+        Assert.Equal(stamp, File.GetLastWriteTimeUtc(StoreFile));
+    }
+
+    [Fact]
     public void Clear_RemovesTheRecord()
     {
         NewHistory().Add(Alert("First"));

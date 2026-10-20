@@ -45,43 +45,47 @@ public class TuneUpServiceTests
         Assert.Equal("0 B", result.FreedDisplay);
     }
 
+    // The limits are HealthLimits', where the Health Score's bands end too, so the two cards give the same advice
+    // (#2877), and HealthLimitsTests holds them to each other. These pin the edges: the advice starts past a limit,
+    // not at it.
+
     [Fact]
-    public void TuneUpResult_UptimeWarning_FalseUnder14Days()
+    public void TuneUpResult_UptimeWarning_FalseAtTheRestartLimit()
     {
-        var result = new TuneUpResult { Uptime = TimeSpan.FromDays(13) };
+        var result = new TuneUpResult { Uptime = TimeSpan.FromDays(HealthLimits.RestartAdvisedAfterDays) };
         Assert.False(result.UptimeWarning);
     }
 
     [Fact]
-    public void TuneUpResult_UptimeWarning_TrueAt14Days()
+    public void TuneUpResult_UptimeWarning_TruePastTheRestartLimit()
     {
-        var result = new TuneUpResult { Uptime = TimeSpan.FromDays(14) };
+        var result = new TuneUpResult { Uptime = TimeSpan.FromDays(HealthLimits.RestartAdvisedAfterDays + 0.01) };
         Assert.True(result.UptimeWarning);
     }
 
     [Fact]
-    public void TuneUpResult_UptimeWarning_TrueOver14Days()
+    public void TuneUpResult_UptimeWarning_TrueAfterAMonth()
     {
         var result = new TuneUpResult { Uptime = TimeSpan.FromDays(30) };
         Assert.True(result.UptimeWarning);
     }
 
     [Fact]
-    public void TuneUpResult_RamWarning_FalseUnder85()
+    public void TuneUpResult_RamWarning_FalseAtTheMemoryLimit()
     {
-        var result = new TuneUpResult { RamUsedPercent = 60 };
+        var result = new TuneUpResult { RamUsedPercent = HealthLimits.CloseAppsAdvisedAbovePercent };
         Assert.False(result.RamWarning);
     }
 
     [Fact]
-    public void TuneUpResult_RamWarning_TrueAt85()
+    public void TuneUpResult_RamWarning_TruePastTheMemoryLimit()
     {
-        var result = new TuneUpResult { RamUsedPercent = 85 };
+        var result = new TuneUpResult { RamUsedPercent = HealthLimits.CloseAppsAdvisedAbovePercent + 0.5 };
         Assert.True(result.RamWarning);
     }
 
     [Fact]
-    public void TuneUpResult_RamWarning_TrueOver85()
+    public void TuneUpResult_RamWarning_TrueAt95()
     {
         var result = new TuneUpResult { RamUsedPercent = 95 };
         Assert.True(result.RamWarning);

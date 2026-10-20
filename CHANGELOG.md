@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.24] - 2026-10-20
+
+**New App Alerts reports one installation once, under the program's name.**
+
+### Fixed
+
+- **One installation came up twice on New App Alerts, under its folder and under its program.** An installer creates
+  its folder in Program Files first and registers the program minutes later, and New App Alerts announced both: VLC
+  arrived as "VideoLAN" and as "VLC media player", with two notifications and a count of two, which reads as two
+  programs that installed themselves. When a newly registered program lives in a folder announced in the last ten
+  minutes, that alert now takes the program's name, and no second notification comes. Recent Changes counts such an
+  install once as well, and so does an older pair New App Alerts kept, when the program's entry named its install
+  folder. Since New App Alerts was added (0.33.0).
+
 ## [1.130.23] - 2026-10-20
 
 **A running disk check and a winget search now show on the sidebar and the taskbar button, and closing SysManager

@@ -50,6 +50,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         _history = history ?? throw new ArgumentNullException(nameof(history));
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _service.NewAppDetected += OnNewAppDetected;
+        _service.AppIdentified += OnAppIdentified;
         InitializeAsync(() => { LoadHistory(); return Task.CompletedTask; });
     }
 
@@ -179,6 +180,33 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         ToastService.Instance.Show("New app installed", entry.Name);
     }
 
+    private void OnAppIdentified(AppInstallEntry alert, AppInstallEntry app) =>
+        _dispatcher.BeginInvoke(() => Identify(alert, app));
+
+    /// <summary>
+    /// Names a listed folder alert after the program whose uninstall entry points into the folder, rather than listing
+    /// the program a second time. Runs on the UI thread.
+    /// </summary>
+    /// <remarks>
+    /// An installer creates its folder first and writes its uninstall entry minutes later, so one install was listed
+    /// twice, as "VideoLAN" and as "VLC media player", with two notifications and a count of two (#2878). The row keeps
+    /// its folder and its time, takes the program's name, and no second notification is shown. A folder alert cleared
+    /// away meanwhile is not there to rename, so the program is listed as a detection of its own.
+    /// </remarks>
+    internal void Identify(AppInstallEntry alert, AppInstallEntry app)
+    {
+        if (!Alerts.Contains(alert))
+        {
+            Record(app);
+            return;
+        }
+
+        _history.Rename(alert, app.Name, app.Publisher);
+        alert.Name = app.Name;
+        if (app.Publisher.Length > 0) alert.Publisher = app.Publisher;
+        MonitorStatus = $"New app detected: {app.Name}";
+    }
+
     /// <summary>Whether there are alerts worth exporting.</summary>
     public bool HasAlerts => AlertCount > 0;
 
@@ -218,6 +246,7 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         if (disposing)
         {
             _service.NewAppDetected -= OnNewAppDetected;
+            _service.AppIdentified -= OnAppIdentified;
             _service.Dispose();
         }
         base.Dispose(disposing);

@@ -72,7 +72,7 @@ public sealed class RecentChangesService : IRecentChangesService
     /// How far apart two records of one install can be. An installer creates its folder minutes before it writes its
     /// uninstall entry, Windows Installer records the end, and New App Alerts checks the entries every 30 seconds.
     /// </summary>
-    private static readonly TimeSpan SameInstall = TimeSpan.FromMinutes(10);
+    internal static readonly TimeSpan SameInstall = TimeSpan.FromMinutes(10);
 
     private readonly IReliabilityHistory _reliability;
     private readonly IInstalledProgramsHistory _programs;
@@ -122,7 +122,7 @@ public sealed class RecentChangesService : IRecentChangesService
         var (windowsChanges, problems) = ReliabilityChanges.Parse(history.Records);
         var changes = Combine(
             [.. Activity(local.Activity), .. windowsChanges],
-            local.Alerts.Alerts.Select(Detected).ToList(),
+            OneAlertPerInstall(local.Alerts.Alerts).Select(Detected).ToList(),
             local.Programs.Changes.Select(Program).ToList(),
             Settings(local.Sightings.Sightings, _watchdog.Catalog));
 
@@ -188,10 +188,22 @@ public sealed class RecentChangesService : IRecentChangesService
             string.IsNullOrWhiteSpace(e.Detail) ? e.Action : e.Detail, "You, in SysManager",
             string.IsNullOrWhiteSpace(e.Detail) ? "" : e.Action));
 
+    /// <summary>
+    /// New App Alerts' detections, with a new folder left out when an uninstall entry noticed within
+    /// <see cref="SameInstall"/> of it points into it: one install, which New App Alerts kept twice before #2878.
+    /// </summary>
+    internal static IEnumerable<AppInstallEntry> OneAlertPerInstall(IReadOnlyList<AppInstallEntry> alerts) =>
+        alerts.Where(folder => !(IsFolder(folder) && alerts.Any(entry =>
+            !IsFolder(entry) && (entry.DetectedAt - folder.DetectedAt).Duration() <= SameInstall
+            && AppAlertService.BelongsTo(entry, folder.InstallPath))));
+
+    private static bool IsFolder(AppInstallEntry alert) =>
+        string.Equals(alert.Source, "FileSystem", StringComparison.Ordinal);
+
     /// <summary>One of New App Alerts' detections: a new folder names where it appeared, a new uninstall entry does not.</summary>
     internal static ChangeEvent Detected(AppInstallEntry alert) => new(
         alert.DetectedAt, null, ChangeKind.ProgramDetected, alert.Name, "An installer",
-        string.Equals(alert.Source, "FileSystem", StringComparison.Ordinal)
+        IsFolder(alert)
         && System.IO.Path.GetDirectoryName(alert.InstallPath) is { Length: > 0 } folder
             ? $"A new folder in {folder}, noticed by New App Alerts"
             : "Noticed by New App Alerts while it was watching");

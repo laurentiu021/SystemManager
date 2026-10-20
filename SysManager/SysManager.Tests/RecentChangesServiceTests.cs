@@ -313,6 +313,44 @@ public sealed class RecentChangesServiceTests
             (change.Kind, change.Subject, change.Who, change.Detail));
     }
 
+    [Fact]
+    public void ANewFolderAndTheUninstallEntryThatPointsIntoIt_AreOneInstall()
+    {
+        // New App Alerts kept both before #2878, so a list kept then still holds the pair.
+        var folder = new AppInstallEntry
+        {
+            Name = "VideoLAN",
+            InstallPath = @"C:\Program Files\VideoLAN",
+            DetectedAt = Now,
+            Source = "FileSystem"
+        };
+        var program = new AppInstallEntry
+        {
+            Name = "VLC media player",
+            InstallPath = @"C:\Program Files\VideoLAN\VLC",
+            DetectedAt = Now.AddMinutes(4),
+            Source = "Registry"
+        };
+        var elsewhere = new AppInstallEntry
+        {
+            Name = "Contoso Notes",
+            InstallPath = @"C:\Program Files\Contoso",
+            DetectedAt = Now.AddMinutes(1),
+            Source = "Registry"
+        };
+        var muchLater = new AppInstallEntry
+        {
+            Name = "VLC media player",
+            InstallPath = @"C:\Program Files\VideoLAN\VLC",
+            DetectedAt = Now + RecentChangesService.SameInstall + TimeSpan.FromMinutes(1),
+            Source = "Registry"
+        };
+
+        Assert.Equal([program, elsewhere], RecentChangesService.OneAlertPerInstall([program, elsewhere, folder]));
+        Assert.Equal([muchLater, folder], RecentChangesService.OneAlertPerInstall([muchLater, folder]));
+        Assert.Equal([elsewhere, folder], RecentChangesService.OneAlertPerInstall([elsewhere, folder]));
+    }
+
     [Theory]
     [InlineData("Registry", @"C:\Program Files\Search Pro")]
     [InlineData("FileSystem", "")]

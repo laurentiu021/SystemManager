@@ -1205,7 +1205,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   described in words
 - **"Not scheduled" means Windows said so.** If the schedule cannot be read, the page says that
   instead of "No maintenance is scheduled yet", and Save warns that it replaces any schedule
-  SysManager has already set
+  SysManager has already set. Its last run and result are read the same way, so a read that
+  failed is not shown as "Not run yet", and a removal Windows refuses goes to the log with
+  the reason
 - **Runs on battery too.** Windows will not start a scheduled task on battery unless it is
   told to, so on an unplugged laptop the schedule would silently never fire — it now starts
   regardless, and keeps going if you unplug mid-run. Untick it if you would rather it waited
@@ -2025,6 +2027,10 @@ offers, "rate us" prompts:
 - One-click "Install" replaces the running executable in-place and
   restarts automatically (no manual file copying needed). It asks first, because it
   closes SysManager, and names anything still running that closing would cut off.
+- **When Install stops short, it says so as a problem**, not in the green "download complete"
+  line. A download that fails its hash check is deleted, so Download fetches it again; when
+  the hash could not be fetched or the new version would not start, the file is kept and
+  Install is offered again.
 - **"Go back to the previous version"** — the build being replaced is kept, so an
   update that installs cleanly but turns out to be broken is not a dead end. The
   button appears in the About tab only when a retained copy exists, asks for

@@ -1180,6 +1180,28 @@ public sealed class AboutViewModelRollbackTests : IDisposable
         Assert.DoesNotContain("DownloadStatus =", callback, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Install's problems have a row that says so, and the green "download complete" row gives way to it.
+    /// </summary>
+    /// <remarks>
+    /// With a downloaded file, the green row was the only one showing <c>DownloadStatus</c>, so every refusal and
+    /// failure Install wrote there read as success, on one line that did not wrap.
+    /// </remarks>
+    [Fact]
+    public void InstallsProblems_HaveARowThatSaysSo_AndTheGreenRowGivesWay()
+    {
+        var renderers = DownloadStatusRenderers();
+
+        var problem = Assert.Single(renderers, r =>
+            r.Gates.Any(g => g.Contains("InstallFailed", StringComparison.Ordinal) && !g.Contains("Inverse", StringComparison.Ordinal)));
+        Assert.Equal("Wrap", (string?)problem.Element.Attribute("TextWrapping"));
+        Assert.Equal("{DynamicResource Warning}", (string?)problem.Element.Attribute("Foreground"));
+        Assert.Contains(problem.Element.Attributes(), a => a.Name.LocalName == "LiveRegion.Announces" && a.Value == "True");
+
+        var green = Assert.Single(renderers, r => r.Gates.Any(g => g.Contains("DownloadedPath", StringComparison.Ordinal)));
+        Assert.Contains(green.Gates, g => g.Contains("InstallFailed", StringComparison.Ordinal) && g.Contains("Inverse", StringComparison.Ordinal));
+    }
+
     /// <summary>Each element that renders <c>DownloadStatus</c>, with every Visibility gate above it.</summary>
     private static List<(System.Xml.Linq.XElement Element, List<string> Gates)> DownloadStatusRenderers()
     {

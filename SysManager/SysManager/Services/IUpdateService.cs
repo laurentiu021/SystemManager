@@ -61,4 +61,10 @@ public interface IUpdateService
     /// </summary>
     Task<(bool Verified, string? ExpectedHash, string? ActualHash)> VerifyHashAsync(
         UpdateService.ReleaseInfo rel, Stream fileStream, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a downloaded build that Install refused, with the hash stored beside it, so that the next download
+    /// fetches it again.
+    /// </summary>
+    void DiscardDownload(string filePath);
 }

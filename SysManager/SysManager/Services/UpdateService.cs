@@ -553,6 +553,23 @@ public sealed class UpdateService : IUpdateService
         }
     }
 
+    /// <summary>
+    /// Deletes a downloaded build that Install refused, with the hash stored beside it, so that the next download
+    /// fetches it again. Only a file named like a release download is touched. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// The hash stored beside a download is the hash of what was downloaded, and <see cref="DownloadAsync"/> hands
+    /// the cached file back whenever the two agree, which they do for a corrupted download as well. So after Install
+    /// refused a file, Download returned the same file at once and Install refused it again, for as long as it stayed
+    /// in the cache.
+    /// </remarks>
+    public void DiscardDownload(string filePath)
+    {
+        if (!IsMainExeAsset(Path.GetFileName(filePath))) return;
+        CleanupFile(filePath + ".sha256");
+        CleanupFile(filePath);
+    }
+
     private static void CleanupFile(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }

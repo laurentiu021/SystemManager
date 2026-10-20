@@ -205,4 +205,29 @@ public class UpdateServicePruneTests : IDisposable
             UpdateApplier.PreviousBuildFileName + ".sha256",
         ], Remaining());
     }
+
+    // ── DiscardDownload: a download Install refused is let go ─────────────────
+
+    [Fact]
+    public void Discard_DeletesTheFileAndTheHashStoredBesideIt()
+    {
+        // The stored hash is the downloaded file's own, so the cache would hand a refused file straight back.
+        var file = Touch("SysManager-1.56.8.exe");
+        Touch("SysManager-1.56.8.exe.sha256");
+        Touch("notes.txt");
+
+        new UpdateService().DiscardDownload(file);
+
+        Assert.Equal(["notes.txt"], Remaining());
+    }
+
+    [Fact]
+    public void Discard_LeavesAFileNotNamedLikeADownloadAlone()
+    {
+        var other = Touch("notes.txt");
+
+        new UpdateService().DiscardDownload(other);
+
+        Assert.True(File.Exists(other));
+    }
 }

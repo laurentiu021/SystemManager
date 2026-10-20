@@ -113,21 +113,24 @@ public sealed class MaintenanceSchedulerService
     }
 
     /// <summary>Removes the maintenance task. Returns true if it no longer exists afterwards.</summary>
+    /// <remarks>
+    /// A refusal is logged, because the tab tells the user to look there, and the read-back still decides: a task
+    /// that turns out to be gone is removed whatever the refusal said.
+    /// </remarks>
     public async Task<bool> RemoveAsync(CancellationToken ct = default)
     {
         try
         {
             var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = TaskName };
             await _ps.RunAsync(RemoveScript, parameters, ct).ConfigureAwait(false);
-            // Removed only when Windows then answers that there is no task. A read-back that fails proves nothing.
-            var status = await GetStatusAsync(ct).ConfigureAwait(false);
-            return status is { Exists: false };
         }
         catch (RuntimeException ex)
         {
             Log.Warning("Maintenance schedule removal failed: {Error}", ex.Message);
-            return false;
         }
+        // Removed only when Windows then answers that there is no task. A read-back that fails proves nothing.
+        var status = await GetStatusAsync(ct).ConfigureAwait(false);
+        return status is { Exists: false };
     }
 
     // ── PowerShell scripts (parameterised; no string interpolation of user input) ──
@@ -181,6 +184,9 @@ public sealed class MaintenanceSchedulerService
     /// and the script returns nothing. Any other error is thrown, so the runner raises it and the read counts
     /// as failed. The read used <c>-ErrorAction SilentlyContinue</c>, which made every failure look like an
     /// absent task (#2487).
+    /// <para>The task's run information is read the same way. Read with <c>SilentlyContinue</c> too, a failed read of
+    /// it left every field empty, which the tab showed as Last result "Not run yet" for a task that may have run many
+    /// times.</para>
     /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with
     /// <c>Get-ScheduledTask</c> shadowed by a function.</para>
     /// </remarks>
@@ -192,7 +198,11 @@ public sealed class MaintenanceSchedulerService
             throw
         }
         if ($null -eq $task) { return }
-        $info = Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Folder -ErrorAction SilentlyContinue
+        try { $info = Get-ScheduledTaskInfo -TaskName $Name -TaskPath $Folder -ErrorAction Stop }
+        catch {
+            if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { return }
+            throw
+        }
         # Arguments is the command line the task runs, so the tab can spot a standby purge, which fails every run
         # without administrator rights (#2593). SysManager registers one action, so the first is the one it set.
         [PSCustomObject]@{
@@ -205,9 +215,20 @@ public sealed class MaintenanceSchedulerService
         }
         """;
 
-    private const string RemoveScript = """
+    /// <summary>The script <see cref="RemoveAsync"/> runs.</summary>
+    /// <remarks>
+    /// A task that is already gone is the one quiet case, as in <see cref="StatusScript"/>. Any other refusal is
+    /// thrown, so <see cref="RemoveAsync"/> logs the reason the tab tells the user to look for. With
+    /// <c>-ErrorAction SilentlyContinue</c> nothing was thrown, the log held no reason, and the tab still said "Could
+    /// not remove the task. Check the log." Internal for the same reason as <see cref="StatusScript"/>.
+    /// </remarks>
+    internal const string RemoveScript = """
         param([string]$Folder, [string]$Name)
-        Unregister-ScheduledTask -TaskName $Name -TaskPath $Folder -Confirm:$false -ErrorAction SilentlyContinue
+        try { Unregister-ScheduledTask -TaskName $Name -TaskPath $Folder -Confirm:$false -ErrorAction Stop }
+        catch {
+            if ($_.CategoryInfo.Category -eq 'ObjectNotFound') { return }
+            throw
+        }
         """;
 
     /// <summary>Plain-language description of the last task result code. Pure/testable.</summary>

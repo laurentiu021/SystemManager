@@ -607,7 +607,9 @@ Key services:
   tab's startup check run had to call `api.github.com` for real. An internal
   constructor takes the HTTP handler, so a test can make GitHub's reply fail in a
   given way with no network, and both release reads take the ways a reply that has
-  arrived can fail to read from one list, `IsUnreadableReply` (#2663).
+  arrived can fail to read from one list, `IsUnreadableReply` (#2663). `DiscardDownload` deletes
+  a download Install refused, with the hash stored beside it, because the cache hands a file back
+  whenever it matches that stored hash, which is its own.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
   old one and restart, before any DI/UI is built (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs across seven kinds of
@@ -1583,8 +1585,9 @@ Key services:
   halves.
 - `MaintenanceSchedulerService` — registers/reads/removes a single SysManager-owned Windows
   scheduled task (`\SysManager\Scheduled Maintenance`). `GetStatusAsync` returns null for a read that
-  failed: `StatusScript` treats only `Get-ScheduledTask`'s `ObjectNotFound` as "not registered" and
-  throws on any other error. The task launches the app's own exe with a
+  failed: `StatusScript` treats only `ObjectNotFound` from `Get-ScheduledTask` and
+  `Get-ScheduledTaskInfo` as "not registered" and throws on any other error, and `RemoveScript` is
+  quiet only for a task already gone, so `RemoveAsync` logs a refusal before its read-back decides. The task launches the app's own exe with a
   allowlisted CLI verb on a daily/weekly trigger, via the `ScheduledTasks` module through the
   `IPowerShellRunner` seam. Registered in the current-user context (no admin); only ever
   touches its own task — never enumerates or modifies others. The command is built from a

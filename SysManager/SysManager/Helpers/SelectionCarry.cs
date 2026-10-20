@@ -24,14 +24,14 @@ public interface ISelectableRow
 /// Copies the ticks the user set from a previous list onto a freshly built one.
 /// </summary>
 /// <remarks>
-/// Nine tabs rebuild a bound collection from a fresh scan. The six this started with used to re-derive the
+/// Ten tabs rebuild a bound collection from a fresh scan. The six this started with used to re-derive the
 /// tick state from a default — so a refresh discarded what the user had chosen. In four of them the fresh
 /// rows arrive pre-selected, which meant a refresh did not merely forget the choice but REVERSED it, and the
 /// next action then deleted, upgraded or exported exactly what had been excluded. <c>RefreshOnF5</c> reaches
 /// all six, so pressing F5 was enough (#2300, #2301, #2304).
 /// <para>Each of those six was fixed with its own copy of this logic first, deliberately, so the fixes could
 /// ship with tests rather than waiting on a refactor. This is that refactor — one body, no behaviour change —
-/// and three tabs have been keyed through it since.</para>
+/// and four tabs have been keyed through it since.</para>
 /// </remarks>
 public static class SelectionCarry
 {
@@ -53,7 +53,7 @@ public static class SelectionCarry
     /// <param name="carriedADecision">
     /// Optional filter on which PREVIOUS rows count as the user's choice. Only Deep Cleanup needs it: an
     /// empty category was unticked by the scan rather than by the user, so if it has content now it should
-    /// take the default again instead of staying unticked for a choice nobody made. The other eight callers
+    /// take the default again instead of staying unticked for a choice nobody made. The other nine callers
     /// leave it null because their defaults are constants rather than measurements.
     /// </param>
     /// <returns>

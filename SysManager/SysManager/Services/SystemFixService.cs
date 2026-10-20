@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -130,8 +131,12 @@ public sealed class SystemFixService : IDisposable
         }
         catch (System.Management.Automation.RuntimeException ex)
         {
+            // The reason is the run's exception, not a line on the output stream, so it is logged and handed back
+            // here or it is lost: the tab said "see the output for details" over an empty console (#2875).
+            Log.Warning(ex, "System fix {Fix} failed", name);
             output.Enqueue(ex.Message);
-            return new SystemFixResult(name, Success: false, string.Join(Environment.NewLine, output), needsReboot);
+            return new SystemFixResult(
+                name, Success: false, string.Join(Environment.NewLine, output), needsReboot, FailureReason: ex.Message);
         }
         finally
         {

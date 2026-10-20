@@ -10,7 +10,7 @@ namespace SysManager.Models;
 /// <summary>
 /// Represents a Windows Update entry (available, hidden, or from history).
 /// </summary>
-public sealed partial class UpdateEntry : ObservableObject
+public sealed partial class UpdateEntry : ObservableObject, Helpers.ISelectableRow
 {
     [ObservableProperty] private bool _isSelected = true;
     [ObservableProperty] private string _status = "";

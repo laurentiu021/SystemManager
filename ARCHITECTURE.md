@@ -643,18 +643,19 @@ Key services:
   answer to "which file is this entry", shared with `ExtractPublisher`, so the Publisher and
   the certificate can never describe different files.
 - `Helpers/SelectionCarry` — keeps the user's ticks when a bound list is rebuilt, defined once for
-  the nine tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
-  Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export, App Blocker, Debloater and
-  Uninstaller. The six it started with used to re-derive the tick from a default, and in four the
+  the ten tabs that rebuild one from a fresh scan: System Health drives, Deep Cleanup categories,
+  Shortcut Cleaner, Browser Cleaner, App Updates, Profile Export, App Blocker, Debloater,
+  Uninstaller and Windows Update, whose rows are keyed by update id and kept apart from the grid so
+  a look at the History view does not lose them (#2874). The six it started with used to re-derive the tick from a default, and in four the
   fresh rows arrive pre-selected — so a refresh did not forget the choice but REVERSED it, and the
   next action then deleted, upgraded or exported exactly what had been excluded. `RefreshOnF5`
   reaches all six (#2300, #2301, #2304). Rows opt in through `ISelectableRow`, so the helper needs a
-  key selector rather than getter/setter delegates. Three rules live here rather than at nine call
+  key selector rather than getter/setter delegates. Three rules live here rather than at ten call
   sites: an EMPTY previous list is the first population (a present list with nothing selected is a
   *decision* and is honoured — testing "is anything selected" instead would re-tick everything, which
   is the bug); the optional `carriedADecision` filter exists only for Deep Cleanup, whose default is
   *measured*, so an empty category unticked by the scan rather than the user takes the default again
-  once it has content (the other eight default from constants and pass null); and the key's
+  once it has content (the other nine default from constants and pass null); and the key's
   uniqueness is now CHECKED rather than assumed. A key claimed by two rows neither throws nor shows
   — the grid looks right and a tick turns up on a row nobody touched, which is what two identically
   named Firefox profiles cost in Browser Cleaner (#2402). `Apply` reports the colliding keys and logs

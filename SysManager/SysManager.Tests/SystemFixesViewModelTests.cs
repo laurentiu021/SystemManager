@@ -329,6 +329,58 @@ public class SystemFixesViewModelTests
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
+    // ---------- a fix that stops says why (#2875) ----------
+
+    private static SystemFixesViewModel VmWhoseFixStops(string reason)
+    {
+        var serviceRunner = Substitute.For<IPowerShellRunner>();
+        serviceRunner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+                     .Returns<Collection<PSObject>>(_ => throw new RuntimeException(reason));
+        return NewVm(serviceRunner: serviceRunner);
+    }
+
+    [Fact]
+    public async Task AFixThatStops_SaysWhy_InTheConsoleAndTheStatusLine()
+    {
+        // The reason is the script's own, raised as the run's exception, so it never reached the console the status
+        // line pointed at: "see the output for details" over an empty console.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        const string Reason = "App Installer package not found. Install \"App Installer\" from the Microsoft Store.";
+        var vm = VmWhoseFixStops(Reason);
+
+        await vm.ReinstallWinGetCommand.ExecuteAsync(null);
+
+        Assert.Equal($"Reinstall WinGet did not complete: {Reason}", vm.StatusMessage);
+        Assert.Contains(vm.Console.Lines, l => l.Kind == OutputKind.Error && l.Text == Reason);
+    }
+
+    [Fact]
+    public async Task AFixThatStops_PutsOnlyTheFirstLineOfTheReasonInTheStatusLine()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = VmWhoseFixStops("Access is denied.\r\nAt line:3 char:5");
+
+        await vm.ResetWindowsUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("Reset Windows Update did not complete: Access is denied.", vm.StatusMessage);
+        Assert.Contains(vm.Console.Lines, l => l.Kind == OutputKind.Error && l.Text.EndsWith("char:5", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AFixThatStopsWithNoReason_DoesNotPointAtAnEmptyConsole()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = VmWhoseFixStops("");
+
+        await vm.ReinstallWinGetCommand.ExecuteAsync(null);
+
+        Assert.Equal("Reinstall WinGet did not complete.", vm.StatusMessage);
+        Assert.DoesNotContain(vm.Console.Lines, l => l.Kind == OutputKind.Error);
+    }
+
     // ---------- re-entry ----------
 
     [Fact]

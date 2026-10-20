@@ -451,4 +451,23 @@ public class DuplicateFileViewModelTests
             .SelectMany(e => e.Elements().Where(s => s.Name.LocalName == "Style")));
         Assert.Equal("{StaticResource Caption}", inline.Attribute("BasedOn")?.Value);
     }
+
+    // ── The summary says when files stored online only were not checked (R7-04) ──
+
+    [Fact]
+    public void TheSummary_SaysHowManyFilesStoredOnlineOnlyWereNotChecked()
+    {
+        // Without it, "No duplicates found." covered files the scan never opened.
+        Assert.Equal("No duplicates found. 3 files stored online only were not checked, so nothing was downloaded.",
+            DuplicateFileViewModel.Summarize(0, 0, 0, onlineOnlySkipped: 3));
+        Assert.Equal("2 groups · 5 files · 3.0 KB wasted · 1 file stored online only was not checked, so nothing was downloaded",
+            DuplicateFileViewModel.Summarize(2, 5, 3072, onlineOnlySkipped: 1));
+    }
+
+    [Fact]
+    public void TheSummary_IsUnchanged_WhenEveryFileWasChecked()
+    {
+        Assert.Equal("No duplicates found.", DuplicateFileViewModel.Summarize(0, 0, 0, onlineOnlySkipped: 0));
+        Assert.Equal("2 groups · 5 files · 3.0 KB wasted", DuplicateFileViewModel.Summarize(2, 5, 3072, onlineOnlySkipped: 0));
+    }
 }

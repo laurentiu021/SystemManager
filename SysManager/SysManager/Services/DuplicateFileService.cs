@@ -34,12 +34,33 @@ public sealed class DuplicateFileService
     /// <see cref="CompletePhase"/>.
     /// </param>
     /// <param name="Phase">Plain-language stage, or <see cref="CompletePhase"/> for the final report.</param>
+    /// <param name="OnlineOnlySkipped">
+    /// Files above the minimum size left out because they are stored online only, see <see cref="IsOnlineOnly"/>.
+    /// </param>
     public sealed record ScanProgress(
         long FilesDiscovered,
         long FilesHashed,
         long BytesProcessed,
         string CurrentFile,
-        string Phase);
+        string Phase,
+        long OnlineOnlySkipped = 0);
+
+    // FILE_ATTRIBUTE_RECALL_ON_OPEN and FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS, which FileAttributes does not name.
+    private const FileAttributes RecallOnOpen = (FileAttributes)0x00040000;
+    private const FileAttributes RecallOnDataAccess = (FileAttributes)0x00400000;
+
+    /// <summary>
+    /// True for a file that is not stored on this PC, only online: reading it makes OneDrive, or another sync
+    /// client, download it and keep it.
+    /// </summary>
+    /// <remarks>
+    /// The scan reads the first 4 KB of every same-size candidate and then the whole file when those match, so a
+    /// folder backed up by OneDrive, which Windows 11 sets up for Desktop, Documents and Pictures, was downloaded
+    /// file by file: gigabytes on a small drive or a metered connection, filling the disk the user was trying to
+    /// tidy. These attributes are the ones Windows sets on such a file, and reading them downloads nothing.
+    /// </remarks>
+    internal static bool IsOnlineOnly(FileAttributes attributes) =>
+        (attributes & (FileAttributes.Offline | RecallOnOpen | RecallOnDataAccess)) != 0;
 
     /// <summary>
     /// The <see cref="ScanProgress.Phase"/> of the one final report, sent after the walk finishes so a
@@ -91,6 +112,7 @@ public sealed class DuplicateFileService
         // ── Pass 1: discover files and group by size ──
         Dictionary<long, List<FileInfo>> sizeGroups = [];
         long discovered = 0;
+        long onlineOnly = 0;
         var stack = new Stack<string>();
         stack.Push(rootPath);
 
@@ -131,6 +153,12 @@ public sealed class DuplicateFileService
                     if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) continue;
                     if (fi.Length < minSizeBytes) continue;
                     if (ShouldSkipFile(fi.Name)) continue;
+                    // Counted and left unread, so the scan downloads nothing; the summary says how many.
+                    if (IsOnlineOnly(fi.Attributes))
+                    {
+                        onlineOnly++;
+                        continue;
+                    }
 
                     discovered++;
                     if (!sizeGroups.TryGetValue(fi.Length, out var list))
@@ -251,7 +279,7 @@ public sealed class DuplicateFileService
         // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize.
         ct.ThrowIfCancellationRequested();
 
-        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", CompletePhase));
+        progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", CompletePhase, onlineOnly));
 
         // Only return groups with 2+ files (actual duplicates).
         return hashGroups.Values

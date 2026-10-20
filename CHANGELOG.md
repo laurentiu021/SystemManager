@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.11] - 2026-10-20
+
+**Duplicate Finder no longer downloads files that OneDrive keeps online only, and says how many it left unchecked.**
+
+### Fixed
+
+- **Duplicate Finder downloaded files that were stored online only.** To compare two files of the same size it reads
+  them, and reading a file OneDrive keeps online only makes OneDrive download it and keep it on the PC. Windows 11
+  sets OneDrive up to back up Desktop, Documents and Pictures, and Storage Sense makes files that are rarely opened
+  online only, so pointing the scan at Pictures could download gigabytes on a small drive or a metered connection,
+  filling the disk the scan was meant to tidy, while the tab said only "Hashing files…". Files stored online only are
+  left unread now, and the summary says how many were not checked. Since Duplicate Finder was added (0.7.0).
+
 ## [1.130.10] - 2026-10-20
 
 **The temp cleanups leave alone what a system service unpacked into Windows' own TEMP folder, and Shortcut Cleaner no

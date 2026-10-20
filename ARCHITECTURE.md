@@ -694,6 +694,12 @@ Key services:
   value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
   file format rather than console output. Nothing is trimmed or substituted — a lossy export of
   a path is worse than a quoted one.
+- `Helpers/StorageLabels` — the one name for each `MSFT_PhysicalDisk` bus and media type, used by
+  `SystemInfoService`, `DiskHealthService`, `FixedDriveService` and the System Report. Those three
+  services each had a table, and the tables had drifted, so one disk on a RAID controller or an SD card
+  was named three ways on System Health. A list still picks the word for a value with no name, because
+  the chkdsk list hides an empty label while the SMART card needs one. `StorageLabelsTests` fails if
+  another source file maps bus types itself.
 - `Helpers/TreemapLayout` — squarified treemap layout (Bruls, Huizing and van Wijk): one rectangle per
   weight, areas in proportion, as square as the order allows, tiling the bounds without a gap. Pure.
 - `Helpers/SizeObserver` — attached properties that push an element's laid-out size into a binding,

@@ -277,12 +277,16 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // Naming what else stops is the whole point of the prompt. "This may affect system
         // functionality" is true of every service and therefore tells the user nothing they can act on;
         // "also stops: Fax" is a fact they can decide against. Only the generic sentence is replaced —
-        // when nothing depends on this service there is nothing more honest to say (#1512).
+        // when nothing depends on this service there is nothing more honest to say (#1512), unless it is a
+        // Caution service, whose own note says what stopping it costs and takes the generic sentence's place.
+        var caution = CautionNote(entry);
         if (!DialogService.Instance.Confirm(
             entry.HasDependents
                 ? $"Stop service \"{entry.DisplayName}\"?\n\n"
-                  + $"Windows will also stop: {entry.DependentNames}."
-                : $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
+                  + $"Windows will also stop: {entry.DependentNames}." + caution
+                : caution.Length > 0
+                    ? $"Stop service \"{entry.DisplayName}\"?" + caution
+                    : $"Stop service \"{entry.DisplayName}\"?\n\nThis may affect system functionality.",
             "Stop Service — Confirm")) return;
 
         // A change that is cancelled with nothing to name it when SysManager closes mid-run. Shares the
@@ -346,11 +350,12 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
         // it. Saying "also stops" here, as the Stop prompt correctly does, would describe an effect the
         // user would not see until they rebooted and then could not explain (#1512).
         if (!DialogService.Instance.Confirm(
-            entry.HasDependents
+            (entry.HasDependents
                 ? $"Disable service \"{entry.DisplayName}\"?\n\n"
                   + "This prevents the service from starting automatically. These services need it, so "
                   + $"they will not be able to start either: {entry.DependentNames}."
-                : $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.",
+                : $"Disable service \"{entry.DisplayName}\"?\n\nThis prevents the service from starting automatically.")
+            + CautionNote(entry),
             "Disable Service — Confirm")) return;
 
         // A change that is cancelled with nothing to name it when SysManager closes mid-run. Checked
@@ -394,6 +399,20 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
             StatusMessage = $"Disable service failed: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// The note <see cref="SafetyDatabase"/> holds for a Caution service, as the closing paragraph of its Stop and
+    /// Disable prompts, or empty for any other service.
+    /// </summary>
+    /// <remarks>
+    /// The note is the one sentence that says what the change costs ("Disabling prevents security patches", "removes
+    /// all sound"). It was shown only as the safety pill's tooltip, which a keyboard never opens, so the question it
+    /// answers was asked in the same generic words as for a Safe service.
+    /// </remarks>
+    internal static string CautionNote(ServiceEntry entry) =>
+        entry.SafetyLevel == SafetyLevel.Caution && !string.IsNullOrWhiteSpace(entry.SafetyDescription)
+            ? $"\n\nCaution: {entry.SafetyDescription.Trim()}"
+            : "";
 
     /// <summary>
     /// What Disable and Enable say for a service whose name SysManager will not put on the sc.exe command line

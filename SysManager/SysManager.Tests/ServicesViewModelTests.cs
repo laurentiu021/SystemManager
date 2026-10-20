@@ -1154,15 +1154,74 @@ public class ServicesViewModelTests
     // ServiceEntry default IS Critical, so an entry that merely omitted the property would prove
     // nothing. Confirm always answers false, so no service is ever really stopped or disabled.
 
+    // No note by default: a Caution service with a note gets that note in place of the generic sentence, so the
+    // tests about the generic wording use one without.
     private static List<ServiceEntry> OneServiceWith(params string[] dependents) =>
+        OneServiceRated(Models.SafetyLevel.Caution, "", dependents);
+
+    private static List<ServiceEntry> OneServiceRated(Models.SafetyLevel level, string note, params string[] dependents) =>
     [
         new()
         {
             Name = "Spooler", DisplayName = "Print Spooler", Status = "Running", StartType = "Automatic",
-            SafetyLevel = Models.SafetyLevel.Caution, SafetyDescription = "Required for printing.",
+            SafetyLevel = level, SafetyDescription = note,
             DependentServices = dependents
         }
     ];
+
+    [Theory]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    public async Task ACautionService_ShowsItsNoteInThePrompt(string verb)
+    {
+        // The note is what the change costs. It used to reach only the pill's tooltip, which a keyboard never opens,
+        // while the prompt asked the same generic question as for a Safe service.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceRated(Models.SafetyLevel.Caution, "Disabling prevents security patches.");
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await ExecuteAsync(vm, verb, scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("Caution: Disabling prevents security patches.", StringComparison.Ordinal)
+                             && !m.Contains("may affect system functionality", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task ACautionServiceWithDependents_NamesThemAndItsNote()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceRated(Models.SafetyLevel.Caution, "Disabling removes all sound.", "Windows Fax");
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.StopServiceCommand.ExecuteAsync(scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => m.Contains("also stop: Windows Fax", StringComparison.Ordinal)
+                             && m.Contains("Caution: Disabling removes all sound.", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
+
+    [Theory]
+    [InlineData("Stop")]
+    [InlineData("Disable")]
+    public async Task ASafeServicesNote_IsNotPresentedAsACaution(string verb)
+    {
+        // The negative half: only a Caution rating turns the note into a warning.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var scanned = OneServiceRated(Models.SafetyLevel.Safe, "Only needed for Bluetooth devices.");
+        using var vm = await CreateWithDataAsync(scanned);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await ExecuteAsync(vm, verb, scanned[0]);
+
+        DialogService.Instance.Received(1).Confirm(
+            Arg.Is<string>(m => !m.Contains("Caution:", StringComparison.Ordinal)),
+            Arg.Any<string>());
+    }
 
     [Fact]
     public async Task StopService_WithDependents_NamesWhatElseWindowsWillStop()

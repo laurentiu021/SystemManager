@@ -5,6 +5,7 @@
 using System.IO;
 using System.Management;
 using Serilog;
+using SysManager.Helpers;
 
 namespace SysManager.Services;
 
@@ -83,9 +84,10 @@ public sealed class FixedDriveService
                 using (mo)
                 {
                     var id = mo["DeviceId"]?.ToString() ?? "";
+                    // An empty label for a value with no name: the chkdsk list hides an empty one.
                     media[id] = (
-                        MapMedia(ToUInt32Safe(mo["MediaType"])),
-                        MapBus(ToUInt32Safe(mo["BusType"])));
+                        StorageLabels.Media(ToUInt32Safe(mo["MediaType"]), unknown: ""),
+                        StorageLabels.Bus(ToUInt32Safe(mo["BusType"]), unknown: ""));
                 }
             }
 
@@ -168,23 +170,4 @@ public sealed class FixedDriveService
         catch (FormatException) { return 0d; }
         catch (OverflowException) { return 0d; }
     }
-
-    private static string MapMedia(uint v) => v switch
-    {
-        3 => "HDD",
-        4 => "SSD",
-        5 => "SCM",
-        _ => ""
-    };
-
-    private static string MapBus(uint v) => v switch
-    {
-        1 => "SCSI",
-        3 => "ATA",
-        7 => "USB",
-        10 => "SAS",
-        11 => "SATA",
-        17 => "NVMe",
-        _ => ""
-    };
 }

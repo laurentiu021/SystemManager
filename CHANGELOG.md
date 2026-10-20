@@ -10,6 +10,43 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.5] - 2026-10-20
+
+**A Caution service's warning now appears when you stop or disable it, and four smaller things the app said or
+stored wrong are fixed.**
+
+### Fixed
+
+- **Stopping or disabling a Caution service asked the same question as for a harmless one.** SysManager rates 12
+  services Caution, each with a note that says what turning it off costs: no security patches for Windows Update, no
+  sound for Windows Audio, no automatic address for DHCP Client. That note was only the safety pill's tooltip, which a
+  keyboard never opens, and the confirmation said "This may affect system functionality." The Stop and Disable
+  confirmations now end with the note ("Caution: ..."), and still name any services that depend on the one being
+  turned off. Safe services ask what they asked before. The generic question goes back to the Services tab's first
+  version (0.13.0).
+- **System Health named one disk's bus three ways.** The Storage devices list, the SMART card and the chkdsk list each
+  had a table of bus names, and the tables had drifted: a disk behind a RAID controller read "RAID" in two of them and
+  had no bus in the chkdsk list, and an SD or eMMC card read "SD" or "MMC" in one and "Other" in another. All three
+  lists and the System Report use one table now, which also names mounted virtual disks and Storage Spaces. The
+  separate tables date from 0.3.0 and 0.4.0.
+- **Display Profiles could offer Apply for the mode already in use.** The mode list keeps one entry per resolution and
+  refresh rate, at whichever color depth Windows listed first, and Apply compared the depth too. When Windows listed
+  the current mode at another depth first, Apply was enabled for the mode the display was already in, and pressing it
+  started the "Keep these settings?" countdown for a change that changed nothing. Two modes with the same resolution
+  and refresh rate are one mode now, since Apply never changes the depth. This goes back to the tab's first version
+  (1.37.0).
+- **A Windows Update that could not check for updates was explained as an uninstall that needs no action.** The
+  explanation for Windows Update event 25 read "A Windows Update was uninstalled." and "Informational — no action
+  needed unless unexpected." The event means Windows Update failed to check for updates, at Error level. It now says
+  that, and suggests checking the internet connection and the PC's clock, then Reset Windows Update in System Fixes.
+  Windows writes this event to a log System Logs does not open, so the wrong text was not shown in this version; it
+  had been in the table since the first release.
+- **Recent Changes stored the kind of each program change as a number.** Its record of the programs that appeared,
+  left or were updated between two looks wrote each kind as its position in a list, so a later version that added a
+  kind before them would have shown stored removals as installs for as long as the record keeps them. The kind is
+  written by name now. A record written with numbers still reads, and an entry that is not one of the three program
+  kinds is left out. This could not happen yet; the record dates from 1.125.0.
+
 ## [1.130.4] - 2026-10-14
 
 **The checkboxes in six lists are the app's own checkbox now, with the focus ring, and none is cut off** (#2696).

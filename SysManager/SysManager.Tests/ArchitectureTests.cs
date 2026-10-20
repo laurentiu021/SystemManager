@@ -2131,6 +2131,92 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No PowerShell script SysManager runs declares a parameter named after one of PowerShell's automatic variables.
+    /// </summary>
+    /// <remarks>
+    /// PowerShell sets those itself, so a value passed under that name never reaches the script. Scheduled
+    /// Maintenance's register script took the command line as <c>$Args</c>, which inside a script is the array of
+    /// arguments no parameter took, empty here: <c>New-ScheduledTaskAction</c> refused it, and from 1.50.0 no
+    /// schedule saved from the tab was ever registered.
+    /// <para>Two controls keep it from passing on nothing: the scan must find that defect as it was written, and it must
+    /// find the parameters the app's scripts declare, not their types or default values. A default of <c>$false</c>
+    /// is not a parameter named false.</para>
+    /// </remarks>
+    [Fact]
+    public void NoScriptParameter_IsNamedLikeAnAutomaticVariable()
+    {
+        var control = ScriptParameterBlock().Match(
+            "param([string]$Exe, [string]$Args, [bool]$Daily = $false, [ValidateSet('a', 'b')][string]$Kind)");
+        Assert.Equal(["Exe", "Args", "Daily", "Kind"], DeclaredScriptParameters(control.Groups["body"].Value));
+
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        var declared = files
+            .SelectMany(f => ScriptParameterBlock().Matches(WithoutComments(File.ReadAllText(f)))
+                .SelectMany(block => DeclaredScriptParameters(block.Groups["body"].Value))
+                .Select(name => (File: Path.GetFileName(f), Name: name)))
+            .ToList();
+        Assert.True(declared.Count >= 20,
+            $"only {declared.Count} script parameters were found, and the app's scripts declare 23 — this guard is "
+            + "reading the wrong text.");
+
+        var offenders = declared.Where(p => PowerShellAutomaticVariables.Contains(p.Name))
+            .Select(p => $"{p.File}: ${p.Name}")
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "these script parameters are named after a PowerShell automatic variable, which PowerShell sets itself, so "
+            + "the value passed never reaches the script. Rename them:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>PowerShell's automatic variables, from about_Automatic_Variables.</summary>
+    private static readonly HashSet<string> PowerShellAutomaticVariables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "_", "args", "ConsoleFileName", "EnabledExperimentalFeatures", "Error", "Event", "EventArgs",
+        "EventSubscriber", "ExecutionContext", "false", "foreach", "HOME", "Host", "input", "IsCoreCLR", "IsLinux",
+        "IsMacOS", "IsWindows", "LASTEXITCODE", "Matches", "MyInvocation", "NestedPromptLevel", "null", "PID",
+        "PROFILE", "PSBoundParameters", "PSCmdlet", "PSCommandPath", "PSCulture", "PSDebugContext", "PSEdition",
+        "PSHOME", "PSItem", "PSScriptRoot", "PSSenderInfo", "PSUICulture", "PSVersionTable", "PWD", "Sender",
+        "ShellId", "StackTrace", "switch", "this", "true",
+    };
+
+    /// <summary>
+    /// The names a script's param block declares, leaving out what is inside attributes, types and quotes, and the
+    /// default values after an <c>=</c>.
+    /// </summary>
+    private static List<string> DeclaredScriptParameters(string body)
+    {
+        var names = new List<string>();
+        var depth = 0;
+        var inDefault = false;
+        for (var i = 0; i < body.Length; i++)
+        {
+            var c = body[i];
+            if (c is '\'' or '"')
+            {
+                var close = body.IndexOf(c, i + 1);
+                i = close < 0 ? body.Length : close;
+            }
+            else if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}') depth--;
+            else if (depth == 0 && c == ',') inDefault = false;
+            else if (depth == 0 && c == '=') inDefault = true;
+            else if (depth == 0 && !inDefault && c == '$')
+            {
+                var end = i + 1;
+                while (end < body.Length && (char.IsLetterOrDigit(body[end]) || body[end] == '_')) end++;
+                if (end > i + 1) names.Add(body[(i + 1)..end]);
+                i = end - 1;
+            }
+        }
+        return names;
+    }
+
+    [GeneratedRegex(@"\bparam\s*\((?<body>(?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex ScriptParameterBlock();
+
+    /// <summary>
     /// An audio route SysManager cannot read must be shown as unknown, not as the system default.
     /// </summary>
     /// <remarks>

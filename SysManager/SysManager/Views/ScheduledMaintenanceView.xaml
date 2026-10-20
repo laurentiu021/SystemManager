@@ -31,7 +31,7 @@
                  task" in passing left that for the user to discover by losing a schedule (#1509). The last
                  sentence says where the standby purge went: it needs administrator rights the task does not
                  have, so it is no longer offered here (#2593). -->
-            <TextBlock Text="Run maintenance automatically so you don't have to remember. SysManager keeps one schedule at a time: pick how often and at what time, and it cleans temporary files in the background. Saving a new schedule replaces the previous one. Purging standby memory needs administrator rights, which a scheduled task does not have, so it is not offered here: Standby List Cleaner can purge automatically while SysManager runs as administrator."
+            <TextBlock Text="Run maintenance automatically so you don't have to remember. SysManager keeps one schedule at a time for your Windows account: pick how often and at what time, and it cleans temporary files in the background. Saving a new schedule replaces your previous one, never another account's. Purging standby memory needs administrator rights, which a scheduled task does not have, so it is not offered here: Standby List Cleaner can purge automatically while SysManager runs as administrator."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 

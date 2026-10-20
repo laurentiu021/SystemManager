@@ -176,8 +176,9 @@ What the app can and cannot do by design:
   and reads only NVIDIA GPU and disk temperatures.
 - **Unattended cleanup**: `SysManager.exe --cleanup` deletes temporary files from your
   TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it
-  on a schedule. The schedule is one task, `\SysManager\Scheduled Maintenance`, which
-  runs without administrator rights. It does not offer the standby-list purge, which
+  on a schedule. The schedule is one task for each Windows account,
+  `SysManager Scheduled Maintenance-` followed by the account's SID, which runs as that
+  account without administrator rights. It does not offer the standby-list purge, which
   needs them: a task given administrator rights would start, with those rights, whatever
   replaced SysManager's exe in a folder your account can write to. A purge schedule saved
   by an earlier version still runs without them, so it fails, and the tab says so. You
@@ -305,9 +306,10 @@ see the last two rows.
 
 Apart from those last two, everything sits inside your own user profile, in two folders only
 because Windows separates roaming settings from machine-local data; nothing is hidden in either.
-If you set up Scheduled Maintenance, Windows also keeps one task, `\SysManager\Scheduled Maintenance`,
-in Task Scheduler. Deleting a copy kept to undo a change does not break the app, but that change can
-then no longer be put back: Undo Changes lists only the copies that are still there.
+If you set up Scheduled Maintenance, Windows also keeps one task for your account in Task Scheduler,
+`SysManager Scheduled Maintenance-` followed by your account's SID. Deleting a copy kept to undo a
+change does not break the app, but that change can then no longer be put back: Undo Changes lists
+only the copies that are still there.
 
 On every log line, including inside error messages, the folder name after
 `C:\Users\` in any path is replaced with `[user]`, so a log you choose to share does

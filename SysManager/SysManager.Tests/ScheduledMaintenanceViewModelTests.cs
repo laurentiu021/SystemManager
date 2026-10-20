@@ -413,7 +413,7 @@ public class ScheduledMaintenanceViewModelTests
 
         await ps.Received(1).RunAsync(
             Arg.Is<string>(s => s.Contains("Register-ScheduledTask", StringComparison.Ordinal)),
-            Arg.Is<IDictionary<string, object?>?>(p => p != null && (string)p["Args"]! == "--cleanup --silent"),
+            Arg.Is<IDictionary<string, object?>?>(p => p != null && (string)p["Arguments"]! == "--cleanup --silent"),
             Arg.Any<CancellationToken>());
         Assert.Equal("", vm.StandbyPurgeWarning);
     }

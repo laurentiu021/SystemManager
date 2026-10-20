@@ -1226,14 +1226,15 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **One schedule at a time, said out loud.** Saving replaces the schedule you already had
   rather than adding a second, so the page says so — in the header and again beside the Save
   button — and the confirmation names the time the old one was next due, so you can tell what
-  you are about to lose. One task by name is what keeps this feature from needing
-  administrator rights and from being able to touch anything else Windows schedules
+  you are about to lose. One task by name for each account is what keeps this feature from
+  needing administrator rights and from being able to touch anything else Windows schedules
 - **Windows' own count of skipped runs is shown** when it is not zero — the only signal
   Windows gives for a run its conditions blocked
 - Update or remove the schedule any time, each with a confirmation
 - Runs in your user context (no admin required), only while you are signed in, and only ever
-  touches its own task
-  at `\SysManager\Scheduled Maintenance` — no other scheduled tasks are affected
+  touches its own task. Each Windows account on the PC has its own, named
+  `SysManager Scheduled Maintenance-` followed by the account's security ID, so one account's
+  schedule never replaces or removes another's, and no other scheduled tasks are affected
 - Built on the same safe CLI verbs; nothing destructive is automated
 
 ### Privacy & Telemetry
@@ -2523,8 +2524,9 @@ To remove it completely:
    apps and uninstalled programs cannot be put back.
 2. **Remove the scheduled task, if you created one.** Only applies if you used **Scheduled
    Maintenance**: open that tab and press **Remove schedule**, and the app unregisters the task
-   (`\SysManager\Scheduled Maintenance`) for you. It is the only thing SysManager registers with
-   Windows, and only ever when you explicitly ask for it.
+   (`SysManager Scheduled Maintenance-` followed by your account's security ID, in the Task
+   Scheduler Library) for you. Each account that set one up removes its own. It is the only thing
+   SysManager registers with Windows, and only ever when you explicitly ask for it.
 3. **Delete the executable** — `SysManager-vX.Y.Z.exe`, wherever you saved it. That is the whole
    program. If you installed through winget, `winget uninstall laurentiu021.SysManager` does this.
 4. **Delete what it keeps** (optional). It is small, except `updates`, which holds about 170 MB once

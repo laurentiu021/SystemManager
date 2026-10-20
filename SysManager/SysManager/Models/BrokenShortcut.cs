@@ -49,14 +49,37 @@ public sealed record ShortcutScanReport
     public int UnreachableTargets { get; init; }
 
     /// <summary>
+    /// Shortcuts left alone because they sit in a folder OneDrive shares with the user's other PCs and point at
+    /// something that is not on this one, where they may still work.
+    /// </summary>
+    public int SharedTargets { get; init; }
+
+    /// <summary>True when every shortcut found was decided: none unreachable, none in a shared folder.</summary>
+    public bool CheckedEverything => UnreachableTargets == 0 && SharedTargets == 0;
+
+    /// <summary>
     /// A plain-English sentence for the user, or null when there is nothing they need to know. Names the
     /// consequence (these were left alone, and why that is the safe answer) rather than the mechanism.
     /// </summary>
-    public string? Notice => UnreachableTargets == 0
-        ? null
-        : $"{UnreachableTargets} shortcut{(UnreachableTargets == 1 ? "" : "s")} "
-          + $"{(UnreachableTargets == 1 ? "points" : "point")} somewhere this scan could not look — a drive "
-          + "that is not plugged in, a network folder that is not answering, or a place you do not have "
-          + $"permission to read. {(UnreachableTargets == 1 ? "It was" : "They were")} left alone, because "
-          + "not being able to check is not the same as being broken.";
+    public string? Notice
+    {
+        get
+        {
+            var unreachable = UnreachableTargets == 0
+                ? null
+                : $"{UnreachableTargets} shortcut{(UnreachableTargets == 1 ? "" : "s")} "
+                  + $"{(UnreachableTargets == 1 ? "points" : "point")} somewhere this scan could not look — a drive "
+                  + "that is not plugged in, a network folder that is not answering, or a place you do not have "
+                  + $"permission to read. {(UnreachableTargets == 1 ? "It was" : "They were")} left alone, because "
+                  + "not being able to check is not the same as being broken.";
+            var one = SharedTargets == 1;
+            var shared = SharedTargets == 0
+                ? null
+                : $"{SharedTargets} shortcut{(one ? "" : "s")} in a folder OneDrive shares with your other PCs "
+                  + $"{(one ? "points" : "point")} at something that is not on this PC. {(one ? "It was" : "They were")} "
+                  + $"left alone: {(one ? "it" : "they")} may work on another of your PCs, and deleting "
+                  + $"{(one ? "it" : "them")} here would delete {(one ? "it" : "them")} there too.";
+            return unreachable is null ? shared : shared is null ? unreachable : unreachable + " " + shared;
+        }
+    }
 }

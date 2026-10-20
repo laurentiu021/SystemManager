@@ -14929,6 +14929,14 @@ public partial class ArchitectureTests
                 && declaration.Contains("SystemPaths.OwnExtractionDirectory", StringComparison.Ordinal),
                 $"{optionsName} in {file} excludes neither or only one extraction root, so the temp sweep can "
                 + "delete the .NET single-file extraction folder of this app or of another running one.");
+
+            // The two above are the current user's. Both sweeps also walk %WinDir%\Temp, where a single-file app
+            // running as SYSTEM unpacks into its own .net, so each also skips that name at the top of any root.
+            Assert.True(
+                declaration.Contains("ExcludeRootChildren", StringComparison.Ordinal)
+                && declaration.Contains("SystemPaths.BundleExtractionFolderName", StringComparison.Ordinal),
+                $"{optionsName} in {file} does not skip the extraction folder at the top of each temp root it walks, "
+                + "so a sweep of %WinDir%\\Temp can delete what a single-file app running as SYSTEM unpacked there.");
         }
 
         // Every SafeFileWalk call in a file that sweeps or measures %TEMP% must use one of those named

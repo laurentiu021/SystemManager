@@ -741,7 +741,8 @@ Across the tab:
 ### Quick Cleanup
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
 System → System Fixes, where the tab name matches what they do.
-- Clear TEMP folders
+- Clear TEMP folders, leaving alone the folder single-file apps unpack themselves into, in
+  Windows' own TEMP folder as well as yours
 - Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
   empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
   records it with what it held
@@ -1184,6 +1185,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   with an unplugged drive reads as "nothing confirmed" rather than "your PC is clean". A shortcut
   to a network share is never judged gone, even when the share has been removed: from here a
   removed share and a sleeping one look the same
+- **A shortcut in a folder OneDrive shares with your other PCs is not called broken because its
+  program is missing here.** Once OneDrive backs up the Desktop, its shortcuts sync to every PC
+  on the account, so one may point at a program installed on another of them, and deleting it
+  here would delete it there too. Those are left alone and counted, and the status line says why
 - Lists results with name, location, and missing target path
 - **Export CSV** saves the list before you delete anything, naming both the shortcut and its
   missing target, so the change is reviewable rather than a batch of deletions nobody can audit

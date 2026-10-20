@@ -30,10 +30,20 @@ public sealed partial class ShortcutCleanerService
 
     private static ShortcutScanReport Scan(
         IProgress<string>? progress, CancellationToken ct)
+        => Scan(GetScanLocations(), SyncRoots(Environment.GetEnvironmentVariable), progress, ct);
+
+    /// <summary>
+    /// The scan over <paramref name="locations"/>, with <paramref name="syncRoots"/> as the folders OneDrive keeps in
+    /// step with the user's other PCs. Internal so a test can point it at a folder of shortcuts it made.
+    /// </summary>
+    internal static ShortcutScanReport Scan(
+        IReadOnlyList<(string Label, string Path)> locations, IReadOnlyList<string> syncRoots,
+        IProgress<string>? progress, CancellationToken ct)
     {
         List<BrokenShortcut> results = [];
         var unreachable = 0;
-        var locations = GetScanLocations();
+        var shared = 0;
+        string?[] synced = [.. syncRoots];
 
         foreach (var (label, path) in locations)
         {
@@ -57,10 +67,11 @@ public sealed partial class ShortcutCleanerService
 
                     // "Broken" must mean the scan ESTABLISHED the target is gone, never that it failed to
                     // reach it — see ClassifyTarget. An undecided target is counted and left alone, because
-                    // the rows this produces arrive pre-ticked for deletion (#2378).
-                    switch (ClassifyTarget(target))
+                    // the rows this produces arrive pre-ticked for deletion (#2378). See Judge for a shortcut
+                    // in a folder OneDrive shares.
+                    switch (Judge(ClassifyTarget(target), SystemPaths.IsInsideAnySubtree(lnk, synced)))
                     {
-                        case TargetVerdict.Missing:
+                        case ShortcutOutcome.Broken:
                             results.Add(new BrokenShortcut
                             {
                                 Name = Path.GetFileNameWithoutExtension(lnk),
@@ -70,8 +81,12 @@ public sealed partial class ShortcutCleanerService
                             });
                             break;
 
-                        case TargetVerdict.Unreachable:
+                        case ShortcutOutcome.Unreachable:
                             unreachable++;
+                            break;
+
+                        case ShortcutOutcome.Shared:
+                            shared++;
                             break;
                     }
                 }
@@ -89,8 +104,54 @@ public sealed partial class ShortcutCleanerService
         // sibling scanners end the same way, for the same reason.
         ct.ThrowIfCancellationRequested();
 
-        return new ShortcutScanReport { Broken = results, UnreachableTargets = unreachable };
+        return new ShortcutScanReport { Broken = results, UnreachableTargets = unreachable, SharedTargets = shared };
     }
+
+    /// <summary>What becomes of one shortcut, once its target has been judged.</summary>
+    internal enum ShortcutOutcome
+    {
+        /// <summary>Its target is there.</summary>
+        Fine,
+
+        /// <summary>Its target is confirmed gone: listed, ticked, for deletion.</summary>
+        Broken,
+
+        /// <summary>Its target could not be checked: counted and left alone.</summary>
+        Unreachable,
+
+        /// <summary>Its target is not on this PC, in a folder another PC shares: counted and left alone.</summary>
+        Shared,
+    }
+
+    /// <summary>
+    /// What becomes of a shortcut, from <paramref name="verdict"/> on its target and whether the shortcut sits in a
+    /// folder OneDrive shares with the user's other PCs.
+    /// </summary>
+    /// <remarks>
+    /// Once OneDrive backs up the Desktop, which Windows 11 offers by default, the Desktop is one folder on every PC
+    /// signed in to that account, and its shortcuts sync with it. A shortcut to a program installed on another of
+    /// those PCs has its target missing here and present there. Called broken, it arrived ticked, and deleting it here
+    /// deleted it there too, where it worked. So in such a folder a missing target is undecided, like one the scan
+    /// could not reach.
+    /// </remarks>
+    internal static ShortcutOutcome Judge(TargetVerdict verdict, bool inSharedFolder) => verdict switch
+    {
+        TargetVerdict.Missing => inSharedFolder ? ShortcutOutcome.Shared : ShortcutOutcome.Broken,
+        TargetVerdict.Unreachable => ShortcutOutcome.Unreachable,
+        _ => ShortcutOutcome.Fine,
+    };
+
+    /// <summary>
+    /// The folders OneDrive keeps in step with the user's other PCs, from the variables it sets: <c>OneDrive</c> for
+    /// the default account, <c>OneDriveConsumer</c> for a personal one and <c>OneDriveCommercial</c> for a work or
+    /// school one. Other sync clients are not recognised.
+    /// </summary>
+    internal static IReadOnlyList<string> SyncRoots(Func<string, string?> environment) =>
+        [.. new[] { "OneDrive", "OneDriveConsumer", "OneDriveCommercial" }
+            .Select(environment)
+            .OfType<string>()
+            .Where(path => !string.IsNullOrWhiteSpace(path) && Path.IsPathFullyQualified(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>What the scan was able to establish about one shortcut's target.</summary>
     internal enum TargetVerdict

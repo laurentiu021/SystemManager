@@ -203,11 +203,17 @@ internal static class SystemPaths
         Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR"), Path.GetTempPath());
 
     /// <summary>
+    /// The folder the .NET host unpacks single-file apps into, inside the temp folder each app runs with:
+    /// <c>&lt;temp&gt;\.net</c>. A const, so the static initialisers above can use it whatever their order.
+    /// </summary>
+    internal const string BundleExtractionFolderName = ".net";
+
+    /// <summary>
     /// Where single-file bundles are extracted: <paramref name="overrideDir"/> when the host has been
     /// redirected with <c>DOTNET_BUNDLE_EXTRACT_BASE_DIR</c>, otherwise <c>&lt;temp&gt;\.net</c>.
     /// </summary>
     internal static string? ResolveBundleExtractionRoot(string? overrideDir, string tempPath) =>
-        Normalise(string.IsNullOrWhiteSpace(overrideDir) ? Path.Join(tempPath, ".net") : overrideDir);
+        Normalise(string.IsNullOrWhiteSpace(overrideDir) ? Path.Join(tempPath, BundleExtractionFolderName) : overrideDir);
 
     /// <summary>
     /// True when <paramref name="candidate"/> sits in ANY of <paramref name="subtrees"/>. Nulls and blanks

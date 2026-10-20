@@ -367,4 +367,52 @@ public class SafeFileWalkTests
         yield break;
 #pragma warning restore CS0162
     }
+
+    // ---------- names skipped at the top of whatever root is walked ----------
+
+    [Fact]
+    public void Files_SkipsAnExcludedRootChild_ButNotTheSameNameDeeperDown()
+    {
+        // Every temp root can hold the .NET host's extraction folder, %WinDir%\Temp's included, so the sweeps skip
+        // one at the top of any root they walk. A folder of that name further down is someone's data.
+        var root = NewTempRoot();
+        var extraction = Path.Combine(root, ".NET", "app", "hash");
+        var deeper = Path.Combine(root, "project", ".net");
+        Directory.CreateDirectory(extraction);
+        Directory.CreateDirectory(deeper);
+        File.WriteAllText(Path.Combine(root, "ordinary.txt"), "x");
+        File.WriteAllText(Path.Combine(extraction, "native.dll"), "x");
+        File.WriteAllText(Path.Combine(deeper, "notes.txt"), "x");
+
+        try
+        {
+            var found = SafeFileWalk
+                .Files(root, CancellationToken.None, new SafeWalkOptions { ExcludeRootChildren = [".net"] })
+                .Select(f => Path.GetRelativePath(root, f))
+                .Order(StringComparer.Ordinal)
+                .ToList();
+
+            Assert.Equal(["ordinary.txt", Path.Combine("project", ".net", "notes.txt")], found);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void DirectoriesDeepestFirst_LeavesAnExcludedRootChildOut()
+    {
+        var root = NewTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, ".net", "app", "hash"));
+        Directory.CreateDirectory(Path.Combine(root, "old", "empty"));
+
+        try
+        {
+            var found = SafeFileWalk
+                .DirectoriesDeepestFirst(root, CancellationToken.None, new SafeWalkOptions { ExcludeRootChildren = [".net"] })
+                .Select(d => Path.GetRelativePath(root, d))
+                .ToList();
+
+            Assert.Equal([Path.Combine("old", "empty"), "old"], found);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 }

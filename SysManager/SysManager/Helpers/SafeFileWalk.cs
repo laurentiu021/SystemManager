@@ -36,6 +36,18 @@ internal sealed record SafeWalkOptions
     /// OTHER app under the same root.
     /// </remarks>
     internal IReadOnlyList<string?> ExcludeSubtrees { get; init; } = [];
+
+    /// <summary>
+    /// Names of directories to skip when they sit directly in the walk's root, whatever that root is. Compared
+    /// without regard to case, as NTFS compares them.
+    /// </summary>
+    /// <remarks>
+    /// The temp sweeps pass <see cref="SystemPaths.BundleExtractionFolderName"/>. The .NET host unpacks a single-file
+    /// app into the <c>.net</c> folder of whichever temp folder that app runs with, so each temp root the sweeps walk
+    /// can hold one. A service running as SYSTEM unpacks into <c>%WinDir%\Temp\.net</c>, which the sweeps walk as well,
+    /// and <see cref="ExcludeSubtrees"/> names only the current user's.
+    /// </remarks>
+    internal IReadOnlyList<string> ExcludeRootChildren { get; init; } = [];
 }
 
 /// <summary>
@@ -75,6 +87,7 @@ internal static class SafeFileWalk
 
         var stack = new Stack<string>();
         stack.Push(root);
+        var atRoot = true;
 
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
@@ -100,9 +113,11 @@ internal static class SafeFileWalk
                     options.SkippedLinks?.Add(sub.FullName);
                     continue;
                 }
+                if (atRoot && IsExcludedRootChild(sub.Name, options)) continue;
                 if (SystemPaths.IsInsideAnySubtree(sub.FullName, [.. options.ExcludeSubtrees])) continue;
                 stack.Push(sub.FullName);
             }
+            atRoot = false;
         }
     }
 
@@ -125,6 +140,7 @@ internal static class SafeFileWalk
 
         var stack = new Stack<string>();
         stack.Push(root);
+        var atRoot = true;
 
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
@@ -136,15 +152,27 @@ internal static class SafeFileWalk
                     options.SkippedLinks?.Add(sub.FullName);
                     continue;
                 }
+                if (atRoot && IsExcludedRootChild(sub.Name, options)) continue;
                 if (SystemPaths.IsInsideAnySubtree(sub.FullName, [.. options.ExcludeSubtrees])) continue;
 
                 found.Add(sub.FullName);
                 stack.Push(sub.FullName);
             }
+            atRoot = false;
         }
 
         found.Sort((a, b) => Depth(b).CompareTo(Depth(a)));
         return found;
+    }
+
+    /// <summary>True when <paramref name="name"/>, a directory directly in the walk's root, is one to skip.</summary>
+    private static bool IsExcludedRootChild(string name, SafeWalkOptions options)
+    {
+        foreach (var excluded in options.ExcludeRootChildren)
+        {
+            if (string.Equals(name, excluded, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
     }
 
     private static int Depth(string path)

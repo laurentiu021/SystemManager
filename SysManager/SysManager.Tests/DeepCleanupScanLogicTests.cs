@@ -325,4 +325,29 @@ public sealed class DeepCleanupScanLogicTests
         Assert.NotSame(roots.FixedDriveRoots, roots.FixedDriveRoots);
         Assert.NotSame(roots.RecycleBinPaths, roots.RecycleBinPaths);
     }
+
+    // ── Temporary files leaves %WinDir%\Temp's extraction folder alone ─────────
+
+    [Fact]
+    public async Task TemporaryFiles_LeavesTheSystemTempExtractionFolderAlone()
+    {
+        // A single-file app running as SYSTEM unpacks its native libraries into %WinDir%\Temp\.net, and deleting one
+        // it has not loaded yet breaks it the next time it needs it. The bucket says that folder is left alone.
+        using var roots = Roots();
+        var windowsTemp = Path.Combine(roots.WindowsDirectory, "Temp");
+        var unpacked = TempCleanupRoots.WriteFile(Path.Combine(windowsTemp, ".net", "SomeService", "hash", "native.dll"), 10);
+        var old = TempCleanupRoots.WriteFile(Path.Combine(windowsTemp, "old.tmp"), 5);
+        var service = new DeepCleanupService(roots);
+
+        var categories = await service.ScanAsync();
+        var temporary = Named(categories, "Temporary files");
+        Assert.Equal(1, temporary.FileCount);
+        Assert.Equal(5, temporary.TotalSizeBytes);
+
+        foreach (var category in categories) category.IsSelected = category == temporary;
+        await service.CleanAsync(categories);
+
+        Assert.True(File.Exists(unpacked), "the clean deleted what a SYSTEM service unpacked into %WinDir%\\Temp\\.net");
+        Assert.False(File.Exists(old));
+    }
 }

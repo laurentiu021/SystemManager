@@ -41,13 +41,13 @@ public sealed record TuneUpResult
 
     // ── Uptime ─────────────────────────────────────────────────────────
     public TimeSpan Uptime { get; init; }
-    public bool UptimeWarning => Uptime.TotalDays >= 14;
+    public bool UptimeWarning => HealthLimits.AdvisesRestart(Uptime);
 
     // ── RAM ────────────────────────────────────────────────────────────
     public double RamUsedPercent { get; init; }
     public double RamUsedGB { get; init; }
     public double RamTotalGB { get; init; }
-    public bool RamWarning => RamUsedPercent >= 85;
+    public bool RamWarning => HealthLimits.AdvisesClosingApps(RamUsedPercent);
 
     // ── Summary helpers ────────────────────────────────────────────────
 

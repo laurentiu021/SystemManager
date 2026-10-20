@@ -391,11 +391,13 @@ public sealed class HealthScoreService
 
         // Linear scale: 0% used = 100 score, 100% used = 0 score
         // But we're more lenient: up to 60% is fine (score 100), then degrades
+        // The band that ends at the advice limit is the last without a recommendation (a score below 75 adds one), so
+        // the Tune-Up card, which reads the same limit, gives the same advice.
         return usedPct switch
         {
             <= 60 => 100,
             <= 70 => 90,
-            <= 80 => 75,
+            <= HealthLimits.CloseAppsAdvisedAbovePercent => 75,
             <= 85 => 60,
             <= 90 => 40,
             <= 95 => 20,
@@ -409,10 +411,11 @@ public sealed class HealthScoreService
         if (snapshot is null) return UnknownComponentScore;
         double days = snapshot.Os.Uptime.TotalDays;
 
+        // As for memory: the band that ends at the advice limit is the last that recommends no restart.
         return days switch
         {
             <= 3 => 100,
-            <= 7 => 90,
+            <= HealthLimits.RestartAdvisedAfterDays => 90,
             <= 14 => 70,
             <= 21 => 50,
             <= 30 => 30,

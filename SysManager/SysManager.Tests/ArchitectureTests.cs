@@ -13211,8 +13211,36 @@ public partial class ArchitectureTests
             $"only {figures} job progress figures were found across Views/, out of 6 measured — the parse is "
             + "broken, not the views.");
 
+        // A job's bar can also be a marquee with no figure at all, a fixed IsIndeterminate="True". The taskbar button
+        // then follows IsProgressIndeterminate, so the view model has to set it: Large Files, Bandwidth Monitor's
+        // history, Resource History and Scheduled Maintenance reached only IsBusy, and the button stayed blank (#2872).
+        var marquees = 0;
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var isMarquee = XDocument.Load(view).Descendants()
+                .Where(e => e.Name.LocalName == "ProgressBar")
+                .Where(e => !e.Ancestors().Any(a => a.Name.LocalName == "DataTemplate"))
+                .Where(e => ((string?)e.Attribute("AutomationProperties.Name") ?? "")
+                    .EndsWith("progress", StringComparison.OrdinalIgnoreCase))
+                .Any(e => string.Equals((string?)e.Attribute("IsIndeterminate"), "True", StringComparison.Ordinal));
+            if (!isMarquee) continue;
+
+            marquees++;
+            var viewName = Path.GetFileNameWithoutExtension(view);
+            var vmPath = Path.Combine(appDir, "ViewModels", viewName + "Model.cs");
+            var vm = File.Exists(vmPath) ? WithoutComments(File.ReadAllText(vmPath)) : "";
+            if (!Regex.IsMatch(vm, @"\bIsProgressIndeterminate\s*=\s*(?:true|value)\s*;"))
+                offenders.Add($"{viewName}.xaml shows a job as a marquee, and {viewName}Model never sets "
+                            + "IsProgressIndeterminate, so the taskbar button stays blank while the job runs");
+        }
+
+        // Vacuity floor: Bandwidth Monitor, Large Files, Resource History and Scheduled Maintenance today.
+        Assert.True(marquees >= 4,
+            $"only {marquees} views were found showing a job as a marquee, out of 4 measured — the parse is broken.");
+
         Assert.True(offenders.Count == 0,
-            "a job's progress bar shows a figure the taskbar button never gets:\n  " + string.Join("\n  ", offenders));
+            "a job's progress bar shows progress the taskbar button never gets:\n  " + string.Join("\n  ", offenders));
     }
 
     /// <summary>A binding to a plain property of the view model: no dotted path, no converter in its name.</summary>
@@ -17354,12 +17382,12 @@ public partial class ArchitectureTests
         {
             ["CleanupViewModel.cs"] =
             [
-                "/Online /Cleanup-Image /StartComponentCleanup",
-                "/Online /Cleanup-Image /AnalyzeComponentStore",
+                "/Online /English /Cleanup-Image /StartComponentCleanup",
+                "/Online /English /Cleanup-Image /AnalyzeComponentStore",
             ],
             ["SystemFixesViewModel.cs"] =
             [
-                "/Online /Cleanup-Image /RestoreHealth",
+                "/Online /English /Cleanup-Image /RestoreHealth",
                 "\"sfc.exe\", \"/scannow\"",
             ],
         };

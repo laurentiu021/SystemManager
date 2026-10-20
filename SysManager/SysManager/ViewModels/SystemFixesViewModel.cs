@@ -303,7 +303,7 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         _runner.LineReceived += Collect;
         try
         {
-            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /Cleanup-Image /RestoreHealth", _dismCts.Token, PowerShellRunner.OemEncoding);
+            var exit = await _runner.RunProcessAsync("DISM.exe", "/Online /English /Cleanup-Image /RestoreHealth", _dismCts.Token, PowerShellRunner.OemEncoding);
             var (verdict, color) = ParseDismResult(captured, exit);
             DismVerdict = verdict;
             DismVerdictColorHex = color;

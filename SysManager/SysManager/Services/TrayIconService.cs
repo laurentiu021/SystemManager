@@ -341,16 +341,18 @@ public sealed class TrayIconService : IDisposable
     {
         var now = DateTime.UtcNow;
 
-        // High RAM (>90%)
-        if (snapshot.Memory.UsedPercent > 90 && now - _lastRamNotification > NotificationCooldown)
+        // High RAM, at the notification area's own limit (see HealthLimits).
+        if (snapshot.Memory.UsedPercent > HealthLimits.HighMemoryNotifiedAbovePercent
+            && now - _lastRamNotification > NotificationCooldown)
         {
             _lastRamNotification = now;
             ShowNotification("High Memory Usage",
                 $"RAM is at {snapshot.Memory.UsedPercent:0}% — consider closing unused applications.");
         }
 
-        // High uptime (>14 days)
-        if (snapshot.Os.Uptime.TotalDays > 14 && now - _lastUptimeNotification > NotificationCooldown)
+        // High uptime, at the notification area's own limit (see HealthLimits).
+        if (snapshot.Os.Uptime.TotalDays > HealthLimits.RestartNotifiedAfterDays
+            && now - _lastUptimeNotification > NotificationCooldown)
         {
             _lastUptimeNotification = now;
             ShowNotification("Restart Recommended",

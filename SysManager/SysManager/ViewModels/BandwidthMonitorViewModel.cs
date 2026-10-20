@@ -474,6 +474,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
             // races ReplaceWith on a collection LiveCharts is observing.
             _historyOwnsChart = true;
             IsBusy = true;
+            IsProgressIndeterminate = true;
             try
             {
                 var loaded = await _loadHistory(range.Range, _pollCts?.Token ?? default).ConfigureAwait(true);
@@ -501,7 +502,7 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
                 // chart permanently frozen the next time the tab is opened.
                 _historyOwnsChart = false;
             }
-            finally { IsBusy = false; }
+            finally { IsBusy = false; IsProgressIndeterminate = false; }
         }
         finally
         {

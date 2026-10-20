@@ -753,7 +753,8 @@ System → System Fixes, where the tab name matches what they do.
   several gigabytes of superseded Windows components, and it is where the free editions of
   the mainstream cleaners find their biggest number. "Check component store" runs the
   read-only `DISM /AnalyzeComponentStore` and reports how large the store is and whether
-  Windows itself recommends a cleanup (the full breakdown is in the output below); only when
+  Windows itself recommends a cleanup, whatever language Windows is in (the full breakdown is
+  in the output below); only when
   Windows recommends one does "Clean up component store" become clickable, and only behind
   a confirmation that states the cost — after a cleanup, updates already installed can no
   longer be uninstalled. `/ResetBase` is never used, and a test makes it impossible to add
@@ -1907,7 +1908,8 @@ offers, "rate us" prompts:
   for a moment, a new action waits and is written once it can be, rather than replacing it.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, permanently
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
-  health, flags high uptime (14+ days) and high RAM usage (85%+). Displays
+  health, flags high uptime (more than 7 days) and high RAM usage (more than 80%), the same
+  limits the Health Score card advises at. Displays
   a summary card with freed space, warnings, and links to relevant tabs.
   The space freed includes what the Recycle Bin held, and the card and Recent activity say
   that the bin was emptied and what was in it.

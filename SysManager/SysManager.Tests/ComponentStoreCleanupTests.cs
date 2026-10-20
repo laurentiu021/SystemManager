@@ -112,6 +112,24 @@ public sealed class ComponentStoreCleanupTests
         Assert.False(recommended);
     }
 
+    /// <summary>
+    /// An analysis whose recommendation cannot be found says so, rather than "Analysis completed" over a button that
+    /// stays off for no stated reason.
+    /// </summary>
+    /// <remarks>
+    /// Both calls now ask DISM for English, so this is the case where it printed something else anyway (#2846).
+    /// </remarks>
+    [Fact]
+    public void Analysis_WhenTheOutputSaysNeither_SaysTheRecommendationCouldNotBeRead()
+    {
+        var (verdict, _, recommended) = CleanupViewModel.ParseComponentStoreResult(
+            ["Komponentenspeicher (WinSxS)-Informationen:", "Der Vorgang wurde erfolgreich beendet."],
+            0, analyzing: true);
+
+        Assert.False(recommended);
+        Assert.StartsWith("Windows' recommendation could not be read", verdict, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Analysis_WithNoSizeInTheOutput_OmitsItRatherThanInventingOne()
     {
@@ -252,7 +270,7 @@ public sealed class ComponentStoreCleanupTests
         await vm.AnalyzeComponentStoreCommand.ExecuteAsync(null);
 
         await runner.Received(1).RunProcessAsync(
-            "DISM.exe", "/Online /Cleanup-Image /AnalyzeComponentStore",
+            "DISM.exe", "/Online /English /Cleanup-Image /AnalyzeComponentStore",
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 
@@ -304,7 +322,7 @@ public sealed class ComponentStoreCleanupTests
             await vm.CleanComponentStoreCommand.ExecuteAsync(null);
 
             await runner.Received(1).RunProcessAsync(
-                "DISM.exe", "/Online /Cleanup-Image /StartComponentCleanup",
+                "DISM.exe", "/Online /English /Cleanup-Image /StartComponentCleanup",
                 Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
         }
         finally { DialogService.Instance = prevDialog; }

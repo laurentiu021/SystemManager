@@ -616,6 +616,8 @@ need administrator rights:
   renamed, the fix says so instead of asking for a pointless reboot — and restarts the services
   either way
 - **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
+- When either of these two stops, the status line and the console say why, for example that App
+  Installer is not installed, and the reason is logged
 
 **Fix the desktop and taskbar** — no administrator rights needed, and the quickest things
 to try when the taskbar, the Start menu or the icons misbehave. Both close any open File
@@ -690,7 +692,8 @@ Across the tab:
   Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort
 - Per-update checkbox selection with Select all / Deselect all — every update the scan lists
   starts ticked, optional drivers and feature upgrades included, so untick what you don't want
-  before Install selected
+  before Install selected. **What you untick stays unticked**: listing again, with F5 or after a
+  look at the history, keeps your choices, and only an update not listed before starts ticked
 - Live progress per update: `Connecting → Downloading → Installing → ✓ Installed`
   streamed to the console as it happens
 - Per-row Status column updated in real time

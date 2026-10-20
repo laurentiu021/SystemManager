@@ -500,6 +500,101 @@ public class WindowsUpdateViewModelTests
         Assert.Equal(expected, WindowsUpdateService.FormatSize(bytes));
     }
 
+    // ---------- a rescan keeps what the user unticked (#2874) ----------
+
+    /// <summary>
+    /// A view model whose scans return the given updates in turn, each time as new rows, as Windows Update does,
+    /// and whose history read fails, which still clears the grid as a look at the history does.
+    /// </summary>
+    private static WindowsUpdateViewModel VmOverScans(params string[][] scans)
+    {
+        var wu = Substitute.For<IWindowsUpdateService>();
+        var call = 0;
+        wu.ScanAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            var ids = scans[Math.Min(call++, scans.Length - 1)];
+            return Task.FromResult<IReadOnlyList<UpdateEntry>>(
+                [.. ids.Select(id => new UpdateEntry { Title = "Update " + id, UpdateId = id })]);
+        });
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+              .Returns(WindowsUpdateViewModel.HistoryModuleImportFailedExitCode);
+        return new WindowsUpdateViewModel(runner, wu, new WindowsUpdatePolicyService(), () => false);
+    }
+
+    private static bool Ticked(WindowsUpdateViewModel vm, string id) =>
+        Assert.Single(vm.Updates, u => u.UpdateId == id).IsSelected;
+
+    [Fact]
+    public async Task ListingAgain_KeepsTheUpdatesTheUserUnticked()
+    {
+        var vm = VmOverScans(["a", "b", "c"]);
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+        Assert.Single(vm.Updates, u => u.UpdateId == "b").IsSelected = false;
+
+        await vm.ListUpdatesCommand.ExecuteAsync(null);   // F5 runs this same command
+
+        Assert.True(Ticked(vm, "a"));
+        Assert.False(Ticked(vm, "b"));
+        Assert.True(Ticked(vm, "c"));
+        Assert.False(vm.AllSelected);   // the header follows the rows
+    }
+
+    [Fact]
+    public async Task ListingAfterALookAtTheHistory_KeepsTheUpdatesTheUserUnticked()
+    {
+        var vm = VmOverScans(["a", "b"]);
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+        Assert.Single(vm.Updates, u => u.UpdateId == "a").IsSelected = false;
+
+        await vm.ShowHistoryCommand.ExecuteAsync(null);
+        Assert.Empty(vm.Updates);   // the history view took the grid, so the ticks were not left there
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(Ticked(vm, "a"));
+        Assert.True(Ticked(vm, "b"));
+    }
+
+    [Fact]
+    public async Task AfterAnInstall_TheUpdatesLeftOutStayUnticked_AndANewOneIsTicked()
+    {
+        // What was ticked got installed and is gone from the next scan. What was left out must not come back ticked,
+        // one press of Install selected away; an update the user has never seen takes the default.
+        var vm = VmOverScans(["a", "b"], ["b", "new"]);
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+        Assert.Single(vm.Updates, u => u.UpdateId == "b").IsSelected = false;
+
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(Ticked(vm, "b"));
+        Assert.True(Ticked(vm, "new"));
+    }
+
+    [Fact]
+    public async Task UntickingEverything_IsKeptToo()
+    {
+        // Nothing ticked is a decision, not a first look: reading it as one would tick everything again.
+        var vm = VmOverScans(["a", "b"]);
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+        vm.DeselectAllCommand.Execute(null);
+
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+
+        Assert.All(vm.Updates, u => Assert.False(u.IsSelected));
+        Assert.False(vm.AllSelected);
+    }
+
+    [Fact]
+    public async Task TheFirstList_TicksEverything()
+    {
+        var vm = VmOverScans(["a", "b"]);
+
+        await vm.ListUpdatesCommand.ExecuteAsync(null);
+
+        Assert.All(vm.Updates, u => Assert.True(u.IsSelected));
+        Assert.True(vm.AllSelected);
+    }
+
     // ---------- select-all header checkbox (audit #66) ----------
 
     private static WindowsUpdateViewModel VmWithUpdates(int count)

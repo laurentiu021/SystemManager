@@ -424,7 +424,17 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
             }
             else
             {
-                StatusMessage = $"{result.FixName} did not complete — see the output for details.";
+                // The script's own reason, which the console never received: it arrives as the run's exception (#2875).
+                var reason = result.FailureReason?.Trim();
+                if (string.IsNullOrEmpty(reason))
+                {
+                    StatusMessage = $"{result.FixName} did not complete.";
+                }
+                else
+                {
+                    Console.Append(PowerShellLine.Err(reason));
+                    StatusMessage = $"{result.FixName} did not complete: {reason.Split('\n', 2)[0].TrimEnd()}";
+                }
             }
             Log.Information("SystemFix: {Fix} success={Success}", result.FixName, result.Success);
         }

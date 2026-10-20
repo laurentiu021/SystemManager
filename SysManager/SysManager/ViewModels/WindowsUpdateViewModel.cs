@@ -78,6 +78,14 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<UpdateEntry> Updates { get; } = new();
+
+    /// <summary>The rows the last List updates showed, with the ticks the user left on them.</summary>
+    /// <remarks>
+    /// Kept apart from <see cref="Updates"/>, which the History view fills too, so a look at the history does not
+    /// lose them. Every scan builds new rows and a new row starts ticked, so a rescan, F5 included, ticked again
+    /// every update the user had unticked, and Install selected then installed it (#2874).
+    /// </remarks>
+    private IReadOnlyCollection<UpdateEntry> _listed = [];
     public ConsoleViewModel Console { get; } = new();
 
     [ObservableProperty] private bool _moduleAvailable;
@@ -377,14 +385,17 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         try
         {
             var results = await _wu.ScanAsync(_cts.Token);
-            foreach (var u in results.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase))
+            var fresh = results.OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase).ToList();
+            // Matched by the Windows Update id, which stays the same for an update between scans.
+            SelectionCarry.Apply(_listed, fresh, u => u.UpdateId, StringComparer.OrdinalIgnoreCase);
+            _listed = fresh;
+            foreach (var u in fresh)
                 Updates.Add(u);
 
             UpdateCount = Updates.Count;
-            // Newly listed updates default to selected, so reflect that on the
-            // header checkbox without re-applying to rows.
+            // The header checkbox follows the rows, which keep what the user unticked, without re-applying to them.
             _suppressAllSelected = true;
-            AllSelected = UpdateCount > 0;
+            AllSelected = UpdateCount > 0 && Updates.All(u => u.IsSelected);
             _suppressAllSelected = false;
             TableSummary = UpdateCount > 0
                 ? $"{UpdateCount} updates found."

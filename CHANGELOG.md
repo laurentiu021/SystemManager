@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.16] - 2026-10-20
+
+**Windows Update keeps the updates you unticked when it lists them again, and System Fixes says why a repair
+stopped.**
+
+### Fixed
+
+- **Listing updates again ticked every update you had unticked.** Every scan shows its updates as new rows, ticked,
+  so List updates, F5, or a look at the history followed by List updates ticked again an optional driver or a
+  feature update you had unticked, and Install selected then installed it. After an install, the next list held only
+  the updates you had left out, all ticked again. What you untick now stays unticked across a rescan; only an update
+  the scan has not shown before starts ticked. Since updates could be ticked one by one (1.1.0), and with F5
+  since it lists updates (1.127.10).
+- **A repair that stopped said "see the output for details" over an empty console.** Reset Windows Update and
+  Reinstall WinGet stop with a reason of their own, such as that App Installer is not installed, and that reason
+  reached neither the console nor the log. It is shown in the console and on the status line now, and logged. Since
+  System Fixes was added (1.26.0).
+
 ## [1.130.15] - 2026-10-20
 
 **Scheduled Maintenance runs at the time you picked, before and after the clocks change.**

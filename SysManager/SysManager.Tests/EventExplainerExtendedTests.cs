@@ -74,6 +74,20 @@ public class EventExplainerExtendedTests
         Assert.False(string.IsNullOrWhiteSpace(e.Explanation));
     }
 
+    [Fact]
+    public void WindowsUpdateEvent25_SaysTheCheckFailed_AndAsksForAction()
+    {
+        // The provider's own message for 25 is "Windows Update failed to check for updates with error %1", at
+        // Error level. The row used to call it an uninstall that needs no action, which only a test of the words
+        // themselves would have caught: the theory above checks that some explanation exists.
+        Assert.True(EventExplainer.TryExplain("Microsoft-Windows-WindowsUpdateClient", 25, out var info));
+
+        Assert.Contains("could not check for updates", info.Explanation, StringComparison.Ordinal);
+        Assert.DoesNotContain("uninstalled", info.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no action needed", info.Recommendation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Reset Windows Update", info.Recommendation, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(7000)]
     [InlineData(7001)]

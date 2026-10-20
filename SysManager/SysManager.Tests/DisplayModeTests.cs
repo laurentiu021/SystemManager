@@ -27,6 +27,21 @@ public class DisplayModeTests
         Assert.NotEqual(a, c);
     }
 
+    [Fact]
+    public void TheSameModeAtAnotherBitDepth_IsTheSameMode()
+    {
+        // The mode list keeps the depth Windows listed first for each resolution and refresh rate, and the current
+        // mode carries the depth in use. Apply never changes the depth, so the two are one mode and Apply must not be
+        // offered for it.
+        var listed = new DisplayMode(1920, 1080, 60, 16);
+        var current = new DisplayMode(1920, 1080, 60, 32);
+
+        Assert.Equal(listed, current);
+        Assert.Equal(listed.GetHashCode(), current.GetHashCode());
+        Assert.NotEqual(listed, new DisplayMode(1920, 1080, 75, 32));
+        Assert.NotEqual(listed, new DisplayMode(1600, 1080, 60, 16));
+    }
+
     [Theory]
     [InlineData(true, "Dell U2720Q (primary)")]
     [InlineData(false, "Dell U2720Q")]

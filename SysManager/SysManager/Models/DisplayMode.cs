@@ -14,6 +14,16 @@ public sealed record DisplayMode(int Width, int Height, int RefreshHz, int BitsP
     public string ResolutionDisplay => $"{Width}×{Height}";
 
     public string RefreshDisplay => $"{RefreshHz} Hz";
+
+    /// <summary>
+    /// The same mode when the resolution and the refresh rate match. The bit depth is left out on purpose: Apply sets
+    /// only those three (<c>DM_PELSWIDTH</c>, <c>DM_PELSHEIGHT</c>, <c>DM_DISPLAYFREQUENCY</c>), and the mode list keeps
+    /// whichever depth Windows listed first, so comparing depths made Apply look available for the mode in use.
+    /// </summary>
+    public bool Equals(DisplayMode? other) =>
+        other is not null && Width == other.Width && Height == other.Height && RefreshHz == other.RefreshHz;
+
+    public override int GetHashCode() => HashCode.Combine(Width, Height, RefreshHz);
 }
 
 /// <summary>An attached display adapter and its current/available modes.</summary>

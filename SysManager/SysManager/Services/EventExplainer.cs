@@ -71,9 +71,11 @@ public static class EventExplainer
         [new("Microsoft-Windows-WindowsUpdateClient", 20)] = (
             "A Windows Update failed to install.",
             "Run Windows Update Troubleshooter. If stuck, try 'wsreset.exe' and 'dism /online /cleanup-image /restorehealth'."),
+        // Event 25 is "Windows Update failed to check for updates with error %1" at Error level, written to the
+        // WindowsUpdateClient/Operational channel. The row described an uninstall that needs no action.
         [new("Microsoft-Windows-WindowsUpdateClient", 25)] = (
-            "A Windows Update was uninstalled.",
-            "Informational — no action needed unless unexpected."),
+            "Windows Update could not check for updates. The error code is in the message.",
+            "Check the internet connection and the PC's date and time. If it keeps happening, run Reset Windows Update in System Fixes."),
         [new("Microsoft-Windows-Servicing", 3)] = (
             "A servicing operation failed. Component store may be inconsistent.",
             "Run 'dism /online /cleanup-image /restorehealth' then 'sfc /scannow'."),

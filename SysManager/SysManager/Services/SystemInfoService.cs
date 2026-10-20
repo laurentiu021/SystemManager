@@ -5,6 +5,7 @@
 using System.Management;
 using System.Runtime.InteropServices;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -371,31 +372,8 @@ public sealed partial class SystemInfoService
                 using (mo)
                 {
                     var size = Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d;
-                    var mediaType = (ushort)Convert.ToUInt32(mo["MediaType"] ?? 0u) switch
-                    {
-                        3 => "HDD",
-                        4 => "SSD",
-                        5 => "SCM",
-                        _ => "Unspecified"
-                    };
-                    var busType = (ushort)Convert.ToUInt32(mo["BusType"] ?? 0u) switch
-                    {
-                        1 => "SCSI",
-                        2 => "ATAPI",
-                        3 => "ATA",
-                        4 => "1394",
-                        5 => "SSA",
-                        6 => "Fibre",
-                        7 => "USB",
-                        8 => "RAID",
-                        9 => "iSCSI",
-                        10 => "SAS",
-                        11 => "SATA",
-                        12 => "SD",
-                        13 => "MMC",
-                        17 => "NVMe",
-                        _ => "Other"
-                    };
+                    var mediaType = StorageLabels.Media(Convert.ToUInt32(mo["MediaType"] ?? 0u));
+                    var busType = StorageLabels.Bus(Convert.ToUInt32(mo["BusType"] ?? 0u));
                     var health = (ushort)Convert.ToUInt32(mo["HealthStatus"] ?? 0u) switch
                     {
                         0 => "Healthy",

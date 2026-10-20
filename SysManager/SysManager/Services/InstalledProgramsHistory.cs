@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Serilog;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -163,17 +164,31 @@ public sealed class InstalledProgramsHistory : IInstalledProgramsHistory
     /// <summary>What the file holds.</summary>
     internal sealed record Stored(DateTime TakenAt, List<ProgramName> Programs, List<ProgramChange> Changes);
 
+    /// <summary>
+    /// The kind of each change is written by name, so the record still reads correctly if <see cref="ChangeKind"/> is
+    /// ever reordered, as the Uninstaller's leftover record already writes its confidence. A number written by an
+    /// earlier build still reads, which is why the three program kinds keep their positions (a test pins them).
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter<ChangeKind>() },
+    };
+
+    /// <summary>The only kinds this record holds; anything else in the file is not one of its changes.</summary>
+    private static bool IsProgramKind(ChangeKind kind) =>
+        kind is ChangeKind.ProgramAppeared or ChangeKind.ProgramDisappeared or ChangeKind.ProgramUpdated;
+
     /// <summary>The stored history, or null when the text is not one.</summary>
     internal static Stored? Parse(string json)
     {
         try
         {
-            var stored = JsonSerializer.Deserialize<Stored>(json);
+            var stored = JsonSerializer.Deserialize<Stored>(json, JsonOptions);
             if (stored is null || stored.Programs is null) return null;
             return stored with
             {
                 Programs = [.. stored.Programs.Where(p => p is { Name.Length: > 0 }).Select(p => p with { Publisher = p.Publisher ?? "" })],
-                Changes = [.. (stored.Changes ?? []).Where(c => c is { Name.Length: > 0 })
+                Changes = [.. (stored.Changes ?? []).Where(c => c is { Name.Length: > 0 } && IsProgramKind(c.Kind))
                     .Select(c => c with { Publisher = c.Publisher ?? "", Before = c.Before ?? "" })],
             };
         }
@@ -189,7 +204,7 @@ public sealed class InstalledProgramsHistory : IInstalledProgramsHistory
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
-            AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(stored));
+            AtomicFile.WriteAllText(_filePath, JsonSerializer.Serialize(stored, JsonOptions));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

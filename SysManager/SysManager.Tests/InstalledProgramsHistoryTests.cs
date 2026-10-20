@@ -293,6 +293,57 @@ public sealed class InstalledProgramsHistoryTests : IDisposable
         Assert.Null(InstalledProgramsHistory.Parse(json));
     }
 
+    // ── How a change's kind is stored ──────────────────────────────────────
+
+    [Fact]
+    public void TheKindOfAChange_IsWrittenByName()
+    {
+        // As a number, a stored kind would read as another one the day ChangeKind gained a member before the program
+        // kinds, and the record keeps its changes for months.
+        Installed(Program("Contoso Notes"));
+        NewHistory().Observe(FirstLook);
+        Installed(Program("Contoso Notes"), Program("Contoso Paint"));
+        NewHistory().Observe(SecondLook);
+
+        var text = File.ReadAllText(StoreFile);
+        Assert.Contains("\"Kind\":\"ProgramAppeared\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AKindAnEarlierBuildWroteAsANumber_StillReads()
+    {
+        const string json = """
+            {"TakenAt":"2026-10-02T09:00:00","Programs":[{"Name":"Contoso Notes","Publisher":"Contoso"}],
+             "Changes":[{"Name":"Contoso Paint","Publisher":"Contoso","Kind":9,
+                         "Since":"2026-10-02T09:00:00","Until":"2026-10-05T15:20:00","Before":""}]}
+            """;
+
+        var change = Assert.Single(InstalledProgramsHistory.Parse(json)!.Changes);
+
+        Assert.Equal(ChangeKind.ProgramDisappeared, change.Kind);
+    }
+
+    [Fact]
+    public void TheProgramKinds_KeepThePositionsEarlierBuildsWroteThemAt()
+    {
+        // Records written before the kind was stored by name hold these numbers, so moving any of the three would make
+        // those records read wrong.
+        Assert.Equal(8, (int)ChangeKind.ProgramAppeared);
+        Assert.Equal(9, (int)ChangeKind.ProgramDisappeared);
+        Assert.Equal(10, (int)ChangeKind.ProgramUpdated);
+    }
+
+    [Fact]
+    public void AChangeOfAKindThisRecordNeverHolds_IsDropped()
+    {
+        var json = JsonSerializer.Serialize(new InstalledProgramsHistory.Stored(FirstLook,
+            [new ProgramName("Contoso Notes", "Contoso")],
+            [new ProgramChange("Contoso Paint", "Contoso", ChangeKind.ProgramRemoved, FirstLook, SecondLook),
+             new ProgramChange("Contoso Draw", "Contoso", ChangeKind.ProgramAppeared, FirstLook, SecondLook)]));
+
+        Assert.Equal("Contoso Draw", Assert.Single(InstalledProgramsHistory.Parse(json)!.Changes).Name);
+    }
+
     // ── Names ──────────────────────────────────────────────────────────────
 
     [Theory]

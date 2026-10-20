@@ -15,46 +15,6 @@ namespace SysManager.Tests;
 /// </summary>
 public class DiskHealthServiceTests
 {
-    // ---------- MapMedia ----------
-
-    private static string InvokeMapMedia(uint v)
-    {
-        var m = typeof(DiskHealthService).GetMethod("MapMedia", BindingFlags.NonPublic | BindingFlags.Static)!;
-        return (string)m.Invoke(null, new object[] { v })!;
-    }
-
-    [Theory]
-    [InlineData(3u, "HDD")]
-    [InlineData(4u, "SSD")]
-    [InlineData(5u, "SCM")]
-    [InlineData(0u, "Unspecified")]
-    [InlineData(99u, "Unspecified")]
-    public void MapMedia_ReturnsExpected(uint input, string expected)
-        => Assert.Equal(expected, InvokeMapMedia(input));
-
-    // ---------- MapBus ----------
-
-    private static string InvokeMapBus(uint v)
-    {
-        var m = typeof(DiskHealthService).GetMethod("MapBus", BindingFlags.NonPublic | BindingFlags.Static)!;
-        return (string)m.Invoke(null, new object[] { v })!;
-    }
-
-    [Theory]
-    [InlineData(1u, "SCSI")]
-    [InlineData(3u, "ATA")]
-    [InlineData(6u, "Fibre")]
-    [InlineData(7u, "USB")]
-    [InlineData(8u, "RAID")]
-    [InlineData(9u, "iSCSI")]
-    [InlineData(10u, "SAS")]
-    [InlineData(11u, "SATA")]
-    [InlineData(17u, "NVMe")]
-    [InlineData(0u, "Other")]
-    [InlineData(99u, "Other")]
-    public void MapBus_ReturnsExpected(uint input, string expected)
-        => Assert.Equal(expected, InvokeMapBus(input));
-
     // ---------- MapHealth ----------
 
     private static string InvokeMapHealth(uint v)

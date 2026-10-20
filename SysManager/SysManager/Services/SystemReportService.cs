@@ -440,8 +440,8 @@ public sealed class SystemReportService
             foreach (var disk in d.Disks)
             {
                 sb.Append($"  {disk.FriendlyName}");
-                if (!string.IsNullOrWhiteSpace(disk.MediaType) && disk.MediaType != "Unspecified") sb.Append($" — {disk.MediaType}");
-                if (!string.IsNullOrWhiteSpace(disk.BusType) && disk.BusType != "Other") sb.Append($" ({disk.BusType})");
+                if (!string.IsNullOrWhiteSpace(disk.MediaType) && disk.MediaType != StorageLabels.UnspecifiedMedia) sb.Append($" — {disk.MediaType}");
+                if (!string.IsNullOrWhiteSpace(disk.BusType) && disk.BusType != StorageLabels.OtherBus) sb.Append($" ({disk.BusType})");
                 if (disk.SizeGB > 0) sb.Append($" — {disk.SizeGB:F0} GB");
                 sb.Append($" — {disk.HealthStatus}");
                 sb.AppendLine();
@@ -676,8 +676,8 @@ public sealed class SystemReportService
             foreach (var disk in d.Disks)
             {
                 var v = disk.FriendlyName;
-                if (!string.IsNullOrWhiteSpace(disk.MediaType) && disk.MediaType != "Unspecified") v += $" · {disk.MediaType}";
-                if (!string.IsNullOrWhiteSpace(disk.BusType) && disk.BusType != "Other") v += $" · {disk.BusType}";
+                if (!string.IsNullOrWhiteSpace(disk.MediaType) && disk.MediaType != StorageLabels.UnspecifiedMedia) v += $" · {disk.MediaType}";
+                if (!string.IsNullOrWhiteSpace(disk.BusType) && disk.BusType != StorageLabels.OtherBus) v += $" · {disk.BusType}";
                 if (disk.SizeGB > 0) v += $" · {disk.SizeGB:F0} GB";
                 v += $" · {disk.HealthStatus}";
                 if (disk.TemperatureC.HasValue) v += $" · {disk.TemperatureC:F0} °C";

@@ -49,8 +49,8 @@ public sealed class DiskHealthService
                         var report = new DiskHealthReport
                         {
                             FriendlyName = mo["FriendlyName"]?.ToString() ?? "Disk",
-                            MediaType = MapMedia(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
-                            BusType = MapBus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
+                            MediaType = StorageLabels.Media(Convert.ToUInt32(mo["MediaType"] ?? 0u)),
+                            BusType = StorageLabels.Bus(Convert.ToUInt32(mo["BusType"] ?? 0u)),
                             SizeGB = Math.Round(Convert.ToDouble(mo["Size"] ?? 0) / 1024d / 1024d / 1024d, 0),
                             HealthStatus = MapHealth(Convert.ToUInt32(mo["HealthStatus"] ?? 0u))
                         };
@@ -206,28 +206,6 @@ public sealed class DiskHealthService
         catch (OverflowException) { return null; }
         catch (InvalidCastException) { return null; }
     }
-
-    private static string MapMedia(uint v) => v switch
-    {
-        3 => "HDD",
-        4 => "SSD",
-        5 => "SCM",
-        _ => "Unspecified"
-    };
-
-    private static string MapBus(uint v) => v switch
-    {
-        1 => "SCSI",
-        3 => "ATA",
-        6 => "Fibre",
-        7 => "USB",
-        8 => "RAID",
-        9 => "iSCSI",
-        10 => "SAS",
-        11 => "SATA",
-        17 => "NVMe",
-        _ => "Other"
-    };
 
     private static string MapHealth(uint v) => v switch
     {

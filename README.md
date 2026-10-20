@@ -1795,7 +1795,9 @@ offers, "rate us" prompts:
 - **Says what else breaks before you break it** — when other services need the one you
   are turning off, they are named in the confirmation by their real names, so the choice
   is "my printer will stop working" rather than "this may affect system functionality".
-  The names are on the safety pill's tooltip too, which needs no admin rights to read
+  The names are on the safety pill's tooltip too, which needs no admin rights to read.
+  For a Caution service the confirmation also carries its note, for example that turning off
+  Windows Update stops security patches
 - Start, stop, disable, or enable services with confirmation dialogs
 - **Stops and disables only services it knows** — SysManager rates 48 services by name (21
   safe, 12 caution, 15 critical). Every other service is **Not rated**: a grey pill, because

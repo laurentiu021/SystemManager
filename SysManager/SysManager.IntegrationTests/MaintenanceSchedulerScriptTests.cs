@@ -50,7 +50,7 @@ public class MaintenanceSchedulerScriptTests
 
     private const string RegisterStubs =
         "function New-ScheduledTaskTrigger { [CmdletBinding()] param([switch]$Daily, [switch]$Weekly, $DaysOfWeek, $At) " +
-        "[PSCustomObject]@{ At = $At } } ; " +
+        "[PSCustomObject]@{ At = $At; StartBoundary = '2026-07-01T03:00:00+03:00' } } ; " +
         "function New-ScheduledTaskSettingsSet { [CmdletBinding()] param([switch]$StartWhenAvailable, " +
         "[switch]$DontStopOnIdleEnd, $ExecutionTimeLimit, [switch]$AllowStartIfOnBatteries, " +
         "[switch]$DontStopIfGoingOnBatteries, [switch]$RunOnlyIfIdle) [PSCustomObject]@{} } ; " +
@@ -58,7 +58,8 @@ public class MaintenanceSchedulerScriptTests
         "[PSCustomObject]@{ UserId = $UserId } } ; " +
         "function Register-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath, [ValidateNotNull()]$Action, " +
         "$Trigger, $Settings, $Principal, $Description, [switch]$Force) " +
-        "Write-Host \"REGISTERED args=[$($Action.Arguments)] user=[$($Principal.UserId)]\" ; [PSCustomObject]@{ State = 'Ready' } } ; " +
+        "Write-Host \"REGISTERED args=[$($Action.Arguments)] user=[$($Principal.UserId)] start=[$($Trigger.StartBoundary)]\" ; " +
+        "[PSCustomObject]@{ State = 'Ready' } } ; " +
         "function Get-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath) [PSCustomObject]@{ State = 'Ready' } } ; ";
 
     /// <summary>A stub that makes the action as the real cmdlet does, refusing an empty command line as it does.</summary>
@@ -91,6 +92,17 @@ public class MaintenanceSchedulerScriptTests
         Assert.Contains("REGISTERED args=[--cleanup --silent] user=[S-1-5-21-1000-2000-3000-1001]", output,
                         StringComparison.Ordinal);
         Assert.Contains("__SM_AFTER_REGISTER__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Registering_StartsTheTriggerAtThePickedLocalTime_WithNoOffset()
+    {
+        // New-ScheduledTaskTrigger -At stores the start with today's UTC offset, as the stub does here, and Task
+        // Scheduler then runs the task at that UTC moment, an hour off the picked time after the clocks change (#2868).
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Register(ActionStub));
+
+        var start = System.Text.RegularExpressions.Regex.Match(output, @"start=\[(?<start>[^\]]*)\]").Groups["start"].Value;
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T03:00:00$", start);
     }
 
     [Fact]

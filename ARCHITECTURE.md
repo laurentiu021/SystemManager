@@ -1606,7 +1606,10 @@ Key services:
   registered, and `ArchitectureTests.NoScriptParameter_IsNamedLikeAnAutomaticVariable` holds every
   embedded script to that. Its steps are one `try`, each with `-ErrorAction Stop`, so the first
   failure ends it rather than leaving `Register-ScheduledTask` a `$action` an earlier script left in
-  the runner's reused runspace. `GetStatusAsync` returns null for a read that
+  the runner's reused runspace. The trigger's `StartBoundary` is rewritten in local time with no
+  offset: the one `New-ScheduledTaskTrigger -At` writes carries today's UTC offset, which Task
+  Scheduler repeats as a UTC moment, an hour off the picked time after a clock change (#2868).
+  `GetStatusAsync` returns null for a read that
   failed: `StatusScript` treats only `ObjectNotFound` from `Get-ScheduledTask` and
   `Get-ScheduledTaskInfo` as "not registered" and throws on any other error, and `RemoveScript` is
   quiet only for a task already gone, so `RemoveAsync` logs a refusal before its read-back decides. The task launches the app's own exe with a

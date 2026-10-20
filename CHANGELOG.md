@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.15] - 2026-10-20
+
+**Scheduled Maintenance runs at the time you picked, before and after the clocks change.**
+
+### Fixed
+
+- **A schedule ran an hour off the picked time once the clocks changed.** Windows was given the start as a moment in
+  UTC, with the offset of the day it was saved, and repeated the task at that moment, which it shows as "Synchronize
+  across time zones". A daily run at 03:00 saved in summer would run at 02:00 from the end of daylight saving time,
+  and the card's next run would say so. The start is local time now, so the task follows the PC's clock, and the next
+  run shown after you change the time is the new one. Since a schedule could first be saved (1.130.13).
+
 ## [1.130.14] - 2026-10-20
 
 **Nothing one of SysManager's PowerShell steps leaves behind reaches the next one, and a step cancelled as it

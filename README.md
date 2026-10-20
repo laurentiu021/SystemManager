@@ -1230,6 +1230,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   needing administrator rights and from being able to touch anything else Windows schedules
 - **Windows' own count of skipped runs is shown** when it is not zero — the only signal
   Windows gives for a run its conditions blocked
+- **Runs at the time you picked, before and after the clocks change.** The task follows your
+  PC's clock, so the end or start of daylight saving time does not move it by an hour
 - Update or remove the schedule any time, each with a confirmation
 - Runs in your user context (no admin required), only while you are signed in, and only ever
   touches its own task. Each Windows account on the PC has its own, named

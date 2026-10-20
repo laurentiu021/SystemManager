@@ -162,6 +162,56 @@ public class DefenderServiceTests
         Assert.True(status.RealtimeProtection);
     }
 
+    // ── Real-time protection as it runs, not only as it is set (#2867) ────────
+    // The card read the setting, so with another antivirus in charge it said "On" while Defender was not scanning.
+
+    private static DefenderStatus Realtime(bool setting, object? inEffect, string? mode)
+    {
+        var obj = new PSObject();
+        obj.Properties.Add(new PSNoteProperty("DisableRealtimeMonitoring", !setting));
+        if (inEffect is not null) obj.Properties.Add(new PSNoteProperty("RealTimeProtectionEnabled", inEffect));
+        if (mode is not null) obj.Properties.Add(new PSNoteProperty("AMRunningMode", mode));
+        return DefenderService.ParseStatus(obj);
+    }
+
+    [Theory]
+    [InlineData("Passive Mode")]
+    [InlineData("SxS Passive Mode")]
+    [InlineData("EDR Block Mode")]
+    public void WithAnotherAntivirusInCharge_RealtimeReadsOff_AndSaysWhy(string mode)
+    {
+        var status = Realtime(setting: true, inEffect: false, mode);
+
+        Assert.True(status.RealtimeProtection);   // the premise: the setting is on
+        Assert.Equal("Off", status.RealtimeDisplay);
+        Assert.Equal("Real-time protection is off: another antivirus is in charge, and Windows runs Defender in passive mode.",
+            status.RealtimeNote);
+    }
+
+    [Fact]
+    public void RealtimeOffForAnotherReason_ReadsOff_AndSaysTheSettingIsOn()
+    {
+        var status = Realtime(setting: true, inEffect: false, "Normal");
+
+        Assert.Equal("Off", status.RealtimeDisplay);
+        Assert.Equal("Real-time protection is off, although its setting here is on.", status.RealtimeNote);
+    }
+
+    [Theory]
+    [InlineData(true, true, "On")]
+    [InlineData(false, false, "Off")]
+    [InlineData(false, true, "On")]   // turned on outside this setting: what runs is what counts
+    [InlineData(true, null, "On")]    // not read: the setting is all there is
+    [InlineData(false, null, "Off")]
+    public void WhenTheTwoAgree_OrTheStateInEffectIsUnknown_NothingNeedsSaying(bool setting, bool? inEffect, string shown)
+    {
+        var status = Realtime(setting, inEffect, inEffect is null ? null : "Normal");
+
+        Assert.Equal(shown, status.RealtimeDisplay);
+        Assert.Equal("", status.RealtimeNote);
+        Assert.Equal(inEffect, status.RealtimeInEffect);
+    }
+
     // ── The status read stops on a failed read (#2476) ──────────────────────
     // A read that failed and returned normally left its variable null, the object was still emitted with every
     // field null, and ParseStatus turns a null "Disable" flag into protection ON. So a status that was never read
@@ -196,6 +246,7 @@ public class DefenderServiceTests
         Assert.False(status.RealtimeProtection);   // the stub disables it, so a null would read as ON
         Assert.True(status.IsTamperProtected);
         Assert.Equal(new[] { @"C:\Games" }, status.ExclusionPaths);
+        Assert.Equal((false, "Passive Mode"), (status.RealtimeInEffect, status.RunningMode));
     }
 
     /// <summary>
@@ -213,7 +264,8 @@ public class DefenderServiceTests
             "PUAProtection = 1; MAPSReporting = 2; EnableControlledFolderAccess = 0; ExclusionPath = @('C:\\Games'); " +
             "ExclusionExtension = @(); ExclusionProcess = @() } }\n";
         const string computerStatus =
-            "function Get-MpComputerStatus { [CmdletBinding()] param() [pscustomobject]@{ IsTamperProtected = $true } }\n";
+            "function Get-MpComputerStatus { [CmdletBinding()] param() [pscustomobject]@{ IsTamperProtected = $true; " +
+            "RealTimeProtectionEnabled = $false; AMRunningMode = 'Passive Mode' } }\n";
 
         static string Failing(string name) =>
             $"function {name} {{ [CmdletBinding()] param() $PSCmdlet.WriteError([System.Management.Automation.ErrorRecord]::new(" +

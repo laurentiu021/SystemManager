@@ -40,7 +40,38 @@ public sealed record DefenderStatus(
     public string PuaDisplay => TriStateLabel(PuaProtection);
     public string CfaDisplay => TriStateLabel(ControlledFolderAccess);
     public string MapsDisplay => MapsLabel(MapsReporting);
-    public string RealtimeDisplay => RealtimeProtection ? "On" : "Off";
+    /// <summary>
+    /// Whether real-time scanning runs, as Windows reports it, or null when that was not read.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RealtimeProtection"/> is the setting, which says only what is configured. Windows stops real-time
+    /// scanning when another antivirus takes over and leaves the setting on, and the card read the setting, so it said
+    /// "On" while Defender was not scanning (#2867).
+    /// </remarks>
+    public bool? RealtimeInEffect { get; init; }
+
+    /// <summary>
+    /// How Windows runs Defender, in Get-MpComputerStatus's words ("Normal", "Passive Mode", …), or empty.
+    /// </summary>
+    public string RunningMode { get; init; } = "";
+
+    /// <summary>
+    /// Defender stands aside for another antivirus: Windows runs it in passive mode, or in EDR block mode, either
+    /// of which means another antivirus is the one in charge.
+    /// </summary>
+    public bool StandsAside =>
+        RunningMode.Contains("Passive", StringComparison.OrdinalIgnoreCase)
+        || RunningMode.Contains("EDR Block", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Real-time scanning as it runs, or as it is set when that was not read.</summary>
+    public string RealtimeDisplay => (RealtimeInEffect ?? RealtimeProtection) ? "On" : "Off";
+
+    /// <summary>Why real-time scanning is off while its setting is on, or empty when the two agree.</summary>
+    public string RealtimeNote => RealtimeProtection && RealtimeInEffect == false
+        ? StandsAside
+            ? "Real-time protection is off: another antivirus is in charge, and Windows runs Defender in passive mode."
+            : "Real-time protection is off, although its setting here is on."
+        : "";
 
     /// <summary>
     /// False when Windows withheld the exclusion lists, which it does for a standard user. The three lists

@@ -400,4 +400,26 @@ public class DefenderViewModelTests
 
         Assert.Contains("and so would ransomware", Assert.Single(dialog.Messages), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task WithAnotherAntivirusInCharge_TheTabSaysRealtimeIsOff_AndWhy()
+    {
+        // The card read the setting, so it said "On" while Defender was not scanning (#2867).
+        var projection = new PSObject();
+        projection.Properties.Add(new PSNoteProperty("DisableRealtimeMonitoring", false));
+        projection.Properties.Add(new PSNoteProperty("IsTamperProtected", true));
+        projection.Properties.Add(new PSNoteProperty("RealTimeProtectionEnabled", false));
+        projection.Properties.Add(new PSNoteProperty("AMRunningMode", "Passive Mode"));
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<System.Threading.CancellationToken>())
+          .Returns(new Collection<PSObject> { projection });
+        var vm = new DefenderViewModel(new DefenderService(ps), NoRestorePoint());
+        await vm.InitializationComplete;
+
+        await vm.RefreshCommand.ExecuteAsync(null);
+
+        Assert.Equal("Off", vm.RealtimeDisplay);
+        Assert.Equal("Real-time protection is off: another antivirus is in charge, and Windows runs Defender in passive mode.",
+            vm.StatusMessage);
+    }
 }

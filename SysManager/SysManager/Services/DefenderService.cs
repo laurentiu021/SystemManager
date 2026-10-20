@@ -54,6 +54,8 @@ public sealed class DefenderService
             ExclusionExtension          = @($p.ExclusionExtension)
             ExclusionProcess            = @($p.ExclusionProcess)
             IsTamperProtected           = [bool]$s.IsTamperProtected
+            RealTimeProtectionEnabled   = $s.RealTimeProtectionEnabled
+            AMRunningMode               = [string]$s.AMRunningMode
         }
         """;
 
@@ -89,9 +91,14 @@ public sealed class DefenderService
             : status with { ExclusionPaths = [], ExclusionExtensions = [], ExclusionProcesses = [], ExclusionsReadable = false };
 
     /// <summary>Parse a Get-MpPreference/Get-MpComputerStatus projection into a status.</summary>
+    /// <remarks>
+    /// Real-time scanning is read both ways: as set, from the preference, and as it runs, from the computer status,
+    /// which is what the card shows (#2867). A projection without the second leaves it unknown, not off.
+    /// </remarks>
     public static DefenderStatus ParseStatus(PSObject obj)
     {
         bool disableRtp = ToBool(Prop(obj, "DisableRealtimeMonitoring"));
+        var inEffect = Prop(obj, "RealTimeProtectionEnabled");
         return new DefenderStatus(
             Available: true,
             IsTamperProtected: ToBool(Prop(obj, "IsTamperProtected")),
@@ -101,7 +108,11 @@ public sealed class DefenderService
             ControlledFolderAccess: ToInt(Prop(obj, "EnableControlledFolderAccess")),
             ExclusionPaths: ToStringList(Prop(obj, "ExclusionPath")),
             ExclusionExtensions: ToStringList(Prop(obj, "ExclusionExtension")),
-            ExclusionProcesses: ToStringList(Prop(obj, "ExclusionProcess")));
+            ExclusionProcesses: ToStringList(Prop(obj, "ExclusionProcess")))
+        {
+            RealtimeInEffect = inEffect is null ? null : ToBool(inEffect),
+            RunningMode = Prop(obj, "AMRunningMode")?.ToString()?.Trim() ?? "",
+        };
     }
 
     /// <summary>

@@ -768,7 +768,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // "count non-blank lines minus the header/separator" heuristic — the
             // latter mis-counted whenever winget's header/footer layout shifted.
             var upgradable = await _winget.ListUpgradableAsync(CancellationToken.None);
-            count = upgradable.Count;
+            count = CountForTheAlert(upgradable);
         }
         // The two failures App Updates names: the query failed, or winget is not installed.
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -806,6 +806,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
         NavTargetId = "nav-app-updates",
         ActionLabel = "Open App Updates",
     };
+
+    /// <summary>
+    /// The updates the alert counts: those winget can compare with what is installed. An app whose installed version
+    /// winget cannot read is offered on every scan, so counting it kept the alert yellow for good, and Update All Apps,
+    /// which leaves those apps out, could never clear it.
+    /// </summary>
+    internal static int CountForTheAlert(IEnumerable<AppPackage> upgradable) => upgradable.Count(p => !p.HasUnknownVersion);
 
     /// <summary>Pure decision for the App Updates alert. Testable without WPF.</summary>
     /// <remarks>

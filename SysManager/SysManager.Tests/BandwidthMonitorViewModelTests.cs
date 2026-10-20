@@ -897,4 +897,40 @@ public class BandwidthMonitorViewModelTests : IDisposable
         vm.Dispose();
         vm.Dispose();
     }
+
+    // ── The first sample after the tab was hidden ──────────────────────────────
+
+    [Fact]
+    public async Task TheFirstSampleAfterTheTabWasHidden_OnlyResetsTheBaseline()
+    {
+        // Each source measures since its own previous sample and none is taken while the tab is hidden, so the first
+        // one back is the average over the whole time away. It was shown, plotted and saved as the current rate.
+        var busy = new BandwidthSnapshot(BandwidthMode.Connections, 5_000_000, 1_000_000, []);
+        var history = new BandwidthHistoryService(_dir);
+        using var vm = NewVm(connFactory: () => new FakeSource(BandwidthMode.Connections, available: true, busy),
+                             history: history);
+        vm.IsActive = true;
+        vm.IsActive = false;
+        vm.IsActive = true;
+
+        await PollOnceAsync(vm);
+        Assert.Equal(0, vm.TotalDownBytesPerSec);
+        Assert.Empty(await history.LoadAsync(TimeSpan.FromHours(1)));
+
+        await PollOnceAsync(vm);
+        Assert.Equal(5_000_000, vm.TotalDownBytesPerSec);
+        Assert.Single(await history.LoadAsync(TimeSpan.FromHours(1)));
+    }
+
+    [Fact]
+    public async Task ATabThatStayedVisible_UsesEverySample()
+    {
+        var busy = new BandwidthSnapshot(BandwidthMode.Connections, 5_000_000, 1_000_000, []);
+        using var vm = NewVm(connFactory: () => new FakeSource(BandwidthMode.Connections, available: true, busy));
+        vm.IsActive = true;
+
+        await PollOnceAsync(vm);
+
+        Assert.Equal(5_000_000, vm.TotalDownBytesPerSec);
+    }
 }

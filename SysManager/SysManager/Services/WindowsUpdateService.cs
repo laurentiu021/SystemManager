@@ -148,12 +148,20 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             Emit("  Downloading…");
                             var dl = session.CreateUpdateDownloader();
                             int dlCode;
+                            int dlHr;
                             try
                             {
                                 dl.Updates = coll;
                                 var dlResult = dl.Download();
-                                dlCode = (int)dlResult.ResultCode;
-                                Marshal.FinalReleaseComObject(dlResult);
+                                try
+                                {
+                                    dlCode = EffectiveResultCode((int)dlResult.ResultCode, () => UpdateResultCode(dlResult));
+                                    dlHr = ResultHResult(dlResult);
+                                }
+                                finally
+                                {
+                                    Marshal.FinalReleaseComObject(dlResult);
+                                }
                             }
                             finally
                             {
@@ -162,10 +170,12 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                                 Marshal.FinalReleaseComObject(dl);
                             }
 
-                            if (dlCode != 2)
+                            if (dlCode != Succeeded)
                             {
-                                Emit($"  Download failed (code {dlCode}).");
-                                entry.Status = "Failed (download)";
+                                entry.Status = FailureStatus("download", dlCode, dlHr);
+                                Emit($"  Download failed: {entry.Status}.");
+                                Serilog.Log.Warning("Windows Update download failed for {Title}: result code {Code}, 0x{HResult:X8}",
+                                    entry.Title, dlCode, dlHr);
                                 failed++;
                                 // Do NOT release `coll` here: `continue` still runs the outer
                                 // finally, which releases it. Releasing it twice separates the
@@ -178,7 +188,11 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         if (!(bool)u.EulaAccepted)
                         {
                             try { u.AcceptEula(); }
-                            catch (COMException ex) { Log?.Invoke($"  EULA accept failed: 0x{ex.HResult:X8}"); }
+                            catch (COMException ex)
+                            {
+                                Log?.Invoke($"  EULA accept failed: 0x{ex.HResult:X8}");
+                                Serilog.Log.Warning(ex, "Windows Update licence acceptance failed for {Title}", entry.Title);
+                            }
                         }
 
                         ct.ThrowIfCancellationRequested();
@@ -186,6 +200,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         entry.Status = "Installing…";
 
                         int iCode;
+                        int iHr;
                         bool needsReboot;
                         var inst = session.CreateUpdateInstaller();
                         try
@@ -194,7 +209,8 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             var iResult = inst.Install();
                             try
                             {
-                                iCode = (int)iResult.ResultCode;
+                                iCode = EffectiveResultCode((int)iResult.ResultCode, () => UpdateResultCode(iResult));
+                                iHr = ResultHResult(iResult);
                                 needsReboot = (bool)iResult.RebootRequired;
                             }
                             finally
@@ -209,7 +225,7 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                             Marshal.FinalReleaseComObject(inst);
                         }
 
-                        if (iCode == 2)
+                        if (iCode == Succeeded)
                         {
                             entry.Status = needsReboot ? "Installed (reboot required)" : "Installed";
                             installed++;
@@ -218,9 +234,11 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
                         }
                         else
                         {
-                            entry.Status = $"Failed (install code {iCode})";
+                            entry.Status = FailureStatus("install", iCode, iHr);
                             failed++;
-                            Emit($"  ✗ Install failed (code {iCode}).");
+                            Emit($"  ✗ Install failed: {entry.Status}.");
+                            Serilog.Log.Warning("Windows Update install failed for {Title}: result code {Code}, 0x{HResult:X8}",
+                                entry.Title, iCode, iHr);
                         }
                     }
                     catch (COMException ex)
@@ -247,6 +265,60 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
 
             return new InstallReport(installed, failed, reboot);
         }, ct);
+
+    /// <summary>WUA's <c>OperationResultCode.orcSucceeded</c>.</summary>
+    private const int Succeeded = 2;
+
+    /// <summary>WUA's <c>OperationResultCode.orcSucceededWithErrors</c>.</summary>
+    private const int SucceededWithErrors = 3;
+
+    /// <summary>
+    /// The code that decides a one-update download or install. WUA's overall code, unless it is "succeeded with errors",
+    /// which says only that some update had a problem: with one update in the collection, that update's own code
+    /// decides whether it went in.
+    /// </summary>
+    internal static int EffectiveResultCode(int overall, Func<int> forTheUpdate) =>
+        overall == SucceededWithErrors ? forTheUpdate() : overall;
+
+    /// <summary>
+    /// A failed row's status: the HRESULT Windows reported when it gave one, the code a search for the error needs
+    /// (0x800F0922, 0x80073712), and the WUA result code only when there is none. The row used to show the result code
+    /// alone, which is 4 for nearly every failure.
+    /// </summary>
+    internal static string FailureStatus(string phase, int resultCode, int hResult) =>
+        hResult != 0 ? $"Failed ({phase} 0x{hResult:X8})" : $"Failed ({phase} code {resultCode})";
+
+    /// <summary>The HRESULT of a WUA download or installation result: the overall one, or else the one update's.</summary>
+    private static int ResultHResult(dynamic result)
+    {
+        var overall = (int)result.HResult;
+        if (overall != 0) return overall;
+        dynamic? one = null;
+        try
+        {
+            one = result.GetUpdateResult(0);
+            return (int)one.HResult;
+        }
+        finally
+        {
+            if (one is not null) Marshal.FinalReleaseComObject(one);
+        }
+    }
+
+    /// <summary>The result code of the one update in a WUA download or installation result.</summary>
+    private static int UpdateResultCode(dynamic result)
+    {
+        dynamic? one = null;
+        try
+        {
+            one = result.GetUpdateResult(0);
+            return (int)one.ResultCode;
+        }
+        finally
+        {
+            if (one is not null) Marshal.FinalReleaseComObject(one);
+        }
+    }
 
     private static dynamic CreateSession()
     {

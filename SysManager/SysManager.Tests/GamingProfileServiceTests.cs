@@ -1100,4 +1100,63 @@ public class GamingProfileServiceTests
         }
         finally { DeleteStore(path); }
     }
+
+    // ── Pause search indexing: a stop that outlasts its wait ───────────────────
+
+    [Fact]
+    public async Task AStopStillInProgressWhenItsWaitRunsOut_CountsAsApplied()
+    {
+        // Windows had accepted the stop and was still carrying it out. Counted as failed, the step was never reverted,
+        // and the indexer stayed stopped after game mode ended.
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => throw new InvalidOperationException("did not stop within 30 seconds"),
+            start: () => Task.CompletedTask,
+            status: () => System.ServiceProcess.ServiceControllerStatus.StopPending,
+            waitUntilStopped: _ => Task.CompletedTask);
+
+        Assert.Equal(GamingTweakResult.Applied, await tweak.ApplyAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AStopWindowsRefused_StillFails()
+    {
+        // The negative half: the indexer is still running, so nothing was paused.
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => throw new InvalidOperationException("Could not stop service"),
+            start: () => Task.CompletedTask,
+            status: () => System.ServiceProcess.ServiceControllerStatus.Running,
+            waitUntilStopped: _ => Task.CompletedTask);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tweak.ApplyAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ARevertWhileTheIndexerIsStillStopping_WaitsForItBeforeStartingIt()
+    {
+        var calls = new List<string>();
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => Task.CompletedTask,
+            start: () => { calls.Add("start"); return Task.CompletedTask; },
+            status: () => System.ServiceProcess.ServiceControllerStatus.StopPending,
+            waitUntilStopped: _ => { calls.Add("wait"); return Task.CompletedTask; });
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Equal(["wait", "start"], calls);
+    }
+
+    [Fact]
+    public async Task ARevertOfAStoppedIndexer_StartsItWithoutWaiting()
+    {
+        var calls = new List<string>();
+        var tweak = new SearchIndexingTweak(wasRunning: true,
+            stop: () => Task.CompletedTask,
+            start: () => { calls.Add("start"); return Task.CompletedTask; },
+            status: () => System.ServiceProcess.ServiceControllerStatus.Stopped,
+            waitUntilStopped: _ => { calls.Add("wait"); return Task.CompletedTask; });
+
+        await tweak.RevertAsync(CancellationToken.None);
+
+        Assert.Equal(["start"], calls);
+    }
 }

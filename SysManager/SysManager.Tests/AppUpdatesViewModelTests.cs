@@ -388,4 +388,18 @@ public class AppUpdatesViewModelTests
 
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
     }
+
+    [Fact]
+    public void TheScanStatus_SaysHowManyWereLeftUnticked_AndWhy()
+    {
+        AppPackage[] found =
+        [
+            new() { Id = "Git.Git", CurrentVersion = "2.47.0" },
+            new() { Id = "Contoso.Helper", CurrentVersion = AppPackage.UnknownVersion },
+        ];
+
+        Assert.Equal("2 upgradable package(s) found; 1 not ticked, because winget cannot read the installed version",
+            AppUpdatesViewModel.DescribeScan(found));
+        Assert.Equal("1 upgradable package(s) found", AppUpdatesViewModel.DescribeScan([found[0]]));
+    }
 }

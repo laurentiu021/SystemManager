@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Diagnostics;
+using System.ServiceProcess;
 using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
@@ -166,9 +167,27 @@ internal sealed class StandbyPurgeTweak(StandbyMemoryService standby) : IGamingT
 /// Temporarily STOP (not disable) the Windows Search indexer to cut background disk/CPU;
 /// restart it on revert only if it was running before. Needs admin.
 /// </summary>
-internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
+/// <param name="wasRunning">Whether the indexer was running before game mode started.</param>
+/// <param name="stop">Stops the indexer; defaults to the real service. A test passes its own.</param>
+/// <param name="start">Starts the indexer; defaults to the real service.</param>
+/// <param name="status">The indexer's state now, or null when it cannot be read; defaults to the real service.</param>
+/// <param name="waitUntilStopped">Waits, up to the time given, for the indexer to finish stopping.</param>
+internal sealed class SearchIndexingTweak(
+    bool wasRunning,
+    Func<Task>? stop = null,
+    Func<Task>? start = null,
+    Func<ServiceControllerStatus?>? status = null,
+    Func<TimeSpan, Task>? waitUntilStopped = null) : IGamingTweak
 {
     public const string ServiceName = "WSearch";
+
+    /// <summary>How long a revert waits for a stop still in progress before it starts the indexer again.</summary>
+    private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(30);
+
+    private readonly Func<Task> _stop = stop ?? (() => ServiceManagerService.StopServiceAsync(ServiceName));
+    private readonly Func<Task> _start = start ?? (() => ServiceManagerService.StartServiceAsync(ServiceName));
+    private readonly Func<ServiceControllerStatus?> _status = status ?? ReadStatus;
+    private readonly Func<TimeSpan, Task> _waitUntilStopped = waitUntilStopped ?? WaitUntilStoppedAsync;
 
     public string Label => "Pause search indexing";
     public bool RequiresAdmin => true;
@@ -178,7 +197,17 @@ internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
         // The indexer was already stopped before apply → nothing to stop, nothing to restart on
         // revert. A no-op keeps us from restarting a service the user had intentionally stopped.
         if (!wasRunning) return GamingTweakResult.NoChange;
-        await ServiceManagerService.StopServiceAsync(ServiceName).ConfigureAwait(false);
+        try
+        {
+            await _stop().ConfigureAwait(false);
+        }
+        // The 30-second wait ran out while Windows was still stopping the indexer. The stop was accepted, so the
+        // step counts and game mode's revert starts the indexer again. Counted as failed, it was never reverted,
+        // and the indexer went on to stop and stayed stopped until the next restart.
+        catch (InvalidOperationException) when (_status() is ServiceControllerStatus.StopPending or ServiceControllerStatus.Stopped)
+        {
+            return GamingTweakResult.Applied;
+        }
         return GamingTweakResult.Applied;
     }
 
@@ -186,9 +215,33 @@ internal sealed class SearchIndexingTweak(bool wasRunning) : IGamingTweak
     {
         // Only restart what we stopped: if the indexer was already stopped before apply,
         // leave it stopped (restoring the exact prior state).
-        if (wasRunning)
-            await ServiceManagerService.StartServiceAsync(ServiceName).ConfigureAwait(false);
+        if (!wasRunning) return;
+        // Windows refuses to start a service that is still stopping, which a stop that outlasted its wait can be.
+        if (_status() is ServiceControllerStatus.StopPending)
+            await _waitUntilStopped(StopWait).ConfigureAwait(false);
+        await _start().ConfigureAwait(false);
     }
+
+    private static ServiceControllerStatus? ReadStatus()
+    {
+        try
+        {
+            using var sc = new ServiceController(ServiceName);
+            return sc.Status;
+        }
+        catch (InvalidOperationException) { return null; }   // not installed, or not readable
+    }
+
+    private static Task WaitUntilStoppedAsync(TimeSpan timeout) => Task.Run(() =>
+    {
+        try
+        {
+            using var sc = new ServiceController(ServiceName);
+            sc.WaitForStatus(ServiceControllerStatus.Stopped, timeout);
+        }
+        catch (System.ServiceProcess.TimeoutException) { /* still stopping: the start that follows reports what Windows says */ }
+        catch (InvalidOperationException) { /* not installed or not readable: the start reports it the same way */ }
+    });
 }
 
 /// <summary>

@@ -301,6 +301,13 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
         // after its awaits (see InitAsync). _source is nulled in Dispose, so this covers it directly.
         if (_source is null || _pollCts is null || ct.IsCancellationRequested) return;
 
+        // The first sample after the tab was hidden has only set the source's baseline; the next one is a real rate.
+        if (_primeNextSample)
+        {
+            _primeNextSample = false;
+            return;
+        }
+
         TotalDownBytesPerSec = snap.TotalDownBytesPerSec;
         TotalUpBytesPerSec = snap.TotalUpBytesPerSec;
 
@@ -678,8 +685,23 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
     {
         // Only the poll loop honours IsActive (it skips sampling while hidden). Nothing to start/stop
         // here — but clear a stale alert when leaving so it doesn't linger on the hidden tab.
-        if (!value) AlertMessage = "";
+        if (!value)
+        {
+            AlertMessage = "";
+            _primeNextSample = true;
+        }
     }
+
+    /// <summary>
+    /// Set when the tab is hidden, so the first sample after it comes back only resets the baseline.
+    /// </summary>
+    /// <remarks>
+    /// Every source measures since its own previous sample, and none is taken while the tab is hidden, so that first
+    /// sample is the average over the whole time away. It used to be shown as the current rate, plotted as "now",
+    /// saved to the history and checked against the alert threshold. Read and written on the UI thread only: the
+    /// poll loop resumes there, and so does a change of <see cref="ObservableObject"/> state.
+    /// </remarks>
+    private bool _primeNextSample;
 
     /// <summary>
     /// Writes per-app network usage to a CSV the user picks a location for.

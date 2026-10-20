@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.18] - 2026-10-20
+
+**CPU Core Affinity says when Windows will not show a process's cores, instead of showing the last process's, and
+Display Profiles lists a monitor connected after the tab was first opened.**
+
+### Fixed
+
+- **CPU Core Affinity showed the previous process's cores for a process it could not read.** Picking a process whose
+  cores Windows does not let SysManager read, such as Defender's engine or another account's program, left the grid
+  ticked as it was for the process picked before, so those ticks read as this one's, and Apply stayed on for a change
+  Windows then refused. The grid now shows no cores, Apply is off, and the status line says why. A process that closed
+  after the list was read is taken off the list, as it already was after an Apply. Since CPU Core Affinity was added
+  (1.38.0).
+- **Display Profiles never saw a screen connected after the tab was first opened.** The displays were read once, and
+  SysManager keeps running in the notification area, so a monitor or TV plugged in later, or a laptop put on its dock,
+  never appeared and could not be set until SysManager was closed and started again. The tab reads the displays again
+  when Windows reports a display change, and on a new Refresh button and F5, keeping the display you picked while it
+  is still connected. Nothing is read while a change waits for Keep; a change reported then is read once it is kept
+  or reverted. Since Display Profiles was added (1.37.0).
+
 ## [1.130.17] - 2026-10-20
 
 **A Large Files scan shows on the taskbar button, the Dashboard's Tune-Up and Health Score cards give the same

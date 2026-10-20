@@ -51,6 +51,19 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
     // filter never loses a process, exactly as ServicesViewModel keeps _allServices behind Services.
     private List<RunningProcess> _allProcesses = [];
 
+    // Whether the grid shows the selected process's own cores. Apply is offered only then.
+    private bool _coresRead;
+
+    // What the status line says about a selected process whose cores could not be read. It names that process, so
+    // selecting one whose cores can be read puts the prompt back instead of leaving it there.
+    private string? _whyNoCores;
+
+    // A refresh selects the process again, so a process that closed meanwhile must not start another refresh.
+    private bool _refreshingProcesses;
+
+    /// <summary>The list read again after the selected process turned out to have closed. Internal so a test can await it.</summary>
+    internal Task ClosedProcessRefresh { get; private set; } = Task.CompletedTask;
+
     public BulkObservableCollection<RunningProcess> Processes { get; } = new();
     public BulkObservableCollection<CoreToggle> Cores { get; } = new();
 
@@ -95,6 +108,7 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
         // without this the click produced no feedback at all.
         IsBusy = true;
         IsProgressIndeterminate = true;
+        _refreshingProcesses = true;
         try
         {
             // Preserve the selection across a refresh by PID and start time: the list is a fresh set of records,
@@ -109,12 +123,16 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
                 SelectedProcess = Processes.FirstOrDefault(
                     p => p.ProcessId == selected.ProcessId && p.StartTime == selected.StartTime);
 
-            StatusMessage = IsHybrid
-                ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
-                : "Pick a process, choose cores, then apply.";
+            // Not over the reason a selected process shows no cores: the grid stays empty, so the reason still holds.
+            if (_coresRead || SelectedProcess is null) StatusMessage = Prompt;
         }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally { _refreshingProcesses = false; IsBusy = false; IsProgressIndeterminate = false; }
     }
+
+    /// <summary>What the status line asks for while there is nothing else to say.</summary>
+    private string Prompt => IsHybrid
+        ? "Hybrid CPU detected — P-cores and E-cores are labelled. Pick a process."
+        : "Pick a process, choose cores, then apply.";
 
     /// <summary>
     /// Narrows the picker to processes whose name or PID contains the filter text. Rebuilt from
@@ -136,35 +154,63 @@ public sealed partial class CpuAffinityViewModel : ViewModelBase
 
     partial void OnSelectedProcessChanged(RunningProcess? value)
     {
-        if (value is null)
-        {
-            ApplyCommand.NotifyCanExecuteChanged();
-            RestoreCommand.NotifyCanExecuteChanged();
-            return;
-        }
+        _coresRead = value is not null && ShowCoresOf(value);
+        ApplyCommand.NotifyCanExecuteChanged();
+        RestoreCommand.NotifyCanExecuteChanged();
+    }
 
-        long? mask = _service.GetAffinity(value.ProcessId, value.StartTime);
-        if (mask is { } m)
+    /// <summary>
+    /// Ticks the cores <paramref name="proc"/> may run on and returns true, or, when Windows will not say, clears the
+    /// grid, says why and returns false.
+    /// </summary>
+    /// <remarks>
+    /// Windows will not say for a process it keeps closed to SysManager, such as one of its own or another account's,
+    /// or for one that has closed since the list was read. The grid used to keep the previous process's ticks then,
+    /// so they read as this one's, and Apply was offered for a change Windows refuses, since a process SysManager may
+    /// not read is not one it may change (#2839). A process that has closed comes off the list, as it does after an
+    /// Apply that found it closed.
+    /// </remarks>
+    private bool ShowCoresOf(RunningProcess proc)
+    {
+        if (_service.GetAffinity(proc.ProcessId, proc.StartTime) is { } mask)
         {
             // Capture the original ONCE per process. TryAdd, not an assignment: re-selecting a process
             // — which a Refresh now does automatically to preserve the selection — must not treat the
             // mask SysManager itself just applied as the value to restore to.
-            _originalMasks.TryAdd(OriginalKey(value), m);
+            _originalMasks.TryAdd(OriginalKey(proc), mask);
 
             // The checkboxes always mirror the LIVE mask, so the grid shows what is true right now.
             // Only the restore target is remembered.
-            foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(m, c.Index);
+            foreach (var c in Cores) c.IsSelected = CpuAffinityService.IsCoreInMask(mask, c.Index);
+            if (StatusMessage == _whyNoCores) StatusMessage = Prompt;
+            return true;
         }
-        ApplyCommand.NotifyCanExecuteChanged();
-        RestoreCommand.NotifyCanExecuteChanged();
+
+        foreach (var c in Cores) c.IsSelected = false;
+        if (!_service.HasExited(proc.ProcessId, proc.StartTime))
+            StatusMessage = _whyNoCores = $"Windows did not let SysManager read which cores {proc.Name} uses, so they "
+                                          + "cannot be changed. It may need administrator rights, and some Windows "
+                                          + "processes stay closed even to those.";
+        else if (_refreshingProcesses)
+            StatusMessage = _whyNoCores = $"{proc.Display} had already closed.";
+        else
+            ClosedProcessRefresh = TakeOffTheListAsync(proc);
+        return false;
+    }
+
+    /// <summary>Reads the list again after the selected process turned out to have closed, and says so.</summary>
+    private async Task TakeOffTheListAsync(RunningProcess proc)
+    {
+        await RefreshProcessesAsync();
+        StatusMessage = _whyNoCores = $"{proc.Display} had already closed, so the list was read again.";
     }
 
     private static (int Pid, string Name, DateTime? StartTime) OriginalKey(RunningProcess p) =>
         (p.ProcessId, p.Name, p.StartTime);
 
-    private bool HasSelection => SelectedProcess is not null;
+    private bool CanApply => SelectedProcess is not null && _coresRead;
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(CanApply))]
     private async Task ApplyAsync()
     {
         var proc = SelectedProcess;

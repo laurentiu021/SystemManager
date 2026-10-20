@@ -230,7 +230,7 @@ the 25 tabs that can be cancelled from the keyboard, which is every tab with a C
 while something is running, and only after the control you are on has had its own chance to use the key,
 so it still closes a drop-down or undoes a text edit first.
 
-**`F5` re-reads the tab you are on**, across all 45 tabs that have something to look at again — the
+**`F5` re-reads the tab you are on**, across all 46 tabs that have something to look at again — the
 process list, the startup entries, the event log, the installed apps. Each tab names its own refresh, so
 F5 runs exactly what its own toolbar button runs and nothing else: nothing that cleans, deletes, applies
 or uninstalls is reachable from a bare keypress. On Drivers, Windows Update and Disk Analyzer that is List
@@ -1720,6 +1720,9 @@ offers, "rate us" prompts:
   that a **15-second auto-revert** restores the previous mode unless you confirm
   "Keep", so a bad mode can never strand you on a blank screen; **Revert now** goes back at once
 - **Per-display** — choose which monitor to configure; shows the current mode
+- **Sees a screen you connect later** — the list is read again when Windows reports a display
+  connected, removed or changed, and on **Refresh** or **F5**. The display you picked stays picked
+  while it is still connected, and nothing is read while a change waits for "Keep"
 - Validates each mode (CDS_TEST) before applying; no admin required
 
 ### CPU Core Affinity
@@ -1740,6 +1743,9 @@ offers, "rate us" prompts:
 - **Changes the process you picked, and no other** — if it closed after the list was
   read and Windows gave its process ID to another program, Apply and Restore leave that
   program alone, say the process had already closed, and refresh the list
+- **Says when Windows will not tell** — a process whose cores Windows does not let SysManager
+  read, such as one of Windows' own or another account's, shows no cores ticked, cannot be
+  applied, and the status line says why; one that closed after the list was read is taken off it
 - An empty selection is rejected — Windows treats an empty mask as "let the OS
   decide", so the app never silently does the opposite of what you picked
 

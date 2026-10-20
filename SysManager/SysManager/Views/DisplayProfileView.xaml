@@ -35,6 +35,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
                     <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}"/>
@@ -48,7 +49,10 @@
                         </ComboBox.ItemTemplate>
                     </ComboBox>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshDisplaysCommand}"
+                        Style="{StaticResource GhostButton}" Margin="8,0,0,0" Padding="14,8" VerticalAlignment="Bottom"
+                        AutomationProperties.Name="Refresh display list"/>
+                <StackPanel Grid.Column="2" Margin="16,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="CURRENT" Style="{StaticResource SectionLabel}"/>
                     <TextBlock Text="{Binding CurrentMode.Display, FallbackValue=—}" Style="{StaticResource MetricCompact}"
                                Foreground="{DynamicResource Info}" Margin="0,4,0,0"/>

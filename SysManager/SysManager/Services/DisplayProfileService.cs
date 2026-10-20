@@ -4,6 +4,7 @@
 
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 using Serilog;
 using SysManager.Models;
 
@@ -24,8 +25,19 @@ namespace SysManager.Services;
 /// by the source generator (SYSLIB1051). These functions have A/W variants, so the W
 /// entry point is named explicitly.
 /// </summary>
-public sealed class DisplayProfileService
+public sealed class DisplayProfileService : IDisplayProfileService
 {
+    /// <inheritdoc/>
+    /// <remarks>
+    /// <see cref="SystemEvents.DisplaySettingsChanged"/>, raised on <c>WM_DISPLAYCHANGE</c>. Its handlers are held in a
+    /// static list, so a subscriber has to unsubscribe.
+    /// </remarks>
+    public event EventHandler? DisplaysChanged
+    {
+        add => SystemEvents.DisplaySettingsChanged += value;
+        remove => SystemEvents.DisplaySettingsChanged -= value;
+    }
+
     /// <summary>Enumerate active display adapters.</summary>
     public IReadOnlyList<DisplayDevice> GetDisplays()
     {

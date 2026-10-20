@@ -356,8 +356,8 @@ to scroll.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.
-- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net.
-- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID and start time across a refresh. Every read and change passes `RunningProcess.StartTime` with the PID, and a change that fails for a process that has closed refreshes the list and says so (#2514); `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
+- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. The displays are read again on Refresh, F5 and `IDisplayProfileService.DisplaysChanged`, keeping the selected display by device name while it is connected and reading its modes again; the newest read wins, and one Windows reports is silent on the status line. Not while a mode is applied, reverted or waits to be kept: a change reported then is read once that is over (#2886).
+- `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID and start time across a refresh. Every read and change passes `RunningProcess.StartTime` with the PID, and a change that fails for a process that has closed refreshes the list and says so (#2514). A process whose affinity cannot be read shows no cores ticked and offers no Apply, with the reason on the status line, and one that has closed is taken off the list by a refresh, which never starts another (#2839); `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. Holds TWO cancellation sources: one for the task-list scan (driven by the Cancel button) and one for the per-selection run-info query, which each new selection supersedes so arrow-keying the grid cannot queue a PowerShell round-trip per row. Enable/disable is deliberately NOT cancellable — its script writes then reads back, so a cancel between the two would leave the task toggled while the grid showed the old state.
 - `DarkModeViewModel` — switch the Windows light/dark theme manually or on a fixed-time schedule (DispatcherTimer poll while the app runs); persists the schedule.
@@ -394,7 +394,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-three are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-four are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
@@ -402,7 +402,8 @@ constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (
 history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's Extensions view),
 `ICleanupPreScanService`, `IRecycleBin` (ShellRecycleBin, the Recycle Bin that Quick Cleanup, Deep Cleanup and
 the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
-`ICpuAffinityService`,
+`ICpuAffinityService`, `IDisplayProfileService` (DisplayProfileService, which also passes on Windows' display-change
+notification),
 `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
@@ -1290,7 +1291,8 @@ Key services:
 - `DisplayProfileService` — `user32` display APIs (`EnumDisplayDevicesW` /
   `EnumDisplaySettingsW` / `ChangeDisplaySettingsExW`) to read and switch resolution +
   refresh rate. Session-only apply (reverts on reboot); validated with `CDS_TEST` first.
-  Also classic `[DllImport]` (DEVMODE has non-blittable inline buffers).
+  Also classic `[DllImport]` (DEVMODE has non-blittable inline buffers). Behind
+  `IDisplayProfileService`, whose `DisplaysChanged` is `SystemEvents.DisplaySettingsChanged`.
 - `CpuAffinityService` — gets/sets per-process CPU affinity via `Process.ProcessorAffinity`
   and detects P-core/E-core topology via kernel32 `GetLogicalProcessorInformationEx`
   (variable-length buffer walked by each record's `Size`). The mask helpers
@@ -1843,7 +1845,7 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   where it has one (#2597).
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not
   agree on a name: 15 distinct spellings bind to a refresh-shaped button, and two views bind
-  two candidates each, so a convention-matching shell would have to guess. 45 tabs override
+  two candidates each, so a convention-matching shell would have to guess. 46 tabs override
   it — Browser Cleaner's returns the read of whichever half is on screen — and every command
   it can return must begin with Refresh/Rescan/Reload/Scan/Load/List/Analyze, which
   mechanically keeps Clean, Delete, Apply and Uninstall off a bare keypress.

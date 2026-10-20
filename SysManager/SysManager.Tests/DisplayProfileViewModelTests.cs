@@ -4,6 +4,7 @@
 
 using CommunityToolkit.Mvvm.Input;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -320,5 +321,198 @@ public class DisplayProfileViewModelTests
         vm.Dispose();
 
         service.Received(1).DisplaysChanged -= Arg.Any<EventHandler>();
+    }
+
+    // ---------- applying, keeping and reverting (#2761) ----------
+    // A unit test has no Application, so no dispatcher for the countdown to tick on, and a change waits for Keep or
+    // Revert now: the state between two ticks.
+
+    private static readonly DisplayMode At165 = new(2560, 1440, 165, 32);
+
+    /// <summary>
+    /// <paramref name="displays"/>, the laptop first and primary, with every mode change succeeding. The laptop runs at
+    /// 60 Hz until a change, and Windows reports 144 Hz after it.
+    /// </summary>
+    private static IDisplayProfileService Applying(params DisplayDevice[] displays)
+    {
+        var service = Listing(displays, displays);
+        // The mode load, the mode Apply records as the previous one, and every read after the change.
+        service.GetCurrentMode(Laptop.DeviceName).Returns(At60, At60, At144);
+        service.TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), out Arg.Any<string>())
+               .Returns(call => { call[4] = ""; return true; });
+        return service;
+    }
+
+    /// <summary>Applies 144 Hz to the laptop, which leaves the change waiting to be kept.</summary>
+    private static async Task<DisplayProfileViewModel> WaitingToBeKept(IDisplayProfileService service)
+    {
+        var vm = await Loaded(service);
+        vm.SelectedMode = At144;
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.True(vm.IsAwaitingConfirm);   // the premise
+        return vm;
+    }
+
+    [Fact]
+    public async Task Apply_IsOff_WhileARevertPutsThePreviousModeBack()
+    {
+        // The revert ends the countdown before it re-trains the panel. An apply started then recorded its own
+        // previous mode over the one being put back, and the revert still reported itself done.
+        var entered = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        var changes = 0;
+        var service = Applying(Laptop);
+        service.TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), out Arg.Any<string>())
+               .Returns(call =>
+               {
+                   if (Interlocked.Increment(ref changes) == 2)   // the revert
+                   {
+                       entered.Set();
+                       release.Wait(Bound);
+                   }
+                   call[4] = "";
+                   return true;
+               });
+        try
+        {
+            using var vm = await WaitingToBeKept(service);
+
+            var revert = vm.RevertNowCommand.ExecuteAsync(null);
+            Assert.True(entered.Wait(Bound), "the revert never reached Windows");
+            vm.SelectedMode = At60;   // another row picked while the panel re-trains
+
+            Assert.False(vm.ApplyCommand.CanExecute(null));
+
+            release.Set();
+            await revert;
+            Assert.Equal("Reverted to the previous display mode.", vm.StatusMessage);
+        }
+        finally
+        {
+            release.Set();
+        }
+    }
+
+    [Fact]
+    public async Task Escape_RevertsAChangeWaitingToBeKept_AndIsLeftAloneOtherwise()
+    {
+        using var vm = await Loaded(Applying(Laptop));
+        Assert.Null(vm.EscapeCancel);
+
+        vm.SelectedMode = At144;
+        await vm.ApplyCommand.ExecuteAsync(null);
+        Assert.Same(vm.RevertNowCommand, vm.EscapeCancel);
+
+        vm.KeepSettingsCommand.Execute(null);
+        Assert.Null(vm.EscapeCancel);
+    }
+
+    [Fact]
+    public async Task ARevertThatFails_SaysHowToRecover_WithoutTheKeyThatNoLongerDoesAnything()
+    {
+        var changes = 0;
+        var service = Applying(Laptop);
+        service.TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), out Arg.Any<string>())
+               .Returns(call =>
+               {
+                   var revert = Interlocked.Increment(ref changes) == 2;
+                   call[4] = revert ? "The display driver rejected the mode." : "";
+                   return !revert;
+               });
+        using var vm = await WaitingToBeKept(service);
+
+        await vm.RevertNowCommand.ExecuteAsync(null);
+
+        Assert.Equal("Couldn't restore the previous display mode. If the screen looks wrong, restart the PC, which "
+                     + "puts it back, or use Windows Settings ▸ System ▸ Display.", vm.StatusMessage);
+        Assert.Null(vm.EscapeCancel);
+    }
+
+    [Fact]
+    public async Task Closing_WhileAChangeWaitsToBeKept_PutsThePreviousModeBack()
+    {
+        // The countdown was the only way back, and it ended with SysManager: exiting from the notification area in
+        // those seconds kept a mode nobody confirmed.
+        var service = Applying(Laptop);
+        var vm = await WaitingToBeKept(service);
+
+        vm.Dispose();
+
+        service.Received(1).TryApplyMode(Laptop.DeviceName, 1920, 1080, 60, out Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Closing_AfterTheChangeWasKept_ChangesNoMode()
+    {
+        var service = Applying(Laptop);
+        var vm = await WaitingToBeKept(service);
+        vm.KeepSettingsCommand.Execute(null);
+
+        vm.Dispose();
+
+        // The apply alone.
+        service.Received(1).TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(),
+                                         out Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task WhileAChangeWaitsToBeKept_ClosingSysManagerAsksFirst()
+    {
+        using var vm = await WaitingToBeKept(Applying(Laptop));
+
+        Assert.Contains("Display mode change", QuitGuard.ActiveWorkWarning(), StringComparison.Ordinal);
+
+        vm.KeepSettingsCommand.Execute(null);
+        Assert.False(OperationLockService.Instance.IsLocked(OperationCategory.Display));
+    }
+
+    [Fact]
+    public async Task Keep_NamesTheModeApplied_WhenAnotherDisplayIsPickedMeanwhile()
+    {
+        var service = Applying(Laptop, Monitor);
+        service.GetCurrentMode(Monitor.DeviceName).Returns(At165);
+        using var vm = await WaitingToBeKept(service);
+        vm.SelectedDisplay = Monitor;
+        await vm.InitializationComplete;
+        Assert.Equal(At165, vm.CurrentMode);   // the readout follows the display picked
+
+        vm.KeepSettingsCommand.Execute(null);
+
+        Assert.Equal("Display set to 1920 × 1080 @ 144 Hz.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Apply_WhenAnotherDisplayIsPickedWhileThePanelReTrains_LeavesThatDisplaysReadoutAlone()
+    {
+        var entered = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        var service = Applying(Laptop, Monitor);
+        service.GetCurrentMode(Monitor.DeviceName).Returns(At165);
+        service.TryApplyMode(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), out Arg.Any<string>())
+               .Returns(call =>
+               {
+                   entered.Set();
+                   release.Wait(Bound);
+                   call[4] = "";
+                   return true;
+               });
+        try
+        {
+            using var vm = await Loaded(service);
+            vm.SelectedMode = At144;
+            var apply = vm.ApplyCommand.ExecuteAsync(null);
+            Assert.True(entered.Wait(Bound), "the apply never reached Windows");
+            vm.SelectedDisplay = Monitor;
+            await vm.InitializationComplete;   // the monitor's modes and its current mode
+
+            release.Set();
+            await apply;
+
+            Assert.Equal(At165, vm.CurrentMode);
+        }
+        finally
+        {
+            release.Set();
+        }
     }
 }

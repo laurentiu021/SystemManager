@@ -356,7 +356,7 @@ to scroll.
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.
-- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. The displays are read again on Refresh, F5 and `IDisplayProfileService.DisplaysChanged`, keeping the selected display by device name while it is connected and reading its modes again; the newest read wins, and one Windows reports is silent on the status line. Not while a mode is applied, reverted or waits to be kept: a change reported then is read once that is over (#2886).
+- `DisplayProfileViewModel` — list displays and supported resolution/refresh modes and switch between them; applies for the session with a 15-second auto-revert safety net. The displays are read again on Refresh, F5 and `IDisplayProfileService.DisplaysChanged`, keeping the selected display by device name while it is connected and reading its modes again; the newest read wins, and one Windows reports is silent on the status line. Not while a mode is applied, reverted or waits to be kept: a change reported then is read once that is over (#2886). Apply is off while a revert re-trains the panel, Escape reverts a mode waiting to be kept, closing SysManager meanwhile puts the previous mode back in `Dispose` and asks first through the `Display` lock, and the readout and Keep's message follow the display each belongs to (#2761). Without an `Application`, in unit tests, the countdown has no dispatcher and waits for Keep or Revert now.
 - `CpuAffinityViewModel` — pin a running process to specific logical CPUs with P-core/E-core labels on hybrid CPUs; per-process and reverts on process exit. The picker has a name/PID filter over a backing list (like `ServicesViewModel`) and preserves the selection by PID and start time across a refresh. Every read and change passes `RunningProcess.StartTime` with the PID, and a change that fails for a process that has closed refreshes the list and says so (#2514). A process whose affinity cannot be read shows no cores ticked and offers no Apply, with the reason on the status line, and one that has closed is taken off the list by a refresh, which never starts another (#2839); `RunningProcess.PinnedDisplay` surfaces the already-read affinity mask as a neutral "N of M cores" marker via the pure, tested `DescribeAffinity` helper.
 - `DefenderViewModel` — view Microsoft Defender status, toggle PUA / Controlled Folder Access, and manage scan-exclusion folders; every change is admin-gated, confirmed, and verified by read-back (Tamper Protection can silently reject). All four changes share one `RunOperationAsync` funnel that takes the shared `ISessionRestorePoint` snapshot before the first of them, so no command can skip it; each keeps its own failure wording, passed in.
 - `TaskSchedulerViewModel` — browse Windows scheduled tasks with a safety classification and enable/disable them (reversible, never deletes); system tasks warn before disabling, changes verified by read-back. Holds TWO cancellation sources: one for the task-list scan (driven by the Cancel button) and one for the per-selection run-info query, which each new selection supersedes so arrow-keying the grid cannot queue a PowerShell round-trip per row. Enable/disable is deliberately NOT cancellable — its script writes then reads back, so a cancel between the two would leave the task toggled while the grid showed the old state.
@@ -970,7 +970,7 @@ Key services:
 - `IconExtractorService` — extracts application icons from executables
   for display in process/app lists; caches results.
 - `OperationLockService` — prevents concurrent conflicting operations by
-  category (Disk / Network / SystemModification / Shell / Install) via a thread-safe
+  category (Disk / Network / SystemModification / Shell / Install / Display) via a thread-safe
   `ConcurrentDictionary` try-acquire. Returns a disposable handle, or `null`
   immediately if that category is already locked (non-blocking; no timeout).
   `Shell` is deliberately separate from `SystemModification` rather than folded into
@@ -982,6 +982,8 @@ Key services:
   and an MSI package started while another runs fails with 1618 (#2510; Update All Apps joined at #2553).
   None of them services Windows, so an SFC scan does not hold them up. Reset Windows Update stops the Windows
   Installer service, so it holds `Install` as well as `SystemModification` (#2553).
+  `Display` keeps nothing out, as nothing else changes a display mode: Display Profiles holds it from Apply until
+  the new mode is kept or the previous one is back, so the exits that read `QuitGuard` ask first (#2761).
   `Network` covers the speed tests, traceroute, Network Repair, and DNS & Hosts' DNS changes. Saving or
   restoring the hosts file takes no lock, from DNS & Hosts or from Undo Changes: both write it only through
   `HostsFileService`, which swaps a finished copy into place (#2553).
@@ -1839,8 +1841,9 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   stop. One property rather than a flag beside a command, because the app answers "is
   something running?" five different ways (`IsBusy` on most tabs, plus `IsShredding`,
   `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
-  four tabs. 25 tabs override it: every tab with a Cancel button, whether the button hides
-  while nothing runs or stays on screen. One that stays states no flag in the view, so its
+  four tabs. 26 tabs override it: every tab with a Cancel button, whether the button hides
+  while nothing runs or stays on screen, and Display Profiles, whose Escape is Revert now while
+  a new mode waits to be kept. One that stays states no flag in the view, so its
   override still returns null while nothing runs, on its Cancel command's `CanExecute` flag
   where it has one (#2597).
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not

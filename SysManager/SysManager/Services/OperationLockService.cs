@@ -73,7 +73,17 @@ public enum OperationCategory
     /// points, and gating an app upgrade behind an SFC scan or a Windows Update install would block ordinary app
     /// management for a resource the two do not share.
     /// </remarks>
-    Install
+    Install,
+
+    /// <summary>
+    /// A display mode change on Display Profiles, from Apply until the new mode is kept or the previous one is back.
+    /// </summary>
+    /// <remarks>
+    /// Nothing else in SysManager changes a display mode, so this keeps nothing out. It is taken so that closing
+    /// SysManager meanwhile asks first, as <c>QuitGuard</c> reads what is running from here: the countdown that puts
+    /// the previous mode back ends with SysManager (#2761).
+    /// </remarks>
+    Display
 }
 
 /// <summary>

@@ -33,6 +33,23 @@ public class ContextMenuServiceTests
         Assert.Null(ContextMenuService.StripMnemonic(null!));
     }
 
+    [Theory]
+    [InlineData("IntelliJ IDEA", "IntelliJ IDEA")]
+    [InlineData("Open with PyCharm", "Open with PyCharm")]
+    [InlineData("Add to PotPlayer's playlist", "Add to PotPlayer's playlist")]
+    [InlineData("Open w&ith Code - Insiders", "Open with Code - Insiders")]
+    [InlineData("Play with MPC-HC", "Play with MPC-HC")]
+    public void AVerbsOwnMenuText_IsShownAsWritten(string label, string shown)
+        => Assert.Equal(shown, ContextMenuService.GetFriendlyName(label, "", isLabel: true));
+
+    [Fact]
+    public void AKeyName_IsStillSplitIntoWords()
+    {
+        // The negative half: a key name is an identifier, and splitting it is what makes it readable.
+        Assert.Equal("Open With Py Charm", ContextMenuService.GetFriendlyName("OpenWithPyCharm", "", isLabel: false));
+        Assert.Equal("Command Prompt", ContextMenuService.GetFriendlyName("cmd", "", isLabel: true));
+    }
+
     [Fact]
     public void SplitCamelCase_CapitalizesInvariantly_OnTurkishCulture()
     {

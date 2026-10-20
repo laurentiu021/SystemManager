@@ -2080,7 +2080,9 @@ offers, "rate us" prompts:
   deliberately records nothing: it changes nothing, and a script polling it would push
   the real entries out of a history that only keeps the last 200
 - The in-app **CLI Interface** tab is a reference: it lists every command with a
-  one-click copy button. Example: `SysManager.exe --cleanup --silent`
+  one-click copy button. Each command is copied with the full path of the file you are running,
+  since the download is named `SysManager-v<version>.exe`, for example
+  `"C:\Tools\SysManager-v<version>.exe" --cleanup --silent`. In PowerShell, put `&` and a space in front
 
 ## Screenshots
 

@@ -60,11 +60,21 @@ public class EnvironmentVariableServiceTests
     }
 
     [Fact]
-    public void ChooseKind_PreservesExistingString()
+    public void ChooseKind_PromotesAnExistingStringThatNowHoldsAToken()
     {
-        Assert.Equal(RegistryValueKind.String,
+        // Windows expands %SystemRoot% only in REG_EXPAND_SZ. Kept as REG_SZ, the edit was saved as literal text, so
+        // a PATH entry such as %SystemRoot%\x pointed at a folder that does not exist.
+        Assert.Equal(RegistryValueKind.ExpandString,
             EnvironmentVariableService.ChooseKind(RegistryValueKind.String, @"%SystemRoot%\x"));
     }
+
+    [Theory]
+    [InlineData("50%")]
+    [InlineData("a%20b")]
+    [InlineData("100% sure")]
+    [InlineData("plain")]
+    public void ChooseKind_KeepsAnExistingStringWithNoToken(string value)
+        => Assert.Equal(RegistryValueKind.String, EnvironmentVariableService.ChooseKind(RegistryValueKind.String, value));
 
     [Fact]
     public void ChooseKind_UnsupportedExistingKindFallsBackToStringKind()

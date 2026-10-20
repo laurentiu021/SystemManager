@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.IO;
 using SysManager.Models;
 
 namespace SysManager.Tests;
@@ -17,7 +18,6 @@ public class TracerouteHopTests
         var h = new TracerouteHop();
         Assert.Equal(0, h.HopNumber);
         Assert.Equal("*", h.Address);
-        Assert.Equal("", h.HostName);
         Assert.Null(h.LatencyMs);
         Assert.Equal("", h.Status);
     }
@@ -29,13 +29,11 @@ public class TracerouteHopTests
         {
             HopNumber = 5,
             Address = "192.168.1.1",
-            HostName = "router.local",
             LatencyMs = 3.5,
             Status = "TtlExpired"
         };
         Assert.Equal(5, h.HopNumber);
         Assert.Equal("192.168.1.1", h.Address);
-        Assert.Equal("router.local", h.HostName);
         Assert.Equal(3.5, h.LatencyMs);
         Assert.Equal("TtlExpired", h.Status);
     }
@@ -50,12 +48,14 @@ public class TracerouteHopTests
     }
 
     [Fact]
-    public void PropertyChanged_FiresOnHostNameChange()
+    public void AHop_CarriesNoHostName_SoNoTraceWaitsToLookOneUp()
     {
-        var h = new TracerouteHop();
-        var changed = h.RecordPropertyChanges();
-        h.HostName = "resolved.host.com";
-        Assert.Contains("HostName", changed);
+        // Each hop used to wait for a reverse lookup whose answer nothing displayed. Showing names would mean adding
+        // a column for them, and the lookup with it, on purpose.
+        Assert.Null(typeof(TracerouteHop).GetProperty("HostName"));
+        var source = File.ReadAllText(Path.Combine(TestPaths.AppProject(), "Services", "TracerouteService.cs"));
+        Assert.Contains("GetHostAddressesAsync", source, StringComparison.Ordinal);   // the source that was read
+        Assert.DoesNotContain("GetHostEntryAsync", source, StringComparison.Ordinal);
     }
 
     [Fact]

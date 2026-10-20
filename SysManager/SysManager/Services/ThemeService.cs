@@ -887,6 +887,16 @@ public sealed class ThemeService
             var data = JsonSerializer.Deserialize<ThemeSettings>(json);
             if (data is null) return;
 
+            // Nothing is taken from the file until it is known to name a preset and one of the four modes. The mode
+            // used to be taken first, so a file with no preset id left CurrentPresetId null: every Auto lookup then
+            // threw, and an "auto" file did so at start-up, before the main window existed.
+            if (string.IsNullOrWhiteSpace(data.PresetId) || !IsKnownMode(data.Mode))
+            {
+                Log.Debug("Theme load failed: the file names no preset, or a mode that is not one of the four");
+                _unparsableAtLoad = true;
+                return;
+            }
+
             CurrentMode = data.Mode;
             ShadePosition = data.ShadePosition;
             CurrentPresetId = data.PresetId;
@@ -916,6 +926,9 @@ public sealed class ThemeService
             _unparsableAtLoad = true;
         }
     }
+
+    /// <summary>The modes the service writes: a preset's own dark or light, following Windows, or a custom theme.</summary>
+    private static bool IsKnownMode(string? mode) => mode is "dark" or "light" or AutoMode or "custom";
 
     private sealed record ThemeSettings(
         string PresetId, string Mode, double ShadePosition,

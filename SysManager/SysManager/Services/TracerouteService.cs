@@ -82,26 +82,9 @@ public sealed class TracerouteService
                 Status = latencies.Count > 0 ? replyStatus.ToString() : "Timeout"
             };
 
-            // Await reverse DNS with a short timeout before emitting the hop.
-            // This ensures hop.HostName is populated when the UI receives it.
-            if (replyAddress is not null)
-            {
-                var addr = replyAddress;
-                try
-                {
-                    using var dnsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    dnsCts.CancelAfter(800); // 800ms max for reverse DNS
-                    // Pass the token INTO GetHostEntryAsync rather than wrapping it in
-                    // WaitAsync: WaitAsync only abandons the await, leaving the lookup
-                    // running in the background (an orphaned task). The cancellation-aware
-                    // overload actually cancels the lookup when the 800ms budget elapses.
-                    var entry = await Dns.GetHostEntryAsync(addr.ToString(), dnsCts.Token).ConfigureAwait(false);
-                    hop.HostName = entry.HostName;
-                }
-                catch (OperationCanceledException) { /* DNS too slow — leave as null */ }
-                catch (System.Net.Sockets.SocketException) { /* no reverse DNS record */ }
-            }
-
+            // No reverse lookup of the hop's address. It held each hop back for up to 800 ms, more where the lookup
+            // could not be cancelled, and auto-trace repeated it for every target on every round, for a host name
+            // that nothing in the app showed since the console line that printed it was removed (#611).
             results.Add(hop);
             RaiseHopCompleted(hop);
 

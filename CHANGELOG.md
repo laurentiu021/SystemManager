@@ -10,6 +10,40 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.6] - 2026-10-20
+
+**SysManager opens even when its theme file names no theme, and Environment Variables, Traceroute, CLI Interface and
+Right-click Menu each fix one thing they did wrong.**
+
+### Fixed
+
+- **A theme file with no preset could keep SysManager from opening.** Loading `theme.json` took the mode from the file
+  before checking that the file named a preset. A file without one, edited by hand or brought in by Profile import
+  from a profile that lacked the field, left the preset empty. In Follow Windows mode the first lookup then threw
+  while SysManager was starting, before its window existed: one error box, then a SysManager running with no window,
+  and every later start only handing over to it. In the other modes the Follow Windows button threw instead. The file
+  is checked first now. One with no preset, or with a mode SysManager never writes, is treated like any other file
+  that is not a theme: the shipped theme is used, and the file is set aside at the next change. Since 1.82.0, when
+  following Windows was added.
+- **Typing %NAME% into an existing Environment Variables value did not make it expand.** A variable stored as plain
+  text (REG_SZ) kept that kind when edited, so a value that now held a token such as `%SystemRoot%` was saved as
+  literal text, and Windows never expanded it: a PATH folder added that way pointed at a folder that does not exist.
+  An edited plain-text value that now holds a `%NAME%` token is saved as expandable. One with only a percent sign,
+  such as `50%` or `a%20b`, keeps its kind. Since 1.33.3.
+- **Traceroute waited at every hop for a name it never showed.** Each hop looked up the replying address's host name,
+  for up to 800 ms and longer when the lookup could not be stopped, before the hop appeared, and auto-trace repeated
+  that for every target on every round. Nothing has displayed that name since 1.18.0. The lookup is gone, so a trace
+  takes as long as its pings.
+- **CLI Interface copied commands for a file nobody has.** The example and every Copy button wrote `SysManager.exe`,
+  while the download is named `SysManager-v<version>.exe`, so the pasted line was not found from a script or Task
+  Scheduler, and copying the `--json` or `--silent` row gave a line the command line refuses. Commands are copied
+  with the full, quoted path of the file that is running now, a modifier comes with `--health`, which changes
+  nothing, and the tab says that PowerShell needs `&` in front. Since the tab was added (1.49.0).
+- **Right-click Menu changed the names programs give their entries.** An entry's own menu text went through the
+  clean-up meant for registry key names, so "IntelliJ IDEA" read "Intelli J IDEA", "PyCharm" read "Py Charm" and
+  "Code - Insiders" lost its dash. That text is shown as written now, without its keyboard-shortcut marker; only key
+  names are split into words. Since 1.7.5.
+
 ## [1.130.5] - 2026-10-20
 
 **A Caution service's warning now appears when you stop or disable it, and four smaller things the app said or

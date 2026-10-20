@@ -131,9 +131,9 @@ public sealed partial class ContextMenuService : IContextMenuService
                         }
 
                         // Read display name: prefer (Default) value, fall back to key name
-                        var displayName = entryKey.GetValue("")?.ToString();
-                        if (string.IsNullOrWhiteSpace(displayName))
-                            displayName = entryName;
+                        var label = entryKey.GetValue("")?.ToString();
+                        var isLabel = !string.IsNullOrWhiteSpace(label);
+                        var displayName = string.IsNullOrWhiteSpace(label) ? entryName : label;
 
                         // Check if LegacyDisable exists (entry is hidden)
                         var isEnabled = entryKey.GetValue("LegacyDisable") is null;
@@ -144,7 +144,7 @@ public sealed partial class ContextMenuService : IContextMenuService
                         var registryPath = $@"HKCR\{subKey}\{entryName}";
 
                         // Resolve a user-friendly display name
-                        var friendlyName = GetFriendlyName(displayName, command);
+                        var friendlyName = GetFriendlyName(displayName, command, isLabel);
 
                         entries.Add(new ContextMenuEntry
                         {
@@ -964,7 +964,13 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// Resolves a raw registry entry name into a user-friendly display name.
     /// Falls back to CamelCase splitting and cleanup for unknown entries.
     /// </summary>
-    private static string GetFriendlyName(string rawName, string command)
+    /// <param name="isLabel">
+    /// True when <paramref name="rawName"/> is the verb's (Default) value, the text its program wrote for the menu.
+    /// That text is shown as written, its mnemonic aside: split as if it were a key name, "IntelliJ IDEA" read
+    /// "Intelli J IDEA", "PyCharm" read "Py Charm" and "Code - Insiders" lost its dash. Only a key name, which is an
+    /// identifier, is split.
+    /// </param>
+    internal static string GetFriendlyName(string rawName, string command, bool isLabel = false)
     {
         // 1. Check exact match in known names
         if (KnownNames.TryGetValue(rawName, out var known))
@@ -1012,8 +1018,8 @@ public sealed partial class ContextMenuService : IContextMenuService
                 return inferred;
         }
 
-        // 5. Split CamelCase for readable raw names
-        return SplitCamelCase(rawName);
+        // 5. A label as written; split CamelCase for a key name
+        return isLabel ? MultiSpacePattern().Replace(StripMnemonic(rawName), " ").Trim() : SplitCamelCase(rawName);
     }
 
     /// <summary>

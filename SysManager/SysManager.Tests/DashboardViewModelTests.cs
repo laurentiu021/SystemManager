@@ -143,9 +143,12 @@ public class DashboardViewModelTests
     }
 
     [Fact]
-    public void Constructor_IsBusyFalse()
+    public async Task Constructor_IsBusyFalse_OnceItsFirstLoadIsDone()
     {
-        var vm = NewVm();
+        // The first load computes the health score, which marks the tab busy while it runs (#2876), so the flag is read
+        // once that load is done rather than while it may still be running.
+        using var vm = NewVm(WingetListing(() => 0));
+        await vm.InitializationComplete.WaitAsync(Bound);
         Assert.False(vm.IsBusy);
     }
 
@@ -1567,6 +1570,20 @@ public class DashboardViewModelTests
 
         Assert.True(vm.IsBusy);
         Assert.Equal(0, vm.Progress);
+    }
+
+    [Fact]
+    public async Task TheHealthScore_MarksTheTabBusyWhileItLoads_AtStartUpToo()
+    {
+        // Only a refresh marked the tab busy, so the tab was not busy while the score was computed at start-up (#2876).
+        using var vm = NewVm(WingetListing(() => 0));
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        vm.IsHealthScoreLoading = true;
+        Assert.True(vm.IsBusy);
+
+        vm.IsHealthScoreLoading = false;
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]

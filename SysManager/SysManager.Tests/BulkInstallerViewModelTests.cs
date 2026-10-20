@@ -347,15 +347,47 @@ public class BulkInstallerViewModelTests
     // ── re-entrancy guard (regression: shared CTS disposed mid-install) ──
 
     [Fact]
-    public void InstallSelectedCommand_DisabledWhileBusy()
+    public void InstallSelectedCommand_DisabledWhileAnInstallRuns()
     {
-        var vm = NewVm();
+        var vm = VmWithSubstitutedRunner(Substitute.For<IPowerShellRunner>());
+        var told = 0;
+        vm.InstallSelectedCommand.CanExecuteChanged += (_, _) => told++;
         Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // idle → clickable
 
-        vm.IsBusy = true;
+        vm.IsInstalling = true;
         Assert.False(vm.InstallSelectedCommand.CanExecute(null));  // running → blocked (no re-entry)
+        Assert.True(told > 0, "the button was not told, so it stays clickable on screen");
 
-        vm.IsBusy = false;
+        vm.IsInstalling = false;
         Assert.True(vm.InstallSelectedCommand.CanExecute(null));   // done → clickable again
+    }
+
+    [Fact]
+    public async Task AWingetSearch_ShowsTheTabBusy_ButNotTheInstallsCancel()
+    {
+        // The search set only IsSearching, so it showed on neither the sidebar nor the taskbar button (#2876). It is
+        // not an install, so the install's Cancel and Escape stay out of it, and Install Selected stays on.
+        var search = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(a => a.StartsWith("search ", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(search.Task);
+        var vm = VmWithSubstitutedRunner(runner);
+        await vm.InitializationComplete;
+        vm.SearchQuery = "vlc";
+
+        var running = vm.SearchWingetCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsSearching);   // the premise
+        Assert.True(vm.IsBusy);
+        Assert.True(vm.IsProgressIndeterminate);
+        Assert.False(vm.IsInstalling);
+        Assert.Null(vm.EscapeCancel);
+        Assert.True(vm.InstallSelectedCommand.CanExecute(null));
+
+        search.SetResult(0);
+        await running;
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
     }
 }

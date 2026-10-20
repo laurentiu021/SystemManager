@@ -22,7 +22,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? EscapeCancel =>
-        IsBusy ? CancelCommand : null;
+        IsInstalling ? CancelCommand : null;
 
     private readonly BulkInstallerService _service;
     private readonly AppIconService _iconService;
@@ -66,6 +66,25 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     // Custom winget search
     [ObservableProperty] private string _searchQuery = "";
     [ObservableProperty] private bool _isSearching;
+
+    // An install is running. Its Cancel button, its bar on the status line and the gate on Install Selected follow
+    // this, and the sidebar and the taskbar button follow IsBusy, which a winget search sets too: the search set only
+    // its own flag, so it showed on neither (#2876).
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallSelectedCommand))]
+    private bool _isInstalling;
+
+    partial void OnIsInstallingChanged(bool value) => FollowWork();
+
+    partial void OnIsSearchingChanged(bool value) => FollowWork();
+
+    private void FollowWork()
+    {
+        IsBusy = IsInstalling || IsSearching;
+
+        // A search reports no figure, so the taskbar button shows a moving bar for it. An install sets its own.
+        if (!IsInstalling) IsProgressIndeterminate = IsSearching;
+    }
     public BulkObservableCollection<InstallableApp> SearchResults { get; } = new();
 
     /// <summary>
@@ -109,10 +128,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         _service = service;
         _iconService = iconService;
-        // IsBusy lives in the base class; observe it to re-evaluate the install
-        // command's CanExecute so the button disables while an install runs (a second
-        // click would otherwise dispose the shared CTS mid-flight).
-        PropertyChanged += OnVmPropertyChanged;
         IsElevated = AdminHelper.IsElevated();
         // Reflect the persisted opt-in WITHOUT triggering a save/reload during ctor init.
         _loadWebIcons = _iconService.NetworkFetchEnabled;
@@ -215,17 +230,15 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     /// Gate for the install command. Without it the "Install Selected" button stays
     /// clickable during a running install; a second click re-enters the handler and
     /// disposes the shared CTS the first invocation is still awaiting
-    /// (ObjectDisposedException). Disabling the button while busy prevents that.
+    /// (ObjectDisposedException). Disabling the button while an install runs prevents that.
     /// </summary>
-    private bool NotBusy => !IsBusy;
+    /// <remarks>
+    /// An install, not IsBusy: a winget search marks the tab busy too, and it shares nothing with an install, so the
+    /// button stays on while one runs (#2876).
+    /// </remarks>
+    private bool NotInstalling => !IsInstalling;
 
-    private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(IsBusy))
-            InstallSelectedCommand.NotifyCanExecuteChanged();
-    }
-
-    [RelayCommand(CanExecute = nameof(NotBusy))]
+    [RelayCommand(CanExecute = nameof(NotInstalling))]
     private async Task InstallSelectedAsync()
     {
         var selected = Apps.Where(a => a.IsSelected).ToList();
@@ -255,9 +268,9 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             return;
         }
 
-        IsBusy = true;
+        IsInstalling = true;
         IsProgressIndeterminate = false;
-        // Re-entrancy is prevented by the NotBusy CanExecute gate, so the running
+        // Re-entrancy is prevented by the NotInstalling CanExecute gate, so the running
         // install can never have its CTS disposed out from under it by a second click.
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -341,7 +354,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            IsInstalling = false;
             InstallEtaText = string.Empty;
         }
     }
@@ -603,7 +616,6 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     {
         if (disposing)
         {
-            PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();
         }

@@ -400,6 +400,83 @@ public class DeepCleanupViewModelTests : IDisposable
         }
     }
 
+    // ---------- what is cleaned is what the confirmation listed (#2702) ----------
+    // The confirmation is modal, and WPF keeps running queued work while it is open. A scan that finished then
+    // replaced the list, and the clean ran over the new one: a category that was empty when the dialog was built,
+    // and had content now, arrived ticked and was cleaned without being confirmed, the Recycle Bin among them.
+
+    private static CleanupCategory Bucket(string name, string path, long size, bool ticked) => new()
+    {
+        Name = name,
+        Description = "test",
+        Paths = [path],
+        TotalSizeBytes = size,
+        FileCount = size > 0 ? 1 : 0,
+        IsSelected = ticked,
+    };
+
+    [Fact]
+    public void Clean_IsOff_WhileAScanRuns_AndComesBackAfterIt()
+    {
+        var vm = NewVm();
+        // A folder that is never created: nothing here cleans, and nothing could clean a real one by mistake.
+        vm.Categories.Add(Bucket("Listed", Path.Combine(Path.GetTempPath(), "smtest_never_" + Guid.NewGuid().ToString("N")),
+                                 size: 1, ticked: true));
+        var told = 0;
+        vm.CleanCommand.CanExecuteChanged += (_, _) => told++;
+
+        vm.IsScanning = true;
+        Assert.False(vm.CleanCommand.CanExecute(null));
+        Assert.Equal(1, told);
+
+        vm.IsScanning = false;
+        Assert.True(vm.CleanCommand.CanExecute(null));
+        Assert.Equal(2, told);
+    }
+
+    [Fact]
+    public async Task Clean_DeletesWhatTheConfirmationListed_WhenTheListWasReplacedWhileItWasOpen()
+    {
+        var listed = Path.Combine(Path.GetTempPath(), "smtest_clean_listed_" + Guid.NewGuid().ToString("N"));
+        var unlisted = Path.Combine(Path.GetTempPath(), "smtest_clean_unlisted_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(listed);
+        Directory.CreateDirectory(unlisted);
+        var listedFile = Path.Combine(listed, "old.tmp");
+        var unlistedFile = Path.Combine(unlisted, "new.tmp");
+        File.WriteAllText(listedFile, "x");
+
+        var vm = NewVm();
+        vm.Categories.Add(Bucket("Listed", listed, size: 1, ticked: true));
+        vm.Categories.Add(Bucket("Empty at the scan", unlisted, size: 0, ticked: false));
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(_ =>
+        {
+            // The rescan landing while the dialog is open: the empty category has filled, and arrives ticked.
+            File.WriteAllText(unlistedFile, "x");
+            vm.Categories.ReplaceWith([Bucket("Listed", listed, size: 1, ticked: true),
+                                       Bucket("Empty at the scan", unlisted, size: 1, ticked: true)]);
+            return true;
+        });
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.CleanCommand.ExecuteAsync(null);
+
+            Assert.False(File.Exists(listedFile), "the category the confirmation listed was not cleaned");
+            Assert.True(File.Exists(unlistedFile), "a category the confirmation did not list was cleaned");
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            foreach (var dir in new[] { listed, unlisted })
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
     // ---------- the Windows Update caches vs a Windows Update install or reset (#2510) ----------
 
     [Fact]

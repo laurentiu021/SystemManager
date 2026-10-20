@@ -61,12 +61,16 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     public string TotalSelectedDisplay => FormatHelper.FormatSize(TotalSelectedBytes);
 
     /// <summary>
-    /// Clean is only valid when at least one category is ticked and no clean is
-    /// already running. Gating CanExecute (rather than early-returning inside the
+    /// Clean is only valid when at least one category is ticked and no clean or scan is
+    /// running. Gating CanExecute (rather than early-returning inside the
     /// command) keeps the button visibly disabled at 0 B selected, so an empty
     /// destructive action is never presented as clickable.
     /// </summary>
-    private bool CanClean => !IsCleaning && Categories.Any(c => c.IsSelected);
+    /// <remarks>
+    /// Not during a scan: one that finishes while the confirmation is open replaces the list the confirmation was
+    /// built from (#2702).
+    /// </remarks>
+    private bool CanClean => !IsCleaning && !IsScanning && Categories.Any(c => c.IsSelected);
 
     public DeepCleanupViewModel(DeepCleanupService cleanup)
     {
@@ -87,7 +91,12 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     }
 
     // Forward any running state to IsBusy so the sidebar progress indicator works
-    partial void OnIsScanningChanged(bool value) => IsBusy = IsScanning || IsCleaning;
+    partial void OnIsScanningChanged(bool value)
+    {
+        IsBusy = IsScanning || IsCleaning;
+        CleanCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnIsCleaningChanged(bool value)
     {
         IsBusy = IsScanning || IsCleaning;
@@ -235,7 +244,7 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanClean))]
     private async Task CleanAsync()
     {
-        if (IsCleaning || !Categories.Any(c => c.IsSelected)) return;
+        if (IsCleaning || IsScanning || !Categories.Any(c => c.IsSelected)) return;
 
         // Deletion is permanent. Confirm first, showing how much will be removed so the choice is
         // informed — and naming the Recycle Bin explicitly whenever it is one of the selected categories.
@@ -300,8 +309,12 @@ public sealed partial class DeepCleanupViewModel : ViewModelBase
                 CleanStatusLine = $"[{p.Current}/{p.Total}]  {p.CategoryName}";
                 CleanEtaText = _cleanEta.Update(CleanProgress);
             });
+            // The categories the confirmation listed, not the list on screen now. The confirmation is modal and WPF
+            // keeps running queued work while it is open, so a scan that finished then had replaced the list, and a
+            // category that was empty when the dialog was built arrived ticked and was cleaned unconfirmed: the
+            // Recycle Bin, with files deleted into it since (#2702).
             var result = await progress.SettleAfterAsync(
-                reporter => _cleanup.CleanAsync(Categories, reporter, _cleanCts.Token));
+                reporter => _cleanup.CleanAsync(selected, reporter, _cleanCts.Token));
             // Released here rather than at the end of the method: the rescan below only reads, and holding the
             // system lock through a scan of the whole machine would refuse every other system change for minutes.
             // The using above still releases it if the clean throws; a second Dispose does nothing.

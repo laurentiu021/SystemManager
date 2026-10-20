@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.20] - 2026-10-20
+
+**Deep Cleanup deletes exactly what its confirmation listed, and Clean selected stays off while a scan runs.**
+
+### Fixed
+
+- **Deep Cleanup could clean a category its confirmation never listed.** Clean selected stayed on while a scan ran,
+  and the confirmation stays open while SysManager keeps working. A scan that finished meanwhile replaced the list,
+  and the clean then ran over the new one, so a category that was empty when the confirmation was shown, and had
+  filled since, was ticked and cleaned without being named. The Recycle Bin is the worst case: an empty bin starts
+  unticked since 1.130.8, so files deleted after the last scan went with it. The clean now deletes the categories
+  the confirmation listed, and Clean selected is off until the scan has finished. Since the confirmation was added
+  (1.19.4).
+
 ## [1.130.19] - 2026-10-20
 
 **On Display Profiles, Apply mode waits for a revert to finish, Escape puts back a mode you have not kept, and closing

@@ -243,7 +243,9 @@ to scroll.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
   a link to the maker's support site.
 - `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
-- `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list.
+- `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list. Clean is off while a
+  scan runs, and the service is handed the categories the confirmation listed rather than the list on screen, which
+  a scan finishing behind the modal confirmation could replace (#2702).
 - `LargeFilesViewModel` — read-only biggest-files listing for a chosen folder or drive. Split out of
   `DeepCleanupViewModel` in #1523 and moved to the Storage group, beside the other two read-only
   space-analysis tabs. The two halves shared nothing — the locations list, the drive enumeration and

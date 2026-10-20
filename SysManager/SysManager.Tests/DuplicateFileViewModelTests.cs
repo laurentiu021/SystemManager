@@ -452,7 +452,7 @@ public class DuplicateFileViewModelTests
         Assert.Equal("{StaticResource Caption}", inline.Attribute("BasedOn")?.Value);
     }
 
-    // ── The summary says when files stored online only were not checked (R7-04) ──
+    // ── The summary says when files stored online only were not checked ──────
 
     [Fact]
     public void TheSummary_SaysHowManyFilesStoredOnlineOnlyWereNotChecked()

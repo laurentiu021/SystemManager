@@ -1436,7 +1436,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   registry mechanism
 - Enter an exe name or browse for a file, confirm, and the app is prevented
   from launching
-- Fully reversible — unblock restores normal execution
+- Fully reversible — unblock restores normal execution, and a block an older version wrote is
+  listed and can be lifted wherever Windows is installed
 - A block goes by file name: it stops every program with that name on the PC, for every
   user, and the confirmation says so
 - Shows list of currently blocked apps with select/deselect and batch unblock. Your ticks

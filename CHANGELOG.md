@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.12] - 2026-10-20
+
+**App Blocker recognises the blocks older versions wrote on a PC where Windows is not in C:\Windows, and a program
+name too long for Windows is refused with the tab's own message instead of an error box.**
+
+### Fixed
+
+- **App Blocker could neither show nor lift a block an older version wrote, where Windows is not in C:\Windows.**
+  Versions before 1.33.11 stored a block as `C:\Windows\System32\SysManager_Blocked.exe`, and later versions
+  recognised a block only by the path to their own system folder. Where Windows is installed elsewhere, such a block
+  still kept the program from starting, but the tab did not list it, so it had no Unblock button, the Dashboard's
+  warning about a block that cannot be lifted could not see it, and blocking the program again was refused as
+  another program's debugger. A block is recognised by that file name now, wherever the path points. Since 1.33.11.
+- **A very long program name made Block fail with an error box.** Windows limits a registry key name to 255
+  characters, and a pasted name longer than that reached the registry and failed there with an error SysManager did
+  not catch, so the generic error box appeared instead of the tab's own message. Such a name is refused as not a
+  valid program name now, and the box takes at most 255 characters. Since App Blocker was added (0.34.0).
+
 ## [1.130.11] - 2026-10-20
 
 **Duplicate Finder no longer downloads files that OneDrive keeps online only, and says how many it left unchecked.**

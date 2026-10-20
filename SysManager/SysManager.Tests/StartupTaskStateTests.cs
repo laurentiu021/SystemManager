@@ -40,6 +40,36 @@ public sealed class StartupTaskStateTests : IDisposable
         File.WriteAllText(path, xml, Encoding.Unicode);
     }
 
+    // ---------- what runs the task (#2871) ----------
+    // Only a sign-in or start-up trigger makes a task start with Windows. The Dashboard's "Why is it slow?" counted every
+    // enabled task as a program that does, hourly and daily updaters among them.
+
+    [Theory]
+    [InlineData("<LogonTrigger><Enabled>true</Enabled></LogonTrigger>", true)]
+    [InlineData("<LogonTrigger />", true)]
+    [InlineData("<BootTrigger />", true)]
+    [InlineData("<CalendarTrigger><StartBoundary>2026-01-01T03:00:00</StartBoundary></CalendarTrigger>", false)]
+    [InlineData("<TimeTrigger><Repetition><Interval>PT1H</Interval></Repetition></TimeTrigger>", false)]
+    [InlineData("<LogonTrigger><Enabled>false</Enabled></LogonTrigger><CalendarTrigger />", false)]
+    [InlineData("<CalendarTrigger /><LogonTrigger />", true)]
+    [InlineData("", false)]
+    public void ATask_StartsWithWindows_OnlyWhenAnEnabledSignInOrStartUpTriggerRunsIt(string triggers, bool expected)
+    {
+        WriteTask("Updater", "<Hidden>false</Hidden>", triggers);
+
+        Assert.Equal(expected, StartupService.ReadTaskDefinition(_tasksRoot, @"\Updater")?.StartsWithWindows);
+    }
+
+    [Fact]
+    public void ADisabledTask_KeepsWhatRunsIt_AndReadsAsDisabled()
+    {
+        WriteTask("Updater", "<Enabled>false</Enabled>", "<LogonTrigger />");
+
+        Assert.Equal(new StartupService.TaskDefinition(Enabled: false, StartsWithWindows: true),
+                     StartupService.ReadTaskDefinition(_tasksRoot, @"\Updater"));
+        Assert.Equal("Disabled (scheduled)", StartupService.TaskStatus(enabled: false, startsWithWindows: true));
+    }
+
     [Fact]
     public void ADisabledTask_ReadsAsDisabled()
     {

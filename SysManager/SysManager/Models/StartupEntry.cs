@@ -100,6 +100,16 @@ public sealed partial class StartupEntry : ObservableObject
 
     /// <summary>Task Scheduler path (for scheduled task entries).</summary>
     public string TaskPath { get; init; } = "";
+
+    /// <summary>
+    /// Whether this runs when Windows starts or someone signs in: always for the Run keys and the Startup folders, and
+    /// for a scheduled task only when an enabled sign-in or start-up trigger runs it.
+    /// </summary>
+    /// <remarks>
+    /// Startup Manager lists other programs' scheduled tasks whatever runs them, and the Dashboard's "Why is it slow?"
+    /// counted every enabled one as a program that starts with Windows, hourly and daily updaters among them (#2871).
+    /// </remarks>
+    public bool StartsWithWindows { get; init; } = true;
 }
 
 public enum StartupSource

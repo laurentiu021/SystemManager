@@ -380,6 +380,30 @@ public sealed class SlowdownServiceTests
     }
 
     [Fact]
+    public async Task ScheduledTasksThatDoNotRunAtStartUp_AreNotCountedAsStartingWithWindows()
+    {
+        // Seven programs that start with Windows, and six scheduled updaters that run hourly or daily. Every enabled
+        // entry counted, so the check said "13 programs start with Windows" and sent the user to turn off things that do
+        // not slow the start (#2871).
+        _startup = _ => Task.FromResult(new StartupScan(
+            [
+                .. Enumerable.Range(1, 7).Select(i => new StartupEntry { Name = $"Program {i}", IsEnabled = true }),
+                .. Enumerable.Range(1, 6).Select(i => new StartupEntry
+                {
+                    Name = $"Updater {i}", IsEnabled = true, Source = StartupSource.TaskScheduler, StartsWithWindows = false,
+                }),
+            ],
+            ScheduledTasksListed: true));
+        var progress = new Reports();
+
+        var report = await NewService().CheckAsync(progress);
+
+        Assert.Empty(report.Findings);
+        Assert.Equal("Startup programs — 7 start with Windows",
+                     progress.Seen.Single(r => r.Probe == SlowdownProbe.Startup).Line);
+    }
+
+    [Fact]
     public async Task TenPrograms_IsNotAFinding()
     {
         _startup = _ => Task.FromResult(Startup(enabled: 10, disabled: 30));

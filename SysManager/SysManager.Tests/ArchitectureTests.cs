@@ -11857,6 +11857,10 @@ public partial class ArchitectureTests
     /// waves through, because it describes what the tab sounds like it ought to do. The issue asking for
     /// this fix repeated the same phrase, so writing the copy from the issue text would have shipped the
     /// error a second time.</para>
+    /// <para>Since #2871 the scan reads what runs each task from its definition, through
+    /// <c>ReadTaskDefinition</c>, so a task that runs at sign-in or start-up is told from one on a schedule,
+    /// and that counts as decoding the kind: the scan has to take <c>StartsWithWindows</c> from the definition,
+    /// and the definition has to name the logon trigger.</para>
     /// <para>The other half is scope. The scan drops <c>\Microsoft\</c> and <c>\Windows\</c> tasks on
     /// purpose — the short list is the right answer to "why is my PC slow to start" — so the tab is
     /// deliberately incomplete and has to say so, and to name the tab that is complete. Both directions are
@@ -11888,11 +11892,18 @@ public partial class ArchitectureTests
 
         // Does the scan decode the trigger TYPE, or merely require that SOME trigger exists? Positive
         // signals only: indexing the blob, or naming a trigger kind. Counting occurrences of the local
-        // would go red on an unrelated rename.
+        // would go red on an unrelated rename. The kind is read in ReadTaskDefinition, sliced the same way.
+        var definitionAt = service.IndexOf("internal static TaskDefinition? ReadTaskDefinition", StringComparison.Ordinal);
+        var definitionRest = definitionAt > 0 ? service[definitionAt..] : "";
+        var definitionEnd = NextMemberDeclaration().Match(definitionRest, 1);
+        var definition = definitionEnd.Success ? definitionRest[..definitionEnd.Index] : definitionRest;
         var decodesTriggerType = scan.Contains("triggers[", StringComparison.Ordinal)
             || scan.Contains("TriggerType", StringComparison.Ordinal)
             || scan.Contains("LogonTrigger", StringComparison.Ordinal)
-            || scan.Contains("TASK_TRIGGER", StringComparison.Ordinal);
+            || scan.Contains("TASK_TRIGGER", StringComparison.Ordinal)
+            || (scan.Contains("ReadTaskDefinition(", StringComparison.Ordinal)
+                && scan.Contains(".StartsWithWindows", StringComparison.Ordinal)
+                && definition.Contains("\"LogonTrigger\"", StringComparison.Ordinal));
 
         // Is the list deliberately incomplete? Matched as the real StartsWith arguments, so the comments
         // that explain the exclusion cannot satisfy it.
@@ -12197,7 +12208,8 @@ public partial class ArchitectureTests
         var displayed = displayedPerSite.Concat(displayedPostPass).ToArray();
         // Not display: these steer the toggle and the Open button. Demanding UI for them would push this
         // guard into asking for columns nobody wants, which is how the sibling guard's scope was drawn too.
-        string[] logicOnly = ["Source", "RegistryKey", "ValueName", "TaskPath"];
+        // StartsWithWindows decides what "Why is it slow?" counts, and the user reads it in StatusText (#2871).
+        string[] logicOnly = ["Source", "RegistryKey", "ValueName", "TaskPath", "StartsWithWindows"];
 
         var perSite = ObjectInitializerBodies(service, "StartupEntry")
             .Select(body => InitializerAssignment().Matches(body)

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.22] - 2026-10-20
+
+**Why is it slow? counts only what really starts with Windows, and Startup Manager says which scheduled tasks run at
+start-up.**
+
+### Fixed
+
+- **Why is it slow? counted scheduled updaters as programs that start with Windows.** Run as administrator, Startup
+  Manager lists other programs' scheduled tasks whatever runs them, and the Dashboard check counted every enabled one,
+  hourly and daily updaters among them, and SysManager's own Scheduled Maintenance task once a schedule was saved. So
+  a PC with 7 start-up programs and 6 such tasks was told "13 programs start with Windows" and sent to turn off things
+  that do not slow its start. A scheduled task now counts only when it runs when you sign in or Windows starts, read
+  from the task itself, and Startup Manager shows which: "Enabled (at start-up)" or "Enabled (scheduled)". SysManager's
+  own task is no longer listed. Since Why is it slow? was added (1.127.0).
+
 ## [1.130.21] - 2026-10-20
 
 **The Dashboard judges a drive the way System Health does, so a healthy SSD with normal wear no longer reads as

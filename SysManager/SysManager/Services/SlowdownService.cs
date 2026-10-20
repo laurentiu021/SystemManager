@@ -384,10 +384,11 @@ public sealed class SlowdownService : ISlowdownService
     {
         if (scan is null) return ProbeOutcome.Unread(SlowdownProbe.Startup);
 
-        // Counted the way Startup Manager counts "enabled", so the number is the one the tab shows. Without
-        // administrator rights Windows keeps other programs' scheduled tasks to itself, so the count is then only what
-        // could be seen, and the words say so.
-        var enabled = scan.Entries.Count(e => e.IsEnabled);
+        // What is on and starts with Windows: a scheduled task only when it runs at sign-in or start-up, which its
+        // status in Startup Manager says ("Enabled (at start-up)"). Every enabled task used to count, hourly and daily
+        // updaters and SysManager's own maintenance task among them (#2871). Without administrator rights Windows keeps
+        // other programs' scheduled tasks to itself, so the count is then only what could be seen, and the words say so.
+        var enabled = scan.Entries.Count(e => e.IsEnabled && e.StartsWithWindows);
         var atLeast = !scan.ScheduledTasksListed;
         var summary = $"{(atLeast ? "at least " : "")}{enabled} start with Windows";
 

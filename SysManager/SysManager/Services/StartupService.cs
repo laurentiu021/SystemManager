@@ -320,9 +320,10 @@ public sealed class StartupService
     /// every time. The refusal was logged at Debug and nothing said so: a standard user saw a start-up list with
     /// every third-party scheduled task missing, under a header saying they were listed (#2503). A missing key is
     /// not a refusal, and one task that cannot be opened is still skipped rather than failing the read.
-    /// <para>The machine hive is passed in so a test can refuse the read for real, on a redirected key.</para>
+    /// <para>The machine hive is passed in so a test can refuse the read for real, on a redirected key, and the folder
+    /// of task definitions so a test can supply its own.</para>
     /// </remarks>
-    internal static bool ReadScheduledTasks(RegistryKey machine, List<StartupEntry> results)
+    internal static bool ReadScheduledTasks(RegistryKey machine, List<StartupEntry> results, string? tasksRoot = null)
     {
         try
         {
@@ -345,6 +346,11 @@ public sealed class StartupService
                     if (uri.StartsWith(@"\Microsoft\", StringComparison.OrdinalIgnoreCase)) continue;
                     if (uri.StartsWith(@"\Windows\", StringComparison.OrdinalIgnoreCase)) continue;
 
+                    // SysManager's own maintenance task belongs to no other program, and runs on its schedule, not at
+                    // start-up (#2871).
+                    if (uri.StartsWith(MaintenanceSchedulerService.TaskFolder + MaintenanceSchedulerService.TaskNamePrefix,
+                                       StringComparison.OrdinalIgnoreCase)) continue;
+
                     var description = taskKey.GetValue("Description")?.ToString() ?? "";
                     var author = taskKey.GetValue("Author")?.ToString() ?? "";
 
@@ -356,8 +362,11 @@ public sealed class StartupService
 
                     // Read from the task's own definition: every task used to be listed as enabled, so a disabled
                     // one looked enabled and a Disable made here appeared to be undone by the next refresh
-                    // (#2453). A definition that cannot be read keeps that old assumption.
-                    var enabled = ReadTaskEnabled(TasksFolder, uri) ?? true;
+                    // (#2453). A definition that cannot be read keeps that old assumption. What runs the task comes
+                    // from there too, and a task is said to start with Windows only when that was read (#2871).
+                    var definition = ReadTaskDefinition(tasksRoot ?? TasksFolder, uri);
+                    var enabled = definition?.Enabled ?? true;
+                    var startsWithWindows = definition?.StartsWithWindows ?? false;
                     results.Add(new StartupEntry
                     {
                         Name = taskName,
@@ -368,8 +377,9 @@ public sealed class StartupService
                         ValueName = taskName,
                         TaskPath = uri,
                         IsEnabled = enabled,
+                        StartsWithWindows = startsWithWindows,
                         Publisher = author,
-                        StatusText = enabled ? "Enabled (scheduled)" : "Disabled (scheduled)"
+                        StatusText = TaskStatus(enabled, startsWithWindows)
                     });
                 }
                 catch (System.Security.SecurityException ex)
@@ -406,7 +416,20 @@ public sealed class StartupService
     /// own, which says nothing about the task, so only the one under <c>Settings</c> is read. Returns null when the
     /// definition cannot be read, or when the path would lead outside <paramref name="tasksRoot"/>.
     /// </summary>
-    internal static bool? ReadTaskEnabled(string tasksRoot, string uri)
+    internal static bool? ReadTaskEnabled(string tasksRoot, string uri) => ReadTaskDefinition(tasksRoot, uri)?.Enabled;
+
+    /// <summary>What a scheduled task's definition says about when it runs.</summary>
+    /// <param name="Enabled">False when the task itself is disabled.</param>
+    /// <param name="StartsWithWindows">True when an enabled sign-in or start-up trigger runs it.</param>
+    internal sealed record TaskDefinition(bool Enabled, bool StartsWithWindows);
+
+    /// <summary>
+    /// The definition of the task at <paramref name="uri"/> under <paramref name="tasksRoot"/>: whether it is enabled,
+    /// as <see cref="ReadTaskEnabled"/> describes, and whether a <c>LogonTrigger</c> or <c>BootTrigger</c> that is
+    /// itself enabled runs it. Null when the definition cannot be read, or when the path would lead outside
+    /// <paramref name="tasksRoot"/>.
+    /// </summary>
+    internal static TaskDefinition? ReadTaskDefinition(string tasksRoot, string uri)
     {
         var relative = uri.TrimStart('\\');
         if (relative.Length == 0) return null;
@@ -426,10 +449,10 @@ public sealed class StartupService
                 XmlResolver = null,
             };
             using var reader = System.Xml.XmlReader.Create(path, settings);
-            var enabled = System.Xml.Linq.XDocument.Load(reader).Root?
-                .Elements().FirstOrDefault(e => e.Name.LocalName == "Settings")?
-                .Elements().FirstOrDefault(e => e.Name.LocalName == "Enabled");
-            return enabled is null || !string.Equals(enabled.Value.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+            var task = System.Xml.Linq.XDocument.Load(reader).Root;
+            var startsWithWindows = Child(task, "Triggers")?.Elements()
+                .Any(t => t.Name.LocalName is "LogonTrigger" or "BootTrigger" && IsOn(t)) ?? false;
+            return new TaskDefinition(IsOn(Child(task, "Settings")), startsWithWindows);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException
                                        or System.Xml.XmlException or ArgumentException)
@@ -438,6 +461,20 @@ public sealed class StartupService
             return null;
         }
     }
+
+    private static System.Xml.Linq.XElement? Child(System.Xml.Linq.XElement? parent, string name) =>
+        parent?.Elements().FirstOrDefault(e => e.Name.LocalName == name);
+
+    // On unless it carries <Enabled>false</Enabled>, which Task Scheduler writes for a disabled task or trigger only.
+    private static bool IsOn(System.Xml.Linq.XElement? element) =>
+        Child(element, "Enabled") is not { } enabled
+        || !string.Equals(enabled.Value.Trim(), "false", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A scheduled task's status line: whether it is on, and whether an enabled one runs at start-up.</summary>
+    internal static string TaskStatus(bool enabled, bool startsWithWindows) =>
+        !enabled ? "Disabled (scheduled)"
+        : startsWithWindows ? "Enabled (at start-up)"
+        : "Enabled (scheduled)";
 
     private static void ReadRunKey(RegistryKey root, string keyPath, StartupSource source, List<StartupEntry> results)
     {
@@ -735,7 +772,7 @@ public sealed class StartupService
             if (proc.ExitCode == 0)
             {
                 entry.IsEnabled = enabled;
-                entry.StatusText = enabled ? "Enabled (scheduled)" : "Disabled (scheduled)";
+                entry.StatusText = TaskStatus(enabled, entry.StartsWithWindows);
                 return true;
             }
 

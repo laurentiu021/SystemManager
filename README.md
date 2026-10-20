@@ -766,7 +766,8 @@ System → System Fixes, where the tab name matches what they do.
   before a single byte is deleted. Every category with something in it starts ticked — the
   Recycle Bin on every drive included — except the blue-screen memory dumps and Windows.old, so
   untick anything you want to keep. Deleting is permanent: nothing goes to the Recycle Bin, and
-  the confirmation says so
+  the confirmation says so. Clean deletes what that confirmation listed, and stays off while a
+  scan runs
 - **What you untick stays unticked.** Scanning again — including with F5 — keeps your
   choices instead of re-ticking everything, so the tab cannot quietly undo the "untick
   anything you want to keep" it just asked you for. A category that was empty last time

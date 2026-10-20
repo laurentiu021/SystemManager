@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.21] - 2026-10-20
+
+**The Dashboard judges a drive the way System Health does, so a healthy SSD with normal wear no longer reads as
+critical.**
+
+### Fixed
+
+- **A healthy SSD with normal wear was called "Disk health critical" on the Dashboard.** The health score took every
+  point of an SSD's wear, and points for warmth from 50 °C, off the drive's score, while System Health warns only from
+  90% wear or 70 °C. So a drive at 41% wear, with most of its rated endurance left and reported Healthy by Windows,
+  scored 59: the Dashboard showed the red critical alert, the health card asked for a backup, the overall score
+  dropped, and System Health called the same drive Healthy. Every tab now judges a drive the same way, the System
+  Report's disk line included, and the backup advice names the drive that needs it. Since the Health Score card was
+  added (0.37.0).
+
 ## [1.130.20] - 2026-10-20
 
 **Deep Cleanup deletes exactly what its confirmation listed, and Clean selected stays off while a scan runs.**

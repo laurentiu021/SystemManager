@@ -117,10 +117,60 @@ public sealed partial class DiskHealthReport : ObservableObject
     internal static int? StatusCeiling(string? status) => status switch
     {
         "Healthy" => 100,
-        "Warning" => 60,
-        "Unhealthy" => 20,
+        "Warning" => WarningCeiling,
+        "Unhealthy" => FailingCeiling,
         _ => null,
     };
+
+    /// <summary>The highest score a drive Windows warns about may report.</summary>
+    internal const int WarningCeiling = 60;
+
+    /// <summary>The highest score a drive Windows reports as failing may report.</summary>
+    internal const int FailingCeiling = 20;
+
+    /// <summary>Wear, in percent of the rated endurance, from which a replacement should be planned.</summary>
+    internal const int ReplaceAtWearPercent = 90;
+
+    /// <summary>The temperature, in °C, from which a drive runs hot.</summary>
+    internal const double HotAtCelsius = 70;
+
+    /// <summary>
+    /// How the drive is doing, by the limits System Health's verdict uses: what the health score, the Dashboard's disk
+    /// alert and the System Report judge the drive by.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HealthPercent"/> takes off every point of wear and, from 50 °C, points for warmth, which suits a gauge
+    /// of the life left but not a warning. The health score used it as the drive's score, so a Healthy SSD at 41% wear
+    /// scored 59: the Dashboard said "Disk health critical", the health card asked for a backup, and System Health
+    /// called the same drive Healthy (#2866). Wear is normal up to the replace line, and warmth until the drive runs hot.
+    /// </remarks>
+    public DiskCondition Condition => Finding switch
+    {
+        DiskFinding.Failing => DiskCondition.Failing,
+        DiskFinding.WindowsWarns or DiskFinding.WornOut or DiskFinding.RunsHot or DiskFinding.IoErrors
+            => DiskCondition.Watch,
+        DiskFinding.NothingWrong => DiskCondition.Fine,
+        _ => DiskCondition.Unknown,
+    };
+
+    /// <summary>
+    /// What decides <see cref="Condition"/>, first match winning, and so which sentence System Health's verdict says.
+    /// </summary>
+    internal DiskFinding Finding
+    {
+        get
+        {
+            // Windows' own status first: it knows about failures the counters do not show.
+            if (HealthStatus == "Unhealthy") return DiskFinding.Failing;
+            if (HealthStatus == "Warning") return DiskFinding.WindowsWarns;
+            if (WearPercent >= ReplaceAtWearPercent) return DiskFinding.WornOut;
+            if (TemperatureC >= HotAtCelsius) return DiskFinding.RunsHot;
+            if ((ReadErrors ?? 0) > 0 || (WriteErrors ?? 0) > 0) return DiskFinding.IoErrors;
+
+            // HealthPercent is null only when no counter was read and Windows gave no status this recognises.
+            return HealthPercent is null ? DiskFinding.NothingRead : DiskFinding.NothingWrong;
+        }
+    }
 
     /// <summary>The health score as the card shows it, or "—" when there is nothing to score it on.</summary>
     /// <remarks>
@@ -202,4 +252,32 @@ public sealed partial class DiskHealthReport : ObservableObject
         < 8760 => $"{PowerOnHours / 24}d {PowerOnHours % 24}h",
         _ => string.Create(CultureInfo.InvariantCulture, $"{PowerOnHours.Value / 8760.0:F1}y")
     };
+}
+
+/// <summary>How a drive is doing, as one judgement every tab gives the same way.</summary>
+public enum DiskCondition
+{
+    /// <summary>Nothing was read: no counter, and no status Windows gives that SysManager recognises.</summary>
+    Unknown,
+
+    /// <summary>Nothing calls for action.</summary>
+    Fine,
+
+    /// <summary>Worth a backup and a look: Windows warns, or the drive is worn out, runs hot or logged I/O errors.</summary>
+    Watch,
+
+    /// <summary>Windows reports the drive as failing.</summary>
+    Failing,
+}
+
+/// <summary>What decided a drive's <see cref="DiskCondition"/>, in the order <see cref="DiskHealthReport.Finding"/> checks.</summary>
+internal enum DiskFinding
+{
+    NothingRead,
+    NothingWrong,
+    Failing,
+    WindowsWarns,
+    WornOut,
+    RunsHot,
+    IoErrors,
 }

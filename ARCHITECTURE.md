@@ -519,7 +519,10 @@ Key services:
   disable-updates option, only a bounded pause. `Read` returns null for a read Windows refused,
   which the tab reports as not known (`WindowsUpdateViewModel.DescribePolicy`); no policy key at all
   is the defaults.
-- `DiskHealthService` — pulls SMART data through WMI.
+- `DiskHealthService` — pulls SMART data through WMI. Its verdict is the sentence for
+  `DiskHealthReport.Finding`, the first of Windows' failing or warning status, 90% wear, 70 °C or I/O errors, and
+  `DiskHealthReport.Condition` (Fine, Watch, Failing, Unknown) follows the same finding, so every tab judges a drive
+  alike (#2866). `HealthPercent` stays the life-left gauge on System Health's card.
 - `MemoryTestService` — scans WHEA / MemoryDiagnostics events. A log it cannot read is thrown,
   never returned as zero errors, so the Dashboard and System Health can say the check did not run.
 - `EventLogService` + `EventExplainer` — read Windows Event Log and attach
@@ -561,6 +564,8 @@ Key services:
   `TuneUpResult.NotChecked`, so a failed check is never counted as a passed one.
 - `HealthScoreService` — aggregates disk health, free space on the system drive (a quarter of the score), RAM,
   uptime, and battery wear into a single 0–100 score with color-coded verdict and recommendations.
+  A drive scores by its `DiskHealthReport.Condition`: 100 when fine, Windows' warning and failing figures (60, 20)
+  when watched or failing, and the unknown 80 when nothing was read (#2866).
   `OverallScore` weights the battery only when `BatteryWasMeasured`: a battery whose capacities could not be read is left out, like a
   desktop's, and named in `UnavailableComponents`. `ComputeAsync` gathers and then calls the static
   `Evaluate`, which scores evidence already in hand; the System Report calls `Evaluate` with the snapshot and

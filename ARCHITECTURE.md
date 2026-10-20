@@ -684,7 +684,8 @@ Key services:
   and that is load-bearing — a `yield return` cannot sit inside a `try` with a `catch`, which is
   exactly why four of the five copies never enclosed their own iteration. `SafeWalkOptions` is a
   record rather than optional parameters so no caller can bind an exclusion path to the search
-  pattern by position. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
+  pattern by position. `ExcludeRootChildren` skips a name directly in whatever root is walked, which is how the
+  temp sweeps leave the `.net` extraction folder of `%WinDir%\Temp` alone as well as the user's. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
   `LargeFileScanner`) still keep their own loop: they prune the traversal by a path predicate, and
   one needs an access-denied tally, neither of which `SafeWalkOptions` carries. That exemption is a
   named list in `ArchitectureTests`, and it is **partial and asserted**: each exempted scanner must
@@ -1002,7 +1003,9 @@ Key services:
   nothing over it. Machine-specific by nature (absolute paths + sizes on this disk), so it
   is deliberately absent from `ProfileService.Catalog` and pinned OUT by a test.
 - `ShortcutCleanerService` — scans the Desktop and Public Desktop, both Start Menus, Quick Launch and Recent
-  Items for broken shortcuts (dead targets) and offers safe removal. A network target is never judged gone.
+  Items for broken shortcuts (dead targets) and offers safe removal. A network target is never judged gone,
+  and `Judge` leaves a shortcut with a missing target alone when it sits in a folder OneDrive shares with the
+  user's other PCs (`SyncRoots`, from the `OneDrive*` variables), where it may still work.
 - `BulkInstallerService` — installs apps via winget in batch with
   per-item progress and error reporting.
 - `FileShredderService` — secure multi-pass file overwrite (DoD 5220.22-M
@@ -1701,7 +1704,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `BundleExtractionRoot`, the shared folder single-file apps unpack into, and
   `OwnExtractionDirectory`, this build's own leaf under it. Deleting either
   breaks a running program's later lazy loads, which no in-use check can
-  prevent because nothing holds those files open yet.
+  prevent because nothing holds those files open yet. `BundleExtractionFolderName` names
+  that folder for every temp root, `%WinDir%\Temp` included, where a SYSTEM service unpacks.
 - `RecycleBinHelper` — measures the Recycle Bin (`SHQueryRecycleBin`) and empties it
   (`SHEmptyRecycleBin`) through the shell API, asking first and leaving an empty bin alone, and judging a
   failure code by whether the bin is empty afterwards. Quick Cleanup, Deep Cleanup and the Dashboard's
@@ -1893,7 +1897,7 @@ tab cannot ship a refresh or cancel button the keyboard cannot reach.
   `steamapps\common`. Inside Program Files it reaches only named launcher folders: Steam's
   `appcache`, `htmlcache`, `depotcache`, `logs` and shader cache, and the League of Legends logs.
 - Every walk goes through `Helpers/SafeFileWalk`, so no link is followed and the folders single-file
-  apps unpack into under TEMP are left alone. The servicing-logs bucket takes only files older than
+  apps unpack into under TEMP are left alone, in `%WinDir%\Temp` as well as the user's. The servicing-logs bucket takes only files older than
   30 days, and the Recycle Bin is sized and emptied by the shell through `IRecycleBin`, not by walking or
   deleting its folders. The
   Delivery Optimization cache is emptied through Windows' `Delete-DeliveryOptimizationCache` for the same

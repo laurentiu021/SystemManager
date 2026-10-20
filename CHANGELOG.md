@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.10] - 2026-10-20
+
+**The temp cleanups leave alone what a system service unpacked into Windows' own TEMP folder, and Shortcut Cleaner no
+longer calls a shortcut broken because the program it opens is installed on your other PC.**
+
+### Fixed
+
+- **Cleaning TEMP as administrator could delete files a system service needed.** Single-file .NET programs unpack
+  their libraries into a `.net` folder inside their TEMP folder, and the cleanups leave that folder alone because a
+  library unpacked but not yet loaded is not in use and deletes without complaint, breaking the program the next time
+  it needs it. Deep Cleanup's Temporary files, Quick Cleanup's Clean TEMP and the Quick Tune-Up also clean Windows' own
+  TEMP folder, which needs administrator rights, and there they left alone only your account's `.net` folder, not the
+  one a program running as the system unpacks into. The `.net` folder at the top of every TEMP folder they clean is
+  left alone now, as the Temporary files description already said. Windows' TEMP folder has been cleaned since 0.5.0,
+  and your own `.net` folder left alone since 1.75.26.
+- **Shortcut Cleaner could delete a working shortcut from your other PCs.** Once OneDrive backs up your Desktop, which
+  Windows 11 offers by default, its shortcuts sync to every PC signed in to that account. A shortcut to a program
+  installed on only one of them has its program missing on the others, so there it was listed as broken, ticked, and
+  counted by the Quick Tune-Up, and deleting it removed it from every PC, including the one where it worked. A
+  shortcut in a folder OneDrive shares is not called broken because its program is missing here: it is left alone and
+  counted, and the status line says why. Since Shortcut Cleaner was added (0.32.0).
+
 ## [1.130.9] - 2026-10-20
 
 **When installing an update stops short, the About tab now says so as a problem, and Scheduled Maintenance no longer

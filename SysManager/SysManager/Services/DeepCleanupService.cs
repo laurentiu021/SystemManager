@@ -684,6 +684,9 @@ public sealed class DeepCleanupService
     private static SafeWalkOptions CleanupWalk { get; } = new()
     {
         ExcludeSubtrees = [SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory],
+        // And the extraction folder at the top of each root walked: "Temporary files" also walks %WinDir%\Temp,
+        // whose own .net is where a single-file app running as SYSTEM unpacks.
+        ExcludeRootChildren = [SystemPaths.BundleExtractionFolderName],
     };
 
     /// <summary>

@@ -273,6 +273,9 @@ public sealed class TuneUpService : ITuneUpService
     internal static SafeWalkOptions TempWalk { get; } = new()
     {
         ExcludeSubtrees = [SystemPaths.BundleExtractionRoot, SystemPaths.OwnExtractionDirectory],
+        // And the extraction folder at the top of each temp root walked: %WinDir%\Temp has its own, where a
+        // single-file app running as SYSTEM unpacks.
+        ExcludeRootChildren = [SystemPaths.BundleExtractionFolderName],
     };
 
     // ── Recycle Bin ────────────────────────────────────────────────────

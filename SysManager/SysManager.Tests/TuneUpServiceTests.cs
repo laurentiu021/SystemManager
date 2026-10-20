@@ -592,4 +592,28 @@ public class TuneUpServiceTests
     [Fact]
     public void ABinTheTuneUpWasNotAskedToEmpty_HasNoLineOnTheCard()
         => Assert.Equal("", (Ran(emptied: false, before: null) with { RecycleBinSkipped = true }).RecycleBinDisplay);
+
+    // ── The temp sweep leaves every temp root's extraction folder alone ───────
+
+    [Fact]
+    public void TheTempWalk_LeavesTheExtractionFolderAtTheTopOfAnyTempRootAlone()
+    {
+        // The sweep walks %WinDir%\Temp too, where a single-file app running as SYSTEM unpacks into .net, and the
+        // walk excluded only the current user's. Walked here over a folder standing in for that temp root.
+        var root = Path.Combine(Path.GetTempPath(), "SysManagerTempWalk_" + Guid.NewGuid().ToString("N"));
+        var unpacked = Path.Combine(root, ".net", "SomeService", "hash");
+        Directory.CreateDirectory(unpacked);
+        File.WriteAllText(Path.Combine(unpacked, "native.dll"), "x");
+        File.WriteAllText(Path.Combine(root, "old.tmp"), "x");
+
+        try
+        {
+            var files = SafeFileWalk.Files(root, CancellationToken.None, TuneUpService.TempWalk).ToList();
+            var folders = SafeFileWalk.DirectoriesDeepestFirst(root, CancellationToken.None, TuneUpService.TempWalk);
+
+            Assert.Equal([Path.Combine(root, "old.tmp")], files);
+            Assert.Empty(folders);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
 }

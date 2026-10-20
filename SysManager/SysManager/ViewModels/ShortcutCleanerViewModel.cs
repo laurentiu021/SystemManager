@@ -105,8 +105,9 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
             // "Your system is clean" is only true when the scan could see everywhere it looked. With targets
             // it could not reach, an empty list means "I found nothing I could confirm" — a different
             // statement, and the one the user needs when a drive is unplugged (#2378).
+            // Shortcuts left alone in a folder OneDrive shares count as undecided too.
             var headline = BrokenCount == 0
-                ? report.UnreachableTargets == 0
+                ? report.CheckedEverything
                     ? "No broken shortcuts found — your system is clean."
                     : "No broken shortcuts confirmed."
                 : $"Found {BrokenCount} broken shortcut{(BrokenCount == 1 ? "" : "s")}.";

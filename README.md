@@ -504,6 +504,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   to start with, and whatever you tick after that survives a refresh — so a rescan cannot
   quietly point a long disk check at a drive you deselected. chkdsk needs administrator
   rights, and without them each drive you ticked says so
+- A running chkdsk shows under System Health in the sidebar and on the taskbar button, and
+  closing SysManager during one asks first. It waits for a disk scan or clean-up another tab
+  is running, and says which
 - **BIOS & firmware** — BIOS version/date/vendor, motherboard model, boot mode (UEFI/Legacy), and Secure
   Boot status, all read-only. A **Find BIOS update** button opens the board maker's support site (ASUS,
   MSI, Gigabyte, ASRock, Acer, Biostar, Dell, HP, Lenovo, …), or a web search for the board when the
@@ -1150,11 +1153,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Environment Variables, System Fixes, Windows Features, Windows Update, Restore Points, Context
   Menu, App Updates, Bulk Installer, Uninstaller, Preinstalled Apps, Privacy & Telemetry, Defender
   Tweaks, Edge/OneDrive Remover, Services, Undo Changes, and the Dashboard's quick actions. Disk
-  Analyzer, Large Files and Duplicate Finder only read, and take it so a scan never runs while a
-  cleanup is deleting; Speed Test and Traceroute take it so a measurement never runs during a
-  network change; the Dashboard's Why is it slow? takes it so it never measures SysManager's own
-  cleanup as the thing slowing the PC down. Display Profiles holds one of its own while a new display
-  mode waits to be kept, so closing SysManager then asks first
+  Analyzer, Large Files, Duplicate Finder and System Health's chkdsk only read, and take it so a
+  scan never runs while a cleanup is deleting; Speed Test and Traceroute take it so a measurement
+  never runs during a network change; the Dashboard's Why is it slow? takes it so it never
+  measures SysManager's own cleanup as the thing slowing the PC down. Display Profiles holds one
+  of its own while a new display mode waits to be kept, so closing SysManager then asks first
 - These tabs change things without it: Startup Manager, Task Scheduler, App Blocker, Notification
   Blocker, Settings Watchdog, Scheduled Maintenance, Standby List Cleaner, Display Profiles, Timer
   Resolution, CPU Core Affinity, Dark Mode Scheduler, Volume Control, Profile Export/Import, and
@@ -1991,10 +1994,10 @@ offers, "rate us" prompts:
   remembers the answer. If you pick the notification area, it tells you where the
   window went so it doesn't look like it vanished. Right-click the tray icon to
   reopen or exit at any time.
-- **Nothing is cut off by closing** — if SysManager is still in the middle of something
-  that changes your system (a repair, a Windows feature or update being installed, a
-  clean-up), closing the window, **Exit** in the tray, **Run as administrator** and
-  installing an update all say what is still running and ask before they go ahead,
+- **Nothing is cut off by closing** — if SysManager is still in the middle of a disk check
+  or of something that changes your system (a repair, a Windows feature or update being
+  installed, a clean-up), closing the window, **Exit** in the tray, **Run as administrator**
+  and installing an update all say what is still running and ask before they go ahead,
   because closing stops it part-way
 - **Progress on the taskbar button** — a long job keeps reporting while the window is
   minimised. The SysManager button on the taskbar fills up as an SFC scan, a bulk

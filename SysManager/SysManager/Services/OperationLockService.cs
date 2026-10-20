@@ -16,8 +16,8 @@ public enum OperationCategory
 {
     /// <summary>
     /// Disk-intensive: scanning or deleting across the disk. Temp Cleanup, Deep Cleanup's scan and clean, Disk
-    /// Analyzer, Large Files, Duplicate Finder, Shortcut Cleaner, File Shredder, Browser Cleaner, and the
-    /// Dashboard's Quick Cleanup and Quick Tune-Up.
+    /// Analyzer, Large Files, Duplicate Finder, Shortcut Cleaner, File Shredder, Browser Cleaner, System Health's
+    /// chkdsk, and the Dashboard's Quick Cleanup and Quick Tune-Up.
     /// </summary>
     Disk,
 

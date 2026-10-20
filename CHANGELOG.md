@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.23] - 2026-10-20
+
+**A running disk check and a winget search now show on the sidebar and the taskbar button, and closing SysManager
+during a disk check asks first.**
+
+### Fixed
+
+- **A disk check on System Health showed nowhere outside its tab, and closing SysManager cut it off without asking.**
+  chkdsk can run for many minutes, and it never marked the tab busy, so the sidebar had no bar under System Health and
+  the taskbar button stayed blank. It also took no lock, so closing the window or choosing Exit in the tray ended it
+  part-way without a word, and it did not wait for a clean-up deleting files on the same disk. A disk check now shows
+  like any other long job, closing SysManager while one runs asks first, and it waits for a disk scan or clean-up
+  another tab is running, and says which. Since the sidebar bar was added (0.26.0), and since closing first asked
+  about running work (1.114.15).
+- **A winget search on Bulk Installer showed nowhere outside its tab.** A search of the whole winget repository can
+  take several seconds, and only its own spinner showed it: no bar under Bulk Installer in the sidebar and nothing on
+  the taskbar button. It now shows on both. Since the search was added (1.7.5).
+
 ## [1.130.22] - 2026-10-20
 
 **Why is it slow? counts only what really starts with Windows, and Startup Manager says which scheduled tasks run at

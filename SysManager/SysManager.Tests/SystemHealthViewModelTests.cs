@@ -3,6 +3,8 @@
 // License: MIT
 
 using System.Reflection;
+using System.Text;
+using NSubstitute;
 using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -287,8 +289,8 @@ public class SystemHealthViewModelTests
     // Both chkdsk entry points refuse without administrator rights, and neither refusal was asserted
     // (#2171). Only the refusal is covered, deliberately: unlike the other gated commands in the app
     // these have NO confirmation dialog to decline, so past the gate they start a real chkdsk scan on a
-    // real volume. There is nothing to substitute and nothing to stop it, so the elevated branch is not
-    // something a unit test may enter.
+    // real volume. These are built on the real runner, so they enter only the refusal; the tests at the end of
+    // this file that enter the elevated branch hand the view model a substitute runner instead.
     //
     // The per-drive status is part of the assertion. Marking each selected drive "Needs admin" is what
     // tells the user WHICH drives were skipped.
@@ -352,5 +354,103 @@ public class SystemHealthViewModelTests
 
         vm.IsChkdskRunning = true;
         Assert.Same(vm.CancelScanCommand, vm.EscapeCancel);
+    }
+
+    // ---------- a running chkdsk on the sidebar, the taskbar and the exit prompts (#2876) ----------
+    // chkdsk set only IsChkdskRunning, so a run of several minutes showed on neither the sidebar nor the taskbar
+    // button, and took no lock, so closing SysManager meanwhile asked nothing and cut it off.
+    //
+    // A run waiting for its chkdsk holds the Disk lock, which is process-wide. So each test ends its own run even when
+    // an assertion fails, or every test after it would find the lock taken, and every wait is bounded, so a run that
+    // never ends fails the test instead of hanging the suite.
+
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// A view model over the real read-only services and a runner whose chkdsk waits for <paramref name="chkdsk"/>.
+    /// </summary>
+    private static SystemHealthViewModel WithChkdsk(TaskCompletionSource<int> chkdsk, IPowerShellRunner? runner = null)
+    {
+        runner ??= Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("chkdsk.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(), Arg.Any<Encoding?>())
+              .Returns(chkdsk.Task);
+        return new(new SystemInfoService(), new DiskHealthService(), new MemoryTestService(), new FixedDriveService(),
+                   runner, new BiosService());
+    }
+
+    [Fact]
+    public async Task AChkdskRun_ShowsTheTabBusy_AndAsksBeforeSysManagerCloses()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = WithChkdsk(chkdsk);
+        await vm.InitializationComplete.WaitAsync(Bound);
+
+        var run = vm.RunChkdskCommand.ExecuteAsync("C:");
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.True(vm.IsProgressIndeterminate);
+            Assert.Contains("Disk check (chkdsk)", QuitGuard.ActiveWorkWarning(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            chkdsk.TrySetResult(0);
+            await run.WaitAsync(Bound);
+        }
+
+        Assert.False(vm.IsBusy);
+        Assert.False(OperationLockService.Instance.IsLocked(OperationCategory.Disk));
+    }
+
+    [Fact]
+    public async Task AReadThatEndsBesideARunningChkdsk_LeavesTheTabBusy()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = WithChkdsk(chkdsk);
+        await vm.InitializationComplete.WaitAsync(Bound);
+        var run = vm.RunChkdskCommand.ExecuteAsync("C:");
+        try
+        {
+            await vm.CheckMemoryErrorsCommand.ExecuteAsync(null).WaitAsync(Bound);
+
+            Assert.True(vm.IsBusy);   // chkdsk still runs
+        }
+        finally
+        {
+            chkdsk.TrySetResult(0);
+            await run.WaitAsync(Bound);
+        }
+
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Chkdsk_WhileAnotherDiskJobRuns_SaysSo_AndDoesNotStart()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var runner = Substitute.For<IPowerShellRunner>();
+        var chkdsk = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = WithChkdsk(chkdsk, runner);
+        await vm.InitializationComplete.WaitAsync(Bound);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Large File Scan");
+        Assert.NotNull(held);
+
+        // A refusal ends before anything is awaited. A run that started anyway waits for chkdsk, so it is ended here.
+        var run = vm.RunChkdskCommand.ExecuteAsync("C:");
+        try
+        {
+            Assert.Equal("Cannot start — Large File Scan is already running.", vm.StatusMessage);
+            Assert.False(vm.IsChkdskRunning);
+        }
+        finally
+        {
+            chkdsk.TrySetResult(0);
+            await run.WaitAsync(Bound);
+        }
+
+        await runner.DidNotReceive().RunProcessAsync("chkdsk.exe", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                                                     Arg.Any<Encoding?>());
     }
 }

@@ -14828,10 +14828,53 @@ public partial class ArchitectureTests
     /// <c>IsBusy</c>, never a second flag set alongside the first. Whether the assignment goes through the hook
     /// or happens inline in the command is left open — several tabs predate the hook idiom and set it directly,
     /// which is equally correct.</para>
+    /// <para><b>Each flag, not each file.</b> This passed a file as soon as it contained <c>IsBusy =</c> anywhere,
+    /// which <c>IsBusy ==</c> matched too, and every tab with such a flag set <c>IsBusy</c> for some other command.
+    /// So System Health's chkdsk and Bulk Installer's winget search showed on neither the sidebar nor the taskbar,
+    /// and it could only ever catch a view model that never set <c>IsBusy</c> at all (#2876). Which flags reach it is
+    /// decided by <see cref="UnforwardedRunningFlags"/>, whose known answers are checked first.</para>
     /// </remarks>
     [Fact]
     public void EveryViewModelThatTracksRunningState_ForwardsItToIsBusy()
     {
+        // Known answers: a hook that assigns IsBusy, a hook through a method of the same file (called from a line
+        // before its declaration, which is not the declaration), a command that sets IsBusy beside the flag, and one
+        // that sets a forwarded flag beside it are all forwarded. A method that assigns IsBusy from a flag whose hook
+        // does not call it is not, as nothing runs it when the flag changes, and nor is a command whose only mention
+        // is a comparison.
+        const string sample = """
+            [ObservableProperty] private bool _isScanning;
+            [ObservableProperty] private bool _isCleaning;
+            [ObservableProperty] private bool _isLoading;
+            [ObservableProperty] private bool _isTesting;
+            [ObservableProperty] private bool _isRunning;
+            [ObservableProperty] private bool _isSearching;
+            partial void OnIsScanningChanged(bool value) => IsBusy = value;
+            partial void OnIsCleaningChanged(bool value) => FollowWork();
+            private void FollowWork()
+            {
+                IsBusy = AnyWork;
+            }
+            private bool AnyWork => IsCleaning;
+            private void Refresh() => IsBusy = IsRunning;
+            private async Task LoadAsync()
+            {
+                IsLoading = true;
+                IsBusy = true;
+            }
+            private async Task TestAsync()
+            {
+                IsTesting = true;
+                IsScanning = true;
+            }
+            private async Task SearchAsync()
+            {
+                IsSearching = true;
+                if (IsBusy == true) return;
+            }
+            """;
+        Assert.Equal(["IsRunning", "IsSearching"], UnforwardedRunningFlags(sample));
+
         // Not tabs: a row inside the Volume Control list and the This PC card above it, with no sidebar entry to
         // draw a bar under. Their flag means "the user is dragging this slider", which is not background work.
         var notTabs = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -14855,12 +14898,13 @@ public partial class ArchitectureTests
 
             withFlags++;
             if (notTabs.ContainsKey(name)) continue;
-            if (code.Contains("IsBusy =", StringComparison.Ordinal)) continue;
 
-            missing.Add($"{name} tracks {string.Join(", ", flags)} but never assigns IsBusy");
+            var unforwarded = UnforwardedRunningFlags(code);
+            if (unforwarded.Count > 0)
+                missing.Add($"{name} tracks {string.Join(", ", unforwarded)} without ever assigning IsBusy for it");
         }
 
-        // Vacuity floor: fourteen view-models carry such a flag today. A collapse means the pattern stopped
+        // Vacuity floor: seventeen view-models carry such a flag today. A collapse means the pattern stopped
         // matching the declaration shape, and this guard would pass having read nothing.
         Assert.True(withFlags >= 12,
             $"only {withFlags} view-models with a running-state flag were found — the declaration pattern no "
@@ -14878,6 +14922,86 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"\[ObservableProperty\][^;]{0,200}?private bool _(?<flag>is\w+(?:ing|Running|Loading));",
                     RegexOptions.Singleline)]
     private static partial Regex RunningStateFlag();
+
+    /// <summary>
+    /// The running-state flags of a view model, its source with comments stripped, that never reach <c>IsBusy</c>.
+    /// </summary>
+    /// <remarks>
+    /// A flag reaches it when its generated <c>On…Changed</c> hook assigns <c>IsBusy</c>, itself or through a method
+    /// of the same file it calls, or when every member that sets the flag to true also assigns <c>IsBusy</c> or sets a
+    /// flag that reaches it. An assignment is <c>=</c>, never <c>==</c>. A member is read from its declaration line to
+    /// the next one, the shape the rest of this file slices by.
+    /// <para>An <c>IsBusy</c> assignment that names the flag does not count by itself. It runs only when something
+    /// calls it, so a flag whose hook stopped calling it passed while a change of the flag reached nothing.</para>
+    /// </remarks>
+    internal static List<string> UnforwardedRunningFlags(string code)
+    {
+        var properties = RunningStateFlag().Matches(code)
+            .Select(m => char.ToUpperInvariant(m.Groups["flag"].Value[0]) + m.Groups["flag"].Value[1..])
+            .ToList();
+        var lines = code.Replace("\r\n", "\n").Split('\n');
+
+        // The member around line i: from its declaration line to the next declaration line.
+        string MemberAround(int i)
+        {
+            var start = i;
+            while (start > 0 && !MemberDeclaration().IsMatch(lines[start])) start--;
+            var end = i + 1;
+            while (end < lines.Length && !MemberDeclaration().IsMatch(lines[end])) end++;
+            return string.Join('\n', lines[start..end]);
+        }
+
+        // The member declared with this name, or empty. The name has to come before the line's first parenthesis
+        // or arrow: a hook that calls the member names it too, after its own declaration.
+        string Member(string name)
+        {
+            var declares = new Regex(@"^[^(=]*\b" + Regex.Escape(name) + @"\s*\(");
+            var at = Array.FindIndex(lines, l => MemberDeclaration().IsMatch(l) && declares.IsMatch(l));
+            return at < 0 ? "" : MemberAround(at);
+        }
+
+        bool ReachedByItsHook(string property)
+        {
+            var hook = Member("On" + property + "Changed");
+            if (BusyAssignment().IsMatch(hook)) return true;
+            foreach (Match call in Regex.Matches(hook, @"\b(?<name>[A-Z]\w*)\s*\("))
+            {
+                var name = call.Groups["name"].Value;
+                if (name != "On" + property + "Changed" && BusyAssignment().IsMatch(Member(name))) return true;
+            }
+
+            return false;
+        }
+
+        var direct = properties.Where(ReachedByItsHook).ToHashSet(StringComparer.Ordinal);
+
+        bool ReachedBesideItsSetter(string property)
+        {
+            var sites = Enumerable.Range(0, lines.Length)
+                .Where(i => Regex.IsMatch(lines[i], @"\b" + property + @"\s*=\s*true\b"))
+                .ToList();
+            return sites.Count > 0 && sites.All(i =>
+            {
+                var member = MemberAround(i);
+                return BusyAssignment().IsMatch(member)
+                    || direct.Any(other => Regex.IsMatch(member, @"\b" + other + @"\s*=\s*true\b"));
+            });
+        }
+
+        return properties.Where(p => !direct.Contains(p) && !ReachedBesideItsSetter(p)).ToList();
+    }
+
+    /// <summary>
+    /// The first line of a member: modifiers, then a name and its opening parenthesis. A generated hook is declared
+    /// <c>partial void</c>, with no access modifier, so <c>partial</c> starts one too.
+    /// </summary>
+    [GeneratedRegex(@"^\s*(?:(?:private|internal|public|protected|partial|static|async|override|virtual)\s+)+\S.*?\b\w+\s*\(",
+                    RegexOptions.CultureInvariant)]
+    private static partial Regex MemberDeclaration();
+
+    /// <summary>An assignment to <c>IsBusy</c>, not a comparison with it.</summary>
+    [GeneratedRegex(@"\bIsBusy\s*=(?!=)", RegexOptions.CultureInvariant)]
+    private static partial Regex BusyAssignment();
 
     /// <summary>
     /// The snapshot cache lock may hold only the one-time cached queries, never a per-poll one.

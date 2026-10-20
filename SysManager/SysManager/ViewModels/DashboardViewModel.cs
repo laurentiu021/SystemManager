@@ -1491,11 +1491,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private void FollowJobs()
     {
         var quickActionRuns = IsQuickActionRunning && !IsQuickActionDone;
-        IsBusy = _refreshing || IsTuneUpRunning || quickActionRuns || IsSlowdownCheckRunning;
+        IsBusy = _refreshing || IsTuneUpRunning || quickActionRuns || IsSlowdownCheckRunning || IsHealthScoreLoading;
         ShowOnTaskbar(IsTuneUpRunning ? TuneUpProgress : quickActionRuns ? QuickActionProgress : 0);
     }
 
     partial void OnIsTuneUpRunningChanged(bool value) => FollowJobs();
+
+    // The score is computed at start-up too, outside a refresh, and the tab was not busy while it ran there (#2876).
+    partial void OnIsHealthScoreLoadingChanged(bool value) => FollowJobs();
     partial void OnTuneUpProgressChanged(int value) => FollowJobs();
     partial void OnIsQuickActionRunningChanged(bool value) => FollowJobs();
     partial void OnIsQuickActionDoneChanged(bool value) => FollowJobs();

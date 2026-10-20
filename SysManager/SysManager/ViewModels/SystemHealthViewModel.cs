@@ -49,6 +49,12 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [ObservableProperty] private bool _isChkdskRunning;
     [ObservableProperty] private string _chkdskStatus = string.Empty;
 
+    // The reads below mark themselves running and chkdsk has its own flag, and the tab is busy while any of them is.
+    // Each read set IsBusy and cleared it as it ended, and chkdsk set only its flag, so a chkdsk run of several minutes
+    // showed on neither the sidebar nor the taskbar button, and a read ending beside it would have cleared the bar
+    // anyway (#2876).
+    private int _readsRunning;
+
     // Memory diagnostic summary
     [ObservableProperty] private int _wheaMemoryErrors;
     [ObservableProperty] private int _memoryDiagnosticResults;
@@ -93,11 +99,31 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         base.Dispose(disposing);
     }
 
+    private void BeginRead()
+    {
+        _readsRunning++;
+        FollowWork();
+    }
+
+    private void EndRead()
+    {
+        _readsRunning--;
+        FollowWork();
+    }
+
+    // Nothing here reports a figure, so the bar is a moving one whenever something runs.
+    private void FollowWork()
+    {
+        IsBusy = _readsRunning > 0 || IsChkdskRunning;
+        IsProgressIndeterminate = IsBusy;
+    }
+
+    partial void OnIsChkdskRunningChanged(bool value) => FollowWork();
+
     [RelayCommand]
     private async Task ScanAsync()
     {
-        IsBusy = true;
-        IsProgressIndeterminate = true;
+        BeginRead();
         StatusMessage = "Collecting system info...";
         try
         {
@@ -117,7 +143,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         }
         catch (System.Management.ManagementException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
         catch (InvalidOperationException ex) { StatusMessage = $"Scan failed: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally { EndRead(); }
     }
 
     /// <summary>Opens the motherboard manufacturer's support page (or a web search) for BIOS updates.</summary>
@@ -194,8 +220,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
     [RelayCommand]
     private async Task CheckDiskHealthAsync()
     {
-        IsBusy = true;
-        IsProgressIndeterminate = true;
+        BeginRead();
         StatusMessage = "Reading SMART data...";
         try
         {
@@ -205,14 +230,13 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         }
         catch (System.Management.ManagementException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
         catch (InvalidOperationException ex) { StatusMessage = $"CheckDiskHealth failed: {ex.Message}"; }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally { EndRead(); }
     }
 
     [RelayCommand]
     private async Task CheckMemoryErrorsAsync()
     {
-        IsBusy = true;
-        IsProgressIndeterminate = true;
+        BeginRead();
         StatusMessage = "Scanning event log for memory errors...";
         try
         {
@@ -245,7 +269,7 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             MemoryHealthColorHex = StatusColors.Warning;
             StatusMessage = $"CheckMemoryErrors failed: {ex.Message}";
         }
-        finally { IsBusy = false; IsProgressIndeterminate = false; }
+        finally { EndRead(); }
     }
 
     [RelayCommand]
@@ -274,6 +298,8 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
         }
 
         var target = ChkdskDrives.FirstOrDefault(d => string.Equals(d.Letter, driveLetter, StringComparison.OrdinalIgnoreCase));
+        using var opLock = TryLockForChkdsk();
+        if (opLock is null) return;
         IsChkdskRunning = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -301,6 +327,8 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             return;
         }
 
+        using var opLock = TryLockForChkdsk();
+        if (opLock is null) return;
         IsChkdskRunning = true;
         ChkdskStatus = $"Scanning {selected.Count} drive(s)...";
         _cts?.Dispose();
@@ -317,6 +345,22 @@ public sealed partial class SystemHealthViewModel : ViewModelBase
             ChkdskStatus = _cts.Token.IsCancellationRequested ? "Cancelled." : "All scans finished.";
         }
         finally { IsChkdskRunning = false; }
+    }
+
+    /// <summary>
+    /// The Disk lock for a chkdsk run, or null, with the reason on the status line, when another disk job holds it.
+    /// </summary>
+    /// <remarks>
+    /// Taken as the disk scans take it, so a chkdsk never runs beside a clean-up's deletes. It is also what makes
+    /// closing SysManager ask first, as QuitGuard reads what runs from there: without it, closing during chkdsk asked
+    /// nothing and the disposal cut chkdsk off part-way (#2876).
+    /// </remarks>
+    private OperationLockService.OperationHandle? TryLockForChkdsk()
+    {
+        var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.Disk, "Disk check (chkdsk)");
+        if (opLock is null)
+            StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.Disk)} is already running.";
+        return opLock;
     }
 
     private async Task RunChkdskCoreAsync(string driveLetter, DriveTarget? target, CancellationToken ct)

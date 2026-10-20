@@ -67,7 +67,7 @@ properties, none of which touches `Content`.
 `NavItem` also mirrors the tab's `IsBusy`, `Progress` and `IsProgressIndeterminate` out of its view-model,
 and `MainWindowViewModel.MapTaskbarProgress` turns the selected tab's two progress signals into the Windows
 taskbar button's `ProgressState`/`ProgressValue` (bound in `MainWindow.xaml`), only while the tab is busy, so
-the button goes blank when a job ends whatever figure it left. Both progress signals are read, not one: 38
+the button goes blank when a job ends whatever figure it left. Both progress signals are read, not one: 42
 view-models set the indeterminate flag and 12 set a percentage. A tab whose own bar binds a figure of its own,
 or that draws no bar, feeds the taskbar through `ViewModelBase.ShowOnTaskbar`: Deep Cleanup, Speed Test, File
 Shredder, the update download and the Dashboard's Quick Tune-Up and quick actions (#2596).
@@ -241,7 +241,9 @@ to scroll.
 - `AppUpdatesViewModel` — winget scan and bulk upgrade.
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
-  a link to the maker's support site.
+  a link to the maker's support site. The tab is busy while a read or chkdsk runs, so a read that ends beside a
+  chkdsk leaves it busy, and chkdsk takes the `Disk` lock, so it never runs beside a clean-up and closing
+  SysManager asks first (#2876).
 - `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
 - `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list. Clean is off while a
   scan runs, and the service is handed the categories the confirmation listed rather than the list on screen, which
@@ -314,6 +316,8 @@ to scroll.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
 - `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade.
+  A winget search marks the tab busy as an install does, and the install's Cancel, its bar and the Install Selected
+  gate follow `IsInstalling` alone, so a search leaves them as they are (#2876).
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
 - `PrivacyViewModel` — Windows privacy and telemetry toggles via registry. Apply takes the shared
   `ISessionRestorePoint` snapshot first — after the confirmation, so declining costs nothing.

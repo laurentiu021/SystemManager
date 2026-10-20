@@ -1962,7 +1962,9 @@ offers, "rate us" prompts:
   work or Reset Windows Update is running
 - **Health Score** — overall system health gauge (0–100) combining disk
   SMART, free space on the system drive, RAM usage, uptime, and battery
-  wear. Free space counts for a quarter of it, because a full drive is the
+  wear. A drive is judged the way System Health judges it: wear and warmth count from 90% worn and
+  70 °C, so a healthy, well-used SSD neither lowers the score nor raises the disk alert.
+  Free space counts for a quarter of it, because a full drive is the
   commonest reason a PC feels slow and the one thing on that list you can
   fix today — so a system drive with less than 10 GB free, or under 5% free with less than 25 GB
   left, cannot score green, and the recommendation says how many GB are left and points at Deep Cleanup.

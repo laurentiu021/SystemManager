@@ -156,7 +156,7 @@ public sealed class HealthScoreService
         IReadOnlyList<FixedDriveService.FixedDrive>? drives, string? systemDrive, BatteryInfo? battery = null)
     {
         List<string> unavailable = [];
-        if (disks is null || disks.All(d => d.HealthPercent is null)) unavailable.Add(DiskComponent);
+        if (disks is null || disks.All(d => d.Condition == DiskCondition.Unknown)) unavailable.Add(DiskComponent);
 
         // Free space is unavailable when the SYSTEM drive specifically could not be read, not when some
         // drive could not: a BitLocker-locked data volume is skipped by the enumeration and changes nothing
@@ -285,8 +285,9 @@ public sealed class HealthScoreService
         // this point, from a machine with no drives. Either way nothing was measured.
         if (disks is null || disks.Count == 0) return UnknownComponentScore;
 
-        // The worst disk decides. HealthPercent already folds in Windows' own verdict as a ceiling,
-        // so there is nothing left to map here.
+        // The worst disk decides, by its condition: the judgement System Health's verdict gives. Its
+        // HealthPercent, the life left, took every point of wear off the score, so a Healthy SSD at 41%
+        // wear scored 59 and read as "Disk health critical" (#2866).
         //
         // This used to be `?? d.HealthStatus switch { "Healthy" => 100, "Warning" => 50,
         // "Unhealthy" => 20, _ => 80 }`, whose three named arms were unreachable: HealthPercent
@@ -299,9 +300,20 @@ public sealed class HealthScoreService
         // The empty-list case above is a STRONGER absence of evidence and used to be scored more
         // generously — this comment previously claimed a single unknown drive was "the only case that
         // reaches it", which was how the contradiction survived.
-        int worstScore = disks.Select(d => d.HealthPercent ?? UnknownComponentScore).Min();
-        return Math.Clamp(worstScore, 0, 100);
+        return disks.Select(DiskScore).Min();
     }
+
+    /// <summary>
+    /// One drive's score: full for a drive in good condition, Windows' own figures for a warning and for a failing
+    /// drive, and the unknown value when nothing was read.
+    /// </summary>
+    internal static int DiskScore(DiskHealthReport disk) => disk.Condition switch
+    {
+        DiskCondition.Fine => 100,
+        DiskCondition.Watch => DiskHealthReport.WarningCeiling,
+        DiskCondition.Failing => DiskHealthReport.FailingCeiling,
+        _ => UnknownComponentScore,
+    };
 
     /// <summary>
     /// Scores how much room the SYSTEM drive has left. 100 is comfortable, 10 is nearly full.
@@ -485,7 +497,7 @@ public sealed class HealthScoreService
         // Disk
         if (diskScore < 80 && disks is not null)
         {
-            var worst = disks.OrderBy(d => d.HealthPercent ?? 100).FirstOrDefault();
+            var worst = disks.OrderBy(DiskScore).FirstOrDefault();
             string diskName = worst?.FriendlyName ?? "Disk";
             recs.Add(new HealthRecommendation
             {

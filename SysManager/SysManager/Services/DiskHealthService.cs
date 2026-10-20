@@ -133,38 +133,30 @@ public sealed class DiskHealthService
     /// </summary>
     private static void ApplyVerdict(DiskHealthReport r)
     {
-        // Base on HealthStatus first — Windows already knows about failures.
-        if (r.HealthStatus == "Unhealthy")
+        // The sentence for what DiskHealthReport.Finding decided, which the health score and the Dashboard judge the
+        // drive by too, so the tabs cannot give one drive two answers (#2866).
+        switch (r.Finding)
         {
-            r.Verdict = "Drive is failing — back up now and replace it.";
-            r.VerdictColorHex = StatusColors.Bad;
-            return;
-        }
-        if (r.HealthStatus == "Warning")
-        {
-            r.Verdict = "Drive is warning of problems. Back up soon.";
-            r.VerdictColorHex = StatusColors.Warning;
-            return;
-        }
-
-        // SMART thresholds
-        if (r.WearPercent is >= 90)
-        {
-            r.Verdict = $"SSD {r.WearPercent}% worn out — plan a replacement.";
-            r.VerdictColorHex = StatusColors.Warning;
-            return;
-        }
-        if (r.TemperatureC is >= 70)
-        {
-            r.Verdict = $"Running hot ({r.TemperatureC:F0} °C). Check cooling / airflow.";
-            r.VerdictColorHex = StatusColors.Warning;
-            return;
-        }
-        if ((r.ReadErrors ?? 0) > 0 || (r.WriteErrors ?? 0) > 0)
-        {
-            r.Verdict = $"{(r.ReadErrors ?? 0) + (r.WriteErrors ?? 0)} I/O errors logged. Monitor closely.";
-            r.VerdictColorHex = StatusColors.Warning;
-            return;
+            case DiskFinding.Failing:
+                r.Verdict = "Drive is failing — back up now and replace it.";
+                r.VerdictColorHex = StatusColors.Bad;
+                return;
+            case DiskFinding.WindowsWarns:
+                r.Verdict = "Drive is warning of problems. Back up soon.";
+                r.VerdictColorHex = StatusColors.Warning;
+                return;
+            case DiskFinding.WornOut:
+                r.Verdict = $"SSD {r.WearPercent}% worn out — plan a replacement.";
+                r.VerdictColorHex = StatusColors.Warning;
+                return;
+            case DiskFinding.RunsHot:
+                r.Verdict = $"Running hot ({r.TemperatureC:F0} °C). Check cooling / airflow.";
+                r.VerdictColorHex = StatusColors.Warning;
+                return;
+            case DiskFinding.IoErrors:
+                r.Verdict = $"{(r.ReadErrors ?? 0) + (r.WriteErrors ?? 0)} I/O errors logged. Monitor closely.";
+                r.VerdictColorHex = StatusColors.Warning;
+                return;
         }
 
         // All good

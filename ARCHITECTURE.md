@@ -578,7 +578,8 @@ Key services:
 - `SlowdownService` (`ISlowdownService`) — the Dashboard's "Why is it slow?" check (#1529). Looks at five things at
   once: the system drive, judged by `HealthScoreService.ComputeFreeSpaceScore`; the program using the most of the
   processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never
-  SysManager itself or the idle process; what starts with Windows (`StartupService`) and what Windows blamed at its
+  SysManager itself or the idle process; what starts with Windows (`StartupService`, a scheduled task only when its
+  `StartsWithWindows` is set) and what Windows blamed at its
   last timed start, if that was within 30 days (`BootAnalyzerService`); memory in use, from 90%; and the time since
   the last restart, judged by `ComputeUptimeScore`. Returns a `SlowdownReport`: the findings ranked in
   `SlowdownKind` order, worst first, each with the tabs that can act on it, and the parts that could not be read,
@@ -640,7 +641,9 @@ Key services:
   `\Windows\` excluded; toggled through `schtasks /Change`, so the same task the
   Task Scheduler tab owns). `TaskCache` has no enabled flag, so a task's state comes from
   its definition under `System32\Tasks` (`Settings/Enabled`), read without DTDs and only
-  inside that folder. `TaskCache` is readable by SYSTEM and Administrators only, so
+  inside that folder. The same read, `ReadTaskDefinition`, sets `StartsWithWindows` when an
+  enabled `LogonTrigger` or `BootTrigger` runs the task, which its status says ("Enabled (at
+  start-up)"), and SysManager's own maintenance task is left out (#2871). `TaskCache` is readable by SYSTEM and Administrators only, so
   `ScanAsync` returns a `StartupScan` that says whether the tasks could be listed, rather
   than a list that silently has none. Enriches each entry from `ProcessDescriptionService`
   (plain-language description + `ProcessSafety`) keyed on the executable's base

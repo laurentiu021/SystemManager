@@ -818,6 +818,10 @@ System → System Fixes, where the tab name matches what they do.
   installed by a 32-bit installer**, plus both Startup folders and scheduled tasks belonging to
   programs you installed. Windows lets only administrators read which scheduled tasks exist, so
   without "Run as administrator" those tasks are left out, and the tab says so
+- **A scheduled task says when it runs.** One that runs when you sign in or Windows starts reads
+  "Enabled (at start-up)"; one that runs on a schedule, such as an hourly updater, reads "Enabled
+  (scheduled)", and the Dashboard's Why is it slow? does not count it as starting with Windows.
+  SysManager's own Scheduled Maintenance task is not listed
 - **Windows' own scheduled tasks are deliberately left out**, so the list stays short enough to read
   and nothing here is something you should not touch. [Task Scheduler](#task-scheduler) is the tab that
   shows every task, Windows' included — a third-party task appears on both, and it is the same task in
@@ -1936,7 +1940,8 @@ offers, "rate us" prompts:
     left, and put first under 10 GB, or under 10% with less than 25 GB left
   - **a program using 40% or more of the processor**, counted across all of its processes and
     measured twice, a second apart, so a moment's spike is not named. SysManager itself never is
-  - **more than ten programs starting with Windows**, or more than 20 seconds that Windows itself
+  - **more than ten programs starting with Windows**, a scheduled task only when it runs at sign-in
+    or start-up, or more than 20 seconds that Windows itself
     blamed on what ran during the last start it timed, if that was in the last 30 days. Reading
     what Windows blamed needs administrator rights; the count does not
   - **memory at 90% or more**

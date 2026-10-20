@@ -310,7 +310,7 @@ public class SystemFixesViewModelTests
         await vm.RunDismCommand.ExecuteAsync(null);
 
         await runner.Received(1).RunProcessAsync(
-            "DISM.exe", "/Online /Cleanup-Image /RestoreHealth",
+            "DISM.exe", "/Online /English /Cleanup-Image /RestoreHealth",
             Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
     }
 

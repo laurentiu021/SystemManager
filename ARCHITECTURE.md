@@ -563,7 +563,10 @@ Key services:
   `Evaluate`, which scores evidence already in hand; the System Report calls `Evaluate` with the snapshot and
   disks it read itself, so the report and the Dashboard share one copy of the scoring. The lines past which it
   recommends freeing space or a restart are named constants (`FreeSpaceRecommendBelow`,
-  `FreeSpaceCriticalAtOrBelow`, `RestartRecommendedAtOrBelow`) that `SlowdownService` reads too.
+  `FreeSpaceCriticalAtOrBelow`, `RestartRecommendedAtOrBelow`) that `SlowdownService` reads too. The
+  uptime and memory limits themselves are in `Models/HealthLimits` (more than 7 days, more than 80%),
+  which the score bands and `TuneUpResult` both read, so the Tune-Up card and the Health Score card
+  give the same advice; the notification area keeps limits of its own there, further out (#2877).
 - `SlowdownService` (`ISlowdownService`) — the Dashboard's "Why is it slow?" check (#1529). Looks at five things at
   once: the system drive, judged by `HealthScoreService.ComputeFreeSpaceScore`; the program using the most of the
   processor, from two `ProcessManagerService` snapshots a second apart, by program rather than by process, never

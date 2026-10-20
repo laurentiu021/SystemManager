@@ -111,10 +111,13 @@ public sealed partial class LargeFilesViewModel : ViewModelBase
 
     partial void OnBytesScannedChanged(long value) => OnPropertyChanged(nameof(BytesScannedDisplay));
 
-    // Forward running state to IsBusy so the sidebar progress indicator works, and re-evaluate Cancel.
+    // Forward running state to IsBusy so the sidebar progress indicator works, and re-evaluate Cancel. The tab's bar
+    // is a marquee with no figure of its own, so the taskbar button is told the same; with IsBusy alone it stayed blank
+    // for the whole of a scan that can take minutes (#2872).
     partial void OnIsScanningChanged(bool value)
     {
         IsBusy = value;
+        IsProgressIndeterminate = value;
         CancelCommand.NotifyCanExecuteChanged();
     }
 

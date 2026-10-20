@@ -360,7 +360,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanRunStoreOp))]
     private Task AnalyzeComponentStoreAsync()
-        => RunComponentStoreAsync("/Online /Cleanup-Image /AnalyzeComponentStore", analyzing: true);
+        => RunComponentStoreAsync("/Online /English /Cleanup-Image /AnalyzeComponentStore", analyzing: true);
 
     /// <summary>Performs the cleanup the analysis reported, after an explicit confirmation.</summary>
     [RelayCommand(CanExecute = nameof(CanCleanComponentStore))]
@@ -382,7 +382,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
             return;
         }
 
-        await RunComponentStoreAsync("/Online /Cleanup-Image /StartComponentCleanup", analyzing: false);
+        await RunComponentStoreAsync("/Online /English /Cleanup-Image /StartComponentCleanup", analyzing: false);
     }
 
     /// <summary>Analyse and clean differ only in the DISM argument and the wording, so they share this.</summary>
@@ -482,10 +482,10 @@ public sealed partial class CleanupViewModel : ViewModelBase
     /// and — for an analysis — whether the cleanup button should become available.
     /// </summary>
     /// <remarks>
-    /// Matches on the English phrases DISM prints, the same approach and the same limitation as
-    /// <see cref="SystemFixesViewModel.ParseSfcResult"/> and
-    /// <see cref="SystemFixesViewModel.ParseDismResult"/>, with an exit-code fallback for
-    /// everything else. <c>Component Store Cleanup Recommended : No</c> is a real and common answer, and
+    /// Matches on the English phrases DISM prints, which it prints on any display language because both calls pass
+    /// DISM's <c>/English</c> option. Without it a non-English Windows printed its own wording, nothing matched, and the
+    /// cleanup button stayed off for good (#2846). An exit-code fallback covers everything else, and an analysis whose
+    /// recommendation still cannot be found says so. <c>Component Store Cleanup Recommended : No</c> is a real and common answer, and
     /// saying so is more useful than an empty result — a store already cleaned should not present a button
     /// that would spend half an hour reclaiming nothing.
     /// <para>The size shown is the store's own, quoted from <c>Actual Size of Component Store</c> rather than
@@ -530,7 +530,8 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
 
         return exitCode == 0
-            ? ("Analysis completed. Check the console output for what Windows reported.", StatusColors.Neutral, false)
+            ? ("Windows' recommendation could not be read, so the cleanup stays off. The console shows what Windows reported.",
+               StatusColors.Neutral, false)
             : ($"Analysis finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning, false);
     }
 

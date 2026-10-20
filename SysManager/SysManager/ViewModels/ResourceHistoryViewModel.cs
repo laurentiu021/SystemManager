@@ -154,6 +154,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         }
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             _loaded = await _service.LoadAsync(SelectedRange.Range);
@@ -185,6 +186,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            IsProgressIndeterminate = false;
             // Release only if the gate is still alive: Dispose can land while the load is in flight, and
             // releasing a disposed SemaphoreSlim throws — out of a finally block, which would replace a
             // clean teardown with an unhandled exception.
@@ -223,6 +225,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             var csv = ResourceHistoryService.ToCsv(_loaded);
@@ -232,7 +235,7 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     partial void OnHasDataChanged(bool value) => ExportCsvCommand.NotifyCanExecuteChanged();

@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.17] - 2026-10-20
+
+**A Large Files scan shows on the taskbar button, the Dashboard's Tune-Up and Health Score cards give the same
+advice about restarting and memory, and the component store can be cleaned on a Windows that is not in English.**
+
+### Fixed
+
+- **A Large Files scan never showed on the taskbar button.** The button follows a tab's progress, and the scan's bar
+  is a moving bar with no figure, which the button was never told about, so a scan of a whole drive, which can take
+  minutes, left it blank, and once SysManager is minimised that button is the only sign of progress. The same held for
+  Bandwidth Monitor loading its history, Resource History loading or exporting, and Scheduled Maintenance saving,
+  removing or reading its schedule. Each now shows the moving bar on the button while it works. Since the taskbar
+  button began showing progress (1.83.0).
+- **The Tune-Up card could say the PC had restarted recently while the card below recommended a restart.** Quick
+  Tune-Up warned only past 14 days of uptime and 85% of memory in use, and the Health Score card advises a restart
+  past 7 days and closing apps past 80%, so in between each card said the opposite of the other. Both use the same
+  limits now, defined once. The notification area keeps its own, further out (14 days, 90%), because it interrupts
+  every four hours while the condition lasts. Since the Health Score card was added (0.37.0).
+- **On a Windows that is not in English, Clean up component store could never be pressed.** DISM printed its
+  analysis in the display language, and SysManager read only the English answer, so the analysis ended in "Analysis
+  completed", the cleanup stayed off for good, and the store's size was never quoted. SysManager asks DISM for
+  English now, here and for System Fixes' DISM repair, and an analysis whose answer still cannot be read says so.
+  Since the component store check was added (1.94.0).
+
 ## [1.130.16] - 2026-10-20
 
 **Windows Update keeps the updates you unticked when it lists them again, and System Fixes says why a repair

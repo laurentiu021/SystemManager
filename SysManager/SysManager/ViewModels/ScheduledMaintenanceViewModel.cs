@@ -166,8 +166,9 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     private async Task RefreshAsync()
     {
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try { await LoadStatusAsync(); }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     /// <summary>
@@ -255,6 +256,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             bool ok = await _service.RegisterAsync(schedule);
@@ -270,7 +272,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
                 StatusMessage = "Could not register the scheduled task. Check the log for details.";
             }
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private bool CanRemove() => IsScheduled && !IsBusy;
@@ -284,6 +286,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             return;
 
         IsBusy = true;
+        IsProgressIndeterminate = true;
         try
         {
             bool removed = await _service.RemoveAsync();
@@ -291,7 +294,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             await LoadStatusAsync(); // refresh state first, then set the outcome message
             StatusMessage = removed ? "Scheduled maintenance removed." : "Could not remove the task. Check the log.";
         }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     partial void OnIsScheduledChanged(bool value)

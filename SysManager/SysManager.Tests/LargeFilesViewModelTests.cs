@@ -20,6 +20,21 @@ public class LargeFilesViewModelTests
         new(new Services.LargeFileScanner(), new Services.FixedDriveService());
 
     [Fact]
+    public void AScan_ShowsOnTheTaskbarButton_ForAsLongAsItRuns()
+    {
+        // The tab's bar is a marquee with no figure, and the scan reached only IsBusy, so the taskbar button, the one
+        // sign of progress once the window is minimised, stayed blank for the whole scan (#2872).
+        var vm = NewVm();
+
+        vm.IsScanning = true;
+        Assert.True(vm.IsBusy);
+        Assert.True(vm.IsProgressIndeterminate);
+
+        vm.IsScanning = false;
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
     public void Constructor_ScanStatusEmpty()
     {
         var vm = NewVm();

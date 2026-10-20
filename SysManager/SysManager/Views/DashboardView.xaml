@@ -289,7 +289,7 @@
                         <DockPanel Margin="0,0,0,6"
                                    Visibility="{Binding TuneUpResult.UptimeWarning, Converter={StaticResource FlexVis}}">
                             <TextBlock VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"
-                                       Text="This PC has not restarted in over two weeks — a restart often clears slowdowns on its own." Style="{StaticResource Body}"/>
+                                       Text="This PC has not restarted in over a week — a restart often clears slowdowns on its own." Style="{StaticResource Body}"/>
                         </DockPanel>
 
                         <!-- RAM -->

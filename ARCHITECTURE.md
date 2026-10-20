@@ -1501,6 +1501,10 @@ Key services:
   bound parameters (never interpolated); every change is verified by reading the value
   back (Tamper Protection can silently reject). The status read stops if either cmdlet
   fails, so an unread status is reported as unavailable rather than as protection "On".
+  Real-time protection is read as set (`Get-MpPreference`) and as it runs
+  (`Get-MpComputerStatus`'s `RealTimeProtectionEnabled` and `AMRunningMode`); the card shows
+  the second, and `DefenderStatus.RealtimeNote` says why when the two differ, such as
+  passive mode beside another antivirus (#2867).
   Windows shows the exclusion lists only to an administrator, so for a standard user
   they are emptied and marked unreadable, and the tab says they are hidden. The parse
   helpers are pure, unit-tested.

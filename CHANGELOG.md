@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.25] - 2026-10-20
+
+**Defender Tweaks shows whether Defender is really scanning, and says when another antivirus is in charge.**
+
+### Fixed
+
+- **Real-time protection read "On" on Defender Tweaks while Defender was not scanning.** The card showed how
+  real-time protection is set, not whether it runs. When another antivirus is in charge, which is the case on many
+  PCs that came with one, Windows stops Defender's real-time scanning and leaves the setting on, so the tab said
+  Defender was protecting the PC when it was not. The card now shows what Windows reports as running, and the status
+  line says why it is off while its setting is on. Since Defender Tweaks was added (1.39.0).
+
 ## [1.130.24] - 2026-10-20
 
 **New App Alerts reports one installation once, under the program's name.**

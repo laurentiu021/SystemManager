@@ -101,11 +101,15 @@ public sealed partial class DefenderViewModel : ViewModelBase
         {
             var status = await _service.GetStatusAsync().ConfigureAwait(true);
             Apply(status);
+            // Whether Defender scans at all comes before the note about changes, which the Tamper Protection banner
+            // above the cards also gives.
             StatusMessage = !IsAvailable
                 ? "Microsoft Defender is not available on this system."
-                : IsTamperProtected
-                    ? "Tamper Protection is ON — some changes may be ignored by Windows until you turn it off in Windows Security."
-                    : "Defender status loaded.";
+                : status.RealtimeNote is { Length: > 0 } note
+                    ? note
+                    : IsTamperProtected
+                        ? "Tamper Protection is ON — some changes may be ignored by Windows until you turn it off in Windows Security."
+                        : "Defender status loaded.";
         }
         // GetStatusAsync runs PowerShell; a runspace-level fault (not just a script
         // RuntimeException the service catches) would otherwise escape this async

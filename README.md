@@ -1576,7 +1576,10 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
 ### Defender Tweaks
 Manage Microsoft Defender without digging through Windows Security:
 - **Status at a glance** — real-time protection, cloud protection (MAPS), PUA
-  protection, and Controlled Folder Access
+  protection, and Controlled Folder Access. Real-time protection shows whether
+  Defender is scanning, as Windows reports it, not only how it is set: when another
+  antivirus is in charge, Windows stops Defender's scanning and leaves the setting on,
+  so the card reads Off and the status line says why
 - **Toggle PUA protection and Controlled Folder Access** (ransomware protection). Turning
   Controlled Folder Access on first says which folders it protects, that some games and
   programs then cannot save there until you allow them, and where in Windows Security to

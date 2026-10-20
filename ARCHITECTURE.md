@@ -478,7 +478,7 @@ Key services:
   A runner REUSES its runspace across calls, because starting that child
   and completing a remoting handshake with it is the slow part and the services
   that use it call in bursts (`DnsService` six times, `EdgeOneDriveService` four).
-  Three properties make reuse safe: the runspace state, and whether its child
+  Four properties make reuse safe: the runspace state, and whether its child
   process is still running, are re-checked on every lease, so a child killed from
   outside is discarded and rebuilt rather than failing every later call (the state
   alone goes on reading open for about a minute after the child dies, and tearing
@@ -488,7 +488,10 @@ Key services:
   evicted after ~20 s idle, which matters because eleven runners are constructed
   directly in `MainWindowViewModel`'s designer graph and nothing ever disposes
   them — without eviction a dozen `powershell.exe` processes would be resident for
-  the whole run. `Dispose` releases it deterministically where a consumer is disposed.
+  the whole run; and each script runs in a scope of its own
+  (`AddScript(script, useLocalScope: true)`), so no variable or preference one script
+  sets reaches the next. In the runspace's global scope they did, from 1.78.7 to 1.130.13.
+  `Dispose` releases it deterministically where a consumer is disposed.
   A session that stops working under a run surfaces as `RuntimeException`, the type
   every service already turns into its failed state, rather than as the two
   `SystemException`s PowerShell raises for it. A run also watches its child process
@@ -498,7 +501,11 @@ Key services:
   minute (#2637). Cancelling hands `Stop()` to the
   thread pool: `Stop()` waits for the stop to land, and on a session whose child had
   died that froze the caller of `Cancel()`, a Cancel button's UI thread, for about a
-  minute (#2608).
+  minute (#2608). A run whose token is cancelled by the end of the lease is cancelled
+  there and never invoked (`CancelledBeforeItStarted`): the registration would ask an
+  instance that has not run to stop, and `BeginInvoke` refuses one that is still
+  stopping with an `InvalidOperationException` no caller's cancel branch catches, or,
+  once the stop has landed, starts the script anyway.
 - `WingetService` — shells out to `winget` and parses its table output.
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs

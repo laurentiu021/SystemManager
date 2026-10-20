@@ -688,6 +688,11 @@ public class PowerShellRunnerTests
     public async Task RunAsync_SupportsCancellation()
     {
         var runner = new PowerShellRunner();
+        // Warmed first, so the cancel below lands on a RUNNING loop, which is what this measures. On a cold runner,
+        // opening the runspace can take longer than the 300 ms before the cancel, and a cancel that lands before the
+        // script starts is a different outcome: the run is cancelled and the script never starts, which the unit
+        // suite pins.
+        await runner.RunAsync("'warm'");
         var lines = new System.Collections.Concurrent.ConcurrentQueue<Models.PowerShellLine>();
         runner.LineReceived += lines.Enqueue;
 
@@ -882,27 +887,16 @@ public class PowerShellRunnerTests
             + "With no exception the caller receives an empty result set and no indication that anything was "
             + "cancelled — for a query that is indistinguishable from a real answer of \"nothing found\".");
 
-        // EITHER discriminator is correct here now, and that is a change from what this asserted.
+        // ONE answer here now, and it is a third discriminator.
         //
-        // It pinned "completed on its own", which was the honest description of a hole: the registration
-        // fired while the instance was NotStarted, Stop() threw InvalidOperationException, it was swallowed,
-        // and BeginInvoke went on to run the script with nothing having asked it to stop. The runner now
-        // re-asserts Stop after BeginInvoke and closes that window (#2286), so this scenario reaches the
-        // pipeline properly.
-        //
-        // Which message comes back is then genuinely racy — and only because THIS script is `1 + 1`. Against
-        // a trivial script the stop and the script's own completion are in a real race, and both outcomes
-        // are correct: cancellation is reported either way, which is the contract asserted above and the
-        // reason this test exists. Pinning the winner of that race is precisely what made
-        // RunAsync_SupportsCancellation flaky, so it is not repeated here.
-        //
-        // The deterministic pin lives there instead, where the script BLOCKS for 20 seconds: a lost stop
-        // cannot hide behind a fast script, so "stopped by cancellation" is the only correct answer and is
-        // asserted exactly.
-        Assert.True(ex!.Message.Contains("stopped by cancellation", StringComparison.Ordinal)
-                    || ex.Message.Contains("completed on its own", StringComparison.Ordinal),
-            "the cancellation was reported without either discriminator in its message, so a future reader "
-            + $"cannot tell which path ran: \"{ex.Message}\"");
+        // This pinned "completed on its own" first, the honest description of a hole: the registration fired
+        // while the instance was NotStarted, the stop was lost, and BeginInvoke went on to run the script with
+        // nothing having asked it to stop. #2286 re-asserted Stop after BeginInvoke, and then either of the two
+        // messages was right, in a real race against `1 + 1`. The script still started, though, and on a real
+        // runner a stop still landing made BeginInvoke throw InvalidOperationException instead, which no
+        // caller's cancel branch catches. Since 1.130.14 a run whose token is cancelled by the end of the lease
+        // is cancelled there and never invoked, so nothing races and the message says which path ran.
+        Assert.Equal(PowerShellRunner.CancelledBeforeItStarted, ex!.Message);
     }
 
     /// <summary>
@@ -920,9 +914,10 @@ public class PowerShellRunnerTests
     /// synchronously, <c>Stop()</c> throws <c>InvalidOperationException</c> on a not-yet-invoked instance, it
     /// is swallowed, and <c>BeginInvoke</c> starts a pipeline nothing has asked to stop.</para>
     /// <para>Deterministic for the same reason as the test above — the seam holds the open until the test has
-    /// cancelled — so this needs no sleeping to arrange the race and cannot depend on execution order. It is
-    /// the regression test the fix would otherwise not have: removing the runner's post-BeginInvoke
-    /// re-assertion takes this from about a second to the script's full 20.</para>
+    /// cancelled — so this needs no sleeping to arrange the race and cannot depend on execution order. It was
+    /// the regression test for the runner's post-BeginInvoke re-assertion. Since 1.130.14 a run cancelled by
+    /// the end of the lease is never invoked at all, which the unit suite pins, and this keeps the time bound
+    /// around it.</para>
     /// </remarks>
     [Fact]
     public async Task RunAsync_CancelledWhileTheRunspaceIsOpening_DoesNotRunTheScriptAnyway()

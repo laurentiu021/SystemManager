@@ -308,6 +308,35 @@ public class PowerShellRunnerTests
         Assert.IsType<TimeoutException>(ex.InnerException);
     }
 
+    /// <summary>
+    /// A runspace kept for the next script hands it nothing the last one left: no variable and no preference.
+    /// </summary>
+    /// <remarks>
+    /// Each script ran in the runspace's global scope, and since 1.78.7 the runspace is kept for the next call, so a
+    /// variable or an <c>$ErrorActionPreference</c> one script set was still there for the next. Counted through the
+    /// seam, so the second script provably ran on the same runspace; on a fresh one this would pass without testing
+    /// anything.
+    /// </remarks>
+    [Fact]
+    public async Task ARunspaceKeptForTheNextScript_HandsItNothingTheLastOneLeft()
+    {
+        var built = 0;
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            isElevated: () => false,
+            createRunspace: () =>
+            {
+                built++;
+                return (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null);
+            });
+
+        await runner.RunAsync("$leftBehind = 'from the first script'; $ErrorActionPreference = 'Stop'");
+        var seen = await runner.RunAsync("[string]$leftBehind + '|' + [string]$ErrorActionPreference");
+
+        Assert.Equal(1, built);
+        Assert.Equal("|Continue", Assert.Single(seen).BaseObject);
+    }
+
     /// <summary>The shipped timeout is generous enough not to fire on a slow cold start.</summary>
     /// <remarks>
     /// The value is the whole risk in this change: too tight and it breaks a working feature on a slow machine,
@@ -539,6 +568,50 @@ public class PowerShellRunnerTests
 
         stop();
         await Assert.ThrowsAsync<OperationCanceledException>(() => run);
+    }
+
+    /// <summary>
+    /// A cancel that lands while the runspace is still opening cancels the run, and the script never starts.
+    /// </summary>
+    /// <remarks>
+    /// The registration that asks for the stop is made after the lease, so for a token cancelled during it the stop
+    /// is asked of an instance that has not run. <c>BeginInvoke</c> refuses one that is still stopping, which arrived
+    /// as an <c>InvalidOperationException</c> no caller's cancel branch catches, and once the stop had landed the
+    /// script started anyway and was stopped a moment later. On a cold runner the lease takes a few hundred
+    /// milliseconds, so a Cancel clicked at once lands in it. The open is held here until the token is cancelled,
+    /// and the stop runs where it is asked for, so the order is the test's and not the clock's.
+    /// </remarks>
+    [Fact]
+    public async Task ACancelWhileTheRunspaceIsOpening_CancelsTheRun_AndTheScriptNeverStarts()
+    {
+        var opening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: async runspace =>
+            {
+                await opening.Task;
+                runspace.Open();
+            },
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null),
+            scheduleStop: stop =>
+            {
+                stop();
+                return Task.CompletedTask;
+            });
+        var started = false;
+        runner.LineReceived += line =>
+        {
+            if (line.Text == "started") Volatile.Write(ref started, true);
+        };
+        using var cts = new CancellationTokenSource();
+
+        var run = runner.RunAsync("'started'", cancellationToken: cts.Token);
+        cts.Cancel();
+        opening.SetResult();
+
+        var ex = await Assert.ThrowsAsync<OperationCanceledException>(() => run.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(PowerShellRunner.CancelledBeforeItStarted, ex.Message);
+        Assert.False(Volatile.Read(ref started), "the script started after the run had been cancelled");
     }
 
     /// <summary>

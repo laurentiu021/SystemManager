@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using SysManager.Models;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -39,6 +40,72 @@ public class MaintenanceSchedulerScriptTests
         unregisterStub + RemoveGuard +
         "& {" + MaintenanceSchedulerService.RemoveScript + "} -Folder '\\SysManager\\' -Name 'Maintenance' ; " +
         "'__SM_AFTER_REMOVE__'";
+
+    // ── Registering, against stubs that say what Register-ScheduledTask was given ──
+    // Dot-sourced, so the script runs in the scope it is started from, as it does in the runner's runspace.
+
+    private static readonly string RegisterGuard = WindowsPowerShellScript.StubsInEffect(
+        "New-ScheduledTaskAction", "New-ScheduledTaskTrigger", "New-ScheduledTaskSettingsSet",
+        "New-ScheduledTaskPrincipal", "Register-ScheduledTask", "Get-ScheduledTask");
+
+    private const string RegisterStubs =
+        "function New-ScheduledTaskTrigger { [CmdletBinding()] param([switch]$Daily, [switch]$Weekly, $DaysOfWeek, $At) " +
+        "[PSCustomObject]@{ At = $At } } ; " +
+        "function New-ScheduledTaskSettingsSet { [CmdletBinding()] param([switch]$StartWhenAvailable, " +
+        "[switch]$DontStopOnIdleEnd, $ExecutionTimeLimit, [switch]$AllowStartIfOnBatteries, " +
+        "[switch]$DontStopIfGoingOnBatteries, [switch]$RunOnlyIfIdle) [PSCustomObject]@{} } ; " +
+        "function New-ScheduledTaskPrincipal { [CmdletBinding()] param($UserId, $LogonType, $RunLevel) " +
+        "[PSCustomObject]@{ UserId = $UserId } } ; " +
+        "function Register-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath, [ValidateNotNull()]$Action, " +
+        "$Trigger, $Settings, $Principal, $Description, [switch]$Force) " +
+        "Write-Host \"REGISTERED args=[$($Action.Arguments)] user=[$($Principal.UserId)]\" ; [PSCustomObject]@{ State = 'Ready' } } ; " +
+        "function Get-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath) [PSCustomObject]@{ State = 'Ready' } } ; ";
+
+    /// <summary>A stub that makes the action as the real cmdlet does, refusing an empty command line as it does.</summary>
+    private const string ActionStub =
+        "function New-ScheduledTaskAction { [CmdletBinding()] param([string]$Execute, [ValidateNotNullOrEmpty()][string]$Argument) " +
+        "[PSCustomObject]@{ Execute = $Execute; Arguments = $Argument } } ; ";
+
+    private static string Register(string actionStub, string before = "")
+    {
+        var parameters = MaintenanceSchedulerService.RegisterParameters(
+            new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Weekly, 3, 0, DayOfWeek.Sunday),
+            @"C:\Apps\SysManager.exe", "S-1-5-21-1000-2000-3000-1001");
+        var named = string.Join(" ", parameters.Select(p => p.Value switch
+        {
+            bool flag => $"-{p.Key} ${(flag ? "true" : "false")}",
+            string text => $"-{p.Key} '{text.Replace("'", "''", StringComparison.Ordinal)}'",
+            _ => throw new InvalidOperationException($"{p.Key} has no PowerShell literal form here"),
+        }));
+        return actionStub + RegisterStubs + RegisterGuard + before +
+            ". {" + MaintenanceSchedulerService.RegisterScript + "} " + named + " ; '__SM_AFTER_REGISTER__'";
+    }
+
+    [Fact]
+    public async Task Registering_GivesTheActionTheCommandLine_AndThePrincipalTheAccount()
+    {
+        // The command line was taken as $Args, which PowerShell sets itself to the arguments no parameter took, so it
+        // was always empty: New-ScheduledTaskAction refused it, and no schedule saved from the tab was registered.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Register(ActionStub));
+
+        Assert.Contains("REGISTERED args=[--cleanup --silent] user=[S-1-5-21-1000-2000-3000-1001]", output,
+                        StringComparison.Ordinal);
+        Assert.Contains("__SM_AFTER_REGISTER__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Registering_StopsAtAStepThatFails_RatherThanRegisterAnEarlierScriptsAction()
+    {
+        // The runner keeps its runspace for the next script, and a refused parameter leaves the variable it was being
+        // assigned to as it was, so the action an earlier script left behind was what got registered.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Register(
+            "function New-ScheduledTaskAction { [CmdletBinding()] param([string]$Execute, " +
+            "[ValidatePattern('^refused$')][string]$Argument) [PSCustomObject]@{ Arguments = $Argument } } ; ",
+            before: "$action = [PSCustomObject]@{ Execute = 'C:\\earlier.exe'; Arguments = '--from-an-earlier-script' } ; "));
+
+        Assert.DoesNotContain("REGISTERED", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("__SM_AFTER_REGISTER__", output, StringComparison.Ordinal);
+    }
 
     [Fact]
     public async Task WhenWindowsSaysThereIsNoTask_ReturnsNothingAndCarriesOn()

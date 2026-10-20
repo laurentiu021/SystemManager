@@ -13,6 +13,11 @@ namespace SysManager.Tests;
 
 public class MaintenanceSchedulerServiceTests
 {
+    // Made-up accounts, so no test depends on the account running it.
+    private const string Sid = "S-1-5-21-1000-2000-3000-1001";
+    private const string OtherSid = "S-1-5-21-1000-2000-3000-1002";
+    private const string OwnTask = MaintenanceSchedulerService.TaskNamePrefix + Sid;
+
     private static PSObject StateRow(string state)
     {
         var o = new PSObject();
@@ -35,7 +40,7 @@ public class MaintenanceSchedulerServiceTests
         var ps = Substitute.For<IPowerShellRunner>();
         ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
           .Returns(new Collection<PSObject>(rows.ToList()));
-        return (new MaintenanceSchedulerService(ps), ps);
+        return (new MaintenanceSchedulerService(ps, Sid), ps);
     }
 
     // ── RegisterAsync: only allowlisted args reach PowerShell (security invariant) ──
@@ -54,9 +59,10 @@ public class MaintenanceSchedulerServiceTests
             Arg.Is<IDictionary<string, object?>?>(p =>
                 p != null &&
                 (string)p["Exe"]! == @"C:\Apps\SysManager.exe" &&
-                (string)p["Args"]! == "--cleanup --silent" &&     // allowlisted, never arbitrary
+                (string)p["Arguments"]! == "--cleanup --silent" &&     // allowlisted, never arbitrary
                 (string)p["Folder"]! == MaintenanceSchedulerService.TaskFolder &&
-                (string)p["Name"]! == MaintenanceSchedulerService.TaskName &&
+                (string)p["Name"]! == OwnTask &&
+                (string)p["UserId"]! == Sid &&
                 (bool)p["Daily"]! == false &&
                 (string)p["At"]! == "03:30" &&
                 (string)p["DayOfWeek"]! == "Sunday"),
@@ -299,5 +305,104 @@ public class MaintenanceSchedulerServiceTests
         Assert.Contains("Unregister-ScheduledTask", MaintenanceSchedulerService.RemoveScript, StringComparison.Ordinal);
         foreach (var script in new[] { MaintenanceSchedulerService.StatusScript, MaintenanceSchedulerService.RemoveScript })
             Assert.DoesNotContain("SilentlyContinue", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── One task per account ──────────────────────────────────────────────
+    // There was one task at a fixed path for the whole PC. On a PC with two accounts each tab would have shown the
+    // other account's schedule as its own, and Save or Remove run as administrator would have replaced or deleted it.
+
+    private static MaintenanceSchedule Daily() => new(MaintenanceAction.Cleanup, MaintenanceFrequency.Daily, 3, 0);
+
+    /// <summary>
+    /// A service for the account with <paramref name="sid"/> over <paramref name="tasks"/>, keyed by folder and name,
+    /// which the scripts change as Windows would: the status script reads one, the register script adds or replaces
+    /// one, the remove script deletes one. Two services over the same tasks are two accounts on one PC.
+    /// </summary>
+    private static MaintenanceSchedulerService Account(string sid, Dictionary<string, PSObject> tasks)
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(call =>
+          {
+              var script = call.ArgAt<string>(0);
+              var p = call.ArgAt<IDictionary<string, object?>?>(1)!;
+              var key = (string)p["Folder"]! + (string)p["Name"]!;
+              if (script == MaintenanceSchedulerService.RegisterScript)
+              {
+                  var row = StatusRow("Ready", 0);
+                  row.Properties.Add(new PSNoteProperty("RunsAs", (string)p["UserId"]!));
+                  tasks[key] = row;
+                  return Task.FromResult(new Collection<PSObject> { StateRow("Ready") });
+              }
+              if (script == MaintenanceSchedulerService.RemoveScript) tasks.Remove(key);
+              return Task.FromResult(script == MaintenanceSchedulerService.StatusScript && tasks.TryGetValue(key, out var found)
+                  ? new Collection<PSObject> { found }
+                  : new Collection<PSObject>());
+          });
+        return new MaintenanceSchedulerService(ps, sid);
+    }
+
+    [Fact]
+    public async Task AnotherAccountsSchedule_IsNotThisAccounts()
+    {
+        var tasks = new Dictionary<string, PSObject>();
+        Assert.True(await Account(OtherSid, tasks).RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+
+        var status = await Account(Sid, tasks).GetStatusAsync();
+
+        Assert.NotNull(status);   // read, and nothing of this account's is there: not the "could not be read" null
+        Assert.False(status.Exists);
+    }
+
+    [Fact]
+    public async Task SavingBesideAnotherAccountsSchedule_LeavesThatOneAsItWas()
+    {
+        var tasks = new Dictionary<string, PSObject>();
+        Assert.True(await Account(OtherSid, tasks).RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+
+        Assert.True(await Account(Sid, tasks).RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+
+        Assert.Equal(2, tasks.Count);
+        Assert.Equal([Sid, OtherSid], tasks.Values.Select(t => (string)t.Properties["RunsAs"].Value).Order());
+    }
+
+    [Fact]
+    public async Task Removing_LeavesAnotherAccountsScheduleAlone()
+    {
+        var tasks = new Dictionary<string, PSObject>();
+        var other = Account(OtherSid, tasks);
+        var mine = Account(Sid, tasks);
+        Assert.True(await other.RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+        Assert.True(await mine.RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+
+        Assert.True(await mine.RemoveAsync());
+
+        Assert.False((await mine.GetStatusAsync())!.Exists);
+        Assert.True((await other.GetStatusAsync())!.Exists);   // the other account's schedule still runs
+    }
+
+    [Fact]
+    public async Task WithoutAnAccount_NothingIsReadOrRegistered()
+    {
+        // Windows did not say which account this is, so there is no task name to read, save or remove.
+        var ps = Substitute.For<IPowerShellRunner>();
+        var svc = new MaintenanceSchedulerService(ps, accountSid: null);
+
+        Assert.Null(svc.TaskName);
+        Assert.Null(await svc.GetStatusAsync());
+        Assert.False(await svc.RegisterAsync(Daily(), exePath: @"C:\Apps\SysManager.exe"));
+        Assert.False(await svc.RemoveAsync());
+        await ps.DidNotReceive().RunAsync(
+            Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ThePublicConstructor_SchedulesForTheAccountSysManagerRunsAs()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+
+        var svc = new MaintenanceSchedulerService(Substitute.For<IPowerShellRunner>());
+
+        Assert.Equal(MaintenanceSchedulerService.TaskNamePrefix + identity.User!.Value, svc.TaskName);
     }
 }

@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.13] - 2026-10-20
+
+**Scheduled Maintenance can save a schedule, and each Windows account on the PC has its own.**
+
+### Fixed
+
+- **Saving a schedule never registered it.** SysManager handed the task's command line to Windows under a name
+  PowerShell keeps for its own use, so the command line always arrived empty, Windows refused to create the task, and
+  Save said "Could not register the scheduled task." for every schedule. The command line arrives now, and a step that
+  fails stops the save, so nothing half-built is registered. Since Scheduled Maintenance was added (1.50.0).
+- **Two Windows accounts on one PC would have shared one schedule.** The task had one name for the whole PC, so with
+  saving fixed each account's tab would have shown the other account's schedule as its own, an account without
+  administrator rights could not have saved one beside it, and Save or Remove run as administrator would have replaced
+  or deleted the other account's. Each account has its own task now, named with the account's security ID and run as
+  that account, and the tab reads, saves and removes only that one. Since Scheduled Maintenance was added (1.50.0).
+
 ## [1.130.12] - 2026-10-20
 
 **App Blocker recognises the blocks older versions wrote on a PC where Windows is not in C:\Windows, and a program

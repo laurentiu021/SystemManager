@@ -78,10 +78,10 @@ public class MaintenanceScheduleTests
     // ── Task identity constants ───────────────────────────────────────────
 
     [Fact]
-    public void TaskIdentity_IsSysManagerOwnedFolder()
+    public void TaskIdentity_IsOneTaskPerAccount()
     {
-        Assert.Equal(@"\SysManager\", MaintenanceSchedulerService.TaskFolder);
-        Assert.Equal("Scheduled Maintenance", MaintenanceSchedulerService.TaskName);
+        Assert.Equal(@"\", MaintenanceSchedulerService.TaskFolder);
+        Assert.Equal("SysManager Scheduled Maintenance-", MaintenanceSchedulerService.TaskNamePrefix);
     }
 
     // ── Every action is honestly named, end to end ────────────────────────
@@ -191,7 +191,8 @@ public class MaintenanceScheduleTests
             MaintenanceAction.Cleanup, MaintenanceFrequency.Daily, 3, 0,
             RunOnBattery: onBattery, OnlyWhenIdle: onlyIdle);
 
-        var parameters = MaintenanceSchedulerService.RegisterParameters(schedule, @"C:\x\SysManager.exe");
+        var parameters = MaintenanceSchedulerService.RegisterParameters(
+            schedule, @"C:\x\SysManager.exe", "S-1-5-21-1000-2000-3000-1001");
 
         Assert.Equal(onBattery, parameters["OnBattery"]);
         Assert.Equal(onlyIdle, parameters["OnlyIfIdle"]);
@@ -230,6 +231,48 @@ public class MaintenanceScheduleTests
 
         Assert.Contains("ExecutionTimeLimit = [TimeSpan]::FromHours(1)", script, StringComparison.Ordinal);
         Assert.DoesNotContain("New-TimeSpan", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegisterParameters_AreExactlyTheParametersTheScriptDeclares()
+    {
+        // A name the script does not declare is an error when it runs, and one it declares but is not sent is empty.
+        var parameters = MaintenanceSchedulerService.RegisterParameters(
+            new MaintenanceSchedule(MaintenanceAction.Cleanup, MaintenanceFrequency.Daily, 3, 0),
+            @"C:\x\SysManager.exe", "S-1-5-21-1000-2000-3000-1001");
+        var script = MaintenanceSchedulerService.RegisterScript;
+        var block = script[(script.IndexOf("param(", StringComparison.Ordinal) + 6)..script.IndexOf(')')];
+        var declared = System.Text.RegularExpressions.Regex.Matches(block, @"\$(\w+)").Select(m => m.Groups[1].Value);
+
+        Assert.Equal(declared.Order(), parameters.Keys.Order());
+    }
+
+    [Fact]
+    public void RegisterScript_RunsTheTaskAsTheAccountItIsGiven()
+    {
+        // By the SID in the task's name rather than $env:USERNAME, so the task named for an account is the one that
+        // runs as it, and a user name that also belongs to another account cannot pick that one instead.
+        var script = CodeOnly(MaintenanceSchedulerService.RegisterScript);
+
+        Assert.Contains("New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited", script,
+                        StringComparison.Ordinal);
+        Assert.DoesNotContain("$env:USERNAME", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RegisterScript_StopsAtTheFirstStepThatFails()
+    {
+        // The runner keeps a runspace for the next script, so a step that failed without stopping left Register to
+        // run with whatever $action an earlier script had set, or with none. -ErrorAction Stop turns an error a step
+        // writes into one that ends it; the try is what ends the script, because a refused parameter otherwise ends
+        // only its own statement.
+        var lines = CodeOnly(MaintenanceSchedulerService.RegisterScript).Split('\n').Select(l => l.Trim()).ToList();
+        var steps = lines.Where(line => line.Contains("New-ScheduledTask", StringComparison.Ordinal)).ToList();
+
+        Assert.Equal(5, steps.Count);   // the action, both triggers, the settings and the principal
+        Assert.All(steps, step => Assert.Contains("-ErrorAction Stop", step, StringComparison.Ordinal));
+        Assert.Equal("try {", lines[lines.FindIndex(l => l.EndsWith("[bool]$OnlyIfIdle)", StringComparison.Ordinal)) + 1]);
+        Assert.Equal("} catch { throw }", lines.Last(l => l.Length > 0));
     }
 
     /// <summary>The script with its <c>#</c> comments removed, so an assertion cannot match its own prose.</summary>

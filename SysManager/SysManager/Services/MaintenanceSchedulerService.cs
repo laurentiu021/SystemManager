@@ -5,32 +5,60 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Management.Automation;
+using System.Security.Principal;
 using Serilog;
 using SysManager.Models;
 
 namespace SysManager.Services;
 
 /// <summary>
-/// Creates, reads, and removes a single SysManager-owned Windows scheduled task that runs
-/// the app headless (via its CLI) on a recurring schedule. Uses the <c>ScheduledTasks</c>
-/// PowerShell module through the shared <see cref="IPowerShellRunner"/> seam.
+/// Creates, reads, and removes the SysManager-owned Windows scheduled task that runs the app
+/// headless (via its CLI) on a recurring schedule for the account SysManager runs as. Uses the
+/// <c>ScheduledTasks</c> PowerShell module through the shared <see cref="IPowerShellRunner"/> seam.
 ///
-/// Safety: this service only ever touches the one task at <see cref="TaskFolder"/> +
-/// <see cref="TaskName"/> — it never enumerates or modifies other tasks. The command it
+/// Safety: each Windows account has its own task, <see cref="TaskNamePrefix"/> followed by the
+/// account's SID in <see cref="TaskFolder"/>, and this service only ever touches that one — it
+/// never enumerates or modifies other tasks, including another account's. The command it
 /// registers is built from an allowlisted CLI argument string (no free-form user input),
 /// pointed at the running executable's own path, and registered in the current user's
 /// context (no admin required, runs only when that user is logged on).
 /// </summary>
 public sealed class MaintenanceSchedulerService
 {
-    public const string TaskFolder = @"\SysManager\";
-    public const string TaskName = "Scheduled Maintenance";
+    /// <summary>The folder every account's task is in: the root of the Task Scheduler Library.</summary>
+    /// <remarks>
+    /// One task per account, named with the account's SID as Windows names its own per-user tasks, and in the
+    /// root so that no folder one account created can stand in another's way. The name used to be one fixed path
+    /// for the whole PC, <c>\SysManager\Scheduled Maintenance</c>: on a PC with two accounts each tab would have
+    /// shown the other account's schedule as its own, and Save or Remove run as administrator would have replaced
+    /// or deleted it. Nothing was ever registered there, because the register script could not build its action
+    /// (see <see cref="RegisterScript"/>), so there is no earlier task to carry over.
+    /// </remarks>
+    public const string TaskFolder = @"\";
+
+    /// <summary>The start of every account's task name; the account's SID follows it.</summary>
+    public const string TaskNamePrefix = "SysManager Scheduled Maintenance-";
 
     private readonly IPowerShellRunner _ps;
+    private readonly string? _accountSid;
 
-    public MaintenanceSchedulerService(IPowerShellRunner ps) => _ps = ps;
+    public MaintenanceSchedulerService(IPowerShellRunner ps) : this(ps, CurrentAccountSid()) { }
 
-    /// <summary>Registers (or replaces) the maintenance task from the given schedule.
+    /// <summary>A service for the account with the given SID, or for none when it is null.</summary>
+    /// <remarks>
+    /// Internal so a test can be another account than the one running it; the public constructor uses the
+    /// account SysManager runs as.
+    /// </remarks>
+    internal MaintenanceSchedulerService(IPowerShellRunner ps, string? accountSid)
+    {
+        _ps = ps;
+        _accountSid = accountSid;
+    }
+
+    /// <summary>The name of this account's task, or null when Windows did not say which account this is.</summary>
+    public string? TaskName => _accountSid is { } sid ? TaskNamePrefix + sid : null;
+
+    /// <summary>Registers (or replaces) this account's maintenance task from the given schedule.
     /// Returns true on success. The executable path defaults to the running process.</summary>
     public async Task<bool> RegisterAsync(MaintenanceSchedule schedule, string? exePath = null, CancellationToken ct = default)
     {
@@ -40,11 +68,16 @@ public sealed class MaintenanceSchedulerService
             Log.Warning("Maintenance schedule not registered — could not resolve executable path.");
             return false;
         }
+        if (_accountSid is not { } sid)
+        {
+            Log.Warning("Maintenance schedule not registered — Windows did not say which account this is.");
+            return false;
+        }
 
         try
         {
             Collection<PSObject> results = await _ps
-                .RunAsync(RegisterScript, RegisterParameters(schedule, exePath), ct)
+                .RunAsync(RegisterScript, RegisterParameters(schedule, exePath, sid), ct)
                 .ConfigureAwait(false);
             // The script emits the registered task's state; one row back == success.
             return results.Count == 1 && Str(results[0], "State") is not null;
@@ -57,20 +90,22 @@ public sealed class MaintenanceSchedulerService
     }
 
     /// <summary>
-    /// The parameters <see cref="RegisterScript"/> is invoked with, for a schedule and an executable path.
+    /// The parameters <see cref="RegisterScript"/> is invoked with, for a schedule, an executable path and the SID
+    /// of the account the task is for.
     /// </summary>
     /// <remarks>
     /// Pure and <c>internal</c> so a test can assert that a schedule's power and idle policy actually reaches
     /// the script. The alternative — calling <c>RegisterAsync</c> — registers a real Windows scheduled task on
     /// the machine running the test, which is not something a unit suite may do to a developer's PC.
     /// </remarks>
-    internal static Dictionary<string, object?> RegisterParameters(MaintenanceSchedule schedule, string exePath)
+    internal static Dictionary<string, object?> RegisterParameters(MaintenanceSchedule schedule, string exePath, string accountSid)
         => new()
         {
             ["Exe"] = exePath,
-            ["Args"] = schedule.CliArguments,
+            ["Arguments"] = schedule.CliArguments,
             ["Folder"] = TaskFolder,
-            ["Name"] = TaskName,
+            ["Name"] = TaskNamePrefix + accountSid,
+            ["UserId"] = accountSid,
             ["Daily"] = schedule.Frequency == MaintenanceFrequency.Daily,
             ["At"] = $"{schedule.Hour:D2}:{schedule.Minute:D2}",
             ["DayOfWeek"] = schedule.DayOfWeek.ToString(),
@@ -79,8 +114,8 @@ public sealed class MaintenanceSchedulerService
         };
 
     /// <summary>
-    /// Reads the current state of the maintenance task: Exists=false when Windows says there is no task, and
-    /// null when the read itself failed.
+    /// Reads the current state of this account's maintenance task: Exists=false when Windows says there is none,
+    /// and null when the read itself failed.
     /// </summary>
     /// <remarks>
     /// A failed read used to return "not registered", so the tab said "No maintenance is scheduled yet." and a
@@ -89,9 +124,10 @@ public sealed class MaintenanceSchedulerService
     /// </remarks>
     public async Task<MaintenanceStatus?> GetStatusAsync(CancellationToken ct = default)
     {
+        if (TaskName is not { } name) return null;
         try
         {
-            var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = TaskName };
+            var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = name };
             Collection<PSObject> results = await _ps.RunAsync(StatusScript, parameters, ct).ConfigureAwait(false);
             if (results.Count == 0) return MaintenanceStatus.NotRegistered;
 
@@ -112,16 +148,17 @@ public sealed class MaintenanceSchedulerService
         }
     }
 
-    /// <summary>Removes the maintenance task. Returns true if it no longer exists afterwards.</summary>
+    /// <summary>Removes this account's maintenance task. Returns true if it no longer exists afterwards.</summary>
     /// <remarks>
     /// A refusal is logged, because the tab tells the user to look there, and the read-back still decides: a task
     /// that turns out to be gone is removed whatever the refusal said.
     /// </remarks>
     public async Task<bool> RemoveAsync(CancellationToken ct = default)
     {
+        if (TaskName is not { } name) return false;
         try
         {
-            var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = TaskName };
+            var parameters = new Dictionary<string, object?> { ["Folder"] = TaskFolder, ["Name"] = name };
             await _ps.RunAsync(RemoveScript, parameters, ct).ConfigureAwait(false);
         }
         catch (RuntimeException ex)
@@ -133,49 +170,77 @@ public sealed class MaintenanceSchedulerService
         return status is { Exists: false };
     }
 
+    /// <summary>The SID of the account SysManager runs as, or null when Windows does not say.</summary>
+    private static string? CurrentAccountSid()
+    {
+        try
+        {
+            // WindowsIdentity owns a native token handle, so it is disposed here, as RecycleBinHelper does.
+            using var identity = WindowsIdentity.GetCurrent();
+            return identity.User?.Value is { Length: > 0 } sid ? sid : null;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning("Scheduled Maintenance could not read which account this is: {Error}", ex.Message);
+            return null;
+        }
+    }
+
     // ── PowerShell scripts (parameterised; no string interpolation of user input) ──
 
     // Register-ScheduledTask with -Force replaces any existing task of the same name, so
     // re-registering just updates the schedule. The action runs the app's own exe with the
     // allowlisted CLI args; the trigger is daily or weekly at the chosen time. The task is
-    // pinned to the current interactive user at the LIMITED run level via an explicit
-    // principal — so it needs no admin to register and runs only when that user is logged on,
-    // never with elevation. (Previously this relied on the cmdlet's default principal; the
-    // explicit principal makes the security posture deliberate rather than implicit.)
+    // pinned to the account SysManager runs as, by the SID in its name, at the LIMITED run level
+    // via an explicit principal — so it needs no admin to register and runs only when that user
+    // is logged on, never with elevation. (Previously this relied on the cmdlet's default
+    // principal; the explicit principal makes the security posture deliberate rather than implicit.)
+    //
+    // The command line is $Arguments, never $Args: PowerShell sets $args itself once the parameters
+    // are bound, to the arguments nothing bound, so a parameter of that name always reads as empty.
+    // It was $Args from 1.50.0, so New-ScheduledTaskAction refused it and no schedule saved from the
+    // tab was ever registered.
+    //
+    // The steps are one try, and each stops on an error, so the first that fails ends the script.
+    // A refused parameter otherwise ends only its own statement and leaves the variable it was
+    // assigning as it was, and the runner keeps its runspace for the next script, so Register went
+    // on with whatever $action an earlier script had left, or with none.
     internal const string RegisterScript = """
-        param([string]$Exe, [string]$Args, [string]$Folder, [string]$Name,
+        param([string]$Exe, [string]$Arguments, [string]$Folder, [string]$Name, [string]$UserId,
               [bool]$Daily, [string]$At, [string]$DayOfWeek,
               [bool]$OnBattery, [bool]$OnlyIfIdle)
-        $action = New-ScheduledTaskAction -Execute $Exe -Argument $Args
-        if ($Daily) {
-            $trigger = New-ScheduledTaskTrigger -Daily -At $At
-        } else {
-            $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At
-        }
-        # Splatted from typed [bool] parameters, so the policy is still an allowlisted value and never
-        # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
-        # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,
-        # and -StartWhenAvailable then fired it late, whenever the condition next cleared.
-        # [TimeSpan]::FromHours, not New-TimeSpan: a .NET call needs no module. Until #2476 a standard user's
-        # runspace loaded Microsoft.PowerShell.Core only, and a Utility cmdlet here failed there.
-        $settingsArgs = @{
-            StartWhenAvailable = $true
-            DontStopOnIdleEnd  = $true
-            ExecutionTimeLimit = [TimeSpan]::FromHours(1)
-        }
-        if ($OnBattery) {
-            $settingsArgs['AllowStartIfOnBatteries'] = $true
-            $settingsArgs['DontStopIfGoingOnBatteries'] = $true
-        }
-        if ($OnlyIfIdle) { $settingsArgs['RunOnlyIfIdle'] = $true }
-        $settings = New-ScheduledTaskSettingsSet @settingsArgs
-        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $Name -TaskPath $Folder -Action $action -Trigger $trigger `
-            -Settings $settings -Principal $principal -Description "SysManager automated maintenance." `
-            -Force -ErrorAction Stop |
-            Select-Object @{ n='State'; e={ [string]$_.State } } | Out-Null
-        Get-ScheduledTask -TaskName $Name -TaskPath $Folder -ErrorAction Stop |
-            Select-Object @{ n='State'; e={ [string]$_.State } }
+        try {
+            $action = New-ScheduledTaskAction -Execute $Exe -Argument $Arguments -ErrorAction Stop
+            if ($Daily) {
+                $trigger = New-ScheduledTaskTrigger -Daily -At $At -ErrorAction Stop
+            } else {
+                $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $DayOfWeek -At $At -ErrorAction Stop
+            }
+            # Splatted from typed [bool] parameters, so the policy is still an allowlisted value and never
+            # free-form text. AllowStartIfOnBatteries defaults to $FALSE in New-ScheduledTaskSettingsSet, and
+            # inheriting that default is the defect: on a laptop running unplugged the task simply did not start,
+            # and -StartWhenAvailable then fired it late, whenever the condition next cleared.
+            # [TimeSpan]::FromHours, not New-TimeSpan: a .NET call needs no module. Until #2476 a standard user's
+            # runspace loaded Microsoft.PowerShell.Core only, and a Utility cmdlet here failed there.
+            $settingsArgs = @{
+                StartWhenAvailable = $true
+                DontStopOnIdleEnd  = $true
+                ExecutionTimeLimit = [TimeSpan]::FromHours(1)
+            }
+            if ($OnBattery) {
+                $settingsArgs['AllowStartIfOnBatteries'] = $true
+                $settingsArgs['DontStopIfGoingOnBatteries'] = $true
+            }
+            if ($OnlyIfIdle) { $settingsArgs['RunOnlyIfIdle'] = $true }
+            $settings = New-ScheduledTaskSettingsSet @settingsArgs -ErrorAction Stop
+            $principal = New-ScheduledTaskPrincipal -UserId $UserId -LogonType Interactive -RunLevel Limited -ErrorAction Stop
+            Register-ScheduledTask -TaskName $Name -TaskPath $Folder -Action $action -Trigger $trigger `
+                -Settings $settings -Principal $principal -Description "SysManager automated maintenance." `
+                -Force -ErrorAction Stop |
+                Select-Object @{ n='State'; e={ [string]$_.State } } | Out-Null
+            Get-ScheduledTask -TaskName $Name -TaskPath $Folder -ErrorAction Stop |
+                Select-Object @{ n='State'; e={ [string]$_.State } }
+        } catch { throw }
         """;
 
     /// <summary>The script <see cref="GetStatusAsync"/> runs: one row for the task, or none when there is none.</summary>

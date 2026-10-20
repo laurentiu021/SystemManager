@@ -1590,8 +1590,16 @@ Key services:
   does not: it changes nothing, and polling it would evict the whole history that is the
   only record of what the app changed. `OnlyTheMutatingCliVerbs_RecordAHeadlessRun` pins both
   halves.
-- `MaintenanceSchedulerService` — registers/reads/removes a single SysManager-owned Windows
-  scheduled task (`\SysManager\Scheduled Maintenance`). `GetStatusAsync` returns null for a read that
+- `MaintenanceSchedulerService` — registers/reads/removes the SysManager-owned Windows scheduled
+  task of the account it runs as, `SysManager Scheduled Maintenance-<SID>` in the root of the Task
+  Scheduler Library (`TaskName`), registered with that SID as its principal, so each account has its
+  own and none reads, replaces or removes another's; the internal constructor takes the SID, for
+  tests. `RegisterScript` takes the command line as `$Arguments`: a parameter named `$Args` is
+  PowerShell's own automatic variable and always read as empty, so until 1.130.13 nothing was ever
+  registered, and `ArchitectureTests.NoScriptParameter_IsNamedLikeAnAutomaticVariable` holds every
+  embedded script to that. Its steps are one `try`, each with `-ErrorAction Stop`, so the first
+  failure ends it rather than leaving `Register-ScheduledTask` a `$action` an earlier script left in
+  the runner's reused runspace. `GetStatusAsync` returns null for a read that
   failed: `StatusScript` treats only `ObjectNotFound` from `Get-ScheduledTask` and
   `Get-ScheduledTaskInfo` as "not registered" and throws on any other error, and `RemoveScript` is
   quiet only for a task already gone, so `RemoveAsync` logs a refusal before its read-back decides. The task launches the app's own exe with a

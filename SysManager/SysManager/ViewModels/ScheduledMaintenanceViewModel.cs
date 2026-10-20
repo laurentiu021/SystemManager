@@ -145,15 +145,16 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// The one-schedule rule, stated where the user is about to act on it.
     /// </summary>
     /// <remarks>
-    /// This tab registers a single Windows task at a fixed name, so Save does not add a second schedule — it
-    /// overwrites the first. Nothing said so. The header mentioned "one Windows scheduled task" as an
+    /// This tab registers one Windows task for each account, at a fixed name, so Save does not add a second
+    /// schedule — it overwrites the first. Nothing said so. The header mentioned "one Windows scheduled task" as an
     /// implementation detail, the Configure card offered an action and a time as though each Save were a new
     /// entry, and the confirmation dialog said "This creates a Windows scheduled task" even when one already
     /// existed. Someone who wanted a weekly cleanup AND a monthly standby purge would have set the second and
     /// silently lost the first, with the tab then reporting the survivor as though nothing had gone (#1509).
     /// <para>Supporting more than one schedule was considered and deliberately not done: the whole design
-    /// rests on touching exactly one task by name, which is what makes it safe to register without admin and
-    /// impossible for it to disturb anything else Windows schedules. Saying so plainly is the fix.</para>
+    /// rests on touching exactly one task by name for each account, which is what makes it safe to register
+    /// without admin and impossible for it to disturb anything else Windows schedules. Saying so plainly is the
+    /// fix.</para>
     /// </remarks>
     public string OneScheduleNote => IsScheduled
         ? "SysManager keeps one schedule at a time, so saving this replaces the one above."

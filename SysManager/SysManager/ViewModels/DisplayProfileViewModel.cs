@@ -224,7 +224,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         ChangingMode = true;
-        var applied = false;
+        var changed = false;
         try
         {
             _previousDevice = display;
@@ -243,7 +243,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
             Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
             CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
-            applied = true;
+            changed = true;
         }
         finally
         {
@@ -252,7 +252,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
             ChangingMode = false;
 
             // A change Windows refused starts no countdown, so a display change it reported meanwhile is read now.
-            if (!applied) ReadDisplaysChangedMeanwhile();
+            if (!changed) ReadDisplaysChangedMeanwhile();
         }
 
         // Begin the auto-revert window — the user must confirm to keep the change.

@@ -25,10 +25,20 @@ public class MaintenanceSchedulerScriptTests
         "function Get-ScheduledTaskInfo { [CmdletBinding()] param($TaskName, $TaskPath) " +
         "[PSCustomObject]@{ LastRunTime = $null; NextRunTime = $null; LastTaskResult = 0; NumberOfMissedRuns = 0 } } ; ";
 
-    private static string Run(string taskStub) =>
-        taskStub + InfoStub + Guard +
+    private static string Run(string taskStub, string infoStub = InfoStub) =>
+        taskStub + infoStub + Guard +
         "& {" + MaintenanceSchedulerService.StatusScript + "} -Folder '\\SysManager\\' -Name 'Maintenance' ; " +
         "'__SM_AFTER_STATUS__'";
+
+    private const string ReadyTask =
+        "function Get-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath) [PSCustomObject]@{ State = 'Ready' } } ; ";
+
+    private static readonly string RemoveGuard = WindowsPowerShellScript.StubsInEffect("Unregister-ScheduledTask");
+
+    private static string Remove(string unregisterStub) =>
+        unregisterStub + RemoveGuard +
+        "& {" + MaintenanceSchedulerService.RemoveScript + "} -Folder '\\SysManager\\' -Name 'Maintenance' ; " +
+        "'__SM_AFTER_REMOVE__'";
 
     [Fact]
     public async Task WhenWindowsSaysThereIsNoTask_ReturnsNothingAndCarriesOn()
@@ -76,5 +86,47 @@ public class MaintenanceSchedulerScriptTests
 
         Assert.Contains("--purge-standby --silent", output, StringComparison.Ordinal);
         Assert.Contains("__SM_AFTER_STATUS__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WhenTheRunInformationCannotBeRead_StopsTheScript()
+    {
+        // It was read with -ErrorAction SilentlyContinue, so the tab showed "Not run yet" for a task that had run.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Run(ReadyTask,
+            "function Get-ScheduledTaskInfo { [CmdletBinding()] param($TaskName, $TaskPath) " +
+            "Write-Error -Message 'The Task Scheduler service did not answer.' -Category ResourceUnavailable } ; "));
+
+        Assert.DoesNotContain("__SM_AFTER_STATUS__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Removing_WhenWindowsRefuses_StopsTheScript()
+    {
+        // With -ErrorAction SilentlyContinue the refusal threw nothing, and the log the tab points to stayed empty.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Remove(
+            "function Unregister-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath, [switch]$Confirm) " +
+            "Write-Error -Message 'Access is denied.' -Category PermissionDenied } ; "));
+
+        Assert.DoesNotContain("__SM_AFTER_REMOVE__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Removing_ATaskThatIsAlreadyGone_CarriesOn()
+    {
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Remove(
+            "function Unregister-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath, [switch]$Confirm) " +
+            "Write-Error -Message 'No MSFT_ScheduledTask objects found.' -Category ObjectNotFound } ; "));
+
+        Assert.Contains("__SM_AFTER_REMOVE__", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Removing_ATask_CarriesOn()
+    {
+        // The positive control, so a script that stopped on everything could not pass the case above's opposite.
+        var (_, output, _) = await WindowsPowerShellScript.RunAsync(Remove(
+            "function Unregister-ScheduledTask { [CmdletBinding()] param($TaskName, $TaskPath, [switch]$Confirm) } ; "));
+
+        Assert.Contains("__SM_AFTER_REMOVE__", output, StringComparison.Ordinal);
     }
 }

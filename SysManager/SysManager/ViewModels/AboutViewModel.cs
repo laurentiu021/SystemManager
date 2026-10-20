@@ -109,6 +109,13 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     [ObservableProperty] private bool _autoDownloadFailed;
 
+    /// <summary>
+    /// True when Install stopped short with the downloaded file still usable: it could not be opened, the published
+    /// hash could not be fetched, the running copy could not be found, or the new version would not start. The view
+    /// then shows the reason in a warning row in place of the green one, with Install still offered.
+    /// </summary>
+    [ObservableProperty] private bool _installFailed;
+
     public bool ShowDownloadButton => !IsDownloading && string.IsNullOrEmpty(DownloadedPath);
 
     /// <summary>
@@ -424,6 +431,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         if (_latest is null || IsDownloading) return;
         IsDownloading = true;
         AutoDownloadFailed = false;
+        InstallFailed = false;
         DownloadPercent = 0;
         DownloadStatus = "Downloading...";
         DownloadProgressLine = DownloadStatus;
@@ -874,15 +882,17 @@ public sealed partial class AboutViewModel : ViewModelBase
     [RelayCommand]
     private async Task InstallUpdateAsync()
     {
-        if (string.IsNullOrWhiteSpace(DownloadedPath) || !File.Exists(DownloadedPath))
+        InstallFailed = false;
+        var path = DownloadedPath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            DownloadStatus = "No downloaded file to install.";
+            InstallStopped("No downloaded file to install.", unusable: true);
             return;
         }
 
         if (_latest is null)
         {
-            DownloadStatus = "No release info available.";
+            InstallStopped("No release info available.", unusable: false);
             return;
         }
 
@@ -896,33 +906,42 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             lockedStream = new FileStream(
-                DownloadedPath,
+                path,
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.Read);
         }
         catch (IOException ex)
         {
-            DownloadStatus = $"Cannot lock update file: {ex.Message}";
+            InstallStopped($"Cannot lock update file: {ex.Message}", unusable: false);
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
-            DownloadStatus = $"Cannot access update file: {ex.Message}";
+            InstallStopped($"Cannot access update file: {ex.Message}", unusable: false);
             return;
         }
 
+        // Set when the file itself is refused, so it is deleted once the handle on it is closed.
+        var refused = false;
         try
         {
             // Step 1: Verify SHA256 hash before installing — hashes from the held stream
             // so no other process can modify the bytes between verify and launch.
             DownloadStatus = "Verifying file integrity...";
             var (verified, expected, actual) = await _updates.VerifyHashAsync(_latest, lockedStream);
+            if (!verified && expected is not null && actual is not null)
+            {
+                refused = true;
+                InstallStopped($"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…",
+                    unusable: true);
+                return;
+            }
             if (!verified)
             {
-                DownloadStatus = expected is not null && actual is not null
-                    ? $"SHA256 mismatch — file may be corrupted. Expected: {expected[..12]}… Got: {actual[..12]}…"
-                    : "Hash verification failed — file may be corrupted. Try downloading again.";
+                // The published hash could not be fetched or the file read, which says nothing against the file.
+                InstallStopped("Could not check the download against its published hash. Check the internet "
+                    + "connection, then press Install again.", unusable: false);
                 return;
             }
 
@@ -932,9 +951,10 @@ public sealed partial class AboutViewModel : ViewModelBase
             // VerifyAuthenticode takes a path — it opens its own handle (read-shared), which
             // is fine: our deny-write handle prevents modification. The file cannot change
             // between SHA256 verification and this call because we still hold the lock.
-            if (!UpdateService.VerifyAuthenticode(DownloadedPath))
+            if (!UpdateService.VerifyAuthenticode(path))
             {
-                DownloadStatus = "Update binary's signature could not be read. Download aborted.";
+                refused = true;
+                InstallStopped("Update binary's signature could not be read. Download aborted.", unusable: true);
                 return;
             }
 
@@ -942,7 +962,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             var currentExe = Environment.ProcessPath;
             if (string.IsNullOrWhiteSpace(currentExe) || !File.Exists(currentExe))
             {
-                DownloadStatus = "Cannot determine current executable path.";
+                InstallStopped("Cannot determine current executable path.", unusable: false);
                 return;
             }
 
@@ -974,7 +994,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
             _launch(new ProcessStartInfo
             {
-                FileName = DownloadedPath!,
+                FileName = path,
                 Arguments = args,
                 UseShellExecute = true
             });
@@ -985,15 +1005,45 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex)
         {
-            DownloadStatus = $"Update failed: {ex.Message}";
+            InstallStopped($"Update failed: {ex.Message}", unusable: false);
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
-            DownloadStatus = $"Update failed: {ex.Message}";
+            InstallStopped($"Update failed: {ex.Message}", unusable: false);
         }
         finally
         {
             lockedStream.Dispose();
+            // The cache hands a file back while it matches the hash stored beside it, which is its own, so a refused
+            // file kept would come back from the next Download at once and be refused again.
+            if (refused) _updates.DiscardDownload(path);
+        }
+    }
+
+    /// <summary>
+    /// Shows why Install stopped short, in a row that reads as a problem rather than in the green one.
+    /// </summary>
+    /// <param name="message">What went wrong, for the row and for a screen reader.</param>
+    /// <param name="unusable">
+    /// True when the downloaded file itself was refused or is gone. It is let go, so Download and Manual download come
+    /// back where an Install that cannot succeed was offered. Otherwise the file is kept, and Install stays offered.
+    /// </param>
+    /// <remarks>
+    /// Install wrote every refusal and failure to <see cref="DownloadStatus"/>, which with a downloaded file only the
+    /// green "download complete" row showed. "SHA256 mismatch" and "Update failed: …" read as success there, were cut
+    /// off at the card's edge, and had Install offered beside them.
+    /// </remarks>
+    private void InstallStopped(string message, bool unusable)
+    {
+        DownloadStatus = message;
+        if (unusable)
+        {
+            DownloadedPath = null;
+            AutoDownloadFailed = true;
+        }
+        else
+        {
+            InstallFailed = true;
         }
     }
 

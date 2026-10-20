@@ -263,4 +263,41 @@ public class MaintenanceSchedulerServiceTests
 
         Assert.False(await new MaintenanceSchedulerService(ps).RemoveAsync());
     }
+
+    [Fact]
+    public async Task RemoveAsync_WhenWindowsRefuses_SaysItWasNotRemoved()
+    {
+        // The remove script stops on a refusal now, so the reason reaches the log the tab points to; the read-back
+        // still decides what the tab says.
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(ci => ((string)ci[0]!).Contains("Unregister-ScheduledTask", StringComparison.Ordinal)
+              ? Task.FromException<Collection<PSObject>>(new RuntimeException("Access is denied."))
+              : Task.FromResult(new Collection<PSObject> { PSObject.AsPSObject(new { State = "Ready" }) }));
+
+        Assert.False(await new MaintenanceSchedulerService(ps).RemoveAsync());
+    }
+
+    [Fact]
+    public async Task RemoveAsync_WhenTheRefusedTaskTurnsOutToBeGone_CountsItRemoved()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(ci => ((string)ci[0]!).Contains("Unregister-ScheduledTask", StringComparison.Ordinal)
+              ? Task.FromException<Collection<PSObject>>(new RuntimeException("The task was not found."))
+              : Task.FromResult(new Collection<PSObject>()));
+
+        Assert.True(await new MaintenanceSchedulerService(ps).RemoveAsync());
+    }
+
+    [Fact]
+    public void NeitherScriptHidesAnError()
+    {
+        // #2487 took SilentlyContinue off the task read; the run-information read and the removal kept it, so a
+        // failed read showed "Not run yet" and a refused removal left nothing in the log.
+        Assert.Contains("Get-ScheduledTaskInfo", MaintenanceSchedulerService.StatusScript, StringComparison.Ordinal);
+        Assert.Contains("Unregister-ScheduledTask", MaintenanceSchedulerService.RemoveScript, StringComparison.Ordinal);
+        foreach (var script in new[] { MaintenanceSchedulerService.StatusScript, MaintenanceSchedulerService.RemoveScript })
+            Assert.DoesNotContain("SilentlyContinue", script, StringComparison.OrdinalIgnoreCase);
+    }
 }

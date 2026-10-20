@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.9] - 2026-10-20
+
+**When installing an update stops short, the About tab now says so as a problem, and Scheduled Maintenance no longer
+hides two errors.**
+
+### Fixed
+
+- **A refused or failed update install was shown as a finished download.** When Install stopped, for example because
+  the download did not match its published SHA256 hash, the reason took the place of the text in the green "Download
+  complete" line, on one line cut off at the card's edge, with Install still offered beside it. It is shown in an
+  amber line that wraps now. A download that fails its hash check, or whose signature cannot be read, is deleted, and
+  Download and Manual download come back in place of Install. When the hash could not be fetched, the running copy
+  could not be found or the new version would not start, the file is kept and Install is offered again, and the
+  message for a hash that could not be fetched now says to check the connection instead of calling the file
+  corrupted. Since 0.28.22.
+- **Downloading again after a refused install brought back the same file.** The update cache keeps the hash of each
+  download beside it and reuses the file while the two match, which they do for a damaged download too, so Download
+  returned the refused file at once and Install refused it again. A refused file is deleted with its stored hash now,
+  so the next download fetches it again. Since 0.48.24.
+- **Scheduled Maintenance could show "Not run yet" for a schedule that had run, and leave nothing in the log when
+  Remove failed.** Two of its PowerShell calls still let an error pass without a word. When Windows could not report
+  the task's last run, the page showed Last result "Not run yet"; it says now that the schedule could not be read.
+  When Windows refused to remove the task, the page said "Could not remove the task. Check the log." and the log held
+  no reason; the reason is written there now. Since Scheduled Maintenance was added (1.50.0).
+
 ## [1.130.8] - 2026-10-20
 
 **The Recycle Bin is measured the way Windows counts it, so an empty one reads as empty, and every way SysManager

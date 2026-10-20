@@ -212,17 +212,20 @@
                             </ScrollViewer>
                         </Border>
 
-                        <!-- Download completed -->
-                        <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
-                                    Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
-                            <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}" VerticalAlignment="Center"
-                                       AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
-                            <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
-                            <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center">
-                                <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
-                            </TextBlock>
-                        </StackPanel>
+                        <!-- Download completed. Hidden while Install has a problem to report, which the
+                             Install row further down shows instead: it used to land here, in green. -->
+                        <Grid Visibility="{Binding InstallFailed, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
+                            <StackPanel Margin="0,14,0,0" Orientation="Horizontal"
+                                        Visibility="{Binding DownloadedPath, Converter={StaticResource FlexVis}}">
+                                <Ellipse Width="10" Height="10" Fill="{DynamicResource Success}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Success}" VerticalAlignment="Center"
+                                           AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
+                                <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
+                                <TextBlock Style="{StaticResource Body}" VerticalAlignment="Center">
+                                    <Hyperlink Command="{Binding OpenDownloadFolderCommand}" Foreground="{DynamicResource Accent}">Show file</Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
 
                         <!-- Download FAILED. The mirror of the row above, and the reason it has to exist:
                              DownloadStatus was rendered in exactly two places, one gated on IsDownloading
@@ -243,6 +246,19 @@
                              so TextWrapping would never take effect. -->
                         <DockPanel Margin="0,14,0,0"
                                    Visibility="{Binding AutoDownloadFailed, Converter={StaticResource FlexVis}}">
+                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{DynamicResource Warning}"
+                                     VerticalAlignment="Top" Margin="0,5,8,0"/>
+                            <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Warning}"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"/>
+                        </DockPanel>
+
+                        <!-- Install stopped short, with the downloaded file kept and Install still offered: the file
+                             could not be opened, the published hash could not be fetched, or the new version would not
+                             start. The same shape and colours as the download-failure row above. A file Install refused
+                             outright is let go instead, and that row says why. -->
+                        <DockPanel Margin="0,14,0,0"
+                                   Visibility="{Binding InstallFailed, Converter={StaticResource FlexVis}}">
                             <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Fill="{DynamicResource Warning}"
                                      VerticalAlignment="Top" Margin="0,5,8,0"/>
                             <TextBlock Text="{Binding DownloadStatus}" Style="{StaticResource SectionTitle}" Foreground="{DynamicResource Warning}"

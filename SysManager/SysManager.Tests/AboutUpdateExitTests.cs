@@ -45,23 +45,28 @@ public sealed class AboutUpdateExitTests : IDisposable
         catch (IOException) { /* a leftover temp dir must never fail a test run */ }
     }
 
-    private AboutViewModel NewVm()
-    {
-        var updates = Substitute.For<IUpdateService>();
-        updates.GetLatestAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release));
-        updates.VerifyHashAsync(Release, Arg.Any<Stream>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<(bool, string?, string?)>((true, "hash", "hash")));
+    private readonly IUpdateService _updates = Substitute.For<IUpdateService>();
 
-        return new AboutViewModel(updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
+    /// <summary>A view-model over the substitute update client, with the start and the shutdown recorded.</summary>
+    /// <param name="verify">What the hash check answers; it passes unless a test says otherwise.</param>
+    /// <param name="launch">What starting the new version does; it records the start unless a test says otherwise.</param>
+    private AboutViewModel NewVm((bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null)
+    {
+        _updates.GetLatestAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release));
+        _updates.VerifyHashAsync(Release, Arg.Any<Stream>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<(bool, string?, string?)>(verify ?? (true, "hash", "hash")));
+
+        return new AboutViewModel(_updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir,
-            launch: _launched.Add, shutdown: () => _shutdowns++);
+            launch: launch ?? _launched.Add, shutdown: () => _shutdowns++);
     }
 
     /// <summary>A view-model that has found the update and downloaded it, one click from Install.</summary>
-    private async Task<AboutViewModel> ReadyToInstallAsync()
+    private async Task<AboutViewModel> ReadyToInstallAsync(
+        (bool, string?, string?)? verify = null, Action<ProcessStartInfo>? launch = null)
     {
-        var vm = NewVm();
+        var vm = NewVm(verify, launch);
         await vm.CheckForUpdatesCommand.ExecuteAsync(null);
         Assert.Equal("v99.0.0", vm.LatestVersionLabel);   // the premise: the update was found
 
@@ -135,5 +140,94 @@ public sealed class AboutUpdateExitTests : IDisposable
         Assert.Contains("still working on: Deep Cleanup.", shown);
         Assert.Empty(_launched);
         Assert.Equal(0, _shutdowns);
+    }
+
+    // ── Install's refusals and failures read as problems ────────────────────────
+    //
+    // Install wrote every one of them to DownloadStatus, which with a downloaded file only the green "download
+    // complete" row showed, so "SHA256 mismatch" read as success, with Install offered beside it.
+
+    [Fact]
+    public async Task AFileWhoseHashDoesNotMatch_IsLetGo_AndDownloadComesBack()
+    {
+        var vm = await ReadyToInstallAsync(verify: (false, new string('A', 64), new string('B', 64)));
+        var file = vm.DownloadedPath!;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("SHA256 mismatch", vm.DownloadStatus, StringComparison.Ordinal);
+        Assert.True(vm.AutoDownloadFailed);   // the warning row, and Manual download
+        Assert.Null(vm.DownloadedPath);       // no green row, and no Install
+        Assert.True(vm.ShowDownloadButton);
+        // Deleted, so the next Download fetches it again: the cache would hand the same file back.
+        _updates.Received(1).DiscardDownload(file);
+        Assert.Empty(_launched);
+        Assert.Equal(0, dialog.Calls);
+    }
+
+    [Fact]
+    public async Task AHashThatCouldNotBeChecked_IsAProblem_AndInstallStaysOffered()
+    {
+        // The published hash was not fetched, which says nothing against the file, so it is kept.
+        var vm = await ReadyToInstallAsync(verify: (false, null, null));
+        var file = vm.DownloadedPath;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.True(vm.InstallFailed);
+        Assert.Contains("Could not check the download", vm.DownloadStatus, StringComparison.Ordinal);
+        Assert.Equal(file, vm.DownloadedPath);
+        Assert.False(vm.AutoDownloadFailed);
+        _updates.DidNotReceiveWithAnyArgs().DiscardDownload(default!);
+        Assert.Empty(_launched);
+    }
+
+    [Fact]
+    public async Task ANewVersionThatWouldNotStart_IsAProblem_AndNothingCloses()
+    {
+        var vm = await ReadyToInstallAsync(launch: _ => throw new System.ComponentModel.Win32Exception(1223, "The operation was canceled by the user."));
+        var file = vm.DownloadedPath;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.True(vm.InstallFailed);
+        Assert.Equal("Update failed: The operation was canceled by the user.", vm.DownloadStatus);
+        Assert.Equal(file, vm.DownloadedPath);   // Install is offered again
+        Assert.Equal(0, _shutdowns);
+        _updates.DidNotReceiveWithAnyArgs().DiscardDownload(default!);
+    }
+
+    [Fact]
+    public async Task ANewDownload_ClearsAnInstallProblem()
+    {
+        var vm = await ReadyToInstallAsync(verify: (false, null, null));
+        using var dialog = new DialogAnswer(confirm: false);
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+        Assert.True(vm.InstallFailed);   // the premise
+        _updates.DownloadAsync(Release, Arg.Any<IProgress<(long, long?)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(vm.DownloadedPath));
+
+        await vm.DownloadCommand.ExecuteAsync(null);
+
+        Assert.False(vm.InstallFailed);
+        Assert.StartsWith("Download complete.", vm.DownloadStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFileThatIsGone_IsLetGo_AndDownloadComesBack()
+    {
+        var vm = await ReadyToInstallAsync();
+        File.Delete(vm.DownloadedPath!);
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("No downloaded file to install.", vm.DownloadStatus);
+        Assert.True(vm.AutoDownloadFailed);
+        Assert.Null(vm.DownloadedPath);
+        Assert.False(vm.InstallFailed);
     }
 }

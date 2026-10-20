@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.19] - 2026-10-20
+
+**On Display Profiles, Apply mode waits for a revert to finish, Escape puts back a mode you have not kept, and closing
+SysManager before you keep a new mode puts the previous one back.**
+
+### Fixed
+
+- **Apply mode could be pressed while a revert was still running.** Revert now and the end of the countdown closed the
+  "Keep these settings?" bar before the screen had re-trained, and picking another mode then turned Apply mode back
+  on. An apply started then replaced the mode the revert was putting back, and the tab still reported the revert as
+  done. Apply mode now stays off until the revert has finished. Since display changes ran in the background (1.42.2).
+- **Escape did nothing on Display Profiles, though the message after a failed revert said to press it.** Escape now
+  puts back the previous mode while a new one waits for Keep, as Windows' own prompt does. After a failed revert the
+  message says to restart the PC, which puts the previous mode back, or to use Windows Settings. Since that message
+  was added (1.43.1).
+- **Closing SysManager during the 15-second countdown kept the mode you had not confirmed.** Exiting from the
+  notification area, closing the window or restarting as administrator ended the countdown that would have put the
+  previous mode back. SysManager now asks first while a new mode waits to be kept, and puts the previous mode back as
+  it closes. Since Display Profiles was added (1.37.0).
+- **Picking another display while a mode was applied or waited to be kept mixed up the two.** The readout under the
+  display picked could show the other display's new mode, and Keep's message named whichever mode the readout showed.
+  Each now belongs to its own display, and Keep names the mode that was applied. Since Display Profiles was added
+  (1.37.0).
+
 ## [1.130.18] - 2026-10-20
 
 **CPU Core Affinity says when Windows will not show a process's cores, instead of showing the last process's, and

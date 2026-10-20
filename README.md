@@ -226,7 +226,8 @@ on, the way it opens a folder in File Explorer. Opening the appearance panel mov
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
 `Escape` also stops whatever the open tab is doing — a disk scan, a duplicate search, a speed test — on
-the 25 tabs that can be cancelled from the keyboard, which is every tab with a Cancel button. It only acts
+the 26 tabs that can be cancelled from the keyboard: every tab with a Cancel button, and Display Profiles, where
+it puts back the previous mode while a new one waits for "Keep". It only acts
 while something is running, and only after the control you are on has had its own chance to use the key,
 so it still closes a drop-down or undoes a text edit first.
 
@@ -1135,7 +1136,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 
 ### Operation Lock
 - Prevents conflicting concurrent operations across tabs
-- Operations grouped by category (Disk, Network, SystemModification, Shell, Install)
+- Operations grouped by category (Disk, Network, SystemModification, Shell, Install, Display)
 - If a conflicting operation is already running, the UI shows which operation
   is blocking and refuses to start the new one
 - Taken by the tabs that change disk, network or system state, restart the Windows shell, or
@@ -1147,7 +1148,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Analyzer, Large Files and Duplicate Finder only read, and take it so a scan never runs while a
   cleanup is deleting; Speed Test and Traceroute take it so a measurement never runs during a
   network change; the Dashboard's Why is it slow? takes it so it never measures SysManager's own
-  cleanup as the thing slowing the PC down
+  cleanup as the thing slowing the PC down. Display Profiles holds one of its own while a new display
+  mode waits to be kept, so closing SysManager then asks first
 - These tabs change things without it: Startup Manager, Task Scheduler, App Blocker, Notification
   Blocker, Settings Watchdog, Scheduled Maintenance, Standby List Cleaner, Display Profiles, Timer
   Resolution, CPU Core Affinity, Dark Mode Scheduler, Volume Control, Profile Export/Import, and
@@ -1718,7 +1720,8 @@ offers, "rate us" prompts:
   using only the Windows display APIs (no NVIDIA/AMD tool conflict)
 - **Safe by design** — applies for the session, so a reboot reverts; on top of
   that a **15-second auto-revert** restores the previous mode unless you confirm
-  "Keep", so a bad mode can never strand you on a blank screen; **Revert now** goes back at once
+  "Keep", so a bad mode can never strand you on a blank screen; **Revert now** or **Esc** goes back at once,
+  and closing SysManager before you keep a mode puts the previous one back (it asks first)
 - **Per-display** — choose which monitor to configure; shows the current mode
 - **Sees a screen you connect later** — the list is read again when Windows reports a display
   connected, removed or changed, and on **Refresh** or **F5**. The display you picked stays picked

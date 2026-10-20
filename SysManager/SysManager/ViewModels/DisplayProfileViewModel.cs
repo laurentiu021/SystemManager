@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,6 +25,13 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshDisplaysCommand;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Escape reverts a new mode that waits to be kept, as Windows' own "Keep these display settings?" does. The screen
+    /// may be hard to read just then, and Escape is the one key that needs no aim (#2761).
+    /// </remarks>
+    protected internal override IRelayCommand? EscapeCancel => IsAwaitingConfirm ? RevertNowCommand : null;
+
     private readonly IDisplayProfileService _service;
     private DispatcherTimer? _revertTimer;
     private DisplayMode? _previousMode;
@@ -42,6 +50,12 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
     // Windows reported a display change while a mode was applied, reverted or waited to be kept. The displays are
     // read again once that is over, so a screen connected meanwhile is not missed.
     private bool _displaysChangedMeanwhile;
+    // The mode Windows reported after the last apply, for Keep's message: the readout follows the selected display,
+    // which can be another one by then.
+    private DisplayMode? _appliedMode;
+    // Held from Apply until the new mode is kept or the previous one is back, so closing SysManager meanwhile asks
+    // first (see OperationCategory.Display).
+    private OperationLockService.OperationHandle? _modeChangeLock;
     private const int RevertSeconds = 15;
 
     public BulkObservableCollection<DisplayDevice> Displays { get; } = new();
@@ -139,6 +153,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         {
             _changingMode = value;
             RefreshDisplaysCommand.NotifyCanExecuteChanged();
+            ApplyCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -203,7 +218,9 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
 
     partial void OnSelectedModeChanged(DisplayMode? value) => ApplyCommand.NotifyCanExecuteChanged();
 
-    private bool CanApply => IsSupported && !IsAwaitingConfirm && SelectedDisplay is not null
+    // Not while a revert re-trains the panel either: it ends the countdown first, and an apply started then recorded
+    // its own previous mode over the one the revert was putting back (#2761).
+    private bool CanApply => IsSupported && !IsAwaitingConfirm && !_changingMode && SelectedDisplay is not null
         && SelectedMode is not null && !SelectedMode.Equals(CurrentMode);
 
     [RelayCommand(CanExecute = nameof(CanApply))]
@@ -224,6 +241,7 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         ChangingMode = true;
+        _modeChangeLock ??= OperationLockService.Instance.TryAcquire(OperationCategory.Display, "Display mode change");
         var changed = false;
         try
         {
@@ -242,7 +260,12 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
             }
 
             Log.Information("Applied display mode {Mode} to {Device}", mode.Display, display.DeviceName);
-            CurrentMode = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+            var now = await Task.Run(() => _service.GetCurrentMode(display.DeviceName)).ConfigureAwait(true);
+            _appliedMode = now ?? mode;
+
+            // Only for the display still selected, as the revert does: the picker can move while the panel re-trains,
+            // and the readout then belongs to the display picked since (#2761).
+            if (ReferenceEquals(display, SelectedDisplay)) CurrentMode = now;
             changed = true;
         }
         finally
@@ -252,7 +275,11 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
             ChangingMode = false;
 
             // A change Windows refused starts no countdown, so a display change it reported meanwhile is read now.
-            if (!changed) ReadDisplaysChangedMeanwhile();
+            if (!changed)
+            {
+                EndModeChange();
+                ReadDisplaysChangedMeanwhile();
+            }
         }
 
         // Begin the auto-revert window — the user must confirm to keep the change.
@@ -266,9 +293,18 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         IsAwaitingConfirm = false;
         _previousMode = null;
         _previousDevice = null;
-        StatusMessage = $"Display set to {CurrentMode?.Display}.";
+        StatusMessage = $"Display set to {(_appliedMode ?? CurrentMode)?.Display}.";
+        EndModeChange();
         ApplyCommand.NotifyCanExecuteChanged();
         ReadDisplaysChangedMeanwhile();
+    }
+
+    /// <summary>Releases what a mode change holds once it is kept, reverted or refused.</summary>
+    private void EndModeChange()
+    {
+        _appliedMode = null;
+        _modeChangeLock?.Dispose();
+        _modeChangeLock = null;
     }
 
     [RelayCommand]
@@ -282,7 +318,11 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         ApplyCommand.NotifyCanExecuteChanged();
 
         StopRevertTimer();
-        _revertTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+
+        // On the application's dispatcher, which is the UI thread this runs on. With none, in headless tests and the
+        // designer, nothing could tick, and the change waits for Keep or Revert now as it does between ticks.
+        if (Application.Current?.Dispatcher is not { } dispatcher) return;
+        _revertTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = TimeSpan.FromSeconds(1) };
         _revertTimer.Tick += OnRevertTick;
         _revertTimer.Start();
     }
@@ -343,11 +383,35 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         else ChangingMode = false;
         _previousMode = null;
         _previousDevice = null;
+
+        // Not "press Esc": nothing is left for Escape to revert once this has run. A restart does put the mode back,
+        // since the change was made for this session only.
         StatusMessage = revertFailed
-            ? "Couldn't restore the previous display mode — if the screen looks wrong, press Esc or use Windows Settings ▸ System ▸ Display to reset it."
+            ? "Couldn't restore the previous display mode. If the screen looks wrong, restart the PC, which puts it back, or use Windows Settings ▸ System ▸ Display."
             : message;
+        EndModeChange();
         ApplyCommand.NotifyCanExecuteChanged();
         ReadDisplaysChangedMeanwhile();
+    }
+
+    /// <summary>
+    /// Puts back the mode a change replaced when SysManager closes while that change waits to be kept.
+    /// </summary>
+    /// <remarks>
+    /// The change lasts until the next mode change, sign-out or restart, and the countdown was its only way back. So
+    /// exiting from the notification area, closing the window or restarting as administrator in those 15 seconds kept
+    /// a mode nobody confirmed, the case the countdown exists for (#2761). Run while SysManager closes, so it waits for
+    /// the panel, and a failure can only be logged.
+    /// </remarks>
+    private void PutBackAModeNotKept()
+    {
+        if (!IsAwaitingConfirm || _previousDevice is not { } device || _previousMode is not { } previous) return;
+
+        if (_service.TryApplyMode(device.DeviceName, previous.Width, previous.Height, previous.RefreshHz, out var error))
+            Log.Information("Put back display mode {Mode} on {Device} as SysManager closed", previous.Display, device.DeviceName);
+        else
+            Log.Warning("Could not put back display mode {Mode} on {Device} as SysManager closed: {Error}",
+                        previous.Display, device.DeviceName, error);
     }
 
     private void StopRevertTimer()
@@ -363,6 +427,8 @@ public sealed partial class DisplayProfileViewModel : ViewModelBase
         if (disposing)
         {
             StopRevertTimer();
+            PutBackAModeNotKept();
+            EndModeChange();
 
             // Windows' display notification keeps its handlers in a static list, so one left there would keep this
             // view model alive, reading displays, for the rest of the process.

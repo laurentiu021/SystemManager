@@ -15216,11 +15216,11 @@ public partial class ArchitectureTests
             }
         }
 
-        // Vacuity floor, re-measured: five calls across three files. TuneUpService and DeepCleanupService each
-        // make a Files and a DirectoriesDeepestFirst call, and CleanupPreScanService makes one Files call, for the
-        // temp folders. It made two until the Recycle Bin's size came from the shell instead of a walk of the
-        // bin's folders, and that is the only reason the count went down: no temp walk disappeared.
-        Assert.True(callsChecked >= 5,
+        // Vacuity floor, re-measured: four calls across two files. TuneUpService and DeepCleanupService each make a
+        // Files and a DirectoriesDeepestFirst call. CleanupPreScanService made a Files call of its own until it
+        // measured through TuneUpService.TempFilesToClean, the sweep's own list with its age rule (#2890), and before
+        // that two, until the Recycle Bin's size came from the shell. Neither change took a temp walk away.
+        Assert.True(callsChecked >= 4,
             $"only {callsChecked} SafeFileWalk calls were matched across {callers.Count} file(s) — the pattern "
             + "no longer matches the call shape, so this guard proves nothing. Re-derive it before trusting a "
             + "pass.");

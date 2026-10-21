@@ -51,7 +51,7 @@
 
                 <!-- Clean up section -->
                 <TextBlock Text="Clean up" Style="{StaticResource SectionTitle}" Margin="0,0,0,4"/>
-                <TextBlock Text="Clean TEMP removes temporary files from %TEMP% and Windows\Temp. Empty Recycle Bin clears deleted files on every drive."
+                <TextBlock Text="Clean TEMP removes temporary files more than a week old from %TEMP% and Windows\Temp, so a program being installed keeps the ones it unpacked. Empty Recycle Bin clears deleted files on every drive."
                            Style="{StaticResource Subtle}" Margin="0,0,0,10" TextWrapping="Wrap"/>
                 <WrapPanel Orientation="Horizontal">
                     <Button Content="Clean TEMP" Command="{Binding CleanTempCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"

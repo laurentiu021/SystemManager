@@ -176,6 +176,9 @@ public sealed class DeepCleanupDeliveryOptimizationTests
         using var roots = new TempCleanupRoots();
         var piece = TempCleanupRoots.WriteFile(Path.Combine(CacheDir(roots), "piece.bin"), 10);
         var temp = TempCleanupRoots.WriteFile(Path.Combine(roots.UserTemp, "leftover.tmp"), 7);
+        // Older than the week the temporary-files bucket leaves alone (#2890).
+        File.SetCreationTimeUtc(temp, DateTime.UtcNow - TimeSpan.FromDays(30));
+        File.SetLastWriteTimeUtc(temp, DateTime.UtcNow - TimeSpan.FromDays(30));
         var ps = Runner(() => { });
         var service = new DeepCleanupService(roots, ps);
         var categories = await ScanAndTickAsync(service, BucketName, "Temporary files");

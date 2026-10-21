@@ -620,4 +620,71 @@ public class TuneUpServiceTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }
+
+    // ── The temp sweep leaves what was created or changed in the last week (#2890) ───────
+    // Being held open was the only thing that kept a temp file, so an installer that had unpacked its files and not
+    // opened them yet lost them part-way. Swept here over a folder of the test's own, never the real temp folders.
+
+    private static readonly DateTime Now = new(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime MonthAgo = Now.AddDays(-30);
+
+    private static string Aged(string path, DateTime created, DateTime written)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "x");
+        File.SetCreationTimeUtc(path, created);
+        File.SetLastWriteTimeUtc(path, written);
+        return path;
+    }
+
+    /// <summary>A temp folder with one file of each age, and the folders the sweep has to decide on.</summary>
+    private sealed class AgedTemp : IDisposable
+    {
+        public string Root { get; } = Path.Combine(Path.GetTempPath(), "SysManagerTempAge_" + Guid.NewGuid().ToString("N"));
+        public string Unpacked { get; }    // created now, by an installer, keeping its archive time
+        public string Fresh { get; }       // created and written now
+        public string Rewritten { get; }   // created long ago, written now
+        public string Leftover { get; }    // neither, a month ago: the one the sweep is for
+        public string OldFolder { get; }
+        public string NewEmptyFolder { get; }
+
+        public AgedTemp()
+        {
+            Unpacked = Aged(Path.Combine(Root, "setup-1234", "payload.cab"), Now, MonthAgo);
+            Fresh = Aged(Path.Combine(Root, "fresh.tmp"), Now, Now);
+            Rewritten = Aged(Path.Combine(Root, "log.txt"), MonthAgo, Now);
+            OldFolder = Path.Combine(Root, "stale");
+            Leftover = Aged(Path.Combine(OldFolder, "leftover.tmp"), MonthAgo, MonthAgo);
+            Directory.SetCreationTimeUtc(OldFolder, MonthAgo);
+            NewEmptyFolder = Path.Combine(Root, "empty-new");
+            Directory.CreateDirectory(NewEmptyFolder);
+            Directory.SetCreationTimeUtc(NewEmptyFolder, Now);
+        }
+
+        public void Dispose() => Directory.Delete(Root, recursive: true);
+    }
+
+    [Fact]
+    public void TheTempSweep_LeavesWhatWasCreatedOrChangedThisWeek_AndCleansTheRest()
+    {
+        using var temp = new AgedTemp();
+
+        var (_, deleted, errors) = TuneUpService.CleanTempFiles([temp.Root], Now, CancellationToken.None);
+
+        Assert.Equal((1, 0), (deleted, errors));
+        Assert.False(File.Exists(temp.Leftover));
+        Assert.All(new[] { temp.Unpacked, temp.Fresh, temp.Rewritten }, file => Assert.True(File.Exists(file), file));
+        Assert.False(Directory.Exists(temp.OldFolder));          // emptied, and made a month ago
+        Assert.True(Directory.Exists(temp.NewEmptyFolder));      // empty, but made just now
+    }
+
+    [Fact]
+    public void TheFilesQuickCleanupMeasures_AreTheFilesTheSweepCleans()
+    {
+        using var temp = new AgedTemp();
+
+        var counted = TuneUpService.TempFilesToClean(temp.Root, Now - CleanupAge.TempFilesKeptFor, CancellationToken.None);
+
+        Assert.Equal([temp.Leftover], counted);
+    }
 }

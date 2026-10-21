@@ -30,18 +30,12 @@ public sealed class CleanupPreScanService(IRecycleBin recycleBin) : ICleanupPreS
     // delete, or it promises space Clean TEMP will correctly leave alone.
     private string MeasureTemp()
     {
-        var paths = new[]
-        {
-            Environment.GetEnvironmentVariable("TEMP") ?? "",
-            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
-        };
-
-        // TuneUpService.TempWalk, not a second copy of its exclusions: this number claims to describe what
-        // CleanTempFilesAsync would free, which is only true while both walk the same set.
-        var bytes = paths
+        // TuneUpService's roots and files, not a second copy of its exclusions or its age: this number claims to
+        // describe what CleanTempFilesAsync would free, which is only true while both count the same set.
+        var cutoff = DateTime.UtcNow - CleanupAge.TempFilesKeptFor;
+        var bytes = TuneUpService.TempRoots()
             .Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p))
-            .Sum(path => SumFileLengths(
-                SafeFileWalk.Files(path, CancellationToken.None, TuneUpService.TempWalk)));
+            .Sum(path => SumFileLengths(TuneUpService.TempFilesToClean(path, cutoff, CancellationToken.None)));
 
         return Describe(bytes, "can be freed");
     }

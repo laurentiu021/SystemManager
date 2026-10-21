@@ -486,8 +486,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   it counted. The list is loaded straight away, and the search box is cleared so nothing typed
   earlier hides those events
 - Mark any event with the flag button to keep it findable while you keep scrolling or
-  change filters. "Clear marks" removes them all, including any a filter is hiding. A load
-  keeps the marks, and the event open on the right, for every event it lists again
+  change filters. "Clear 2 marks", which counts them, removes them all, including any a
+  filter is hiding. A load keeps the marks, and the event open on the right, for every
+  event it lists again
 - Export to CSV — every event loaded, including any a filter is hiding — with a "search
   online" link for unknown events
 - The Security log requires administrator rights. Without them the page says so
@@ -1006,11 +1007,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Show only apps** narrows the list to programs with a window, and a program whose window has
   stopped responding reads **Not responding** in the status column
 - Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
-- **Right-click a row** for the same actions the row's buttons offer, or press the Menu key or
-  Shift+F10 — the Windows shortcut Task Manager honours. Without it, reaching the buttons on the
-  200th process meant arrowing to that row and then pressing Tab through every cell before it. The
-  menu item that ends a program is coloured like the button that does, says what it costs, and goes
-  through the same confirmation
+- **Right-click a row** for the same actions the row's buttons offer, each naming the program, as
+  in "Kill notepad.exe", or press the Menu key or Shift+F10 — the Windows shortcut Task Manager
+  honours. Without it, reaching the buttons on the 200th process meant arrowing to that row and then
+  pressing Tab through every cell before it. The menu item that ends a program is coloured like the
+  button that does, says what it costs, and goes through the same confirmation
 - **Export CSV** saves the list **as currently filtered** to a file you choose the location for —
   someone who has typed a filter to isolate a suspect gets that list, not all ~470 rows. Both the
   readable and the raw values are included, so a spreadsheet can sort by size and by start time
@@ -1153,7 +1154,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   board, lock-screen ads, and Start-menu suggestions
 - **See exactly what is being watched** — the full list of monitored settings, each
   with its value right now in plain language and the reason it is watched, visible
-  from the moment you open the tab rather than only after something has changed
+  from the moment you open the tab rather than only after something has changed.
+  Hovering a reason shows all of it, with the registry value the setting is read from
 - **Save a baseline** of your current preferences with one click; the watchdog
   remembers exactly what each watched setting was. If the baseline cannot be written — a
   full disk, for example — the tab says it was not saved, and why. If a saved baseline
@@ -1468,8 +1470,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Already installed is not a failure** — an app that is already on the PC, with nothing
   newer to install, is marked "Already installed" and counted on its own, not as a failed
   install
-- Category filter and text search across the catalog, plus a button that ticks
-  every app in the chosen category at once
+- Category filter and text search across the catalog, plus a button named for the chosen
+  category, such as "Select Browsers", that ticks every app in it at once
 - Per-package install status tracking with ETA
 - The catalog is grouped under category headings, and an app already on this PC carries an
   **Installed** badge
@@ -1900,10 +1902,12 @@ offers, "rate us" prompts:
   instead of Microsoft's own wording
 - Filter by status (Running/Stopped), safety level (Safe/Caution/Critical/Not rated),
   gaming recommendation (Safe to disable / Keep enabled / Advanced), or free-text
-  search — each chip shows how many services it matches, so you know before pressing it
+  search — each chip names what it filters and how many services it matches, as in
+  "Safe (12)", so you know before pressing it
 - Mark any row with the flag button to keep it findable while you keep filtering or
-  searching. "Clear marks" removes them all, including any a filter is hiding. Reading the
-  list again — Refresh, or after Undo Changes turned services back on — clears the marks too
+  searching. "Clear 2 marks", which counts them, removes them all, including any a filter
+  is hiding. Reading the list again — Refresh, or after Undo Changes turned services back
+  on — clears the marks too
 - **Says what else breaks before you break it** — when other services need the one you
   are turning off, they are named in the confirmation by their real names, so the choice
   is "my printer will stop working" rather than "this may affect system functionality".
@@ -1930,9 +1934,10 @@ offers, "rate us" prompts:
   on one that is not, and each says so and leaves the service alone otherwise. Stop says when Windows
   will not stop a service rather than reporting that it did
 - **Right-click a row** — or press the Menu key or Shift+F10 — for Start, Stop, Disable, Enable and
-  Mark, the same five actions as the row's buttons and through the same commands, so every
-  confirmation still applies. services.msc has worked this way for twenty years; four buttons per
-  row previously meant Tabbing through every cell of every preceding row to reach one
+  Mark, each naming the service, as in "Stop Print Spooler". They are the same five actions as the
+  row's buttons and go through the same commands, so every confirmation still applies. services.msc
+  has worked this way for twenty years; four buttons per row previously meant Tabbing through every
+  cell of every preceding row to reach one
 - Requires admin for all mutations
 
 ### Drivers

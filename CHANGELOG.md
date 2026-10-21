@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.39] - 2026-10-21
+
+**Filter chips, menu items, buttons and tooltips built around a number or a name show all their words, and
+Settings Watchdog's reasons have their tooltip.**
+
+### Fixed
+
+- **Services' filter chips showed only their counts.** "Safe to disable" and "Keep enabled" read as two identical green
+  pills with a number in each, and Running, Stopped, Not rated and Advanced as identical grey ones. Each chip now names
+  what it filters beside its count, as in "Safe (12)". Since 1.10.0.
+- **The right-click menus named only the row, on every item.** On Services and Process Manager each item read just the
+  service's or the program's name, "Kill" included, and a screen reader announced them the same way. Disk Analyzer's
+  block menu read only the folder's name. Each item now says what it does, as in "Kill notepad.exe" or "Show AppData in
+  Explorer". Since 1.104.0, and 1.119.0 on Disk Analyzer.
+- **Three buttons showed only a number or a name.** "Clear marks" on Services and System Logs read a bare count, and
+  now reads "Clear 2 marks", or "Clear 1 mark". Bulk Installer's button for the chosen category read only the
+  category, and now reads "Select Browsers". Since 1.61.6.
+- **Settings Watchdog's reasons had no tooltip.** The column trims a long reason, and the tooltip meant to show all of
+  it, with the registry value the setting is read from, never appeared. It does now. Since 1.61.7.
+- **System Logs' "SysManager's own logs" button had a tooltip of only a folder path.** It now says that it opens
+  SysManager's own diagnostic logs, and where they are. Since 1.56.10.
+
 ## [1.130.38] - 2026-10-21
 
 **File Lock Detector says what kind of program holds a file in plain words, and Battery Health no longer shows a healthy

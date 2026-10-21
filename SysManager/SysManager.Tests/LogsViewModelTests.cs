@@ -239,6 +239,25 @@ public class LogsViewModelTests
     }
 
     [Fact]
+    public void TheClearButton_SaysHowManyMarksItClears()
+    {
+        // It was a StringFormat on Content, which WPF does not format, so the button read a bare "2" (#2808).
+        var first = Make(EventSeverity.Error, "first");
+        var second = Make(EventSeverity.Warning, "second");
+        var vm = WithEntries(first, second);
+        var raised = vm.RecordPropertyChanges();
+
+        vm.ToggleHighlightCommand.Execute(first);
+        Assert.Equal("Clear 1 mark", vm.ClearMarksText);
+
+        vm.ToggleHighlightCommand.Execute(second);
+        Assert.Equal("Clear 2 marks", vm.ClearMarksText);
+
+        // Raised with every change of the count, or the button would keep its first words.
+        Assert.Equal(2, raised.Count(name => name == nameof(LogsViewModel.ClearMarksText)));
+    }
+
+    [Fact]
     public void LoadingADifferentLog_DropsTheMarkCount()
     {
         // Entries are rebuilt per load, so the marked objects are gone; a stale count would keep the

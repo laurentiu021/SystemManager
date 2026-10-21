@@ -1426,6 +1426,24 @@ public class ServicesViewModelTests
         Assert.Equal(0, vm.HighlightedCount);
     }
 
+    [Fact]
+    public async Task TheClearButton_SaysHowManyMarksItClears()
+    {
+        // It was a StringFormat on Content, which WPF does not format, so the button read a bare "2" (#2808).
+        var entries = FreshEntries();
+        var vm = await CreateWithDataAsync(entries);
+        var raised = vm.RecordPropertyChanges();
+
+        vm.ToggleHighlightCommand.Execute(entries[0]);
+        Assert.Equal("Clear 1 mark", vm.ClearMarksText);
+
+        vm.ToggleHighlightCommand.Execute(entries[1]);
+        Assert.Equal("Clear 2 marks", vm.ClearMarksText);
+
+        // Raised with every change of the count, or the button would keep its first words.
+        Assert.Equal(2, raised.Count(name => name == nameof(ServicesViewModel.ClearMarksText)));
+    }
+
     // ── Elevation gate on Start / Stop / Disable / Enable ────────────────────
     //
     // Four commands here refuse without administrator rights, and none of them was asserted (#2171).

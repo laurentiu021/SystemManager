@@ -40,6 +40,9 @@
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>
             <h:MaintenanceActionToTextConverter x:Key="MaintenanceActionText"/>
+            <!-- The text for a property typed object, Content, Header or ToolTip, where a binding's StringFormat is
+                 dropped. See FormatConverter (#2808). -->
+            <h:FormatConverter x:Key="Format"/>
 
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="TrueValue">True</sys:Boolean>
             <sys:Boolean xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="FalseValue">False</sys:Boolean>

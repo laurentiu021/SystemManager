@@ -31,7 +31,7 @@
                     <!-- The same command as the list's folder button. Tag carries the view model, because a
                          context menu is not in the view's tree and cannot find it by ancestor. -->
                     <ContextMenu>
-                        <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Show {0} in Explorer'}"
+                        <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Show {0} in Explorer'}"
                                   Command="{Binding PlacementTarget.Tag.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding PlacementTarget.DataContext.Entry, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                     </ContextMenu>

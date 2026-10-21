@@ -448,6 +448,16 @@ public class SettingsWatchdogViewModelTests
             vm.Watched.Single(w => w.Setting.Key == "telemetry").Location);
     }
 
+    [Fact]
+    public void TheReasonTooltip_IsTheWholeReason_ThenTheRegistryLocation()
+    {
+        // It was a MultiBinding with a StringFormat and no converter, which gives a ToolTip nothing at all (#2808).
+        var vm = new SettingsWatchdogViewModel(WithCatalog(new Dictionary<string, int?>()));
+
+        Assert.Equal("desc\nHKLM\\SOFTWARE\\Test\\telemetry\\Val",
+            vm.Watched.Single(w => w.Setting.Key == "telemetry").ToolTipText);
+    }
+
     // ── one read per refresh (regression #1967) ────────────────────────────
     // Refresh used to obtain the live values TWICE: DetectDrift() read them to compute drift, then
     // Refresh read them again to build the watched list. A setting that changed between the two reads

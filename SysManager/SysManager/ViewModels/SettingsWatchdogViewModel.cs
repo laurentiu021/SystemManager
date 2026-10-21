@@ -278,5 +278,15 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         /// read registry paths, but anyone who wants to verify a claim should not have to read the source.
         /// </summary>
         public string Location => $@"{Setting.RegistryPath}\{Setting.ValueName}";
+
+        /// <summary>
+        /// The reason column's tooltip: the whole reason, which the column trims, and under it the registry location.
+        /// </summary>
+        /// <remarks>
+        /// It was a <c>MultiBinding</c> with a <c>StringFormat</c> and no converter. <c>ToolTip</c> is typed
+        /// <c>object</c>, and WPF formats only for a string, so the binding had nothing to give and the cell had no
+        /// tooltip at all (#2808).
+        /// </remarks>
+        public string ToolTipText => $"{Description}\n{Location}";
     }
 }

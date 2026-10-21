@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.48] - 2026-10-21
+
+**A DNS preset on DNS & Hosts goes to the adapter Windows sends its traffic through, so a family filter that says it
+is on filters, and the confirmation names that adapter.**
+
+### Fixed
+
+- **A DNS preset could go to an adapter that carried no traffic.** DNS & Hosts picked the connected adapter with the
+  lowest interface number, which is only the order the adapters were created in. On a laptop on a dock, with its
+  Wi-Fi still connected while the dock's Ethernet carried the traffic, a family preset was written to the Wi-Fi, the
+  tab said it was set, and names went on resolving through the Ethernet's servers. The preset, Reset to DHCP and the
+  Current DNS readout now use the adapter of the route Windows sends traffic to the internet through, and fall back to
+  the old order only when there is no such route; Undo still goes back to the adapter the change went to. Since 1.6.0.
+- **The confirmation named the adapter by a number.** "Change DNS on active network interface 12" told nobody which
+  adapter that was. It names the adapter as Windows does, such as "Wi-Fi" or "Ethernet 3". Since 1.56.4.
+
 ## [1.130.47] - 2026-10-21
 
 **Process Manager's "Show only apps" lists a Store app such as Settings or Calculator, and a frozen one reads "Not

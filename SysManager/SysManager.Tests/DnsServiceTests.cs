@@ -662,6 +662,28 @@ public class DnsServiceTests
         Assert.Equal(["2606:4700:4700::1111"], snap.V6);
         Assert.Equal(DnsService.DnsConfigurationSource.Static, snap.V4Source);
         Assert.Equal(DnsService.DnsConfigurationSource.Static, snap.V6Source);
+        // No name printed: the snapshot names none, and the confirmation falls back to the number.
+        Assert.Equal("", snap.AdapterName);
+    }
+
+    [Fact]
+    public async Task CaptureSnapshotAsync_ReadsTheAdaptersName_ForTheConfirmationToSay()
+    {
+        // The name Windows shows, kept whole: an "=" in it is part of the name (#2879).
+        var lines = CaptureResult(17, "IPv4=1.1.1.3");
+        lines.Insert(2, PSObject.AsPSObject("IFNAME=Ethernet 3 = dock"));
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(lines);
+        using var svc = new DnsService(runner);
+
+        var snap = await svc.CaptureSnapshotAsync();
+
+        Assert.Equal("Ethernet 3 = dock", snap.AdapterName);
+        await runner.Received(1).RunAsync(
+            Arg.Is<string>(script => script != null && script.Contains("\"IFNAME=$($adapter.Name)\"")),
+            Arg.Any<IDictionary<string, object?>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

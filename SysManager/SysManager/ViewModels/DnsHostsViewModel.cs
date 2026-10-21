@@ -194,7 +194,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
 
             var v6Note = preset.HasIpv6 ? " + IPv6" : "";
             if (!DialogService.Instance.Confirm(
-                    $"Change DNS on active network interface {snapshot.IfIndex} to {preset.Name} " +
+                    $"Change DNS on {DescribeAdapter(snapshot)} to {preset.Name} " +
                     $"({preset.Primary}, {preset.Secondary}{v6Note})?\n\n" +
                     $"Previous setting: {DescribeDnsSnapshot(snapshot)}.\n" +
                     "You can restore the previous setting with Undo.",
@@ -290,7 +290,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             var snapshot = await _dnsService.CaptureSnapshotAsync(_cts.Token).ConfigureAwait(true);
 
             if (!DialogService.Instance.Confirm(
-                    $"Reset DNS on active network interface {snapshot.IfIndex} to automatic (DHCP)?\n\n" +
+                    $"Reset DNS on {DescribeAdapter(snapshot)} to automatic (DHCP)?\n\n" +
                     $"Current setting: {DescribeDnsSnapshot(snapshot)}.\n" +
                     "The current setting can be restored with Undo.",
                     "Confirm DNS Reset"))
@@ -433,6 +433,15 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         UpdateCanRestorePreviousDns();
         return pending;
     }
+
+    /// <summary>
+    /// The adapter a DNS change goes to, by the name Windows shows for it, such as "Wi-Fi": an interface number
+    /// told nobody which adapter that was (#2879).
+    /// </summary>
+    private static string DescribeAdapter(DnsService.DnsSnapshot snapshot) =>
+        snapshot.AdapterName.Length > 0
+            ? $"the network adapter \"{snapshot.AdapterName}\""
+            : $"network interface {snapshot.IfIndex}";
 
     private static string DescribeDnsSnapshot(DnsService.DnsSnapshot snapshot)
     {

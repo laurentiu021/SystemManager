@@ -121,14 +121,24 @@ public sealed class DnsService : IDisposable
         finally { ReleaseGate(); }
     }
 
-    // Single source of truth for "the active adapter": prefer a non-virtual adapter
-    // that is Up, fall back to any Up adapter, and always order by ifIndex so the
-    // SAME adapter is chosen for reading, snapshotting, and mutating. Without this,
-    // display/capture and set/reset/restore could target different NICs on a
-    // multi-adapter machine (Wi-Fi + Ethernet + VPN), breaking reversibility.
+    // Single source of truth for "the active adapter", so the SAME adapter is chosen for reading, snapshotting and
+    // mutating; otherwise display/capture and set/reset/restore could target different NICs on a multi-adapter
+    // machine (Wi-Fi + Ethernet + VPN), breaking reversibility. It is the adapter of the route Windows would send
+    // traffic to the internet through, which Find-NetRoute works out without sending anything, for a public IPv4
+    // address and then a public IPv6 one: Windows asks that adapter's DNS servers. The lowest interface number among
+    // the adapters that are Up, which this used to be, is only the order they were created in, so on a laptop on a
+    // dock a preset went to the Wi-Fi while names resolved through the Ethernet's servers (#2879). With no route to an
+    // adapter that is Up, the old order stands: the first non-virtual adapter that is Up by ifIndex, then any.
     private const string ActiveAdapterSelector =
-        "$adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.Virtual -eq $false } | Sort-Object -Property ifIndex | Select-Object -First 1; " +
-        "if (-not $adapter) { $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Sort-Object -Property ifIndex | Select-Object -First 1 }";
+        "$upAdapters = @(Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }); $adapter = $null; " +
+        "foreach ($probe in @('1.1.1.1', '2606:4700:4700::1111')) { " +
+        "$route = Find-NetRoute -RemoteIPAddress $probe -ErrorAction SilentlyContinue | Select-Object -First 1; " +
+        "if ($route) { $adapter = $upAdapters | Where-Object { $_.ifIndex -eq $route.InterfaceIndex } | " +
+        "Select-Object -First 1 }; " +
+        "if ($adapter) { break } }; " +
+        "if (-not $adapter) { $adapter = $upAdapters | Where-Object { $_.Virtual -eq $false } | " +
+        "Sort-Object -Property ifIndex | Select-Object -First 1 }; " +
+        "if (-not $adapter) { $adapter = $upAdapters | Sort-Object -Property ifIndex | Select-Object -First 1 }";
 
     /// <summary>Prints the interface index of the active adapter, or nothing when none is up.</summary>
     /// <remarks>
@@ -173,7 +183,8 @@ public sealed class DnsService : IDisposable
     /// each family's configuration source is captured too. <paramref name="IfIndex"/> pins the
     /// adapter selected at capture time, while <paramref name="InterfaceGuid"/> prevents a
     /// recycled index from targeting a different adapter. Zero means "not captured" and falls
-    /// back to dynamic lookup for legacy callers.
+    /// back to dynamic lookup for legacy callers. <paramref name="AdapterName"/> is the name
+    /// Windows shows for it, such as "Wi-Fi", for the confirmation to say; it identifies nothing.
     /// </summary>
     public sealed record DnsSnapshot(
         IReadOnlyList<string> V4,
@@ -181,7 +192,8 @@ public sealed class DnsService : IDisposable
         int IfIndex = 0,
         Guid? InterfaceGuid = null,
         DnsConfigurationSource V4Source = DnsConfigurationSource.Unknown,
-        DnsConfigurationSource V6Source = DnsConfigurationSource.Unknown)
+        DnsConfigurationSource V6Source = DnsConfigurationSource.Unknown,
+        string AdapterName = "")
     {
         public static readonly DnsSnapshot Empty = new([], []);
     }
@@ -232,6 +244,7 @@ public sealed class DnsService : IDisposable
                     $interfaceGuid = [Guid]$adapter.InterfaceGuid
                     "IFINDEX=$ifIndex"
                     "IFGUID=$($interfaceGuid.ToString('D'))"
+                    "IFNAME=$($adapter.Name)"
                     $guidKey = $interfaceGuid.ToString('B')
                     $registryPaths = @{
                         IPv4 = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guidKey"
@@ -303,6 +316,7 @@ public sealed class DnsService : IDisposable
             List<string> v4 = [], v6 = [];
             int capturedIfIndex = 0;
             Guid? capturedInterfaceGuid = null;
+            var capturedName = "";
             bool capturedV4 = false, capturedV6 = false;
             bool identityVerified = false;
             bool identityMetadataValid = true, sourceMetadataValid = true, addressMetadataValid = true;
@@ -324,6 +338,11 @@ public sealed class DnsService : IDisposable
                 {
                     if (Guid.TryParse(value, out var interfaceGuid))
                         capturedInterfaceGuid = interfaceGuid;
+                    continue;
+                }
+                if (tag == "IFNAME")
+                {
+                    capturedName = value.Trim();
                     continue;
                 }
                 if (tag == "COMPLETE")
@@ -400,7 +419,8 @@ public sealed class DnsService : IDisposable
                 capturedIfIndex,
                 capturedInterfaceGuid,
                 v4Source,
-                v6Source);
+                v6Source,
+                capturedName);
         }
         finally { ReleaseGate(); }
     }

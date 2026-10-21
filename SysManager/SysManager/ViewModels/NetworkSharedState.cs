@@ -65,6 +65,13 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     /// </summary>
     private readonly Dictionary<string, List<KeyValuePair<SKColor, SolidColorPaint>>> _seriesStrokes = new();
 
+    /// <summary>The theme the charts and the targets' colours are drawn for: the app's, or one a test gives.</summary>
+    /// <remarks>
+    /// A test cannot switch the app's theme without writing the user's theme file, and on the dark default every
+    /// line colour already reads, so checking the light colours needs a light theme of its own.
+    /// </remarks>
+    internal Func<ThemePreset> Theme { get; init; } = static () => ThemeService.Instance.CurrentTheme;
+
     public ObservableCollection<PingTarget> Targets { get; } = new();
     public BulkObservableCollection<TracerouteHop> TracerouteHops { get; } = new();
 
@@ -189,13 +196,17 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         if (IsTracedHost(host)) ForgetTracedHost();
 
         var color = Palette[PaletteIndex++ % Palette.Length];
-        var target = new PingTarget(name, host, color, isCustom, role);
+        var skColor = SKColor.Parse(color.TrimStart('#')).WithAlpha(230);
+
+        // Drawn in the colour that reads on the theme's card from the start. The chart theme is applied when this
+        // state is built, before the first target exists, so the lines added after it kept the designed colour on a
+        // light theme until the theme next changed: #80FFDB at 1.03:1 on Clean Indigo (#2818).
+        var shown = ShownOnTheCard(skColor);
+        var target = new PingTarget(name, host, color, isCustom, role) { ShownColorHex = Hex(shown) };
         Targets.Add(target);
 
         var buffer = new BulkObservableCollection<DateTimePoint>();
         Buffers[host] = buffer;
-
-        var skColor = SKColor.Parse(color.TrimStart('#')).WithAlpha(230);
 
         // Every paint carrying this target's identity colour, registered against the DESIGNED hue so
         // ChartTheme.Apply can re-derive a readable version for the active preset. The palette is tuned
@@ -205,11 +216,11 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         //
         // Keyed BY HOST because RemoveTargetInternal disposes these paints: a flat list would keep
         // handing disposed SKPaint handles to the next theme change.
-        var latencyStroke = new SolidColorPaint(skColor, 2);
-        var latencyGeometryStroke = new SolidColorPaint(skColor, 1);
-        var latencyGeometryFill = new SolidColorPaint(skColor);
-        var traceStroke = new SolidColorPaint(skColor, 2);
-        var traceGeometryStroke = new SolidColorPaint(skColor, 2);
+        var latencyStroke = new SolidColorPaint(shown, 2);
+        var latencyGeometryStroke = new SolidColorPaint(shown, 1);
+        var latencyGeometryFill = new SolidColorPaint(shown);
+        var traceStroke = new SolidColorPaint(shown, 2);
+        var traceGeometryStroke = new SolidColorPaint(shown, 2);
         _seriesStrokes[host] =
         [
             new(skColor, latencyStroke),
@@ -276,7 +287,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             // Marker centre = the theme surface (a "hollow-on-surface" dot ringed by the series colour).
             // Was a hardcoded near-black, which stayed black on the light presets and read as black dots
             // with a faint colour rim on the white legend. Re-themed in ChartTheme.Apply on theme change.
-            GeometryFill = new SolidColorPaint(Helpers.ChartTheme.Sk(ThemeService.Instance.CurrentTheme.Surface)),
+            GeometryFill = new SolidColorPaint(Helpers.ChartTheme.Sk(Theme().Surface)),
             AnimationsSpeed = TimeSpan.Zero
         });
     }
@@ -304,8 +315,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         _tracedHost = host;
 
         var skColor = SKColor.Parse(Palette[PaletteIndex++ % Palette.Length].TrimStart('#')).WithAlpha(230);
-        var traceStroke = new SolidColorPaint(skColor, 2);
-        var traceGeometryStroke = new SolidColorPaint(skColor, 2);
+        var shown = ShownOnTheCard(skColor);
+        var traceStroke = new SolidColorPaint(shown, 2);
+        var traceGeometryStroke = new SolidColorPaint(shown, 2);
         _seriesStrokes[host] = [new(skColor, traceStroke), new(skColor, traceGeometryStroke)];
         AddTraceLine(host, host, traceStroke, traceGeometryStroke);
     }
@@ -675,16 +687,29 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     // ── Chart theming ──
 
     /// <summary>
-    /// Repaints the chart labels, legend, and tooltip from the current app theme. Wired to
-    /// <see cref="ThemeService.ThemeChanged"/> so switching to a light preset makes the axis
+    /// Repaints the chart labels, legend, tooltip and lines, and the targets' card bars, from the current app
+    /// theme. Wired to <see cref="ThemeService.ThemeChanged"/> so switching to a light preset makes the axis
     /// text dark-on-light (readable) instead of the previous hardcoded near-white.
     /// </summary>
-    private void ApplyChartTheme() => Helpers.ChartTheme.Apply(
-        LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
-        [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes],
-        TraceSeries,
-        // Flattened per call rather than kept flat, so a removed target's disposed paints are gone.
-        [.. _seriesStrokes.Values.SelectMany(p => p)]);
+    private void ApplyChartTheme()
+    {
+        Helpers.ChartTheme.Apply(
+            LegendTextPaint, TooltipTextPaint, TooltipBackgroundPaint,
+            [.. LatencyXAxes, .. LatencyYAxes, .. TraceXAxes, .. TraceYAxes],
+            TraceSeries,
+            // Flattened per call rather than kept flat, so a removed target's disposed paints are gone.
+            [.. _seriesStrokes.Values.SelectMany(p => p)],
+            Theme());
+
+        foreach (var target in Targets)
+            target.ShownColorHex = Hex(ShownOnTheCard(SKColor.Parse(target.ColorHex.TrimStart('#')).WithAlpha(230)));
+    }
+
+    /// <summary><paramref name="designed"/>, moved just far enough from the theme's card to be seen on it.</summary>
+    private SKColor ShownOnTheCard(SKColor designed) =>
+        Helpers.ChartTheme.ReadableAgainst(designed, Helpers.ChartTheme.Sk(Theme().Surface));
+
+    private static string Hex(SKColor color) => $"#{color.Red:X2}{color.Green:X2}{color.Blue:X2}";
 
     // ── Axis factories ──
 

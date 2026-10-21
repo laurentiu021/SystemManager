@@ -217,10 +217,11 @@ new theme's colours, whether you pick the theme or Auto follows Windows.
 Graph lines follow the theme rather than fighting it. The Ping, Traceroute, Bandwidth Monitor, Resource
 History, Speed Test and Battery Health charts each draw with a fixed set of colours — blue is CPU, purple is
 memory — and those colours were chosen against a dark card. Switching to a light theme darkens each line
-by exactly as much as it needs to stay at 3:1 against the card it is drawn on, so the line remains
-followable without a second palette to maintain and without changing which colour means what. Brightness
-moves, hue does not; on the six dark presets, where the original colours already clear the bar, nothing
-changes at all.
+by exactly as much as it needs to stay at 3:1 against the card it is drawn on, and on a dark Custom card a
+line that falls short is lightened instead, so the line remains followable without a second palette to
+maintain and without changing which colour means what. Brightness moves, hue does not; on the six dark
+presets, where the original colours already clear the bar, nothing changes at all. On Ping, the bar on each
+target's card is drawn in its line's colour, so it still says which line is whose.
 
 ### Keyboard navigation
 The app is operable without a mouse, and the control you are on is always visible. `Tab` moves

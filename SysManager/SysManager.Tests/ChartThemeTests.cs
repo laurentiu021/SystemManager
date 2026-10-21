@@ -237,6 +237,84 @@ public class ChartThemeTests
         Assert.Equal(designed.Alpha, stroke.Color.Alpha);
     }
 
+    /// <summary>
+    /// On a dark Custom surface a line that falls short is lightened until it reads, not darkened (#2818).
+    /// </summary>
+    /// <remarks>
+    /// #4A4A4A still admits white text, so the theme takes it as a dark surface. Walking toward black, five of the
+    /// 13 colours went darker on every step and ended at 1.8 to 1.9:1.
+    /// </remarks>
+    [Fact]
+    public void OnADarkCustomSurface_ALineThatFallsShortIsLightened()
+    {
+        var surface = SKColor.Parse("4A4A4A");
+        var moved = 0;
+
+        foreach (var hex in Palette)
+        {
+            var designed = SKColor.Parse(hex.TrimStart('#')).WithAlpha(230);
+            var readable = ChartTheme.ReadableAgainst(designed, surface);
+
+            Assert.True(ContrastRatio(Composite(readable, surface), surface) >= 3.0,
+                $"{hex} reads {ContrastRatio(Composite(readable, surface), surface):F2}:1 on #4A4A4A");
+            if (readable == designed) continue;
+            moved++;
+            Assert.True(RelLum(readable) > RelLum(designed), $"{hex} was made darker on a dark surface");
+        }
+
+        // Five of the 13 fall short on this surface as designed; a walk that moved none would prove nothing here.
+        Assert.True(moved >= 5, $"only {moved} colours needed moving on #4A4A4A, of the five that fall short");
+    }
+
+    /// <summary>
+    /// Every line reads on any card surface a Custom theme can have, from black to white and across the hues.
+    /// </summary>
+    /// <remarks>
+    /// The walk goes to the extreme if it has to. With the old ceiling of 80%, a few colours stayed short on the greys
+    /// between dark and light, where only white or black reaches 3:1.
+    /// </remarks>
+    [Fact]
+    public void EveryLine_ReadsOnEveryCardSurface()
+    {
+        List<SKColor> surfaces = [.. Enumerable.Range(0, 256).Select(v => new SKColor((byte)v, (byte)v, (byte)v))];
+        for (var r = 0; r <= 255; r += 51)
+            for (var g = 0; g <= 255; g += 51)
+                for (var b = 0; b <= 255; b += 51)
+                    surfaces.Add(new SKColor((byte)r, (byte)g, (byte)b));
+
+        var offenders = new List<string>();
+        var checkedPairs = 0;
+        foreach (var surface in surfaces)
+            foreach (var hex in Palette)
+            {
+                checkedPairs++;
+                var readable = ChartTheme.ReadableAgainst(SKColor.Parse(hex.TrimStart('#')).WithAlpha(230), surface);
+                var ratio = ContrastRatio(Composite(readable, surface), surface);
+                if (ratio < 3.0) offenders.Add($"{hex} on {surface} -> {ratio:F2}:1");
+            }
+
+        // 256 greys and 216 colours, by 13 lines.
+        Assert.Equal((256 + 216) * Palette.Length, checkedPairs);
+        Assert.True(offenders.Count == 0,
+            $"these lines stay below 3:1 on their card:\n  {string.Join("\n  ", offenders.Take(20))}");
+    }
+
+    /// <summary>A theme passed to <see cref="ChartTheme.Apply"/> is the one its lines are made to read on.</summary>
+    [Fact]
+    public void Apply_PaintsForTheThemeItIsGiven()
+    {
+        var light = ThemePreset.Defaults["clean-indigo"];
+        var designed = SKColor.Parse("80FFDB").WithAlpha(230);
+        var stroke = new SolidColorPaint(designed, 2);
+
+        ChartTheme.Apply(new SolidColorPaint(SKColors.Black), new SolidColorPaint(SKColors.Black),
+            new SolidColorPaint(SKColors.Black), [new Axis()], seriesBaseColors: [new(designed, stroke)], theme: light);
+
+        var expected = ChartTheme.ReadableAgainst(designed, ChartTheme.Sk(light.Surface));
+        Assert.NotEqual(designed, expected);   // #80FFDB is 1.03:1 on Clean Indigo's card, so it has to move
+        Assert.Equal(expected, stroke.Color);
+    }
+
     /// <summary>Composites a series stroke over its surface at the alpha the charts actually use.</summary>
     private static SKColor Composite(SKColor line, SKColor surface)
     {

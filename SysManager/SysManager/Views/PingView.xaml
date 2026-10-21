@@ -123,7 +123,7 @@
                             <Border Margin="0,0,10,10" Padding="14,12" CornerRadius="{StaticResource RadiusLg}"
                                     Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                 <Grid>
-                                    <Border helpers:ThemeBrush.Background="{Binding ColorHex}"
+                                    <Border helpers:ThemeBrush.Background="{Binding ShownColorHex}"
                                             Width="4" HorizontalAlignment="Left" CornerRadius="2"
                                             Margin="-14,-12,0,-12"/>
                                     <DockPanel Margin="6,0,0,0">

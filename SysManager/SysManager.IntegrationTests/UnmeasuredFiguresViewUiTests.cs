@@ -46,7 +46,7 @@ public sealed class UnmeasuredFiguresViewUiTests
 
         StaHelper.Run(() =>
         {
-            var texts = TextsOf(Laid(new SystemHealthView(), context));
+            var texts = TextsOf(Laid<SystemHealthView>(context));
 
             Assert.Equal("—", After(texts, "HEALTH"));
             Assert.Equal("—", After(texts, "TEMPERATURE"));
@@ -72,7 +72,7 @@ public sealed class UnmeasuredFiguresViewUiTests
 
         StaHelper.Run(() =>
         {
-            var texts = TextsOf(Laid(new SystemHealthView(), context));
+            var texts = TextsOf(Laid<SystemHealthView>(context));
 
             Assert.EndsWith("%", After(texts, "HEALTH"), StringComparison.Ordinal);
             Assert.Equal("38 °C", After(texts, "TEMPERATURE"));
@@ -90,7 +90,7 @@ public sealed class UnmeasuredFiguresViewUiTests
 
         StaHelper.Run(() =>
         {
-            var texts = TextsOf(Laid(new PingView(), context));
+            var texts = TextsOf(Laid<PingView>(context));
 
             // The value sits above its label in a ping row.
             Assert.Equal("—", Before(texts, "LATENCY"));
@@ -99,10 +99,16 @@ public sealed class UnmeasuredFiguresViewUiTests
         });
     }
 
-    private static FrameworkElement Laid(FrameworkElement view, object context)
+    /// <summary>The view built after the app's dictionaries are loaded, which its styles come from.</summary>
+    /// <remarks>
+    /// Built here rather than handed in: a view constructed first resolves its styles before there is an Application
+    /// to hold them, so a test that ran before any other on the STA thread failed on "Cannot find resource named
+    /// 'Display'".
+    /// </remarks>
+    private static TView Laid<TView>(object context) where TView : FrameworkElement, new()
     {
         AppResources.Ensure();
-        view.DataContext = context;
+        var view = new TView { DataContext = context };
         view.Measure(new Size(1400, 1600));
         view.Arrange(new Rect(0, 0, 1400, 1600));
         view.UpdateLayout();

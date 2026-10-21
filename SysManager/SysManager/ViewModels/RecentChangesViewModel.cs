@@ -118,12 +118,24 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
 
     private bool CanRefresh() => !IsBusy;
 
-    /// <summary>Opens the tab a change's button, or the line about System Logs, names.</summary>
+    /// <summary>Opens the tab a change's button names.</summary>
     [RelayCommand]
     private void OpenTab(string? navId)
     {
         if (!string.IsNullOrWhiteSpace(navId)) _navigation.GoTo(navId);
     }
+
+    /// <summary>
+    /// Opens System Logs on the problems the line counts: errors in the Application log over the period chosen, loaded
+    /// (#2887).
+    /// </summary>
+    /// <remarks>
+    /// The line's button opened the tab alone, which starts on the System log over 24 hours and reads nothing until
+    /// Refresh, so the crashes the line counted were nowhere on it.
+    /// </remarks>
+    [RelayCommand]
+    private void OpenProblems() =>
+        _navigation.GoTo("nav-logs", arrival: LogsArrival.AppProblems(PeriodDays(SelectedPeriod)));
 
     // One look at a time; one asked for meanwhile runs once that one ends, since it is the change the user came to see.
     private Task LookAsync()

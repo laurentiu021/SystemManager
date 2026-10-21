@@ -664,22 +664,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
     /// implements <see cref="IFilterable"/> — the difference between arriving at a list of 200 services
     /// and arriving at the one the user was just told about.
     /// </param>
+    /// <param name="arrival">
+    /// Optional: what the destination opens on. Handed over only if its view model implements
+    /// <see cref="IArrivalDestination"/>, so a link lands on what it counted (#2887).
+    /// </param>
     /// <remarks>
-    /// The filter is applied AFTER selection, because selecting the tab is what builds its view model on
-    /// the lazy path: reading Content first would construct it a navigation early, and on the eager
+    /// The filter and the arrival are handed over AFTER selection, because selecting the tab is what builds its view
+    /// model on the lazy path: reading Content first would construct it a navigation early, and on the eager
     /// designer path it would still be the wrong order to reason about.
     /// </remarks>
-    public void NavigateTo(string navId, string? filter = null)
+    public void NavigateTo(string navId, string? filter = null, Models.NavigationArrival? arrival = null)
     {
         SelectNavById(navId);
 
-        if (string.IsNullOrWhiteSpace(filter)) return;
+        if (SelectedNav?.Id == navId && SelectedNav is { IsContentCreated: true } tab)
+            HandOver(tab.Content, filter, arrival);
+    }
 
-        if (SelectedNav?.Id == navId
-            && SelectedNav is { IsContentCreated: true, Content: IFilterable filterable })
-        {
-            filterable.FilterText = filter;
-        }
+    /// <summary>
+    /// Gives the tab the user was sent to the filter and the arrival the link carried, each where the tab takes it.
+    /// </summary>
+    internal static void HandOver(object content, string? filter, Models.NavigationArrival? arrival)
+    {
+        if (!string.IsNullOrWhiteSpace(filter) && content is IFilterable filterable) filterable.FilterText = filter;
+        if (arrival is not null && content is IArrivalDestination destination) destination.Arrive(arrival);
     }
 
     // Only the About shortcut is bound (MainWindow.xaml's update banner, "View details"). Five

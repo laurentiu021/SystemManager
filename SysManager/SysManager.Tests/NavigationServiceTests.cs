@@ -48,6 +48,18 @@ public class NavigationServiceTests
         shell.Received(1).NavigateTo("nav-services", "Spooler");
     }
 
+    [Fact]
+    public void GoTo_ForwardsTheArrivalWhenOneIsGiven()
+    {
+        // System Logs opens on what the Dashboard's Event Log alert counted only if the arrival reaches the shell
+        // (#2887).
+        var (service, shell) = Bound();
+
+        service.GoTo("nav-logs", arrival: LogsArrival.CriticalSystemEvents);
+
+        shell.Received(1).NavigateTo("nav-logs", null, LogsArrival.CriticalSystemEvents);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
@@ -87,6 +99,42 @@ public class NavigationServiceTests
 
         second.Received(1).NavigateTo("nav-logs", null);
         first.DidNotReceiveWithAnyArgs().NavigateTo(default!, default);
+    }
+
+    // ---- What the shell hands the tab it opened (#2887) ----
+
+    [Fact]
+    public void HandOver_GivesTheArrivalToATabThatTakesOne()
+    {
+        var tab = Substitute.For<IArrivalDestination>();
+
+        ViewModels.MainWindowViewModel.HandOver(tab, null, LogsArrival.CriticalSystemEvents);
+
+        tab.Received(1).Arrive(LogsArrival.CriticalSystemEvents);
+    }
+
+    [Fact]
+    public void HandOver_WithNoArrival_GivesTheTabNone()
+    {
+        var tab = Substitute.For<IArrivalDestination>();
+
+        ViewModels.MainWindowViewModel.HandOver(tab, "Spooler", null);
+
+        tab.DidNotReceiveWithAnyArgs().Arrive(default!);
+    }
+
+    [Fact]
+    public void HandOver_WritesAFilterIntoATabThatTakesOne_ButNotABlankOne()
+    {
+        // The filter path moved into HandOver with the arrival, so it is pinned here too: a blank filter must not wipe
+        // what the tab's search box already holds.
+        var tab = Substitute.For<IFilterable>();
+
+        ViewModels.MainWindowViewModel.HandOver(tab, "   ", LogsArrival.CriticalSystemEvents);
+        tab.DidNotReceiveWithAnyArgs().FilterText = default!;
+
+        ViewModels.MainWindowViewModel.HandOver(tab, "Spooler", null);
+        tab.Received(1).FilterText = "Spooler";
     }
 
     // ---- The routing rules the two features depend on ----

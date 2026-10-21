@@ -164,6 +164,10 @@
                                      AutomationProperties.Name="30d — time range: last 30 days"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 30 days'}"
                                      Style="{StaticResource FilterChipNeutral}"/>
+                        <RadioButton Content="90d" GroupName="TimeRange" Margin="0,0,4,0"
+                                     AutomationProperties.Name="90d — time range: last 90 days"
+                                     IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='Last 90 days'}"
+                                     Style="{StaticResource FilterChipNeutral}"/>
                         <RadioButton Content="All" GroupName="TimeRange"
                                      AutomationProperties.Name="Time range: all time"
                                      IsChecked="{Binding SelectedTimeRange, Converter={StaticResource IsEqual}, ConverterParameter='All'}"

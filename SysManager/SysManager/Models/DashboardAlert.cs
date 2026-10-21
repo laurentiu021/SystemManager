@@ -42,6 +42,15 @@ public sealed partial class DashboardAlert : ObservableObject
     /// </remarks>
     [ObservableProperty] private string _navTargetId = "";
 
+    /// <summary>What the tab opens on, for an alert whose tab can show exactly what it counted, or null.</summary>
+    /// <remarks>
+    /// The Event Log alert counts critical events in the System log over 7 days, and its button opened System Logs on
+    /// the System log over 24 hours with nothing loaded (#2887). Set when the alert is made, because what an alert
+    /// counts does not change from one scan to the next; <see cref="NavTargetId"/> still decides whether there is a
+    /// button at all.
+    /// </remarks>
+    public NavigationArrival? Arrival { get; init; }
+
     /// <summary>The words on the alert's button: "Fix this" for a finding, unless the alert names its own.</summary>
     /// <remarks>
     /// An alert with nothing wrong can still have somewhere to go. The app-updates alert whose check at startup was

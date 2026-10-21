@@ -575,7 +575,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
             ? new DashboardAlert { Title = "Checking app updates...", State = AlertLoadingState.Loading }
             : AppUpdatesNotCheckedAtStartup();
         var memoryAlert = new DashboardAlert { Title = "Checking memory health...", State = AlertLoadingState.Loading };
-        var eventLogAlert = new DashboardAlert { Title = "Checking Event Log...", State = AlertLoadingState.Loading };
+        // Its button opens System Logs on the events its scan counts (#2887).
+        var eventLogAlert = new DashboardAlert
+        {
+            Title = "Checking Event Log...",
+            State = AlertLoadingState.Loading,
+            Arrival = LogsArrival.CriticalSystemEvents,
+        };
         var rebootAlert = new DashboardAlert { Title = "Checking for a pending reboot...", State = AlertLoadingState.Loading };
 
         Alerts.Add(smartAlert);
@@ -890,9 +896,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
         int? criticalCount = null;
         try
         {
-            var since = DateTime.Now.AddDays(-7);
+            // The log and the days the alert's button opens System Logs on, so the count and that list cannot disagree
+            // (#2887). Level 1 is Critical, the one severity it shows.
+            var shown = LogsArrival.CriticalSystemEvents;
+            var since = DateTime.Now - shown.Within;
             var query = new System.Diagnostics.Eventing.Reader.EventLogQuery(
-                "System", System.Diagnostics.Eventing.Reader.PathType.LogName,
+                shown.Log, System.Diagnostics.Eventing.Reader.PathType.LogName,
                 $"*[System[Level=1 and TimeCreated[@SystemTime>='{since.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}']]]");
 
             var counted = 0;
@@ -1210,6 +1219,13 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private void OpenTab(string? navId)
     {
         if (!string.IsNullOrEmpty(navId)) SelectTab(navId);
+    }
+
+    /// <summary>Opens the tab an alert names, on what the alert counted when it carries that (#2887).</summary>
+    [RelayCommand]
+    private void OpenAlert(DashboardAlert? alert)
+    {
+        if (alert is { CanNavigate: true }) _navigation.GoTo(alert.NavTargetId, arrival: alert.Arrival);
     }
 
     /// <summary>

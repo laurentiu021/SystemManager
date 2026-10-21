@@ -42,7 +42,8 @@ public sealed class WelcomeOverlayUiTests
     {
         public List<string> Visited { get; } = [];
 
-        public void GoTo(string navId, string? filter = null) => Visited.Add(navId);
+        public void GoTo(string navId, string? filter = null, Models.NavigationArrival? arrival = null) =>
+            Visited.Add(navId);
     }
 
     [Fact]

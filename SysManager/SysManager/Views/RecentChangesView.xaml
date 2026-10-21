@@ -157,7 +157,7 @@
                         Visibility="{Binding HasProblems, Converter={StaticResource FlexVis}}">
                     <DockPanel>
                         <Button DockPanel.Dock="Right" Content="Open System Logs"
-                                Command="{Binding OpenTabCommand}" CommandParameter="nav-logs"
+                                Command="{Binding OpenProblemsCommand}"
                                 AutomationProperties.Name="Open System Logs"
                                 Style="{StaticResource SecondaryButton}" Padding="10,4" Margin="12,0,0,0"/>
                         <TextBlock Text="{Binding ProblemsText}" Style="{StaticResource Body}" VerticalAlignment="Center" TextWrapping="Wrap"

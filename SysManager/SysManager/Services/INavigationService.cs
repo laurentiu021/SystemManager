@@ -3,6 +3,7 @@
 // License: MIT
 
 using Serilog;
+using SysManager.Models;
 
 namespace SysManager.Services;
 
@@ -16,11 +17,13 @@ namespace SysManager.Services;
 /// cannot be tested and only works while a window happens to be up. Copying that to a second and third
 /// caller is what #1504 warned against, so the seam came first: the callers depend on this interface and
 /// a test substitutes it.
-/// <para>Deliberately just an id and an optional filter. A richer contract — "navigate and select row
-/// X", "navigate and start a scan" — would make every destination's internals part of this interface.
+/// <para>Deliberately just an id, an optional filter and an optional arrival. A richer contract — "navigate and
+/// select row X", "navigate and start a scan" — would make every destination's internals part of this interface.
 /// The filter is the exception because it is the difference between arriving at a list of 200 services
 /// and arriving at the one service the user was told about, and every destination that can honour it
-/// already has the property.</para>
+/// already has the property. The arrival is the other, for the same reason: a link that counted events in a log and
+/// a time range has to land on them, not on a tab that starts elsewhere and reads nothing until Refresh (#2887). It
+/// is the destination's own record, so this interface still names no tab's options.</para>
 /// </remarks>
 public interface INavigationService
 {
@@ -33,7 +36,11 @@ public interface INavigationService
     /// Optional text to pre-fill the destination's search box, applied only when the destination
     /// implements <see cref="IFilterable"/>. Ignored otherwise, so a caller may always pass it.
     /// </param>
-    void GoTo(string navId, string? filter = null);
+    /// <param name="arrival">
+    /// Optional: what the destination opens on, handed over only when it implements <see cref="IArrivalDestination"/>.
+    /// Ignored otherwise, like the filter.
+    /// </param>
+    void GoTo(string navId, string? filter = null, NavigationArrival? arrival = null);
 }
 
 /// <summary>
@@ -63,11 +70,24 @@ public interface ISearchDestination
 }
 
 /// <summary>
+/// A tab that can open on what a link counted, already loaded (#2887).
+/// </summary>
+/// <remarks>
+/// Opt-in, like <see cref="IFilterable"/>. System Logs takes a <see cref="LogsArrival"/> from the Dashboard's Event Log
+/// alert and Recent Changes' problems line, which count events in a log and a time range the tab does not start on.
+/// </remarks>
+public interface IArrivalDestination
+{
+    /// <summary>Called when a link sends the user here. An arrival for another tab is ignored.</summary>
+    void Arrive(NavigationArrival arrival);
+}
+
+/// <summary>
 /// The shell, from navigation's point of view. Implemented by <c>MainWindowViewModel</c>.
 /// </summary>
 public interface INavigationTarget
 {
-    void NavigateTo(string navId, string? filter = null);
+    void NavigateTo(string navId, string? filter = null, NavigationArrival? arrival = null);
 }
 
 /// <summary>
@@ -88,7 +108,7 @@ public sealed class NavigationService : INavigationService
     public void Bind(INavigationTarget shell) => _shell = shell;
 
     /// <inheritdoc/>
-    public void GoTo(string navId, string? filter = null)
+    public void GoTo(string navId, string? filter = null, NavigationArrival? arrival = null)
     {
         if (string.IsNullOrWhiteSpace(navId)) return;
 
@@ -98,6 +118,6 @@ public sealed class NavigationService : INavigationService
             return;
         }
 
-        _shell.NavigateTo(navId, filter);
+        _shell.NavigateTo(navId, filter, arrival);
     }
 }

@@ -2,7 +2,9 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.Concurrent;
 using System.IO;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -146,5 +148,102 @@ public class EnvironmentVariablesViewModelTests : IDisposable
 
         Assert.Empty(vm.FilteredVariables);
         Assert.False(vm.HasNoMatches);
+    }
+
+    // ---------- PATH folders checked off the UI thread, each once a look (#2873) ----------
+    // Directory.Exists ran on the UI thread for every entry, at each selection, keystroke and edit, and one folder on a
+    // share that could not be reached held the window for the whole connection attempt. These run over a redirected
+    // environment and a folder check the test supplies, so no real folder or share is asked about.
+
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    private static async Task<EnvironmentVariablesViewModel> WithUserPath(RedirectedEnvironment env, string path,
+                                                                          Func<string, bool> folderExists)
+    {
+        env.SetUser("PATH", path);
+        var vm = new EnvironmentVariablesViewModel(env.Service, null, folderExists);
+        await vm.InitializationComplete.WaitAsync(Bound);
+        return vm;
+    }
+
+    private static EnvVariable UserPath(EnvironmentVariablesViewModel vm) =>
+        vm.Variables.Single(v => v.Scope == EnvVarScope.User && v.Name.Equals("PATH", StringComparison.OrdinalIgnoreCase));
+
+    [Fact]
+    public async Task SelectingPath_DoesNotWaitForTheFolderCheck()
+    {
+        using var env = new RedirectedEnvironment();
+        using var slow = new ManualResetEventSlim();
+        var vm = await WithUserPath(env, @"C:\Contoso\bin;C:\Contoso\gone", folder =>
+        {
+            slow.Wait(Bound);
+            return !folder.EndsWith("gone", StringComparison.Ordinal);
+        });
+
+        vm.SelectedVariable = UserPath(vm);
+
+        // Back on the test's thread with the check still waiting: the selection did not wait for it.
+        Assert.False(vm.FolderCheck.IsCompleted);
+        Assert.Equal([@"C:\Contoso\bin", @"C:\Contoso\gone"], vm.PathEntries.Select(e => e.Directory));
+        Assert.All(vm.PathEntries, e => Assert.False(e.IsMissing));
+
+        slow.Set();
+        await vm.FolderCheck.WaitAsync(Bound);
+        Assert.Equal([false, true], vm.PathEntries.Select(e => e.IsMissing));
+    }
+
+    [Fact]
+    public async Task AFolderOnAShare_IsNotChecked_AndNotCalledMissing()
+    {
+        using var env = new RedirectedEnvironment();
+        var asked = new ConcurrentQueue<string>();
+        var vm = await WithUserPath(env, @"\\nas\tools\bin;C:\Contoso\bin", folder =>
+        {
+            asked.Enqueue(folder);
+            return false;
+        });
+
+        vm.SelectedVariable = UserPath(vm);
+        await vm.FolderCheck.WaitAsync(Bound);
+
+        Assert.Equal([@"C:\Contoso\bin"], asked);
+        Assert.Equal([false, true], vm.PathEntries.Select(e => e.IsMissing));
+    }
+
+    [Fact]
+    public async Task EditingTheList_ChecksOnlyNewFolders_AndANewLookChecksThemAllAgain()
+    {
+        using var env = new RedirectedEnvironment();
+        var asked = new ConcurrentQueue<string>();
+        var vm = await WithUserPath(env, @"C:\Contoso\a;C:\Contoso\b", folder =>
+        {
+            asked.Enqueue(folder);
+            return true;
+        });
+        var path = UserPath(vm);
+        vm.SelectedVariable = path;
+        await vm.FolderCheck.WaitAsync(Bound);
+
+        vm.MoveDirectoryDownCommand.Execute(vm.PathEntries[0]);   // the same folders, in another order
+        path.Value += @";C:\Contoso\c";                           // typed into the Value cell
+        await vm.FolderCheck.WaitAsync(Bound);
+        Assert.Equal([@"C:\Contoso\a", @"C:\Contoso\b", @"C:\Contoso\c"], asked.Order());   // each once
+
+        vm.SelectedVariable = null;
+        vm.SelectedVariable = path;
+        await vm.FolderCheck.WaitAsync(Bound);
+        Assert.Equal([@"C:\Contoso\a", @"C:\Contoso\b", @"C:\Contoso\c"], asked.Skip(3).Order());
+    }
+
+    [Theory]
+    [InlineData(@"\\nas\tools\bin", true)]
+    [InlineData("//nas/tools", true)]
+    [InlineData(@"""\\nas\tools""", true)]
+    [InlineData(@"C:\Windows", false)]
+    [InlineData("bin", false)]
+    [InlineData(@"%SystemRoot%\system32", false)]
+    public void IsOnTheNetwork_FindsAShareByItsPath(string folder, bool onTheNetwork)
+    {
+        Assert.Equal(onTheNetwork, EnvironmentVariablesViewModel.IsOnTheNetwork(folder));
     }
 }

@@ -43,6 +43,16 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     // PropertyChanged does not rebuild (and discard) the entries currently being edited.
     private bool _committingPath;
 
+    // Whether each PATH folder exists: one check for each folder since the variable was selected, run off the UI
+    // thread. Directory.Exists ran on every entry, on the UI thread, at each selection, keystroke and edit, and one
+    // folder on a share that could not be reached held the window for the whole connection attempt (#2873).
+    private readonly Func<string, bool> _folderExists;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<bool>> _folderChecks =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The folder check started last. Internal so a test can await it.</summary>
+    internal Task FolderCheck { get; private set; } = Task.CompletedTask;
+
     public BulkObservableCollection<EnvVariable> Variables { get; } = new();
     public BulkObservableCollection<EnvVariable> FilteredVariables { get; } = new();
 
@@ -87,9 +97,21 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     [ObservableProperty] private string _newDirectory = "";
 
     public EnvironmentVariablesViewModel(EnvironmentVariableService service, IPutBackSignal? putBack = null)
+        : this(service, putBack, Directory.Exists) { }
+
+    /// <summary>Test seam: the same view-model with the folder check supplied.</summary>
+    /// <param name="service">Reads and writes the variables.</param>
+    /// <param name="putBack">Says when Undo Changes put the variables back, or null.</param>
+    /// <param name="folderExists">
+    /// Whether a PATH folder exists. Injected so a test decides how long a check takes and sees which folders are asked
+    /// about, with no real folder involved.
+    /// </param>
+    internal EnvironmentVariablesViewModel(EnvironmentVariableService service, IPutBackSignal? putBack,
+                                           Func<string, bool> folderExists)
     {
         _service = service;
         _putBack = putBack;
+        _folderExists = folderExists ?? throw new ArgumentNullException(nameof(folderExists));
         if (_putBack is not null) _putBack.PutBack += OnPutBack;
         IsElevated = AdminHelper.IsElevated();
         // Read both env hives off the UI thread so the eagerly-built VM doesn't block
@@ -155,6 +177,8 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
     {
         if (oldValue is not null)
             PathEntries.CollectionChanged -= OnPathEntriesChanged;
+        // A new look checks the folders again: one created or removed since the last look is found as it is now.
+        _folderChecks.Clear();
         RebuildPathEntries();
         if (IsPathSelected)
             PathEntries.CollectionChanged += OnPathEntriesChanged;
@@ -230,14 +254,44 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
         // "missing". Only annotate IsMissing for genuine directory lists (PATH/*PATH).
         var checkMissing = SelectedVariable?.IsDirectoryList == true;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        List<(PathEntry Entry, Task<bool> Check)> waiting = [];
         foreach (var entry in PathEntries)
         {
             var key = entry.Directory.TrimEnd('\\', '/');
             entry.IsDuplicate = !seen.Add(key);
-            if (!checkMissing) { entry.IsMissing = false; continue; }
-            try { entry.IsMissing = !string.IsNullOrWhiteSpace(entry.Directory) && !Directory.Exists(entry.Directory); }
-            catch (ArgumentException) { entry.IsMissing = true; } // malformed path characters
+            if (!checkMissing || string.IsNullOrWhiteSpace(entry.Directory) || IsOnTheNetwork(entry.Directory))
+            {
+                entry.IsMissing = false;
+                continue;
+            }
+
+            var check = _folderChecks.GetOrAdd(entry.Directory, folder => Task.Run(() => _folderExists(folder)));
+            if (check.IsCompletedSuccessfully) entry.IsMissing = !check.Result;
+            else waiting.Add((entry, check));
         }
+
+        if (waiting.Count > 0) FolderCheck = FlagWhenCheckedAsync(waiting);
+    }
+
+    /// <summary>Flags each entry as its folder's check answers.</summary>
+    private static async Task FlagWhenCheckedAsync(List<(PathEntry Entry, Task<bool> Check)> waiting)
+    {
+        foreach (var (entry, check) in waiting)
+            entry.IsMissing = !await check.ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// A folder on a share: a <c>\\server\share</c> path, or a drive mapped to one. It is not checked, as Windows waits
+    /// for the server to answer, tens of seconds when it cannot be reached, and a share that is down now may be up when
+    /// the variable is used. It is not flagged missing either.
+    /// </summary>
+    internal static bool IsOnTheNetwork(string folder)
+    {
+        var path = folder.Trim().Trim('"');
+        if (path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal)) return true;
+        if (path.Length < 2 || path[1] != ':' || !char.IsAsciiLetter(path[0])) return false;
+        try { return new DriveInfo(path[..1]).DriveType == DriveType.Network; }
+        catch (ArgumentException) { return false; }
     }
 
     private void OnPathEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => CommitPathEntries();

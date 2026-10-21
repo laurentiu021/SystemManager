@@ -855,6 +855,53 @@ public partial class ArchitectureTests
     private static partial Regex ToCsvCall();
 
     /// <summary>
+    /// Every grid a user can edit turns off the Delete key, which would otherwise take the selected row off the list.
+    /// </summary>
+    /// <remarks>
+    /// WPF's <c>DataGrid</c> removes the selected rows from its collection on Delete whenever it is not read-only and
+    /// <c>CanUserDeleteRows</c> keeps its default of true. Eight grids that are editable for a tick or a switch never
+    /// turned it off, so the row vanished while nothing changed on the PC: the program still started with Windows,
+    /// Environment Variables' Apply deleted nothing, and Preinstalled Apps could remove an app no longer on screen
+    /// (#2809). A read-only grid needs nothing, because WPF refuses Delete on one.
+    /// </remarks>
+    [Fact]
+    public void EveryEditableGrid_TurnsOffTheDeleteKey()
+    {
+        var views = Path.Combine(TestPaths.AppProject(), "Views");
+        var offenders = new List<string>();
+        var grids = 0;
+        var editable = 0;
+
+        foreach (var file in Directory.EnumerateFiles(views, "*.xaml").Order(StringComparer.Ordinal))
+        {
+            var doc = XDocument.Parse(WithoutXamlComments(File.ReadAllText(file)));
+            foreach (var grid in doc.Descendants().Where(e => e.Name.LocalName == "DataGrid"))
+            {
+                grids++;
+                if ((string?)grid.Attribute("IsReadOnly") == "True") continue;
+                editable++;
+                if ((string?)grid.Attribute("CanUserDeleteRows") != "False")
+                {
+                    var name = (string?)grid.Attributes()
+                        .FirstOrDefault(a => a.Name.LocalName == "AutomationProperties.Name")?.Value ?? "a grid";
+                    offenders.Add($"{Path.GetFileName(file)}: {name}");
+                }
+            }
+        }
+
+        // Vacuity floor: 35 grids when measured, 11 of them editable — App Blocker, App Updates, Browser Cleaner,
+        // Right-click Menu, Preinstalled Apps, DNS & Hosts, Environment Variables, Shortcut Cleaner, Startup Manager,
+        // Uninstaller and Windows Update.
+        Assert.True(grids >= 35 && editable >= 11,
+            $"{grids} grids and {editable} editable ones were found, out of 35 and 11 measured — the parse is out of "
+            + "date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "an editable grid leaves the Delete key on, so pressing it takes the selected row off the list while "
+            + "nothing changes on the PC. Set CanUserDeleteRows=\"False\":\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// Every <c>StatusFooter</c> names its own progress bar, and no view re-inlines the block it replaced.
     /// </summary>
     /// <remarks>

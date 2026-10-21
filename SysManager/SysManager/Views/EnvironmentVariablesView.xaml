@@ -100,7 +100,7 @@
                           SelectedItem="{Binding SelectedVariable}"
                           AutomationProperties.Name="Environment variables"
                           AutoGenerateColumns="False" HeadersVisibility="Column"
-                          CanUserAddRows="False" SelectionMode="Single"
+                          CanUserAddRows="False" CanUserDeleteRows="False" SelectionMode="Single"
                           Background="Transparent" BorderThickness="0"
                           GridLinesVisibility="None"
                           VirtualizingPanel.IsVirtualizing="True"

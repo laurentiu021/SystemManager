@@ -238,6 +238,10 @@ or uninstalls is reachable from a bare keypress. On Drivers, Windows Update and 
 drivers, List updates and Analyze. Pressing it during a refresh that is already running does nothing
 rather than starting a second one.
 
+**`Delete` in a list does nothing.** A startup program, an app, a variable or a menu entry is removed only
+through its own button and that button's confirmation, so a stray key press never takes a row off a list
+while it stays on the PC.
+
 **Focus stays where you were when a list refreshes.** A refresh rebuilds a list's rows, and the button or cell
 you were on used to go with them, leaving focus at the top of the window. Now focus comes back to the same
 control in the same row: after F5 on Services, after putting a change back on Undo Changes, and on every table

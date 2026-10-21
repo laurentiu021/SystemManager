@@ -170,7 +170,7 @@
                       GridLinesVisibility="None"
                       SelectionMode="Single" CanUserSortColumns="True"
                       CanUserResizeColumns="True"
-                      CanUserAddRows="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       Visibility="{Binding UpdateCount, Converter={StaticResource GreaterThanZero}}">

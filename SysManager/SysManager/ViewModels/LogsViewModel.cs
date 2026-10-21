@@ -25,7 +25,7 @@ namespace SysManager.ViewModels;
 /// live via a CollectionView, and shows a plain-English explanation for the
 /// selected entry. Supports export to CSV and jumping to the raw log file.
 /// </summary>
-public sealed partial class LogsViewModel : ViewModelBase
+public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
 {
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => RefreshCommand;
@@ -46,7 +46,20 @@ public sealed partial class LogsViewModel : ViewModelBase
     public ICollectionView EntriesView { get; }
 
     public string[] AvailableLogs { get; } = ["System", "Application", "Security", "Setup"];
-    public string[] TimeRanges { get; } = ["Last hour", "Last 24 hours", "Last 7 days", "Last 30 days", "All"];
+
+    /// <summary>The time ranges the tab offers, each with how far back it reaches, or null for the whole log.</summary>
+    private static readonly (string Name, TimeSpan? Reach)[] Ranges =
+    [
+        ("Last hour", TimeSpan.FromHours(1)),
+        ("Last 24 hours", TimeSpan.FromDays(1)),
+        ("Last 7 days", TimeSpan.FromDays(7)),
+        ("Last 30 days", TimeSpan.FromDays(30)),
+        // Recent Changes' longest period, whose problems line opens this tab on it (#2887).
+        ("Last 90 days", TimeSpan.FromDays(90)),
+        ("All", null),
+    ];
+
+    public string[] TimeRanges { get; } = [.. Ranges.Select(r => r.Name)];
     public string[] MaxResultOptions { get; } = ["200", "500", "1000", "5000"];
 
     [ObservableProperty] private string _selectedLog = "System";
@@ -170,8 +183,9 @@ public sealed partial class LogsViewModel : ViewModelBase
     {
         EntriesView.Refresh();
         UpdateVisibleCount();
-        // While a load runs the command cannot start again; that load sees the switch when it ends.
-        if (shown && NotLoaded(severity) && RefreshCommand.CanExecute(null))
+        // While a load runs the command cannot start again; that load sees the switch when it ends. Not while an
+        // arrival sets the switches either: it loads once, when they are all set.
+        if (!_arriving && shown && NotLoaded(severity) && RefreshCommand.CanExecute(null))
             RefreshCommand.Execute(null);
     }
 
@@ -241,9 +255,62 @@ public sealed partial class LogsViewModel : ViewModelBase
     private async Task RefreshAsync()
     {
         var finished = await LoadAsync().ConfigureAwait(true);
-        // A severity switched on while that load ran was not asked for by it, so the list loads once more with it.
-        while (finished && BuildSeverityFilter().Exists(NotLoaded))
+        // A severity switched on while that load ran was not asked for by it, so the list loads once more with it. An
+        // arrival while it ran stopped it, to load the list the arrival chose.
+        while (TakeWaitingArrival() || (finished && BuildSeverityFilter().Exists(NotLoaded)))
             finished = await LoadAsync().ConfigureAwait(true);
+    }
+
+    // True while Arrive sets the log, the range and the switches, so a switch it turns on does not start a load early.
+    private bool _arriving;
+
+    // An arrival that came while a load ran. That load was stopped, and RefreshAsync loads the arrival's list next.
+    private bool _arrivalWaiting;
+
+    private bool TakeWaitingArrival()
+    {
+        var waiting = _arrivalWaiting;
+        _arrivalWaiting = false;
+        return waiting;
+    }
+
+    /// <summary>Opens on the log, time range and severities a link counted, and loads them (#2887).</summary>
+    /// <remarks>
+    /// The Dashboard's Event Log alert and Recent Changes' problems line sent the user here with nothing but the tab,
+    /// which starts on the System log over 24 hours and reads nothing until Refresh: an empty grid, and after Refresh
+    /// still not what either had counted. The search box is cleared too, because text typed earlier would hide what the
+    /// link counted. A load already running reads what was chosen before, so it is stopped, and the arrival's list
+    /// loads as soon as it has.
+    /// </remarks>
+    public void Arrive(NavigationArrival arrival)
+    {
+        if (arrival is not LogsArrival logs || !AvailableLogs.Contains(logs.Log)) return;
+
+        _arriving = true;
+        try
+        {
+            SelectedLog = logs.Log;
+            SelectedTimeRange = RangeCovering(logs.Within);
+            ShowCritical = logs.Severities.Contains(EventSeverity.Critical);
+            ShowError = logs.Severities.Contains(EventSeverity.Error);
+            ShowWarning = logs.Severities.Contains(EventSeverity.Warning);
+            ShowInfo = logs.Severities.Contains(EventSeverity.Info);
+            ShowVerbose = logs.Severities.Contains(EventSeverity.Verbose);
+            FilterText = "";
+        }
+        finally
+        {
+            _arriving = false;
+        }
+
+        if (RefreshCommand.CanExecute(null))
+        {
+            RefreshCommand.Execute(null);
+            return;
+        }
+
+        _arrivalWaiting = true;
+        _cts?.Cancel();
     }
 
     /// <summary>
@@ -484,15 +551,26 @@ public sealed partial class LogsViewModel : ViewModelBase
         return list;
     }
 
-    private static DateTime? ResolveSince(string range) => range switch
+    private static DateTime? ResolveSince(string range)
     {
-        "Last hour" => DateTime.Now.AddHours(-1),
-        "Last 24 hours" => DateTime.Now.AddDays(-1),
-        "Last 7 days" => DateTime.Now.AddDays(-7),
-        "Last 30 days" => DateTime.Now.AddDays(-30),
-        "All" => null,
-        _ => DateTime.Now.AddDays(-1)
-    };
+        foreach (var (name, reach) in Ranges)
+        {
+            if (name == range) return reach is { } span ? DateTime.Now - span : null;
+        }
+        return DateTime.Now.AddDays(-1);
+    }
+
+    /// <summary>
+    /// The shortest time range that reaches back <paramref name="within"/>, so an arrival shows all it counted.
+    /// </summary>
+    internal static string RangeCovering(TimeSpan within)
+    {
+        foreach (var (name, reach) in Ranges)
+        {
+            if (reach is not { } span || span >= within) return name;
+        }
+        return "All";
+    }
 
     private void ResetCounts()
     {

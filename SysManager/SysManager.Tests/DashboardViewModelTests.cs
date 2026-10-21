@@ -1113,6 +1113,64 @@ public class DashboardViewModelTests
     // Generous, because the load they wait for queries WMI and reads the Event Log.
     private static readonly TimeSpan Bound = TimeSpan.FromMinutes(2);
 
+    // ── An alert's button opens its tab on what the alert counted (#2887) ──
+
+    [Fact]
+    public async Task TheEventLogAlert_OpensSystemLogsOnTheCriticalSystemEventsItCounts()
+    {
+        // It counts critical events in the System log over 7 days, and its button opened System Logs on the System log
+        // over 24 hours with nothing loaded.
+        using var vm = NewVm(QuietWinget());
+        await LoadedWithAlertsAsync(vm);
+
+        var alert = Assert.Single(vm.Alerts, a => a.Arrival is not null);
+        Assert.Same(LogsArrival.CriticalSystemEvents, alert.Arrival);
+        // Whatever this PC's System log holds, the alert carrying it says one of the Event Log alert's titles.
+        var title = alert.Title;
+        Assert.True(
+            title == DashboardViewModel.ClassifyEventLog(null).Title
+            || title == DashboardViewModel.ClassifyEventLog(0).Title
+            || title == DashboardViewModel.ClassifyEventLog(1).Title
+            || title.EndsWith(DashboardViewModel.ClassifyEventLog(2).Title[1..], StringComparison.Ordinal),
+            $"the alert that opens System Logs on critical events says '{title}'");
+    }
+
+    [Fact]
+    public void OpenAlert_OpensTheAlertsTab_OnWhatItCounted()
+    {
+        var navigation = Substitute.For<INavigationService>();
+        using var vm = NewVm(QuietWinget(), navigation: navigation);
+
+        vm.OpenAlertCommand.Execute(
+            new DashboardAlert { NavTargetId = "nav-logs", Arrival = LogsArrival.CriticalSystemEvents });
+
+        navigation.Received(1).GoTo("nav-logs", null, LogsArrival.CriticalSystemEvents);
+    }
+
+    [Fact]
+    public void OpenAlert_ForAnAlertThatCarriesNothing_OpensJustTheTab()
+    {
+        var navigation = Substitute.For<INavigationService>();
+        using var vm = NewVm(QuietWinget(), navigation: navigation);
+
+        vm.OpenAlertCommand.Execute(new DashboardAlert { NavTargetId = "nav-system-health" });
+
+        navigation.Received(1).GoTo("nav-system-health", null, null);
+    }
+
+    [Fact]
+    public void OpenAlert_ForAnAlertWithNowhereToGo_OpensNothing()
+    {
+        // A green alert has no target and its button is hidden; the command does not invent somewhere to go.
+        var navigation = Substitute.For<INavigationService>();
+        using var vm = NewVm(QuietWinget(), navigation: navigation);
+
+        vm.OpenAlertCommand.Execute(new DashboardAlert { Arrival = LogsArrival.CriticalSystemEvents });
+        vm.OpenAlertCommand.Execute(null);
+
+        navigation.DidNotReceiveWithAnyArgs().GoTo(default!, default, default);
+    }
+
     private static async Task LoadedWithAlertsAsync(DashboardViewModel vm)
     {
         await vm.InitializationComplete.WaitAsync(Bound);

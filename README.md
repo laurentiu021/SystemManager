@@ -442,7 +442,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   activity log keeps 200 entries instead of 60, and when even that does not reach back to the start of the
   period, the page says from when SysManager's own actions are listed
 - **Problems are not changes.** Crashes and programs that stopped responding in the same days are counted
-  in one line, which opens System Logs
+  in one line, which opens System Logs on the errors in the Application log over the same days, already
+  loaded
 - **A source that could not be read is named** rather than shown as nothing changed, and an empty period
   says what was checked: "Nothing was installed or updated, SysManager changed nothing, and your saved
   settings still match"
@@ -457,10 +458,16 @@ Edit Windows environment variables without the cramped built-in dialog:
 ### System Logs (Windows Event Log, friendly)
 - Browse System, Application, Security, and Setup logs
 - Each event gets a plain-English explanation and recommended next steps
-- Nothing is read until you press **Refresh** (or F5). The log, the time range, the maximum
-  number of results and the severity boxes decide what Refresh reads. Unticking a severity or
-  typing in the search box filters what is loaded straight away. Ticking a severity the list
-  was loaded without — Information and Verbose start unticked — loads the list again with it
+- Nothing is read until you press **Refresh** (or F5), unless another tab sends you here (below).
+  The log, the time range, the maximum number of results and the severity boxes decide what
+  Refresh reads. Unticking a severity or typing in the search box filters what is loaded straight
+  away. Ticking a severity the list was loaded without — Information and Verbose start unticked —
+  loads the list again with it
+- **Opens on what sent you here.** The Dashboard's critical-events alert opens the tab on the
+  critical events in the System log over the last 7 days, and Recent Changes' problems line on
+  the errors in the Application log over its 7, 30 or 90 days, where Windows records the crashes
+  it counted. The list is loaded straight away, and the search box is cleared so nothing typed
+  earlier hides those events
 - Mark any event with the flag button to keep it findable while you keep scrolling or
   change filters. "Clear marks" removes them all, including any a filter is hiding. A load
   keeps the marks, and the event open on the right, for every event it lists again
@@ -1921,10 +1928,10 @@ offers, "rate us" prompts:
 - **Storage** — each fixed drive and how full it is
 - **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the tab
   that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
-  updates to App Updates, critical events to System Logs, low disk space to Deep Cleanup, high memory to
-  Process Manager, an app block that cannot be undone normally to App Blocker. Findings with nothing wrong
-  show no link, and neither do the two pieces of advice no tab here can carry out — restarting, and
-  replacing a worn battery
+  updates to App Updates, critical events to System Logs, opened on those events, low disk space to Deep
+  Cleanup, high memory to Process Manager, an app block that cannot be undone normally to App Blocker.
+  Findings with nothing wrong show no link, and neither do the two pieces of advice no tab here can carry
+  out — restarting, and replacing a worn battery
 - **System Alerts** — disk health, app updates, memory errors in the last 30 days, critical events in the
   last 7 days, a pending reboot, and any app block that cannot be undone normally. They are checked when
   SysManager starts, again when you press "Scan system", and after Update All Apps. A check that could not

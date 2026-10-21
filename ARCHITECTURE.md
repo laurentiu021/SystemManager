@@ -308,7 +308,9 @@ to scroll.
   keeps that comparison out of the code. The severity switches are part of the query, so switching on one the
   last load did not ask for loads again, and `RefreshAsync` loads once more when one was switched on while it
   ran. A load gives an event it lists again, the same log, record id and time, back its mark and keeps it open
-  in the detail pane (#2601).
+  in the detail pane (#2601). `Arrive` sets the log, the shortest of its time ranges that covers a
+  `LogsArrival`'s reach (`RangeCovering`), and the severities, clears the search box and loads once; a load
+  already running is stopped and `RefreshAsync` loads the arrival's list next (#2887).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
@@ -362,7 +364,8 @@ to scroll.
   `ChangeRow` that opens to their list; `Summarize`, `DescribeProblems`, `Describe` and `DescribeEmpty` are the
   wording, pure. Looks again whenever it is shown (`IsActive`, set by `MainWindowViewModel.SetActive`), since each
   look is what keeps the list of installed programs, and once more when a look was asked for while one ran. A row's
-  button opens the tab that can act on it through `INavigationService`. Read-only.
+  button opens the tab that can act on it through `INavigationService`, and the problems line opens System Logs on
+  `LogsArrival.AppProblems` of the period chosen (#2887). Read-only.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair.
@@ -435,7 +438,10 @@ something can offer the tab that fixes it. It is **late-bound**: the shell build
 those view models take the service, so the service cannot take the shell in its constructor — the shell
 calls `NavigationService.Bind(this)` instead, implementing `INavigationTarget`. A destination that
 implements `IFilterable` can be arrived at pre-filtered, which is how Boot Analyzer opens Services already
-narrowed to the service that slowed boot. This replaced a
+narrowed to the service that slowed boot. One that implements `IArrivalDestination` can be arrived at on a
+`NavigationArrival` of its own, a record in Models that the shell hands over through `MainWindowViewModel.HandOver`:
+System Logs takes a `LogsArrival` (a log, how far back, the severities) from the Dashboard's Event Log alert, which
+carries it as `DashboardAlert.Arrival`, and from Recent Changes' problems line, and loads it (#2887). This replaced a
 `Application.Current.MainWindow.DataContext as MainWindowViewModel` lookup in `DashboardViewModel`;
 `NoViewModelReachesTheShellThroughTheLiveWindow` stops that returning.
 A tab opened from the sidebar search that implements `ISearchDestination` is told what was searched for,

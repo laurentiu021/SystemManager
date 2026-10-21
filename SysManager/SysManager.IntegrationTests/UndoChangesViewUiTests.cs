@@ -42,7 +42,7 @@ public sealed class UndoChangesViewUiTests
 
     private sealed class NoNavigation : INavigationService
     {
-        public void GoTo(string navId, string? filter = null) { }
+        public void GoTo(string navId, string? filter = null, NavigationArrival? arrival = null) { }
     }
 
     private static readonly UndoChange Performance = new(

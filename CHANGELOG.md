@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.31] - 2026-10-21
+
+**System Logs opens on the events the Dashboard and Recent Changes counted, already loaded.**
+
+### Fixed
+
+- **The Dashboard's critical-events alert and Recent Changes' problems line opened an empty System Logs, on a log and
+  a time range that could not show what they counted.** Both passed only the tab, and System Logs starts on the
+  System log over the last 24 hours and reads nothing until Refresh. The alert counts critical events in the System
+  log over 7 days, so after Refresh one from two days ago still read "Critical 0"; the problems line counts app
+  crashes and hangs, which Windows records as errors in the Application log, so they were not there at all. System
+  Logs now opens on the System log's critical events of the last 7 days from the alert, and on the Application log's
+  errors over the period chosen from Recent Changes, loaded, with the search box cleared. Its time ranges gain 90
+  days, Recent Changes' longest period. Since 1.105.0 for the alert and 1.125.0 for Recent Changes.
+
 ## [1.130.30] - 2026-10-21
 
 **Deep Cleanup, CLI Interface, Startup Manager and Speed Test say at the top what each tab does.**

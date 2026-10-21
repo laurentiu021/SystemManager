@@ -35,7 +35,7 @@ public sealed class RecentChangesViewUiTests
 
     private sealed class NoNavigation : INavigationService
     {
-        public void GoTo(string navId, string? filter = null) { }
+        public void GoTo(string navId, string? filter = null, NavigationArrival? arrival = null) { }
     }
 
     private static readonly ChangeEvent[] AWeek =
@@ -152,8 +152,8 @@ public sealed class RecentChangesViewUiTests
 
             Assert.Contains("Problems in the same days — 1 app crash — are in System Logs.", ShownTexts(view));
             var logs = Named<Button>(view, "Open System Logs");
-            Assert.Same(vm.OpenTabCommand, logs.Command);
-            Assert.Equal("nav-logs", logs.CommandParameter);
+            Assert.Same(vm.OpenProblemsCommand, logs.Command);
+            Assert.Null(logs.CommandParameter);
         });
     }
 

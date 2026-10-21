@@ -388,6 +388,8 @@ public class LogsViewModelTests
 
         public List<List<EventSeverity>> Asked { get; } = [];
 
+        public List<EventLogQueryOptions> Queries { get; } = [];
+
         public TaskCompletionSource? Gate { get; set; }
 
         public int PauseAt { get; set; }
@@ -396,6 +398,7 @@ public class LogsViewModelTests
             EventLogQueryOptions options, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
         {
             Asked.Add([.. options.Severities ?? []]);
+            Queries.Add(options);
             var listed = 0;
             foreach (var (severity, record, minute) in Events)
             {
@@ -523,6 +526,146 @@ public class LogsViewModelTests
             Assert.Equal("Cancelled", vm.StatusMessage);
         });
     }
+
+    // ---------- a link that counted events opens the tab on them (#2887) ----------
+    //
+    // The Dashboard's Event Log alert and Recent Changes' problems line sent the user here with nothing but the tab,
+    // which starts on the System log over 24 hours and reads nothing until Refresh: an empty grid, and after Refresh
+    // still not what either had counted.
+
+    [Fact]
+    public void AnArrival_OpensOnTheLogRangeAndSeveritiesItNames_AndLoadsThem()
+    {
+        var log = new FakeLog
+        {
+            Events = [(EventSeverity.Critical, 1, 1), (EventSeverity.Error, 2, 2), (EventSeverity.Warning, 3, 3)],
+        };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+
+            vm.Arrive(LogsArrival.AppProblems(30));
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            var asked = Assert.Single(log.Queries);
+            Assert.Equal("Application", asked.LogName);
+            Assert.Equal(new[] { EventSeverity.Error }, asked.Severities!);
+            Assert.Equal("Application", vm.SelectedLog);
+            Assert.Equal("Last 30 days", vm.SelectedTimeRange);
+            Assert.Equal(new[] { false, true, false, false, false },
+                new[] { vm.ShowCritical, vm.ShowError, vm.ShowWarning, vm.ShowInfo, vm.ShowVerbose });
+            Assert.Equal(2, Assert.Single(vm.Entries).RecordId);
+            Assert.Equal("Loaded 1 events from Application", vm.StatusMessage);
+        });
+    }
+
+    [Fact]
+    public void AnArrival_OverRecentChangesLongestPeriod_ReadsBackNinetyDays()
+    {
+        // The tab had no range that long, so the 90-day line could only have opened on "All".
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+
+            vm.Arrive(LogsArrival.AppProblems(90));
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.Equal("Last 90 days", vm.SelectedTimeRange);
+            var since = Assert.Single(log.Queries).Since;
+            Assert.NotNull(since);
+            // A day either side, so the clock moving while the test runs cannot matter.
+            Assert.InRange(since.Value, DateTime.Now.AddDays(-91), DateTime.Now.AddDays(-89));
+        });
+    }
+
+    [Fact]
+    public void AnArrival_ClearsTheSearchBox()
+    {
+        // Text typed earlier would hide the events the link counted.
+        var log = new FakeLog { Events = [(EventSeverity.Critical, 1, 1)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync) { FilterText = "disk" };
+
+            vm.Arrive(LogsArrival.CriticalSystemEvents);
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.Equal("", vm.FilterText);
+            Assert.Equal(1, vm.VisibleCount);
+        });
+    }
+
+    [Fact]
+    public void AnArrival_LoadsOnce_ThoughItSwitchesOnASeverityTheListWasLoadedWithout()
+    {
+        // Switching a severity on after a load loads the list again with it (#2601). An arrival switches several at
+        // once and loads once, with all of them, rather than once for a half-set list and again for the rest.
+        var log = new FakeLog { Events = [(EventSeverity.Critical, 1, 1), (EventSeverity.Error, 2, 2)] };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync) { ShowError = false };
+            PumpUntilDone(queue, vm.RefreshCommand.ExecuteAsync(null));
+
+            vm.Arrive(LogsArrival.AppProblems(7));
+            PumpUntilDone(queue, vm.RefreshCommand.ExecutionTask!);
+
+            Assert.Equal(2, log.Queries.Count);
+            Assert.Equal(new[] { EventSeverity.Error }, log.Queries[1].Severities!);
+        });
+    }
+
+    [Fact]
+    public void AnArrival_WhileALoadRuns_StopsIt_AndLoadsTheListItNames()
+    {
+        var gate = new TaskCompletionSource();
+        var log = new FakeLog { Events = [(EventSeverity.Critical, 1, 1), (EventSeverity.Error, 2, 2)], Gate = gate };
+        OnADispatcher(queue =>
+        {
+            var vm = new LogsViewModel(new EventLogService(), log.ReadAsync);
+            var refresh = vm.RefreshCommand.ExecuteAsync(null);
+
+            vm.Arrive(LogsArrival.AppProblems(7));
+            Assert.Single(log.Queries);   // no second load beside the one running
+            gate.SetResult();
+            PumpUntilDone(queue, refresh);
+
+            Assert.Equal(2, log.Queries.Count);
+            Assert.Equal("Application", log.Queries[1].LogName);
+            Assert.Equal(2, Assert.Single(vm.Entries).RecordId);
+            Assert.Equal("Loaded 1 events from Application", vm.StatusMessage);
+        });
+    }
+
+    [Fact]
+    public void AnArrivalForAnotherTab_OrALogTheTabDoesNotList_ChangesNothing()
+    {
+        var log = new FakeLog { Events = [(EventSeverity.Error, 1, 1)] };
+        var vm = new LogsViewModel(new EventLogService(), log.ReadAsync) { FilterText = "disk" };
+
+        vm.Arrive(new OtherTabsArrival());
+        vm.Arrive(new LogsArrival("Microsoft-Windows-PowerShell/Operational", TimeSpan.FromDays(7),
+            [EventSeverity.Error]));
+
+        Assert.Empty(log.Queries);
+        Assert.Equal("System", vm.SelectedLog);
+        Assert.Equal("Last 24 hours", vm.SelectedTimeRange);
+        Assert.Equal("disk", vm.FilterText);
+    }
+
+    private sealed record OtherTabsArrival : NavigationArrival;
+
+    [Theory]
+    [InlineData(0.5, "Last hour")]
+    [InlineData(1, "Last hour")]
+    [InlineData(2, "Last 24 hours")]
+    [InlineData(24 * 7, "Last 7 days")]
+    [InlineData(24 * 8, "Last 30 days")]
+    [InlineData(24 * 30, "Last 30 days")]
+    [InlineData(24 * 90, "Last 90 days")]
+    [InlineData(24 * 365, "All")]
+    public void RangeCovering_IsTheShortestRangeThatReachesBackFarEnough(double hours, string expected)
+        => Assert.Equal(expected, LogsViewModel.RangeCovering(TimeSpan.FromHours(hours)));
 
     // A load builds new rows, so loading again on a switch the user took for a filter would have dropped every mark
     // and closed the event they were reading. An event listed again keeps both.

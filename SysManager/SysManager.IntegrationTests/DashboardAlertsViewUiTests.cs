@@ -90,8 +90,8 @@ public sealed class DashboardAlertsViewUiTests
             var button = Named<Button>(Laid(vm), "Open App Updates: App updates not checked at startup");
 
             Assert.Equal("Open App Updates", button.Content);
-            Assert.Same(vm.OpenTabCommand, button.Command);
-            Assert.Equal("nav-app-updates", button.CommandParameter);
+            Assert.Same(vm.OpenAlertCommand, button.Command);
+            Assert.Equal("nav-app-updates", Assert.IsType<DashboardAlert>(button.CommandParameter).NavTargetId);
             Assert.Equal(Visibility.Visible, button.Visibility);
 
             // The dot on the alert's own row, in the colour of nothing to judge rather than the green of "all good".

@@ -238,6 +238,26 @@ public sealed class RecentChangesViewModelTests
         _navigation.ReceivedWithAnyArgs(1).GoTo(default!, default);
     }
 
+    [Theory]
+    [InlineData("7 days", 7)]
+    [InlineData("30 days", 30)]
+    [InlineData("90 days", 90)]
+    public async Task TheProblemsLink_OpensSystemLogsOnTheApplicationErrorsOfThePeriod(string period, int days)
+    {
+        // The link opened the tab alone, which starts on the System log over 24 hours, so the crashes the line counted
+        // were nowhere on it (#2887). Windows writes a crash and a hang to the Application log as errors.
+        using var vm = NewVm(Look(problems: [new ProblemEvent(Now.AddDays(-2), StoppedResponding: false)]));
+        await vm.InitializationComplete;
+        vm.SelectedPeriod = period;
+
+        vm.OpenProblemsCommand.Execute(null);
+
+        _navigation.Received(1).GoTo("nav-logs", null, Arg.Is<LogsArrival>(a =>
+            a.Log == "Application" && a.Within == TimeSpan.FromDays(days)
+            && a.Severities.SequenceEqual(new[] { EventSeverity.Error })));
+        _navigation.ReceivedWithAnyArgs(1).GoTo(default!, default, default);
+    }
+
     [Fact]
     public async Task F5_LooksAgain()
     {

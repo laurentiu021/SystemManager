@@ -238,7 +238,8 @@ public sealed class LeftoverService : ILeftoverService
             var safeName = string.Join("_", subKey.Split(Path.GetInvalidFileNameChars()));
             var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             var file = Path.Combine(_backupDir, $"{safeName}_{stamp}.reg");
-            var exit = await _ps.RunProcessAsync("reg.exe", $"export \"HKCU\\{subKey}\" \"{file}\" /y", ct)
+            var exit = await _ps.RunProcessAsync(
+                    "reg.exe", $"export \"HKCU\\{subKey}\" \"{file}\" /y", ct, PowerShellRunner.OemEncoding)
                 .ConfigureAwait(false);
             if (exit != 0 || !File.Exists(file) || new FileInfo(file).Length == 0) return null;
 

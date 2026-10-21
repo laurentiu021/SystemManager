@@ -990,4 +990,36 @@ public class PowerShellRunnerTests
         runner.ProgressChanged -= Handler;
         Assert.False(received);
     }
+
+    // ---------- the console tools' code page (#2844) ----------
+
+    [Theory]
+    [InlineData(437)]
+    [InlineData(850)]
+    [InlineData(852)]
+    public void EncodingOfCodePage_IsThatCodePage(int codePage)
+    {
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        Assert.Equal(codePage, PowerShellRunner.EncodingOfCodePage(codePage).CodePage);
+    }
+
+    [Fact]
+    public void EncodingOfCodePage_65001_IsUtf8_SoTheUtf8OptionReadsEveryLetter()
+    {
+        // "Beta: Use Unicode UTF-8 for worldwide language support" makes the system's OEM code page 65001, so the
+        // tools write UTF-8. Read in the German format's 850, as before, "Höchstleistung" came back as
+        // "H├Âchstleistung".
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var written = System.Text.Encoding.UTF8.GetBytes("Höchstleistung");
+
+        Assert.Equal("Höchstleistung", PowerShellRunner.EncodingOfCodePage(65001).GetString(written));
+        Assert.Equal("H├Âchstleistung", PowerShellRunner.EncodingOfCodePage(850).GetString(written));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    [InlineData(70000)]
+    public void EncodingOfCodePage_WithNoEncodingForIt_IsUtf8(int codePage) =>
+        Assert.Equal(65001, PowerShellRunner.EncodingOfCodePage(codePage).CodePage);
 }

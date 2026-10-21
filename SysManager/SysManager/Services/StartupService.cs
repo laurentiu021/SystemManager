@@ -725,7 +725,11 @@ public sealed class StartupService
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardError = true,
+                // schtasks writes the OEM code page. Unset, a process with no console, as SysManager is, reads it in
+                // the ANSI code page, and the error shown on the row lost its accented letters (#2844).
+                StandardOutputEncoding = PowerShellRunner.OemEncoding,
+                StandardErrorEncoding = PowerShellRunner.OemEncoding,
             };
 
             using var proc = System.Diagnostics.Process.Start(psi);

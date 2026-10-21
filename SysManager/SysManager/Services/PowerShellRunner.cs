@@ -38,7 +38,7 @@ namespace SysManager.Services;
 /// Violation of this contract creates a code injection vulnerability. The Bypass policy
 /// is safe ONLY because the script content is fully controlled by SysManager's source code.</para>
 /// </summary>
-public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
+public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
 {
     /// <summary>
     /// Serialises pipelines on this runner, because a reused runspace can only run one at a time.
@@ -120,25 +120,42 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     public event Action<int>? ProgressChanged; // 0-100
 
     /// <summary>
-    /// OEM encoding for native Windows tools (chkdsk, DISM, ipconfig, netsh, powercfg, sc).
-    /// Requires CodePagesEncodingProvider registered at startup. Not sfc, which writes UTF-16:
-    /// see <see cref="SysManager.Helpers.SfcOutput.Encoding"/>.
+    /// The encoding native Windows tools write in when their output is redirected (chkdsk, DISM,
+    /// ipconfig, netsh, powercfg, sc): the system's OEM code page. Requires CodePagesEncodingProvider
+    /// registered at startup. Not sfc, which writes UTF-16: see
+    /// <see cref="SysManager.Helpers.SfcOutput.Encoding"/>.
     /// </summary>
-    public static System.Text.Encoding OemEncoding { get; } =
-        GetOemEncodingSafe();
+    public static System.Text.Encoding OemEncoding { get; } = ReadOemEncoding();
 
-    private static System.Text.Encoding GetOemEncodingSafe()
+    /// <summary>The encoding of the system's OEM code page, as <c>GetOEMCP</c> gives it.</summary>
+    /// <remarks>
+    /// The code page follows "Language for non-Unicode programs", and is 65001, UTF-8, with "Beta: Use
+    /// Unicode UTF-8 for worldwide language support" on. It was the regional format's
+    /// <c>TextInfo.OEMCodePage</c>, which is fixed data for the format whatever Windows is set to: with
+    /// Romanian formats on an English Windows it is 852 while the tools write 437, and with the UTF-8 option
+    /// every letter outside ASCII came back as two (#2844).
+    /// </remarks>
+    internal static System.Text.Encoding ReadOemEncoding() => EncodingOfCodePage((int)GetOEMCP());
+
+    /// <summary>The encoding of <paramref name="codePage"/>, or UTF-8 when .NET has none for it.</summary>
+    internal static System.Text.Encoding EncodingOfCodePage(int codePage)
     {
         try
         {
-            return System.Text.Encoding.GetEncoding(
-                System.Globalization.CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+            return System.Text.Encoding.GetEncoding(codePage);
         }
         catch (NotSupportedException)
         {
             return System.Text.Encoding.UTF8;
         }
+        catch (ArgumentException)
+        {
+            return System.Text.Encoding.UTF8;
+        }
     }
+
+    [System.Runtime.InteropServices.LibraryImport("kernel32.dll")]
+    private static partial uint GetOEMCP();
 
     /// <summary>
     /// Execute a script and return the collected PSObject results. Every run happens in a
@@ -384,7 +401,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
             script;
         var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(wrapped));
         var args = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -OutputFormat Text -EncodedCommand {encoded}";
-        return await RunProcessAsync("powershell.exe", args, cancellationToken).ConfigureAwait(false);
+        // UTF-8, because the script sets the console's output encoding to it before anything else.
+        return await RunProcessAsync("powershell.exe", args, cancellationToken, System.Text.Encoding.UTF8)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

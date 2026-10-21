@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.46] - 2026-10-21
+
+**Text from Windows' own tools keeps its accented letters when the regional format and the Windows language differ,
+or when Windows uses UTF-8 for programs that are not Unicode.**
+
+### Fixed
+
+- **Output from Windows' console tools could lose its accented letters.** The tools write in the code page Windows
+  uses for programs that are not Unicode, and SysManager read them in the one that comes with the regional format,
+  which is often another: an English Windows with Romanian formats writes 437, and it was read as 852. With "Beta: Use
+  Unicode UTF-8 for worldwide language support" on, the tools write UTF-8, so on German formats a power plan named
+  "Höchstleistung" showed as "H├Âchstleistung". That reached the power plan names on Performance Mode and Undo
+  Changes and the output on Network Repair, Services, Quick Cleanup, System Fixes, System Health and Battery Health.
+  They are read in Windows' own code page now. Since 0.13.14.
+- **An error from schtasks on Startup Manager lost its accented letters.** Startup Manager read it in the ANSI code
+  page while schtasks writes the OEM one. Since 0.13.8.
+
 ## [1.130.45] - 2026-10-21
 
 **System Fixes reads SFC's progress and result whatever language Windows is in, DISM no longer says no repairs were

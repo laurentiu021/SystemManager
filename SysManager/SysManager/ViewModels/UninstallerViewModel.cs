@@ -29,6 +29,12 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     private readonly EtaCalculator _uninstallEta = new();
     private CancellationTokenSource? _cts;
 
+    // The uninstaller running now has a token of its own, which only closing SysManager cancels. Cancel and Escape
+    // stop a batch before its next app instead: ending an uninstaller half-way can leave its program half-removed, and
+    // Escape did that from a bare keypress (#2834).
+    private CancellationTokenSource? _uninstallerCts;
+    private InstalledApp? _uninstalling;
+
     public BulkObservableCollection<InstalledApp> AllApps { get; } = new();
     public BulkObservableCollection<InstalledApp> FilteredApps { get; } = new();
 
@@ -209,6 +215,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        _uninstallerCts?.Dispose();
+        _uninstallerCts = new CancellationTokenSource();
         int completed = 0;
         int removed = 0;
         int failed = 0;
@@ -238,13 +246,14 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 UninstallEtaText = _uninstallEta.Update(Progress);
                 var currentCompleted = false;
 
+                _uninstalling = app;
                 try
                 {
                     var local = string.IsNullOrWhiteSpace(app.Source)
                         && !string.IsNullOrWhiteSpace(app.UninstallString);
                     var code = local
-                        ? await _service.UninstallLocalAsync(app, _cts.Token)
-                        : await _service.UninstallAsync(app.Id, _cts.Token);
+                        ? await _service.UninstallLocalAsync(app, _uninstallerCts.Token)
+                        : await _service.UninstallAsync(app.Id, _uninstallerCts.Token);
 
                     currentCompleted = true;
                     if (IsSuccessfulUninstallExitCode(code) && _service.IsStillRegistered(app))
@@ -284,7 +293,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                 {
                     app.Status = $"Error: {ex.Message}";
                     failed++;
-                    currentCompleted = !_cts.IsCancellationRequested;
+                    currentCompleted = !_uninstallerCts.IsCancellationRequested;
                 }
                 // A failed uninstaller launch (missing/blocked exe) must not abort the
                 // whole batch - record it on the row and continue with the next app.
@@ -307,6 +316,10 @@ public sealed partial class UninstallerViewModel : ViewModelBase
                     app.Status = $"Error: {ex.Message}";
                     failed++;
                     currentCompleted = true;
+                }
+                finally
+                {
+                    _uninstalling = null;
                 }
 
                 if (currentCompleted)
@@ -630,8 +643,15 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         return $"{ConfirmRemovalQuestion(ticked)}\n\n{lines}\n\n{string.Join(" ", new[] { folders, keys }.Where(s => s.Length > 0))}";
     }
 
+    /// <summary>Stops a scan, or a batch before its next app: the uninstaller running now finishes.</summary>
     [RelayCommand]
-    private void Cancel() => _cts?.Cancel();
+    private void Cancel()
+    {
+        _cts?.Cancel();
+        if (_uninstalling is { } app)
+            StatusMessage = $"Stopping after {app.Name}. Its uninstaller finishes first, so it is not left "
+                            + "half-removed.";
+    }
 
     protected override void Dispose(bool disposing)
     {
@@ -640,6 +660,8 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();
+            _uninstallerCts?.Cancel();
+            _uninstallerCts?.Dispose();
         }
         base.Dispose(disposing);
     }

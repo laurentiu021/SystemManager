@@ -379,12 +379,15 @@ public class UninstallerViewModelGateTests
     }
 
     [Fact]
-    public async Task UninstallSelected_WhenCancelled_StopsBatchAndReportsPartialProgress()
+    public async Task UninstallSelected_WhenCancelled_LetsTheRunningUninstallerFinish_ThenStopsBeforeTheNextApp()
     {
+        // Cancel, and Escape with it, ended the running uninstaller part-way, which can leave its program half-removed
+        // (#2834). The second of three is running when Cancel is pressed: it finishes, and the third never starts.
         var started = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var pending = new TaskCompletionSource<int>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
         var callCount = 0;
         var runner = Substitute.For<IPowerShellRunner>();
         runner.RunProcessAsync(
@@ -394,16 +397,15 @@ public class UninstallerViewModelGateTests
                 Arg.Any<System.Text.Encoding?>())
             .Returns(callInfo =>
             {
-                if (Interlocked.Increment(ref callCount) == 1)
+                if (Interlocked.Increment(ref callCount) != 2)
                     return Task.FromResult(0);
 
-                var token = callInfo.ArgAt<CancellationToken>(2);
-                token.Register(() => pending.TrySetCanceled(token));
+                runningToken = callInfo.ArgAt<CancellationToken>(2);
                 started.TrySetResult(true);
                 return pending.Task;
             });
         var vm = NewVm(runner);
-        Seed(vm, 2);
+        Seed(vm, 3);
         foreach (var app in vm.FilteredApps)
         {
             app.Source = "winget";
@@ -414,17 +416,22 @@ public class UninstallerViewModelGateTests
         var dialog = Substitute.For<IDialogService>();
         dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
         DialogService.Instance = dialog;
+        var execution = Task.CompletedTask;
         try
         {
-            var execution = vm.UninstallSelectedCommand.ExecuteAsync(null);
+            execution = vm.UninstallSelectedCommand.ExecuteAsync(null);
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             vm.CancelCommand.Execute(null);
-            await execution;
 
-            Assert.Equal(50, vm.Progress);
-            Assert.Contains("cancelled after 1/2 completed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
-            Assert.Single(vm.FilteredApps);
-            Assert.Equal("Cancelled", vm.FilteredApps[0].Status);
+            Assert.False(runningToken.IsCancellationRequested);
+            Assert.Equal("Stopping after app001. Its uninstaller finishes first, so it is not left half-removed.",
+                vm.StatusMessage);
+
+            pending.SetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Contains("cancelled after 2/3 completed", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("app002", Assert.Single(vm.FilteredApps).Name);
             await runner.Received(2).RunProcessAsync(
                 "winget",
                 Arg.Any<string>(),
@@ -433,6 +440,57 @@ public class UninstallerViewModelGateTests
         }
         finally
         {
+            // Ended either way: a batch left running holds the install lock every later uninstall in this class needs.
+            pending.TrySetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+            DialogService.Instance = previousDialog;
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_WhileAnUninstallerRuns_StillEndsIt()
+    {
+        // Closing SysManager asks first while the uninstall holds its lock, and then ends what is running, as before.
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(
+                "winget",
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>(),
+                Arg.Any<System.Text.Encoding?>())
+            .Returns(callInfo =>
+            {
+                runningToken = callInfo.ArgAt<CancellationToken>(2);
+                runningToken.Register(() => pending.TrySetCanceled(runningToken));
+                started.TrySetResult(true);
+                return pending.Task;
+            });
+        var vm = NewVm(runner);
+        Seed(vm, 1);
+        vm.FilteredApps[0].Source = "winget";
+        vm.FilteredApps[0].IsSelected = true;
+
+        var previousDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(true);
+        DialogService.Instance = dialog;
+        var execution = Task.CompletedTask;
+        try
+        {
+            execution = vm.UninstallSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            vm.Dispose();
+
+            Assert.True(runningToken.IsCancellationRequested);
+        }
+        finally
+        {
+            // Ended either way: a batch left running holds the install lock every later uninstall in this class needs.
+            pending.TrySetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
             DialogService.Instance = previousDialog;
         }
     }

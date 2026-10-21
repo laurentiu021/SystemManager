@@ -281,7 +281,8 @@ to scroll.
   a scale from 70% (or lower) to just above 100%, so a small loss is not drawn as a cliff. The same paint lifecycle
   as `SpeedTrendChart`.
 - `UninstallerViewModel` — winget-based app uninstaller with batch support, and the Left behind card
-  that follows an uninstall.
+  that follows an uninstall. Cancel and Escape stop a batch before its next app: the uninstaller already running
+  has a token of its own, which only `Dispose` cancels (#2834).
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore. Refresh is off while `IsBusy`,
   and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607).
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
@@ -370,7 +371,7 @@ to scroll.
   `LogsArrival.AppProblems` of the period chosen (#2887). Read-only.
 - `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
-- `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair.
+- `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair. It overrides no `EscapeCancel`: every run changes Windows, so Escape stops none of them and the Cancel button does (#2834).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
 - `TimerResolutionViewModel` — request the finest Windows timer resolution (≈0.5 ms) for lower game input latency, or release it; shows the live effective value.
 - `FileLockViewModel` — find which processes are holding a file/folder (Restart Manager) and optionally end a selected one after confirmation; critical processes are protected. A failed check and a path that does not exist are reported as such, never as "no process". End process passes the locker's start time with its ID, so a locker that closed and whose ID Windows gave to another program is reported as already closed rather than that program ended (#2514); an ended or closed locker is followed by a fresh check, with the outcome put in front of its result.

@@ -110,7 +110,7 @@
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding StoreVerdict}" Style="{StaticResource Body}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"
-                                   Foreground="{Binding StoreVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                                   helpers:ThemeBrush.Foreground="{Binding StoreVerdictColorHex}"/>
                     </DockPanel>
                 </Border>
 

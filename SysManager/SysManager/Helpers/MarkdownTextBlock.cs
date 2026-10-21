@@ -144,12 +144,10 @@ public static partial class MarkdownTextBlock
             }
             else if (m.Groups[2].Success)
             {
-                // `code`
-                tb.Inlines.Add(new Run(m.Groups[2].Value)
-                {
-                    FontFamily = CodeFontFamily,
-                    Foreground = Application.Current?.TryFindResource("Accent") as Brush ?? Brushes.CornflowerBlue
-                });
+                // `code`, in the accent: a reference to it, not the brush, which a theme switch replaces (#2818).
+                var code = new Run(m.Groups[2].Value) { FontFamily = CodeFontFamily };
+                code.SetResourceReference(TextElement.ForegroundProperty, "Accent");
+                tb.Inlines.Add(code);
             }
 
             pos = m.Index + m.Length;

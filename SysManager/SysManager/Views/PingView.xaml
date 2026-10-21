@@ -48,7 +48,7 @@
 
         <!-- Health verdict -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="28,16,28,0"
-                BorderBrush="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"
+                helpers:ThemeBrush.BorderBrush="{Binding Shared.Health.ColorHex}"
                 BorderThickness="1">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -58,9 +58,9 @@
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="12" Height="12" Margin="0,0,10,0" VerticalAlignment="Center"
-                                 Fill="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"/>
+                                 helpers:ThemeBrush.Fill="{Binding Shared.Health.ColorHex}"/>
                         <TextBlock Text="{Binding Shared.Health.Headline}" Style="{StaticResource Heading}"
-                                   Foreground="{Binding Shared.Health.ColorHex, Converter={StaticResource HexBrush}}"/>
+                                   helpers:ThemeBrush.Foreground="{Binding Shared.Health.ColorHex}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding Shared.Health.Detail}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}"
                                Margin="22,6,0,0" TextWrapping="Wrap" MaxWidth="820"/>
@@ -123,7 +123,7 @@
                             <Border Margin="0,0,10,10" Padding="14,12" CornerRadius="{StaticResource RadiusLg}"
                                     Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Border1}" BorderThickness="1">
                                 <Grid>
-                                    <Border Background="{Binding ColorHex, Converter={StaticResource HexBrush}}"
+                                    <Border helpers:ThemeBrush.Background="{Binding ColorHex}"
                                             Width="4" HorizontalAlignment="Left" CornerRadius="2"
                                             Margin="-14,-12,0,-12"/>
                                     <DockPanel Margin="6,0,0,0">

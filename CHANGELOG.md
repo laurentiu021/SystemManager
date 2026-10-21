@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.43] - 2026-10-21
+
+**Console output, verdicts and health cards change colour with the theme, so a switch to a light theme no longer leaves
+near-white text on a white card.**
+
+### Fixed
+
+- **Some colours stayed in the old theme after a switch.** The live output on Quick Cleanup, App Updates, System Fixes
+  and System Health, the verdicts on System Fixes, Quick Cleanup, Battery Health, Ping and Speed Test, System Health's
+  memory verdict and disk cards, the Dashboard's slowdown findings, health score, recommendations, tune-up results and
+  temperatures, the event details on System Logs, the code in About's release notes and the cards in the Appearance
+  panel kept the colours they were first drawn in. After a switch from a dark theme to Clean Indigo, console text stayed
+  near-white on the white card, at 1.2:1, and the verdicts kept the dark theme's green and amber, at about 2:1. They
+  take the new theme's colours now, whether you pick the theme or Auto follows Windows. Lists drawn as tables, such as
+  the Safety chips on Services and Process Manager, already did. Since 1.52.38 for the live output, 1.57.6 for the
+  verdicts and disk cards, 1.13.0 for About's code and 1.82.0 for the Appearance panel.
+- **Process Manager's Status chip used the dark theme's colours on every theme.** "Running", the state of nearly every
+  row, measured 1.5 to 1.9:1 on the light themes' grey chip. It uses the theme's green and red now, as the Safety chip
+  beside it does. Since 1.13.0, which brought the light themes.
+
 ## [1.130.42] - 2026-10-21
 
 **A drop-down opens from a click anywhere on it, long tooltips wrap instead of being cut off, and a focused field keeps

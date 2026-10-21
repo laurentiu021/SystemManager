@@ -2629,6 +2629,216 @@ public partial class ArchitectureTests
         };
 
     /// <summary>
+    /// A colour a binding picks goes through <c>helpers:ThemeBrush</c>, never straight onto a brush property.
+    /// </summary>
+    /// <remarks>
+    /// A binding onto a brush property hands the element a brush, and the converters that turned a status into one
+    /// looked the theme's brush up once. <c>ThemeService.Apply</c> stores a new brush under every name, so the element
+    /// kept the old theme's colour: a console line stayed near-white on the light card after a switch, and the verdicts
+    /// and disk cards kept the dark palette's green and amber (#2818). ThemeBrush takes the colour's name and sets a
+    /// reference to the theme's brush, which follows every switch. A binding that passes a brush along from another
+    /// element, with <c>RelativeSource</c> or <c>ElementName</c>, picks no colour and is not read.
+    /// <para>The target's type comes from WPF by reflection, as in
+    /// <see cref="EveryStringFormat_IsOnAPropertyThatHoldsAString"/>, so a brush property nobody listed is read
+    /// too.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryColourABindingPicks_GoesThroughThemeBrush()
+    {
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var fill = XamlPropertyType(XamlType(presentation, "Ellipse"), "Fill");
+        Assert.True(typeof(System.Windows.Media.Brush).IsAssignableFrom(fill));
+        Assert.Equal(typeof(string), XamlPropertyType(typeof(SysManager.Helpers.ThemeBrush), "Foreground"));
+
+        var offenders = new List<string>();
+        var bindings = 0;
+        var themed = 0;
+
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".xaml"))
+        {
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Parse(File.ReadAllText(file)).Descendants())
+            {
+                foreach (var attribute in element.Attributes())
+                {
+                    var value = attribute.Value;
+                    if (!value.StartsWith("{Binding", StringComparison.Ordinal)
+                        && !value.StartsWith("{MultiBinding", StringComparison.Ordinal))
+                        continue;
+
+                    bindings++;
+                    var (owner, property) = AttributeTarget(element, attribute);
+                    if (owner == typeof(SysManager.Helpers.ThemeBrush)) themed++;
+                    if (PassesABrushAlong(value)) continue;
+                    if (HoldsABrush(owner, property))
+                        offenders.Add($"{name}: <{element.Name.LocalName} {attribute.Name.LocalName}=\"{value}\">");
+                }
+
+                // <Border.Background><Binding …/></Border.Background>, the same binding written as an element.
+                if (element.Name.LocalName is "Binding" or "MultiBinding"
+                    && element.Parent is { } holder
+                    && holder.Name.LocalName.Contains('.', StringComparison.Ordinal))
+                {
+                    bindings++;
+                    var (owner, property) = PropertyElementTarget(holder);
+                    if (element.Attribute("RelativeSource") is null && element.Attribute("ElementName") is null
+                        && HoldsABrush(owner, property))
+                        offenders.Add($"{name}: <{holder.Name.LocalName}><{element.Name.LocalName} …/>");
+                }
+            }
+        }
+
+        // 2102 bindings and 66 through ThemeBrush when written. Far fewer means the views were not read.
+        Assert.True(bindings >= 1500, $"only {bindings} bindings were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "These bind a brush property, so the element gets a brush, which a theme switch does not change. Bind the "
+            + "colour's name, or a converter that returns one, to helpers:ThemeBrush.Foreground, .Background, .Fill or "
+            + ".BorderBrush instead:\n  " + string.Join("\n  ", offenders));
+        Assert.True(themed >= 50, $"only {themed} bindings through ThemeBrush were read, of 66.");
+    }
+
+    /// <summary>
+    /// Every <c>helpers:ThemeBrush</c> is on an element that has the property it paints, and the element does not set
+    /// that property itself as well.
+    /// </summary>
+    /// <remarks>
+    /// ThemeBrush sets the element's own property, the one <c>ThemeBrush.TargetOf</c> names, so on an element without
+    /// it the colour goes nowhere, and on one that sets the property too, whichever is set last wins. The element's
+    /// type is read from the XAML, or from the style's target for a setter, and its property is compared with the one
+    /// ThemeBrush sets by identity, since WPF shares one property between the elements that have it (#2818).
+    /// </remarks>
+    [Fact]
+    public void EveryThemeBrush_IsOnAnElementThatHasThePropertyItPaints()
+    {
+        // Known answers: a TextBlock's Background is its text's, not a panel's, and a TextBlock has no Fill.
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        Assert.Null(PaintOffence(XamlType(presentation, "TextBlock"), "Background"));
+        Assert.Null(PaintOffence(XamlType(presentation, "Run"), "Foreground"));
+        Assert.NotNull(PaintOffence(XamlType(presentation, "TextBlock"), "Fill"));
+        Assert.NotNull(PaintOffence(XamlType(presentation, "Ellipse"), "Background"));
+
+        var offenders = new List<string>();
+        var painted = 0;
+
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".xaml"))
+        {
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Parse(File.ReadAllText(file)).Descendants())
+            {
+                var paints = element.Attributes()
+                    .Where(a => a.Name.LocalName.StartsWith(ThemeBrushPrefix, StringComparison.Ordinal));
+                foreach (var attribute in paints)
+                {
+                    painted++;
+                    var paint = attribute.Name.LocalName[ThemeBrushPrefix.Length..];
+                    var type = XamlType(element.Name.Namespace, element.Name.LocalName);
+                    if (PaintOffence(type, paint) is { } offence)
+                        offenders.Add($"{name}: <{element.Name.LocalName} {attribute.Name.LocalName}> {offence}");
+                    if (element.Attribute(paint) is not null)
+                        offenders.Add($"{name}: <{element.Name.LocalName}> sets {paint} itself as well as through "
+                                      + "ThemeBrush");
+                }
+
+                if (element.Name.LocalName != "Setter"
+                    || (string?)element.Attribute("Property") is not { } setterProperty)
+                    continue;
+                var at = setterProperty.IndexOf(ThemeBrushPrefix, StringComparison.Ordinal);
+                if (at < 0) continue;
+
+                painted++;
+                var setterPaint = setterProperty[(at + ThemeBrushPrefix.Length)..];
+                var style = element.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Style");
+                var target = (string?)style?.Attribute("TargetType") is { } targetType
+                    ? XamlTypeNamed(style!, targetType)
+                    : null;
+                if (PaintOffence(target, setterPaint) is { } setterOffence)
+                    offenders.Add($"{name}: <Setter Property=\"{setterProperty}\"> {setterOffence}");
+                if (style?.Descendants().Any(s => s.Name.LocalName == "Setter"
+                                                  && (string?)s.Attribute("Property") == setterPaint) == true)
+                    offenders.Add($"{name}: a {target?.Name} style sets {setterPaint} itself as well as through "
+                                  + "ThemeBrush");
+            }
+        }
+
+        // 68 when written: 64 attributes and four style setters.
+        Assert.True(painted >= 50, $"only {painted} uses of ThemeBrush were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "ThemeBrush paints the element's own property, so each of these paints nothing, or fights another "
+            + "value:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// No code looks a resource up and keeps what it found: a theme brush found that way keeps the colour it had
+    /// (#2818).
+    /// </summary>
+    /// <remarks>
+    /// <c>FindResource</c> and <c>TryFindResource</c> return the brush under a name at that moment, and a theme switch
+    /// stores a new one, so Markdown's code spans and the theme panel's own cards kept the old theme's colour.
+    /// <c>SetResourceReference</c>, <c>helpers:ThemeBrush</c> or <c>{DynamicResource}</c> follow the switch. Comments
+    /// are left out, so prose that names the call does not count.
+    /// </remarks>
+    [Fact]
+    public void NoCode_KeepsAResourceItLookedUp()
+    {
+        Assert.Matches(ResourceLookup(), "Foreground = Application.Current?.TryFindResource(\"Accent\") as Brush");
+        Assert.Matches(ResourceLookup(), "var border = FindResource (\"Border1\");");
+        Assert.DoesNotMatch(ResourceLookup(), "run.SetResourceReference(TextElement.ForegroundProperty, \"Accent\");");
+
+        var offenders = new List<string>();
+        var files = 0;
+        foreach (var file in SourceFilesUnder(TestPaths.AppProject(), ".cs"))
+        {
+            files++;
+            var code = WithoutComments(File.ReadAllText(file)).Split('\n');
+            for (var i = 0; i < code.Length; i++)
+                if (ResourceLookup().IsMatch(code[i]))
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}: {code[i].Trim()}");
+        }
+
+        // 442 when written.
+        Assert.True(files >= 300, $"only {files} source files were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "These look a resource up, and a theme brush found that way keeps its colour after a switch. Use "
+            + "SetResourceReference, helpers:ThemeBrush or {DynamicResource} instead:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    private const string ThemeBrushPrefix = "ThemeBrush.";
+
+    /// <summary>A call to <c>FindResource</c> or <c>TryFindResource</c>.</summary>
+    [GeneratedRegex(@"\b(?:Try)?FindResource\s*\(")]
+    private static partial Regex ResourceLookup();
+
+    /// <summary>
+    /// Whether a binding takes its value from another element, which hands a brush along rather than picking one.
+    /// </summary>
+    private static bool PassesABrushAlong(string binding) =>
+        binding.Contains("RelativeSource=", StringComparison.Ordinal)
+        || binding.Contains("ElementName=", StringComparison.Ordinal);
+
+    private static bool HoldsABrush(Type? owner, string property) =>
+        XamlPropertyType(owner, property) is { } type && typeof(System.Windows.Media.Brush).IsAssignableFrom(type);
+
+    /// <summary>
+    /// Why <c>ThemeBrush.<paramref name="paint"/></c> paints nothing on an element of type
+    /// <paramref name="element"/>, or null when it paints the element's own property.
+    /// </summary>
+    private static string? PaintOffence(Type? element, string paint)
+    {
+        if (element is null) return "is on an element whose type could not be resolved";
+
+        const BindingFlags Static = BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy;
+        if (typeof(SysManager.Helpers.ThemeBrush).GetField(paint + "Property", Static)?.GetValue(null)
+            is not System.Windows.DependencyProperty attached)
+            return $"names {paint}, which ThemeBrush does not paint";
+
+        var own = element.GetField(paint + "Property", Static)?.GetValue(null) as System.Windows.DependencyProperty;
+        return ReferenceEquals(own, SysManager.Helpers.ThemeBrush.TargetOf(element, attached))
+            ? null
+            : $"is on a {element.Name}, which has no {paint} for it to paint";
+    }
+
+    /// <summary>
     /// The type <paramref name="property"/> holds on <paramref name="owner"/>: its dependency property's, else its CLR
     /// property's, or null when it has neither.
     /// </summary>

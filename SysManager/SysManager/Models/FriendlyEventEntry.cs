@@ -54,8 +54,8 @@ public sealed partial class FriendlyEventEntry : ObservableObject
     };
 
     /// <summary>
-    /// Theme resource key for the severity dot/text in the log list, resolved by
-    /// <c>HexToBrushConverter</c>. Keys rather than literals for the same reason as
+    /// Theme resource key for the severity dot/text in the log list, painted by
+    /// <c>ThemeBrush</c>. Keys rather than literals for the same reason as
     /// <see cref="Helpers.StatusColors"/>: these were dark-calibrated hex constants that
     /// <c>ThemeService</c> could not recompute, so on a light preset the severity colour rendered
     /// pale on a near-white row. Critical keeps its own key because the log list gives it a distinct

@@ -138,7 +138,7 @@
                              content. Start and progress are covered by the status line at the bottom. -->
                         <TextBlock Text="{Binding SfcVerdict}" Style="{StaticResource Body}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"
-                                   Foreground="{Binding SfcVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                                   helpers:ThemeBrush.Foreground="{Binding SfcVerdictColorHex}"/>
                     </DockPanel>
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,6,0,0"
@@ -160,7 +160,7 @@
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <TextBlock Text="{Binding DismVerdict}" Style="{StaticResource Body}" TextWrapping="Wrap" VerticalAlignment="Center"
                                    AutomationProperties.LiveSetting="Polite" helpers:LiveRegion.Announces="True"
-                                   Foreground="{Binding DismVerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                                   helpers:ThemeBrush.Foreground="{Binding DismVerdictColorHex}"/>
                     </DockPanel>
                 </Border>
 

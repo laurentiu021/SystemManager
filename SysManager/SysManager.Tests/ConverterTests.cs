@@ -5,6 +5,7 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Media;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -18,37 +19,35 @@ namespace SysManager.Tests;
 /// </summary>
 public class ConverterTests
 {
-    // ---------- OutputKindToBrushConverter ----------
+    // ---------- OutputKindToColorConverter ----------
 
     [Theory]
-    [InlineData(OutputKind.Error)]
-    [InlineData(OutputKind.Warning)]
-    [InlineData(OutputKind.Info)]
-    [InlineData(OutputKind.Verbose)]
-    [InlineData(OutputKind.Debug)]
-    [InlineData(OutputKind.Progress)]
-    [InlineData(OutputKind.Output)]
-    public void OutputKindToBrush_AllKinds_ReturnBrush(OutputKind kind)
+    [InlineData(OutputKind.Error, "OutErrorBrush")]
+    [InlineData(OutputKind.Warning, "OutWarnBrush")]
+    [InlineData(OutputKind.Info, "OutInfoBrush")]
+    [InlineData(OutputKind.Verbose, "OutVerboseBrush")]
+    [InlineData(OutputKind.Debug, "OutDebugBrush")]
+    [InlineData(OutputKind.Progress, "OutProgressBrush")]
+    [InlineData(OutputKind.Output, "OutOutputBrush")]
+    public void OutputKindToColor_NamesTheConsoleBrushOfEachKind(OutputKind kind, string expected)
     {
-        var conv = new OutputKindToBrushConverter();
-        var result = conv.Convert(kind, typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.IsAssignableFrom<Brush>(result);
+        var conv = new OutputKindToColorConverter();
+        Assert.Equal(expected, conv.Convert(kind, typeof(string), null!, CultureInfo.InvariantCulture));
     }
 
     [Fact]
-    public void OutputKindToBrush_UnknownValue_ReturnsBrush()
+    public void OutputKindToColor_UnknownValue_IsTheOrdinaryOutputColour()
     {
-        var conv = new OutputKindToBrushConverter();
-        var result = conv.Convert(999, typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.IsAssignableFrom<Brush>(result);
+        var conv = new OutputKindToColorConverter();
+        Assert.Equal("OutOutputBrush", conv.Convert(999, typeof(string), null!, CultureInfo.InvariantCulture));
     }
 
     [Fact]
-    public void OutputKindToBrush_ConvertBack_Throws()
+    public void OutputKindToColor_ConvertBack_Throws()
     {
-        var conv = new OutputKindToBrushConverter();
+        var conv = new OutputKindToColorConverter();
         Assert.Throws<NotSupportedException>(() =>
-            conv.ConvertBack(Brushes.White, typeof(OutputKind), null!, CultureInfo.InvariantCulture));
+            conv.ConvertBack("OutErrorBrush", typeof(OutputKind), null!, CultureInfo.InvariantCulture));
     }
 
     // ---------- FlexibleBoolToVisibilityConverter ----------
@@ -227,94 +226,35 @@ public class ConverterTests
             conv.ConvertBack(Brushes.White, typeof(bool), null!, CultureInfo.InvariantCulture));
     }
 
-    // ---------- HexToBrushConverter ----------
+    // ---------- ProcessStatusToColorConverter ----------
 
-    [Fact]
-    public void HexToBrush_ValidHex_ReturnsSolidColorBrush()
+    [Theory]
+    [InlineData("Running", "SuccessText")]
+    [InlineData("Not responding", "DangerText")]
+    [InlineData("not RESPONDING", "DangerText")]
+    public void StatusColor_NamesTheThemesStatusText(string status, string expected)
     {
-        var conv = new HexToBrushConverter();
-        var result = conv.Convert("#4CC9F0", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.IsType<SolidColorBrush>(result);
-        var brush = (SolidColorBrush)result;
-        Assert.Equal(Color.FromRgb(0x4C, 0xC9, 0xF0), brush.Color);
+        // Fixed #22C55E and #EF4444 on every theme put "Running" at 1.5 to 1.9:1 on the light presets' chip (#2818).
+        var conv = new ProcessStatusToColorConverter();
+        Assert.Equal(expected, conv.Convert(status, typeof(string), null!, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("Suspended")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void StatusColor_AnyOtherStatus_IsGrey(string? status)
+    {
+        var conv = new ProcessStatusToColorConverter();
+        Assert.Equal("#808080", conv.Convert(status!, typeof(string), null!, CultureInfo.InvariantCulture));
     }
 
     [Fact]
-    public void HexToBrush_Null_ReturnsGray()
+    public void StatusColor_ConvertBack_Throws()
     {
-        var conv = new HexToBrushConverter();
-        var result = conv.Convert(null!, typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(Brushes.Gray, result);
-    }
-
-    [Fact]
-    public void HexToBrush_EmptyString_ReturnsGray()
-    {
-        var conv = new HexToBrushConverter();
-        var result = conv.Convert("", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(Brushes.Gray, result);
-    }
-
-    [Fact]
-    public void HexToBrush_InvalidHex_ReturnsGray()
-    {
-        var conv = new HexToBrushConverter();
-        var result = conv.Convert("not-a-color", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(Brushes.Gray, result);
-    }
-
-    [Fact]
-    public void HexToBrush_ConvertBack_Throws()
-    {
-        var conv = new HexToBrushConverter();
+        var conv = new ProcessStatusToColorConverter();
         Assert.Throws<NotSupportedException>(() =>
-            conv.ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
-    }
-
-    // ---------- ProcessStatusToBrushConverter ----------
-
-    [Fact]
-    public void StatusBrush_Running_ReturnsGreen()
-    {
-        var conv = new ProcessStatusToBrushConverter();
-        var result = conv.Convert("Running", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.IsType<SolidColorBrush>(result);
-        var brush = (SolidColorBrush)result;
-        Assert.Equal(Color.FromRgb(0x22, 0xC5, 0x5E), brush.Color);
-    }
-
-    [Fact]
-    public void StatusBrush_NotResponding_ReturnsRed()
-    {
-        var conv = new ProcessStatusToBrushConverter();
-        var result = conv.Convert("Not responding", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.IsType<SolidColorBrush>(result);
-        var brush = (SolidColorBrush)result;
-        Assert.Equal(Color.FromRgb(0xEF, 0x44, 0x44), brush.Color);
-    }
-
-    [Fact]
-    public void StatusBrush_Unknown_ReturnsGray()
-    {
-        var conv = new ProcessStatusToBrushConverter();
-        var result = conv.Convert("Suspended", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(Brushes.Gray, result);
-    }
-
-    [Fact]
-    public void StatusBrush_Null_ReturnsGray()
-    {
-        var conv = new ProcessStatusToBrushConverter();
-        var result = conv.Convert(null!, typeof(Brush), null!, CultureInfo.InvariantCulture);
-        Assert.Equal(Brushes.Gray, result);
-    }
-
-    [Fact]
-    public void StatusBrush_ConvertBack_Throws()
-    {
-        var conv = new ProcessStatusToBrushConverter();
-        Assert.Throws<NotSupportedException>(() =>
-            conv.ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+            conv.ConvertBack("SuccessText", typeof(string), null!, CultureInfo.InvariantCulture));
     }
 
     // ---------- ProcessSafety* (Process Manager provenance chip) ----------
@@ -330,17 +270,15 @@ public class ConverterTests
     {
         // #1512: grey and plain, so "we have no rating" no longer wears the red that means "this breaks Windows".
         var text = new SafetyLevelToTextConverter().Convert(SafetyLevel.NotRated, typeof(string), null!, CultureInfo.InvariantCulture);
-        var brush = Assert.IsType<SolidColorBrush>(
-            new SafetyLevelToBrushConverter().Convert(SafetyLevel.NotRated, typeof(Brush), null!, CultureInfo.InvariantCulture));
-        var critical = Assert.IsType<SolidColorBrush>(
-            new SafetyLevelToBrushConverter().Convert(SafetyLevel.Critical, typeof(Brush), null!, CultureInfo.InvariantCulture));
-        var background = new SafetyLevelToBackgroundConverter();
+        var color = new SafetyLevelToColorConverter();
+        var background = new SafetyLevelToBackgroundColorConverter();
+        object Colour(IValueConverter converter, SafetyLevel level) =>
+            converter.Convert(level, typeof(string), null!, CultureInfo.InvariantCulture);
 
         Assert.Equal("Not rated", text);
-        Assert.Equal(Color.FromRgb(0x7B, 0x83, 0x96), brush.Color);   // TextMuted, as Not recognised uses
-        Assert.NotEqual(critical.Color, brush.Color);
-        Assert.NotEqual(background.Convert(SafetyLevel.Critical, typeof(Brush), null!, CultureInfo.InvariantCulture),
-            background.Convert(SafetyLevel.NotRated, typeof(Brush), null!, CultureInfo.InvariantCulture));
+        Assert.Equal("TextMuted", Colour(color, SafetyLevel.NotRated));
+        Assert.Equal("DangerText", Colour(color, SafetyLevel.Critical));
+        Assert.NotEqual(Colour(background, SafetyLevel.Critical), Colour(background, SafetyLevel.NotRated));
     }
 
     [Fact]
@@ -349,13 +287,18 @@ public class ConverterTests
         // A level the converters do not name falls through to Critical's red and word, which is how most services came
         // to read Critical: this keeps a new level from doing it silently.
         var text = new SafetyLevelToTextConverter();
-        var background = new SafetyLevelToBackgroundConverter();
+        var color = new SafetyLevelToColorConverter();
+        var background = new SafetyLevelToBackgroundColorConverter();
         var levels = Enum.GetValues<SafetyLevel>();
 
-        var words = levels.Select(l => text.Convert(l, typeof(string), null!, CultureInfo.InvariantCulture)).ToList();
-        var fills = levels.Select(l => background.Convert(l, typeof(Brush), null!, CultureInfo.InvariantCulture)).ToList();
+        List<object> Each(IValueConverter converter) =>
+            [.. levels.Select(l => converter.Convert(l, typeof(string), null!, CultureInfo.InvariantCulture))];
+        var words = Each(text);
+        var inks = Each(color);
+        var fills = Each(background);
 
         Assert.Equal(levels.Length, words.Distinct().Count());
+        Assert.Equal(levels.Length, inks.Distinct().Count());
         Assert.Equal(levels.Length, fills.Distinct().Count());
     }
 
@@ -387,13 +330,13 @@ public class ConverterTests
     }
 
     [Fact]
-    public void ProcSafetyBrush_ThreeProvenanceValues_AreVisuallyDistinct()
+    public void ProcSafetyColor_ThreeProvenanceValues_AreVisuallyDistinct()
     {
-        // If two of them resolved to the same brush the column would convey nothing.
-        var conv = new ProcessSafetyToBrushConverter();
-        var system = conv.Convert("System", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        var trusted = conv.Convert("Trusted", typeof(Brush), null!, CultureInfo.InvariantCulture);
-        var unknown = conv.Convert("Unknown", typeof(Brush), null!, CultureInfo.InvariantCulture);
+        // If two of them named the same colour the column would convey nothing.
+        var conv = new ProcessSafetyToColorConverter();
+        var system = conv.Convert("System", typeof(string), null!, CultureInfo.InvariantCulture);
+        var trusted = conv.Convert("Trusted", typeof(string), null!, CultureInfo.InvariantCulture);
+        var unknown = conv.Convert("Unknown", typeof(string), null!, CultureInfo.InvariantCulture);
 
         Assert.NotEqual(system, trusted);
         Assert.NotEqual(system, unknown);
@@ -401,35 +344,32 @@ public class ConverterTests
     }
 
     [Fact]
-    public void ProcSafetyBrush_Unknown_IsMutedNotAWarningColour()
+    public void ProcSafetyColor_Unknown_IsMutedNotAWarningColour()
     {
         // The database holds 108 entries while a typical machine runs 200+ processes, so most rows are
         // Unknown. Tinting them amber/red would make a normal machine look alarming and train the user
         // to ignore the column. It uses the app's existing TextMuted grey — "no information", which is
         // what Unknown means — and is asserted to be neither the warning nor the danger colour.
-        var (key, fallback) = ProcessSafetyPalette.TextBrushKey("Unknown");
+        var unknown = ProcessSafetyPalette.TextColor("Unknown");
 
-        Assert.Null(key);   // deliberately theme-independent
-        var muted = Assert.IsType<SolidColorBrush>(fallback);
-        Assert.Equal(Color.FromRgb(0x7B, 0x83, 0x96), muted.Color);   // TextMuted
+        Assert.Equal("#7B8396", unknown);   // a fixed colour, the same on every theme
+        var muted = (Color)ColorConverter.ConvertFromString(unknown);
 
         // Desaturated: no channel dominates the way it does in an amber/red alert.
-        var max = Math.Max(muted.Color.R, Math.Max(muted.Color.G, muted.Color.B));
-        var min = Math.Min(muted.Color.R, Math.Min(muted.Color.G, muted.Color.B));
+        var max = Math.Max(muted.R, Math.Max(muted.G, muted.B));
+        var min = Math.Min(muted.R, Math.Min(muted.G, muted.B));
         Assert.True(max - min < 0x30, $"spread {max - min:X} is too saturated for a neutral chip");
     }
 
     [Theory]
-    [InlineData("System")]
-    [InlineData("Trusted")]
-    public void ProcSafetyBrush_KnownProvenance_ResolvesThroughTheThemePalette(string provenance)
+    [InlineData("System", "InfoText", "InfoBgSubtle")]
+    [InlineData("Trusted", "SuccessText", "SuccessBgSubtle")]
+    public void ProcSafetyColor_KnownProvenance_NamesTheThemesStatusBrushes(string provenance, string text, string tint)
     {
-        // Known values must go through a ThemeService.StatusPalette key so the chip stays legible on
-        // light presets, with a frozen dark brush as the design-time/unit-test fallback.
-        var (key, fallback) = ProcessSafetyPalette.TextBrushKey(provenance);
-
-        Assert.NotNull(key);
-        Assert.True(fallback.IsFrozen);
+        // Known values name a ThemeService.StatusPalette brush, so the chip stays legible on the light presets and
+        // follows a theme switch.
+        Assert.Equal(text, ProcessSafetyPalette.TextColor(provenance));
+        Assert.Equal(tint, ProcessSafetyPalette.BackgroundColor(provenance));
     }
 
     [Theory]
@@ -448,10 +388,10 @@ public class ConverterTests
     [Fact]
     public void ProcSafety_AllConverters_ConvertBackThrows()
     {
-        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToBrushConverter()
-            .ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
-        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToBackgroundConverter()
-            .ConvertBack(Brushes.Gray, typeof(string), null!, CultureInfo.InvariantCulture));
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToColorConverter()
+            .ConvertBack("InfoText", typeof(string), null!, CultureInfo.InvariantCulture));
+        Assert.Throws<NotSupportedException>(() => new ProcessSafetyToBackgroundColorConverter()
+            .ConvertBack("InfoBgSubtle", typeof(string), null!, CultureInfo.InvariantCulture));
         Assert.Throws<NotSupportedException>(() => new ProcessSafetyToTextConverter()
             .ConvertBack("Windows", typeof(string), null!, CultureInfo.InvariantCulture));
         Assert.Throws<NotSupportedException>(() => new ProcessSafetyToTooltipConverter()
@@ -469,8 +409,8 @@ public class ConverterTests
 
         Assert.Contains("Header=\"Safety\"", xaml);
         Assert.Contains("ProcSafetyText", xaml);
-        Assert.Contains("ProcSafetyBrush", xaml);
-        Assert.Contains("ProcSafetyBg", xaml);
+        Assert.Contains("ProcSafetyColor", xaml);
+        Assert.Contains("ProcSafetyBgColor", xaml);
         Assert.Contains("ProcSafetyTip", xaml);
         Assert.Contains("SortMemberPath=\"SafetyLevel\"", xaml);
     }
@@ -542,8 +482,8 @@ public class ConverterTests
         // above only proves the key is USED.
         var xaml = File.ReadAllText(TestPaths.AppFile("App.xaml"));
 
-        Assert.Contains("x:Key=\"ProcSafetyBrush\"", xaml);
-        Assert.Contains("x:Key=\"ProcSafetyBg\"", xaml);
+        Assert.Contains("x:Key=\"ProcSafetyColor\"", xaml);
+        Assert.Contains("x:Key=\"ProcSafetyBgColor\"", xaml);
         Assert.Contains("x:Key=\"ProcSafetyText\"", xaml);
         Assert.Contains("x:Key=\"ProcSafetyTip\"", xaml);
     }

@@ -52,7 +52,7 @@
                                        Foreground="{DynamicResource TextMuted}"/>
                             <TextBlock Text="{Binding Text}" Style="{StaticResource Body}"
                                        FontFamily="{StaticResource MonoFont}"
-                                       Foreground="{Binding Kind, Converter={StaticResource KindBrush}}"
+                                       helpers:ThemeBrush.Foreground="{Binding Kind, Converter={StaticResource KindColor}}"
                                        TextWrapping="NoWrap"/>
                         </StackPanel>
                     </DataTemplate>

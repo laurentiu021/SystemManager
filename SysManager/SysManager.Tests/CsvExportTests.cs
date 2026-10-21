@@ -308,8 +308,8 @@ public class CsvExportTests
         Assert.Equal("PID,Process,Type,Started,Started (raw),Critical", lines[0]);
         Assert.EndsWith(",yes", lines[1], StringComparison.Ordinal);
         Assert.EndsWith(",no", lines[2], StringComparison.Ordinal);
-        // No start time available: em dash in the display column, empty in the raw one.
-        Assert.Equal("4,System,RmCritical,—,,yes", lines[1]);
+        // No start time available: em dash in the display column, empty in the raw one. The type in plain words.
+        Assert.Equal("4,System,Needed by Windows,—,,yes", lines[1]);
     }
 
     /// <summary>Both paths, because one names what would be deleted and the other is the evidence why.</summary>

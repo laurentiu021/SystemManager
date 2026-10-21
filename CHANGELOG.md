@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.38] - 2026-10-21
+
+**File Lock Detector says what kind of program holds a file in plain words, and Battery Health no longer shows a healthy
+battery's wear in red.**
+
+### Fixed
+
+- **File Lock Detector's Type column showed the names Windows uses internally.** It read "RmExplorer", "RmService" or
+  "RmCritical", the last being the one process that should not be ended. It now reads "File Explorer", "Windows
+  service", "Needed by Windows", "App window", "Background window", "Console app" or "Other", and the CSV export
+  does the same. Since 1.36.0 on the tab and 1.91.0 in the export.
+- **Battery Health showed every wear figure in the colour kept for failures, 0% included.** A new battery's 0% or an
+  ordinary 4% read as a failing battery, beside an uncoloured health figure and above a verdict that said nothing
+  needed doing. The figure now reads like health, and the verdict says whether the wear is a problem. Since 0.10.0.
+
 ## [1.130.37] - 2026-10-21
 
 **Progress bars move while Windows Features, System Report and Windows Update work, and New App Alerts no longer

@@ -40,4 +40,21 @@ public class FileLockerTests
         var l = new FileLocker(1, "a.exe", appType, null);
         Assert.Equal(expected, l.IsCritical);
     }
+
+    /// <summary>
+    /// The Type column and the export showed the Restart Manager's names, "RmExplorer" and "RmCritical" among them
+    /// (#2813). Every name it gives has its plain words, and anything else reads "Other".
+    /// </summary>
+    [Theory]
+    [InlineData("RmMainWindow", "App window")]
+    [InlineData("RmOtherWindow", "Background window")]
+    [InlineData("RmService", "Windows service")]
+    [InlineData("RmExplorer", "File Explorer")]
+    [InlineData("RmConsole", "Console app")]
+    [InlineData("RmCritical", "Needed by Windows")]
+    [InlineData("rmcritical", "Needed by Windows")]
+    [InlineData("RmUnknownApp", "Other")]
+    [InlineData("", "Other")]
+    public void TypeDisplay_SaysWhatKindOfProgramItIs_InPlainWords(string appType, string expected)
+        => Assert.Equal(expected, new FileLocker(1, "a.exe", appType, null).TypeDisplay);
 }

@@ -26,4 +26,20 @@ public sealed record FileLocker(
     /// these is dangerous and the UI should warn or block.
     /// </summary>
     public bool IsCritical => AppType.Equals("RmCritical", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What kind of program this is, in plain words, for the Type column and the export. <see cref="AppType"/> keeps
+    /// the Restart Manager's own name, which <see cref="IsCritical"/> compares, and the column showed it as it was:
+    /// "RmExplorer", and "RmCritical" for the one process not to end (#2813).
+    /// </summary>
+    public string TypeDisplay => AppType.ToUpperInvariant() switch
+    {
+        "RMMAINWINDOW" => "App window",
+        "RMOTHERWINDOW" => "Background window",
+        "RMSERVICE" => "Windows service",
+        "RMEXPLORER" => "File Explorer",
+        "RMCONSOLE" => "Console app",
+        "RMCRITICAL" => "Needed by Windows",
+        _ => "Other",
+    };
 }

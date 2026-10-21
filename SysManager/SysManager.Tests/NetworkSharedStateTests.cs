@@ -221,4 +221,129 @@ public class NetworkSharedStateTests
         var ex = Record.Exception(() => state.Dispose());
         Assert.Null(ex);
     }
+
+    // ---------- the route of a host that is not a Ping target, and the auto-trace host (#2870) ----------
+    // The Hops table and the chart showed Ping targets only, so a trace of any other host ended "Done" with nothing on
+    // screen, and the host Start auto-trace gave the monitor was traced every round until SysManager closed. None of
+    // these starts the monitor or sends anything: they hand the state a route and read what it shows.
+
+    private static NetworkSharedState NewState() => new(new Services.PingMonitorService(), new Services.TracerouteService(),
+        new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+        new Services.NetworkRepairService(new Services.PowerShellRunner()));
+
+    private static List<TracerouteHop> Route(params string[] addresses) =>
+        [.. addresses.Select((a, i) => new TracerouteHop { HopNumber = i + 1, Address = a, LatencyMs = 10 + i, Status = "TtlExpired" })];
+
+    private static int LinesFor(NetworkSharedState state, string host) =>
+        state.TraceSeries.Count(s => s.Name?.Contains($"({host})") == true);
+
+    [Fact]
+    public void ARouteToAHostThatIsNotAPingTarget_IsListedAndDrawn()
+    {
+        using var state = NewState();
+        var lines = state.TraceSeries.Count;
+        var route = Route("192.0.2.1", "198.51.100.7", "203.0.113.9");
+
+        state.ApplyRoute("bbc.co.uk", route);
+
+        Assert.Equal(route, state.TracerouteHops);
+        Assert.Equal(lines + 1, state.TraceSeries.Count);
+        Assert.Equal(1, LinesFor(state, "bbc.co.uk"));
+        Assert.Equal([1d, 2d, 3d], state.TraceBuffers["bbc.co.uk"].Select(p => p.X ?? 0));
+    }
+
+    [Fact]
+    public void AnotherHostTraced_TakesTheLastOnesPlace()
+    {
+        using var state = NewState();
+        var lines = state.TraceSeries.Count;
+        state.ApplyRoute("bbc.co.uk", Route("192.0.2.1"));
+
+        var second = Route("198.51.100.7", "203.0.113.9");
+        state.ApplyRoute("example.org", second);
+
+        Assert.Equal(second, state.TracerouteHops);
+        Assert.Equal(lines + 1, state.TraceSeries.Count);
+        Assert.Equal(0, LinesFor(state, "bbc.co.uk"));
+        Assert.False(state.TraceBuffers.ContainsKey("bbc.co.uk"));
+    }
+
+    [Fact]
+    public void APingTargetTypedInAnotherCase_IsThatTarget()
+    {
+        using var state = NewState();
+        Assert.Contains(state.Targets, t => t.Host == "google.com");   // the premise: the Global preset has it
+        var lines = state.TraceSeries.Count;
+        var route = Route("192.0.2.1", "198.51.100.7");
+
+        state.ApplyRoute("GOOGLE.COM", route);
+
+        Assert.Equal(route, state.TracerouteHops);
+        Assert.Equal(lines, state.TraceSeries.Count);
+        Assert.Equal(2, state.TraceBuffers["google.com"].Count);
+    }
+
+    [Fact]
+    public void AddingTheTracedHostAsATarget_LeavesItOneLine()
+    {
+        using var state = NewState();
+        state.ApplyRoute("bbc.co.uk", Route("192.0.2.1"));
+
+        state.AddTarget("BBC", "bbc.co.uk", isCustom: true);
+
+        Assert.Equal(1, LinesFor(state, "bbc.co.uk"));
+        Assert.Equal(state.Targets.Count, state.TraceSeries.Count);
+    }
+
+    [Fact]
+    public void AnAutoTraceHost_ReplacesTheLastOne_AndGoesWhenForgotten()
+    {
+        using var state = NewState();
+
+        state.TrackAutoTraceHost("a.example");
+        state.TrackAutoTraceHost("b.example");
+
+        Assert.False(state.TraceMonitor.Targets.ContainsKey("a.example"));
+        Assert.True(state.TraceMonitor.Targets.ContainsKey("b.example"));
+
+        state.ForgetAutoTraceHost();
+        Assert.False(state.TraceMonitor.Targets.ContainsKey("b.example"));
+    }
+
+    [Fact]
+    public void APingTarget_IsNotGivenToTheMonitorAgain_NorTakenOffIt()
+    {
+        using var state = NewState();
+        var watched = state.TraceMonitor.Targets.Count;
+
+        state.TrackAutoTraceHost("GOOGLE.COM");
+        Assert.Equal(watched, state.TraceMonitor.Targets.Count);
+
+        state.ForgetAutoTraceHost();
+        Assert.True(state.TraceMonitor.Targets.ContainsKey("google.com"));
+    }
+
+    [Fact]
+    public void AnAutoTraceHostThatBecameAPingTarget_StaysOnTheMonitor()
+    {
+        using var state = NewState();
+        state.TrackAutoTraceHost("a.example");
+        state.AddTarget("A", "a.example", isCustom: true);
+
+        state.ForgetAutoTraceHost();
+
+        Assert.True(state.TraceMonitor.Targets.ContainsKey("a.example"));
+    }
+
+    [Fact]
+    public void PingsStop_TakesTheAutoTraceHostOffTheMonitorToo()
+    {
+        // Stop on Ping stops the same monitor, and nothing here was started, so nothing is sent.
+        using var state = NewState();
+        state.TrackAutoTraceHost("a.example");
+
+        state.StopMonitoring();
+
+        Assert.False(state.TraceMonitor.Targets.ContainsKey("a.example"));
+    }
 }

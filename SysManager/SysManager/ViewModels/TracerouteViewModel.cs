@@ -56,8 +56,8 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(TraceHost)) return;
 
-        // Ensure the current TraceHost is tracked by the monitor
-        Shared.TraceMonitor.AddHost(TraceHost);
+        // The monitor traces this host from now on, in place of a host an earlier auto-trace gave it.
+        Shared.TrackAutoTraceHost(TraceHost);
         Shared.TraceMonitor.Interval = TimeSpan.FromSeconds(
             Math.Max(10, Shared.TraceIntervalSeconds));
         Shared.TraceMonitor.Start();
@@ -73,6 +73,7 @@ public sealed partial class TracerouteViewModel : ViewModelBase
     private void StopAutoTrace()
     {
         Shared.TraceMonitor.Stop();
+        Shared.ForgetAutoTraceHost();
         Shared.IsAutoTraceRunning = false;
         StatusMessage = "Auto-trace stopped";
         Log.Information("Auto-traceroute stopped");

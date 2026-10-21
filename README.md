@@ -1331,7 +1331,11 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   rather than only that the destination is slow — interval 30 s to 10 min, default 60 s
 - **Latency per hop, charted**, alongside the hop table (number, address, ms)
 - **One-off trace to any host** you type (**Trace now**), with its own status line and a Cancel
-  button. **Start auto-trace** adds the host you typed to the loop and traces it straight away
+  button. Its route is listed and charted beside the ping targets' until you trace another host.
+  **Start auto-trace** adds the host you typed to the loop and traces it straight away, and
+  stopping auto-trace, here or on Ping, takes it off the loop again
+- An address that names no host, such as `0.0.0.0`, or a name too long to look up gets a message
+  saying it cannot be traced, and leaves the loop's other targets alone
 - Shares its targets and its start/stop state with the Ping tab, because it is the same
   monitor answering a different question
 

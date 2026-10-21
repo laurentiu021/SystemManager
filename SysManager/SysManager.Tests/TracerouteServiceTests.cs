@@ -29,4 +29,27 @@ public class TracerouteServiceTests
         var resolved = await TracerouteService.ResolveDestinationAsync(literal, CancellationToken.None);
         Assert.Equal(IPAddress.Parse(literal), resolved);
     }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    public async Task ResolveDestinationAsync_TheAnyAddress_IsRefusedInTheTypeTheTabShows(string host)
+    {
+        // It names no host, and Ping refused it with an ArgumentException nothing caught: the error dialog on Trace now,
+        // and the end of the loop for every target in auto-trace (#2870). Offline: the literal never reaches DNS.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => TracerouteService.ResolveDestinationAsync(host, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ResolveDestinationAsync_ANameDnsRefuses_IsRefusedInTheTypeTheTabShows()
+    {
+        // More than 255 characters: DNS refuses it with an ArgumentOutOfRangeException before it asks anything.
+        var host = new string('a', 300) + ".example";
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => TracerouteService.ResolveDestinationAsync(host, CancellationToken.None));
+        Assert.IsAssignableFrom<ArgumentException>(ex.InnerException);
+    }
 }

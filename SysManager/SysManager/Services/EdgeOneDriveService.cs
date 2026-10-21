@@ -59,6 +59,8 @@ public sealed partial class EdgeOneDriveService
     private readonly RegistryKey _hkcuRoot;   // OneDrive nav-pane pin (Software\Classes\CLSID\…)
     private readonly RegistryKey _hklmRoot;   // Edge policies (SOFTWARE\Policies\Microsoft\Edge)
     private readonly string? _oneDriveSetupPath;
+    private readonly string? _oneDriveClientPath;
+    private readonly Func<bool> _isOneDriveRunning;
 
     /// <summary>
     /// Creates the service. <paramref name="hkcuRoot"/> defaults to <see cref="Registry.CurrentUser"/>
@@ -68,15 +70,20 @@ public sealed partial class EdgeOneDriveService
     /// The optional <paramref name="oneDriveSetupPath"/> override exists for testing, as
     /// <see cref="HostsFileService"/>'s does: it replaces the setup locations probed below, so the
     /// remove/restore outcome can be tested on a machine without OneDrive. The runner is substituted
-    /// there, so the file is never launched.
+    /// there, so the file is never launched. <paramref name="oneDriveClientPath"/> does the same for OneDrive.exe,
+    /// whose presence is what "installed" means, and <paramref name="isOneDriveRunning"/> replaces the look at the
+    /// running processes, so neither answer depends on the machine running the test.
     /// </summary>
     public EdgeOneDriveService(
-        IPowerShellRunner ps, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null, string? oneDriveSetupPath = null)
+        IPowerShellRunner ps, RegistryKey? hkcuRoot = null, RegistryKey? hklmRoot = null,
+        string? oneDriveSetupPath = null, string? oneDriveClientPath = null, Func<bool>? isOneDriveRunning = null)
     {
         _ps = ps;
         _hkcuRoot = hkcuRoot ?? Registry.CurrentUser;
         _hklmRoot = hklmRoot ?? Registry.LocalMachine;
         _oneDriveSetupPath = oneDriveSetupPath;
+        _oneDriveClientPath = oneDriveClientPath;
+        _isOneDriveRunning = isOneDriveRunning ?? IsOneDriveRunning;
     }
 
     // OneDrive's File Explorer navigation-pane entry is a shell namespace CLSID; toggling
@@ -95,6 +102,9 @@ public sealed partial class EdgeOneDriveService
     // The ONLY scheduled tasks this service will ever touch — Edge's two machine auto-update tasks.
     // A fixed allowlist (never a user- or catalog-supplied name) means the disable/enable path can
     // never be pointed at an arbitrary task. Each name is validated as embedding-safe by a unit test.
+    // Each is matched as a prefix in the root task folder: current Edge Update adds an ID to the name, as in
+    // "MicrosoftEdgeUpdateTaskMachineCore{...}", so the exact name found no task, and Disable and Restore
+    // changed none while reporting success (#2810).
     internal static readonly string[] EdgeUpdateTaskNames =
     [
         "MicrosoftEdgeUpdateTaskMachineCore",
@@ -111,8 +121,8 @@ public sealed partial class EdgeOneDriveService
     /// </summary>
     public async Task<EdgeOneDriveStatus> GetStatusAsync(CancellationToken ct = default)
     {
-        bool oneDriveInstalled = ResolveOneDriveSetup() is not null;
-        bool oneDriveRunning = IsOneDriveRunning();
+        bool oneDriveInstalled = IsOneDriveClientInstalled();
+        bool oneDriveRunning = _isOneDriveRunning();
         bool oneDrivePinned = ReadOneDrivePinned(oneDriveInstalled);
         bool edgeInstalled = ResolveEdgeExe() is not null;
         bool edgeBackgroundDisabled = ReadEdgeBackgroundDisabled();
@@ -133,12 +143,19 @@ public sealed partial class EdgeOneDriveService
     /// Removes OneDrive for the current user: stops the client, runs the official uninstaller,
     /// and unpins the File Explorer navigation-pane entry. Reversible via
     /// <see cref="RestoreOneDriveAsync"/>. Returns <see cref="EdgeOneDriveOutcome.NotApplicable"/>
-    /// if OneDrive isn't installed.
+    /// if OneDrive isn't installed, and <see cref="EdgeOneDriveOutcome.Failed"/>, with the entry left as it was, when
+    /// the uninstaller fails or cannot be found.
     /// </summary>
     public async Task<EdgeOneDriveOutcome> RemoveOneDriveAsync(CancellationToken ct = default)
     {
+        if (!IsOneDriveClientInstalled()) return EdgeOneDriveOutcome.NotApplicable;
         var setup = ResolveOneDriveSetup();
-        if (setup is null) return EdgeOneDriveOutcome.NotApplicable;
+        if (setup is null)
+        {
+            // Installed with nothing to uninstall it: "not installed" here would contradict the card.
+            Log.Warning("OneDrive: installed, but no OneDriveSetup.exe was found to uninstall it");
+            return EdgeOneDriveOutcome.Failed;
+        }
 
         try { await _ps.RunAsync(KillOneDriveScript, cancellationToken: ct).ConfigureAwait(false); }
         catch (System.Management.Automation.RuntimeException ex) { Log.Debug("OneDrive: stop-process failed: {Error}", ex.Message); }
@@ -154,11 +171,13 @@ public sealed partial class EdgeOneDriveService
             return EdgeOneDriveOutcome.Failed;
         }
 
-        // Unpin the nav-pane entry regardless — a best-effort per-user cleanup that the
-        // uninstaller doesn't always clear immediately.
-        SetOneDrivePinned(false);
         Log.Information("OneDrive: uninstall requested (exit {Exit})", exit);
-        return exit == 0 ? EdgeOneDriveOutcome.Success : EdgeOneDriveOutcome.Failed;
+        // Only a removal that worked takes the File Explorer entry away (#2810). It went whatever the exit code, so a
+        // failed uninstall left an installed OneDrive missing from the sidebar. Restore pins only after success too.
+        if (exit != 0) return EdgeOneDriveOutcome.Failed;
+        // The uninstaller does not always clear the entry at once.
+        SetOneDrivePinned(false);
+        return EdgeOneDriveOutcome.Success;
     }
 
     /// <summary>
@@ -186,7 +205,6 @@ public sealed partial class EdgeOneDriveService
         Log.Information("OneDrive: reinstall requested (exit {Exit})", exit);
         // The exit code decides, as it does for removal (#2443). It used to be discarded, so a failed setup
         // reported "OneDrive restored." and pinned a File Explorer entry for a client that was not installed.
-        // The tab cannot show the failure afterwards either: "installed" only means the setup file exists.
         if (exit != 0) return EdgeOneDriveOutcome.Failed;
         SetOneDrivePinned(true);
         return EdgeOneDriveOutcome.Success;
@@ -198,17 +216,26 @@ public sealed partial class EdgeOneDriveService
     /// Disables Edge's background mode and startup boost (HKLM Group-Policy keys) and disables its
     /// auto-update scheduled tasks. Fully reversible via <see cref="RestoreEdgeAsync"/>. Never
     /// uninstalls Edge. Returns <see cref="EdgeOneDriveOutcome.NeedsAdmin"/> if the machine policy
-    /// write is denied.
+    /// write is denied, and <see cref="EdgeOneDriveOutcome.Failed"/>, with the policy values put back as they were,
+    /// when no update task is found or one cannot be disabled.
     /// </summary>
     public async Task<EdgeOneDriveOutcome> DisableEdgeAsync(CancellationToken ct = default)
     {
+        // Read first, so a change that does not complete leaves both values as it found them (#2810). Put back rather
+        // than deleted: either may have been set before, by an earlier Disable or by whoever manages the PC.
+        var before = ReadEdgePolicyValues();
         if (!TrySetEdgeBackgroundDisabled(true)) return EdgeOneDriveOutcome.NeedsAdmin;
-        try { await _ps.RunAsync(BuildSetEdgeTasksScript(enabled: false), cancellationToken: ct).ConfigureAwait(false); }
-        catch (System.Management.Automation.RuntimeException ex)
+        var done = false;
+        try
         {
-            Log.Warning("Edge: policy was disabled, but update tasks could not be disabled: {Error}", ex.Message);
-            return EdgeOneDriveOutcome.Failed;
+            done = await TrySetEdgeTasksAsync(enabled: false, ct).ConfigureAwait(false);
         }
+        finally
+        {
+            // Also when the run throws rather than reports, as a cancelled one does.
+            if (!done) RestoreEdgePolicyValues(before);
+        }
+        if (!done) return EdgeOneDriveOutcome.Failed;
         Log.Information("Edge: disabled background/startup-boost and update tasks");
         return EdgeOneDriveOutcome.Success;
     }
@@ -216,17 +243,13 @@ public sealed partial class EdgeOneDriveService
     /// <summary>
     /// Restores Edge to Windows defaults: clears the background/startup-boost policy values and
     /// re-enables its auto-update scheduled tasks. Returns <see cref="EdgeOneDriveOutcome.NeedsAdmin"/>
-    /// if the machine policy write is denied.
+    /// if the machine policy write is denied, and <see cref="EdgeOneDriveOutcome.Failed"/> when no update task is
+    /// found or one cannot be enabled.
     /// </summary>
     public async Task<EdgeOneDriveOutcome> RestoreEdgeAsync(CancellationToken ct = default)
     {
         if (!TrySetEdgeBackgroundDisabled(false)) return EdgeOneDriveOutcome.NeedsAdmin;
-        try { await _ps.RunAsync(BuildSetEdgeTasksScript(enabled: true), cancellationToken: ct).ConfigureAwait(false); }
-        catch (System.Management.Automation.RuntimeException ex)
-        {
-            Log.Warning("Edge: policy was restored, but update tasks could not be enabled: {Error}", ex.Message);
-            return EdgeOneDriveOutcome.Failed;
-        }
+        if (!await TrySetEdgeTasksAsync(enabled: true, ct).ConfigureAwait(false)) return EdgeOneDriveOutcome.Failed;
         Log.Information("Edge: restored background/startup-boost and update tasks");
         return EdgeOneDriveOutcome.Success;
     }
@@ -308,25 +331,120 @@ public sealed partial class EdgeOneDriveService
         catch (IOException) { return false; }
     }
 
+    /// <summary>One Edge policy value as it was: its data and registry type, or no data when it was not set.</summary>
+    private readonly record struct EdgePolicyValue(object? Data, RegistryValueKind Kind);
+
+    /// <summary>Both Edge policy values as they were before a change.</summary>
+    private readonly record struct EdgePolicyValues(EdgePolicyValue BackgroundMode, EdgePolicyValue StartupBoost);
+
+    /// <summary>
+    /// Both policy values as they are now, for <see cref="RestoreEdgePolicyValues"/>. A key that cannot be read reads
+    /// as both unset.
+    /// </summary>
+    private EdgePolicyValues ReadEdgePolicyValues()
+    {
+        try
+        {
+            using var key = _hklmRoot.OpenSubKey(EdgePolicyPath);
+            return new EdgePolicyValues(Read(key, BackgroundModeValue), Read(key, StartupBoostValue));
+        }
+        catch (System.Security.SecurityException) { return default; }
+        catch (IOException) { return default; }
+
+        static EdgePolicyValue Read(RegistryKey? key, string name) =>
+            key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) is { } data
+                ? new EdgePolicyValue(data, key.GetValueKind(name))
+                : default;
+    }
+
+    /// <summary>
+    /// Puts both policy values back as <see cref="ReadEdgePolicyValues"/> found them: written again with their own
+    /// type, or deleted when they were not set.
+    /// </summary>
+    private void RestoreEdgePolicyValues(EdgePolicyValues before)
+    {
+        try
+        {
+            using var key = _hklmRoot.CreateSubKey(EdgePolicyPath, writable: true);
+            if (key is null) return;
+            Put(key, BackgroundModeValue, before.BackgroundMode);
+            Put(key, StartupBoostValue, before.StartupBoost);
+            Log.Information("Edge: the update tasks were not changed, so the policy values were put back");
+        }
+        catch (UnauthorizedAccessException ex) { Log.Warning("Edge policy not put back: {Error}", ex.Message); }
+        catch (System.Security.SecurityException ex) { Log.Warning("Edge policy not put back: {Error}", ex.Message); }
+        catch (IOException ex) { Log.Warning("Edge policy not put back: {Error}", ex.Message); }
+
+        static void Put(RegistryKey key, string name, EdgePolicyValue value)
+        {
+            if (value.Data is null) key.DeleteValue(name, throwOnMissingValue: false);
+            else key.SetValue(name, value.Data, value.Kind);
+        }
+    }
+
     // ── Scheduled-task helpers (Edge auto-update) ───────────────────────────
+
+    /// <summary>
+    /// The pipeline that finds Edge's update tasks: a name starting with one of the fixed prefixes, in the root task
+    /// folder. A wildcard <c>-TaskName</c> that matches nothing returns nothing, without the error it raises beside a
+    /// <c>-TaskPath</c>, so the folder is checked after.
+    /// </summary>
+    private static string FindEdgeTasksPipeline(string errorAction)
+    {
+        var prefixes = string.Join(",", EdgeUpdateTaskNames.Select(n => $"'{n}*'"));
+        return $"@(Get-ScheduledTask -TaskName {prefixes} -ErrorAction {errorAction} " +
+               "| Where-Object { $_.TaskPath -eq '\\' })";
+    }
 
     /// <summary>
     /// Builds the hard-coded enable/disable script over the fixed Edge update-task allowlist. The
     /// task names are compile-time constants validated as embedding-safe (<see cref="IsSafeTaskName"/>),
-    /// so this carries no injection surface even though the names are interpolated.
+    /// so this carries no injection surface even though the names are interpolated. It changes only the tasks not
+    /// already as asked, puts back the ones it changed when one refuses, and reports how many tasks it found and
+    /// whether one refused.
     /// </summary>
-    private static string BuildSetEdgeTasksScript(bool enabled)
+    internal static string BuildSetEdgeTasksScript(bool enabled)
     {
-        var names = string.Join(",", EdgeUpdateTaskNames.Select(n => $"'{n}'"));
-        var verb = enabled ? "Enable-ScheduledTask" : "Disable-ScheduledTask";
-        return $"foreach ($t in {names}) {{ {verb} -TaskName $t -ErrorAction SilentlyContinue | Out-Null }}";
+        var (verb, undo, alreadyDone) = enabled
+            ? ("Enable-ScheduledTask", "Disable-ScheduledTask", "-ne")
+            : ("Disable-ScheduledTask", "Enable-ScheduledTask", "-eq");
+        return $"$tasks = {FindEdgeTasksPipeline("Stop")}; $changed = @(); $refused = $false; " +
+               $"foreach ($t in $tasks) {{ if ([string]$t.State {alreadyDone} 'Disabled') {{ continue }}; " +
+               $"try {{ {verb} -InputObject $t -ErrorAction Stop | Out-Null; $changed += $t }} " +
+               "catch { $refused = $true; break } }; " +
+               "if ($refused) { foreach ($t in $changed) { " +
+               $"{undo} -InputObject $t -ErrorAction SilentlyContinue | Out-Null }} }}; " +
+               "[PSCustomObject]@{ Found = $tasks.Count; Refused = $refused }";
     }
 
-    private static string BuildQueryEdgeTasksScript()
+    internal static string BuildQueryEdgeTasksScript() =>
+        $"$tasks = {FindEdgeTasksPipeline("SilentlyContinue")}; " +
+        "[PSCustomObject]@{ AnyEnabled = (@($tasks | Where-Object { [string]$_.State -ne 'Disabled' }).Count -gt 0) }";
+
+    /// <summary>
+    /// Runs the enable/disable script and says whether it did its job: at least one update task found, and none
+    /// refused. None found is not done, since the confirmation promises the tasks (#2810).
+    /// </summary>
+    private async Task<bool> TrySetEdgeTasksAsync(bool enabled, CancellationToken ct)
     {
-        var names = string.Join(",", EdgeUpdateTaskNames.Select(n => $"'{n}'"));
-        return $"$s = foreach ($t in {names}) {{ $x = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue; if ($x) {{ [string]$x.State }} }}; " +
-               "[PSCustomObject]@{ AnyEnabled = (@($s | Where-Object { $_ -eq 'Ready' }).Count -gt 0) }";
+        var change = enabled ? "enabled" : "disabled";
+        try
+        {
+            var results = await _ps.RunAsync(BuildSetEdgeTasksScript(enabled), cancellationToken: ct)
+                .ConfigureAwait(false);
+            var report = results.Count > 0 ? results[0] : null;
+            var found = report?.Properties["Found"]?.Value as int? ?? 0;
+            var refused = report?.Properties["Refused"]?.Value is not false;
+            if (found > 0 && !refused) return true;
+            Log.Warning("Edge: update tasks not {Change}: {Found} found, one refused: {Refused}",
+                change, found, refused);
+            return false;
+        }
+        catch (System.Management.Automation.RuntimeException ex)
+        {
+            Log.Warning("Edge: update tasks could not be {Change}: {Error}", change, ex.Message);
+            return false;
+        }
     }
 
     private async Task<bool> QueryEdgeUpdateTasksEnabledAsync(CancellationToken ct)
@@ -358,8 +476,8 @@ public sealed partial class EdgeOneDriveService
     /// <summary>
     /// Resolves the OneDriveSetup.exe to launch, preferring the trusted, admin-only-writable
     /// System32/SysWOW64 copy (which also survives an uninstall, so restore still works) and
-    /// falling back to the per-user copy under LOCALAPPDATA. Returns null when none exists
-    /// (OneDrive not installed). Preferring the System copy also avoids launching a user-writable
+    /// falling back to the per-user copy under LOCALAPPDATA. Returns null when none exists, which says
+    /// nothing about whether OneDrive is installed. Preferring the System copy also avoids launching a user-writable
     /// binary should the app ever be elevated for the Edge portion (binary-planting guard, matching
     /// <see cref="SysManager.Helpers.SystemPaths"/>). A test override replaces the candidates; it is probed the same
     /// way.
@@ -378,6 +496,28 @@ public sealed partial class EdgeOneDriveService
                 "Microsoft", "OneDrive", "OneDriveSetup.exe"),
         ];
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// True when OneDrive itself is installed: its OneDrive.exe, under LOCALAPPDATA for one account or under
+    /// Program Files for every account. Not the setup, which Windows keeps in System32 after an uninstall so
+    /// OneDrive can be put back: decided by it, the card said "OneDrive is installed." right after a removal
+    /// (#2810). A test override replaces the candidates.
+    /// </summary>
+    private bool IsOneDriveClientInstalled()
+    {
+        if (_oneDriveClientPath is not null) return File.Exists(_oneDriveClientPath);
+
+        string[] candidates =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "OneDrive", "OneDrive.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                "Microsoft OneDrive", "OneDrive.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                "Microsoft OneDrive", "OneDrive.exe"),
+        ];
+        return candidates.Any(File.Exists);
     }
 
     private static string? ResolveEdgeExe()

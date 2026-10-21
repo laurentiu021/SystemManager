@@ -47,15 +47,32 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EdgeStateText))]
     private bool _edgeBackgroundDisabled;
 
-    public string OneDriveStateText => !OneDriveInstalled
-        ? "OneDrive is not installed."
-        : OneDriveRunning ? "OneDrive is installed and running." : "OneDrive is installed.";
+    /// <summary>
+    /// True once a read of the state has worked. Until then the four flags above are only their defaults, and the card
+    /// said "OneDrive is not installed." while it was still looking (#2810).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OneDriveStateText), nameof(EdgeStateText))]
+    private bool _statusRead;
 
-    public string EdgeStateText => !EdgeInstalled
+    /// <summary>True when the first read failed, so the card says so rather than that it is still checking.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OneDriveStateText), nameof(EdgeStateText))]
+    private bool _statusUnreadable;
+
+    public string OneDriveStateText => UnreadState("OneDrive") ?? (!OneDriveInstalled
+        ? "OneDrive is not installed."
+        : OneDriveRunning ? "OneDrive is installed and running." : "OneDrive is installed.");
+
+    public string EdgeStateText => UnreadState("Microsoft Edge") ?? (!EdgeInstalled
         ? "Microsoft Edge is not installed."
         : EdgeBackgroundDisabled
             ? "Edge is de-integrated (background mode and startup boost are off)."
-            : "Edge is active (background mode / startup boost may be on).";
+            : "Edge is active (background mode / startup boost may be on).");
+
+    /// <summary>What a card says before a read has worked, or null once one has.</summary>
+    private string? UnreadState(string component) => StatusRead ? null
+        : StatusUnreadable ? $"{component}'s state could not be read." : $"Checking {component}…";
 
     public EdgeOneDriveViewModel(EdgeOneDriveService service, ISessionRestorePoint restorePoint)
     {
@@ -102,15 +119,22 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         }
         // GetStatusAsync runs PowerShell; a runspace-level fault (not the RuntimeException the
         // service catches) would otherwise escape this async command unobserved.
-        catch (InvalidOperationException ex) { StatusMessage = $"Could not read status: {ex.Message}"; }
-        catch (System.ComponentModel.Win32Exception ex) { StatusMessage = $"Could not read status: {ex.Message}"; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            StatusMessage = $"Could not read status: {ex.Message}";
+            StatusUnreadable = true;
+        }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task RemoveOneDriveAsync()
     {
-        if (!OneDriveInstalled) { StatusMessage = "OneDrive is not installed — nothing to remove."; return; }
+        if (StatusRead && !OneDriveInstalled)
+        {
+            StatusMessage = "OneDrive is not installed — nothing to remove.";
+            return;
+        }
         if (!Confirm(
                 "Remove OneDrive for your account?\n\n" +
                 "This stops OneDrive, uninstalls it for the current user, and removes its File Explorer " +
@@ -121,7 +145,14 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
             StatusMessage = "OneDrive removal cancelled.";
             return;
         }
-        await RunOperationAsync(_service.RemoveOneDriveAsync, "OneDrive", "removed").ConfigureAwait(true);
+        var wasRunning = OneDriveRunning;
+        var outcome = await RunOperationAsync(_service.RemoveOneDriveAsync, "OneDrive", "removed").ConfigureAwait(true);
+        // The uninstaller runs with OneDrive closed, and a failed removal leaves it closed (#2810). It is not started
+        // again from here: OneDrive refuses to run with the administrator rights SysManager may have, and one started
+        // through the PowerShell helper can be ended with it. Checked after the refresh, so one running again gets no
+        // note.
+        if (outcome == EdgeOneDriveOutcome.Failed && wasRunning && OneDriveInstalled && !OneDriveRunning)
+            StatusMessage += " It was closed for the attempt: open OneDrive from the Start menu to start it again.";
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
@@ -139,7 +170,11 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private async Task DisableEdgeAsync()
     {
-        if (!EdgeInstalled) { StatusMessage = "Microsoft Edge is not installed — nothing to change."; return; }
+        if (StatusRead && !EdgeInstalled)
+        {
+            StatusMessage = "Microsoft Edge is not installed — nothing to change.";
+            return;
+        }
         if (!Confirm(
                 "Disable and de-integrate Microsoft Edge?\n\n" +
                 "Edge is never uninstalled — Windows needs it and would reinstall it anyway. This turns " +
@@ -199,9 +234,11 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     /// <summary>
     /// Shared runner for the four mutating operations: flips busy, invokes the service, maps the
     /// honest <see cref="EdgeOneDriveOutcome"/> to a status message, logs a successful change, and
-    /// always re-reads the status so the panel reflects reality.
+    /// always re-reads the status so the panel reflects reality. Returns the outcome, or null when the change did not
+    /// run or ended in an exception.
     /// </summary>
-    private async Task RunOperationAsync(Func<CancellationToken, Task<EdgeOneDriveOutcome>> operation, string component, string pastTense)
+    private async Task<EdgeOneDriveOutcome?> RunOperationAsync(
+        Func<CancellationToken, Task<EdgeOneDriveOutcome>> operation, string component, string pastTense)
     {
         // A change that is cancelled with nothing to name it when SysManager closes mid-run. One funnel
         // for all four changes, so the lock cannot end up guarding some of them and not others (#2510).
@@ -209,11 +246,12 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            return;
+            return null;
         }
 
         IsBusy = true;
         IsProgressIndeterminate = true;
+        EdgeOneDriveOutcome? result = null;
         try
         {
             // Before the change, never after: a snapshot taken afterwards would record the state
@@ -223,6 +261,7 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
                 .EnsureAsync("SysManager Edge/OneDrive", CancellationToken.None).ConfigureAwait(true);
 
             var outcome = await operation(CancellationToken.None).ConfigureAwait(true);
+            result = outcome;
             StatusMessage = outcome switch
             {
                 EdgeOneDriveOutcome.Success => snapshotTaken
@@ -247,6 +286,7 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
             // Re-read so the status panel matches the new reality, regardless of outcome.
             await RefreshAfterOperationAsync().ConfigureAwait(true);
         }
+        return result;
     }
 
     private async Task RefreshAfterOperationAsync()
@@ -266,6 +306,7 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
         OneDriveRunning = status.OneDriveRunning;
         EdgeInstalled = status.EdgeInstalled;
         EdgeBackgroundDisabled = status.EdgeBackgroundDisabled;
+        StatusRead = true;
     }
 
     // All four changes run through RunOperationAsync, which takes the session restore point first, so every

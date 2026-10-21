@@ -229,7 +229,7 @@
             <DataGrid AutomationProperties.Name="Right-click menu entries"
                       ItemsSource="{Binding Entries}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
-                      CanUserAddRows="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
                       Background="Transparent" BorderThickness="0"
                       GridLinesVisibility="None" IsReadOnly="False"
                       SelectionMode="Single" CanUserSortColumns="True"

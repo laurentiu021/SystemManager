@@ -38,7 +38,7 @@
             <Grid>
             <DataGrid AutomationProperties.Name="Upgradable packages" ItemsSource="{Binding Packages}"
                       AutoGenerateColumns="False" HeadersVisibility="Column"
-                      GridLinesVisibility="None" CanUserAddRows="False"
+                      GridLinesVisibility="None" CanUserAddRows="False" CanUserDeleteRows="False"
                       CanUserSortColumns="True"
                       CanUserResizeColumns="True"
                       Background="Transparent" BorderThickness="0"

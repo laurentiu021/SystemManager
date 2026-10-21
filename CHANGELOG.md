@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.34] - 2026-10-21
+
+**The Delete key no longer takes a row off a list while nothing changes on the PC.**
+
+### Fixed
+
+- **Pressing Delete on Startup Manager, Uninstaller and six other lists removed the selected row and did nothing
+  else.** Windows' list control takes the selected row off its list on Delete unless it is told not to, and the
+  eight lists that can be ticked or switched never told it: Startup Manager, Uninstaller, Right-click Menu,
+  Environment Variables, Preinstalled Apps, App Updates, Browser Cleaner and Windows Update. The startup program
+  still started with Windows and the app stayed installed. On Environment Variables, Apply then deleted nothing,
+  and on Preinstalled Apps the hidden row stayed ticked, so Remove selected could remove an app no longer on
+  screen. Delete now does nothing in every list, and a row goes only through its own button and confirmation.
+  Since each list was added, the oldest in 0.3.0.
+
 ## [1.130.33] - 2026-10-21
 
 **CSV exports open in Excel in your own region, with accented names intact.**

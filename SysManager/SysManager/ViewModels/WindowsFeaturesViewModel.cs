@@ -31,6 +31,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     private readonly WindowsFeaturesService _service;
     private readonly ISessionRestorePoint _restorePoint;
+    private readonly IFeatureParentsService _parents;
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _toggleCts;
 
@@ -49,10 +50,12 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
 
-    public WindowsFeaturesViewModel(WindowsFeaturesService service, ISessionRestorePoint restorePoint)
+    public WindowsFeaturesViewModel(
+        WindowsFeaturesService service, ISessionRestorePoint restorePoint, IFeatureParentsService parents)
     {
         _service = service;
         _restorePoint = restorePoint;
+        _parents = parents;
         // Scan and ToggleFeature both drive the shared WindowsFeaturesService PowerShell
         // runner (each subscribes its own LineReceived handler). Running them concurrently
         // would cross-contaminate the captured output (the SFC/DISM bug class). Re-evaluate
@@ -135,8 +138,13 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
 
             var wasEnabled = feature.IsEnabled;
             var action = wasEnabled ? "disable" : "enable";
+
+            // Enabling passes -All, which turns on every feature this one needs, and the confirmation named only the
+            // clicked one: an IIS sub-feature brought the IIS web server with it, unannounced (#2834).
+            var parents = await ReadParentsAsync(feature);
             if (!DialogService.Instance.Confirm(
                 $"Are you sure you want to {action} '{feature.DisplayName}'?\n\n" +
+                DescribeParents(wasEnabled, parents) +
                 "This may require a system reboot to take effect." +
                 _restorePoint.ConfirmationNotice,
                 $"Confirm {action} feature"))
@@ -181,6 +189,9 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
                 // done part of its work, and one that went through can be waiting for a restart (#2834).
                 var now = await ReadBackAsync(feature.Name, _toggleCts.Token);
 
+                // And the features it turned on with this one, whose rows still read off.
+                var turnedOn = wasEnabled ? 0 : await ShowParentsAsync(feature, parents);
+
                 if (result.Success)
                 {
                     feature.IsEnabled = now?.IsEnabled ?? !wasEnabled;
@@ -198,7 +209,13 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
                         // refused the change, and a snapshot beside "Failed" reads as something to roll back.
                         var rp = snapshotTaken ? " Restore point created." : "";
                         StatusMessage = $"{feature.DisplayName} {action}d" +
-                            (feature.RequiresReboot ? " — reboot required." : ".") + rp;
+                            (feature.RequiresReboot ? " — reboot required." : ".") +
+                            (turnedOn switch
+                            {
+                                0 => "",
+                                1 => " Windows also turned on 1 feature it needs.",
+                                _ => $" Windows also turned on {turnedOn} features it needs.",
+                            }) + rp;
                     }
                     Log.Information("Feature {Feature} toggled to {State}, reboot={Reboot}",
                         feature.Name, feature.IsEnabled ? "Enabled" : "Disabled", feature.RequiresReboot);
@@ -253,6 +270,78 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
             Log.Warning("Windows feature {Feature} could not be read back after a change: {Error}", name, ex.Message);
             return null;
         }
+    }
+
+    /// <summary>
+    /// What the feature needs, as DISM reports it, or null when DISM could not be asked. The bar moves while it is
+    /// read, because opening a DISM session takes a moment, and the status line goes back to what it said.
+    /// </summary>
+    private async Task<IReadOnlyList<FeatureParent>?> ReadParentsAsync(WindowsFeature feature)
+    {
+        var said = StatusMessage;
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        StatusMessage = $"Checking what {feature.DisplayName} needs…";
+        try
+        {
+            return await _parents.ReadAsync(feature.Name).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+            StatusMessage = said;
+        }
+    }
+
+    /// <summary>
+    /// The confirmation's sentence about the features this one needs: the ones turning it on turns on too, or the ones
+    /// that stay on when it is turned off. Ends in a blank line, or is empty when there is nothing to say.
+    /// </summary>
+    internal static string DescribeParents(bool disabling, IReadOnlyList<FeatureParent>? parents)
+    {
+        if (parents is null)
+            return disabling ? "" : "Windows also turns on any other features it needs.\n\n";
+
+        var names = parents.Where(p => p.IsEnabled == disabling)
+            .Select(p => WindowsFeaturesService.HumanizeName(p.Name))
+            .ToList();
+        if (names.Count == 0) return "";
+
+        var list = names.Count <= MaxNamed
+            ? string.Join(", ", names)
+            : $"{string.Join(", ", names.Take(MaxNamed))} and {names.Count - MaxNamed} more";
+        return disabling
+            ? $"The features it needs stay on: {list}.\n\n"
+            : $"Windows turns these on with it, because it needs them: {list}.\n\n";
+    }
+
+    /// <summary>How many features a confirmation names before it counts the rest.</summary>
+    private const int MaxNamed = 10;
+
+    /// <summary>
+    /// Reads again the features that were off before turning this one on, and writes their rows from what DISM reports.
+    /// Returns how many of them are on now.
+    /// </summary>
+    private async Task<int> ShowParentsAsync(WindowsFeature feature, IReadOnlyList<FeatureParent>? before)
+    {
+        var off = before?.Where(p => !p.IsEnabled).Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (off is not { Count: > 0 }) return 0;
+        if (await _parents.ReadAsync(feature.Name).ConfigureAwait(true) is not { } after) return 0;
+
+        var turnedOn = 0;
+        foreach (var parent in after.Where(p => off.Contains(p.Name)))
+        {
+            if (parent.IsEnabled) turnedOn++;
+            if (parent.Pending) PendingReboot = true;
+            if (AllFeatures.FirstOrDefault(f => f.Name.Equals(parent.Name, StringComparison.OrdinalIgnoreCase))
+                is not { } row)
+                continue;
+            row.IsEnabled = parent.IsEnabled;
+            row.RequiresReboot = parent.Pending;
+            row.Status = parent.Pending ? "Reboot required" : parent.IsEnabled ? "Enabled" : "Disabled";
+        }
+        return turnedOn;
     }
 
     // DISM's codes for a feature whose files Windows cannot get, as Microsoft documents them for .NET Framework 3.5

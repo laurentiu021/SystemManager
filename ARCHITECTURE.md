@@ -316,7 +316,7 @@ to scroll.
   already running is stopped and `RefreshAsync` loads the arrival's list next (#2887).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
-- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day. After every change it reads the feature back through `ReadFeatureAsync` and writes the row from that, says DISM's reason for a refusal through `DescribeFailure`, and turns the switch back with `WindowsFeature.ResetSwitch` whenever the change did not happen (#2834, #2739). Escape and Cancel stop only a scan, while `IsScanning` is set: stopping a change ended DISM part-way.
+- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day. After every change it reads the feature back through `ReadFeatureAsync` and writes the row from that, says DISM's reason for a refusal through `DescribeFailure`, and turns the switch back with `WindowsFeature.ResetSwitch` whenever the change did not happen (#2834, #2739). Escape and Cancel stop only a scan, while `IsScanning` is set: stopping a change ended DISM part-way. Before a change it asks `IFeatureParentsService` what the feature needs, and the confirmation names what turning it on turns on with it, or what stays on when it is turned off; after turning one on, those rows are written from DISM's answer.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
   Recent Changes lists them; Clear History clears that record too (#1507). A folder alert that a new uninstall entry
@@ -413,7 +413,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-four are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-five are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
@@ -423,7 +423,8 @@ history), `IBrowserExtensionService` (BrowserExtensionService, Browser Cleaner's
 the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`, `IDisplayProfileService` (DisplayProfileService, which also passes on Windows' display-change
 notification),
-`IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
+`IFeatureParentsService` (FeatureParentsService, the DISM API's list of what a feature needs, for Windows
+Features), `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
 Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
@@ -870,6 +871,9 @@ Key services:
   the publisher's name**, never for the verdict. That ordering is the fix: a name is cosmetic,
   so failing to read one costs a phrase in a tooltip, while the verdict decides a colour. Every
   phrasing here has a form that works with no name, which is what lets the name be optional.
+- `FeatureParentsService` — the features another one needs, its parents, theirs and so on, through the DISM API
+  (`DismGetFeatureParent` in dismapi.dll, loaded from System32 only, since SysManager runs elevated). Windows
+  Features names them before a change and reads them again after turning a feature on (#2834).
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
   via `Get-`, `Enable-` and `Disable-WindowsOptionalFeature`, each in its own `powershell.exe`. All three
   need administrator rights, listing included, and every one of them checks the exit code:

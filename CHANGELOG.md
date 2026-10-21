@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.53] - 2026-10-21
+
+**Windows Features names the features Windows turns on with the one you enable, and shows them on afterwards.**
+
+### Fixed
+
+- **Turning on a feature turned on others with it, and nothing said so.** Windows turns on every feature the chosen
+  one needs, and the confirmation named only the one clicked, so enabling a part of IIS installed the IIS web server
+  underneath, unannounced. Their rows still read off until the next scan. The confirmation now names them, the status
+  line says how many came on, and their rows show it at once. Turning a feature off names the ones it needs, which
+  stay on. Since 0.46.0.
+
 ## [1.130.52] - 2026-10-21
 
 **Escape no longer stops an uninstall or a System Fixes repair half-way, and Uninstaller's Cancel stops a batch

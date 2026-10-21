@@ -102,7 +102,7 @@ public partial class App : Application
         }
 
         // Register OEM/ANSI code pages (437, 852, etc.) required by system
-        // tools like chkdsk.exe, sfc.exe, and DISM.exe on .NET 8+.
+        // tools like chkdsk.exe and DISM.exe on .NET 8+. Not sfc.exe, which writes UTF-16.
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
         // Headless CLI mode: when launched with a recognized CLI verb, run it and exit

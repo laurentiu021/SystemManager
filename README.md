@@ -318,6 +318,12 @@ A list with nothing in it says why. When a search or a filter has hidden everyth
 and how to bring the rest back, rather than asking for a scan, which would keep the search. When its advice names a
 button or a switch, it uses the label shown on the tab.
 
+### Drop-downs, tooltips and fields
+A drop-down opens from a click anywhere on it, not only on its arrow, and an editable one, such as Ping's target,
+keeps clicks on its text for typing. A tooltip longer than its width wraps onto more lines, so its last words are
+there to read. A search box or a drop-down you are typing in keeps its purple focus border while the pointer rests on
+it, and a drop-down reached with `Tab` shows the same focus ring as a button.
+
 ### Right-Click Menu
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything. Plain menu entries use the standard `LegacyDisable` registry

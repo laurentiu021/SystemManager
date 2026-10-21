@@ -14165,6 +14165,58 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A template or style that changes the same thing on hover and on focus puts its focus trigger last.
+    /// </summary>
+    /// <remarks>
+    /// While two triggers that set the same property are both true, the later one wins. The TextBox and ComboBox
+    /// templates set their border on keyboard focus and then on hover, so a focused search box or drop-down under the
+    /// pointer showed the hover border instead of its focus border (#2815). The button styles put focus last, which is
+    /// why a button keeps its focus look under the pointer. Read over every template and style in the app's XAML.
+    /// </remarks>
+    [Fact]
+    public void EveryFocusTrigger_ComesAfterTheHoverTriggerItShares()
+    {
+        string[] focus = ["IsKeyboardFocused", "IsKeyboardFocusWithin", "IsFocused"];
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var read = 0;
+
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{separator}obj{separator}", StringComparison.Ordinal)))
+        {
+            foreach (var triggers in XDocument.Load(file).Descendants()
+                         .Where(e => e.Name.LocalName is "ControlTemplate.Triggers" or "Style.Triggers"))
+            {
+                read++;
+                var owner = (string?)triggers.Parent?.Attribute("TargetType") ?? "?";
+                var focusedFirst = new HashSet<(string?, string?)>();
+                foreach (var trigger in triggers.Elements())
+                {
+                    if ((string?)trigger.Attribute("Value") != "True") continue;
+                    var property = (string?)trigger.Attribute("Property");
+                    var sets = trigger.Elements().Where(s => s.Name.LocalName == "Setter")
+                        .Select(s => ((string?)s.Attribute("TargetName"), (string?)s.Attribute("Property")))
+                        .ToList();
+
+                    if (focus.Contains(property))
+                        focusedFirst.UnionWith(sets);
+                    else if (property == "IsMouseOver")
+                        offenders.AddRange(sets.Where(focusedFirst.Contains).Select(set =>
+                            $"{Path.GetFileName(file)}: the {owner} template sets {set.Item1}.{set.Item2} on hover "
+                            + "after it sets it on focus"));
+                }
+            }
+        }
+
+        // 89 when written. Far fewer means the triggers were not read, and an empty list would pass.
+        Assert.True(read >= 60, $"only {read} trigger lists were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "a hover trigger after a focus trigger that sets the same thing wins while both hold, so a focused "
+            + "control under the pointer loses its focus look. Put the focus trigger last:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The elements inside <paramref name="list"/>, with those of every keyed template it or a list inside it names as
     /// an <c>ItemTemplate</c> or <c>ContentTemplate</c>, so a row built from <c>{StaticResource ...}</c> is read too.
     /// </summary>

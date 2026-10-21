@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.42] - 2026-10-21
+
+**A drop-down opens from a click anywhere on it, long tooltips wrap instead of being cut off, and a focused field keeps
+its focus border under the pointer.**
+
+### Fixed
+
+- **A drop-down opened only from its arrow.** The part that opens the list covered the arrow's last 23 px, and a click
+  on the selected text reached the border behind it, which opens nothing. A click anywhere on a closed box opens it
+  now, and an editable box keeps clicks on its text for typing. Since 1.52.24.
+- **Long tooltips were cut off mid-sentence.** A tooltip's text did not wrap, so one longer than the tooltip's width
+  lost its end: Bulk Installer's "Load app icons from the web" stopped at "app ico", before what it says about Google,
+  and About's startup checks lost "nothing about you or your PC is sent". Tooltips wrap now. Since 1.52.38.
+- **A focused search box or drop-down under the pointer showed the hover border.** It lost its purple focus border
+  until the pointer moved away, and a drop-down reached with `Tab` showed Windows' dotted rectangle, which barely shows
+  on the dark card. Both keep the focus look now, and the drop-down has the app's focus ring. Since 0.3.0 for text
+  boxes and 1.52.24 for drop-downs.
+
 ## [1.130.41] - 2026-10-21
 
 **The mouse wheel scrolls the page past a table that has nothing left to scroll.**

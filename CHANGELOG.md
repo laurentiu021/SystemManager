@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.47] - 2026-10-21
+
+**Process Manager's "Show only apps" lists a Store app such as Settings or Calculator, and a frozen one reads "Not
+responding".**
+
+### Fixed
+
+- **"Show only apps" hid a Store app on screen, such as Settings or Calculator, and listed ApplicationFrameHost
+  instead.** On screen, a Store app is drawn in a frame that belongs to ApplicationFrameHost, a system process, with
+  the app's own window inside it, so the frame counted for ApplicationFrameHost and the app had no window. For the same
+  reason a frozen one could not read "Not responding": the check asked the frame, which keeps answering. The frame
+  counts for the app inside it now, and the check asks the app's window. Since 0.28.8 for the filter and 0.9.0 for the
+  status.
+- **A window Windows keeps hidden made a program an app.** A window its own program has cloaked still reads as
+  visible, so helpers with such windows passed "Show only apps". They no longer count; a window on another virtual
+  desktop still does. Since 0.28.8.
+
 ## [1.130.46] - 2026-10-21
 
 **Text from Windows' own tools keeps its accented letters when the regional format and the Windows language differ,

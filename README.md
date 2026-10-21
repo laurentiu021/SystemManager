@@ -1027,7 +1027,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Lists running Windows processes with PID, memory, threads, status, and when each one started
 - Real-time filter by name, description, category, or PID
 - **Show only apps** narrows the list to programs with a window, and a program whose window has
-  stopped responding reads **Not responding** in the status column
+  stopped responding reads **Not responding** in the status column. A Store app such as Settings
+  or Calculator counts as the app it is, not as the frame Windows draws it in, and a window
+  Windows keeps hidden does not make a program an app
 - Sort by memory, CPU usage, name, category, PID, or start time via clickable column headers
 - **Right-click a row** for the same actions the row's buttons offer, each naming the program, as
   in "Kill notepad.exe", or press the Menu key or Shift+F10 — the Windows shortcut Task Manager

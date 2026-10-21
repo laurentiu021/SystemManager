@@ -120,4 +120,54 @@ public class PrivacyMonitorViewModelTests
         Assert.Equal("No access recorded", vm.EmptyTitle);
         Assert.Equal("No camera, microphone, or location access has been recorded yet.", vm.StatusMessage);
     }
+
+    // ── read again when shown (#2837) ──
+
+    [Fact]
+    public async Task ShowingTheTabAgain_ReadsAgain_SoACameraLetGoOfNoLongerReadsInUse()
+    {
+        // The tab read once, when it was built, and a later visit still said "In use now" for an app that had closed.
+        var camInUse = Cam with { InUse = true };
+        var reads = 0;
+        var vm = await SettledVm(() => ++reads == 1 ? Report([camInUse]) : Report([Cam]));
+        Assert.True(Assert.Single(vm.Entries).InUse);
+
+        vm.IsActive = true;
+        await vm.ShownRefresh;
+
+        Assert.Equal(2, reads);
+        Assert.False(Assert.Single(vm.Entries).InUse);
+        Assert.DoesNotContain("in use right now", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LeavingTheTab_ReadsNothing()
+    {
+        var reads = 0;
+        var vm = await SettledVm(() => { reads++; return Report([Cam]); });
+
+        vm.IsActive = true;
+        await vm.ShownRefresh;
+        vm.IsActive = false;
+        await vm.ShownRefresh;
+
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public async Task ShowingTheTab_WhileARefreshReads_StartsNoSecondRead()
+    {
+        var held = new TaskCompletionSource<PrivacyAccessReport>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        var vm = new PrivacyMonitorViewModel(_ => ++reads == 1 ? Task.FromResult(Report([Cam])) : held.Task);
+        await vm.InitializationComplete;
+        var refresh = vm.RefreshCommand.ExecuteAsync(null);
+
+        vm.IsActive = true;
+        held.SetResult(Report([Cam]));
+        await refresh;
+        await vm.ShownRefresh;
+
+        Assert.Equal(2, reads);
+    }
 }

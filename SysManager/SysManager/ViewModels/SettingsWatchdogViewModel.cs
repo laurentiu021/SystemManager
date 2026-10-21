@@ -48,6 +48,17 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
     [ObservableProperty] private bool _hasDrift;
     [ObservableProperty] private bool _isElevated;
 
+    /// <summary>
+    /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>; becoming visible looks
+    /// again.
+    /// </summary>
+    /// <remarks>
+    /// The tab read the settings when it was built and then only on Refresh, and SysManager can stay in the
+    /// notification area for days. Undo Changes and Recent Changes send the user here because a watched setting
+    /// changed, and the page still showed the look from before it did (#2837).
+    /// </remarks>
+    [ObservableProperty] private bool _isActive;
+
     // True when a baseline file is there and could not be read or used. It is not "no baseline yet": saving
     // over it without asking replaced a baseline the user could not see (#2521).
     private bool _baselineUnusable;
@@ -57,6 +68,13 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         _service = service;
         IsElevated = AdminHelper.IsElevated();
         InitializeAsync(() => { Refresh(); return System.Threading.Tasks.Task.CompletedTask; });
+    }
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        // Not while the first look is still running: the tab is shown the moment it is built, and that look is the
+        // fresh one.
+        if (value && InitializationComplete.IsCompleted) Refresh();
     }
 
     [RelayCommand]
@@ -248,7 +266,9 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
         public string Description => Drift.Setting.Description;
         public string BaselineLabel => Drift.BaselineLabel;
         public string CurrentLabel => Drift.CurrentLabel;
-        public bool CanRestore => Drift.CanRestore;
+
+        // What Restore will do: a drift the baseline holds no value for is never put back (#2594).
+        public bool CanRestore => Drift.CanWriteBack;
     }
 
     /// <summary>

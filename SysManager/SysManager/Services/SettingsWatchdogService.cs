@@ -416,7 +416,9 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
                 d.Setting.Description,
                 d.BaselineLabel,
                 d.CurrentLabel,
-                d.CanRestore ? "yes" : "no");
+                // What Restore will do. CanRestore is true for every catalog entry, and a drift the baseline holds no
+                // value for is never put back, because the watchdog never deletes a value (#2594, #2837).
+                d.CanWriteBack ? "yes" : "no");
         }
         return sb.ToString();
     }

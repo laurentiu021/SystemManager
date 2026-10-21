@@ -1164,7 +1164,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Shows which apps recently used your **camera, microphone, or location**, and when
 - Reads the Windows access history (CapabilityAccessManager consent store) — covers
   both Store apps and desktop programs
-- Devices **in use right now** are flagged and sorted to the top
+- Devices **in use right now** are flagged and sorted to the top, and the tab reads the history
+  again each time you open it, so "In use now" means now
 - If Windows does not let SysManager read a device's history, the tab names that device
   instead of listing the others as if it had been checked, and a Refresh that reads
   nothing at all keeps the previous list on screen
@@ -1189,10 +1190,12 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   aside
 - **Check now** re-reads the live values and lists any drift in plain language, one row per
   setting with its category and **Was** / **Now** columns — e.g. *Diagnostic data (telemetry):
-  Was "Off (Security)", Now "Full"*
+  Was "Off (Security)", Now "Full"*. The tab also checks each time you open it, so following a
+  link from Undo Changes or Recent Changes shows the change that sent you here
 - **Export CSV** saves the list of changes before you restore them. Restore overwrites the
   "now" column, so this file is the only record of what Windows changed — which is why the
-  button sits to the left of Restore
+  button sits to the left of Restore. Its "Can restore" column says what Restore will do: "no"
+  for a setting that was not set when you saved the baseline
 - **Restore changed** writes the drifted settings back to your baseline values in
   one step, after one confirmation. Telemetry, activity history and Widgets are machine-wide
   policies and need administrator rights, surfaced not crashed. A setting that was not set at all

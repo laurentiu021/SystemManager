@@ -644,6 +644,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             case PrivacyViewModel pv: pv.IsActive = active; break;
             case UndoChangesViewModel uc: uc.IsActive = active; break;
             case RecentChangesViewModel rc: rc.IsActive = active; break;
+            case SettingsWatchdogViewModel sw: sw.IsActive = active; break;
+            case PrivacyMonitorViewModel mo: mo.IsActive = active; break;
         }
     }
 

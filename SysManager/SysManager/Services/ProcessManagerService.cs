@@ -201,27 +201,32 @@ public sealed partial class ProcessManagerService
     /// Maps each process id to its main window, in one pass over the session's top-level windows.
     /// </summary>
     /// <remarks>
-    /// "Main window" is defined the same way <c>Process.MainWindowHandle</c> defines it — the first
-    /// visible, unowned top-level window belonging to the process — so the responsiveness column and the
-    /// "has a window" flag keep answering about the same window they did before. A dialog or tooltip is
-    /// owned by its parent and is skipped, which is what stops a modal prompt from being mistaken for an
-    /// app's main window.
+    /// The enumeration collects each visible top-level window, and <see cref="MainWindowsOf"/> decides which
+    /// is a process's main window.
     /// <para>Processes with no window are simply absent from the result rather than present with a zero
     /// handle: on this machine 15 of 479 processes had one, so a map of only the windows that exist is
     /// both smaller and the honest shape.</para>
     /// </remarks>
     private static IReadOnlyDictionary<int, IntPtr> QueryMainWindowsByPid()
     {
-        var byPid = new Dictionary<int, IntPtr>();
+        List<TopLevelWindow> windows = [];
+        var className = new char[64];
 
         // EnumWindows walks in Z-order, so the first window accepted for a process is its topmost one —
         // the same one Process.MainWindowHandle settles on.
         var enumerated = EnumWindows((window, _) =>
         {
             if (!IsWindowVisible(window)) return true;
-            if (GetWindow(window, GwOwner) != IntPtr.Zero) return true;   // owned: a dialog, not the main window
-            if (GetWindowThreadProcessId(window, out var pid) != 0)
-                byPid.TryAdd((int)pid, window);
+            if (GetWindowThreadProcessId(window, out var pid) == 0) return true;
+
+            var length = GetClassName(window, className, className.Length);
+            var isFrame = className.AsSpan(0, Math.Max(length, 0)).SequenceEqual(FrameClass);
+            var hosted = isFrame ? FindWindowEx(window, IntPtr.Zero, CoreWindowClass, null) : IntPtr.Zero;
+            uint hostedPid = 0;
+            if (hosted != IntPtr.Zero) GetWindowThreadProcessId(hosted, out hostedPid);
+
+            windows.Add(new TopLevelWindow(window, (int)pid, GetWindow(window, GwOwner) != IntPtr.Zero,
+                CloakOf(window), isFrame, hosted, (int)hostedPid));
             return true;
         }, IntPtr.Zero);
 
@@ -233,8 +238,83 @@ public sealed partial class ProcessManagerService
             Log.Debug("ProcessManager: EnumWindows failed with {Error}; window state unavailable this refresh",
                 Marshal.GetLastWin32Error());
 
+        return MainWindowsOf(windows);
+    }
+
+    /// <summary>A visible top-level window, with what deciding a process's main window needs from it.</summary>
+    /// <param name="Handle">The window.</param>
+    /// <param name="ProcessId">The process that owns it.</param>
+    /// <param name="HasOwner">True for an owned window: a dialog or tooltip, not a main window.</param>
+    /// <param name="Cloaked">
+    /// DWM's cloak flags for it: 0, or <c>DWM_CLOAKED_APP</c>, <c>_SHELL</c> and <c>_INHERITED</c>.
+    /// </param>
+    /// <param name="IsFrame">True for an <c>ApplicationFrameWindow</c>, the frame a Store app is drawn in.</param>
+    /// <param name="Hosted">The <c>Windows.UI.Core.CoreWindow</c> inside the frame, or zero.</param>
+    /// <param name="HostedProcessId">The process that owns <paramref name="Hosted"/>, or zero.</param>
+    internal readonly record struct TopLevelWindow(
+        IntPtr Handle, int ProcessId, bool HasOwner, uint Cloaked, bool IsFrame, IntPtr Hosted, int HostedProcessId);
+
+    /// <summary>
+    /// The main window of each process, from its visible top-level windows in Z-order: the first one that is
+    /// not owned and that Windows does not keep hidden, as <c>Process.MainWindowHandle</c> picks it.
+    /// </summary>
+    /// <remarks>
+    /// A dialog or tooltip is owned by its parent and is skipped, which is what stops a modal prompt from being
+    /// mistaken for an app's main window. Two kinds of window are not what they look like (#2869):
+    /// <list type="bullet">
+    /// <item>A Store app such as Settings or Calculator is drawn in an <c>ApplicationFrameWindow</c> owned by
+    /// ApplicationFrameHost, with the app's own <c>CoreWindow</c> inside it. The frame is credited to the app
+    /// that owns that window, which is also the window the hung check reads, since the frame's process keeps
+    /// answering when the app stops. A frame with no app inside credits nothing, so ApplicationFrameHost, a
+    /// system process, is not an app; a Store app that is not on screen has a top-level <c>CoreWindow</c> of its
+    /// own.</item>
+    /// <item><c>IsWindowVisible</c> is also true for a window DWM cloaks. One cloaked by its own app, or inside a
+    /// cloaked one, is hidden and makes nothing an app. One the shell cloaks still counts: that is a window on
+    /// another virtual desktop, or a Store app's <c>CoreWindow</c> while it is not on screen.</item>
+    /// </list>
+    /// </remarks>
+    internal static IReadOnlyDictionary<int, IntPtr> MainWindowsOf(IEnumerable<TopLevelWindow> windows)
+    {
+        var byPid = new Dictionary<int, IntPtr>();
+        foreach (var window in windows)
+        {
+            if (window.HasOwner) continue;
+            if ((window.Cloaked & (DwmCloakedApp | DwmCloakedInherited)) != 0) continue;
+            if (window.IsFrame)
+            {
+                if (window.Hosted != IntPtr.Zero && window.HostedProcessId != 0
+                    && window.HostedProcessId != window.ProcessId)
+                {
+                    byPid.TryAdd(window.HostedProcessId, window.Hosted);
+                }
+                continue;
+            }
+            byPid.TryAdd(window.ProcessId, window.Handle);
+        }
         return byPid;
     }
+
+    /// <summary>DWM's cloak flags for <paramref name="window"/>, or 0 when DWM cannot say.</summary>
+    private static uint CloakOf(IntPtr window) =>
+        DwmGetWindowAttribute(window, DwmwaCloaked, out var cloaked, sizeof(uint)) == 0 ? cloaked : 0;
+
+    /// <summary>The class of the frame a Store app is drawn in.</summary>
+    private const string FrameClass = "ApplicationFrameWindow";
+
+    /// <summary>The class of a Store app's own window.</summary>
+    private const string CoreWindowClass = "Windows.UI.Core.CoreWindow";
+
+    /// <summary>DWMWA_CLOAKED.</summary>
+    private const uint DwmwaCloaked = 14;
+
+    /// <summary>DWM_CLOAKED_APP: the window's own app cloaked it.</summary>
+    internal const uint DwmCloakedApp = 1;
+
+    /// <summary>DWM_CLOAKED_SHELL: the shell cloaked it, as it does a window on another virtual desktop.</summary>
+    internal const uint DwmCloakedShell = 2;
+
+    /// <summary>DWM_CLOAKED_INHERITED: the window is inside a cloaked one.</summary>
+    internal const uint DwmCloakedInherited = 4;
 
     /// <summary>Callback for <see cref="EnumWindows"/>; returning false stops the enumeration.</summary>
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -256,6 +336,15 @@ public sealed partial class ProcessManagerService
 
     [LibraryImport("user32.dll")]
     private static partial IntPtr GetWindow(IntPtr window, uint command);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetClassNameW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int GetClassName(IntPtr window, [Out] char[] className, int maxCount);
+
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string? className, string? title);
+
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmGetWindowAttribute(IntPtr window, uint attribute, out uint value, int size);
 
     /// <summary>
     /// True when a window has stopped pumping messages — the non-blocking answer to the question

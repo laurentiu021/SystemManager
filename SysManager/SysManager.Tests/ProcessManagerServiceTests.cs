@@ -174,6 +174,87 @@ public class ProcessManagerServiceTests
         Assert.True(mine.HasMainWindow);
     }
 
+    // ── Which window makes a process an app (#2869) ──
+
+    private const int FrameHost = 4100;
+
+    private static ProcessManagerService.TopLevelWindow Window(int handle, int pid, bool owned = false,
+        uint cloaked = 0) => new(handle, pid, owned, cloaked, IsFrame: false, IntPtr.Zero, 0);
+
+    private static ProcessManagerService.TopLevelWindow Frame(int handle, int hosted = 0, int hostedPid = 0,
+        uint cloaked = 0) => new(handle, FrameHost, HasOwner: false, cloaked, IsFrame: true, hosted, hostedPid);
+
+    [Fact]
+    public async Task Snapshot_AStoreAppInItsFrame_IsAnApp_AndItsOwnWindowIsWhatTheHungCheckReads()
+    {
+        // Settings or Calculator on screen: ApplicationFrameHost's frame with the app's CoreWindow inside. The frame
+        // was credited to ApplicationFrameHost, so "Show only apps" hid the app and a frozen one read "Running".
+        // This process stands in for the app.
+        var self = Environment.ProcessId;
+        var probed = new List<IntPtr>();
+        var service = new ProcessManagerService(
+            () => ProcessManagerService.MainWindowsOf([Frame(0x10, hosted: 0x11, hostedPid: self)]),
+            handle => { probed.Add(handle); return true; });
+
+        var result = await service.SnapshotAsync();
+
+        var app = Assert.Single(result, p => p.Pid == self);
+        Assert.True(app.HasMainWindow);
+        Assert.Equal("Not responding", app.Status);
+        Assert.Equal([new IntPtr(0x11)], probed);
+    }
+
+    [Fact]
+    public void MainWindowsOf_AFrame_CreditsTheAppInsideIt_NotTheFrameHost()
+    {
+        var map = ProcessManagerService.MainWindowsOf([Frame(0x10, hosted: 0x11, hostedPid: 4200)]);
+
+        Assert.Equal(new IntPtr(0x11), Assert.Single(map, kv => kv.Key == 4200).Value);
+        Assert.False(map.ContainsKey(FrameHost));
+    }
+
+    [Fact]
+    public void MainWindowsOf_AFrameWithNoAppInside_MakesNothingAnApp()
+    {
+        // A Store app that is not on screen leaves its frame empty and keeps a CoreWindow of its own, which is what
+        // credits it; the frame alone made ApplicationFrameHost, a system process, read as an app.
+        Assert.Empty(ProcessManagerService.MainWindowsOf(
+            [Frame(0x10), Frame(0x12, hosted: 0x13, hostedPid: FrameHost)]));
+    }
+
+    [Fact]
+    public void MainWindowsOf_AWindowItsAppCloaks_OrInsideACloakedOne_MakesNothingAnApp()
+    {
+        var map = ProcessManagerService.MainWindowsOf(
+        [
+            Window(0x20, 4300, cloaked: ProcessManagerService.DwmCloakedApp),
+            Window(0x21, 4301, cloaked: ProcessManagerService.DwmCloakedInherited),
+            Window(0x22, 4302, cloaked: ProcessManagerService.DwmCloakedApp | ProcessManagerService.DwmCloakedShell),
+            Frame(0x23, hosted: 0x24, hostedPid: 4303, cloaked: ProcessManagerService.DwmCloakedApp),
+        ]);
+
+        Assert.Empty(map);
+    }
+
+    [Fact]
+    public void MainWindowsOf_AWindowTheShellCloaks_StillCounts()
+    {
+        // A window on another virtual desktop, or a Store app's own window while it is not on screen.
+        var map = ProcessManagerService.MainWindowsOf(
+            [Window(0x30, 4400, cloaked: ProcessManagerService.DwmCloakedShell)]);
+
+        Assert.Equal(new IntPtr(0x30), Assert.Single(map).Value);
+    }
+
+    [Fact]
+    public void MainWindowsOf_TakesTheTopmostUnownedWindow_AndNeverADialog()
+    {
+        var map = ProcessManagerService.MainWindowsOf(
+            [Window(0x40, 4500, owned: true), Window(0x41, 4500), Window(0x42, 4500)]);
+
+        Assert.Equal(new IntPtr(0x41), Assert.Single(map).Value);
+    }
+
     // ── KillProcess ──
 
     [Fact]

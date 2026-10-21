@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.41] - 2026-10-21
+
+**The mouse wheel scrolls the page past a table that has nothing left to scroll.**
+
+### Fixed
+
+- **The page stopped scrolling while the pointer was over a table.** A table took every turn of the wheel, whether or
+  not it could move, so System Health's memory and disk tables, which are as tall as their rows, stopped the page
+  under the pointer, and Speed Test's histories and Drivers' list did the same once scrolled to either end. A turn a
+  table cannot use now scrolls the page around it, and a table that can still move keeps the turn. Since 0.3.0 on
+  System Health, 0.41.0 on Speed Test and 0.42.0 on Drivers.
+
 ## [1.130.40] - 2026-10-21
 
 **Clicking a column of sizes, times, speeds, resolutions or dates sorts by the value, so 800 MB comes before 1.2 GB.**

@@ -525,6 +525,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   fullest when SysManager runs as administrator. A figure the drive does not report reads "—",
   with an empty bar, rather than a value it never measured
 - Colour-coded verdict per drive
+- The mouse wheel scrolls the page over the memory and disk tables too: they are as tall as their
+  rows, so they have nothing of their own to scroll
 - Memory diagnostic that scans the last 30 days of WHEA events for RAM errors. If the event log
   cannot be read, it says the check could not be done rather than reporting no errors
 - **Run MemTest (reboot)** opens the Windows Memory Diagnostic, where you choose to restart now
@@ -1402,6 +1404,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
   even while this tab is open. If the saved results cannot be read, the tab says so rather
   than showing none, and a new result is never saved over them
+- A history table that has nothing left to scroll the way the wheel turns passes the turn to the page
 - **A trend above each history**, drawn from the same results, so "is my internet worse than
   it used to be, or is it just today?" is answered at a glance: download and upload over time,
   a dashed line at your usual download, and one sentence — "Usually about 480 Mbps", plus a
@@ -1952,7 +1955,8 @@ offers, "rate us" prompts:
 ### Drivers
 - Sortable DataGrid table of all installed system drivers, listed when you press **List drivers**,
   with a Cancel button while it runs
-- Columns: Device Name, Manufacturer, Version, Date, Signature — click headers to sort
+- Columns: Device Name, Manufacturer, Version, Date, Signature — click headers to sort. At either end
+  of the list, the mouse wheel scrolls the page instead
 - **Signature** — whether Windows reports the driver as digitally signed. Manufacturer
   is a name the driver package supplies about itself, so it proves nothing; this column
   comes from Windows. It says "Signed", not "Safe" — a signature identifies the

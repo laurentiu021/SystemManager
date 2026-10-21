@@ -14131,6 +14131,40 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every table hands a turn of the wheel it cannot use to the page around it.
+    /// </summary>
+    /// <remarks>
+    /// #2817. A DataGrid's own scroll viewer took every turn, so a page stopped scrolling while the pointer was over a
+    /// table with nothing left to scroll. <see cref="Helpers.WheelPassThrough"/> passes the turn on, and every DataGrid
+    /// gets it from the app's DataGrid style, which <see cref="EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows"/>
+    /// already holds every grid to. <c>TableWheelTests</c> turns the wheel over a table laid out in a page.
+    /// </remarks>
+    [Fact]
+    public void EveryTable_HandsTheWheelItCannotUseToThePage()
+    {
+        var appDir = TestPaths.AppProject();
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = Assert.Single(XDocument.Load(Path.Combine(appDir, "App.xaml")).Descendants(),
+            e => e.Name.LocalName == "Style" && (string?)e.Attribute("TargetType") == "DataGrid"
+                 && e.Attribute(x + "Key") is null);
+
+        Assert.True(style.Elements().Any(s => s.Name.LocalName == "Setter"
+                                              && (string?)s.Attribute("Property") == "h:WheelPassThrough.ToPage"
+                                              && (string?)s.Attribute("Value") == "True"),
+            "the app's DataGrid style no longer sets h:WheelPassThrough.ToPage to True, so a page stops scrolling "
+            + "while the pointer is over a table with nothing left to scroll");
+
+        var turnedOff = Directory.EnumerateFiles(Path.Combine(appDir, "Views"), "*.xaml")
+            .Where(f => XDocument.Load(f).Descendants().SelectMany(e => e.Attributes())
+                .Any(a => a.Name.LocalName == "WheelPassThrough.ToPage" && a.Value != "True"))
+            .Select(Path.GetFileName)
+            .ToList();
+        Assert.True(turnedOff.Count == 0,
+            "these views turn WheelPassThrough.ToPage off, so the page stops under their tables: "
+            + string.Join(", ", turnedOff));
+    }
+
+    /// <summary>
     /// The elements inside <paramref name="list"/>, with those of every keyed template it or a list inside it names as
     /// an <c>ItemTemplate</c> or <c>ContentTemplate</c>, so a row built from <c>{StaticResource ...}</c> is read too.
     /// </summary>

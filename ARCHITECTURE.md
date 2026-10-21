@@ -1754,6 +1754,14 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   emptied with `Clear` or one row at a time with `Remove` or `RemoveAt`, as Ping's targets and
   Audio Mixer's sessions are, and `ArchitectureTests.EveryListThatLosesRows_KeepsKeyboardFocusOnItsRows`
   fails when one does not.
+- `WheelPassThrough` — hands the mouse wheel on to the page when a list cannot use it (#2817). A
+  DataGrid's template holds a plain `ScrollViewer`, which takes every turn whether or not it can
+  move, so a page stopped scrolling while the pointer was over a table. The attached `ToPage`
+  property watches `PreviewMouseWheel` on the list, and when the list's own viewer is already at the
+  end the wheel turns towards, it marks the turn handled and raises a new `MouseWheel` on the list's
+  parent, so the page's viewer scrolls. Every DataGrid has it from the implicit DataGrid style;
+  `ArchitectureTests.EveryTable_HandsTheWheelItCannotUseToThePage` holds the style to it and
+  `TableWheelTests` turns the wheel over a laid-out table.
 - `LiveRegion` — makes a live line heard (#2670). `AutomationProperties.LiveSetting` only marks a
   line as a live region; a screen reader speaks it when the app raises UI Automation's
   `LiveRegionChanged` event, and WPF never raises that on its own. `LiveRegion.Announces` follows the

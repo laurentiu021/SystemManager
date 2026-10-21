@@ -523,7 +523,9 @@ Key services:
   instance that has not run to stop, and `BeginInvoke` refuses one that is still
   stopping with an `InvalidOperationException` no caller's cancel branch catches, or,
   once the stop has landed, starts the script anyway.
-- `WingetService` — shells out to `winget` and parses its table output.
+- `WingetService` — shells out to `winget` and parses its table output. The upgrade list leaves out SysManager's
+  own package (`UpdateService.WingetPackageId`), which About updates, and `UpgradeAllAsync` upgrades each listed
+  app by id rather than `upgrade --all`, which would take that package too and replace the running exe (#2889).
 - `WindowsUpdateService` — drives Windows Update through the WUA COM API
   (scan, select, install) with progress reporting, behind `IWindowsUpdateService`; backs
   `WindowsUpdateViewModel`, and the Dashboard's Check Windows Updates action, which only scans.

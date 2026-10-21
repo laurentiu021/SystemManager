@@ -62,6 +62,10 @@ public sealed partial class WingetService : IWingetService
         {
             if (string.IsNullOrWhiteSpace(row.Available)) continue;
 
+            // SysManager's own package: About updates SysManager. Listed here, it was offered beside About saying
+            // SysManager was up to date, and upgrading it had winget replace the file SysManager runs from (#2889).
+            if (string.Equals(row.Id, UpdateService.WingetPackageId, StringComparison.OrdinalIgnoreCase)) continue;
+
             var package = new AppPackage
             {
                 Name = row.Name,
@@ -97,12 +101,30 @@ public sealed partial class WingetService : IWingetService
     [GeneratedRegex(@"^\d+\s+(upgrades|packages|package)\s+", RegexOptions.IgnoreCase)]
     private static partial Regex UpgradeSummaryPattern();
 
+    /// <summary>Upgrades every app the upgrade list holds, one by one, and fails when any of them fails.</summary>
+    /// <remarks>
+    /// By id rather than <c>upgrade --all</c>, which took SysManager's own package too and had winget replace the file
+    /// SysManager runs from (#2889). An app whose installed version winget cannot read is left out, as
+    /// <c>upgrade --all</c> leaves it: it was reinstalled on every press, and the Dashboard's count leaves it out too.
+    /// A failure is reported with the code <c>upgrade --all</c> ends on when one of its apps fails.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// The upgrade list could not be read, so nothing was upgraded.
+    /// </exception>
     public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
     {
-        // Without --include-unknown, as winget's own upgrade --all: an app whose installed version winget cannot read
-        // was reinstalled on every press, and the Dashboard's count leaves those apps out too.
-        var args = "upgrade --all --silent --no-progress --accept-source-agreements --accept-package-agreements --disable-interactivity";
-        int code = await _runner.RunProcessAsync("winget", args, ct).ConfigureAwait(false);
-        return WingetResult.From(code);
+        var failed = false;
+        foreach (var package in (await ListUpgradableAsync(ct).ConfigureAwait(false)).Where(p => !p.HasUnknownVersion))
+        {
+            if (!WingetId.IsValid(package.Id))
+            {
+                failed = true;
+                continue;
+            }
+
+            failed |= !(await UpgradeAsync(package.Id, ct).ConfigureAwait(false)).Succeeded;
+        }
+
+        return WingetResult.From(failed ? WingetExitCodes.UpdateAllHasFailure : 0);
     }
 }

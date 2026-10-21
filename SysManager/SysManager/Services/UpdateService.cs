@@ -24,6 +24,9 @@ public sealed class UpdateService : IUpdateService
     public const string Owner = "laurentiu021";
     public const string Repo = "SystemManager";
 
+    /// <summary>SysManager's own package on winget, the id the README's install line names.</summary>
+    public const string WingetPackageId = "laurentiu021.SysManager";
+
     /// <summary>
     /// True for the release's main executable asset. Release assets are named
     /// <c>SysManager-v&lt;version&gt;.exe</c> (e.g. <c>SysManager-v1.20.1.exe</c>),

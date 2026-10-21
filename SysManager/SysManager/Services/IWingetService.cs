@@ -26,6 +26,12 @@ public interface IWingetService
     /// <summary>Upgrades a single package by its winget id.</summary>
     Task<WingetResult> UpgradeAsync(string packageId, CancellationToken ct = default);
 
-    /// <summary>Upgrades every package that has an update available.</summary>
+    /// <summary>
+    /// Upgrades, one by one, every app <see cref="ListUpgradableAsync"/> lists whose installed version winget can
+    /// read, and fails with <see cref="WingetExitCodes.UpdateAllHasFailure"/> when any of them fails.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The upgrade list could not be read, so nothing was upgraded. The message says why, in plain language.
+    /// </exception>
     Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default);
 }

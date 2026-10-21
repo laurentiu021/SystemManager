@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.29] - 2026-10-21
+
+**App Updates and Update All Apps leave SysManager itself to About.**
+
+### Fixed
+
+- **A copy of SysManager installed with winget was offered its own update on App Updates, and Update All Apps
+  tried to replace the running SysManager.** About updates SysManager, often before winget has the new version, and
+  winget still recorded the version it had installed. So once winget caught up, App Updates listed "SysManager" as out
+  of date beside About saying it was up to date, the Dashboard counted it, and upgrading it, or pressing Update All
+  Apps, asked winget to replace the file SysManager was running from. SysManager's own package is no longer listed or
+  counted, and Update All Apps upgrades the listed apps one by one instead of everything winget knows. Since
+  SysManager was published on winget (0.48.36).
+
 ## [1.130.28] - 2026-10-21
 
 **Cleaning temporary files no longer removes files a program being installed has just unpacked.**

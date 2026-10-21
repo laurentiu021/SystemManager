@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.51] - 2026-10-21
+
+**Windows Features says why Windows refused a change, shows each feature the way Windows reports it afterwards, and
+Escape or Cancel no longer stop a change half-way.**
+
+### Fixed
+
+- **Every failed change said "Check permissions".** The tab offers a change only when SysManager runs as
+  administrator, and the script threw DISM's own reason away. A failure now gives Windows' reason and its error code,
+  and plain words for four codes with a known way out: files the feature needs that Windows could not download
+  (0x800F0906) or find (0x800F081F), a policy that forbids downloading them (0x800F0907), and a service it needs that
+  is turned off (0x80070422). Since 0.46.0.
+- **After a change, the row showed what was asked for rather than what happened.** It flipped the row when Windows
+  said yes and left it alone when Windows said no, so a change that failed part-way, or one waiting for a restart,
+  showed the wrong state. The tab now reads the feature back from Windows after every change. A feature waiting for a
+  restart to turn on read as off, in a scan too; it now shows the state it will have, with "Reboot required", and the
+  reboot notice appears. Since 0.46.0.
+- **A switch could show the opposite of the feature's state.** Declining the confirmation, or a change that could not
+  start or failed, left the switch turned over while the State column said otherwise, and the next click asked the
+  wrong question: turning the switch back off asked whether to enable the feature. The switch now turns back. Since
+  1.9.0.
+- **Escape and Cancel stopped a change half-way.** Both ended PowerShell and DISM while Windows was applying the
+  change, and nothing checked what was left. They now stop only a scan, and the Cancel button shows only while one
+  runs. Since 0.46.0 for Cancel and 1.76.0 for Escape.
+- **Four safety hints were wrong.** "Remote Differential Compression API Support" was described as a Remote Desktop
+  client, Windows Media Player Legacy as a codec pack, and Media Features as Windows Media Player itself. Windows
+  Sandbox's rating was filed under a name that is not Sandbox's, so its row showed as not rated. Since 1.10.0.
+
 ## [1.130.50] - 2026-10-21
 
 **Settings Watchdog and Camera/Mic/Location look again each time you open them, so a link that sends you to a

@@ -117,4 +117,28 @@ public class SafetyDatabaseTests
     [InlineData("TELNETCLIENT")]
     public void GetFeatureSafety_IsCaseInsensitive(string feature)
         => Assert.Equal(SafetyLevel.Safe, SafetyDatabase.GetFeatureSafety(feature).Level);
+
+    [Theory]
+    [InlineData("MSRDC-Infrastructure", "Remote Differential Compression API Support")]
+    [InlineData("Containers-DisposableClientVM", "Windows Sandbox")]
+    [InlineData("WindowsMediaPlayer", "Windows Media Player Legacy")]
+    [InlineData("MediaPlayback", "Media Features")]
+    public void GetFeatureSafety_NamesTheFeatureAsWindowsDoes(string feature, string windowsName)
+    {
+        // The names Windows gives these features. Two hints described another feature, a Remote Desktop client and a
+        // codec pack, and Windows Sandbox's sat under a name that is not its own, so its row showed as not rated
+        // (#2834).
+        var (level, description) = SafetyDatabase.GetFeatureSafety(feature);
+
+        Assert.NotEqual(SafetyLevel.NotRated, level);
+        Assert.StartsWith(windowsName + " — ", description, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GetFeatureSafety_WindowsSandbox_IsRatedUnderItsOwnName_AndOnlyThere()
+    {
+        Assert.Equal(SafetyLevel.Critical, SafetyDatabase.GetFeatureSafety("Containers-DisposableClientVM").Level);
+        Assert.Equal(SafetyLevel.NotRated,
+            SafetyDatabase.GetFeatureSafety("Microsoft-Windows-Client-EmbeddedExp-Package").Level);
+    }
 }

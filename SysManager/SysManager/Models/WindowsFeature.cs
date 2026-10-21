@@ -21,6 +21,14 @@ public sealed partial class WindowsFeature : ObservableObject
     public SafetyLevel SafetyLevel { get; init; } = SafetyLevel.NotRated;
     public string SafetyDescription { get; init; } = "";
 
+    /// <summary>Tells the row's switch to read <see cref="IsEnabled"/> again.</summary>
+    /// <remarks>
+    /// A switch turns itself over when clicked, before its command runs, and its binding is one-way, so only a change
+    /// of <see cref="IsEnabled"/> turns it back. A change that was declined, refused or failed left the switch showing
+    /// the opposite of the State column, and the next click asked about the wrong change (#2739).
+    /// </remarks>
+    public void ResetSwitch() => OnPropertyChanged(nameof(IsEnabled));
+
     /// <summary>Category assignment based on feature name patterns.</summary>
     public static string CategorizeFeature(string featureName)
     {

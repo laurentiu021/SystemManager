@@ -941,7 +941,12 @@ System → System Fixes, where the tab name matches what they do.
 - A **Safety** column — Safe, Caution or Critical, with the reason on hover. A feature the built-in
   list does not know is marked **Not rated**, in grey, and its hover says to look it up first. It
   informs rather than blocks: every feature can still be toggled after the confirmation
-- Shows reboot-required status after toggling
+- After every change the tab reads the feature back from Windows, so the row shows what Windows reports rather than
+  what was asked for, including a change waiting for a restart, which shows "Reboot required"
+- **When Windows refuses a change, the status line says why**: Windows' own reason with its error code, and plain
+  words when the files a feature needs could not be downloaded or found, a policy forbids downloading them, or a
+  service it needs is turned off
+- Cancel and Escape stop a scan, never a change: stopping DISM part-way could leave a feature half-changed
 - **A Windows restore point is attempted before the first toggle of the session**, shared with the
   other tabs that change system settings. This is the tab where it matters most: turning a feature
   back on is a second servicing operation that can itself fail, and unlike removing a Store app,

@@ -130,11 +130,13 @@ public class DnsHostsViewModelGateTests
     private static Collection<PSObject> CaptureResult(
         string ipv4 = "8.8.8.8",
         int ifIndex = 12,
-        string interfaceGuid = TestInterfaceGuid) =>
+        string interfaceGuid = TestInterfaceGuid,
+        string adapterName = "") =>
         new()
         {
             PSObject.AsPSObject($"IFINDEX={ifIndex}"),
             PSObject.AsPSObject($"IFGUID={interfaceGuid}"),
+            PSObject.AsPSObject($"IFNAME={adapterName}"),
             PSObject.AsPSObject("SOURCE_IPv4=Static"),
             PSObject.AsPSObject("SOURCE_IPv6=Automatic"),
             PSObject.AsPSObject($"IPv4={ipv4}"),
@@ -360,6 +362,44 @@ public class DnsHostsViewModelGateTests
                 Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>());
             Assert.Equal("DNS change cancelled.", vm.StatusMessage);
             Assert.False(vm.IsDnsApplying);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task ApplyDns_AndResetDns_NameTheAdapter_AsWindowsShowsIt()
+    {
+        // "active network interface 12" told nobody which adapter that was, on the PC where it mattered: one with two
+        // adapters connected (#2879).
+        var (vm, _, dir, runner) = NewVm();
+        runner.RunAsync(
+                Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(CaptureResult(ifIndex: 17, adapterName: "Ethernet 3")));
+
+        var prevDialog = DialogService.Instance;
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        DialogService.Instance = dialog;
+        try
+        {
+            vm.SelectedPreset = vm.Presets.First(p => p.Name == "Cloudflare — Family (malware + adult)");
+            await vm.ApplyDnsCommand.ExecuteAsync(null);
+            await vm.ResetDnsCommand.ExecuteAsync(null);
+
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.StartsWith("Change DNS on the network adapter \"Ethernet 3\" to Cloudflare — Family",
+                        StringComparison.Ordinal)),
+                "Confirm DNS Change");
+            dialog.Received(1).Confirm(
+                Arg.Is<string>(message => message != null &&
+                    message.StartsWith("Reset DNS on the network adapter \"Ethernet 3\" to automatic (DHCP)?",
+                        StringComparison.Ordinal)),
+                "Confirm DNS Reset");
         }
         finally
         {

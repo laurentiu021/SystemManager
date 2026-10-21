@@ -1460,14 +1460,16 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   **ad/malware/family-blocking variants**
   (Cloudflare 1.1.1.2 malware / 1.1.1.3 family, AdGuard DNS ad-blocking + family,
   OpenDNS FamilyShield), each with a description of what it blocks. **IPv6
-  resolvers** are configured automatically alongside IPv4. Preset changes and
+  resolvers** are configured automatically alongside IPv4. The change goes to the adapter
+  Windows sends its traffic through, the one whose DNS servers it asks, and the confirmation
+  names it as Windows does, such as "Wi-Fi". Preset changes and
   reset to automatic (DHCP) are confirmed, then verify the captured adapter and
   DNS state again inside the mutation script. An **Undo** button follows that
   adapter's stable identity and restores its exact prior IPv4 and IPv6
   automatic/static configuration without persisting DHCP-supplied addresses as
   static overrides. Undo lasts until SysManager closes: DNS is not one of the changes SysManager
   keeps a copy of, so after a restart pick the preset you had, or **Reset to DHCP**.
-- **Current DNS** — the IPv4 servers the active adapter uses, or "Automatic (DHCP)" when none
+- **Current DNS** — the IPv4 servers of that same adapter, or "Automatic (DHCP)" when none
   are set. When Windows cannot report them it says "Unavailable" rather than guessing.
 - **Hosts File Editor** — view, add, and remove entries from the Windows
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,

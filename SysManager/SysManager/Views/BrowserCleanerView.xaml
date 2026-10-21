@@ -158,7 +158,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" IsReadOnly="True" Width="110"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" SortMemberPath="SizeBytes" IsReadOnly="True" Width="110"/>
                     </DataGrid.Columns>
                 </DataGrid>
 

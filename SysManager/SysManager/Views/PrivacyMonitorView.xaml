@@ -56,7 +56,7 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Capability" Binding="{Binding Capability}" Width="140"/>
                         <DataGridTextColumn Header="Application" Binding="{Binding AppName}" Width="*"/>
-                        <DataGridTextColumn Header="Last used" Binding="{Binding LastUsedDisplay}" Width="180"/>
+                        <DataGridTextColumn Header="Last used" Binding="{Binding LastUsedDisplay}" SortMemberPath="LastUsed" Width="180"/>
                     </DataGrid.Columns>
                 </DataGrid>
 

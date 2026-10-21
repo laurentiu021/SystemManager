@@ -17,7 +17,14 @@ public sealed partial class UpdateEntry : ObservableObject, Helpers.ISelectableR
 
     public string Title { get; init; } = "";
     public string KB { get; init; } = "";
-    public string Size { get; init; } = "";
+    /// <summary>The download size as text, such as "15.2 MB", or empty when Windows gave none.</summary>
+    public string SizeDisplay { get; init; } = "";
+
+    /// <summary>
+    /// The download size in bytes, which the Size column sorts on: sorting <see cref="SizeDisplay"/> put "1.2 GB"
+    /// before "15.0 MB" (#2819). 0 when Windows gave none, as for the history.
+    /// </summary>
+    public long SizeBytes { get; init; }
     public DateTime? Date { get; init; }
     public bool IsHidden { get; init; }
     public string Category { get; init; } = "";

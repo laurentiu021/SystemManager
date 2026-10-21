@@ -94,8 +94,8 @@
                       Background="Transparent" BorderThickness="0" GridLinesVisibility="None"
                       VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Resolution" Binding="{Binding ResolutionDisplay}" Width="*"/>
-                    <DataGridTextColumn Header="Refresh rate" Binding="{Binding RefreshDisplay}" Width="160"/>
+                    <DataGridTextColumn Header="Resolution" Binding="{Binding ResolutionDisplay}" SortMemberPath="PixelCount" Width="*"/>
+                    <DataGridTextColumn Header="Refresh rate" Binding="{Binding RefreshDisplay}" SortMemberPath="RefreshHz" Width="160"/>
                 </DataGrid.Columns>
             </DataGrid>
 

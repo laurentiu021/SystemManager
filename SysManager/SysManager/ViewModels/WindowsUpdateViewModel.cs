@@ -668,7 +668,10 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
             {
                 Title = el.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "",
                 KB = el.TryGetProperty("KB", out var kb) ? kb.GetString() ?? "" : "",
-                Size = el.TryGetProperty("Size", out var sz) ? FormatSize(sz) : "",
+                SizeDisplay = el.TryGetProperty("Size", out var sz) ? FormatSize(sz) : "",
+                SizeBytes = el.TryGetProperty("Size", out var bytes) && bytes.ValueKind == JsonValueKind.Number
+                    ? bytes.GetInt64()
+                    : 0,
                 Status = el.TryGetProperty("Status", out var st) ? st.GetString() ?? "" : "",
                 Date = ParseDate(el.TryGetProperty("Date", out var dt) ? dt : default),
                 IsHidden = el.TryGetProperty("IsHidden", out var ih) && ih.ValueKind == JsonValueKind.True,

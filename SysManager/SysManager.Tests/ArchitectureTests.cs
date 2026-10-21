@@ -2749,6 +2749,145 @@ public partial class ArchitectureTests
         ]);
 
     /// <summary>
+    /// A sortable column that shows a number or a date as text sorts on the value, not on the text.
+    /// </summary>
+    /// <remarks>
+    /// A <c>DataGridTextColumn</c> with no <c>SortMemberPath</c> sorts on its binding, so a column bound to a formatted
+    /// string sorted the characters it shows: Large Files put "1.2 GB" before "15.0 MB" and ordered dates by the day of
+    /// the month, Boot Analyzer put "12.3 s" before "9.8 s", Display Profiles put "2560×1440" before "800×600", and
+    /// Windows Update sorted on a <c>Size</c> that was itself the formatted text (#2819). So a column whose sort member
+    /// is a <c>…Display</c> property, or one built by <c>FormatSize</c> or <c>FormatRate</c>, fails here unless its
+    /// text is words, listed below with why; a column that cannot be sorted is not read.
+    /// <para>The formatted properties are read from the source by name, so one that is not called <c>…Display</c> is
+    /// found too, as <c>UpdateEntry.Size</c> was. <see cref="EachFixedColumn_SortsOnANumberOrADate"/> checks
+    /// the type each fixed column sorts on.</para>
+    /// </remarks>
+    [Fact]
+    public void EverySortableColumn_SortsOnTheValueItShows()
+    {
+        // A …Display whose text is the value: sorting it puts the words in alphabetical order, the order wanted.
+        var words = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["TypeDisplay"] = "the kind of program, or of restore point, in words",
+            ["SignatureDisplay"] = "whether a driver is signed, in words",
+            ["DescriptionDisplay"] = "what a task does, in words",
+        };
+
+        // Properties given their value by a size or rate formatter, whatever they are called.
+        var formatted = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .SelectMany(f => FormattedProperty().Matches(WithoutComments(File.ReadAllText(f))))
+            .Select(m => m.Groups["name"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("SizeDisplay", formatted);
+
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var offenders = new List<string>();
+        var seenWords = new HashSet<string>(StringComparer.Ordinal);
+        var sortable = 0;
+
+        foreach (var view in Directory.GetFiles(Path.Combine(TestPaths.AppProject(), "Views"), "*.xaml"))
+        {
+            foreach (var grid in XDocument.Load(view).Descendants(presentation + "DataGrid"))
+            {
+                if ((string?)grid.Attribute("CanUserSortColumns") == "False") continue;
+
+                var columns = grid.Element(presentation + "DataGrid.Columns")?.Elements() ?? [];
+                foreach (var column in columns)
+                {
+                    if ((string?)column.Attribute("CanUserSort") == "False") continue;
+                    var binding = (string?)column.Attribute("Binding") ?? "";
+                    var sortPath = (string?)column.Attribute("SortMemberPath")
+                                   ?? BindingPath().Match(binding).Groups["path"].Value;
+                    if (sortPath.Length == 0) continue;
+                    sortable++;
+
+                    var member = sortPath.Split('.')[^1];
+                    if (words.ContainsKey(member))
+                    {
+                        seenWords.Add(member);
+                        continue;
+                    }
+
+                    if (member.EndsWith("Display", StringComparison.Ordinal) || formatted.Contains(member))
+                        offenders.Add($"{Path.GetFileName(view)}: the \"{(string?)column.Attribute("Header")}\" column "
+                                      + $"sorts on {member}, the text it shows");
+                }
+            }
+        }
+
+        // 154 when written. Far fewer means the grids were not read, and an empty list would pass.
+        Assert.True(sortable >= 120, $"only {sortable} sortable columns were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "a column bound to formatted text sorts that text, so \"1.2 GB\" comes before \"15.0 MB\" and \"12.3 s\" "
+            + "before \"9.8 s\". Set SortMemberPath to the number or date the text is made from:\n  "
+            + string.Join("\n  ", offenders));
+        Assert.True(seenWords.SetEquals(words.Keys),
+            "these words-only exceptions are no longer sorted on by any column, so they excuse nothing: "
+            + string.Join(", ", words.Keys.Except(seenWords)));
+    }
+
+    /// <summary>
+    /// A property, or an initializer, whose value is the text a size or rate formatter makes, such as
+    /// <c>SizeDisplay =&gt; FormatHelper.FormatSize(SizeBytes)</c> or <c>Size = FormatSize(size)</c>.
+    /// </summary>
+    [GeneratedRegex(@"\b(?<name>[A-Z]\w*)\s*(?:=>|=)\s*(?:[^;{}\n]*\?\s*)?(?:\w+\.)?Format(?:Size|Rate)\(")]
+    private static partial Regex FormattedProperty();
+
+    /// <summary>The columns #2819 fixed, each with the type of the rows its grid lists.</summary>
+    public static TheoryData<string, string, Type> SortedColumns => new()
+    {
+        { "LargeFilesView.xaml", "Size", typeof(Models.LargeFileEntry) },
+        { "LargeFilesView.xaml", "Modified", typeof(Models.LargeFileEntry) },
+        { "BrowserCleanerView.xaml", "Size", typeof(Models.BrowserCleanupItem) },
+        { "FileShredderView.xaml", "Size", typeof(Models.ShredItem) },
+        { "WindowsUpdateView.xaml", "Size", typeof(Models.UpdateEntry) },
+        { "BootAnalyzerView.xaml", "When", typeof(Models.BootRecord) },
+        { "BootAnalyzerView.xaml", "Boot time", typeof(Models.BootRecord) },
+        { "BootAnalyzerView.xaml", "Delay", typeof(Models.BootDegradation) },
+        { "DisplayProfileView.xaml", "Resolution", typeof(Models.DisplayMode) },
+        { "DisplayProfileView.xaml", "Refresh rate", typeof(Models.DisplayMode) },
+        { "BandwidthMonitorView.xaml", "Download", typeof(Models.ProcessNetworkUsage) },
+        { "BandwidthMonitorView.xaml", "Upload", typeof(Models.ProcessNetworkUsage) },
+        { "BandwidthMonitorView.xaml", "Session total", typeof(Models.ProcessNetworkUsage) },
+        { "FileLockView.xaml", "Started", typeof(Models.FileLocker) },
+        { "PrivacyMonitorView.xaml", "Last used", typeof(Models.PrivacyAccessEntry) },
+        { "RestorePointsView.xaml", "Created", typeof(Models.RestorePoint) },
+        { "TaskSchedulerView.xaml", "Last run (on select)", typeof(Models.ScheduledTaskInfo) },
+        { "TaskSchedulerView.xaml", "Next run (on select)", typeof(Models.ScheduledTaskInfo) },
+    };
+
+    /// <summary>
+    /// Each column #2819 fixed sorts on a property of its row that holds a number or a date.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EverySortableColumn_SortsOnTheValueItShows"/> rejects a column that sorts on formatted text, by name;
+    /// this reads each fixed column out of its view and checks the type of what a header click sorts on, so a sort
+    /// member that names nothing, or names more text, fails as well.
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(SortedColumns))]
+    public void EachFixedColumn_SortsOnANumberOrADate(string view, string header, Type row)
+    {
+        var column = Assert.Single(XDocument.Load(Path.Combine(TestPaths.AppProject(), "Views", view)).Descendants(),
+            e => e.Name.LocalName.StartsWith("DataGrid", StringComparison.Ordinal)
+                 && e.Name.LocalName.EndsWith("Column", StringComparison.Ordinal)
+                 && (string?)e.Attribute("Header") == header);
+
+        // What a header click sorts on: SortMemberPath, or else the binding's path.
+        var sortsOn = (string?)column.Attribute("SortMemberPath")
+                      ?? BindingPath().Match((string?)column.Attribute("Binding") ?? "").Groups["path"].Value;
+        var property = row.GetProperty(sortsOn, BindingFlags.Public | BindingFlags.Instance);
+        Assert.True(property is not null,
+            $"{view}'s {header} column sorts on {sortsOn}, which {row.Name} does not have.");
+
+        var type = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        Assert.True(type == typeof(long) || type == typeof(int) || type == typeof(double) || type == typeof(DateTime),
+            $"{view}'s {header} column sorts on {row.Name}.{sortsOn}, a {type.Name}, so a header click orders text.");
+    }
+
+    /// <summary>
     /// The two elevation banners that share a slot must share one geometry.
     /// </summary>
     /// <remarks>

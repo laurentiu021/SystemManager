@@ -923,6 +923,21 @@ public class BandwidthMonitorViewModelTests : IDisposable
     }
 
     [Fact]
+    public void TheSessionTotal_SortsOnBytes_AndFollowsBothDirections()
+    {
+        // The column sorted "1.4 GB" before "800.0 MB" as text (#2819), so it sorts on TotalBytes, which has to change
+        // with the figures it adds up for a live grid to see it.
+        var row = new ProcessNetworkUsage { ProcessId = 1, ProcessName = "app.exe" };
+        var raised = row.RecordPropertyChanges();
+
+        row.TotalDownBytes = 800_000_000;
+        row.TotalUpBytes = 600_000_000;
+
+        Assert.Equal(1_400_000_000, row.TotalBytes);
+        Assert.Equal(2, raised.Count(name => name == nameof(ProcessNetworkUsage.TotalBytes)));
+    }
+
+    [Fact]
     public async Task ATabThatStayedVisible_UsesEverySample()
     {
         var busy = new BandwidthSnapshot(BandwidthMode.Connections, 5_000_000, 1_000_000, []);

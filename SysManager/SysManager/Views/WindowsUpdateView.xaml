@@ -222,8 +222,8 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
 
-                    <DataGridTextColumn IsReadOnly="True" Header="Size" Binding="{Binding Size}" Width="80" MinWidth="60"
-                                        SortMemberPath="Size">
+                    <DataGridTextColumn IsReadOnly="True" Header="Size" Binding="{Binding SizeDisplay}" Width="80" MinWidth="60"
+                                        SortMemberPath="SizeBytes">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="HorizontalAlignment" Value="Right"/>

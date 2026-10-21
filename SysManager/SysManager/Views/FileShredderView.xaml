@@ -93,7 +93,7 @@
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200" MinWidth="100"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" MinWidth="120"/>
-                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="90" MinWidth="60"/>
+                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" SortMemberPath="SizeBytes" Width="90" MinWidth="60"/>
                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="160" MinWidth="80"/>
                 <DataGridTemplateColumn Header="" Width="70" MinWidth="70" CanUserResize="False">
                     <DataGridTemplateColumn.CellTemplate>

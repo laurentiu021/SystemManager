@@ -183,11 +183,11 @@
                             <!-- Connections (both modes) -->
                             <DataGridTextColumn Header="Connections" Binding="{Binding ConnectionCount}" Width="110"/>
                             <!-- Precise-mode columns: shown only when ETW mode is active -->
-                            <DataGridTextColumn Header="Download" Binding="{Binding DownDisplay}" Width="110"
+                            <DataGridTextColumn Header="Download" Binding="{Binding DownDisplay}" SortMemberPath="DownBytesPerSec" Width="110"
                                                 Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
-                            <DataGridTextColumn Header="Upload" Binding="{Binding UpDisplay}" Width="110"
+                            <DataGridTextColumn Header="Upload" Binding="{Binding UpDisplay}" SortMemberPath="UpBytesPerSec" Width="110"
                                                 Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
-                            <DataGridTextColumn Header="Session total" Binding="{Binding TotalDisplay}" Width="120"
+                            <DataGridTextColumn Header="Session total" Binding="{Binding TotalDisplay}" SortMemberPath="TotalBytes" Width="120"
                                                 Visibility="{Binding DataContext.PreciseMode, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource FlexVis}}"/>
                         </DataGrid.Columns>
                     </DataGrid>

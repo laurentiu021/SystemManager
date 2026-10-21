@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.40] - 2026-10-21
+
+**Clicking a column of sizes, times, speeds, resolutions or dates sorts by the value, so 800 MB comes before 1.2 GB.**
+
+### Fixed
+
+- **Columns that show a number as text sorted the text.** Large Files put "1.2 GB" before "15.0 MB" and ordered its
+  dates by the day of the month, Browser Cleaner, File Shredder and Windows Update mixed their sizes the same way,
+  Boot Analyzer put "12.3 s" before "9.8 s", Display Profiles put "2560×1440" before "800×600" and "144 Hz" before
+  "60 Hz", and Bandwidth Monitor ordered its speeds and totals by their first digit. Each now sorts by the size, the
+  time, the resolution, the rate or the date itself. Since 0.5.0 on Large Files, 0.28.0 on Windows Update, 1.4.0 on
+  File Shredder, 1.31.0 on Browser Cleaner, 1.33.0 on Boot Analyzer, 1.37.0 on Display Profiles and 1.54.0 on
+  Bandwidth Monitor.
+- The dates on File Lock Detector, Camera/Mic/Location, Restore Points and Task Scheduler already read in an order
+  that sorts, and now sort on the date itself as well, so a row with no date comes first rather than last.
+
 ## [1.130.39] - 2026-10-21
 
 **Filter chips, menu items, buttons and tooltips built around a number or a name show all their words, and

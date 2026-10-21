@@ -35,9 +35,9 @@ namespace SysManager.ViewModels;
 /// </remarks>
 public sealed partial class SystemFixesViewModel : ViewModelBase
 {
-    /// <inheritdoc/>
-    protected internal override IRelayCommand? EscapeCancel =>
-        IsBusy ? CancelCommand : null;
+    // Escape stops nothing here, so there is no EscapeCancel: every run on this tab repairs or changes Windows, and
+    // Escape is a bare keypress. It stopped SFC, DISM and the scripted repairs half-way (#2834). The Cancel button
+    // still stops one, for a stop that is meant.
 
     private readonly SystemFixService _service;
 

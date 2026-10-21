@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.52] - 2026-10-21
+
+**Escape no longer stops an uninstall or a System Fixes repair half-way, and Uninstaller's Cancel stops a batch
+before its next app instead of ending the uninstaller that is running.**
+
+### Fixed
+
+- **Uninstaller's Cancel, and Escape, ended the running uninstaller half-way.** That can leave a program half-removed.
+  They now stop the batch before its next app, once the uninstaller already running has finished, and the status line
+  says so. Closing SysManager still ends it, after asking. Since 0.11.0 for Cancel and 1.76.0 for Escape.
+- **Escape stopped a System Fixes repair half-way.** SFC, DISM and the scripted repairs were ended by a bare
+  keypress. Escape stops nothing on System Fixes now; its Cancel button still stops a repair. Since 1.76.0.
+
 ## [1.130.51] - 2026-10-21
 
 **Windows Features says why Windows refused a change, shows each feature the way Windows reports it afterwards, and

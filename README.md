@@ -231,8 +231,11 @@ on, the way it opens a folder in File Explorer. Opening the appearance panel mov
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
 `Escape` also stops whatever the open tab is doing — a disk scan, a duplicate search, a speed test — on
-the 26 tabs that can be cancelled from the keyboard: every tab with a Cancel button, and Display Profiles, where
-it puts back the previous mode while a new one waits for "Keep". It only acts
+the 25 tabs that can be cancelled from the keyboard: every tab with a Cancel button but System Fixes, and Display
+Profiles, where it puts back the previous mode while a new one waits for "Keep". Every run on System Fixes repairs
+Windows, so stopping one is left to its Cancel button rather than a keypress. On Windows Features `Escape` stops a
+scan, never a change, and on Uninstaller it stops a batch before its next app, once the uninstaller already running
+has finished. It only acts
 while something is running, and only after the control you are on has had its own chance to use the key,
 so it still closes a drop-down or undoes a text edit first.
 
@@ -688,6 +691,7 @@ not need administrator rights to open it.
 
 Across the tab:
 - Live output, honest success/failure reporting, admin elevation banner
+- The Cancel button stops a repair; `Escape` does not, because every run here changes Windows
 - *Network-stack reset (Winsock / TCP-IP / DNS flush) lives on the Network → Network
   Repair tab, which offers those as individual one-click tools.*
 - *Freeing up disk space lives on Cleanup → Quick Cleanup. The two tabs are split by what
@@ -1755,6 +1759,8 @@ offers, "rate us" prompts:
   to a second copy of themselves and return straight away; those apps stay on the list, marked as
   still installed, until the uninstaller finishes and you scan again
 - Runs uninstall actions only from an unelevated SysManager session; each package requests its own UAC elevation when required
+- **Cancel stops a batch between apps** — the uninstaller already running finishes first, because ending one
+  half-way can leave its program half-removed. `Escape` does the same
 - **What it left behind** — after an uninstall, a Left behind card lists what the app left on
   the PC: the folder it was installed in, folders named after it in AppData, Local AppData and
   ProgramData, its own settings key under `HKEY_CURRENT_USER\Software`, and a folder named after

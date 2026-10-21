@@ -4039,6 +4039,11 @@ public partial class ArchitectureTests
     /// skipped nine tabs and Escape did nothing on them (#2597). For such a button the override must name its
     /// command and return null when nothing runs, gated on the flag the command's own
     /// <c>[RelayCommand(CanExecute = …)]</c> names where it names one.</para>
+    /// <para><b>A tab on which every run changes Windows declines Escape</b>, by name below and with the reason.
+    /// Escape is a bare keypress, and on System Fixes it stopped SFC, DISM and the scripted repairs half-way (#2834).
+    /// Its Cancel button stays, for a stop the user means, and its view model overrides no <c>EscapeCancel</c>, or one
+    /// that returns null outright. A name whose view has no Cancel button any more fails, so the list cannot go
+    /// stale.</para>
     /// </remarks>
     [Fact]
     public void EveryCancellableTab_LetsEscapeReachItsOwnCancelCommand()
@@ -4046,6 +4051,13 @@ public partial class ArchitectureTests
         var app = TestPaths.AppProject();
         var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
         var binding = new Regex(@"^\{Binding\s+(?<name>\w+)", RegexOptions.CultureInvariant);
+
+        // Views on which every run changes Windows, so Escape stops none of them.
+        var declinesEscape = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["SystemFixesView"] = "every repair on it changes Windows; Escape stopped SFC and DISM half-way (#2834)",
+        };
+        var declined = new HashSet<string>(StringComparer.Ordinal);
 
         var offenders = new List<string>();
         var pairs = 0;
@@ -4085,6 +4097,18 @@ public partial class ArchitectureTests
                     .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 
                 var overrideAt = vm.IndexOf("override IRelayCommand? EscapeCancel", StringComparison.Ordinal);
+                if (declinesEscape.ContainsKey(viewName))
+                {
+                    declined.Add(viewName);
+                    // No override, or one that returns null outright: either way Escape reaches nothing here.
+                    var declining = overrideAt < 0 ? "EscapeCancel=>null" : string.Concat(
+                        vm[overrideAt..vm.IndexOf(';', overrideAt)].Where(c => !char.IsWhiteSpace(c)));
+                    if (!declining.EndsWith("EscapeCancel=>null", StringComparison.Ordinal))
+                        offenders.Add($"{viewName}Model is listed as declining Escape, and its EscapeCancel returns "
+                                      + "a command");
+                    continue;
+                }
+
                 if (overrideAt < 0)
                 {
                     offenders.Add($"{viewName}Model has no EscapeCancel override, so Escape does nothing "
@@ -4122,6 +4146,10 @@ public partial class ArchitectureTests
                                   + $"{commandName} itself says it can run on");
             }
         }
+
+        foreach (var stale in declinesEscape.Keys.Where(k => !declined.Contains(k)))
+            offenders.Add($"{stale} is listed as declining Escape but has no Cancel button any more; "
+                          + "take it off the list");
 
         // Vacuity floors: seventeen Cancel buttons carry a visibility flag today and eleven are on screen all the
         // time. A parse that stopped finding either kind would report success having checked nothing.

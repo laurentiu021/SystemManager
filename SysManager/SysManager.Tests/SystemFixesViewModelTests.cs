@@ -300,6 +300,40 @@ public class SystemFixesViewModelTests
     }
 
     [Fact]
+    public async Task Escape_StopsNoRepair_WhileTheCancelButtonStillDoes()
+    {
+        // Escape ended SFC half-way from a bare keypress (#2834). The Cancel button is the way to stop a repair.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        var running = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken sfcToken = default;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("sfc.exe", "/scannow", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(call =>
+              {
+                  sfcToken = call.ArgAt<CancellationToken>(2);
+                  sfcToken.Register(() => running.TrySetCanceled(sfcToken));
+                  return running.Task;
+              });
+        var vm = NewVm(runner);
+
+        var sfc = vm.RunSfcCommand.ExecuteAsync(null);
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.Null(vm.EscapeCancel);
+
+            vm.CancelCommand.Execute(null);
+            Assert.True(sfcToken.IsCancellationRequested);
+        }
+        finally
+        {
+            running.TrySetResult(0);
+            await sfc;
+        }
+    }
+
+    [Fact]
     public async Task RunSfc_ReadsSfcsOwnOutput_ForItsProgressAndItsVerdict()
     {
         // Redirected, SFC writes UTF-16, and the tab read it as the OEM code page: a NUL between every letter, so the

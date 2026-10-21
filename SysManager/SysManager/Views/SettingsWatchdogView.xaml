@@ -150,14 +150,7 @@
                                     <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
                                     <!-- Full reason plus the exact registry location, for anyone who
                                          wants to verify the claim without reading the source. -->
-                                    <Setter Property="ToolTip">
-                                        <Setter.Value>
-                                            <MultiBinding StringFormat="{}{0}&#x0a;{1}">
-                                                <Binding Path="Description"/>
-                                                <Binding Path="Location"/>
-                                            </MultiBinding>
-                                        </Setter.Value>
-                                    </Setter>
+                                    <Setter Property="ToolTip" Value="{Binding ToolTipText}"/>
                                 </Style>
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>

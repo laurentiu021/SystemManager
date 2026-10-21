@@ -2473,6 +2473,282 @@ public partial class ArchitectureTests
     private static partial Regex BindingPath();
 
     /// <summary>
+    /// A binding's <c>StringFormat</c> is only on a property that holds a string.
+    /// </summary>
+    /// <remarks>
+    /// WPF formats a bound value only when the target property's type is <c>string</c>, and drops the format without
+    /// a word otherwise. <c>Content</c>, <c>Header</c> and <c>ToolTip</c> are typed <c>object</c>, so Services' nine
+    /// filter chips read only their counts, the row menus on Services, Process Manager and Disk Analyzer read only the
+    /// name of what they act on, "Kill" included, both "Clear marks" buttons read a bare number, and Settings
+    /// Watchdog's reason column, whose tooltip was a <c>MultiBinding</c> with a format and no converter, had no tooltip
+    /// at all (#2808).
+    /// Such a property takes its text from <c>Converter={StaticResource Format}</c>, with the template as the
+    /// <c>ConverterParameter</c>, or from a view-model string where the words change with the number.
+    /// <para>The target's type comes from WPF itself, by reflection on the element the binding is set on, or on the
+    /// style's target type for a setter, rather than from a list of property names, which would pass the next
+    /// object-typed property nobody listed. A text column's <c>Binding</c> counts as the cell's <c>TextBlock.Text</c>,
+    /// which is where the column applies it. A target this cannot resolve fails here rather than passing.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryStringFormat_IsOnAPropertyThatHoldsAString()
+    {
+        // Known answers first: a resolver that found nothing would fail every binding, or pass them if it skipped them.
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        Assert.Equal(typeof(string), XamlPropertyType(XamlType(presentation, "TextBlock"), "Text"));
+        Assert.Equal(typeof(object), XamlPropertyType(XamlType(presentation, "Button"), "Content"));
+        Assert.Equal(typeof(string), XamlPropertyType(XamlType(presentation, "AutomationProperties"), "Name"));
+
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var formatted = 0;
+        var templated = 0;
+
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                || file.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+                continue;
+
+            var name = Path.GetFileName(file);
+            foreach (var element in XDocument.Parse(File.ReadAllText(file)).Descendants())
+            {
+                // <Binding StringFormat="…"/> or <MultiBinding StringFormat="…"> as the value of a property element.
+                if (element.Name.LocalName is "Binding" or "MultiBinding"
+                    && element.Attribute("StringFormat") is { } elementFormat
+                    && element.Parent is { } holder
+                    && holder.Name.LocalName.Contains('.', StringComparison.Ordinal))
+                {
+                    formatted++;
+                    var (owner, property) = PropertyElementTarget(holder);
+                    if (FormattedTargetOffence(owner, property) is { } offence)
+                        offenders.Add($"{name}: <{element.Name.LocalName} StringFormat=\"{elementFormat.Value}\"> "
+                                      + offence);
+                }
+
+                foreach (var attribute in element.Attributes())
+                {
+                    var value = attribute.Value;
+                    if (!value.StartsWith('{')) continue;
+
+                    if (value.Contains("Converter={StaticResource Format}", StringComparison.Ordinal))
+                    {
+                        templated++;
+                        if (!FormatTemplate().IsMatch(value))
+                            offenders.Add($"{name}: {attribute.Name.LocalName}=\"{value}\" goes through the Format "
+                                          + "converter with no ConverterParameter template holding {0}");
+                    }
+
+                    if (!value.Contains("StringFormat=", StringComparison.Ordinal)) continue;
+                    formatted++;
+                    var (owner, property) = AttributeTarget(element, attribute);
+                    if (FormattedTargetOffence(owner, property) is { } offence)
+                        offenders.Add($"{name}: {attribute.Name.LocalName}=\"{value}\" {offence}");
+                }
+            }
+        }
+
+        // 118 when written. Far fewer means the views were not read, and an empty list would pass.
+        Assert.True(formatted >= 100,
+            $"only {formatted} bindings with a StringFormat were read, so this checks nothing.");
+        Assert.True(XamlCode(Path.Combine(TestPaths.AppProject(), "App.xaml")).Contains(
+                        @"x:Key=""Format""", StringComparison.Ordinal),
+            "App.xaml no longer defines the Format converter, which every binding above resolves when its view loads.");
+        Assert.True(offenders.Count == 0,
+            "WPF applies a binding's StringFormat only when the property holds a string, and drops it without a word "
+            + "on anything else, so these show the bare value. Give the property its text through "
+            + "Converter={StaticResource Format}, ConverterParameter='… {0} …', or bind a view-model string:\n  "
+            + string.Join("\n  ", offenders));
+
+        // 19 when written. Checked after the offenders, so a binding moved back to a StringFormat is named rather
+        // than reported only as a shorter count.
+        Assert.True(templated >= 15, $"only {templated} bindings through the Format converter were read, of 19.");
+    }
+
+    /// <summary>
+    /// No markup extension escapes a quote by doubling it.
+    /// </summary>
+    /// <remarks>
+    /// Inside a markup extension a quoted value ends at its next quote. <c>StringFormat='Opens SysManager''s own
+    /// diagnostic logs: {0}'</c> compiled to the template "Opens SysManager", dropping the rest, and the same text does
+    /// not load through <c>XamlReader</c> at all (#2808). A quote inside one is escaped with a backslash:
+    /// <c>'Opens SysManager\'s own diagnostic logs: {0}'</c>. A pair of quotes with nothing between them, an empty
+    /// value, is not a doubled quote and passes.
+    /// </remarks>
+    [Fact]
+    public void NoMarkupExtension_EscapesAQuoteByDoublingIt()
+    {
+        Assert.Matches(DoubledQuote(), "{Binding X, StringFormat='SysManager''s {0}'}");
+        Assert.DoesNotMatch(DoubledQuote(), "{Binding X, ConverterParameter='', FallbackValue=''}");
+
+        var separator = Path.DirectorySeparatorChar;
+        var offenders = new List<string>();
+        var extensions = 0;
+
+        foreach (var file in Directory.GetFiles(TestPaths.AppProject(), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
+                || file.Contains($"{separator}bin{separator}", StringComparison.Ordinal))
+                continue;
+
+            var attributes = XDocument.Parse(File.ReadAllText(file)).Descendants().SelectMany(e => e.Attributes());
+            foreach (var attribute in attributes)
+            {
+                // "{}" opens a literal that only looks like an extension.
+                var value = attribute.Value;
+                if (!value.StartsWith('{') || value.StartsWith("{}", StringComparison.Ordinal)) continue;
+                extensions++;
+                if (DoubledQuote().IsMatch(value))
+                    offenders.Add($"{Path.GetFileName(file)}: {attribute.Name.LocalName}=\"{value}\"");
+            }
+        }
+
+        // 5038 when written.
+        Assert.True(extensions >= 4000, $"only {extensions} markup extensions were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "a doubled quote ends a quoted value inside a markup extension, so the text after it is dropped. "
+            + "Escape the quote with a backslash instead:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A quote doubled between two characters of text: the escape that does not work inside a markup extension.
+    /// </summary>
+    [GeneratedRegex(@"[^\s=,{']''[^\s,}']")]
+    private static partial Regex DoubledQuote();
+
+    /// <summary>A Format converter binding's template: a quoted ConverterParameter that holds <c>{0}</c>.</summary>
+    [GeneratedRegex(@"ConverterParameter='(?:[^'\\]|\\.)*\{0\}")]
+    private static partial Regex FormatTemplate();
+
+    /// <summary>Why a formatted binding's target is wrong, or null when it holds a string.</summary>
+    private static string? FormattedTargetOffence(Type? owner, string property) =>
+        XamlPropertyType(owner, property) switch
+        {
+            null => $"sets {property}, which could not be resolved, so whether WPF formats it is unknown",
+            var type when type == typeof(string) => null,
+            var type => $"sets {owner!.Name}.{property}, which holds {type.Name}",
+        };
+
+    /// <summary>
+    /// The type <paramref name="property"/> holds on <paramref name="owner"/>: its dependency property's, else its CLR
+    /// property's, or null when it has neither.
+    /// </summary>
+    private static Type? XamlPropertyType(Type? owner, string property)
+    {
+        if (owner is null) return null;
+
+        // A text column hands its Binding to the TextBlock in each cell, and to the TextBox while a cell is edited, and
+        // both put it in Text. The column's own property is a BindingBase.
+        if (typeof(System.Windows.Controls.DataGridTextColumn).IsAssignableFrom(owner) && property == "Binding")
+            return typeof(string);
+
+        const BindingFlags Static = BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy;
+        if (owner.GetField(property + "Property", Static)?.GetValue(null) is System.Windows.DependencyProperty dp)
+            return dp.PropertyType;
+        return owner.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => p.Name == property)?.PropertyType;
+    }
+
+    /// <summary>
+    /// The type and property a bound attribute sets: its element's, an attached property's, or a setter's.
+    /// </summary>
+    private static (Type? Owner, string Property) AttributeTarget(XElement element, XAttribute attribute)
+    {
+        var local = attribute.Name.LocalName;
+        if (element.Name.LocalName == "Setter" && local == "Value") return SetterTarget(element);
+
+        var dot = local.LastIndexOf('.');
+        if (dot < 0) return (XamlType(element.Name.Namespace, element.Name.LocalName), local);
+
+        // An attached property, such as AutomationProperties.Name. An attribute with no prefix is in no XML namespace,
+        // and XAML looks its owner up in the file's default one.
+        var ns = attribute.Name.Namespace == XNamespace.None ? element.GetDefaultNamespace() : attribute.Name.Namespace;
+        return (XamlType(ns, local[..dot]), local[(dot + 1)..]);
+    }
+
+    /// <summary>
+    /// The type and property a property element sets, such as <c>&lt;TextBlock.Text&gt;</c> or
+    /// <c>&lt;AutomationProperties.Name&gt;</c>, or its setter's for <c>&lt;Setter.Value&gt;</c>.
+    /// </summary>
+    private static (Type? Owner, string Property) PropertyElementTarget(XElement holder)
+    {
+        var local = holder.Name.LocalName;
+        if (local == "Setter.Value" && holder.Parent is { } setter) return SetterTarget(setter);
+
+        var dot = local.LastIndexOf('.');
+        return (XamlType(holder.Name.Namespace, local[..dot]), local[(dot + 1)..]);
+    }
+
+    /// <summary>
+    /// The type and property a <c>Setter</c> sets: an attached property names its owner, and otherwise it is the
+    /// element its <c>TargetName</c> names in the template, or the type its style or template targets.
+    /// </summary>
+    private static (Type? Owner, string Property) SetterTarget(XElement setter)
+    {
+        var property = (string?)setter.Attribute("Property") ?? "";
+        var dot = property.LastIndexOf('.');
+        if (dot >= 0) return (XamlTypeNamed(setter, property[..dot]), property[(dot + 1)..]);
+
+        if ((string?)setter.Attribute("TargetName") is { } targetName)
+        {
+            XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+            var named = setter.Ancestors()
+                .FirstOrDefault(a => a.Name.LocalName is "ControlTemplate" or "DataTemplate")?
+                .Descendants()
+                .FirstOrDefault(d => (string?)d.Attribute(x + "Name") == targetName
+                                     || (string?)d.Attribute("Name") == targetName);
+            return (named is null ? null : XamlType(named.Name.Namespace, named.Name.LocalName), property);
+        }
+
+        var scope = setter.Ancestors().FirstOrDefault(a => a.Name.LocalName is "Style" or "ControlTemplate");
+        return ((string?)scope?.Attribute("TargetType") is { } targetType ? XamlTypeNamed(scope!, targetType) : null,
+                property);
+    }
+
+    /// <summary>
+    /// The type a XAML type name in an attribute stands for, such as <c>Button</c>, <c>{x:Type ui:Button}</c> or
+    /// <c>AutomationProperties</c>, with its prefix looked up from <paramref name="scope"/>.
+    /// </summary>
+    private static Type? XamlTypeNamed(XElement scope, string qualified)
+    {
+        var name = qualified.StartsWith("{x:Type ", StringComparison.Ordinal) ? qualified[8..^1].Trim() : qualified;
+        var colon = name.IndexOf(':', StringComparison.Ordinal);
+        var ns = colon < 0 ? scope.GetDefaultNamespace() : scope.GetNamespaceOfPrefix(name[..colon]);
+        return ns is null ? null : XamlType(ns, name[(colon + 1)..]);
+    }
+
+    /// <summary>
+    /// The CLR type a XAML name stands for: through a <c>clr-namespace:</c> mapping, or through a URI that a referenced
+    /// assembly maps with <c>XmlnsDefinition</c>, as WPF's own and WPF-UI's are.
+    /// </summary>
+    private static Type? XamlType(XNamespace ns, string name)
+    {
+        const string ClrNamespace = "clr-namespace:";
+        var uri = ns.NamespaceName;
+        if (uri.StartsWith(ClrNamespace, StringComparison.Ordinal))
+        {
+            var parts = uri[ClrNamespace.Length..].Split(';', StringSplitOptions.TrimEntries);
+            var assembly = parts.FirstOrDefault(p => p.StartsWith("assembly=", StringComparison.Ordinal)) is { } named
+                ? Assembly.Load(named["assembly=".Length..])
+                : typeof(SysManager.App).Assembly;
+            return assembly.GetType($"{parts[0]}.{name}");
+        }
+
+        return XamlAssemblies.Value
+            .SelectMany(a => a.GetCustomAttributes<System.Windows.Markup.XmlnsDefinitionAttribute>()
+                .Where(d => d.XmlNamespace == uri)
+                .Select(d => (d.AssemblyName is null ? a : Assembly.Load(d.AssemblyName))
+                    .GetType($"{d.ClrNamespace}.{name}")))
+            .FirstOrDefault(t => t is not null);
+    }
+
+    /// <summary>The app's assembly and every assembly it references, which is where its XAML's types live.</summary>
+    private static readonly Lazy<Assembly[]> XamlAssemblies = new(() =>
+        [
+            typeof(SysManager.App).Assembly,
+            .. typeof(SysManager.App).Assembly.GetReferencedAssemblies().Select(Assembly.Load),
+        ]);
+
+    /// <summary>
     /// The two elevation banners that share a slot must share one geometry.
     /// </summary>
     /// <remarks>

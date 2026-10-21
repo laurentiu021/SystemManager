@@ -278,6 +278,31 @@ public sealed class MaintenanceActionToTextConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Puts the bound value into the template in <c>ConverterParameter</c>, such as <c>'Safe ({0})'</c>, and returns the
+/// text.
+/// </summary>
+/// <remarks>
+/// For the properties typed <c>object</c>: <c>Content</c>, <c>Header</c> and <c>ToolTip</c>. WPF applies a binding's
+/// <c>StringFormat</c> only when the target property holds a string, so on these it dropped the format and the control
+/// showed the bare value: Services' filter chips read only their counts, and the row menus read only the name of the
+/// service or the program, "Kill" included (#2808). This gives the property the text itself, so what is on screen and
+/// the name UI Automation reads from it are one string. <c>ContentStringFormat</c> and <c>HeaderStringFormat</c> would
+/// not: they format only what is drawn, and a menu item would still be announced by the bare name.
+/// <para>A value WPF has not resolved yet is handed back as it is, so the binding shows its fallback rather than the
+/// template around "{DependencyProperty.UnsetValue}".</para>
+/// </remarks>
+public sealed class FormatConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value == DependencyProperty.UnsetValue || parameter is not string template
+            ? value
+            : string.Format(culture, template, value);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 // ── Process provenance (Process Manager) ─────────────────────────────────────────────────────
 // Deliberately SEPARATE from the SafetyLevel* converters above. Those switch on the
 // Models.SafetyLevel enum (Safe/Caution/Critical) used by Services and Windows Features;

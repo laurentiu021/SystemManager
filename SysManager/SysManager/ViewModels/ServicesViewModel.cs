@@ -60,7 +60,19 @@ public sealed partial class ServicesViewModel : ViewModelBase, IFilterable
     /// marks there is nothing to clear, and a permanently visible dead button is the kind of control
     /// this fix exists to remove.
     /// </summary>
-    [ObservableProperty] private int _highlightedCount;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClearMarksText))]
+    private int _highlightedCount;
+
+    /// <summary>
+    /// The "Clear marks" button, with the count: "Clear 3 marks", or "Clear 1 mark". It was a <c>StringFormat</c> on
+    /// <c>Content</c>, which WPF does not format, so the button read a bare "3" (#2808).
+    /// </summary>
+    public string ClearMarksText => HighlightedCount switch
+    {
+        1 => "Clear 1 mark",
+        var n => $"Clear {n} marks",
+    };
 
     /// <summary>
     /// Every value <see cref="ApplyFilter"/> understands, in the order the chips appear.

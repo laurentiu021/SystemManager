@@ -113,7 +113,7 @@
                         <Setter Property="ContextMenu">
                             <Setter.Value>
                                 <ContextMenu>
-                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Open file location for {0}'}"
+                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Open file location for {0}'}"
                                               Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                               IsEnabled="{Binding PlacementTarget.DataContext.CanOpenFileLocation, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
@@ -122,7 +122,7 @@
                                          reader announcing only "Kill chrome.exe" says nothing about what
                                          activating it costs. DangerMenuItem so the item that ends a
                                          program does not look like the one that opens a folder. -->
-                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Kill {0}'}"
+                                    <MenuItem Header="{Binding PlacementTarget.DataContext.Name, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Kill {0}'}"
                                               AutomationProperties.HelpText="Ends this program straight away, losing anything it has not saved. SysManager asks you to confirm first."
                                               Style="{StaticResource DangerMenuItem}"
                                               Command="{Binding PlacementTarget.Tag.KillProcessCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"

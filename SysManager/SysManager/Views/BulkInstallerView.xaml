@@ -62,7 +62,7 @@
                      whole category was to filter to it and press Select All, which also picks up
                      whatever the search box happens to be narrowing to. Hidden while "All" is chosen,
                      where it would duplicate Select All exactly. -->
-                <Button Content="{Binding SelectedCategory, StringFormat='Select {0}'}"
+                <Button Content="{Binding SelectedCategory, Converter={StaticResource Format}, ConverterParameter='Select {0}'}"
                         Command="{Binding SelectCategoryCommand}"
                         CommandParameter="{Binding SelectedCategory}"
                         AutomationProperties.Name="Select every app in the chosen category"

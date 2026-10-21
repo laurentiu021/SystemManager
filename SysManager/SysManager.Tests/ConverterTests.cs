@@ -503,6 +503,38 @@ public class ConverterTests
         Assert.Contains("SortMemberPath=\"Category\"", xaml);
     }
 
+    // ---------- FormatConverter ----------
+
+    [Theory]
+    [InlineData(3, "Safe ({0})", "Safe (3)")]
+    [InlineData("Print Spooler", "Start {0}", "Start Print Spooler")]
+    [InlineData(@"D:\logs", "Opens SysManager's own diagnostic logs: {0}",
+                @"Opens SysManager's own diagnostic logs: D:\logs")]
+    public void Format_PutsTheValueIntoTheTemplate(object value, string template, string expected)
+    {
+        // A StringFormat on Content, Header or ToolTip is dropped, so the property needs the text itself (#2808).
+        var text = new FormatConverter().Convert(value, typeof(object), template, CultureInfo.InvariantCulture);
+        Assert.Equal(expected, Assert.IsType<string>(text));
+    }
+
+    [Fact]
+    public void Format_HandsBackAValueWpfHasNotResolved()
+    {
+        // Wrapped in the template it would read "Kill {DependencyProperty.UnsetValue}" instead of the fallback.
+        var text = new FormatConverter().Convert(DependencyProperty.UnsetValue, typeof(object), "Kill {0}",
+                                                 CultureInfo.InvariantCulture);
+        Assert.Same(DependencyProperty.UnsetValue, text);
+    }
+
+    [Fact]
+    public void Format_WithNoTemplate_HandsBackTheValue()
+        => Assert.Equal(3, new FormatConverter().Convert(3, typeof(object), null!, CultureInfo.InvariantCulture));
+
+    [Fact]
+    public void Format_ConvertBackThrows()
+        => Assert.Throws<NotSupportedException>(() => new FormatConverter()
+            .ConvertBack("Safe (3)", typeof(int), "Safe ({0})", CultureInfo.InvariantCulture));
+
     [Fact]
     public void App_RegistersTheProcessSafetyConverters()
     {

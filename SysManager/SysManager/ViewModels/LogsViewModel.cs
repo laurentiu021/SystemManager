@@ -109,7 +109,20 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
     /// marks there is nothing to clear, and a permanently visible dead control is the kind of thing
     /// this fix exists to remove.
     /// </summary>
-    [ObservableProperty] private int _highlightedCount;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ClearMarksText))]
+    private int _highlightedCount;
+
+    /// <summary>
+    /// The "Clear marks" button, with the count: "Clear 3 marks", or "Clear 1 mark". It was a <c>StringFormat</c> on
+    /// <c>Content</c>, which WPF does not format, so the button read a bare "3" (#2808).
+    /// </summary>
+    public string ClearMarksText => HighlightedCount switch
+    {
+        1 => "Clear 1 mark",
+        var n => $"Clear {n} marks",
+    };
+
     // True when the log itself could not be read (access denied / missing / unavailable), as
     // opposed to being read and yielding nothing. Drives a separate empty state, because
     // "no events match your filters" is misleading when the filters never ran.

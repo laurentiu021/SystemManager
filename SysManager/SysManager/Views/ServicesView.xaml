@@ -44,7 +44,7 @@
                                  Width="240" VerticalContentAlignment="Center"
                                  AutomationProperties.Name="Filter services"/>
                         <!-- Only shown once something is marked; see LogsView for the same pair. -->
-                        <Button Content="{Binding HighlightedCount, StringFormat='Clear {0} marks'}"
+                        <Button Content="{Binding ClearMarksText}"
                                 AutomationProperties.AutomationId="btn-services-clear-marks"
                                 AutomationProperties.Name="Clear all marked services"
                                 Command="{Binding ClearHighlightsCommand}"
@@ -70,24 +70,24 @@
                 <WrapPanel Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="Safety:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="0,0,8,4"/>
-                    <RadioButton Content="{Binding SafeCount, StringFormat='Safe ({0})'}"
+                    <RadioButton Content="{Binding SafeCount, Converter={StaticResource Format}, ConverterParameter='Safe ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Safe}"
                                  Style="{StaticResource FilterChip}"
                                  AutomationProperties.Name="Filter safe services"/>
-                    <RadioButton Content="{Binding CautionCount, StringFormat='Caution ({0})'}"
+                    <RadioButton Content="{Binding CautionCount, Converter={StaticResource Format}, ConverterParameter='Caution ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Caution}"
                                  Style="{StaticResource FilterChipCaution}"
                                  AutomationProperties.Name="Filter caution services"/>
-                    <RadioButton Content="{Binding CriticalCount, StringFormat='Critical ({0})'}"
+                    <RadioButton Content="{Binding CriticalCount, Converter={StaticResource Format}, ConverterParameter='Critical ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Critical}"
                                  Style="{StaticResource FilterChipCritical}"
                                  AutomationProperties.Name="Filter critical services"/>
                     <!-- The services SysManager has no rating for. They counted as Critical, which made that chip
                          most of the list; grey because nothing is known about them either way (#1512). -->
-                    <RadioButton Content="{Binding NotRatedCount, StringFormat='Not rated ({0})'}"
+                    <RadioButton Content="{Binding NotRatedCount, Converter={StaticResource Format}, ConverterParameter='Not rated ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Not rated'}"
                                  Style="{StaticResource FilterChipNeutral}"
@@ -96,12 +96,12 @@
 
                     <TextBlock Text="Status:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>
-                    <RadioButton Content="{Binding RunningCount, StringFormat='Running ({0})'}"
+                    <RadioButton Content="{Binding RunningCount, Converter={StaticResource Format}, ConverterParameter='Running ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Running}"
                                  Style="{StaticResource FilterChipNeutral}"
                                  AutomationProperties.Name="Filter running services"/>
-                    <RadioButton Content="{Binding StoppedCount, StringFormat='Stopped ({0})'}"
+                    <RadioButton Content="{Binding StoppedCount, Converter={StaticResource Format}, ConverterParameter='Stopped ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Stopped}"
                                  Style="{StaticResource FilterChipNeutral}"
@@ -113,19 +113,19 @@
                          least reachable part of it. -->
                     <TextBlock Text="For gaming:" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}"
                                VerticalAlignment="Center" Margin="10,0,8,4"/>
-                    <RadioButton Content="{Binding SafeToDisableCount, StringFormat='Safe to disable ({0})'}"
+                    <RadioButton Content="{Binding SafeToDisableCount, Converter={StaticResource Format}, ConverterParameter='Safe to disable ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Safe to disable'}"
                                  Style="{StaticResource FilterChip}"
                                  ToolTip="Services SysManager considers safe to turn off for gaming"
                                  AutomationProperties.Name="Filter services safe to disable for gaming"/>
-                    <RadioButton Content="{Binding KeepEnabledCount, StringFormat='Keep enabled ({0})'}"
+                    <RadioButton Content="{Binding KeepEnabledCount, Converter={StaticResource Format}, ConverterParameter='Keep enabled ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter='Keep enabled'}"
                                  Style="{StaticResource FilterChip}"
                                  ToolTip="Services to leave alone — turning these off causes problems"
                                  AutomationProperties.Name="Filter services to keep enabled"/>
-                    <RadioButton Content="{Binding AdvancedCount, StringFormat='Advanced ({0})'}"
+                    <RadioButton Content="{Binding AdvancedCount, Converter={StaticResource Format}, ConverterParameter='Advanced ({0})'}"
                                  GroupName="SafetyFilter" Margin="0,0,6,4"
                                  IsChecked="{Binding SelectedFilter, Converter={StaticResource IsEqual}, ConverterParameter=Advanced}"
                                  Style="{StaticResource FilterChipNeutral}"
@@ -176,21 +176,21 @@
                     <Setter Property="ContextMenu">
                         <Setter.Value>
                             <ContextMenu>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Start {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Start {0}'}"
                                           Command="{Binding PlacementTarget.Tag.StartServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Stop {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Stop {0}'}"
                                           Command="{Binding PlacementTarget.Tag.StopServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                 <Separator/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Disable {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Disable {0}'}"
                                           Command="{Binding PlacementTarget.Tag.DisableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Enable {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Enable {0}'}"
                                           Command="{Binding PlacementTarget.Tag.EnableServiceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                 <Separator/>
-                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, StringFormat='Mark or unmark this service: {0}'}"
+                                <MenuItem Header="{Binding PlacementTarget.DataContext.DisplayName, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource Format}, ConverterParameter='Mark or unmark this service: {0}'}"
                                           Command="{Binding PlacementTarget.Tag.ToggleHighlightCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                             </ContextMenu>

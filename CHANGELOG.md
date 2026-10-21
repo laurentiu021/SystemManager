@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.32] - 2026-10-21
+
+**Ping's chart window reads in minutes, Speed Test's time left shows on the running test only, and New App Alerts
+marks its new alerts.**
+
+### Fixed
+
+- **Ping's chart window had no unit.** Beside "Ping every 1 s", the Window picker listed 60, 300, 600 and 900, and
+  its name for screen readers was "Chart time window", so 300 could have been seconds, samples or minutes. It now
+  reads 1, 5, 10 and 15 min, and screen readers hear the same. Since 0.19.0.
+- **Speed Test showed a time left under both cards while one test ran.** Both cards showed the one estimate, so
+  during an Ookla run the HTTP card had a time left under its disabled Run button and read as running too, and the
+  other way round. Each card now shows it only while its own test runs. Since 1.58.6.
+- **New App Alerts counted new alerts and showed no row as new.** The toolbar said how many were new and offered
+  Acknowledge All, but nothing in the list said which alerts those were. An alert not acknowledged yet is now marked
+  New beside its name, and Acknowledge All clears the marks. Since 0.33.0.
+
 ## [1.130.31] - 2026-10-21
 
 **System Logs opens on the events the Dashboard and Recent Changes counted, already loaded.**

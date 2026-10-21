@@ -346,4 +346,18 @@ public class NetworkSharedStateTests
 
         Assert.False(state.TraceMonitor.Targets.ContainsKey("a.example"));
     }
+
+    [Fact]
+    public void TheChartWindows_ReadInMinutes()
+    {
+        // The picker listed 60, 300, 600 and 900 with no unit, so 300 could have been seconds, samples or minutes
+        // (#2884).
+        using var state = NewState();
+
+        Assert.Equal(new[] { 60, 300, 600, 900 }, state.WindowOptions.Select(o => o.Seconds));
+        Assert.Equal(new[] { "1 min", "5 min", "10 min", "15 min" }, state.WindowOptions.Select(o => o.Label));
+        // What a screen reader says for an entry.
+        Assert.Equal("5 min", state.WindowOptions[1].ToString());
+        Assert.Contains(state.WindowOptions, o => o.Seconds == state.WindowSeconds);
+    }
 }

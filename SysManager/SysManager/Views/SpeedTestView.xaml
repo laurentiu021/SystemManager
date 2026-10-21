@@ -100,9 +100,10 @@
                         <!-- The VM already maintains an EtaCalculator and updates EstimatedTime on every
                              progress tick; nothing bound it, so the "time remaining" for a test that can
                              run for minutes was computed and thrown away. Same shape as the ETA lines in
-                             AppUpdatesView / BulkInstallerView / CleanupView. -->
-                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
-                                   Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
+                             AppUpdatesView / BulkInstallerView / CleanupView. This card's own, so it is empty
+                             while the HTTP test runs (#2884). -->
+                        <TextBlock Text="{Binding OoklaTimeLeft}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
+                                   Visibility="{Binding OoklaTimeLeft, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel Ookla speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsOoklaTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>
@@ -132,11 +133,10 @@
                                         Visibility="{Binding HttpVerdict, Converter={StaticResource FlexVis}}"/>
                         <ProgressBar AutomationProperties.Name="HTTP speed test progress" Value="{Binding SpeedProgress}" Maximum="100" Height="4" Margin="0,14,0,0" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                         <TextBlock Text="{Binding HttpStatus}" Style="{StaticResource SubtleStatusLine}" Margin="0,6,0,0"/>
-                        <!-- Shares the single EstimatedTime property with the Ookla card above; only one
-                             engine runs at a time (both are gated on the shared SpeedProgress/CTS), so the
-                             two lines can never show conflicting figures. -->
-                        <TextBlock Text="{Binding EstimatedTime}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
-                                   Visibility="{Binding EstimatedTime, Converter={StaticResource FlexVis}}"/>
+                        <!-- The one estimate, shown only while this card's test runs: both cards showed it,
+                             so during an Ookla run this card read as running too (#2884). -->
+                        <TextBlock Text="{Binding HttpTimeLeft}" Foreground="{DynamicResource TextMuted}" Style="{StaticResource Caption}" Margin="0,4,0,0"
+                                   Visibility="{Binding HttpTimeLeft, Converter={StaticResource FlexVis}}"/>
                         <Button Content="Cancel" Command="{Binding CancelSpeedCommand}" Style="{StaticResource GhostButton}" AutomationProperties.Name="Cancel HTTP speed test" Margin="0,6,0,0" HorizontalAlignment="Left" Visibility="{Binding IsHttpTesting, Converter={StaticResource FlexVis}}"/>
                     </StackPanel>
                 </Border>

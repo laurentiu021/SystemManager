@@ -684,7 +684,8 @@ Across the tab:
 - A trend line tells you whether the last boot was faster or slower than your
   recent average
 - Lists the apps, drivers, services, and devices Windows flagged as slowing boot,
-  with the delay attributed to each
+  with the delay attributed to each. Clicking When, Boot time or Delay sorts by the time
+  itself, so 9.8 s comes before 12.3 s
 - **Each row links to the tab that can switch it off** — a slow service opens Services already
   filtered to that service; a slow app or background task opens Startup Manager. Drivers and devices
   get no link, because SysManager cannot disable one and sending you looking would waste your time
@@ -722,7 +723,8 @@ Across the tab:
 - Unified DataGrid for **everything** in one scan — standard updates, feature
   upgrades and optional drivers
 - Categorized with colored pills: Security, Cumulative, Defender, Driver,
-  Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort
+  Servicing, .NET, Feature upgrade, and Update for everything else — click headers to sort,
+  with Size in the order of the download size
 - Per-update checkbox selection with Select all / Deselect all — every update the scan lists
   starts ticked, optional drivers and feature upgrades included, so untick what you don't want
   before Install selected. **What you untick stays unticked**: listing again, with F5 or after a
@@ -986,6 +988,8 @@ System → System Fixes, where the tab name matches what they do.
 Answers "what is actually using my space?" by listing the biggest files in one place.
 - Scan Downloads, Documents, Desktop, Videos, Pictures, Music, Program Files, or a whole drive
 - Configurable minimum size (default 500 MB) and how many to list (default 100)
+- Click Size or Modified to sort by the size or the date itself: 800 MB before 1.2 GB, and
+  by year and month rather than by the day of the month
 - **Read-only** — the only actions are "Show" (reveals the file in Explorer) and "Copy" (copies its
   path).
   Deletion is disabled by design, even with administrator rights, so a mis-click here can
@@ -1097,6 +1101,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   mode; it uses a Windows kernel trace and so **needs administrator**. The tab
   offers it only when you're already running as administrator and falls back to the
   no-admin view automatically if the trace can't start — it never breaks the tab
+- The Download, Upload and Session total columns sort by the figure itself, so 800 KB/s comes
+  before 1.2 MB/s
 - **Export CSV** saves the per-app list to a file you choose the location for, with the raw
   bytes-per-second and byte totals beside the readable figures — a file whose only numbers are
   "1.2 MB/s" cannot be sorted or added up. What it says afterwards stays on screen: the
@@ -1329,6 +1335,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Three shred methods: Quick (1 pass, zero fill), Standard (3 passes) and Thorough (7 passes); Standard
   and Thorough end with a pass of cryptographically random data (RandomNumberGenerator)
 - Add files or entire folders via file picker dialogs
+- The Size column sorts by the file's size in bytes, not by its text
 - Per-item progress, and **Cancel stops the queue rather than abandoning a file mid-overwrite.**
   Nothing that has not started is touched; a file whose overwrite has already begun is finished
   and removed, because once the first byte is replaced the original cannot come back — stopping
@@ -1569,7 +1576,8 @@ Reclaim space and clear browsing traces, per browser:
   simply "Firefox", and a second one reads "Firefox — dev-edition". Two profiles therefore
   never arrive as two identical "Firefox" rows you cannot tell apart, and a tick on one
   cannot drift onto the other when you rescan
-- **Per-category** with size shown: Cache, History, Cookies, Sessions
+- **Per-category** with size shown: Cache, History, Cookies, Sessions. The Size column sorts by
+  bytes, not by its text
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected
 - **Your ticks survive a rescan, in both directions** — unticking cache or history is not
@@ -1792,7 +1800,8 @@ offers, "rate us" prompts:
 ### Display Profiles
 - **Quick-switch resolution + refresh rate** — pick a mode (e.g. 165 Hz for
   gaming, 60 Hz for work) from the list of everything your display supports,
-  using only the Windows display APIs (no NVIDIA/AMD tool conflict)
+  using only the Windows display APIs (no NVIDIA/AMD tool conflict). The list sorts by
+  resolution and refresh rate as numbers, so 800×600 comes before 2560×1440
 - **Safe by design** — applies for the session, so a reboot reverts; on top of
   that a **15-second auto-revert** restores the previous mode unless you confirm
   "Keep", so a bad mode can never strand you on a blank screen; **Revert now** or **Esc** goes back at once,

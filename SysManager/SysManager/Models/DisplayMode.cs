@@ -16,6 +16,12 @@ public sealed record DisplayMode(int Width, int Height, int RefreshHz, int BitsP
     public string RefreshDisplay => $"{RefreshHz} Hz";
 
     /// <summary>
+    /// How many pixels the mode has, which the Resolution column sorts on: sorting <see cref="ResolutionDisplay"/> put
+    /// "2560×1440" before "800×600" (#2819).
+    /// </summary>
+    public long PixelCount => (long)Width * Height;
+
+    /// <summary>
     /// The same mode when the resolution and the refresh rate match. The bit depth is left out on purpose: Apply sets
     /// only those three (<c>DM_PELSWIDTH</c>, <c>DM_PELSHEIGHT</c>, <c>DM_DISPLAYFREQUENCY</c>), and the mode list keeps
     /// whichever depth Windows listed first, so comparing depths made Apply look available for the mode in use.

@@ -364,7 +364,8 @@ public sealed class WindowsUpdateService : IWindowsUpdateService
         {
             Title = title,
             KB = kb,
-            Size = FormatSize(size),
+            SizeDisplay = FormatSize(size),
+            SizeBytes = size,
             UpdateId = updateId,
             IsHidden = (bool)u.IsHidden,
             Category = ClassifyCategory(title, u),

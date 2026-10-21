@@ -68,7 +68,7 @@
                         <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="*"/>
                         <DataGridTextColumn Header="PID" Binding="{Binding ProcessId}" Width="80"/>
                         <DataGridTextColumn Header="Type" Binding="{Binding TypeDisplay}" Width="140"/>
-                        <DataGridTextColumn Header="Started" Binding="{Binding StartTimeDisplay}" Width="160"/>
+                        <DataGridTextColumn Header="Started" Binding="{Binding StartTimeDisplay}" SortMemberPath="StartTime" Width="160"/>
                     </DataGrid.Columns>
                 </DataGrid>
 

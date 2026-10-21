@@ -43,6 +43,16 @@ public class DisplayModeTests
     }
 
     [Theory]
+    [InlineData(2560, 1440, 3_686_400)]
+    [InlineData(800, 600, 480_000)]
+    [InlineData(7680, 4320, 33_177_600)]
+    public void PixelCount_IsWhatTheResolutionColumnSortsOn(int width, int height, long pixels)
+    {
+        // Sorting "2560×1440" as text put it before "800×600" (#2819).
+        Assert.Equal(pixels, new DisplayMode(width, height, 60, 32).PixelCount);
+    }
+
+    [Theory]
     [InlineData(true, "Dell U2720Q (primary)")]
     [InlineData(false, "Dell U2720Q")]
     public void DisplayDevice_Display_TagsPrimary(bool primary, string expected)

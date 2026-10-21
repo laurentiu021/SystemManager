@@ -119,8 +119,8 @@
                          normal machine; the tab lists first and fills the detail on demand by design.
                          (The comment here previously claimed Next run "was already being fetched". It was
                          not: the field existed and the query for it ran per selection only.) -->
-                    <DataGridTextColumn Header="Last run (on select)" Binding="{Binding LastRunDisplay}" Width="140"/>
-                    <DataGridTextColumn Header="Next run (on select)" Binding="{Binding NextRunDisplay}" Width="140"/>
+                    <DataGridTextColumn Header="Last run (on select)" Binding="{Binding LastRunDisplay}" SortMemberPath="LastRun" Width="140"/>
+                    <DataGridTextColumn Header="Next run (on select)" Binding="{Binding NextRunDisplay}" SortMemberPath="NextRun" Width="140"/>
                     <!-- What the task is for, in Windows' own words, with the publisher on hover.
                          Both came back with every scan (TaskSchedulerService selects Author and
                          Description) and neither was displayed anywhere. Author matters because it is

@@ -78,7 +78,7 @@
                           VirtualizingPanel.VirtualizationMode="Recycling">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="#" Binding="{Binding SequenceNumber}" Width="60"/>
-                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedDisplay}" Width="150"/>
+                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedDisplay}" SortMemberPath="CreationTime" Width="150"/>
                         <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
                         <DataGridTextColumn Header="Type" Binding="{Binding TypeDisplay}" Width="160"/>
                     </DataGrid.Columns>

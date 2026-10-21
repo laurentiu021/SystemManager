@@ -48,12 +48,12 @@ public sealed partial class ProcessNetworkUsage : ObservableObject
 
     /// <summary>Total bytes downloaded by this process since monitoring started (ETW mode only).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TotalDisplay))]
+    [NotifyPropertyChangedFor(nameof(TotalDisplay), nameof(TotalBytes))]
     private long _totalDownBytes;
 
     /// <summary>Total bytes uploaded by this process since monitoring started (ETW mode only).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TotalDisplay))]
+    [NotifyPropertyChangedFor(nameof(TotalDisplay), nameof(TotalBytes))]
     private long _totalUpBytes;
 
     /// <summary>Human-readable download rate for the grid (e.g. "8.2 Mbps").</summary>
@@ -63,7 +63,13 @@ public sealed partial class ProcessNetworkUsage : ObservableObject
     public string UpDisplay => FormatHelper.FormatRate(UpBytesPerSec);
 
     /// <summary>Combined session data volume (down + up) for the grid, e.g. "1.4 GB".</summary>
-    public string TotalDisplay => FormatHelper.FormatSize(TotalDownBytes + TotalUpBytes);
+    public string TotalDisplay => FormatHelper.FormatSize(TotalBytes);
+
+    /// <summary>
+    /// The session's data volume in bytes, down and up, which the Session total column sorts on: sorting
+    /// <see cref="TotalDisplay"/> put "1.4 GB" before "800.0 MB" (#2819).
+    /// </summary>
+    public long TotalBytes => TotalDownBytes + TotalUpBytes;
 
     partial void OnConnectionCountChanged(int value) => OnPropertyChanged(nameof(IsActive));
 }

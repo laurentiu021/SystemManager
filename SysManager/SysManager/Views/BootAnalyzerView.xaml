@@ -71,8 +71,8 @@
                               Background="Transparent" BorderThickness="0" GridLinesVisibility="None"
                               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="When" Binding="{Binding WhenDisplay}" Width="*"/>
-                            <DataGridTextColumn Header="Boot time" Binding="{Binding BootSecondsDisplay}" Width="100"/>
+                            <DataGridTextColumn Header="When" Binding="{Binding WhenDisplay}" SortMemberPath="BootTime" Width="*"/>
+                            <DataGridTextColumn Header="Boot time" Binding="{Binding BootSecondsDisplay}" SortMemberPath="BootTimeMs" Width="100"/>
                         </DataGrid.Columns>
                     </DataGrid>
 
@@ -104,7 +104,7 @@
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Delay" Binding="{Binding DurationDisplay}" Width="80"/>
+                            <DataGridTextColumn Header="Delay" Binding="{Binding DurationDisplay}" SortMemberPath="DurationMs" Width="80"/>
 
                             <!--
                                 The route this tab never had (#1504). It named the exact component that cost

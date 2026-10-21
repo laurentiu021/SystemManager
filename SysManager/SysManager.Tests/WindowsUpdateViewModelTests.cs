@@ -381,7 +381,9 @@ public class WindowsUpdateViewModelTests
         Assert.Equal(2, vm.Updates.Count);
         Assert.Equal("Security Update", vm.Updates[0].Title);
         Assert.Equal("KB1234567", vm.Updates[0].KB);
-        Assert.Equal("1.0 MB", vm.Updates[0].Size);
+        Assert.Equal("1.0 MB", vm.Updates[0].SizeDisplay);
+        Assert.Equal(1_048_576, vm.Updates[0].SizeBytes);
+        Assert.Equal(52_428_800, vm.Updates[1].SizeBytes);
         Assert.Equal("Cumulative Update", vm.Updates[1].Title);
         Assert.True(vm.Updates[1].IsHidden);
     }
@@ -1210,7 +1212,8 @@ public class UpdateEntryTests
         var entry = new UpdateEntry();
         Assert.Equal("", entry.Title);
         Assert.Equal("", entry.KB);
-        Assert.Equal("", entry.Size);
+        Assert.Equal("", entry.SizeDisplay);
+        Assert.Equal(0, entry.SizeBytes);
         Assert.Equal("", entry.Status);
         Assert.Equal("", entry.Category);
         Assert.Null(entry.Date);

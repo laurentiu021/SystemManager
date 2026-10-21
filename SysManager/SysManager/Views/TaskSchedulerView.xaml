@@ -145,11 +145,17 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <!-- Empty state -->
+            <!-- Empty state: nothing listed. Gated on the read rather than the filtered list, so a search or the
+                 system-tasks box that hides every task is not told to scan again (#2811). -->
             <v:EmptyState Glyph="&#xE946;"
                           Title="{Binding EmptyTitle}"
                           Message="{Binding EmptyMessage}"
-                          Visibility="{Binding Tasks.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                          Visibility="{Binding HasTasks, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <!-- Listed, but the search and the system-tasks box hid every task. -->
+            <v:EmptyState Glyph="&#xE721;"
+                          Title="No tasks match your filter"
+                          Message="Nothing matches the current search and filter. Clear the search, or untick 'Hide system tasks', to see every scheduled task."
+                          Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
             </Grid>
         </Border>
 

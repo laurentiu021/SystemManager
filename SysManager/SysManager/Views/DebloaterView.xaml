@@ -126,6 +126,12 @@
                               Title="{Binding EmptyTitle}"
                               Message="{Binding EmptyMessage}"
                               Visibility="{Binding HasApps, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                <!-- Listed, but the search hid every app. The state above is gated on the full list, so without this
+                     a search that matched nothing left bare column headers and no message (#2811). -->
+                <v:EmptyState Glyph="&#xE721;"
+                              Title="No apps match your search"
+                              Message="Nothing matches the current search. Clear it to see every Store app on this PC."
+                              Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
             </Grid>
         </Border>
 

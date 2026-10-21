@@ -43,7 +43,8 @@
                                   IsChecked="{Binding HideWindowsEntries}" Margin="12,0,6,0"
                                   VerticalAlignment="Center" ToolTip="Hide Windows/Microsoft system entries"
                                   AutomationProperties.Name="Hide Windows/Microsoft system entries"/>
-                    <TextBlock Text="Hide system" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
+                    <TextBlock Text="{Binding HideSystemLabel}" Style="{StaticResource Caption}"
+                               Foreground="{DynamicResource TextMuted}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="{Binding ScanSummary}" Style="{StaticResource Subtle}"
@@ -307,7 +308,7 @@
             <!-- Empty state -->
             <v:EmptyState Glyph="&#xE946;"
                           Title="No startup programs to show"
-                          Message="If this looks wrong, use Refresh. &quot;Hide Windows entries&quot; may also be hiding everything."
+                          Message="{Binding EmptyMessage}"
                           Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
             </Grid>
         </Border>

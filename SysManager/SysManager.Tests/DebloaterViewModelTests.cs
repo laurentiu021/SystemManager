@@ -418,4 +418,31 @@ public class DebloaterViewModelTests
         Assert.Equal("Removed 2 apps. Reinstall the others from the Microsoft Store if needed. Skype cannot be "
             + "reinstalled: Microsoft has retired it.", vm.StatusMessage);
     }
+
+    // ---------- a search that matches nothing says so (#2811) ----------
+
+    [Fact]
+    public void ASearchThatMatchesNothing_SetsHasNoResults_UntilItMatches()
+    {
+        // The empty state is gated on the full list, so a search with no match left bare column headers and no message.
+        var vm = NewVm(NoRestorePoint(), ListRunner(() => false));
+        Assert.True(vm.HasApps);
+        Assert.False(vm.HasNoResults);
+
+        vm.SearchText = "zzzz";
+        Assert.True(vm.HasNoResults);
+
+        vm.SearchText = "Contoso";
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void WithNoAppsListed_ASearchIsNotANoMatch()
+    {
+        var vm = NewVm();
+
+        vm.SearchText = "zzzz";
+
+        Assert.False(vm.HasNoResults);
+    }
 }

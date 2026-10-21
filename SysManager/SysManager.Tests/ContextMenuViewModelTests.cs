@@ -233,4 +233,63 @@ public class ContextMenuViewModelTests
         service.DidNotReceive().EnableEntry(Arg.Any<ContextMenuEntry>());
         service.DidNotReceive().DisableEntry(Arg.Any<ContextMenuEntry>());
     }
+
+    // ── filters that hide every entry are not "run a scan" (#2811) ─────────
+
+    /// <summary>A view model whose scan lists <paramref name="entries"/> and whose toggles are never reached.</summary>
+    private static ContextMenuViewModel Listing(params ContextMenuEntry[] entries)
+    {
+        var service = Substitute.For<IContextMenuService>();
+        service.ScanEntries().Returns([.. entries]);
+        var vm = new ContextMenuViewModel(service);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    [Fact]
+    public void FiltersThatHideEveryEntry_SetHasNoResults_WhileTheEntriesStayListed()
+    {
+        var vm = Listing(NewEntry(enabled: true));
+        Assert.True(vm.HasEntries);
+        Assert.False(vm.HasNoResults);
+
+        vm.FilterText = "zzzz";
+        Assert.True(vm.HasNoResults);
+        Assert.True(vm.HasEntries);
+
+        vm.FilterText = "";
+        vm.SelectedLocation = "Desktop";   // a location the entry is not in
+        Assert.True(vm.HasNoResults);
+
+        vm.SelectedLocation = "All";
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void HidingSystemEntries_WhenThatIsAllThereIs_SetsHasNoResults()
+    {
+        // "Show system entries" is off by default, so a menu of Windows' own entries starts out hidden.
+        var vm = Listing(new ContextMenuEntry
+        {
+            Name = "Open",
+            Command = "",
+            RegistryPath = @"HKCR\*\shell\open",
+            Location = "Files",
+            IsSystemEntry = true,
+        });
+        Assert.True(vm.HasNoResults);
+
+        vm.ShowSystemEntries = true;
+
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void AScanThatListsNothing_IsTheNothingListedState_NotANoMatch()
+    {
+        var vm = Listing();
+
+        Assert.False(vm.HasEntries);
+        Assert.False(vm.HasNoResults);
+    }
 }

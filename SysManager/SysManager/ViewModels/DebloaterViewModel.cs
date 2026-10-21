@@ -39,6 +39,12 @@ public sealed partial class DebloaterViewModel : ViewModelBase
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private bool _hasApps;
 
+    /// <summary>
+    /// True when a scan listed apps but the search hid every one of them. The "nothing listed" state is gated on
+    /// <see cref="HasApps"/>, so a search that matched nothing left bare column headers and no message (#2811).
+    /// </summary>
+    [ObservableProperty] private bool _hasNoResults;
+
     // Distinguishes "never scanned" from "scanned, zero results" so the centered empty
     // state stops telling the user to Refresh after a scan that already returned nothing
     // (which contradicted the status bar's "No Store apps found").
@@ -104,6 +110,7 @@ public sealed partial class DebloaterViewModel : ViewModelBase
                 a.Publisher.Contains(term, StringComparison.OrdinalIgnoreCase));
         }
         FilteredApps.ReplaceWith(source);
+        HasNoResults = Apps.Count > 0 && FilteredApps.Count == 0;
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

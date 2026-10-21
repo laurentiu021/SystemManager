@@ -41,6 +41,13 @@ public sealed partial class UninstallerViewModel : ViewModelBase
     [ObservableProperty] private string _uninstallEtaText = string.Empty;
     [ObservableProperty] private bool _isElevated;
 
+    /// <summary>
+    /// True when a scan listed apps but the search hid every one of them, so the list says nothing matches instead of
+    /// telling the user to click Scan, which keeps the search and changes nothing (#2811). Same split as
+    /// <c>DriversViewModel.HasNoResults</c>.
+    /// </summary>
+    [ObservableProperty] private bool _hasNoResults;
+
     /// <summary>Whether the "Left behind" card shows. It appears after a run that removed an app, and on its own when
     /// SysManager runs as administrator with items an earlier session could not remove.</summary>
     [ObservableProperty] private bool _showLeftovers;
@@ -674,6 +681,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
         FilteredApps.ReplaceWith(source);
 
         AppCount = FilteredApps.Count;
+        HasNoResults = AllApps.Count > 0 && AppCount == 0;
         Summary = $"{AppCount} apps{(AllApps.Count != AppCount ? $" (of {AllApps.Count} total)" : "")}";
     }
 

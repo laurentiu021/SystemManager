@@ -383,4 +383,48 @@ public class TaskSchedulerViewModelTests
         Assert.True(vm.ListFailed);
         Assert.Contains("from the last scan", vm.StatusMessage, StringComparison.Ordinal);
     }
+
+    // ── filters that hide every task are not "run a scan" (#2811) ─────────
+
+    [Fact]
+    public async Task FiltersThatHideEveryTask_SetHasNoResults_WhileTheTasksStayListed()
+    {
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(ListRunner(() => false)));
+        await vm.InitializationComplete;
+        Assert.True(vm.HasTasks);
+        Assert.False(vm.HasNoResults);
+
+        vm.Filter = "zzzz";
+        Assert.True(vm.HasNoResults);
+
+        vm.Filter = "Defrag";
+        vm.HideSystemTasks = true;   // Defrag is Windows' own, so "Hide system tasks" leaves nothing
+        Assert.True(vm.HasNoResults);
+        Assert.True(vm.HasTasks);
+
+        vm.HideSystemTasks = false;
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public async Task AFailedFirstRead_IsNotANoMatch()
+    {
+        var vm = new TaskSchedulerViewModel(new TaskSchedulerService(ListRunner(() => true)));
+        await vm.InitializationComplete;
+
+        Assert.False(vm.HasTasks);
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public async Task WithNoTasksListed_TheAdviceNamesTheRefreshButton()
+    {
+        // It said "Run a scan" above a toolbar whose button is Refresh.
+        var vm = NewVm(new RunnerSpy());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.HasTasks);
+        Assert.Equal("No scheduled tasks found", vm.EmptyTitle);
+        Assert.StartsWith("Press Refresh ", vm.EmptyMessage, StringComparison.Ordinal);
+    }
 }

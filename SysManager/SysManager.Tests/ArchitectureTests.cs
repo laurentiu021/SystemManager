@@ -4375,6 +4375,88 @@ public partial class ArchitectureTests
     private static partial Regex CountInverseVisibility();
 
     /// <summary>
+    /// Every control an empty state's message names is on that view, under the label it names.
+    /// </summary>
+    /// <remarks>
+    /// The message is what a user acts on when a list is empty, and pieces of it named controls that were not there
+    /// (#2811): Startup Manager quoted "Hide Windows entries" beside a switch labelled "Hide system", and Right-click
+    /// Menu said to run a scan above a toolbar whose button is Refresh. A message names a control in two ways, and both
+    /// are read: a quoted label, which some literal <c>Content</c> or <c>Text</c> in the same view must be, and "press
+    /// X" or "click X", where the words after the verb must start with such a label. An apostrophe inside a word is
+    /// not a quote. A message bound to a view-model property is not read here; Startup Manager's names its switch
+    /// through the property that switch's label binds.
+    /// </remarks>
+    [Fact]
+    public void EveryEmptyStateMessage_NamesOnlyControlsItsViewHas()
+    {
+        var viewsDir = Path.Combine(TestPaths.AppProject(), "Views");
+        var offenders = new List<string>();
+        var quoted = 0;
+        var pressed = 0;
+
+        foreach (var file in Directory.GetFiles(viewsDir, "*.xaml").Order(StringComparer.Ordinal))
+        {
+            var xaml = WithoutXamlComments(File.ReadAllText(file));
+            var labels = LiteralControlLabel().Matches(xaml)
+                .Select(m => System.Net.WebUtility.HtmlDecode(m.Groups["label"].Value))
+                .ToHashSet(StringComparer.Ordinal);
+            var name = Path.GetFileName(file);
+
+            foreach (var state in EmptyStateLiteralMessage().Matches(xaml).Cast<Match>())
+            {
+                var message = System.Net.WebUtility.HtmlDecode(state.Groups["message"].Value);
+
+                foreach (var quote in QuotedLabel().Matches(message).Cast<Match>())
+                {
+                    quoted++;
+                    var label = quote.Groups["label"].Value;
+                    if (!labels.Contains(label))
+                        offenders.Add($"{name}: \"{message}\" quotes '{label}', and no control in the view is "
+                            + "labelled so");
+                }
+
+                foreach (var press in PressedControl().Matches(message).Cast<Match>())
+                {
+                    pressed++;
+                    var rest = press.Groups["rest"].Value;
+                    if (!labels.Any(label => rest == label || rest.StartsWith(label + " ", StringComparison.Ordinal)))
+                        offenders.Add($"{name}: \"{message}\" sends the user to \"{rest}\", and no control in the view "
+                            + "is labelled so");
+                }
+            }
+        }
+
+        // Vacuity floor: 3 quoted labels and 11 "press" or "click" names in the views' empty states when measured.
+        // Far fewer means the patterns stopped matching, and every absence below is an absence of reading.
+        Assert.True(quoted >= 2 && pressed >= 9,
+            $"only {quoted} quoted labels and {pressed} pressed controls were found in the views' empty-state "
+            + "messages, so the patterns are out of date and a pass proves nothing.");
+        Assert.True(offenders.Count == 0,
+            "these empty states name a control their view does not have, so the user is sent looking for something "
+            + "that is not on screen:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A literal <c>Content</c> or <c>Text</c>, the label a control shows. A binding is not a label.</summary>
+    [GeneratedRegex(@"\b(?:Content|Text)=""(?<label>[^""{][^""]*)""", RegexOptions.Compiled)]
+    private static partial Regex LiteralControlLabel();
+
+    /// <summary>The literal <c>Message</c> of an <c>EmptyState</c>, however many lines its attributes span.</summary>
+    [GeneratedRegex(@"<v:EmptyState\b[^>]*?\bMessage=""(?<message>[^""{][^""]*)""",
+                    RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex EmptyStateLiteralMessage();
+
+    /// <summary>
+    /// A quoted label: a quote that opens after a space, a bracket or the start, and closes before a space,
+    /// punctuation or the end, so the apostrophe in "what's" is not one.
+    /// </summary>
+    [GeneratedRegex(@"(?<=^|[\s(])(?<q>['""])(?<label>[A-Z][^'""]*?)\k<q>(?=[\s.,;:)]|$)", RegexOptions.Compiled)]
+    private static partial Regex QuotedLabel();
+
+    /// <summary>"Press X" or "click X", capturing the words after the verb up to the end of the clause.</summary>
+    [GeneratedRegex(@"\b(?:[Pp]ress|[Cc]lick)\s+(?<rest>[^.,;]+)", RegexOptions.Compiled)]
+    private static partial Regex PressedControl();
+
+    /// <summary>
     /// Every empty-state flag is set where the data it describes arrives, on all of that method's paths.
     /// </summary>
     /// <remarks>

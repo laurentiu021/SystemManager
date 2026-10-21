@@ -43,6 +43,16 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
     [ObservableProperty] private string _filter = "";
     [ObservableProperty] private bool _hideSystemTasks;
 
+    /// <summary>True once a read has listed tasks, whatever the filters show.</summary>
+    [ObservableProperty] private bool _hasTasks;
+
+    /// <summary>
+    /// True when tasks were listed but the search and "Hide system tasks" hid every one, so the list says nothing
+    /// matches instead of asking for a scan, which keeps the filters (#2811). Same split as
+    /// <c>DriversViewModel.HasNoResults</c>.
+    /// </summary>
+    [ObservableProperty] private bool _hasNoResults;
+
     // Distinguishes "Windows answered with none" from "the read failed". The empty state used to say "No
     // scheduled tasks found" either way, because the service returned an empty list for a failed read (#2487).
     [ObservableProperty]
@@ -53,7 +63,7 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
 
     public string EmptyMessage => ListFailed
         ? "Windows did not answer when SysManager asked for the scheduled tasks. Press Refresh to try again."
-        : "Run a scan to list Windows scheduled tasks you can manage.";
+        : "Press Refresh to list the Windows scheduled tasks you can manage.";
 
     public TaskSchedulerViewModel(TaskSchedulerService service)
     {
@@ -143,6 +153,8 @@ public sealed partial class TaskSchedulerViewModel : ViewModelBase
                           || t.Path.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
         Tasks.ReplaceWith(q.ToList());
+        HasTasks = _all.Count > 0;
+        HasNoResults = HasTasks && Tasks.Count == 0;
         ToggleEnabledCommand.NotifyCanExecuteChanged();
     }
 

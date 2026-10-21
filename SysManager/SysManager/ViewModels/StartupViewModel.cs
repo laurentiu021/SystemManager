@@ -39,8 +39,18 @@ public sealed partial class StartupViewModel : ViewModelBase
     [ObservableProperty] private int _enabledCount;
     [ObservableProperty] private int _disabledCount;
     [ObservableProperty] private int _totalCount;
-    [ObservableProperty] private string _scanSummary = "Click Scan to discover startup items.";
+    [ObservableProperty] private string _scanSummary = "Press Refresh to list the programs that start with Windows.";
     [ObservableProperty] private bool _hideWindowsEntries;
+
+    /// <summary>
+    /// The label beside the switch that hides Windows' own entries. The empty list's advice names that switch, so the
+    /// two read this one string: the advice said "Hide Windows entries" beside a switch labelled "Hide system" (#2811).
+    /// </summary>
+    public string HideSystemLabel => "Hide system";
+
+    /// <summary>What the empty list says, naming the switch by <see cref="HideSystemLabel"/>.</summary>
+    public string EmptyMessage =>
+        $"If this looks wrong, use Refresh. \"{HideSystemLabel}\" may also be hiding everything.";
 
     public StartupViewModel(StartupService service, BootAnalyzerService boot)
         : this(() => service.ScanAsync(), AdminHelper.IsElevated,

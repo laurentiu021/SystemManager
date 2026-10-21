@@ -313,6 +313,11 @@ and 3,7 is a number Excel can sort. Each file is UTF-8 with the mark Excel looks
 arrive intact. A value that holds the separator, a quote or a line break is quoted, so a folder named
 `Grieg, Peer Gynt` stays in one column.
 
+### Empty lists
+A list with nothing in it says why. When a search or a filter has hidden everything, it says that nothing matches
+and how to bring the rest back, rather than asking for a scan, which would keep the search. When its advice names a
+button or a switch, it uses the label shown on the tab.
+
 ### Right-Click Menu
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything. Plain menu entries use the standard `LegacyDisable` registry

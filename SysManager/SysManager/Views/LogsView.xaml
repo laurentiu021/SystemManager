@@ -359,7 +359,7 @@
                     <!-- No-results overlay: entries were loaded but the filters hid all of them. -->
                     <v:EmptyState Glyph="&#xE721;"
                                   Title="No events match your filters"
-                                  Message="Try adjusting severity checkboxes or clearing the search."
+                                  Message="Turn the severity switches back on, or clear the search."
                                   Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
 
                     <!-- Refused overlay: the log could not be read at all, so the filters never

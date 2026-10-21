@@ -330,11 +330,17 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <!-- Empty state -->
+            <!-- Empty state: nothing listed. Gated on the scan rather than the filtered list, so filters that hide
+                 every entry are not told to scan again (#2811). -->
             <v:EmptyState Glyph="&#xE946;"
                           Title="No context menu entries"
-                          Message="Run a scan to list right-click menu entries you can toggle."
-                          Visibility="{Binding Entries.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                          Message="Press Refresh to list the right-click menu entries you can toggle."
+                          Visibility="{Binding HasEntries, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <!-- Listed, but the search, the location and the system-entries box hid every entry. -->
+            <v:EmptyState Glyph="&#xE721;"
+                          Title="No entries match your filters"
+                          Message="Nothing matches the current search and filters. Clear the search, set the location back to All, or tick 'Show system entries'."
+                          Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
             </Grid>
         </Border>
 

@@ -2,6 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 using SysManager.Models;
 using SysManager.ViewModels;
 
@@ -90,6 +94,61 @@ public class NetworkSharedStateTests
         state.ApplyPreset(TargetPresets.All[0]);
         Assert.True(state.Targets.Count > 0);
     }
+
+    /// <summary>
+    /// A target added on a light theme draws its lines, and its card's bar, in the colour that reads on that theme's
+    /// card (#2818).
+    /// </summary>
+    /// <remarks>
+    /// The chart theme is applied when the state is built, before any target exists, so the lines added after it
+    /// kept the dark palette on a light theme until the theme next changed. The hosts are documentation addresses,
+    /// and nothing is pinged: the monitor is never started.
+    /// </remarks>
+    [Fact]
+    public void ATargetAddedOnALightTheme_IsDrawnInTheColourThatReadsOnIt()
+    {
+        var light = Services.ThemePreset.Defaults["clean-indigo"];
+        var card = SysManager.Helpers.ChartTheme.Sk(light.Surface);
+        using var state = new NetworkSharedState(new Services.PingMonitorService(), new Services.TracerouteService(),
+            new Services.TracerouteMonitorService(), new Services.SpeedTestService(),
+            new Services.NetworkRepairService(new Services.PowerShellRunner()))
+        {
+            Theme = () => light,
+        };
+
+        var moved = 0;
+        for (var i = 1; i <= NetworkSharedState.Palette.Length; i++)
+        {
+            var host = $"203.0.113.{i}";
+            state.AddTarget($"Edge {i}", host, isCustom: true);
+            var target = state.Targets.Single(t => t.Host == host);
+            var designed = SKColor.Parse(target.ColorHex.TrimStart('#')).WithAlpha(230);
+            var expected = SysManager.Helpers.ChartTheme.ReadableAgainst(designed, card);
+
+            var latency = LatencyLine(state, host);
+            var trace = TraceLine(state, host);
+            Assert.Equal(expected, Paint(latency.Stroke));
+            Assert.Equal(expected, Paint(latency.GeometryStroke));
+            Assert.Equal(expected, Paint(latency.GeometryFill));
+            Assert.Equal(expected, Paint(trace.Stroke));
+            Assert.Equal(expected, Paint(trace.GeometryStroke));
+            Assert.Equal($"#{expected.Red:X2}{expected.Green:X2}{expected.Blue:X2}", target.ShownColorHex);
+            if (expected != designed) moved++;
+        }
+
+        // On Clean Indigo's card most of the palette has to move; one that moved none would prove nothing.
+        Assert.True(moved >= 4, $"only {moved} of the {NetworkSharedState.Palette.Length} colours moved");
+    }
+
+    private static LineSeries<DateTimePoint> LatencyLine(NetworkSharedState state, string host) =>
+        state.LatencySeries.OfType<LineSeries<DateTimePoint>>()
+            .Single(s => s.Name!.EndsWith($"({host})", StringComparison.Ordinal));
+
+    private static LineSeries<ObservablePoint> TraceLine(NetworkSharedState state, string host) =>
+        state.TraceSeries.OfType<LineSeries<ObservablePoint>>()
+            .Single(s => s.Name!.EndsWith($"({host})", StringComparison.Ordinal));
+
+    private static SKColor Paint(object? paint) => Assert.IsType<SolidColorPaint>(paint).Color;
 
     [Fact]
     public void Health_IsNotNull()

@@ -40,8 +40,8 @@ internal static class ChartTheme
     private const byte SeriesAlpha = 230;
 
     /// <summary>
-    /// Returns <paramref name="seriesColor"/> darkened just enough to clear <see cref="MinLineContrast"/>
-    /// against the current theme's card surface, or unchanged when it already does.
+    /// Returns <paramref name="seriesColor"/> moved just far enough from the card <paramref name="surface"/> to clear
+    /// <see cref="MinLineContrast"/> against it, or unchanged when it already does.
     /// <para>The series palette is tuned for the six dark presets, where every colour clears 4:1. On the
     /// six LIGHT presets those same tints wash out against a near-white card: measured across the three
     /// charts' 15 colour literals, 80 of 180 colour x preset combinations fell below 3:1 — every failure
@@ -49,31 +49,34 @@ internal static class ChartTheme
     /// nothing at all.</para>
     /// <para>Only LIGHTNESS changes; the hue is preserved. Users learn "blue is CPU, purple is RAM", and
     /// a second hand-picked light-mode palette would both break that association and drift the moment a
-    /// preset is added or retuned. Walking toward black until the contrast clears is arithmetic, so a
+    /// preset is added or retuned. Walking away from the card until the contrast clears is arithmetic, so a
     /// 13th preset needs no new colours and dark presets are provably untouched (they already pass, so
     /// the loop exits on the first iteration).</para>
+    /// <para>Pure, with the surface passed in rather than read from the live theme, so every preset can be checked
+    /// in a single pass: switching presets in a test would persist to the user's real config file.</para>
     /// </summary>
-    public static SKColor Readable(SKColor seriesColor) =>
-        ReadableAgainst(seriesColor, Sk(ThemeService.Instance.CurrentTheme.Surface));
-
-    /// <summary>
-    /// <see cref="Readable"/> against an explicit <paramref name="surface"/> rather than the live
-    /// theme. Separate overload because the live-theme version can only ever be tested for the ONE
-    /// preset that happens to be active, and switching presets in a test would persist to the user's
-    /// real config file. This one is pure, so every preset can be checked in a single pass.
-    /// </summary>
+    /// <remarks>
+    /// Toward black on a light card and toward white on a dark one, decided by the rule the theme uses for a
+    /// background, <see cref="ThemeService.IsDarkBackground"/>. It only ever darkened: on a dark Custom surface such
+    /// as #4A4A4A, which still admits white text, a line below 3:1 went darker on every step, and five of the 13
+    /// colours ended at 1.8 to 1.9:1, harder to see than before (#2818).
+    /// <para>In 2% steps, as far as the extreme if it takes that. Every shipped preset clears the bar far earlier,
+    /// the worst case needing 26%, so their hues are untouched; the old ceiling of 80% left a few colours short on
+    /// a grey Custom surface at the edge between dark and light, where only the extreme itself reaches 3:1.</para>
+    /// </remarks>
     public static SKColor ReadableAgainst(SKColor seriesColor, SKColor surface)
     {
-        // Up to 80% toward black in 2% steps. 80% is the floor at which a hue is still recognisable;
-        // every real preset clears the bar far earlier (the worst case needs 26%).
-        for (var step = 0; step <= 40; step++)
+        var away = ThemeService.IsDarkBackground(WpfColor.FromRgb(surface.Red, surface.Green, surface.Blue))
+            ? SKColors.White
+            : SKColors.Black;
+        for (var step = 0; step <= 50; step++)
         {
-            var candidate = Mix(seriesColor, SKColors.Black, step * 0.02);
+            var candidate = Mix(seriesColor, away, step * 0.02);
             if (Contrast(Mix(surface, candidate, SeriesAlpha / 255.0), surface) >= MinLineContrast)
                 return candidate.WithAlpha(seriesColor.Alpha);
         }
 
-        return Mix(seriesColor, SKColors.Black, 0.8).WithAlpha(seriesColor.Alpha);
+        return away.WithAlpha(seriesColor.Alpha);
     }
 
     /// <summary>Linear blend from <paramref name="from"/> toward <paramref name="to"/>. Alpha untouched.</summary>
@@ -107,20 +110,22 @@ internal static class ChartTheme
     /// </summary>
     /// <param name="seriesBaseColors">
     /// Series paints keyed by their DESIGNED colour. Each paint is repainted to
-    /// <see cref="Readable"/> of its base on every call, so switching from a light preset back to a
+    /// <see cref="ReadableAgainst"/> of its base on every call, so switching from a light preset back to a
     /// dark one restores the original tint exactly. Deriving from the base rather than from the
     /// paint's current colour is what makes this idempotent — reading the live colour would darken
     /// an already-darkened line again on every theme change.
     /// </param>
+    /// <param name="theme">The theme to paint for; the app's current one when null.</param>
     public static void Apply(
         SolidColorPaint legendText,
         SolidColorPaint tooltipText,
         SolidColorPaint tooltipBackground,
         IEnumerable<Axis> axes,
         IEnumerable<ISeries>? surfaceFilledSeries = null,
-        IEnumerable<KeyValuePair<SKColor, SolidColorPaint>>? seriesBaseColors = null)
+        IEnumerable<KeyValuePair<SKColor, SolidColorPaint>>? seriesBaseColors = null,
+        ThemePreset? theme = null)
     {
-        var t = ThemeService.Instance.CurrentTheme;
+        var t = theme ?? ThemeService.Instance.CurrentTheme;
         var primary = Sk(t.TextPrimary);
         var secondary = Sk(t.TextSecondary);
         var separator = Sk(t.Border).WithAlpha(80);
@@ -148,9 +153,9 @@ internal static class ChartTheme
 
         // The lines themselves. Same in-place mutation as everything above, for the same reason: the
         // chart holds these paint instances, so replacing them would leave the visual bound to the old
-        // one. See Readable for why only lightness moves.
+        // one. See ReadableAgainst for why only lightness moves.
         if (seriesBaseColors is not null)
             foreach (var (baseColor, paint) in seriesBaseColors)
-                paint.Color = Readable(baseColor);
+                paint.Color = ReadableAgainst(baseColor, surface);
     }
 }

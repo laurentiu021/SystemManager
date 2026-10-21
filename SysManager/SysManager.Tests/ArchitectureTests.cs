@@ -1229,6 +1229,60 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// No view test builds a view before the app's resources are loaded.
+    /// </summary>
+    /// <remarks>
+    /// A view resolves its <c>{StaticResource}</c> styles as it is constructed, so one built before
+    /// <c>AppResources.Ensure</c> has made the Application throws "Cannot find resource named 'Display'". It passes
+    /// whenever another test happened to load the resources first on the shared STA thread, which is how
+    /// <c>UnmeasuredFiguresViewUiTests</c> passed in the full suite and failed on its own. Read from each
+    /// <c>StaHelper.Run</c> block in the integration tests, comments left out; a block that builds its view through
+    /// a helper is the helper's to get right.
+    /// </remarks>
+    [Fact]
+    public void NoViewTest_BuildsAViewBeforeTheAppsResourcesAreLoaded()
+    {
+        Assert.Matches(ViewConstruction(), "var view = new PingView { DataContext = vm };");
+        Assert.Matches(ViewConstruction(), "Laid(new SystemHealthView(), context)");
+        Assert.DoesNotMatch(ViewConstruction(), "var vm = new PingViewModel(shared);");
+
+        var dir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager.IntegrationTests");
+        var offenders = new List<string>();
+        var blocks = 0;
+
+        foreach (var path in Directory.GetFiles(dir, "*.cs").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var source = WithoutComments(File.ReadAllText(path));
+            foreach (Match run in Regex.Matches(source, @"StaHelper\.Run\(\(\) =>\s*\{"))
+            {
+                var end = run.Index + run.Length;
+                for (var depth = 1; depth > 0 && end < source.Length; end++)
+                    depth += source[end] switch { '{' => 1, '}' => -1, _ => 0 };
+
+                var block = source[(run.Index + run.Length)..end];
+                if (ViewConstruction().Match(block) is not { Success: true } view) continue;
+
+                blocks++;
+                var ensure = block.IndexOf("AppResources.Ensure()", StringComparison.Ordinal);
+                if (ensure >= 0 && ensure < view.Index) continue;
+                var line = source[..(run.Index + run.Length + view.Index)].Count(c => c == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(path)}:{line}: {view.Value}");
+            }
+        }
+
+        // 28 when written.
+        Assert.True(blocks >= 20, $"only {blocks} test blocks that build a view were read, so this checks nothing.");
+        Assert.True(offenders.Count == 0,
+            "These build a view before AppResources.Ensure() has loaded the app's resources, so they pass only when "
+            + "another test loaded them first. Call AppResources.Ensure() before the view is constructed:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A view, panel or overlay of the app's being constructed.</summary>
+    [GeneratedRegex(@"\bnew [A-Z]\w*(?:View|Popup|Overlay)\s*[({]")]
+    private static partial Regex ViewConstruction();
+
+    /// <summary>
     /// An integration test that runs a command on a view model whose constructor started <c>InitializeAsync</c> lets
     /// that start-up work finish first.
     /// </summary>

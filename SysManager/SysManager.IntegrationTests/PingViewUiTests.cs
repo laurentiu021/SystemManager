@@ -6,6 +6,9 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using LiveChartsCore.Defaults;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -48,6 +51,52 @@ public sealed class PingViewUiTests
             Assert.Equal(300, shared.WindowSeconds);
             Assert.Contains("5 min", TextsOf(picker));
             Assert.DoesNotContain("300", TextsOf(picker));
+        });
+    }
+
+    [Fact]
+    public void EachTargetsCardBar_ShowsTheColourItsLinesAreDrawnIn()
+    {
+        // On a light theme the lines move from the designed colours to be seen on the card, and the bar on each
+        // target's card, which says which line is whose, moves with them. It kept the designed colour, #80FFDB at
+        // 1.03:1 on Clean Indigo's card (#2818). The hosts are documentation addresses.
+        var light = ThemePreset.Defaults["clean-indigo"];
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            using var shared = new NetworkSharedState(new PingMonitorService(), new TracerouteService(),
+                new TracerouteMonitorService(), new SpeedTestService(),
+                new NetworkRepairService(new PowerShellRunner()))
+            {
+                Theme = () => light,
+            };
+            List<PingTarget> added = [];
+            for (var i = 1; i <= NetworkSharedState.Palette.Length; i++)
+            {
+                shared.AddTarget($"Edge {i}", $"203.0.113.{i}", isCustom: true);
+                added.Add(shared.Targets[^1]);
+            }
+
+            var view = new PingView { DataContext = new PingViewModel(shared) };
+            Relayout(view);
+
+            var bars = Descendants<Border>(view).Where(b => b.Width == 4 && b.DataContext is PingTarget).ToList();
+            var moved = 0;
+            foreach (var target in added)
+            {
+                var bar = Assert.Single(bars, b => ReferenceEquals(b.DataContext, target));
+                var line = shared.LatencySeries.OfType<LineSeries<DateTimePoint>>()
+                    .Single(s => s.Name!.EndsWith($"({target.Host})", StringComparison.Ordinal));
+                var drawn = ((SolidColorPaint)line.Stroke!).Color;
+
+                var shown = ((SolidColorBrush)bar.Background).Color;
+                Assert.Equal(Color.FromRgb(drawn.Red, drawn.Green, drawn.Blue), shown);
+                if (!string.Equals(target.ShownColorHex, target.ColorHex, StringComparison.OrdinalIgnoreCase)) moved++;
+            }
+
+            // Most of the palette has to move on Clean Indigo's card; a check where none moved would prove nothing.
+            Assert.True(moved >= 4, $"only {moved} of the {added.Count} colours moved on Clean Indigo");
         });
     }
 

@@ -33,6 +33,13 @@ public sealed partial class PingTarget : ObservableObject
     [ObservableProperty] private double _lossPercent;
     [ObservableProperty] private string _status = "—"; // "OK" / "Timeout" / "Error"
     [ObservableProperty] private string _colorHex = "#4CC9F0";
+
+    /// <summary>
+    /// The colour the target's lines are drawn in and its card's bar shows: <see cref="ColorHex"/>, moved just far
+    /// enough from the theme's card to be seen on it. The network state sets it for the theme it draws.
+    /// </summary>
+    [ObservableProperty] private string _shownColorHex = "#4CC9F0";
+
     [ObservableProperty] private TargetRole _role = TargetRole.Generic;
 
     /// <summary>The last reply's latency as the row shows it, or "—" when the last ping got none.</summary>
@@ -58,6 +65,7 @@ public sealed partial class PingTarget : ObservableObject
         _name = name;
         _host = host;
         _colorHex = colorHex;
+        _shownColorHex = colorHex;
         _isCustom = isCustom;
         _role = role;
     }

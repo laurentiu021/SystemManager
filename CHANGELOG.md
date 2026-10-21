@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.44] - 2026-10-21
+
+**Ping and Traceroute lines are readable on a light theme from the start, and chart lines stay visible on a dark
+custom theme.**
+
+### Fixed
+
+- **Ping and Traceroute drew their lines in the dark theme's colours on a light theme until the theme changed.** The
+  charts' colours were set when the tabs were first built, before any target existed, so the gateway's and the
+  preset's lines, their legend swatches and the per-hop lines kept colours chosen for a dark card: #80FFDB measured
+  1.03:1 on Clean Indigo. Lines take the readable colour from the start now, and the colour bar on each target's card
+  matches its line. Since 1.65.8.
+- **On a dark custom theme, a chart line that was too faint got fainter.** The step that keeps a line at 3:1 against
+  its card only ever darkened, so on a dark Custom card such as #4A4A4A five of the thirteen chart colours ended at 1.8
+  to 1.9:1. A line now moves toward white on a dark card and toward black on a light one, as far as it needs to. Since
+  1.65.8.
+
 ## [1.130.43] - 2026-10-21
 
 **Console output, verdicts and health cards change colour with the theme, so a switch to a light theme no longer leaves

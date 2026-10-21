@@ -4,7 +4,6 @@
 
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -224,8 +223,8 @@ public sealed partial class FileLockViewModel : ViewModelBase
 
         try
         {
-            var csv = FileLockService.ToCsv(Lockers);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = FileLockService.ToCsv(Lockers, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             // System.IO.Path in full: this view-model has its own `Path` property — the file being
             // scanned — which shadows the static class, so the unqualified call binds to a string.
             var saved = System.IO.Path.GetFileName(dlg.FileName);

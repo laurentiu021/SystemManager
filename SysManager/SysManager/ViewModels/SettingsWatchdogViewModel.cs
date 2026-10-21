@@ -4,7 +4,6 @@
 
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -229,8 +228,8 @@ public sealed partial class SettingsWatchdogViewModel : ViewModelBase
 
         try
         {
-            var csv = SettingsWatchdogService.ToCsv(Drifts.Select(r => r.Drift));
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = SettingsWatchdogService.ToCsv(Drifts.Select(r => r.Drift), CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {Drifts.Count} change(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Settings drift exported", Path.GetFileName(dlg.FileName));
         }

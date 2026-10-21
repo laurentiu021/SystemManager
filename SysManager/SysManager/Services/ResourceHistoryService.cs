@@ -358,18 +358,26 @@ public sealed class ResourceHistoryService : IDisposable
     }
 
     /// <summary>Renders a sample series as CSV with a header row. Empty cells for missing GPU/temperature values.</summary>
-    public static string ToCsv(IEnumerable<ResourceSample> samples)
+    /// <remarks>
+    /// Through <see cref="Csv"/>, like every other export. It wrote commas and dots by hand, so in a region that writes
+    /// decimals with a comma a spreadsheet opened each row as one cell (#2888).
+    /// </remarks>
+    public static string ToCsv(IEnumerable<ResourceSample> samples, CultureInfo culture)
     {
+        ArgumentNullException.ThrowIfNull(samples);
+        ArgumentNullException.ThrowIfNull(culture);
+
         var sb = new StringBuilder();
-        sb.AppendLine("Timestamp,CPU %,RAM %,GPU %,CPU Temp °C,GPU Temp °C");
+        Csv.AppendRow(sb, culture, "Timestamp", "CPU %", "RAM %", "GPU %", "CPU Temp °C", "GPU Temp °C");
         foreach (var s in samples)
         {
-            sb.Append(s.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).Append(',');
-            sb.Append(s.CpuPercent.ToString("F1", CultureInfo.InvariantCulture)).Append(',');
-            sb.Append(s.RamPercent.ToString("F1", CultureInfo.InvariantCulture)).Append(',');
-            sb.Append(s.GpuPercent?.ToString("F1", CultureInfo.InvariantCulture)).Append(',');
-            sb.Append(s.CpuTempC?.ToString("F1", CultureInfo.InvariantCulture)).Append(',');
-            sb.AppendLine(s.GpuTempC?.ToString("F1", CultureInfo.InvariantCulture));
+            Csv.AppendRow(sb, culture,
+                s.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                s.CpuPercent.ToString("F1", culture),
+                s.RamPercent.ToString("F1", culture),
+                s.GpuPercent?.ToString("F1", culture),
+                s.CpuTempC?.ToString("F1", culture),
+                s.GpuTempC?.ToString("F1", culture));
         }
         return sb.ToString();
     }

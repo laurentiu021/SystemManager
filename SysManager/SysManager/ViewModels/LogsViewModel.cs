@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Buffers;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -37,10 +36,6 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
     private readonly EventLogService _eventLogs;
     private readonly Func<EventLogQueryOptions, CancellationToken, IAsyncEnumerable<FriendlyEventEntry>> _readEvents;
     private CancellationTokenSource? _cts;
-
-    // Characters that force a CSV field to be quoted. Hoisted to a SearchValues so the
-    // per-field scan in Csv() doesn't allocate a char[] on every call during export.
-    private static readonly SearchValues<char> CsvSpecials = SearchValues.Create(",\"\n\r");
 
     public BulkObservableCollection<FriendlyEventEntry> Entries { get; } = new();
     public ICollectionView EntriesView { get; }
@@ -507,19 +502,7 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
 
         try
         {
-            using var sw = new StreamWriter(dlg.FileName, false, Encoding.UTF8);
-            sw.WriteLine("Timestamp,Severity,Log,Provider,EventId,Message,Explanation,Recommendation");
-            foreach (var e in Entries)
-            {
-                sw.Write(Csv(e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))); sw.Write(',');
-                sw.Write(Csv(e.SeverityLabel)); sw.Write(',');
-                sw.Write(Csv(e.LogName)); sw.Write(',');
-                sw.Write(Csv(e.ProviderName)); sw.Write(',');
-                sw.Write(e.EventId); sw.Write(',');
-                sw.Write(Csv(e.Message)); sw.Write(',');
-                sw.Write(Csv(e.Explanation)); sw.Write(',');
-                sw.WriteLine(Csv(e.Recommendation));
-            }
+            Csv.Write(dlg.FileName, ToCsv(Entries, CultureInfo.CurrentCulture));
             StatusMessage = $"Exported {Entries.Count} events to {dlg.FileName}";
         }
         catch (IOException ex) { StatusMessage = "Export failed: " + ex.Message; }
@@ -591,12 +574,34 @@ public sealed partial class LogsViewModel : ViewModelBase, IArrivalDestination
         }
     }
 
-    private static string Csv(string? s)
+    /// <summary>
+    /// The loaded events as CSV with a header row: every event loaded, including any a filter is hiding.
+    /// </summary>
+    /// <remarks>
+    /// Through <see cref="Csv"/>, like every other export (#2888). It had an escaper of its own and wrote commas by
+    /// hand, so in a region that splits on semicolons a spreadsheet opened each row as one cell.
+    /// </remarks>
+    internal static string ToCsv(IEnumerable<FriendlyEventEntry> entries, CultureInfo culture)
     {
-        s ??= "";
-        if (s.AsSpan().IndexOfAny(CsvSpecials) >= 0)
-            return "\"" + s.Replace("\"", "\"\"") + "\"";
-        return s;
+        ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, culture, "Timestamp", "Severity", "Log", "Provider", "EventId", "Message", "Explanation",
+            "Recommendation");
+        foreach (var e in entries)
+        {
+            Csv.AppendRow(sb, culture,
+                e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+                e.SeverityLabel,
+                e.LogName,
+                e.ProviderName,
+                e.EventId.ToString(culture),
+                e.Message,
+                e.Explanation,
+                e.Recommendation);
+        }
+        return sb.ToString();
     }
 
     /// <summary>

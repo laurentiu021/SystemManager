@@ -5,7 +5,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LiveChartsCore;
@@ -724,8 +723,8 @@ public sealed partial class BandwidthMonitorViewModel : ViewModelBase
 
         try
         {
-            var csv = BandwidthHistoryService.ToCsv(Processes);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = BandwidthHistoryService.ToCsv(Processes, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {Processes.Count} app(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Bandwidth usage exported", Path.GetFileName(dlg.FileName));
         }

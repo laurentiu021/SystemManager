@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+using System.IO;
 using System.Text;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -20,6 +22,9 @@ namespace SysManager.Tests;
 /// </remarks>
 public class CsvExportTests
 {
+    // The commas and dots of RFC 4180, which the cases below read. The user's own region has its cases at the end.
+    private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
+
     // ── Csv.Field: the escaping the older exporter did not need ──
     //
     // ResourceHistoryService.ToCsv writes its fields raw, and that is safe there because every one is a
@@ -36,7 +41,7 @@ public class CsvExportTests
     [InlineData("carriage\rreturn", "\"carriage\rreturn\"")]
     [InlineData("C:\\Users\\me\\Music", "C:\\Users\\me\\Music")]
     public void Field_QuotesOnlyWhatHasTo(string? input, string expected)
-        => Assert.Equal(expected, Csv.Field(input));
+        => Assert.Equal(expected, Csv.Field(input, Invariant));
 
     /// <summary>
     /// A folder name containing a comma must survive as ONE column. This is the whole reason the helper
@@ -47,7 +52,7 @@ public class CsvExportTests
     public void AppendRow_KeepsACommaInsideOneField()
     {
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "Grieg, Peer Gynt", "1024");
+        Csv.AppendRow(sb, Invariant, "Grieg, Peer Gynt", "1024");
 
         Assert.Equal("\"Grieg, Peer Gynt\",1024\r\n", sb.ToString());
         // Three commas would mean four columns; the quoted one must not count as a separator.
@@ -59,7 +64,7 @@ public class CsvExportTests
     public void AppendRow_TerminatesWithCrLf()
     {
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "a");
+        Csv.AppendRow(sb, Invariant, "a");
         Assert.EndsWith("\r\n", sb.ToString(), StringComparison.Ordinal);
     }
 
@@ -67,7 +72,7 @@ public class CsvExportTests
     public void AppendRow_WithNoFields_StillEndsTheRow()
     {
         var sb = new StringBuilder();
-        Csv.AppendRow(sb);
+        Csv.AppendRow(sb, Invariant);
         Assert.Equal("\r\n", sb.ToString());
     }
 
@@ -79,7 +84,7 @@ public class CsvExportTests
         var csv = PrivacyMonitorService.ToCsv([
             new PrivacyAccessEntry("Camera", "Contoso Meet", new DateTime(2026, 3, 9, 14, 5, 7), false),
             new PrivacyAccessEntry("Microphone", "Contoso Meet", null, true),
-        ]);
+        ], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(3, lines.Length);
@@ -94,7 +99,7 @@ public class CsvExportTests
     [Fact]
     public void PrivacyToCsv_WhenStillInUse_LeavesTheRawTimestampEmpty()
     {
-        var csv = PrivacyMonitorService.ToCsv([new PrivacyAccessEntry("Location", "Maps", null, true)]);
+        var csv = PrivacyMonitorService.ToCsv([new PrivacyAccessEntry("Location", "Maps", null, true)], Invariant);
 
         var row = csv.Split("\r\n")[1];
         Assert.Equal("Location,Maps,In use now,,yes", row);
@@ -103,7 +108,7 @@ public class CsvExportTests
     [Fact]
     public void PrivacyToCsv_WithNoEntries_IsHeaderOnly()
     {
-        var csv = PrivacyMonitorService.ToCsv([]);
+        var csv = PrivacyMonitorService.ToCsv([], Invariant);
         Assert.Equal("Capability,App,Last used,Last used (raw),In use now\r\n", csv);
     }
 
@@ -112,7 +117,7 @@ public class CsvExportTests
     public void PrivacyToCsv_QuotesAnAppNameContainingAComma()
     {
         var csv = PrivacyMonitorService.ToCsv([
-            new PrivacyAccessEntry("Camera", "Acme, Inc. Camera", null, false)]);
+            new PrivacyAccessEntry("Camera", "Acme, Inc. Camera", null, false)], Invariant);
 
         Assert.Contains("\"Acme, Inc. Camera\"", csv, StringComparison.Ordinal);
     }
@@ -132,7 +137,7 @@ public class CsvExportTests
     [Fact]
     public void DriftToCsv_WritesTheLabelsTheTabShows()
     {
-        var csv = SettingsWatchdogService.ToCsv([new SettingDrift(TelemetrySetting(), 0, 3)]);
+        var csv = SettingsWatchdogService.ToCsv([new SettingDrift(TelemetrySetting(), 0, 3)], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("Setting,Category,Description,Was,Now,Can restore", lines[0]);
@@ -149,7 +154,7 @@ public class CsvExportTests
     public void DriftToCsv_RecordsWhetherEachRowCanBeRestored()
     {
         var csv = SettingsWatchdogService.ToCsv([
-            new SettingDrift(TelemetrySetting(), 0, 3, CanRestore: false)]);
+            new SettingDrift(TelemetrySetting(), 0, 3, CanRestore: false)], Invariant);
 
         Assert.EndsWith(",no\r\n", csv, StringComparison.Ordinal);
     }
@@ -157,7 +162,7 @@ public class CsvExportTests
     [Fact]
     public void DriftToCsv_WithNoDrifts_IsHeaderOnly()
     {
-        var csv = SettingsWatchdogService.ToCsv([]);
+        var csv = SettingsWatchdogService.ToCsv([], Invariant);
         Assert.Equal("Setting,Category,Description,Was,Now,Can restore\r\n", csv);
     }
 
@@ -172,7 +177,7 @@ public class CsvExportTests
     {
         var csv = DiskAnalyzerService.ToCsv([
             new DiskUsageEntry { Name = "Music", FullPath = @"C:\Users\me\Music", SizeBytes = 52_428_800,
-                                 Percentage = 12.34, FileCount = 7, FolderCount = 2 }]);
+                                 Percentage = 12.34, FileCount = 7, FolderCount = 2 }], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("Name,Full path,Size,Size (bytes),Share %,Files,Folders,Access denied", lines[0]);
@@ -185,7 +190,7 @@ public class CsvExportTests
     {
         var csv = DiskAnalyzerService.ToCsv([
             new DiskUsageEntry { Name = "Grieg, Peer Gynt", FullPath = @"C:\Music\Grieg, Peer Gynt",
-                                 SizeBytes = 1024 }]);
+                                 SizeBytes = 1024 }], Invariant);
 
         var row = csv.Split("\r\n")[1];
         Assert.StartsWith("\"Grieg, Peer Gynt\",\"C:\\Music\\Grieg, Peer Gynt\",", row, StringComparison.Ordinal);
@@ -199,7 +204,8 @@ public class CsvExportTests
     public void DiskUsageToCsv_MarksAnAccessDeniedFolder()
     {
         var csv = DiskAnalyzerService.ToCsv([
-            new DiskUsageEntry { Name = "System Volume Information", SizeBytes = 0, IsAccessDenied = true }]);
+            new DiskUsageEntry { Name = "System Volume Information", SizeBytes = 0, IsAccessDenied = true }],
+            Invariant);
 
         Assert.EndsWith(",yes\r\n", csv, StringComparison.Ordinal);
     }
@@ -207,7 +213,7 @@ public class CsvExportTests
     [Fact]
     public void DiskUsageToCsv_WithNoEntries_IsHeaderOnly()
     {
-        var csv = DiskAnalyzerService.ToCsv([]);
+        var csv = DiskAnalyzerService.ToCsv([], Invariant);
         Assert.Equal("Name,Full path,Size,Size (bytes),Share %,Files,Folders,Access denied\r\n", csv);
     }
 
@@ -229,7 +235,7 @@ public class CsvExportTests
                 MemoryBytes = 52_428_800, CpuPercent = 3.7, ThreadCount = 7, Status = "Running",
                 StartTime = new DateTime(2026, 3, 9, 14, 5, 7), Category = "System",
                 SafetyLevel = "Known app", FilePath = @"C:\Program Files\Test\target.exe",
-            }]);
+            }], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.StartsWith("PID,Name,Description,Memory,Memory (bytes),CPU %,Threads,Status,Started,", lines[0],
@@ -241,7 +247,7 @@ public class CsvExportTests
     [Fact]
     public void ProcessToCsv_WhenWindowsWithheldTheStartTime_LeavesTheRawColumnEmpty()
     {
-        var csv = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }]);
+        var csv = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }], Invariant);
 
         // Display column is the em dash; the raw column is empty rather than 0001-01-01.
         Assert.Contains(",—,,", csv, StringComparison.Ordinal);
@@ -260,13 +266,13 @@ public class CsvExportTests
         // fail on two columns that are correct.
         const int signature = 12;   // PID,Name,Description,Memory,Memory(bytes),CPU,Threads,Status,Started,
                                     // Started(raw),Category,Safety,Signature,Path
-        var row = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }])
+        var row = ProcessManagerService.ToCsv([new ProcessEntry { Pid = 4, Name = "System" }], Invariant)
             .Split("\r\n")[1].Split(',');
         Assert.Equal("", row[signature]);
 
         var verified = ProcessManagerService.ToCsv([
             new ProcessEntry { Pid = 9, Name = "signed.exe", Signature = SignatureTrust.Verified,
-                               SignatureDetail = "Windows can confirm this comes from Contoso Ltd" }])
+                               SignatureDetail = "Windows can confirm this comes from Contoso Ltd" }], Invariant)
             .Split("\r\n")[1].Split(',');
         Assert.Equal("Verified", verified[signature]);
     }
@@ -277,7 +283,7 @@ public class CsvExportTests
         var csv = AppAlertService.ToCsv([
             new AppInstallEntry { Name = "Contoso Toolbar", Publisher = "Contoso, Inc.",
                                   DetectedAt = new DateTime(2026, 3, 9, 14, 5, 7), Source = "Registry",
-                                  InstallPath = @"C:\Program Files\Contoso", IsAcknowledged = true }]);
+                                  InstallPath = @"C:\Program Files\Contoso", IsAcknowledged = true }], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("App,Publisher,Detected,Source,Install path,Acknowledged", lines[0]);
@@ -296,7 +302,7 @@ public class CsvExportTests
         var csv = FileLockService.ToCsv([
             new FileLocker(4, "System", "RmCritical", null),
             new FileLocker(4242, "notepad.exe", "RmMainWindow", new DateTime(2026, 3, 9, 14, 5, 7)),
-        ]);
+        ], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("PID,Process,Type,Started,Started (raw),Critical", lines[0]);
@@ -313,7 +319,7 @@ public class CsvExportTests
         var csv = ShortcutCleanerService.ToCsv([
             new BrokenShortcut { Name = "Old Game", Location = "Desktop",
                                  ShortcutPath = @"C:\Users\me\Desktop\Old Game.lnk",
-                                 TargetPath = @"D:\Games\Old, Game\game.exe", IsSelected = true }]);
+                                 TargetPath = @"D:\Games\Old, Game\game.exe", IsSelected = true }], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("Name,Location,Shortcut path,Missing target,Selected", lines[0]);
@@ -331,7 +337,7 @@ public class CsvExportTests
                 DownBytesPerSec = 1_048_576, UpBytesPerSec = 131_072,
                 TotalDownBytes = 52_428_800, TotalUpBytes = 1_048_576,
                 RemoteSummary = "contoso.example, 3 more",
-            }]);
+            }], Invariant);
 
         var lines = csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal("PID,Process,Connections,Down,Down (bytes/s),Up,Up (bytes/s),Total,Total (bytes),Remote",
@@ -347,15 +353,18 @@ public class CsvExportTests
     [Fact]
     public void EveryFormatter_RejectsANullSequence()
     {
-        Assert.Throws<ArgumentNullException>(() => PrivacyMonitorService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => SettingsWatchdogService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => DiskAnalyzerService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => ProcessManagerService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => AppAlertService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => FileLockService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => ShortcutCleanerService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => BandwidthHistoryService.ToCsv(null!));
-        Assert.Throws<ArgumentNullException>(() => Csv.AppendRow(null!, "a"));
+        Assert.Throws<ArgumentNullException>(() => PrivacyMonitorService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => SettingsWatchdogService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => DiskAnalyzerService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => ProcessManagerService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => AppAlertService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => FileLockService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => ShortcutCleanerService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => BandwidthHistoryService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => Csv.AppendRow(null!, Invariant, "a"));
+        Assert.Throws<ArgumentNullException>(() => Csv.AppendRow(new StringBuilder(), null!, "a"));
+        Assert.Throws<ArgumentNullException>(() => ResourceHistoryService.ToCsv(null!, Invariant));
+        Assert.Throws<ArgumentNullException>(() => ProcessManagerService.ToCsv([], null!));
     }
 
     /// <summary>
@@ -370,14 +379,14 @@ public class CsvExportTests
     {
         var empty = new (string Name, string Csv)[]
         {
-            ("Privacy", PrivacyMonitorService.ToCsv([])),
-            ("SettingsDrift", SettingsWatchdogService.ToCsv([])),
-            ("DiskUsage", DiskAnalyzerService.ToCsv([])),
-            ("Processes", ProcessManagerService.ToCsv([])),
-            ("AppAlerts", AppAlertService.ToCsv([])),
-            ("FileLocks", FileLockService.ToCsv([])),
-            ("BrokenShortcuts", ShortcutCleanerService.ToCsv([])),
-            ("Bandwidth", BandwidthHistoryService.ToCsv([])),
+            ("Privacy", PrivacyMonitorService.ToCsv([], Invariant)),
+            ("SettingsDrift", SettingsWatchdogService.ToCsv([], Invariant)),
+            ("DiskUsage", DiskAnalyzerService.ToCsv([], Invariant)),
+            ("Processes", ProcessManagerService.ToCsv([], Invariant)),
+            ("AppAlerts", AppAlertService.ToCsv([], Invariant)),
+            ("FileLocks", FileLockService.ToCsv([], Invariant)),
+            ("BrokenShortcuts", ShortcutCleanerService.ToCsv([], Invariant)),
+            ("Bandwidth", BandwidthHistoryService.ToCsv([], Invariant)),
         };
 
         foreach (var (name, csv) in empty)
@@ -387,6 +396,107 @@ public class CsvExportTests
             Assert.False(string.IsNullOrWhiteSpace(header), $"{name} exported an empty header row");
             Assert.Contains(',', header);   // a single-column export would be a formatting mistake
             Assert.Single(csv.Split("\r\n", StringSplitOptions.RemoveEmptyEntries));
+        }
+    }
+
+    // ── In the user's region (#2888), and with the mark Excel needs to read UTF-8 (#2794) ──
+    //
+    // Excel splits a CSV it opens on Windows' list separator and reads numbers with the regional decimal mark, and in
+    // every region that writes decimals with a comma, Romanian included, that separator is a semicolon. Every export
+    // wrote commas and dots, so there each row opened as one cell.
+
+    private static readonly CultureInfo Romanian = new("ro-RO");
+
+    [Fact]
+    public void InARegionThatSplitsOnSemicolons_TheFieldsSplitOnSemicolons()
+    {
+        var sb = new StringBuilder();
+        Csv.AppendRow(sb, Romanian, "Grieg, Peer Gynt", "a;b", "plain");
+
+        // The comma is ordinary text there; the semicolon is what has to be quoted.
+        Assert.Equal("Grieg, Peer Gynt;\"a;b\";plain\r\n", sb.ToString());
+        Assert.Equal(";", Csv.SeparatorOf(Romanian));
+        Assert.Equal(",", Csv.SeparatorOf(new CultureInfo("en-US")));
+        Assert.Equal(",", Csv.SeparatorOf(Invariant));
+    }
+
+    [Fact]
+    public void InARegionThatWritesDecimalsWithAComma_TheNumbersCarryIt()
+    {
+        var csv = ProcessManagerService.ToCsv([
+            new ProcessEntry
+            {
+                Pid = 4242, Name = "target.exe", MemoryBytes = 52_428_800, CpuPercent = 3.7, ThreadCount = 7,
+            }], Romanian);
+
+        var row = csv.Split("\r\n")[1];
+        Assert.StartsWith("4242;target.exe;", row, StringComparison.Ordinal);
+        Assert.Contains(";52428800;3,7;7;", row, StringComparison.Ordinal);
+    }
+
+    /// <summary>Every export's header splits on the region's separator, so no tab is left writing commas.</summary>
+    [Fact]
+    public void EveryExport_SplitsOnTheRegionsSeparator()
+    {
+        var empty = new (string Name, string Csv)[]
+        {
+            ("Privacy", PrivacyMonitorService.ToCsv([], Romanian)),
+            ("SettingsDrift", SettingsWatchdogService.ToCsv([], Romanian)),
+            ("DiskUsage", DiskAnalyzerService.ToCsv([], Romanian)),
+            ("Processes", ProcessManagerService.ToCsv([], Romanian)),
+            ("AppAlerts", AppAlertService.ToCsv([], Romanian)),
+            ("FileLocks", FileLockService.ToCsv([], Romanian)),
+            ("BrokenShortcuts", ShortcutCleanerService.ToCsv([], Romanian)),
+            ("Bandwidth", BandwidthHistoryService.ToCsv([], Romanian)),
+            ("Resources", ResourceHistoryService.ToCsv([], Romanian)),
+            ("RecentChanges", ViewModels.RecentChangesViewModel.ToCsv([], Romanian)),
+            ("Logs", ViewModels.LogsViewModel.ToCsv([], Romanian)),
+        };
+
+        foreach (var (name, csv) in empty)
+        {
+            var header = csv.Split("\r\n")[0];
+            Assert.True(header.Contains(';') && !header.Contains(','), $"{name} wrote its header as \"{header}\"");
+        }
+    }
+
+    [Fact]
+    public void AFile_IsWrittenWithTheMarkExcelReadsAsUtf8()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "export.csv");
+            Csv.Write(path, "Café;—\r\n");
+
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
+            Assert.Equal("Café;—\r\n", Encoding.UTF8.GetString(bytes[3..]));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AFileWrittenAsynchronously_HasTheMarkToo()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "export.csv");
+            await Csv.WriteAsync(path, "Café;—\r\n");
+
+            var bytes = await File.ReadAllBytesAsync(path);
+            Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
+            Assert.Equal("Café;—\r\n", Encoding.UTF8.GetString(bytes[3..]));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
         }
     }
 }

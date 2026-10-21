@@ -186,25 +186,26 @@ public sealed class BandwidthHistoryService
     /// formatted ones. The remote summary is included because "which app is using the network" is usually
     /// followed by "talking to what", and that column is the only place the tab answers it.
     /// </remarks>
-    public static string ToCsv(IEnumerable<ProcessNetworkUsage> usage)
+    public static string ToCsv(IEnumerable<ProcessNetworkUsage> usage, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(usage);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "PID", "Process", "Connections", "Down", "Down (bytes/s)", "Up", "Up (bytes/s)",
+        Csv.AppendRow(sb, culture, "PID", "Process", "Connections", "Down", "Down (bytes/s)", "Up", "Up (bytes/s)",
             "Total", "Total (bytes)", "Remote");
         foreach (var u in usage)
         {
-            Csv.AppendRow(sb,
-                u.ProcessId.ToString(CultureInfo.InvariantCulture),
+            Csv.AppendRow(sb, culture,
+                u.ProcessId.ToString(culture),
                 u.ProcessName,
-                u.ConnectionCount.ToString(CultureInfo.InvariantCulture),
+                u.ConnectionCount.ToString(culture),
                 u.DownDisplay,
-                u.DownBytesPerSec.ToString("F0", CultureInfo.InvariantCulture),
+                u.DownBytesPerSec.ToString("F0", culture),
                 u.UpDisplay,
-                u.UpBytesPerSec.ToString("F0", CultureInfo.InvariantCulture),
+                u.UpBytesPerSec.ToString("F0", culture),
                 u.TotalDisplay,
-                (u.TotalDownBytes + u.TotalUpBytes).ToString(CultureInfo.InvariantCulture),
+                (u.TotalDownBytes + u.TotalUpBytes).ToString(culture),
                 u.RemoteSummary);
         }
         return sb.ToString();

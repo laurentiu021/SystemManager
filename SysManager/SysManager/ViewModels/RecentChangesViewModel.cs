@@ -227,7 +227,7 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
         var shown = look.Changes.Where(c => c.When >= since && Matches(c, SelectedCategory)).ToList();
         try
         {
-            await File.WriteAllTextAsync(dlg.FileName, ToCsv(shown), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            await Csv.WriteAsync(dlg.FileName, ToCsv(shown, CultureInfo.CurrentCulture));
             StatusMessage = $"Exported {shown.Count} change(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Recent changes exported", Path.GetFileName(dlg.FileName));
         }
@@ -359,17 +359,18 @@ public sealed partial class RecentChangesViewModel : ViewModelBase
     }
 
     /// <summary>The changes as CSV, with a header row: when, kind, what, who, and the line under it.</summary>
-    internal static string ToCsv(IEnumerable<ChangeEvent> changes)
+    internal static string ToCsv(IEnumerable<ChangeEvent> changes, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(changes);
+        ArgumentNullException.ThrowIfNull(culture);
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "When", "Kind", "What", "Who", "Detail");
+        Csv.AppendRow(sb, culture, "When", "Kind", "What", "Who", "Detail");
         foreach (var c in changes)
         {
             var when = c.When.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
             if (c.Since is { } since)
                 when = $"between {since.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} and {when}";
-            Csv.AppendRow(sb, when, c.Category.ToString(), ChangeRow.TitleOf(c), c.Who, c.Detail);
+            Csv.AppendRow(sb, culture, when, c.Category.ToString(), ChangeRow.TitleOf(c), c.Who, c.Detail);
         }
         return sb.ToString();
     }

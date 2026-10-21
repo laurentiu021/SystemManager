@@ -161,15 +161,16 @@ public sealed class PrivacyMonitorService
     /// from the tab — including "In use now", which is not a time at all — and the raw column is what a
     /// spreadsheet can sort and filter. Dropping either one makes the file worse than the screen it replaces.
     /// </remarks>
-    public static string ToCsv(IEnumerable<PrivacyAccessEntry> entries)
+    public static string ToCsv(IEnumerable<PrivacyAccessEntry> entries, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "Capability", "App", "Last used", "Last used (raw)", "In use now");
+        Csv.AppendRow(sb, culture, "Capability", "App", "Last used", "Last used (raw)", "In use now");
         foreach (var e in entries)
         {
-            Csv.AppendRow(sb,
+            Csv.AppendRow(sb, culture,
                 e.Capability,
                 e.AppName,
                 e.LastUsedDisplay,

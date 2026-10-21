@@ -371,15 +371,16 @@ public sealed class AppAlertService : IDisposable
     /// acknowledged flag because an exported list is usually being sent to someone who needs to know which
     /// entries the user has already looked at.
     /// </remarks>
-    public static string ToCsv(IEnumerable<AppInstallEntry> alerts)
+    public static string ToCsv(IEnumerable<AppInstallEntry> alerts, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(alerts);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "App", "Publisher", "Detected", "Source", "Install path", "Acknowledged");
+        Csv.AppendRow(sb, culture, "App", "Publisher", "Detected", "Source", "Install path", "Acknowledged");
         foreach (var a in alerts)
         {
-            Csv.AppendRow(sb,
+            Csv.AppendRow(sb, culture,
                 a.Name,
                 a.Publisher,
                 a.DetectedAt == default

@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.33] - 2026-10-21
+
+**CSV exports open in Excel in your own region, with accented names intact.**
+
+### Fixed
+
+- **In a region that writes decimals with a comma, every CSV export opened in Excel as one column.** Excel splits a
+  CSV it opens on Windows' list separator, which is a semicolon in Romanian, German, French and every other region
+  that writes decimals with a comma, and the eleven exports always wrote commas, with dots in the numbers. The
+  columns are now split on your list separator and the numbers carry your decimal mark, so the raw size, CPU and
+  share columns can be sorted. Since 1.47.0.
+- **Accented names and dashes came out garbled when a CSV export was opened in Excel.** Ten of the eleven exports
+  were written without the byte order mark Excel needs to read UTF-8, so "Café" read "CafÃ©" and an em dash three
+  characters. Every export is now written with it. Since 1.47.0.
+
 ## [1.130.32] - 2026-10-21
 
 **Ping's chart window reads in minutes, Speed Test's time left shows on the running test only, and New App Alerts

@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.50] - 2026-10-21
+
+**Settings Watchdog and Camera/Mic/Location look again each time you open them, so a link that sends you to a
+changed setting shows it, and "In use now" means now.**
+
+### Fixed
+
+- **Settings Watchdog and Camera/Mic/Location showed what they read the first time.** Both read when the tab was first
+  built and then only on Refresh, and SysManager can stay in the notification area for days. Undo Changes and Recent
+  Changes send you to Settings Watchdog because a watched setting changed, and the page still said "All watched
+  settings match your baseline." with Restore off. Camera/Mic/Location kept saying "In use now" for an app that had let
+  go of the camera long ago. Both look again each time you open them. Since 1.32.0 for Camera/Mic/Location and
+  1.48.0 for Settings Watchdog.
+- **Settings Watchdog's CSV said every change could be restored.** Its "Can restore" column said "yes" for a setting
+  that was not set when the baseline was saved, which Restore does not put back. It says "no" for those now. Since
+  1.123.0.
+
 ## [1.130.49] - 2026-10-21
 
 **Edge/OneDrive Remover says that Edge will show "Your browser is managed by your organization" while it is

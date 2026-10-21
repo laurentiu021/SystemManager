@@ -37,6 +37,20 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     [ObservableProperty] private string _emptyTitle = "No access recorded";
     [ObservableProperty] private string _emptyMessage = "Windows hasn't logged any camera, microphone, or location access yet.";
 
+    /// <summary>
+    /// True while the tab is on screen. Set by <see cref="MainWindowViewModel.SetActive"/>; becoming visible reads
+    /// again.
+    /// </summary>
+    /// <remarks>
+    /// The tab read the history when it was built and then only on Refresh, so a later visit still said "In use now"
+    /// for an app that had let go of the camera long ago, on the tab someone opens to ask what is watching them right
+    /// now (#2837).
+    /// </remarks>
+    [ObservableProperty] private bool _isActive;
+
+    /// <summary>The read the tab started when it was last shown. Internal so a test can await it.</summary>
+    internal Task ShownRefresh { get; private set; } = Task.CompletedTask;
+
     public PrivacyMonitorViewModel(PrivacyMonitorService service) : this(service.ReadAsync) { }
 
     /// <summary>Test seam: the consent-store read, so a failed one can be supplied without the registry.</summary>
@@ -59,6 +73,12 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(IsBusy)) RefreshCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        // Not while the first read is running, which is the fresh one, nor beside a Refresh still reading.
+        if (value && InitializationComplete.IsCompleted && NotBusy) ShownRefresh = RefreshAsync();
     }
 
     [RelayCommand(CanExecute = nameof(NotBusy))]

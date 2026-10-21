@@ -557,4 +557,48 @@ public class SettingsWatchdogViewModelTests
         Assert.Empty(vm.Drifts);
         Assert.False(vm.HasDrift);
     }
+
+    // ── look again when shown (#2837) ──
+
+    [Fact]
+    public void ShowingTheTabAgain_LooksAgain_SoASettingWindowsResetSinceIsListed()
+    {
+        // Undo Changes and Recent Changes send the user here because a watched setting changed, and the page still
+        // showed the look from before: "All watched settings match your baseline.", with Restore off.
+        var svc = NewService();
+        var vm = new SettingsWatchdogViewModel(svc);
+        Assert.False(vm.HasDrift);
+
+        var drift = Drift("ads");
+        svc.DetectDrift(Arg.Any<BaselineSnapshot>(), Arg.Any<IReadOnlyDictionary<string, int?>>()).Returns([drift]);
+        vm.IsActive = true;
+
+        Assert.True(vm.HasDrift);
+        Assert.Equal(drift, Assert.Single(vm.Drifts).Drift);
+        Assert.True(vm.RestoreSelectedCommand.CanExecute(null));
+        Assert.Equal("1 setting(s) changed since your baseline.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void LeavingTheTab_LooksAtNothing()
+    {
+        var svc = NewService();
+        var vm = new SettingsWatchdogViewModel(svc);
+        vm.IsActive = true;
+        svc.ClearReceivedCalls();
+
+        vm.IsActive = false;
+
+        svc.DidNotReceive().ReadCurrent();
+    }
+
+    [Fact]
+    public void ADriftWithNoValueInTheBaseline_IsNotOfferedForRestore_OnItsRow()
+    {
+        // Restore never puts it back, because the watchdog never deletes a value (#2594).
+        var notSet = new SettingDrift(Setting("ads"), BaselineValue: null, CurrentValue: 1, CanRestore: true);
+        var vm = new SettingsWatchdogViewModel(NewService(notSet));
+
+        Assert.False(Assert.Single(vm.Drifts).CanRestore);
+    }
 }

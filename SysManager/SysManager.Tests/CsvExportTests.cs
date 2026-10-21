@@ -160,6 +160,17 @@ public class CsvExportTests
     }
 
     [Fact]
+    public void DriftToCsv_ASettingThatWasNotSetInTheBaseline_CannotBeRestored()
+    {
+        // Every catalog entry can be restored in principle, and Restore leaves this one alone, because putting
+        // "Not set" back would delete a value and the watchdog never deletes one. The column said "yes" (#2837).
+        var csv = SettingsWatchdogService.ToCsv([
+            new SettingDrift(TelemetrySetting(), BaselineValue: null, CurrentValue: 3)], Invariant);
+
+        Assert.EndsWith(",no\r\n", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DriftToCsv_WithNoDrifts_IsHeaderOnly()
     {
         var csv = SettingsWatchdogService.ToCsv([], Invariant);

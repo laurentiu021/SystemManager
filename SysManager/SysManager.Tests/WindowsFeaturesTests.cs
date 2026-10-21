@@ -130,7 +130,8 @@ public class WindowsFeaturesTests
     [Fact]
     public void ViewModel_InitialState_IsCorrect()
     {
-        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(new PowerShellRunner()), NoRestorePoint());
+        var vm = new WindowsFeaturesViewModel(
+            new WindowsFeaturesService(new PowerShellRunner()), NoRestorePoint(), NoParents());
         Assert.Empty(vm.AllFeatures);
         Assert.Empty(vm.FilteredFeatures);
         Assert.Equal("", vm.FilterText);
@@ -146,7 +147,8 @@ public class WindowsFeaturesTests
         // Scan and ToggleFeature both drive the shared WindowsFeaturesService PowerShell
         // runner. Running them concurrently would let both LineReceived handlers capture
         // the same output. The NotBusy/CanToggle gates make them mutually exclusive.
-        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(new PowerShellRunner()), NoRestorePoint());
+        var vm = new WindowsFeaturesViewModel(
+            new WindowsFeaturesService(new PowerShellRunner()), NoRestorePoint(), NoParents());
         var feature = new WindowsFeature { Name = "TelnetClient", DisplayName = "Telnet Client" };
 
         Assert.True(vm.ScanCommand.CanExecute(null));
@@ -174,6 +176,15 @@ public class WindowsFeaturesTests
         return rp;
     }
 
+    /// <summary>A feature that needs no other: DISM is not asked.</summary>
+    private static IFeatureParentsService NoParents()
+    {
+        var parents = Substitute.For<IFeatureParentsService>();
+        parents.ReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<FeatureParent>?>([]));
+        return parents;
+    }
+
     private static ISessionRestorePoint RestorePointTaken()
     {
         var rp = Substitute.For<ISessionRestorePoint>();
@@ -194,9 +205,10 @@ public class WindowsFeaturesTests
         return runner;
     }
 
-    private static WindowsFeaturesViewModel ElevatedVm(IPowerShellRunner runner, ISessionRestorePoint rp)
+    private static WindowsFeaturesViewModel ElevatedVm(
+        IPowerShellRunner runner, ISessionRestorePoint rp, IFeatureParentsService? parents = null)
     {
-        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), rp);
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(runner), rp, parents ?? NoParents());
         vm.IsElevated = true;   // the command refuses outright without elevation
         return vm;
     }
@@ -302,7 +314,7 @@ public class WindowsFeaturesTests
         // burn the daily allowance on an operation that was never going to run.
         var rp = RestorePointTaken();
         using var dialog = new DialogAnswer(confirm: true);
-        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(RunnerThatSucceeds()), rp);
+        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(RunnerThatSucceeds()), rp, NoParents());
         vm.IsElevated = false;
 
         await vm.ToggleFeatureCommand.ExecuteAsync(
@@ -385,7 +397,8 @@ public class WindowsFeaturesTests
     [Fact]
     public async Task Scan_Unelevated_WhenWindowsRefusesTheQuery_SaysItNeedsAdministrator_NotFoundZero()
     {
-        var vm = new WindowsFeaturesViewModel(new WindowsFeaturesService(RunnerThatExits(1)), NoRestorePoint())
+        var vm = new WindowsFeaturesViewModel(
+            new WindowsFeaturesService(RunnerThatExits(1)), NoRestorePoint(), NoParents())
         {
             IsElevated = false,
         };
@@ -685,6 +698,96 @@ public class WindowsFeaturesTests
         Assert.True(row.IsEnabled);
         Assert.Equal("Reboot required", row.Status);
         Assert.True(vm.PendingReboot);
+    }
+
+    // ── The features turning one on turns on with it (#2834) ──
+    //
+    // Enabling passes -All, which turns on every feature the clicked one needs. The confirmation named only the clicked
+    // one, and those rows still read off afterwards.
+
+    /// <summary>DISM's answer for <c>IIS-ASPNET45</c>: two of what it needs, off before and on after.</summary>
+    private static IFeatureParentsService ParentsTurningOn()
+    {
+        var parents = Substitute.For<IFeatureParentsService>();
+        parents.ReadAsync("IIS-ASPNET45", Arg.Any<CancellationToken>()).Returns(
+            Task.FromResult<IReadOnlyList<FeatureParent>?>(
+                [new("IIS-WebServer", false, false), new("IIS-WebServerRole", false, false)]),
+            Task.FromResult<IReadOnlyList<FeatureParent>?>(
+                [new("IIS-WebServer", true, false), new("IIS-WebServerRole", true, true)]));
+        return parents;
+    }
+
+    private static WindowsFeature Row(string name, bool enabled = false) =>
+        new() { Name = name, DisplayName = WindowsFeaturesService.HumanizeName(name), IsEnabled = enabled };
+
+    [Fact]
+    public async Task ToggleFeature_Enabling_NamesWhatItTurnsOnWithIt_AndShowsThoseRowsOnAfterwards()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(FakeDism(0, ["False"], "IIS-ASPNET45|Enabled"), NoRestorePoint(), ParentsTurningOn());
+        var feature = Row("IIS-ASPNET45");
+        vm.AllFeatures.ReplaceWith([feature, Row("IIS-WebServer"), Row("IIS-WebServerRole"), Row("TelnetClient")]);
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.Contains("Windows turns these on with it, because it needs them: IIS WebServer, IIS WebServerRole.",
+            Assert.Single(dialog.Messages), StringComparison.Ordinal);
+        Assert.True(vm.AllFeatures[1].IsEnabled);
+        Assert.Equal("Enabled", vm.AllFeatures[1].Status);
+        Assert.True(vm.AllFeatures[2].IsEnabled);
+        Assert.Equal("Reboot required", vm.AllFeatures[2].Status);
+        Assert.False(vm.AllFeatures[3].IsEnabled);
+        Assert.True(vm.PendingReboot);
+        Assert.Equal(3, vm.EnabledCount);
+        Assert.Equal("IIS ASPNET45 enabled. Windows also turned on 2 features it needs.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_Disabling_SaysTheFeaturesItNeedsStayOn()
+    {
+        var parents = Substitute.For<IFeatureParentsService>();
+        parents.ReadAsync("IIS-ASPNET45", Arg.Any<CancellationToken>()).Returns(
+            Task.FromResult<IReadOnlyList<FeatureParent>?>(
+                [new("IIS-WebServer", true, false), new("IIS-WebServerRole", true, false)]));
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = ElevatedVm(FakeDism(0, ["False"], null), NoRestorePoint(), parents);
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(Row("IIS-ASPNET45", enabled: true));
+
+        Assert.Contains("The features it needs stay on: IIS WebServer, IIS WebServerRole.",
+            Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenDismCannotBeAsked_SaysWindowsTurnsOnWhatItNeeds()
+    {
+        var parents = Substitute.For<IFeatureParentsService>();
+        parents.ReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<FeatureParent>?>(null));
+        using var dialog = new DialogAnswer(confirm: false);
+        var vm = ElevatedVm(FakeDism(0, ["False"], null), NoRestorePoint(), parents);
+        vm.StatusMessage = "Found 2 features (1 enabled).";
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(Telnet());
+
+        Assert.Contains("Windows also turns on any other features it needs.", Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+        // The status line said "Checking what … needs" while DISM was asked, and goes back after a decline.
+        Assert.Equal("Found 2 features (1 enabled).", vm.StatusMessage);
+    }
+
+    [Fact]
+    public void DescribeParents_NamesTen_AndCountsTheRest()
+    {
+        var many = Enumerable.Range(1, 12).Select(i => new FeatureParent($"Feature-{i}", false, false)).ToList();
+
+        var said = WindowsFeaturesViewModel.DescribeParents(disabling: false, many);
+
+        Assert.StartsWith("Windows turns these on with it, because it needs them: Feature 1, Feature 2,", said,
+            StringComparison.Ordinal);
+        Assert.EndsWith("Feature 10 and 2 more.\n\n", said, StringComparison.Ordinal);
+        Assert.Equal("", WindowsFeaturesViewModel.DescribeParents(disabling: false, []));
+        Assert.Equal("", WindowsFeaturesViewModel.DescribeParents(disabling: true, null));
     }
 
     // ── the service's half ──

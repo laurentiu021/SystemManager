@@ -179,6 +179,7 @@ public static class ServiceRegistration
         services.AddSingleton<AppAlertsViewModel>();
         services.AddSingleton<ShortcutCleanerViewModel>();
         services.AddSingleton<WindowsFeaturesService>();
+        services.AddSingleton<IFeatureParentsService, FeatureParentsService>();
         services.AddSingleton<WindowsFeaturesViewModel>();
         services.AddSingleton<AppBlockerViewModel>();
         services.AddSingleton<BulkInstallerViewModel>();

@@ -17398,6 +17398,11 @@ public partial class ArchitectureTests
             // combase: the Windows Runtime string API is Unicode-only. It takes a PCNZWCH and ships no A/W pair.
             // Confirmed by binding it: the per-app routing factory is activated with the class name it creates.
             "WindowsCreateString",
+            // dismapi: the DISM API is Unicode-only and ships no A/W pair. Confirmed by calling it: the integration
+            // FeatureParentsServiceTests reads IIS-WebServerRole as IIS-WebServer's parent through these three.
+            "DismInitialize",
+            "DismOpenSession",
+            "DismGetFeatureParent",
         ];
 
         var root = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");

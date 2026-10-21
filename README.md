@@ -945,6 +945,8 @@ System → System Fixes, where the tab name matches what they do.
 - A **Safety** column — Safe, Caution or Critical, with the reason on hover. A feature the built-in
   list does not know is marked **Not rated**, in grey, and its hover says to look it up first. It
   informs rather than blocks: every feature can still be toggled after the confirmation
+- **Says what else comes on** — turning on a feature turns on every feature it needs, so the confirmation names
+  them and their rows show them on afterwards. Turning one off names the features it needs, which stay on
 - After every change the tab reads the feature back from Windows, so the row shows what Windows reports rather than
   what was asked for, including a change waiting for a restart, which shows "Reboot required"
 - **When Windows refuses a change, the status line says why**: Windows' own reason with its error code, and plain

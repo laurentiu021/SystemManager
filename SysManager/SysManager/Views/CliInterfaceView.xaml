@@ -25,7 +25,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="CLI Interface" Style="{StaticResource Display}"/>
-            <TextBlock Text="SysManager accepts command-line flags so you can automate safe maintenance from scripts, Task Scheduler, or deployment tools. Read-only or non-destructive actions only — anything that changes the system irreversibly stays in the app behind a confirmation."
+            <TextBlock Text="SysManager accepts command-line flags so you can automate maintenance from scripts, Task Scheduler, or deployment tools. A command line has no one to ask, so it offers only the health score, which changes nothing, and two actions: --cleanup deletes temporary files more than a week old for good, without asking, and --purge-standby frees cached memory and loses no data. Everything else stays in the app behind a confirmation."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
         </StackPanel>
 

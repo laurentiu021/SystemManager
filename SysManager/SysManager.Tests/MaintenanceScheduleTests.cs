@@ -119,6 +119,8 @@ public class MaintenanceScheduleTests
             Assert.NotEqual(action.ToString(), label);
 
             var schedule = new MaintenanceSchedule(action, MaintenanceFrequency.Daily, 3, 0);
+            // Said in the confirmation the schedule is saved through, the only time an unattended run is asked about.
+            Assert.False(string.IsNullOrWhiteSpace(schedule.RunDescription), $"{action} does not say what a run does");
             var verb = schedule.CliArguments.Split(' ')[0];
             var parsed = CliRunner.Parse([verb]).Command;
 

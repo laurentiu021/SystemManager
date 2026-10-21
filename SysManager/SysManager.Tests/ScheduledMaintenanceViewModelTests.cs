@@ -455,4 +455,34 @@ public class ScheduledMaintenanceViewModelTests
         Assert.Contains("could not read whether a schedule is already registered", shown, StringComparison.Ordinal);
         Assert.DoesNotContain("This creates a Windows scheduled task", shown, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Whichever question the save confirmation asks, it says what each run deletes (#2881).
+    /// </summary>
+    /// <remarks>
+    /// A run is unattended, so this dialog is the only time the user is asked. It named the action and the time,
+    /// and the README said nothing destructive was automated.
+    /// </remarks>
+    [Fact]
+    public async Task SaveSchedule_SaysWhatEachRunDeletes_WhicheverQuestionItAsks()
+    {
+        var (fresh, _) = NewVm();
+        var (scheduled, _) = await NewScheduledVmAsync();
+        ScheduledMaintenanceViewModel[] vms = [fresh, scheduled, VmWhoseStatusReadFails()];
+        List<string> questions = [];
+
+        foreach (var vm in vms)
+        {
+            using var dialog = new DialogAnswer(confirm: false);
+            await vm.SaveScheduleCommand.ExecuteAsync(null);
+
+            var shown = Assert.Single(dialog.Messages);
+            Assert.Contains("Each run deletes the temporary files nothing has created or changed in the last week, "
+                + "for good and without asking.", shown, StringComparison.Ordinal);
+            questions.Add(shown);
+        }
+
+        // Three different questions, so the three cases were each reached rather than one of them three times.
+        Assert.Equal(3, questions.Distinct().Count());
+    }
 }

@@ -12,13 +12,15 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Parses and runs SysManager's command-line interface, so power users and sysadmins can
-/// automate the safe maintenance actions from scripts, Task Scheduler, or deployment tools
+/// automate maintenance from scripts, Task Scheduler, or deployment tools
 /// (e.g. <c>SysManager.exe --cleanup --silent</c> or <c>SysManager.exe --health --json</c>).
 ///
-/// Only read-only or safe, non-destructive actions are exposed on the CLI — temp cleanup
-/// (never follows reparse points), standby-list trim (non-destructive cache drop), and
-/// read-only health/inventory. Anything that mutates the system irreversibly stays
-/// GUI-only behind a confirmation dialog. <see cref="Parse"/> is pure; <see cref="ExecuteAsync"/>
+/// A command line has no confirmation dialog, so it exposes only the read-only health score and
+/// command list and two actions: the standby-list purge, which drops clean cache and loses no data,
+/// and temp cleanup, which deletes temporary files more than a week old for good without asking
+/// (never following reparse points). Scheduled Maintenance runs that cleanup unattended, so its
+/// confirmation, asked once when the schedule is saved, says what each run deletes. Everything else
+/// stays GUI-only behind a confirmation dialog. <see cref="Parse"/> is pure; <see cref="ExecuteAsync"/>
 /// returns the output text rather than writing it, so both are fully unit-testable.
 /// </summary>
 public sealed class CliRunner
@@ -113,8 +115,8 @@ public sealed class CliRunner
         ("--version, -v", "Print the SysManager version and exit."),
         ("--list", "List the available CLI commands."),
         ("--health", "Print a system health score (read-only)."),
-        ("--cleanup", "Delete temporary files more than a week old from user and Windows TEMP "
-                      + "(safe, never follows junctions)."),
+        ("--cleanup", "Delete temporary files more than a week old from user and Windows TEMP, for good and "
+                      + "without asking. Never follows junctions."),
         ("--purge-standby", "Purge the standby memory list (non-destructive; needs administrator). "
                           + "Also accepted as --trim-ram, its former name."),
         ("--json", "Modifier: emit machine-readable JSON instead of text."),

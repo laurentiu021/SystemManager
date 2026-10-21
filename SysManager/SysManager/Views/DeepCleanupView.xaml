@@ -13,7 +13,7 @@
                 <DockPanel>
                     <StackPanel>
                         <TextBlock Text="Deep Cleanup" Style="{StaticResource Display}"/>
-                        <TextBlock Text="Find safe-to-remove installer leftovers and caches. Everything is scan-first — nothing is deleted until you tick it and press Clean. Looking for your biggest files instead? That is Storage &amp; Files → Large Files."
+                        <TextBlock Text="Find safe-to-remove installer leftovers and caches. A scan shows what each category holds before anything is deleted. Every category with something in it starts ticked, the Recycle Bin included, except the blue-screen memory dumps and Windows.old, so untick what you want to keep before you press Clean. Looking for your biggest files instead? That is Storage &amp; Files → Large Files."
                                    Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
                     </StackPanel>
                 </DockPanel>

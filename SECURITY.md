@@ -174,8 +174,8 @@ What the app can and cannot do by design:
   LibreHardwareMonitor library, which loads its own kernel-mode driver to reach the
   CPU, motherboard and storage sensors. Without administrator rights it loads nothing
   and reads only NVIDIA GPU and disk temperatures.
-- **Unattended cleanup**: `SysManager.exe --cleanup` deletes temporary files from your
-  TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it
+- **Unattended cleanup**: `SysManager.exe --cleanup` deletes temporary files more than a week
+  old from your TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it
   on a schedule. The schedule is one task for each Windows account,
   `SysManager Scheduled Maintenance-` followed by the account's SID, which runs as that
   account without administrator rights. It does not offer the standby-list purge, which

@@ -46,7 +46,7 @@
 
         <StackPanel Grid.Row="0" Margin="28,24,28,0">
             <TextBlock Text="Speed Test" Style="{StaticResource Display}"/>
-            <TextBlock Text="Measure how fast this connection actually is, and keep the results so a slowdown is something you can show your provider rather than describe. Uses the Ookla test where it can and a plain download test otherwise."
+            <TextBlock Text="Measure how fast this connection actually is, and keep the results so a slowdown is something you can show your provider rather than describe. There are two tests, each with its own Run button: Ookla's, against a nearby server, and an HTTP test through Cloudflare. Each measures download, upload and ping."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 

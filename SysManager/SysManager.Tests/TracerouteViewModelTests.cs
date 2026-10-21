@@ -137,6 +137,20 @@ public class TracerouteViewModelTests
         Assert.Equal(1, raised);   // no further notifications after disposal
     }
 
+    [Fact]
+    public void StoppingAutoTraceOnThisTab_TakesItsHostOffTheMonitor()
+    {
+        // The host was never taken out, so it was traced every round until SysManager closed (#2870).
+        using var shared = NewShared();
+        using var vm = new TracerouteViewModel(shared);
+        shared.TrackAutoTraceHost("a.example");
+        shared.IsAutoTraceRunning = true;
+
+        vm.StopAutoTraceCommand.Execute(null);
+
+        Assert.False(shared.TraceMonitor.Targets.ContainsKey("a.example"));
+    }
+
     // ---------- Escape (#2597) ----------
 
     [Fact]

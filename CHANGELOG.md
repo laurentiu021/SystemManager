@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.27] - 2026-10-21
+
+**Traceroute shows the route of any host it traces, and stopping auto-trace stops tracing its host.**
+
+### Fixed
+
+- **A trace of a host that is not a Ping target showed nothing.** The Hops table and the chart listed Ping targets
+  only, so tracing any other host, the very thing the tab offers, ended "Done — 14 hops" with "No route traced yet"
+  still on screen. A Ping target typed in another letter case was dropped the same way. The route of the host traced
+  last now appears beside the targets', until another host is traced. Since Traceroute was added (0.3.0).
+- **A host auto-traced once was traced until SysManager closed.** Start auto-trace added its host to the loop and
+  nothing took it out, so each new host added one more trace every round, whichever tab ran the loop. Stopping
+  auto-trace, on Traceroute or on Ping, now takes the host out, and starting it on another host replaces the last one.
+  Since auto-trace of a typed host was added (0.21.6).
+- **Tracing 0.0.0.0, or a name too long to look up, raised the error dialog.** In auto-trace, the same host ended the
+  loop for every target while the tab still said auto-trace was running. Such a host now gets a message saying it
+  cannot be traced, and the loop goes on with the others. Since 0.48.11, when the trace stopped counting every error as
+  a hop that timed out.
+
 ## [1.130.26] - 2026-10-21
 
 **Environment Variables no longer freezes while it checks a PATH folder on a network share.**

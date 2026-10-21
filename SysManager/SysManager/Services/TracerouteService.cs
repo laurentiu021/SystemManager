@@ -102,10 +102,20 @@ public sealed class TracerouteService
     /// so an unresolvable host shows a friendly "Error" message instead of crashing the
     /// command with a raw <see cref="System.Net.Sockets.SocketException"/>.
     /// </summary>
+    /// <remarks>
+    /// "0", "0.0.0.0" and "::" parse as the address meaning "any", which names no host, and Ping refuses it with an
+    /// <see cref="ArgumentException"/>, as DNS does a name of more than 255 characters. Nothing caught that type, so a
+    /// trace of such a host raised the error dialog, and in auto-trace ended the loop for every target (#2870). Both are
+    /// refused here in the type the callers show.
+    /// </remarks>
     internal static async Task<IPAddress> ResolveDestinationAsync(string host, CancellationToken ct)
     {
         if (IPAddress.TryParse(host, out var literal))
+        {
+            if (literal.Equals(IPAddress.Any) || literal.Equals(IPAddress.IPv6Any))
+                throw new InvalidOperationException($"'{host}' is not the address of a host, so it cannot be traced.");
             return literal;
+        }
 
         try
         {
@@ -115,6 +125,10 @@ public sealed class TracerouteService
             return addresses[0];
         }
         catch (System.Net.Sockets.SocketException ex)
+        {
+            throw new InvalidOperationException($"Could not resolve host '{host}': {ex.Message}", ex);
+        }
+        catch (ArgumentException ex)
         {
             throw new InvalidOperationException($"Could not resolve host '{host}': {ex.Message}", ex);
         }

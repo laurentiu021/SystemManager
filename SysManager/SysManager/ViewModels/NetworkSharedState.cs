@@ -48,8 +48,12 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     internal readonly ConcurrentDictionary<string, BulkObservableCollection<DateTimePoint>> Buffers = new();
 
     private bool _disposed;
-    internal readonly ConcurrentDictionary<string, BulkObservableCollection<ObservablePoint>> TraceBuffers = new();
-    internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes = new();
+    // A host compares in any letter case: one typed on Traceroute in another case than the Ping target's was a host of
+    // its own, and its route was dropped (#2870).
+    internal readonly ConcurrentDictionary<string, BulkObservableCollection<ObservablePoint>> TraceBuffers =
+        new(StringComparer.OrdinalIgnoreCase);
+    internal readonly Dictionary<string, IReadOnlyList<TracerouteHop>> LatestRoutes =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PropertyChangedEventHandler> _targetHandlers = new();
 
     /// <summary>
@@ -98,6 +102,15 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     // Stop killed a running auto-trace while Traceroute still showed "Stop auto-trace". One owner of
     // the flag means the buttons cannot disagree with the monitor.
     [ObservableProperty] private bool _isAutoTraceRunning;
+
+    // The host whose route is listed and drawn beside the Ping targets' when it is not one of them: the last one
+    // traced, by hand or by auto-trace. Only Ping targets were, so a trace of any other host ended "Done — 14 hops"
+    // with the table and the chart empty (#2870).
+    private string? _tracedHost;
+
+    // The host Start auto-trace gave the trace monitor when it is not a Ping target. It was never taken out, so each
+    // host auto-traced once was traced every round until SysManager closed, whichever tab started the monitor (#2870).
+    private string? _autoTraceHost;
 
     public NetworkSharedState(PingMonitorService pinger, TracerouteService tracer, TracerouteMonitorService traceMonitor, SpeedTestService speed, NetworkRepairService repair)
     {
@@ -170,7 +183,10 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     public void AddTarget(string name, string host, TargetRole role = TargetRole.Generic, bool isCustom = false)
     {
-        if (Targets.Any(t => t.Host.Equals(host, StringComparison.OrdinalIgnoreCase))) return;
+        if (IsTarget(host)) return;
+
+        // The host traced last becomes a target: its own line replaces the one it had as a traced host.
+        if (IsTracedHost(host)) ForgetTracedHost();
 
         var color = Palette[PaletteIndex++ % Palette.Length];
         var target = new PingTarget(name, host, color, isCustom, role);
@@ -216,23 +232,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             AnimationsSpeed = TimeSpan.Zero
         });
 
-        var traceBuffer = new BulkObservableCollection<ObservablePoint>();
-        TraceBuffers[host] = traceBuffer;
-        TraceSeries.Add(new LineSeries<ObservablePoint>
-        {
-            Name = $"{name} ({host})",
-            Values = traceBuffer,
-            Fill = null,
-            GeometrySize = 6,
-            LineSmoothness = 0,
-            Stroke = traceStroke,
-            GeometryStroke = traceGeometryStroke,
-            // Marker centre = the theme surface (a "hollow-on-surface" dot ringed by the series colour).
-            // Was a hardcoded near-black, which stayed black on the light presets and read as black dots
-            // with a faint colour rim on the white legend. Re-themed in ChartTheme.Apply on theme change.
-            GeometryFill = new SolidColorPaint(Helpers.ChartTheme.Sk(ThemeService.Instance.CurrentTheme.Surface)),
-            AnimationsSpeed = TimeSpan.Zero
-        });
+        AddTraceLine(name, host, traceStroke, traceGeometryStroke);
 
         Pinger.AddOrUpdate(target);
         TraceMonitor.AddOrUpdate(target);
@@ -257,6 +257,91 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         };
         target.PropertyChanged += handler;
         _targetHandlers[host] = handler;
+    }
+
+    /// <summary>Adds a host's line to the trace chart, and the points it draws.</summary>
+    private void AddTraceLine(string name, string host, SolidColorPaint stroke, SolidColorPaint geometryStroke)
+    {
+        var traceBuffer = new BulkObservableCollection<ObservablePoint>();
+        TraceBuffers[host] = traceBuffer;
+        TraceSeries.Add(new LineSeries<ObservablePoint>
+        {
+            Name = $"{name} ({host})",
+            Values = traceBuffer,
+            Fill = null,
+            GeometrySize = 6,
+            LineSmoothness = 0,
+            Stroke = stroke,
+            GeometryStroke = geometryStroke,
+            // Marker centre = the theme surface (a "hollow-on-surface" dot ringed by the series colour).
+            // Was a hardcoded near-black, which stayed black on the light presets and read as black dots
+            // with a faint colour rim on the white legend. Re-themed in ChartTheme.Apply on theme change.
+            GeometryFill = new SolidColorPaint(Helpers.ChartTheme.Sk(ThemeService.Instance.CurrentTheme.Surface)),
+            AnimationsSpeed = TimeSpan.Zero
+        });
+    }
+
+    /// <summary>Takes a host's line off the trace chart and frees its paints.</summary>
+    private void RemoveTraceLine(string host)
+    {
+        var tIdx = TraceSeries.ToList().FindIndex(s => s.Name?.Contains($"({host})") == true);
+        if (tIdx < 0) return;
+        DisposeSeries(TraceSeries[tIdx]);
+        TraceSeries.RemoveAt(tIdx);
+    }
+
+    private bool IsTarget(string host) => Targets.Any(t => t.Host.Equals(host, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsTracedHost(string host) => string.Equals(_tracedHost, host, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gives a host that is not a Ping target a line on the trace chart, in place of the last such host's.
+    /// </summary>
+    private void ShowTracedHost(string host)
+    {
+        if (IsTracedHost(host)) return;
+        ForgetTracedHost();
+        _tracedHost = host;
+
+        var skColor = SKColor.Parse(Palette[PaletteIndex++ % Palette.Length].TrimStart('#')).WithAlpha(230);
+        var traceStroke = new SolidColorPaint(skColor, 2);
+        var traceGeometryStroke = new SolidColorPaint(skColor, 2);
+        _seriesStrokes[host] = [new(skColor, traceStroke), new(skColor, traceGeometryStroke)];
+        AddTraceLine(host, host, traceStroke, traceGeometryStroke);
+    }
+
+    /// <summary>Takes the traced host's route off the table and its line off the chart.</summary>
+    private void ForgetTracedHost()
+    {
+        if (_tracedHost is not { } host) return;
+        _tracedHost = null;
+        RemoveTraceLine(host);
+        _seriesStrokes.Remove(host);
+        TraceBuffers.TryRemove(host, out _);
+        LatestRoutes.Remove(host);
+    }
+
+    /// <summary>
+    /// Gives the trace monitor <paramref name="host"/> for auto-trace, in place of the host an earlier auto-trace gave
+    /// it. A Ping target is traced already, and the monitor keeps a host once in any letter case, so it is not added
+    /// again.
+    /// </summary>
+    internal void TrackAutoTraceHost(string host)
+    {
+        if (string.Equals(_autoTraceHost, host, StringComparison.OrdinalIgnoreCase)) return;
+        ForgetAutoTraceHost();
+        TraceMonitor.AddHost(host);
+        _autoTraceHost = host;
+    }
+
+    /// <summary>
+    /// Takes the host auto-trace added off the trace monitor, unless it has become a Ping target since.
+    /// </summary>
+    internal void ForgetAutoTraceHost()
+    {
+        if (_autoTraceHost is not { } host) return;
+        _autoTraceHost = null;
+        if (!IsTarget(host)) TraceMonitor.Remove(host);
     }
 
     public void AddCustomTarget()
@@ -291,12 +376,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
             DisposeSeries(LatencySeries[idx]);
             LatencySeries.RemoveAt(idx);
         }
-        var tIdx = TraceSeries.ToList().FindIndex(s => s.Name?.Contains($"({target.Host})") == true);
-        if (tIdx >= 0)
-        {
-            DisposeSeries(TraceSeries[tIdx]);
-            TraceSeries.RemoveAt(tIdx);
-        }
+        RemoveTraceLine(target.Host);
 
         // Drop the paint registrations in the same breath as DisposeSeries above: keeping them would
         // hand disposed SKPaint handles to the next ThemeChanged, and would leak an entry per
@@ -386,7 +466,8 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
         FlushTimer?.Stop();
         FlushPending();
         IsMonitoring = false;
-        // …and Ping's Stop really does kill a running auto-trace.
+        // …and Ping's Stop really does kill a running auto-trace, so its host goes with it.
+        ForgetAutoTraceHost();
         IsAutoTraceRunning = false;
         // Release axis limits so the chart auto-fits to remaining data
         LatencyXAxes[0].MinLimit = null;
@@ -531,6 +612,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal void ApplyRoute(string host, IReadOnlyList<TracerouteHop> hops)
     {
+        if (!IsTarget(host)) ShowTracedHost(host);
         LatestRoutes[host] = hops;
         if (TraceBuffers.TryGetValue(host, out var buffer))
         {
@@ -541,10 +623,9 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
 
     internal void RefreshHopTable()
     {
-        var hops = Targets
-            .Where(t => LatestRoutes.ContainsKey(t.Host))
-            .SelectMany(t => LatestRoutes[t.Host]);
-        TracerouteHops.ReplaceWith(hops);
+        // The Ping targets' routes, then the traced host's when it is not one of them.
+        var hosts = Targets.Select(t => t.Host).Append(_tracedHost).OfType<string>();
+        TracerouteHops.ReplaceWith(hosts.Where(LatestRoutes.ContainsKey).SelectMany(h => LatestRoutes[h]));
     }
 
     internal void TrimBuffer(BulkObservableCollection<DateTimePoint> buffer)

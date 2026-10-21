@@ -28,7 +28,8 @@ public sealed class TracerouteMonitorService : IDisposable
 
     public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(60);
 
-    public ConcurrentDictionary<string, PingTarget> Targets { get; } = new();
+    // A host in another letter case is the same host, not a second one traced each round (#2870).
+    public ConcurrentDictionary<string, PingTarget> Targets { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     private CancellationTokenSource? _cts;
     private Task? _loop;
@@ -111,6 +112,9 @@ public sealed class TracerouteMonitorService : IDisposable
                 catch (System.Net.NetworkInformation.PingException) { /* ping failed — skip */ }
                 catch (TimeoutException) { /* target unreachable — skip */ }
                 catch (InvalidOperationException) { /* traceroute failed for this target — skip */ }
+                // A host Ping refuses outright skips this target, not the round: nothing caught it, so one such target
+                // ended the loop for every target while the tab still said auto-trace was running (#2870).
+                catch (ArgumentException) { /* a host that cannot be traced — skip */ }
             }
 
             try { await Task.Delay(Interval, ct).ConfigureAwait(false); }

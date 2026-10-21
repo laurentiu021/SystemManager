@@ -35,7 +35,7 @@
                         Style="{StaticResource SecondaryButton}" Margin="0,0,8,0"/>
                 <Button Content="Cancel" Command="{Binding CancelCommand}"
                         Style="{StaticResource GhostButton}" Margin="0,0,12,0"
-                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"/>
+                        Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"/>
                 <TextBlock Text="Search:" VerticalAlignment="Center" Margin="8,0,8,0"
                            Style="{StaticResource Subtle}"/>
                 <Grid Width="220" Margin="0,0,12,0">

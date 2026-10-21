@@ -315,7 +315,7 @@ to scroll.
   already running is stopped and `RefreshAsync` loads the arrival's list next (#2887).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
   version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
-- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day.
+- `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day. After every change it reads the feature back through `ReadFeatureAsync` and writes the row from that, says DISM's reason for a refusal through `DescribeFailure`, and turns the switch back with `WindowsFeature.ResetSwitch` whenever the change did not happen (#2834, #2739). Escape and Cancel stop only a scan, while `IsScanning` is set: stopping a change ended DISM part-way.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
   Recent Changes lists them; Clear History clears that record too (#1507). A folder alert that a new uninstall entry
@@ -872,7 +872,10 @@ Key services:
 - `WindowsFeaturesService` — list, enable, disable Windows optional features
   via `Get-`, `Enable-` and `Disable-WindowsOptionalFeature`, each in its own `powershell.exe`. All three
   need administrator rights, listing included, and every one of them checks the exit code:
-  an unelevated list request fails rather than returning an empty list.
+  an unelevated list request fails rather than returning an empty list. `ReadFeatureAsync` reads one feature the way
+  the list reads them all, and `ReadState` counts `EnablePending` as on and both pending states as waiting for a
+  restart. A change script that fails prints `FailureMarker`, DISM's code and the first line of its message before
+  `exit 1`, and `ParseChange` returns them in a `FeatureChangeResult` (#2834).
 - `UninstallerService` — winget-based uninstall + registry UninstallString
   fallback for local apps not in winget. Uninstall execution is standard-session
   only; validated local commands use the shell runner so their own manifests own

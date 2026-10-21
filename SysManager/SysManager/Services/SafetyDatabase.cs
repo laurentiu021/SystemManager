@@ -102,14 +102,14 @@ public static class SafetyDatabase
     private static readonly FrozenDictionary<string, string> SafeFeatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["Internet-Explorer-Optional-amd64"] = "Legacy IE compatibility in Edge. Not needed unless you use old enterprise sites.",
-        ["MediaPlayback"] = "Windows Media Player legacy — replaced by modern Media Player app.",
-        ["WindowsMediaPlayer"] = "Windows Media Player legacy codec pack. Modern apps don't need it.",
+        ["MediaPlayback"] = "Media Features — holds Windows Media Player Legacy, so turning it off turns that player off too.",
+        ["WindowsMediaPlayer"] = "Windows Media Player Legacy — the older player. The newer Media Player app does not need it.",
         ["Printing-XPSServices-Features"] = "XPS Document Writer — rarely used virtual printer.",
         ["Printing-PrintToPDFServices-Features"] = "Microsoft Print to PDF — useful but can reinstall if needed.",
         ["WorkFolders-Client"] = "Work Folders — enterprise file sync. Not needed for personal use.",
         ["MicrosoftWindowsPowerShellV2Root"] = "PowerShell 2.0 — legacy version, security risk. Use PowerShell 7+.",
         ["MicrosoftWindowsPowerShellV2"] = "PowerShell 2.0 Engine — legacy, unnecessary with modern PS.",
-        ["MSRDC-Infrastructure"] = "Remote Desktop Client — only needed if you RDP into other machines.",
+        ["MSRDC-Infrastructure"] = "Remote Differential Compression API Support — lets other programs sync files by sending only what changed.",
         ["TelnetClient"] = "Telnet Client — insecure protocol. Use SSH instead.",
         ["TFTP"] = "TFTP Client — trivial file transfer. Rarely needed.",
         ["DirectPlay"] = "DirectPlay — legacy gaming API. Only needed for very old games.",
@@ -135,7 +135,7 @@ public static class SafetyDatabase
         ["VirtualMachinePlatform"] = "Virtual Machine Platform — required by WSL2 and Hyper-V.",
         ["HypervisorPlatform"] = "Windows Hypervisor Platform — needed by third-party VMs (VirtualBox, etc).",
         ["Containers"] = "Windows Containers — used by Docker. Disabling breaks container workloads.",
-        ["Microsoft-Windows-Client-EmbeddedExp-Package"] = "Windows Sandbox — isolated test environment. Useful for security.",
+        ["Containers-DisposableClientVM"] = "Windows Sandbox — isolated test environment. Useful for security.",
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     // Below the lists they count, because static fields are set in the order they are written: above them, the counts

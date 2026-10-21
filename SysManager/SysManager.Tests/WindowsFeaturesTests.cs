@@ -425,4 +425,334 @@ public class WindowsFeaturesTests
 
         Assert.Equal("Found 2 features (1 enabled).", vm.StatusMessage);
     }
+
+    // ── What Windows answered, and what the row shows afterwards (#2834, #2739) ──
+    //
+    // The change scripts printed nothing when the cmdlet refused, so every failure said "Check permissions". The row
+    // was written from the request rather than read back, and a switch the change did not move stayed turned over.
+
+    /// <summary>
+    /// A runner that answers the change script with <paramref name="changeExit"/> and <paramref name="changeLines"/>,
+    /// and the read-back of the feature with <paramref name="readLine"/>, or with nothing when it is null.
+    /// </summary>
+    private static IPowerShellRunner FakeDism(int changeExit, string[] changeLines, string? readLine)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(call =>
+              {
+                  var read = call.ArgAt<string>(1).Contains("Get-WindowsOptionalFeature", StringComparison.Ordinal);
+                  string[] lines = read ? (readLine is null ? [] : [readLine]) : changeLines;
+                  foreach (var line in lines)
+                      runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+                  return Task.FromResult(read ? 0 : changeExit);
+              });
+        return runner;
+    }
+
+    private static string Refused(string hexCode, string message) =>
+        $"{WindowsFeaturesService.FailureMarker}|{hexCode}|{message}";
+
+    private static WindowsFeature Telnet(bool enabled = false) =>
+        new() { Name = "TelnetClient", DisplayName = "Telnet Client", IsEnabled = enabled };
+
+    [Fact]
+    public async Task ToggleFeature_WhenWindowsCannotGetTheFilesItNeeds_SaysSo_NotCheckPermissions()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(
+            FakeDism(1, [Refused("800F081F", "The source files could not be found.")], "TelnetClient|Disabled"),
+            NoRestorePoint());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.Equal("Failed to enable Telnet Client (0x800F081F). Windows could not find the files it needs. It gets "
+                     + "them from Windows Update, so check that this PC is online and that Windows Update works, "
+                     + "then try again.", vm.StatusMessage);
+        Assert.Equal("Failed", feature.Status);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenDismRefusesForAnotherReason_SaysDismsOwnReasonWithItsCode()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(
+            FakeDism(1, [Refused("800F0922", "Processing of advanced installers and generic commands failed.")],
+                "TelnetClient|Disabled"),
+            NoRestorePoint());
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(Telnet());
+
+        Assert.Equal("Failed to enable Telnet Client (0x800F0922). Processing of advanced installers and generic "
+                     + "commands failed.", vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData(0x800F0906u, "Windows could not download the files it needs from Windows Update.")]
+    [InlineData(0x800F081Fu, "Windows could not find the files it needs.")]
+    [InlineData(0x800F0907u, "A Windows policy on this PC stops it from downloading the files it needs")]
+    [InlineData(0x80070422u, "A Windows service it needs is turned off")]
+    public void DescribeFailure_ACodeWithAKnownWayOut_GetsItsOwnSentence_AndKeepsTheCode(uint code, string sentence)
+    {
+        var said = WindowsFeaturesViewModel.DescribeFailure("enable", "NetFx3",
+            new FeatureChangeResult(false, false, unchecked((int)code), "DISM's own words"));
+
+        Assert.StartsWith($"Failed to enable NetFx3 (0x{code:X8}). {sentence}", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("DISM's own words", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("permission", said, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DescribeFailure_WithNothingFromWindows_SaysWindowsDidNotSayWhy()
+    {
+        Assert.Equal("Failed to disable NetFx3. Windows did not say why.",
+            WindowsFeaturesViewModel.DescribeFailure("disable", "NetFx3", new FeatureChangeResult(false, false)));
+        Assert.Equal("Failed to disable NetFx3 (0x800F0922).",
+            WindowsFeaturesViewModel.DescribeFailure("disable", "NetFx3",
+                new FeatureChangeResult(false, false, unchecked((int)0x800F0922u))));
+    }
+
+    [Fact]
+    public async Task ToggleFeature_ReadsTheFeatureBack_SoAChangeWaitingForARestartShowsAsOn()
+    {
+        // DISM said no restart was needed, and Windows still reports the feature as waiting for one.
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(FakeDism(0, ["False"], "TelnetClient|EnablePending"), NoRestorePoint());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.True(feature.IsEnabled);
+        Assert.True(feature.RequiresReboot);
+        Assert.Equal("Reboot required", feature.Status);
+        Assert.True(vm.PendingReboot);
+        Assert.Equal("Telnet Client enabled — reboot required.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenTheChangeFailsAfterDoingItsWork_TheRowShowsWhatWindowsReports()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(
+            FakeDism(1, [Refused("800F0922", "Processing of advanced installers and generic commands failed.")],
+                "TelnetClient|Enabled"),
+            NoRestorePoint());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.True(feature.IsEnabled);
+        Assert.Equal("Failed", feature.Status);
+        Assert.StartsWith("Failed to enable Telnet Client (0x800F0922).", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenAFailedChangeLeftARestartPending_SaysARestartIsPending()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(
+            FakeDism(1, [Refused("800F0922", "Processing of advanced installers and generic commands failed.")],
+                "TelnetClient|EnablePending"),
+            NoRestorePoint());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.True(feature.RequiresReboot);
+        Assert.True(vm.PendingReboot);
+        Assert.Equal("Failed", feature.Status);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenWindowsReportsSuccessButTheFeatureDidNotMove_SaysSo()
+    {
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(FakeDism(0, ["False"], "TelnetClient|Disabled"), RestorePointTaken());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.False(feature.IsEnabled);
+        Assert.Equal("Windows reported Telnet Client as enabled, but it still shows as disabled. Scan again to check.",
+            vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task ToggleFeature_WhenTheReadBackFails_GoesByWhatDismSaid()
+    {
+        // The read-back prints nothing, so it finds no feature, and the row goes by DISM's answer, as it always did.
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(FakeDism(0, ["True"], readLine: null), NoRestorePoint());
+        var feature = Telnet();
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.True(feature.IsEnabled);
+        Assert.Equal("Reboot required", feature.Status);
+        Assert.Equal("Telnet Client enabled — reboot required.", vm.StatusMessage);
+    }
+
+    [Theory]
+    [InlineData("declined")]
+    [InlineData("locked")]
+    [InlineData("not elevated")]
+    [InlineData("refused")]
+    public async Task ToggleFeature_WhenTheChangeDoesNotHappen_PutsTheSwitchBack(string why)
+    {
+        // The switch had turned itself over on the click; only a change notification for IsEnabled turns it back.
+        using var dialog = new DialogAnswer(confirm: why != "declined");
+        var vm = ElevatedVm(
+            FakeDism(1, [Refused("800F081F", "The source files could not be found.")], "TelnetClient|Disabled"),
+            NoRestorePoint());
+        vm.IsElevated = why != "not elevated";
+        using var held = why == "locked"
+            ? OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "SFC scan")
+            : null;
+        var feature = Telnet();
+        var told = 0;
+        feature.PropertyChanged += (_, e) => told += e.PropertyName == nameof(WindowsFeature.IsEnabled) ? 1 : 0;
+
+        await vm.ToggleFeatureCommand.ExecuteAsync(feature);
+
+        Assert.False(feature.IsEnabled);
+        Assert.True(told >= 1, $"the switch was not told to read the state again after the change was {why}");
+    }
+
+    [Fact]
+    public async Task Escape_StopsAScan_ButNotAChange()
+    {
+        var listing = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var changing = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken changeToken = default;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(call =>
+              {
+                  var script = call.ArgAt<string>(1);
+                  if (script.Contains("Enable-WindowsOptionalFeature", StringComparison.Ordinal))
+                  {
+                      changeToken = call.ArgAt<CancellationToken>(2);
+                      return changing.Task;
+                  }
+                  return script.Contains("-FeatureName", StringComparison.Ordinal) ? Task.FromResult(0) : listing.Task;
+              });
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(runner, NoRestorePoint());
+
+        var scan = vm.ScanCommand.ExecuteAsync(null);
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+        listing.SetResult(0);
+        await scan;
+        Assert.Null(vm.EscapeCancel);
+
+        var toggle = vm.ToggleFeatureCommand.ExecuteAsync(Telnet());
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.False(vm.IsScanning);
+            Assert.Null(vm.EscapeCancel);
+            vm.CancelCommand.Execute(null);
+            Assert.False(changeToken.IsCancellationRequested);
+        }
+        finally
+        {
+            // Ended either way: a change left running holds the lock every later toggle in this class needs.
+            changing.SetResult(0);
+            await toggle;
+        }
+    }
+
+    [Fact]
+    public async Task Scan_WhenAFeatureWaitsForARestart_ShowsItOn_AndThatARestartIsPending()
+    {
+        var runner = RunnerThatExits(0);
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(call =>
+              {
+                  runner.LineReceived +=
+                      Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output("TelnetClient|EnablePending"));
+                  return Task.FromResult(0);
+              });
+        var vm = ElevatedVm(runner, NoRestorePoint());
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        var row = Assert.Single(vm.AllFeatures);
+        Assert.True(row.IsEnabled);
+        Assert.Equal("Reboot required", row.Status);
+        Assert.True(vm.PendingReboot);
+    }
+
+    // ── the service's half ──
+
+    [Theory]
+    [InlineData("Enabled", true, false)]
+    [InlineData("EnablePending", true, true)]
+    [InlineData("DisablePending", false, true)]
+    [InlineData("Disabled", false, false)]
+    [InlineData("DisabledWithPayloadRemoved", false, false)]
+    public void ParseFeatureList_ReadsAStateWaitingForARestart(string state, bool enabled, bool pending)
+    {
+        var row = Assert.Single(WindowsFeaturesService.ParseFeatureList([$"TelnetClient|{state}"]));
+
+        Assert.Equal(enabled, row.IsEnabled);
+        Assert.Equal(pending, row.RequiresReboot);
+        Assert.Equal(pending ? "Reboot required" : enabled ? "Enabled" : "Disabled", row.Status);
+    }
+
+    [Fact]
+    public void ParseChange_ReadsDismsCodeAndTheFirstLineOfItsMessage()
+    {
+        var result = WindowsFeaturesService.ParseChange(1,
+            ["", Refused("800F081F", "The source files could not be found.")]);
+
+        Assert.False(result.Success);
+        Assert.Equal(unchecked((int)0x800F081Fu), result.ErrorCode);
+        Assert.Equal("The source files could not be found.", result.ErrorMessage);
+    }
+
+    [Fact]
+    public void ParseChange_ReadsTheRestartFlagOfAChangeThatWentThrough()
+    {
+        Assert.Equal(new FeatureChangeResult(true, true), WindowsFeaturesService.ParseChange(0, ["True"]));
+        Assert.Equal(new FeatureChangeResult(true, false), WindowsFeaturesService.ParseChange(0, ["False"]));
+    }
+
+    [Fact]
+    public void ParseChange_AFailureThatPrintedNoReason_HasNoCode()
+    {
+        Assert.Equal(new FeatureChangeResult(false, false), WindowsFeaturesService.ParseChange(1, ["something else"]));
+        Assert.Equal(new FeatureChangeResult(false, false),
+            WindowsFeaturesService.ParseChange(1, [Refused("not hex", "x")]));
+    }
+
+    [Fact]
+    public void ChangeScript_EnablingTurnsOnTheParentsItNeeds_DisablingTouchesOnlyTheFeature()
+    {
+        Assert.Contains("Enable-WindowsOptionalFeature -Online -FeatureName 'TelnetClient' -NoRestart -All ",
+            WindowsFeaturesService.ChangeScript(enable: true, "TelnetClient"), StringComparison.Ordinal);
+        Assert.Contains("Disable-WindowsOptionalFeature -Online -FeatureName 'TelnetClient' -NoRestart -ErrorAction",
+            WindowsFeaturesService.ChangeScript(enable: false, "TelnetClient"), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("TelnetClient'; Remove-Item C:\\x; '")]
+    [InlineData("Telnet Client")]
+    [InlineData("TelnetClient\n")]
+    [InlineData("")]
+    public async Task EveryCallThatPutsTheNameInAScript_RefusesANameThatIsNotOne(string name)
+    {
+        // The pattern is the only thing between the name and the script it is pasted into.
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new WindowsFeaturesService(runner);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.EnableFeatureAsync(name));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.DisableFeatureAsync(name));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReadFeatureAsync(name));
+        await runner.DidNotReceiveWithAnyArgs().RunProcessAsync(default!, default!, default, default);
+    }
 }

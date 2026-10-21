@@ -19,8 +19,8 @@
              instead and opens nothing, so it is not a tab stop. The text colours are set on each TextBlock: the
              app's keyless TextBlock style would otherwise paint them TextPrimary over the fill. -->
         <Style x:Key="MapTile" TargetType="Button">
-            <Setter Property="Background" Value="{Binding FillHex, Converter={StaticResource HexBrush}}"/>
-            <Setter Property="Foreground" Value="{Binding TextHex, Converter={StaticResource HexBrush}}"/>
+            <Setter Property="helpers:ThemeBrush.Background" Value="{Binding FillHex}"/>
+            <Setter Property="helpers:ThemeBrush.Foreground" Value="{Binding TextHex}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
@@ -67,8 +67,8 @@
                     <Setter Property="BorderBrush" Value="{DynamicResource TextSecondary}"/>
                 </Trigger>
                 <DataTrigger Binding="{Binding IsOther}" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource Surface3}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                    <Setter Property="helpers:ThemeBrush.Background" Value="Surface3"/>
+                    <Setter Property="helpers:ThemeBrush.Foreground" Value="TextSecondary"/>
                     <Setter Property="Focusable" Value="False"/>
                     <Setter Property="Cursor" Value="Arrow"/>
                     <Setter Property="ContextMenu" Value="{x:Null}"/>

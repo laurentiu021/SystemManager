@@ -210,6 +210,10 @@ near-black background, say — is nudged toward the background until it does. Th
 are unaffected by that correction; their surfaces already sit near their backgrounds. If a result is
 still not what you wanted, Reset to default theme puts the shipped theme back and survives a restart.
 
+A switch reaches everything at once, on the tab you are on and on the ones you opened before: console
+output, verdicts, health cards, status chips and the cards in the Appearance panel itself redraw in the
+new theme's colours, whether you pick the theme or Auto follows Windows.
+
 Graph lines follow the theme rather than fighting it. The Ping, Traceroute, Bandwidth Monitor, Resource
 History, Speed Test and Battery Health charts each draw with a fixed set of colours — blue is CPU, purple is
 memory — and those colours were chosen against a dark card. Switching to a light theme darkens each line

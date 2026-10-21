@@ -95,7 +95,7 @@ public class SpeedVerdictAnalyzerTests
     {
         // The keys name theme brushes that ThemeService recomputes per preset. A hex literal here would
         // silently reintroduce the dark-calibrated-colour-on-light-theme contrast bug that StatusColors
-        // exists to prevent, and HexToBrushConverter would fall back to grey for a typo'd key.
+        // exists to prevent, and ThemeBrush would leave a typo'd key at the element's default colour.
         string[] known = ["Success", "Warning", "Info", "Danger", "TextMuted"];
         foreach (var down in new[] { 0d, 1, 5, 25, 100, 1000 })
             Assert.Contains(SpeedVerdictAnalyzer.Analyze(Result(down)).ColorKey, known);

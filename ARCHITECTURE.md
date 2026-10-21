@@ -1762,6 +1762,16 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   parent, so the page's viewer scrolls. Every DataGrid has it from the implicit DataGrid style;
   `ArchitectureTests.EveryTable_HandsTheWheelItCannotUseToThePage` holds the style to it and
   `TableWheelTests` turns the wheel over a laid-out table.
+- `ThemeBrush` — paints a brush property in a colour a binding picks: a theme brush's name, or a
+  fixed `#` colour (#2818). Given a name it sets a resource reference, as `{DynamicResource}` does, so
+  the colour follows a theme switch. `ThemeService.Apply` stores a new brush under each name, and the
+  converters that looked the brush up handed the element one that never changed again. The attached
+  `Foreground`, `Background`, `Fill` and `BorderBrush` set the element's own property, the one
+  `TargetOf` names, and the `*Color` converters turn a status, a safety level or a signature into a
+  colour for them. `ArchitectureTests.EveryColourABindingPicks_GoesThroughThemeBrush` fails a binding
+  onto a brush property, `EveryThemeBrush_IsOnAnElementThatHasThePropertyItPaints` one on an element
+  without that property, and `NoCode_KeepsAResourceItLookedUp` a `FindResource` in code;
+  `ThemeSwitchColourTests` switches the theme under the views.
 - `LiveRegion` — makes a live line heard (#2670). `AutomationProperties.LiveSetting` only marks a
   line as a live region; a screen reader speaks it when the app raises UI Automation's
   `LiveRegionChanged` event, and WPF never raises that on its own. `LiveRegion.Announces` follows the
@@ -1834,8 +1844,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   synchronously, including via a short local holding the dispatcher.
 - `MarkdownTextBlock` — lightweight Markdown-to-WPF inline renderer.
 - Value converters: `EqualityConverter`, `IntGreaterThanZeroConverter`, and `ValueConverters` —
-  18 converters (among them visibility, inversion, hex to brush, the colour, background and text of
-  the safety, process-safety and signature pills, and `Format`, which gives a chip, a button, a menu
+  17 converters (among them visibility, inversion, the colour of a console line and of Process
+  Manager's status, the colour, tint and text of the safety, process-safety and signature pills, each
+  colour a name for `ThemeBrush`, and `Format`, which gives a chip, a button, a menu
   item or a tooltip the words around a bound value, where a binding's `StringFormat` does nothing)
   plus the two palettes those pills share.
 - `ExtensionPermissions` — turns what a browser extension asks for into the plain-language lines the

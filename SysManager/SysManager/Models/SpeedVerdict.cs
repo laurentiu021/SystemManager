@@ -11,8 +11,8 @@ namespace SysManager.Models;
 /// <param name="Headline">Short answer to "is that good", e.g. "Fast connection".</param>
 /// <param name="Detail">What that allows, in recognisable terms rather than in Mbps.</param>
 /// <param name="ColorKey">
-/// A semantic key from <see cref="Helpers.StatusColors"/>, resolved against the live theme by
-/// HexToBrushConverter — never a hex literal, or the light presets would render it below the AA
+/// A semantic key from <see cref="Helpers.StatusColors"/>, painted from the live theme by
+/// <see cref="Helpers.ThemeBrush"/> — never a hex literal, or the light presets would render it below the AA
 /// contrast floor.
 /// </param>
 /// <param name="Comparison">

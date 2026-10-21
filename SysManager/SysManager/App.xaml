@@ -18,24 +18,26 @@
             <BooleanToVisibilityConverter x:Key="BoolToVis"/>
             <h:FlexibleBoolToVisibilityConverter x:Key="FlexVis"/>
             <h:BoolInverterConverter x:Key="BoolInvert"/>
-            <h:HexToBrushConverter x:Key="HexBrush"/>
-            <h:OutputKindToBrushConverter x:Key="KindBrush"/>
-            <h:ProcessStatusToBrushConverter x:Key="StatusBrush"/>
-            <h:SafetyLevelToBrushConverter x:Key="SafetyBrush"/>
-            <h:SafetyLevelToBackgroundConverter x:Key="SafetyBg"/>
+            <!-- The *Color converters name a colour, a theme brush or a fixed "#" one, for h:ThemeBrush to paint, so
+                 the colour follows a theme switch. A converter that handed back the brush itself kept the old theme's
+                 (#2818). -->
+            <h:OutputKindToColorConverter x:Key="KindColor"/>
+            <h:ProcessStatusToColorConverter x:Key="StatusColor"/>
+            <h:SafetyLevelToColorConverter x:Key="SafetyColor"/>
+            <h:SafetyLevelToBackgroundColorConverter x:Key="SafetyBgColor"/>
             <h:SafetyLevelToTextConverter x:Key="SafetyText"/>
             <!-- Process provenance (System/Trusted/Unknown) is a STRING on ProcessEntry, not the
-                 Models.SafetyLevel enum the three above switch on — binding it to SafetyBrush/Bg/Text
+                 Models.SafetyLevel enum the three above switch on — binding it to SafetyColor/BgColor/Text
                  would miss every arm and fall through to red for all ~200 rows. Separate converters. -->
-            <h:ProcessSafetyToBrushConverter x:Key="ProcSafetyBrush"/>
-            <h:ProcessSafetyToBackgroundConverter x:Key="ProcSafetyBg"/>
+            <h:ProcessSafetyToColorConverter x:Key="ProcSafetyColor"/>
+            <h:ProcessSafetyToBackgroundColorConverter x:Key="ProcSafetyBgColor"/>
             <h:ProcessSafetyToTextConverter x:Key="ProcSafetyText"/>
             <h:ProcessSafetyToTooltipConverter x:Key="ProcSafetyTip"/>
             <!-- Signature trust is its own scale: it answers "can Windows confirm who signed this",
                  which is a different question from either provenance database above, and its neutral
                  state (Unsigned) is the common case rather than the exception. -->
-            <h:SignatureTrustToBrushConverter x:Key="SigTrustBrush"/>
-            <h:SignatureTrustToBackgroundConverter x:Key="SigTrustBg"/>
+            <h:SignatureTrustToColorConverter x:Key="SigTrustColor"/>
+            <h:SignatureTrustToBackgroundColorConverter x:Key="SigTrustBgColor"/>
             <h:SignatureTrustToTextConverter x:Key="SigTrustText"/>
             <h:IntGreaterThanZeroConverter x:Key="GreaterThanZero"/>
             <h:EqualityConverter x:Key="IsEqual"/>

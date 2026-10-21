@@ -252,20 +252,20 @@ public class StartupSignatureTests
     /// <remarks>
     /// The reasoning is <see cref="ProcessSafetyPalette"/>'s, about unrecognised processes: most startup
     /// entries on an ordinary machine are unsigned, so tinting each of them amber would make the column
-    /// read as a list of problems and teach the user to ignore it. Asserted on the theme KEY rather than a
-    /// brush instance, because the resolved brush depends on whether a WPF Application exists.
+    /// read as a list of problems and teach the user to ignore it. Asserted on the colour the palette names,
+    /// a theme brush or a fixed "#" grey, which is what the view paints.
     /// </remarks>
     [Fact]
     public void ThePalette_KeepsUnsignedNeutral_AndWarnsOnlyOnAFailedCheck()
     {
-        Assert.Null(SignatureTrustPalette.TextBrushKey(SignatureTrust.Unsigned).Key);
-        Assert.Null(SignatureTrustPalette.TextBrushKey(SignatureTrust.Unknown).Key);
+        Assert.Equal("#7B8396", SignatureTrustPalette.TextColor(SignatureTrust.Unsigned));
+        Assert.Equal("#7B8396", SignatureTrustPalette.TextColor(SignatureTrust.Unknown));
 
-        Assert.Equal("SuccessText", SignatureTrustPalette.TextBrushKey(SignatureTrust.Verified).Key);
-        Assert.Equal("SuccessBgSubtle", SignatureTrustPalette.BackgroundBrushKey(SignatureTrust.Verified).Key);
+        Assert.Equal("SuccessText", SignatureTrustPalette.TextColor(SignatureTrust.Verified));
+        Assert.Equal("SuccessBgSubtle", SignatureTrustPalette.BackgroundColor(SignatureTrust.Verified));
 
-        Assert.Equal("WarningText", SignatureTrustPalette.TextBrushKey(SignatureTrust.Invalid).Key);
-        Assert.Equal("WarningBgSubtle", SignatureTrustPalette.BackgroundBrushKey(SignatureTrust.Invalid).Key);
+        Assert.Equal("WarningText", SignatureTrustPalette.TextColor(SignatureTrust.Invalid));
+        Assert.Equal("WarningBgSubtle", SignatureTrustPalette.BackgroundColor(SignatureTrust.Invalid));
     }
 
     [Fact]

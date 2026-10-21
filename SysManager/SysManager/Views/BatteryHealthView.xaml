@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              d:DataContext="{d:DesignInstance vm:BatteryHealthViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -18,15 +19,15 @@
              so it should not look like an unrelated feature. -->
         <DataTemplate x:Key="WearVerdictTemplate">
             <Border Style="{StaticResource CardInner}" Margin="0,12,0,0" Padding="12,10"
-                    BorderBrush="{Binding ColorKey, Converter={StaticResource HexBrush}}"
+                    helpers:ThemeBrush.BorderBrush="{Binding ColorKey}"
                     BorderThickness="1">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="10" Height="10" Margin="0,0,8,0" VerticalAlignment="Center"
-                                 Fill="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
+                                 helpers:ThemeBrush.Fill="{Binding ColorKey}"/>
                         <TextBlock Text="{Binding Headline}" Style="{StaticResource SectionTitle}"
                                    VerticalAlignment="Center"
-                                   Foreground="{Binding ColorKey, Converter={StaticResource HexBrush}}"/>
+                                   helpers:ThemeBrush.Foreground="{Binding ColorKey}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextSecondary}"
                                Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="18,6,0,0"/>

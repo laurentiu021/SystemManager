@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              d:DataContext="{d:DesignInstance vm:StartupViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -143,17 +144,17 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
-                                        Background="{Binding Signature, Converter={StaticResource SigTrustBg}}"
-                                        BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        helpers:ThemeBrush.Background="{Binding Signature, Converter={StaticResource SigTrustBgColor}}"
+                                        helpers:ThemeBrush.BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBgColor}}"
                                         BorderThickness="1" HorizontalAlignment="Left"
                                         ToolTip="{Binding SignatureDetail}"
                                         Visibility="{Binding SignatureDetail, Converter={StaticResource FlexVis}}">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                 Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                                 helpers:ThemeBrush.Fill="{Binding Signature, Converter={StaticResource SigTrustColor}}"/>
                                         <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
                                                    Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                   Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                                   helpers:ThemeBrush.Foreground="{Binding Signature, Converter={StaticResource SigTrustColor}}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
@@ -190,17 +191,17 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
-                                        Background="{Binding Safety, Converter={StaticResource ProcSafetyBg}}"
-                                        BorderBrush="{Binding Safety, Converter={StaticResource ProcSafetyBg}}"
+                                        helpers:ThemeBrush.Background="{Binding Safety, Converter={StaticResource ProcSafetyBgColor}}"
+                                        helpers:ThemeBrush.BorderBrush="{Binding Safety, Converter={StaticResource ProcSafetyBgColor}}"
                                         BorderThickness="1" HorizontalAlignment="Left"
                                         ToolTip="{Binding Safety, Converter={StaticResource ProcSafetyTip}}"
                                         Visibility="{Binding Safety, Converter={StaticResource FlexVis}}">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                 Fill="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
+                                                 helpers:ThemeBrush.Fill="{Binding Safety, Converter={StaticResource ProcSafetyColor}}"/>
                                         <TextBlock Text="{Binding Safety, Converter={StaticResource ProcSafetyText}}"
                                                    Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                   Foreground="{Binding Safety, Converter={StaticResource ProcSafetyBrush}}"/>
+                                                   helpers:ThemeBrush.Foreground="{Binding Safety, Converter={StaticResource ProcSafetyColor}}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

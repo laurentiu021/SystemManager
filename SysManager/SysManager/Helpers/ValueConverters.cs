@@ -2,7 +2,6 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
@@ -11,23 +10,22 @@ using SysManager.Models;
 
 namespace SysManager.Helpers;
 
-public sealed class OutputKindToBrushConverter : IValueConverter
+/// <summary>
+/// Maps a console line's <see cref="OutputKind"/> to the name of the theme brush it is written in, for
+/// <see cref="ThemeBrush"/>.
+/// </summary>
+public sealed class OutputKindToColorConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
     {
-        var key = value switch
-        {
-            OutputKind.Error => "OutErrorBrush",
-            OutputKind.Warning => "OutWarnBrush",
-            OutputKind.Info => "OutInfoBrush",
-            OutputKind.Verbose => "OutVerboseBrush",
-            OutputKind.Debug => "OutDebugBrush",
-            OutputKind.Progress => "OutProgressBrush",
-            _ => "OutOutputBrush"
-        };
-        if (Application.Current?.TryFindResource(key) is Brush b) return b;
-        return Brushes.White;
-    }
+        OutputKind.Error => "OutErrorBrush",
+        OutputKind.Warning => "OutWarnBrush",
+        OutputKind.Info => "OutInfoBrush",
+        OutputKind.Verbose => "OutVerboseBrush",
+        OutputKind.Debug => "OutDebugBrush",
+        OutputKind.Progress => "OutProgressBrush",
+        _ => "OutOutputBrush",
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -90,152 +88,66 @@ public sealed class BoolToElevationBadgeBrushConverter : IValueConverter
 }
 
 /// <summary>
-/// Converts a status colour to a brush. Accepts either a THEME RESOURCE KEY (the
-/// <see cref="StatusColors"/> names — "Success", "Warning", "Danger", "Info", "TextMuted") or a
-/// literal hex string like "#4CC9F0".
-/// <para>The key form is what makes status colours follow the theme. These values used to be
-/// dark-calibrated hex constants that <see cref="Services.ThemeService"/> could not recompute, so
-/// verdict text on System Health, Disk Health, the Dashboard health score and Cleanup's SFC/DISM
-/// results sat below the AA 4.5:1 contrast floor on every light preset. Resolving a key against
-/// the application resources picks up the per-mode brush the theme service already maintains —
-/// the same lookup <see cref="OutputKindToBrushConverter"/> uses.</para>
-/// <para>Literal hex is still honoured, so a caller with a genuinely fixed colour keeps working.</para>
+/// Maps process status text ("Running" / "Not responding") to the colour its chip is drawn in, for
+/// <see cref="ThemeBrush"/>: the theme's green for running, its red for not responding, grey for anything else.
 /// </summary>
-public sealed class HexToBrushConverter : IValueConverter
+/// <remarks>
+/// The theme's status text brushes, the ones the Safety chip beside it uses. It returned #22C55E and #EF4444 on every
+/// theme, which on the light presets' grey chip came to between 1.5 and 1.9:1 for "Running", the state of nearly every
+/// row (#2818).
+/// </remarks>
+public sealed class ProcessStatusToColorConverter : IValueConverter
 {
-    // Cache frozen brushes by hex value to reduce GC pressure on frequently-updating bindings.
-    // ONLY literal hex is cached. A theme brush must never be: the cache is static and its brushes
-    // are frozen, so caching one would keep serving the colour resolved at first render and the
-    // status text would stay dark-themed after a switch to a light preset. A resource lookup is a
-    // dictionary hit, so there is nothing to gain by caching it anyway.
-    private static readonly ConcurrentDictionary<string, SolidColorBrush> _cache = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The grey for any other status, the same on every theme.</summary>
+    internal const string OtherStatus = "#808080";
 
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
     {
-        if (value is not string s || string.IsNullOrWhiteSpace(s)) return Brushes.Gray;
-
-        // A leading '#' is the only thing that marks a literal colour; anything else is a key.
-        if (!s.StartsWith('#'))
-        {
-            // Unknown key, or no Application at all (unit tests): fall back to Gray rather than
-            // throw — a converter exception would blank the verdict text it is meant to colour.
-            return Application.Current?.TryFindResource(s) is Brush themed ? themed : Brushes.Gray;
-        }
-
-        return _cache.GetOrAdd(s, static hex =>
-        {
-            try
-            {
-                var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-                brush.Freeze();
-                return brush;
-            }
-            catch (FormatException)
-            {
-                return Brushes.Gray;
-            }
-        });
-    }
+        string s when s.Contains("Not responding", StringComparison.OrdinalIgnoreCase) => "DangerText",
+        string s when s.Contains("Running", StringComparison.OrdinalIgnoreCase) => "SuccessText",
+        _ => OtherStatus,
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 
 /// <summary>
-/// Maps process status text ("Running" / "Not responding") to a coloured brush.
-/// Green for running, red for not responding, grey for anything else.
+/// Maps a <see cref="SafetyLevel"/> to the theme brush its chip's text and dot are drawn in, for
+/// <see cref="ThemeBrush"/>.
 /// </summary>
-public sealed class ProcessStatusToBrushConverter : IValueConverter
+/// <remarks>
+/// The theme's *Text brushes, which <see cref="Services.ThemeService.StatusPalette"/> sets per mode, so the chip stays
+/// legible on the light presets, where the dark palette's pale red and amber washed out on the near-white chip.
+/// </remarks>
+public sealed class SafetyLevelToColorConverter : IValueConverter
 {
-    private static readonly Brush RunningBrush = CreateFrozen(Color.FromRgb(0x22, 0xC5, 0x5E));
-    private static readonly Brush NotRespondingBrush = CreateFrozen(Color.FromRgb(0xEF, 0x44, 0x44));
-
-    private static SolidColorBrush CreateFrozen(Color c)
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
     {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (value is string status)
-        {
-            if (status.Contains("Not responding", StringComparison.OrdinalIgnoreCase))
-                return NotRespondingBrush;
-            if (status.Contains("Running", StringComparison.OrdinalIgnoreCase))
-                return RunningBrush;
-        }
-        return Brushes.Gray;
-    }
+        SafetyLevel.Safe => "SuccessText",
+        SafetyLevel.Caution => "WarningText",
+        // The app's "no information" grey, as Process Manager's Not recognised chip uses (#1512).
+        SafetyLevel.NotRated => "TextMuted",
+        _ => "DangerText",
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 
-public sealed class SafetyLevelToBrushConverter : IValueConverter
+/// <summary>
+/// Maps a <see cref="SafetyLevel"/> to its chip's tint, for <see cref="ThemeBrush"/>: a fixed colour, the same on every
+/// theme, at an eighth of full strength.
+/// </summary>
+public sealed class SafetyLevelToBackgroundColorConverter : IValueConverter
 {
-    private static readonly SolidColorBrush SafeBrush = new(Color.FromRgb(0x4A, 0xDE, 0x80));
-    private static readonly SolidColorBrush CautionBrush = new(Color.FromRgb(0xFB, 0xBF, 0x24));
-    private static readonly SolidColorBrush CriticalBrush = new(Color.FromRgb(0xF8, 0x71, 0x71));
-    // The app's TextMuted grey, the "no information" colour Process Manager's Not recognised chip already uses (#1512).
-    private static readonly SolidColorBrush NotRatedBrush = new(Color.FromRgb(0x7B, 0x83, 0x96));
-
-    static SafetyLevelToBrushConverter()
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
     {
-        SafeBrush.Freeze();
-        CautionBrush.Freeze();
-        CriticalBrush.Freeze();
-        NotRatedBrush.Freeze();
-    }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        // Resolve the theme-derived *Text brush (recomputed per mode by ThemeService.StatusPalette)
-        // so the Safety chip text/dot stays WCAG-AA-legible on light presets, where the old static
-        // dark-calibrated pale red/amber washed out on the near-white chip. Fall back to the frozen
-        // dark brushes only when there is no live Application (e.g. design-time / unit tests).
-        var (key, fallback) = value is SafetyLevel level ? level switch
-        {
-            SafetyLevel.Safe => ("SuccessText", SafeBrush),
-            SafetyLevel.Caution => ("WarningText", CautionBrush),
-            SafetyLevel.NotRated => ("TextMuted", NotRatedBrush),
-            SafetyLevel.Critical => ("DangerText", CriticalBrush),
-            _ => ("DangerText", CriticalBrush)
-        } : ("DangerText", CriticalBrush);
-        return Application.Current?.TryFindResource(key) is Brush b ? b : fallback;
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-public sealed class SafetyLevelToBackgroundConverter : IValueConverter
-{
-    private static readonly SolidColorBrush SafeBg = new(Color.FromArgb(0x20, 0x22, 0xC5, 0x5E));
-    private static readonly SolidColorBrush CautionBg = new(Color.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
-    private static readonly SolidColorBrush CriticalBg = new(Color.FromArgb(0x20, 0xEF, 0x44, 0x44));
-    private static readonly SolidColorBrush NotRatedBg = new(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
-
-    static SafetyLevelToBackgroundConverter()
-    {
-        SafeBg.Freeze();
-        CautionBg.Freeze();
-        CriticalBg.Freeze();
-        NotRatedBg.Freeze();
-    }
-
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        return value is SafetyLevel level ? level switch
-        {
-            SafetyLevel.Safe => SafeBg,
-            SafetyLevel.Caution => CautionBg,
-            SafetyLevel.NotRated => NotRatedBg,
-            SafetyLevel.Critical => CriticalBg,
-            _ => CriticalBg
-        } : CriticalBg;
-    }
+        SafetyLevel.Safe => "#2022C55E",
+        SafetyLevel.Caution => "#20F59E0B",
+        SafetyLevel.NotRated => "#207B8396",
+        _ => "#20EF4444",
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -311,24 +223,25 @@ public sealed class FormatConverter : IValueConverter
 // painting all ~200 rows red. Different domain, different scale, own converters.
 
 /// <summary>
-/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the chip's text/dot brush.
+/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the colour of the chip's text and dot, for
+/// <see cref="ThemeBrush"/>.
 /// </summary>
-public sealed class ProcessSafetyToBrushConverter : IValueConverter
+public sealed class ProcessSafetyToColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => ProcessSafetyPalette.ResolveText(value as string);
+        => ProcessSafetyPalette.TextColor(value as string);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 
 /// <summary>
-/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the chip's background tint.
+/// Maps <see cref="SysManager.Services.ProcessSafety"/> (as a string) to the chip's tint, for <see cref="ThemeBrush"/>.
 /// </summary>
-public sealed class ProcessSafetyToBackgroundConverter : IValueConverter
+public sealed class ProcessSafetyToBackgroundColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => ProcessSafetyPalette.ResolveBackground(value as string);
+        => ProcessSafetyPalette.BackgroundColor(value as string);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -369,23 +282,12 @@ public static class ProcessSafetyPalette
 {
     // TextMuted / Surface3 are the app's existing "no emphasis" pair, so an unrecognised process
     // looks like ordinary de-emphasised text rather than a bespoke grey invented for this column.
-    private static readonly SolidColorBrush UnknownText = Frozen(Color.FromRgb(0x7B, 0x83, 0x96));
-    private static readonly SolidColorBrush UnknownBg = Frozen(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
-    private static readonly SolidColorBrush SystemText = Frozen(Color.FromRgb(0x7D, 0xD3, 0xFC));
-    private static readonly SolidColorBrush SystemBg = Frozen(Color.FromArgb(0x1A, 0x38, 0xBD, 0xF8));
-    private static readonly SolidColorBrush TrustedText = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
-    private static readonly SolidColorBrush TrustedBg = Frozen(Color.FromArgb(0x1A, 0x22, 0xC5, 0x5E));
-
-    private static SolidColorBrush Frozen(Color c)
-    {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
+    private const string UnknownText = "#7B8396";
+    private const string UnknownBg = "#207B8396";
 
     /// <summary>
-    /// Theme resource key + hardcoded fallback for the chip's text/dot colour. A null key means the
-    /// value is intentionally theme-independent.
+    /// The colour of the chip's text and dot, for <see cref="ThemeBrush"/>: the name of a theme brush, or a fixed
+    /// "#" colour for a value that is the same on every theme.
     /// </summary>
     /// <remarks>
     /// Unknown is deliberately neutral grey, NOT a warning colour. The database holds 108 entries
@@ -393,19 +295,19 @@ public static class ProcessSafetyPalette
     /// would make the whole grid look alarming and teach the user to ignore the column. Grey reads
     /// as "no information", which is what it means.
     /// </remarks>
-    public static (string? Key, Brush Fallback) TextBrushKey(string? safety) => safety switch
+    public static string TextColor(string? safety) => safety switch
     {
-        var s when Is(s, nameof(Services.ProcessSafety.System)) => ("InfoText", SystemText),
-        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => ("SuccessText", TrustedText),
-        _ => (null, UnknownText)
+        var s when Is(s, nameof(Services.ProcessSafety.System)) => "InfoText",
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => "SuccessText",
+        _ => UnknownText,
     };
 
-    /// <summary>Theme resource key + hardcoded fallback for the chip's background tint.</summary>
-    public static (string? Key, Brush Fallback) BackgroundBrushKey(string? safety) => safety switch
+    /// <summary>The colour of the chip's tint and border, in the same form as <see cref="TextColor"/>.</summary>
+    public static string BackgroundColor(string? safety) => safety switch
     {
-        var s when Is(s, nameof(Services.ProcessSafety.System)) => ("InfoBgSubtle", SystemBg),
-        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => ("SuccessBgSubtle", TrustedBg),
-        _ => (null, UnknownBg)
+        var s when Is(s, nameof(Services.ProcessSafety.System)) => "InfoBgSubtle",
+        var s when Is(s, nameof(Services.ProcessSafety.Trusted)) => "SuccessBgSubtle",
+        _ => UnknownBg,
     };
 
     /// <summary>The user-facing label for a provenance value.</summary>
@@ -429,37 +331,27 @@ public static class ProcessSafetyPalette
             "Use Open to see where it runs from before ending it."
     };
 
-    public static Brush ResolveText(string? safety) => Live(TextBrushKey(safety));
-
-    public static Brush ResolveBackground(string? safety) => Live(BackgroundBrushKey(safety));
-
-    // Prefer the live theme brush (recomputed per preset by ThemeService.StatusPalette) so the chip
-    // stays legible on light themes; fall back to the frozen dark values when there is no
-    // Application, i.e. design-time and unit tests.
-    private static Brush Live((string? Key, Brush Fallback) spec)
-        => spec.Key is not null && Application.Current?.TryFindResource(spec.Key) is Brush b
-            ? b
-            : spec.Fallback;
-
     private static bool Is(string? value, string name)
         => string.Equals(value, name, StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>Maps <see cref="Models.SignatureTrust"/> to the pill's text and dot colour.</summary>
-public sealed class SignatureTrustToBrushConverter : IValueConverter
+/// <summary>
+/// Maps <see cref="Models.SignatureTrust"/> to the colour of the pill's text and dot, for <see cref="ThemeBrush"/>.
+/// </summary>
+public sealed class SignatureTrustToColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => SignatureTrustPalette.ResolveText(value);
+        => SignatureTrustPalette.TextColor(value);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 
-/// <summary>Maps <see cref="Models.SignatureTrust"/> to the pill's background tint.</summary>
-public sealed class SignatureTrustToBackgroundConverter : IValueConverter
+/// <summary>Maps <see cref="Models.SignatureTrust"/> to the pill's tint, for <see cref="ThemeBrush"/>.</summary>
+public sealed class SignatureTrustToBackgroundColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => SignatureTrustPalette.ResolveBackground(value);
+        => SignatureTrustPalette.BackgroundColor(value);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -484,30 +376,19 @@ public sealed class SignatureTrustToTextConverter : IValueConverter
 /// drift apart, and so the mapping is unit-testable without a WPF Application.
 /// </summary>
 /// <remarks>
-/// Shaped after <see cref="ProcessSafetyPalette"/> rather than invented: same key-plus-fallback pairs,
-/// same live-theme lookup, same reasoning about neutrality.
+/// Shaped after <see cref="ProcessSafetyPalette"/> rather than invented: the same theme brushes and fixed
+/// colours, and the same reasoning about neutrality.
 /// </remarks>
 public static class SignatureTrustPalette
 {
     // The same "no emphasis" pair the process chip uses for an unrecognised program, so an unsigned
     // startup entry looks like ordinary de-emphasised text rather than a bespoke grey.
-    private static readonly SolidColorBrush NeutralText = Frozen(Color.FromRgb(0x7B, 0x83, 0x96));
-    private static readonly SolidColorBrush NeutralBg = Frozen(Color.FromArgb(0x20, 0x7B, 0x83, 0x96));
-    private static readonly SolidColorBrush VerifiedText = Frozen(Color.FromRgb(0x4A, 0xDE, 0x80));
-    private static readonly SolidColorBrush VerifiedBg = Frozen(Color.FromArgb(0x1A, 0x22, 0xC5, 0x5E));
-    private static readonly SolidColorBrush InvalidText = Frozen(Color.FromRgb(0xFB, 0xBF, 0x24));
-    private static readonly SolidColorBrush InvalidBg = Frozen(Color.FromArgb(0x1F, 0xF5, 0x9E, 0x0B));
-
-    private static SolidColorBrush Frozen(Color c)
-    {
-        var b = new SolidColorBrush(c);
-        b.Freeze();
-        return b;
-    }
+    private const string NeutralText = "#7B8396";
+    private const string NeutralBg = "#207B8396";
 
     /// <summary>
-    /// Theme resource key + hardcoded fallback for the pill's text/dot colour. A null key means the value
-    /// is intentionally theme-independent.
+    /// The colour of the pill's text and dot, for <see cref="ThemeBrush"/>: the name of a theme brush, or a fixed
+    /// "#" colour for a value that is the same on every theme.
     /// </summary>
     /// <remarks>
     /// <b>Unsigned is grey, not amber</b>, for the reason <see cref="ProcessSafetyPalette"/> gives about
@@ -518,19 +399,19 @@ public static class SignatureTrustPalette
     /// hold up, which is the one state here worth a second look. Not red: red belongs to actions that
     /// destroy something, and this column destroys nothing.
     /// </remarks>
-    public static (string? Key, Brush Fallback) TextBrushKey(object? trust) => Trust(trust) switch
+    public static string TextColor(object? trust) => Trust(trust) switch
     {
-        Models.SignatureTrust.Verified => ("SuccessText", VerifiedText),
-        Models.SignatureTrust.Invalid => ("WarningText", InvalidText),
-        _ => (null, NeutralText),
+        Models.SignatureTrust.Verified => "SuccessText",
+        Models.SignatureTrust.Invalid => "WarningText",
+        _ => NeutralText,
     };
 
-    /// <summary>Theme resource key + hardcoded fallback for the pill's background tint.</summary>
-    public static (string? Key, Brush Fallback) BackgroundBrushKey(object? trust) => Trust(trust) switch
+    /// <summary>The colour of the pill's tint and border, in the same form as <see cref="TextColor"/>.</summary>
+    public static string BackgroundColor(object? trust) => Trust(trust) switch
     {
-        Models.SignatureTrust.Verified => ("SuccessBgSubtle", VerifiedBg),
-        Models.SignatureTrust.Invalid => ("WarningBgSubtle", InvalidBg),
-        _ => (null, NeutralBg),
+        Models.SignatureTrust.Verified => "SuccessBgSubtle",
+        Models.SignatureTrust.Invalid => "WarningBgSubtle",
+        _ => NeutralBg,
     };
 
     /// <summary>The words on the pill. Empty for <see cref="Models.SignatureTrust.Unknown"/>.</summary>
@@ -546,18 +427,6 @@ public static class SignatureTrustPalette
         Models.SignatureTrust.Invalid => "Check failed",
         _ => "",
     };
-
-    public static Brush ResolveText(object? trust) => Live(TextBrushKey(trust));
-
-    public static Brush ResolveBackground(object? trust) => Live(BackgroundBrushKey(trust));
-
-    // Prefer the live theme brush (recomputed per preset by ThemeService.StatusPalette) so the pill stays
-    // legible on light themes; fall back to the frozen dark values when there is no Application, i.e.
-    // design-time and unit tests.
-    private static Brush Live((string? Key, Brush Fallback) spec)
-        => spec.Key is not null && Application.Current?.TryFindResource(spec.Key) is Brush b
-            ? b
-            : spec.Fallback;
 
     // Accepts the enum, its name, or null, because a DataGrid cell can hand over any of the three while a
     // row is being recycled.

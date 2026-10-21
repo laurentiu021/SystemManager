@@ -141,6 +141,11 @@ public sealed class DiskAnalyzerViewUiTests : IDisposable
             Assert.False(other.Focusable);
             Assert.Null(other.ContextMenu);
             Assert.Null(other.CommandParameter);
+
+            // It has no colour of its own and takes the theme's grey, with text in the theme's secondary colour.
+            Assert.Same(Application.Current.Resources["Surface3"], other.Background);
+            Assert.All(Descendants<TextBlock>(other).Where(Shown),
+                       t => Assert.Same(Application.Current.Resources["TextSecondary"], t.Foreground));
         });
     }
 

@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              d:DataContext="{d:DesignInstance vm:ServicesViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -277,16 +278,16 @@
                                  names them too, but that dialog sits behind an elevation check, so this
                                  is where an unelevated user can still find out (#1512). -->
                             <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
-                                    Background="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
-                                    BorderBrush="{Binding SafetyLevel, Converter={StaticResource SafetyBg}}"
+                                    helpers:ThemeBrush.Background="{Binding SafetyLevel, Converter={StaticResource SafetyBgColor}}"
+                                    helpers:ThemeBrush.BorderBrush="{Binding SafetyLevel, Converter={StaticResource SafetyBgColor}}"
                                     BorderThickness="1" HorizontalAlignment="Left"
                                     ToolTip="{Binding SafetyTooltip}">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
-                                             Fill="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                             helpers:ThemeBrush.Fill="{Binding SafetyLevel, Converter={StaticResource SafetyColor}}"/>
                                     <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource SafetyText}}"
                                                Style="{StaticResource Micro}" FontWeight="SemiBold"
-                                               Foreground="{Binding SafetyLevel, Converter={StaticResource SafetyBrush}}"/>
+                                               helpers:ThemeBrush.Foreground="{Binding SafetyLevel, Converter={StaticResource SafetyColor}}"/>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

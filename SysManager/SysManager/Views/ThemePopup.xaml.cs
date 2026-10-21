@@ -101,18 +101,15 @@ public partial class ThemePopup : UserControl
             Fill = new SolidColorBrush(preset.TextPrimary)
         });
 
-        var textBrush = TryFindResource("TextPrimary") as Brush ?? new SolidColorBrush(Colors.White);
-        var borderBrush = TryFindResource("Border1") as Brush ?? new SolidColorBrush(Colors.DarkGray);
-        var accentBrush = TryFindResource("Accent") as Brush ?? new SolidColorBrush(Colors.Purple);
-
         var name = new TextBlock
         {
             Text = preset.Name,
             FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Foreground = textBrush,
             VerticalAlignment = VerticalAlignment.Center
         };
+        // References to the theme's brushes, not the brushes themselves, which a theme switch replaces (#2818).
+        name.SetResourceReference(TextBlock.ForegroundProperty, "TextPrimary");
 
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(mini);
@@ -124,7 +121,6 @@ public partial class ThemePopup : UserControl
             Padding = new Thickness(10),
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
-            BorderBrush = _theme.CurrentPresetId == id ? accentBrush : borderBrush,
             Cursor = Cursors.Hand,
             Margin = new Thickness(0, 0, 6, 8),
             Width = 140,
@@ -134,6 +130,7 @@ public partial class ThemePopup : UserControl
             // Enter/Space, and announced by its preset name to assistive technology.
             Focusable = true
         };
+        card.SetResourceReference(Border.BorderBrushProperty, _theme.CurrentPresetId == id ? "Accent" : "Border1");
         AutomationProperties.SetName(card, $"{preset.Name} theme");
         KeyboardNavigation.SetIsTabStop(card, true);
 
@@ -236,12 +233,9 @@ public partial class ThemePopup : UserControl
         // A preset pins its own mode, Dark or Light, so a pick made under Auto leaves Auto (#2599).
         CheckModePill();
 
-        var borderBrush = TryFindResource("Border1") as Brush ?? Brushes.DarkGray;
-        var accentBrush = TryFindResource("Accent") as Brush ?? Brushes.Purple;
-
         foreach (Border c in PresetPanel.Children)
-            c.BorderBrush = borderBrush;
-        card.BorderBrush = accentBrush;
+            c.SetResourceReference(Border.BorderBrushProperty, "Border1");
+        card.SetResourceReference(Border.BorderBrushProperty, "Accent");
     }
 
     private void Shade_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)

@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:SysManager.ViewModels"
              xmlns:v="clr-namespace:SysManager.Views"
+             xmlns:helpers="clr-namespace:SysManager.Helpers"
              d:DataContext="{d:DesignInstance vm:ProcessManagerViewModel}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -259,12 +260,12 @@
                                     <Grid>
                                         <Border Width="3" HorizontalAlignment="Left" CornerRadius="2"
                                                 Margin="-8,-4,0,-4"
-                                                Background="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                                helpers:ThemeBrush.Background="{Binding Status, Converter={StaticResource StatusColor}}"/>
                                         <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
                                             <Ellipse Width="6" Height="6" VerticalAlignment="Center"
-                                                     Fill="{Binding Status, Converter={StaticResource StatusBrush}}"/>
+                                                     helpers:ThemeBrush.Fill="{Binding Status, Converter={StaticResource StatusColor}}"/>
                                             <TextBlock Text="{Binding Status}" Style="{StaticResource Caption}" FontWeight="SemiBold"
-                                                       Foreground="{Binding Status, Converter={StaticResource StatusBrush}}"
+                                                       helpers:ThemeBrush.Foreground="{Binding Status, Converter={StaticResource StatusColor}}"
                                                        VerticalAlignment="Center" Margin="6,0,0,0"/>
                                         </StackPanel>
                                     </Grid>
@@ -281,16 +282,16 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
-                                        Background="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
-                                        BorderBrush="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBg}}"
+                                        helpers:ThemeBrush.Background="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBgColor}}"
+                                        helpers:ThemeBrush.BorderBrush="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBgColor}}"
                                         BorderThickness="1" HorizontalAlignment="Left"
                                         ToolTip="{Binding SafetyLevel, Converter={StaticResource ProcSafetyTip}}">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                 Fill="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
+                                                 helpers:ThemeBrush.Fill="{Binding SafetyLevel, Converter={StaticResource ProcSafetyColor}}"/>
                                         <TextBlock Text="{Binding SafetyLevel, Converter={StaticResource ProcSafetyText}}"
                                                    Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                   Foreground="{Binding SafetyLevel, Converter={StaticResource ProcSafetyBrush}}"/>
+                                                   helpers:ThemeBrush.Foreground="{Binding SafetyLevel, Converter={StaticResource ProcSafetyColor}}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>
@@ -327,17 +328,17 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Border CornerRadius="{StaticResource RadiusMd}" Padding="6,3"
-                                        Background="{Binding Signature, Converter={StaticResource SigTrustBg}}"
-                                        BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBg}}"
+                                        helpers:ThemeBrush.Background="{Binding Signature, Converter={StaticResource SigTrustBgColor}}"
+                                        helpers:ThemeBrush.BorderBrush="{Binding Signature, Converter={StaticResource SigTrustBgColor}}"
                                         BorderThickness="1" HorizontalAlignment="Left"
                                         ToolTip="{Binding SignatureDetail}"
                                         Visibility="{Binding SignatureDetail, Converter={StaticResource FlexVis}}">
                                     <StackPanel Orientation="Horizontal">
                                         <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                 Fill="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                                 helpers:ThemeBrush.Fill="{Binding Signature, Converter={StaticResource SigTrustColor}}"/>
                                         <TextBlock Text="{Binding Signature, Converter={StaticResource SigTrustText}}"
                                                    Style="{StaticResource Caption}" FontWeight="SemiBold" VerticalAlignment="Center"
-                                                   Foreground="{Binding Signature, Converter={StaticResource SigTrustBrush}}"/>
+                                                   helpers:ThemeBrush.Foreground="{Binding Signature, Converter={StaticResource SigTrustColor}}"/>
                                     </StackPanel>
                                 </Border>
                             </DataTemplate>

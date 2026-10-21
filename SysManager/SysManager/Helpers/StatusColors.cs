@@ -13,9 +13,9 @@ namespace SysManager.Helpers;
 /// recompute them — and on the light presets they rendered as pale text on near-white cards,
 /// below the AA 4.5:1 floor, on exactly the tabs that answer "is my PC OK?".
 /// <see cref="Services.ThemeService"/> already recomputes the equivalent semantic brushes per
-/// mode, so these now NAME that brush rather than duplicating a colour:
-/// <see cref="HexToBrushConverter"/> resolves a key against the live theme resources and still
-/// falls back to parsing a literal hex, so any other caller keeps working.</para>
+/// mode, so these now NAME that brush rather than duplicating a colour, and
+/// <see cref="ThemeBrush"/> paints it with a reference to the brush, so the colour follows a theme
+/// switch as well (#2818).</para>
 /// <para>The producers' property names are deliberately unchanged, so none of the XAML binding
 /// paths had to move.</para>
 /// </summary>

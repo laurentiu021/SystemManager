@@ -79,7 +79,7 @@
 
                 <!-- Memory health check -->
                 <Border Style="{StaticResource Card}" Margin="0,16,0,0"
-                        BorderBrush="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"
+                        helpers:ThemeBrush.BorderBrush="{Binding MemoryHealthColorHex}"
                         BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -96,9 +96,9 @@
                             <DockPanel Margin="0,8,0,0">
                                 <Ellipse Width="10" Height="10" DockPanel.Dock="Left" VerticalAlignment="Center"
                                          Margin="0,0,10,0"
-                                         Fill="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"/>
+                                         helpers:ThemeBrush.Fill="{Binding MemoryHealthColorHex}"/>
                                 <TextBlock Text="{Binding MemoryHealthVerdict}" Style="{StaticResource SectionTitle}"
-                                           Foreground="{Binding MemoryHealthColorHex, Converter={StaticResource HexBrush}}"
+                                           helpers:ThemeBrush.Foreground="{Binding MemoryHealthColorHex}"
                                            TextWrapping="Wrap" MaxWidth="620"
                                            HorizontalAlignment="Left" VerticalAlignment="Center"/>
                             </DockPanel>
@@ -191,12 +191,12 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Style="{StaticResource CardInner}" Margin="0,0,0,10"
-                                            BorderBrush="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"
+                                            helpers:ThemeBrush.BorderBrush="{Binding VerdictColorHex}"
                                             BorderThickness="1">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <Ellipse Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,10,0"
-                                                         Fill="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"/>
+                                                         helpers:ThemeBrush.Fill="{Binding VerdictColorHex}"/>
                                                 <TextBlock Text="{Binding FriendlyName}" Style="{StaticResource SectionTitle}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="  ·  " Style="{StaticResource Body}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                                                 <TextBlock Text="{Binding MediaType}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
@@ -206,7 +206,7 @@
                                                 <TextBlock Text="{Binding SizeGB, StringFormat={}{0:F0} GB}" Style="{StaticResource Body}" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <TextBlock Text="{Binding Verdict}" Style="{StaticResource SectionTitle}"
-                                                       Foreground="{Binding VerdictColorHex, Converter={StaticResource HexBrush}}"
+                                                       helpers:ThemeBrush.Foreground="{Binding VerdictColorHex}"
                                                        Margin="22,8,0,0" TextWrapping="Wrap"/>
                                             <WrapPanel Orientation="Horizontal" Margin="22,10,0,0">
                                                 <!-- Health score gauge -->
@@ -214,35 +214,35 @@
                                                     <TextBlock Text="HEALTH" Style="{StaticResource SectionLabel}"/>
                                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                                         <TextBlock Text="{Binding HealthDisplay}" Style="{StaticResource MetricCompact}" FontWeight="Bold"
-                                                                   Foreground="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
+                                                                   helpers:ThemeBrush.Foreground="{Binding HealthPercentColorHex}"/>
                                                     </StackPanel>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
                                                                 Width="{Binding HealthGauge}"
                                                                 MaxWidth="120" Height="4"
-                                                                Background="{Binding HealthPercentColorHex, Converter={StaticResource HexBrush}}"/>
+                                                                helpers:ThemeBrush.Background="{Binding HealthPercentColorHex}"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <!-- Temperature gauge -->
                                                 <StackPanel Margin="0,0,24,6" Width="100">
                                                     <TextBlock Text="TEMPERATURE" Style="{StaticResource SectionLabel}"/>
                                                     <TextBlock Text="{Binding TemperatureDisplay}" Style="{StaticResource Body}"
-                                                               Foreground="{Binding TemperatureColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
+                                                               helpers:ThemeBrush.Foreground="{Binding TemperatureColorHex}" Margin="0,4,0,0"/>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
                                                                 Width="{Binding TemperatureGauge}" MaxWidth="100" Height="4"
-                                                                Background="{Binding TemperatureColorHex, Converter={StaticResource HexBrush}}"/>
+                                                                helpers:ThemeBrush.Background="{Binding TemperatureColorHex}"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <!-- Wear / life remaining gauge -->
                                                 <StackPanel Margin="0,0,24,6" Width="100">
                                                     <TextBlock Text="LIFE REMAINING" Style="{StaticResource SectionLabel}"/>
                                                     <TextBlock Text="{Binding WearDisplay}" Style="{StaticResource Body}"
-                                                               Foreground="{Binding WearColorHex, Converter={StaticResource HexBrush}}" Margin="0,4,0,0"/>
+                                                               helpers:ThemeBrush.Foreground="{Binding WearColorHex}" Margin="0,4,0,0"/>
                                                     <Border Height="4" CornerRadius="2" Background="{DynamicResource Surface0}" Margin="0,4,0,0">
                                                         <Border HorizontalAlignment="Left" CornerRadius="2"
                                                                 Width="{Binding WearGauge}" MaxWidth="100" Height="4"
-                                                                Background="{Binding WearColorHex, Converter={StaticResource HexBrush}}"/>
+                                                                helpers:ThemeBrush.Background="{Binding WearColorHex}"/>
                                                     </Border>
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,24,6">

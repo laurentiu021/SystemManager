@@ -207,23 +207,26 @@ public sealed class TuneUpService : ITuneUpService
         => CleanTempFilesAsync(ct);
 
     private static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(CancellationToken ct)
+        => CleanTempFiles(TempRoots(), DateTime.UtcNow, ct);
+
+    /// <summary>
+    /// The sweep over <paramref name="roots"/>, as at <paramref name="nowUtc"/>, so a test runs it on a folder of its
+    /// own.
+    /// </summary>
+    internal static (long BytesFreed, int FilesDeleted, int Errors) CleanTempFiles(
+        IReadOnlyList<string> roots, DateTime nowUtc, CancellationToken ct)
     {
         long freed = 0;
         int deleted = 0;
         int errors = 0;
+        var cutoff = nowUtc - CleanupAge.TempFilesKeptFor;
 
-        var tempPaths = new[]
-        {
-            Environment.GetEnvironmentVariable("TEMP") ?? "",
-            Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
-        };
-
-        foreach (var dir in tempPaths.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p)))
+        foreach (var dir in roots.Where(p => !string.IsNullOrEmpty(p) && Directory.Exists(p)))
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                foreach (var file in SafeFileWalk.Files(dir, ct, TempWalk))
+                foreach (var file in TempFilesToClean(dir, cutoff, ct))
                 {
                     ct.ThrowIfCancellationRequested();
                     try
@@ -245,6 +248,8 @@ public sealed class TuneUpService : ITuneUpService
                     ct.ThrowIfCancellationRequested();
                     try
                     {
+                        // An empty folder made a moment ago is one an installer is about to fill.
+                        if (CleanupAge.IsRecent(new DirectoryInfo(sub), cutoff)) continue;
                         if (!Directory.EnumerateFileSystemEntries(sub).Any())
                             Directory.Delete(sub);
                     }
@@ -264,6 +269,23 @@ public sealed class TuneUpService : ITuneUpService
 
         return (freed, deleted, errors);
     }
+
+    /// <summary>The folders the temp sweep cleans: the user's TEMP and Windows' own.</summary>
+    internal static string[] TempRoots() =>
+    [
+        Environment.GetEnvironmentVariable("TEMP") ?? "",
+        Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp"),
+    ];
+
+    /// <summary>
+    /// The files under <paramref name="root"/> the temp sweep removes: walked by <see cref="TempWalk"/>, and neither
+    /// created nor written since <paramref name="cutoffUtc"/>.
+    /// </summary>
+    /// <remarks>
+    /// Shared with <see cref="CleanupPreScanService"/>, so the size Quick Cleanup shows is what Clean TEMP frees.
+    /// </remarks>
+    internal static IEnumerable<string> TempFilesToClean(string root, DateTime cutoffUtc, CancellationToken ct) =>
+        SafeFileWalk.Files(root, ct, TempWalk).Where(file => !CleanupAge.IsRecent(new FileInfo(file), cutoffUtc));
 
     /// <summary>
     /// How the temp sweep walks: reparse-point-safe, and never into the folder single-file .NET apps

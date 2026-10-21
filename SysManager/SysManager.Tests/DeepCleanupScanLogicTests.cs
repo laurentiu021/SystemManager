@@ -121,7 +121,10 @@ public sealed class DeepCleanupScanLogicTests
         var young = Path.Combine(cbs, "young.log");
         WriteFile(old, 100);
         WriteFile(young, 7);
+        // Both times: a file is old only when it was neither created nor written within the cutoff (#2890).
+        File.SetCreationTimeUtc(old, DateTime.UtcNow - TimeSpan.FromDays(31));
         File.SetLastWriteTimeUtc(old, DateTime.UtcNow - TimeSpan.FromDays(31));
+        File.SetCreationTimeUtc(young, DateTime.UtcNow - TimeSpan.FromDays(29));
         File.SetLastWriteTimeUtc(young, DateTime.UtcNow - TimeSpan.FromDays(29));
 
         var categories = await new DeepCleanupService(roots).ScanAsync();
@@ -337,6 +340,9 @@ public sealed class DeepCleanupScanLogicTests
         var windowsTemp = Path.Combine(roots.WindowsDirectory, "Temp");
         var unpacked = TempCleanupRoots.WriteFile(Path.Combine(windowsTemp, ".net", "SomeService", "hash", "native.dll"), 10);
         var old = TempCleanupRoots.WriteFile(Path.Combine(windowsTemp, "old.tmp"), 5);
+        // Older than the week the bucket leaves alone (#2890), so it is the one file it takes.
+        File.SetCreationTimeUtc(old, DateTime.UtcNow - TimeSpan.FromDays(30));
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow - TimeSpan.FromDays(30));
         var service = new DeepCleanupService(roots);
 
         var categories = await service.ScanAsync();

@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.28] - 2026-10-21
+
+**Cleaning temporary files no longer removes files a program being installed has just unpacked.**
+
+### Fixed
+
+- **Clean TEMP could delete the files of a program being installed.** The temp sweep removed every temporary file
+  nothing was holding open, whatever its age, so an installer that had unpacked its files and not opened them yet
+  lost them part-way, and could fail or leave the program half-installed. Files created or changed in the last week
+  now stay, as Windows' own Disk Cleanup leaves them, and so does an empty folder made in that time. The same rule
+  applies to Quick Cleanup, the Dashboard's quick clean and Quick Tune-Up, Scheduled Maintenance, `--cleanup` and
+  Deep Cleanup's Temporary files, and the sizes they show count only what would go. Since temp cleaning was added
+  (0.3.0).
+
 ## [1.130.27] - 2026-10-21
 
 **Traceroute shows the route of any host it traces, and stopping auto-trace stops tracing its host.**

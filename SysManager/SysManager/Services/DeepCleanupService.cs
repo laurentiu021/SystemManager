@@ -169,9 +169,12 @@ public sealed class DeepCleanupService
                 [Path.Combine(windowsDir, "Installer", "$PatchCache$")]),
 
             new("Temporary files",
-                "Per-user and system TEMP folders. Files an app is holding open are skipped, and the "
-                + "folder apps unpack themselves into is left alone entirely.",
-                [tempUser, Path.Combine(windowsDir, "Temp")]),
+                "Files in the per-user and system TEMP folders that nothing has created or changed in the last week, "
+                + "as Windows' own Disk Cleanup leaves them: a program being installed may still need newer ones. "
+                + "Files an app is holding open are skipped, and the folder apps unpack themselves into is left "
+                + "alone entirely.",
+                [tempUser, Path.Combine(windowsDir, "Temp")],
+                OlderThan: CleanupAge.TempFilesKeptFor),
 
             new("Prefetch files",
                 "Windows boot/launch prefetch cache. Windows rebuilds it as apps are used.",
@@ -336,7 +339,7 @@ public sealed class DeepCleanupService
                         if (cutoff.HasValue)
                         {
                             var fi = new FileInfo(file);
-                            if (fi.LastWriteTimeUtc >= cutoff.Value) continue;
+                            if (CleanupAge.IsRecent(fi, cutoff.Value)) continue;
                             size += fi.Length;
                         }
                         else
@@ -523,7 +526,7 @@ public sealed class DeepCleanupService
                             if (cutoff.HasValue)
                             {
                                 var fi = new FileInfo(file);
-                                if (fi.LastWriteTimeUtc >= cutoff.Value) continue;
+                                if (CleanupAge.IsRecent(fi, cutoff.Value)) continue;
                             }
                             var len = SafeLength(file);
                             // Clear ONLY ReadOnly, which is the single attribute that blocks a delete.
@@ -550,6 +553,9 @@ public sealed class DeepCleanupService
                     if (patterns is not null) continue;
                     foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(path, ct, CleanupWalk))
                     {
+                        // A bucket with an age keeps a recent folder as it keeps a recent file: an empty folder made a
+                        // moment ago in TEMP is one an installer is about to fill.
+                        if (cutoff.HasValue && CleanupAge.IsRecent(new DirectoryInfo(dir), cutoff.Value)) continue;
                         try { Directory.Delete(dir, recursive: false); }
                         catch (IOException ex) { Log.Debug(ex, "Deep cleanup: failed to delete directory {Dir}", dir); }
                         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Deep cleanup: access denied deleting directory {Dir}", dir); }

@@ -1012,8 +1012,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private async Task QuickCleanupAsync()
     {
         if (!DialogService.Instance.Confirm(
-                "Delete temporary files from your user and Windows Temp folders?\n\n" +
-                "Files in use may be skipped. This cannot be undone.",
+                "Delete temporary files more than a week old from your user and Windows Temp folders?\n\n" +
+                "Newer ones, which a program being installed may still need, and files in use are left alone. " +
+                "This cannot be undone.",
                 "Confirm Quick Cleanup"))
             return;
 

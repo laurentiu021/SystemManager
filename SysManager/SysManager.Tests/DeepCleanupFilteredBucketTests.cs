@@ -40,6 +40,38 @@ public sealed class DeepCleanupFilteredBucketTests
     private static string ExplorerCache(TempCleanupRoots roots)
         => Path.Combine(roots.LocalAppData, "Microsoft", "Windows", "Explorer");
 
+    // ── Temporary files keep what was created or changed this week (#2890) ───────
+
+    /// <summary>
+    /// The bucket deleted every temp file not held open, so an installer that had unpacked its files and not opened
+    /// them yet lost them. Times are set a month back and to the run's own time, far from the week's edge.
+    /// </summary>
+    [Fact]
+    public async Task TemporaryFiles_CountAndCleanOnlyWhatIsMoreThanAWeekOld()
+    {
+        using var roots = Roots();
+        var now = DateTime.UtcNow;
+        var leftover = WriteFile(Path.Combine(roots.UserTemp, "leftover.tmp"), 10);
+        File.SetCreationTimeUtc(leftover, now.AddDays(-30));
+        File.SetLastWriteTimeUtc(leftover, now.AddDays(-30));
+        var setup = Path.Combine(roots.UserTemp, "setup-1234");
+        var unpacked = WriteFile(Path.Combine(setup, "payload.cab"), 20);
+        File.SetLastWriteTimeUtc(unpacked, now.AddDays(-30));    // kept its archive time, created just now
+        var madeJustNow = Path.Combine(roots.UserTemp, "empty-new");
+        Directory.CreateDirectory(madeJustNow);                    // empty, for an installer about to fill it
+        var service = new DeepCleanupService(roots);
+
+        var category = Named(await service.ScanAsync(), "Temporary files");
+        Assert.Equal((1, 10L), (category.FileCount, category.TotalSizeBytes));
+
+        await service.CleanAsync([category]);
+
+        Assert.False(File.Exists(leftover));
+        Assert.True(File.Exists(unpacked));
+        Assert.True(Directory.Exists(setup));
+        Assert.True(Directory.Exists(madeJustNow));
+    }
+
     // ── Blue-screen memory dumps ─────────────────────────────────────────────
 
     /// <summary>

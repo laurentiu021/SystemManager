@@ -753,7 +753,10 @@ Across the tab:
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
 System → System Fixes, where the tab name matches what they do.
 - Clear TEMP folders, leaving alone the folder single-file apps unpack themselves into, in
-  Windows' own TEMP folder as well as yours
+  Windows' own TEMP folder as well as yours. Files created or changed in the last week stay, as
+  Windows' own Disk Cleanup leaves them, so a program being installed keeps what it unpacked;
+  the size shown counts only what would go. Deep Cleanup's Temporary files, the Dashboard's
+  quick clean and Quick Tune-Up, Scheduled Maintenance and `--cleanup` keep them too
 - Empty the Recycle Bin. Its size is the one Windows reports, as Explorer shows it, so an
   empty bin reads "Empty" and is left as it is; each time it is emptied, Recent activity
   records it with what it held
@@ -2134,8 +2137,8 @@ offers, "rate us" prompts:
 - **Automate the safe actions from scripts, Task Scheduler, or deployment tools** —
   SysManager accepts command-line flags and runs headless (no window), writing its
   output to the launching console
-- Commands: `--health` (read-only health score), `--cleanup` (temp-file cleanup, never follows
-  junctions), `--purge-standby` (purge the standby list; needs administrator), plus `--version` (`-v`),
+- Commands: `--health` (read-only health score), `--cleanup` (temp files more than a week old, never
+  follows junctions), `--purge-standby` (purge the standby list; needs administrator), plus `--version` (`-v`),
   `--help` (`-h`, `-?`, `/?`), and `--list`. `--trim-ram` still works as an alias for `--purge-standby`,
   so a script or scheduled task written with the old name is still understood; new scripts should use the
   current name, which says which of the two memory operations it is

@@ -113,7 +113,8 @@ public sealed class CliRunner
         ("--version, -v", "Print the SysManager version and exit."),
         ("--list", "List the available CLI commands."),
         ("--health", "Print a system health score (read-only)."),
-        ("--cleanup", "Delete temporary files from user and Windows TEMP (safe, never follows junctions)."),
+        ("--cleanup", "Delete temporary files more than a week old from user and Windows TEMP "
+                      + "(safe, never follows junctions)."),
         ("--purge-standby", "Purge the standby memory list (non-destructive; needs administrator). "
                           + "Also accepted as --trim-ram, its former name."),
         ("--json", "Modifier: emit machine-readable JSON instead of text."),

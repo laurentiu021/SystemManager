@@ -576,6 +576,8 @@ Key services:
   static method, shared with the Cleanup tab and the CLI. The shortcut, disk and vitals checks are internal
   static methods handed the call to make. Each returns null when it could not run, which the result lists in
   `TuneUpResult.NotChecked`, so a failed check is never counted as a passed one.
+  The sweep takes only the files `TempFilesToClean` lists, those neither created nor written in the last week, and
+  `TempRoots` names the two folders it walks; `CleanupPreScanService` sizes the same list (#2890).
 - `HealthScoreService` — aggregates disk health, free space on the system drive (a quarter of the score), RAM,
   uptime, and battery wear into a single 0–100 score with color-coded verdict and recommendations.
   A drive scores by its `DiskHealthReport.Condition`: 100 when fine, Windows' warning and failing figures (60, 20)
@@ -728,6 +730,11 @@ Key services:
   still test its traversal root through `SafeFileWalk.IsReparsePoint`, because the root is the one
   the user picks and a link there sends the whole scan somewhere else. The guard fails if an
   exempted file stops walking a tree (a stale name nobody would remove) or stops guarding its root.
+- `Helpers/CleanupAge` — how recent a file may be and still be removed, defined once. `TempFilesKeptFor` is
+  the week a temp file is left alone, as Windows' own Disk Cleanup leaves them, and `IsRecent` reads a file's
+  creation and last write, as an unpacked file keeps its archive time, and a folder's creation alone, as its last
+  write moves when the clean-up empties it. The temp sweep, the size Quick Cleanup shows and every Deep Cleanup
+  bucket with an age use it (#2890).
 - `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
   because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
   safe for numbers and fixed-format timestamps but not for the app names, setting descriptions

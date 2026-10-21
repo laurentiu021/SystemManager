@@ -849,7 +849,8 @@ System → System Fixes, where the tab name matches what they do.
   and says that instead
 - Toggle on/off without deleting the original entry (same mechanism as Task Manager) — the disable
   flag is written to the location Windows actually reads for that kind of entry, so a disabled item
-  really stays down
+  really stays down. Your own entries switch without administrator rights; the ones set to start
+  for everyone on the PC need them, and the banner at the top says so
 - **Enable All** turns every disabled entry back on, after a confirmation, and **Hide system** hides
   the entries whose publisher is Microsoft or whose command runs from a Windows or Microsoft folder
 - **A Signature column that says whether Windows can confirm the publisher.** The Publisher column next
@@ -1262,7 +1263,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   touches its own task. Each Windows account on the PC has its own, named
   `SysManager Scheduled Maintenance-` followed by the account's security ID, so one account's
   schedule never replaces or removes another's, and no other scheduled tasks are affected
-- Built on the same safe CLI verbs; nothing destructive is automated
+- **Every run deletes without asking, and the confirmation says so.** A run is `--cleanup`, which
+  deletes for good the temporary files nothing has created or changed in the last week, the same
+  files Quick Cleanup's Clean TEMP deletes after you confirm it. The confirmation you answer when
+  you save the schedule says what each run deletes, and it is the only time you are asked
 
 ### Privacy & Telemetry
 - 12 registry-based toggles across 3 categories (Telemetry, UI Declutter, Features)

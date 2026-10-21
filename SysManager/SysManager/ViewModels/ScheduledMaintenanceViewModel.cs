@@ -43,7 +43,7 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     /// Whether the task may start while the machine is on battery. Defaults to true, which is a CHANGE from
     /// what Windows applied before: New-ScheduledTaskSettingsSet leaves AllowStartIfOnBatteries false, so on
     /// an unplugged laptop the schedule quietly never started while this tab displayed a Next run time
-    /// (#1578). The maintenance verbs this tab can schedule are cheap and non-destructive, so running them
+    /// (#1578). The one maintenance verb this tab can schedule, the temp cleanup, is cheap, so running it
     /// unplugged is the behaviour a user asking for automatic maintenance expects.
     /// </summary>
     [ObservableProperty] private bool _runOnBattery = true;
@@ -222,9 +222,11 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
     {
         // A third question for the case the read failed: there may be a schedule it could not see, and saving
         // replaces it, so this neither claims to create one nor names one it cannot describe (#2487).
+        // Every variant says what a run deletes: a run is unattended, so this is the only time the user is asked.
         if (StatusUnknown)
         {
-            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n"
+            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n"
+                 + $"{schedule.Summary}. {schedule.RunDescription}\n\n"
                  + "SysManager could not read whether a schedule is already registered. It keeps one schedule at a "
                  + "time, so saving this replaces any schedule it has already set. Nothing else on your PC is "
                  + "changed, and you can remove the schedule at any time.";
@@ -232,7 +234,8 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
 
         if (!IsScheduled)
         {
-            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n{schedule.Summary}\n\n"
+            return $"Schedule \"{schedule.ActionLabel}\" to run automatically?\n\n"
+                 + $"{schedule.Summary}. {schedule.RunDescription}\n\n"
                  + "This creates a Windows scheduled task that launches SysManager in the background. "
                  + "SysManager keeps one schedule at a time, so saving again later replaces this one.";
         }
@@ -241,7 +244,8 @@ public sealed partial class ScheduledMaintenanceViewModel : ViewModelBase
             ? "the schedule already registered"
             : $"the schedule already registered, whose next run was {NextRun}";
 
-        return $"Replace the maintenance schedule with \"{schedule.ActionLabel}\"?\n\n{schedule.Summary}\n\n"
+        return $"Replace the maintenance schedule with \"{schedule.ActionLabel}\"?\n\n"
+             + $"{schedule.Summary}. {schedule.RunDescription}\n\n"
              + $"SysManager keeps one schedule at a time, so this REPLACES {existing}. Nothing else on your "
              + "PC is changed, and you can remove the schedule at any time.";
     }

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.30] - 2026-10-21
+
+**Deep Cleanup, CLI Interface, Startup Manager and Speed Test say at the top what each tab does.**
+
+### Fixed
+
+- **Deep Cleanup said nothing is deleted until you tick it, and every category with something in it arrives
+  ticked.** Only the blue-screen memory dumps and Windows.old start unticked, so pressing Clean straight after a scan
+  deleted the rest, the Recycle Bin on every drive included. The text now says which categories start ticked and to
+  untick what you want to keep. Since 1.109.0.
+- **CLI Interface said it offers only read-only or non-destructive actions, and `--cleanup` deletes temporary files
+  for good without asking.** The README's Scheduled Maintenance section said nothing destructive is automated, and
+  every scheduled run is `--cleanup`. Both now say what it deletes, its line in the command list says it deletes for
+  good and without asking, and the confirmation a schedule is saved through says what each run deletes, since that
+  is the only time you are asked. Since 1.49.0 for the tab and 1.50.0 for the README.
+- **Startup Manager told someone without administrator rights that changing startup entries needs them.** Your own
+  start-up programs switch without them; only the ones set to start for everyone on the PC need administrator
+  rights, and the banner now says so. Since 1.43.0.
+- **Speed Test said it uses the Ookla test where it can and a plain download test otherwise.** There are two tests,
+  each with its own Run button, and both measure download, upload and ping. The text now says so. Since 1.99.0.
+
 ## [1.130.29] - 2026-10-21
 
 **App Updates and Update All Apps leave SysManager itself to About.**

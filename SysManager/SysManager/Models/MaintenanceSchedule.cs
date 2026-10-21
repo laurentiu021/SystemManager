@@ -68,6 +68,19 @@ public sealed record MaintenanceSchedule(
 
     public string ActionLabel => LabelFor(Action);
 
+    /// <summary>What each run of the schedule does, said in the confirmation the schedule is saved through.</summary>
+    /// <remarks>
+    /// A run is unattended, so that confirmation is the only time the user is asked. It named the action and the time
+    /// but not what each run deletes, while the README said nothing destructive was automated (#2881).
+    /// </remarks>
+    public string RunDescription => Action switch
+    {
+        MaintenanceAction.Cleanup =>
+            "Each run deletes the temporary files nothing has created or changed in the last week, for good and "
+            + "without asking.",
+        _ => "",
+    };
+
     /// <summary>
     /// A plain-language summary of when this runs, including the conditions that can stop it
     /// (e.g. "Every Sunday at 03:00, only while plugged in and only when you are not using the PC").

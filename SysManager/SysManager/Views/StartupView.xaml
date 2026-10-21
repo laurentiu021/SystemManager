@@ -28,7 +28,7 @@
 
         <!-- Elevation banner -->
         <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
-                       NotElevatedMessage="Changing startup entries requires administrator privileges. Without them, the scheduled tasks other programs add are left out of this list and the Startup impact column stays empty, because Windows shows both only to administrators."
+                       NotElevatedMessage="You can switch your own start-up programs on and off now. The ones set to start for everyone on this PC need administrator rights to switch. Without them, the scheduled tasks other programs add are left out of this list and the Startup impact column stays empty, because Windows shows both only to administrators."
                        ElevatedMessage="Running as administrator — you can enable and disable any startup entry, the scheduled tasks other programs add are listed, and Startup impact shows what Windows measured each one delaying the last start-up."/>
 
         <!-- Toolbar -->

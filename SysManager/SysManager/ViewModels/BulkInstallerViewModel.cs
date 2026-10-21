@@ -118,8 +118,9 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     partial void OnLoadWebIconsChanged(bool value)
     {
         // Persist the opt-in, then (when turning it on) fetch the icons now so the
-        // change is visible immediately rather than only after the next visit.
-        _iconService.SetNetworkFetchEnabled(value);
+        // change is visible immediately rather than only after the next visit. The opt-in decides whether the tab
+        // goes online, so a choice that could not be saved says so (#2833).
+        if (!_iconService.SetNetworkFetchEnabled(value)) StatusMessage = ChangeNotSavedStatus;
         if (value)
             InitializeAsync(LoadIconsAsync);
     }

@@ -120,13 +120,26 @@ public sealed class AppIconServiceTests : IDisposable
     }
 
     [Fact]
-    public void SetNetworkFetchEnabled_TogglesAndReportsValue()
+    public void SetNetworkFetchEnabled_TogglesTheFlag_AndSaysTheChoiceWasSaved()
     {
         var svc = NewService(new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)));
         Assert.True(svc.SetNetworkFetchEnabled(true));
         Assert.True(svc.NetworkFetchEnabled);
-        Assert.False(svc.SetNetworkFetchEnabled(false));
+        Assert.True(svc.SetNetworkFetchEnabled(false));
         Assert.False(svc.NetworkFetchEnabled);
+    }
+
+    [Fact]
+    public void SetNetworkFetchEnabled_WhenTheChoiceCannotBeSaved_SaysSo_AndKeepsItOnlyForThisRun()
+    {
+        // A folder where the file goes: the write fails as a locked or read-only file does. It returned the flag it
+        // had set, so the tab never knew, and the next start fetched icons for someone who had said no (#2833).
+        Directory.CreateDirectory(Path.Combine(_dir, "icon-fetch.json"));
+        var svc = NewService(new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)));
+
+        Assert.False(svc.SetNetworkFetchEnabled(true));
+        Assert.True(svc.NetworkFetchEnabled);
+        Assert.False(NewService().NetworkFetchEnabled);
     }
 
     [Fact]

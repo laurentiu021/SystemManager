@@ -115,16 +115,25 @@ public sealed class UpdateCheckPreferenceService
         return TryParse(text) is { } preference ? (preference, false) : (Default, true);
     }
 
-    /// <summary>Saves the preference. Best-effort: an IO failure must not break the UI.</summary>
-    public void Save(UpdateCheckPreference preference)
+    /// <summary>
+    /// Saves the preference. Never throws: an IO failure must not break the UI. Returns false when the file was not
+    /// written.
+    /// </summary>
+    /// <remarks>
+    /// It returned nothing, so About's two switches showed a choice that was gone at the next start, and the startup
+    /// checks then went online for someone who had switched them off (#2833).
+    /// </remarks>
+    public bool Save(UpdateCheckPreference preference)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             AtomicFile.WriteAllText(_path, Serialize(preference));
+            return true;
         }
         catch (IOException ex) { Log.Debug("Update-check preference save failed: {Error}", ex.Message); }
         catch (UnauthorizedAccessException ex) { Log.Debug("Update-check preference save denied: {Error}", ex.Message); }
+        return false;
     }
 
     /// <summary>
@@ -152,15 +161,16 @@ public sealed class UpdateCheckPreferenceService
     /// </summary>
     /// <remarks>
     /// The user's own choice is written even over a file that could not be read (#2521). See <see cref="Update"/> for
-    /// what the other choice is saved as then.
+    /// what the other choice is saved as then. Returns false when it could not be saved.
     /// </remarks>
-    public void SetCheckOnStartup(bool enabled) => Update(p => p with { CheckOnStartup = enabled });
+    public bool SetCheckOnStartup(bool enabled) => Update(p => p with { CheckOnStartup = enabled });
 
     /// <summary>
     /// Turns the Dashboard's app-update check at startup on or off (#2613), keeping the version check's choice and its
-    /// last-checked timestamp. Serialized against the other two writers by <see cref="_mutateLock"/>.
+    /// last-checked timestamp. Serialized against the other two writers by <see cref="_mutateLock"/>. Returns false
+    /// when it could not be saved.
     /// </summary>
-    public void SetCheckAppUpdatesOnStartup(bool enabled) => Update(p => p with { CheckAppUpdatesOnStartup = enabled });
+    public bool SetCheckAppUpdatesOnStartup(bool enabled) => Update(p => p with { CheckAppUpdatesOnStartup = enabled });
 
     /// <summary>
     /// What the two setters save when the file could not be read or does not parse: both choices off, before the one
@@ -179,13 +189,13 @@ public sealed class UpdateCheckPreferenceService
     /// Building on the default would have saved it on: someone turning the version check back on, while the file held
     /// "off" for the app-update check, would have turned the app-update check on without seeing it happen (#2613).
     /// </remarks>
-    private void Update(Func<UpdateCheckPreference, UpdateCheckPreference> change)
+    private bool Update(Func<UpdateCheckPreference, UpdateCheckPreference> change)
     {
         lock (_mutateLock)
         {
             var (current, unparsable) = Read();
             if (unparsable) StoreFile.SetAside(_path);
-            Save(change(current is null || unparsable ? NothingReadable : current));
+            return Save(change(current is null || unparsable ? NothingReadable : current));
         }
     }
 

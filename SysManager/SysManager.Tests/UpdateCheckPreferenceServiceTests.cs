@@ -166,6 +166,26 @@ public sealed class UpdateCheckPreferenceServiceTests : IDisposable
     // ── The on/off switch ───────────────────────────────────────────────────
 
     [Fact]
+    public void TheSwitches_SayWhetherTheChoiceWasSaved()
+    {
+        // Both returned nothing, so About showed a choice the next start would not find (#2833).
+        Assert.True(NewService().SetCheckOnStartup(false));
+        Assert.True(NewService().SetCheckAppUpdatesOnStartup(false));
+        Assert.True(NewService().Save(UpdateCheckPreferenceService.Default));
+    }
+
+    [Fact]
+    public void TheSwitches_WhenTheFileCannotBeWritten_SaySo()
+    {
+        // A folder where the file goes: the write fails, as a read-only or locked file makes it fail.
+        Directory.CreateDirectory(PreferenceFile);
+
+        Assert.False(NewService().SetCheckOnStartup(false));
+        Assert.False(NewService().SetCheckAppUpdatesOnStartup(false));
+        Assert.False(NewService().Save(UpdateCheckPreferenceService.Default));
+    }
+
+    [Fact]
     public void TurningTheCheckOff_PersistsAcrossInstances()
     {
         NewService().SetCheckOnStartup(false);

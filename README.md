@@ -73,7 +73,8 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 >   Microsoft runs. SysManager adds nothing about you to it. The About tab has a checkbox —
 >   "Check winget for app updates when SysManager starts" — that switches it off, and when
 >   that setting cannot be read, the check does not run either. "Scan system" on the
->   Dashboard and the App Updates tab still ask winget when you press them.
+>   Dashboard and the App Updates tab still ask winget when you press them. If either
+>   choice cannot be saved, About says so under the two checkboxes.
 >
 > Everything else happens only when you use it: the network diagnostics (ping and
 > traceroute, and the speed test — Cloudflare's servers, or Ookla's through the Ookla
@@ -81,8 +82,8 @@ Everything runs on the machine itself. No cloud, no telemetry, no account.
 > installing, updating and removing apps through winget, Windows Update, and the
 > PowerShell Gallery module Windows Update's history needs. App icons in the Bulk
 > Installer are an **opt-in** extra — off by default, and only when you tick "Load app
-> icons from the web" does it fetch them from Google's favicon service. Nothing else
-> leaves your PC.
+> icons from the web" does it fetch them from Google's favicon service, and if that
+> choice cannot be saved, the tab says so. Nothing else leaves your PC.
 >
 > The local diagnostic log keeps its 14 most recent files — a new one each day, or
 > sooner when a day's file reaches 10 MB — in `%LocalAppData%\SysManager\logs`, and the

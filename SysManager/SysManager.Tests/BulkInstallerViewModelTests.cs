@@ -26,6 +26,44 @@ public class BulkInstallerViewModelTests
         new(new BulkInstallerService(new PowerShellRunner()),
             new AppIconService(null, Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"))));
 
+    /// <summary>Answers every icon request with 404, so turning the web icons on sends nothing anywhere.</summary>
+    private sealed class NoIcons : System.Net.Http.HttpMessageHandler
+    {
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+    }
+
+    [Fact]
+    public void TurningWebIconsOn_WhenTheChoiceCannotBeSaved_SaysSo()
+    {
+        // The switch decides whether the tab goes online, and a choice that was not kept said nothing (#2833). A
+        // folder where the file goes makes the write fail.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "icon-fetch.json"));
+        var vm = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()),
+            new AppIconService(new NoIcons(), dir));
+
+        vm.LoadWebIcons = true;
+
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StatusMessage);
+    }
+
+    [Fact]
+    public void TurningWebIconsOff_WhenTheChoiceIsSaved_SaysNothingAboutIt()
+    {
+        var vm = new BulkInstallerViewModel(new BulkInstallerService(new PowerShellRunner()),
+            new AppIconService(new NoIcons(), Path.Combine(Path.GetTempPath(), "SysManagerTests",
+                Guid.NewGuid().ToString("N"))));
+        var before = vm.StatusMessage;
+
+        vm.LoadWebIcons = false;
+        vm.LoadWebIcons = true;
+        vm.LoadWebIcons = false;
+
+        Assert.Equal(before, vm.StatusMessage);
+    }
+
     [Fact]
     public void Constructor_PopulatesAppsWithCuratedList()
     {

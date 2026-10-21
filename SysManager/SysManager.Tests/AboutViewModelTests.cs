@@ -667,6 +667,26 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
     }
 
     [Fact]
+    public async Task AStartupChoiceThatCannotBeSaved_SaysSoUnderTheSwitches_UntilOneIsSaved()
+    {
+        // These two decide whether SysManager goes online on its own, and a choice that was not kept said nothing: the
+        // next start read the old file and went online (#2833). A folder where the file goes makes the write fail.
+        var prefs = new UpdateCheckPreferenceService(_dir);
+        using var vm = NewVm(prefs, NewUpdates());
+        await vm.InitializationComplete;
+        var file = Path.Combine(_dir, UpdateCheckPreferenceService.FileName);
+        File.Delete(file);
+        Directory.CreateDirectory(file);
+
+        vm.CheckForUpdatesOnStartup = !vm.CheckForUpdatesOnStartup;
+        Assert.Equal(ViewModelBase.ChangeNotSavedStatus, vm.StartupChecksStatus);
+
+        Directory.Delete(file);
+        vm.CheckAppUpdatesOnStartup = !vm.CheckAppUpdatesOnStartup;
+        Assert.Equal("", vm.StartupChecksStatus);
+    }
+
+    [Fact]
     public async Task WithTheCheckTurnedOff_NoVersionIsFetchedAndTheReasonIsShown()
     {
         var prefs = new UpdateCheckPreferenceService(_dir);

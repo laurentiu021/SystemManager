@@ -132,6 +132,12 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     [ObservableProperty] private string _rollBackStatus = string.Empty;
 
+    /// <summary>
+    /// The line under the two startup switches: empty, or that a choice could not be saved (#2833). Its own line, for
+    /// the reason <see cref="ReportStatus"/> has one, and because the tab shows no shared status line.
+    /// </summary>
+    [ObservableProperty] private string _startupChecksStatus = string.Empty;
+
     // Report export state
     [ObservableProperty] private bool _isGeneratingReport;
 
@@ -257,16 +263,18 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     // Persist on change rather than on close: the app can be closed to the tray or killed, and a
     // setting the user visibly toggled should survive either.
+    // These two decide whether SysManager goes online on its own, so a choice that could not be saved says so, under
+    // them (#2833).
     partial void OnCheckForUpdatesOnStartupChanged(bool value)
     {
         if (_loadingPreference) return;
-        _preferences.SetCheckOnStartup(value);
+        StartupChecksStatus = _preferences.SetCheckOnStartup(value) ? string.Empty : ChangeNotSavedStatus;
     }
 
     partial void OnCheckAppUpdatesOnStartupChanged(bool value)
     {
         if (_loadingPreference) return;
-        _preferences.SetCheckAppUpdatesOnStartup(value);
+        StartupChecksStatus = _preferences.SetCheckAppUpdatesOnStartup(value) ? string.Empty : ChangeNotSavedStatus;
     }
 
     /// <summary>

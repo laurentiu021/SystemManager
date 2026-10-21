@@ -739,6 +739,10 @@ Across the tab:
   such an app on every scan, because reinstalling it does not tell winget the version, so it is
   left for you to tick, the status line says how many there are, and the Dashboard's count and
   its Update All Apps leave those apps out
+- **SysManager is not on the list.** About keeps SysManager up to date, so App Updates, the
+  Dashboard's count and its Update All Apps leave SysManager's own winget package alone, and
+  winget is never asked to replace the file SysManager is running from. Update All Apps
+  upgrades the listed apps one by one for that reason
 - **Unticking a package survives a rescan** — including when the rescan finds a newer
   version on offer, since "don't upgrade this one" doesn't stop being true because the
   version changed

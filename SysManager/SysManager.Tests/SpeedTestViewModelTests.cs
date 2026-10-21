@@ -64,6 +64,37 @@ public sealed class SpeedTestViewModelTests : IDisposable
     }
 
     [Fact]
+    public void TheTimeLeft_ShowsOnTheCardWhoseTestRuns()
+    {
+        // Both cards showed the one estimate, so during an Ookla run the HTTP card read as running too (#2884).
+        // Each step clears what was raised before it, so each change is seen to announce the lines it moves.
+        var vm = new SpeedTestViewModel(NewShared(), NewHistory());
+        vm.EstimatedTime = "About 20 s left";
+        var raised = vm.RecordPropertyChanges();
+
+        vm.IsOoklaTesting = true;
+
+        Assert.Equal("About 20 s left", vm.OoklaTimeLeft);
+        Assert.Equal("", vm.HttpTimeLeft);
+        Assert.Contains(nameof(SpeedTestViewModel.OoklaTimeLeft), raised);
+
+        raised.Clear();
+        vm.IsOoklaTesting = false;
+        vm.IsHttpTesting = true;
+
+        Assert.Equal("", vm.OoklaTimeLeft);
+        Assert.Equal("About 20 s left", vm.HttpTimeLeft);
+        Assert.Contains(nameof(SpeedTestViewModel.OoklaTimeLeft), raised);
+        Assert.Contains(nameof(SpeedTestViewModel.HttpTimeLeft), raised);
+
+        raised.Clear();
+        vm.EstimatedTime = "About 5 s left";
+
+        Assert.Equal("About 5 s left", vm.HttpTimeLeft);
+        Assert.Contains(nameof(SpeedTestViewModel.HttpTimeLeft), raised);
+    }
+
+    [Fact]
     public void DefaultState_NotTesting()
     {
         var shared = NewShared();

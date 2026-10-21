@@ -292,7 +292,8 @@ to scroll.
 - `SpeedTestViewModel` — HTTP (Cloudflare) and Ookla speed tests. `DescribeFinished` writes the line under a
   finished run, naming an upload or ping that was not measured. Its internal constructor takes the engine, so a
   test runs it without a network. `OoklaTrend` and `HttpTrend` are redrawn from their history list on every
-  change to it, so a trend can never show a run its table does not.
+  change to it, so a trend can never show a run its table does not. `OoklaTimeLeft` and `HttpTimeLeft` show the
+  one time-left estimate on the card of the test that runs, and nothing on the other (#2884).
 - `SpeedTrendChart` — one engine's history as a chart: download, upload and a dashed usual-download line, plus
   the sentence `SpeedTrendAnalyzer` writes. Builds its SkiaSharp paints once, repaints them through
   `ChartTheme` on a theme change, and releases them and the theme subscription in `Dispose`.
@@ -300,6 +301,7 @@ to scroll.
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer and health verdict for the Ping, Traceroute,
   Speed Test and Network Repair view-models. `ApplyRoute` lists and charts a traced host that is not a Ping target
   beside the targets, one such host at a time, and routes compare hosts in any letter case (#2870).
+  `WindowOptions` are `ChartWindowOption`s, which the chart's window picker reads in minutes (#2884).
 - `ServicesViewModel` — Windows services management with gaming recommendations.
 - `DriversViewModel` — driver inventory via Win32_PnPSignedDriver. `ReadScan` reads the exit code together with the output: a failed scan keeps the last list and says so (`ListFailed`), and an error part-way keeps what was listed, marked incomplete.
 - `LogsViewModel` — friendly Event Log viewer. Adds events in batches of 50 through `UiThread.Post`, which

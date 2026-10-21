@@ -50,9 +50,20 @@ public sealed partial class SpeedTestViewModel : ViewModelBase
     [ObservableProperty] private string _httpStatus = "";
     [ObservableProperty] private string _ooklaStatus = "";
     [ObservableProperty] private bool _isSpeedTesting;
-    [ObservableProperty] private bool _isHttpTesting;
-    [ObservableProperty] private bool _isOoklaTesting;
-    [ObservableProperty] private string _estimatedTime = "";
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HttpTimeLeft))] private bool _isHttpTesting;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(OoklaTimeLeft))] private bool _isOoklaTesting;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(HttpTimeLeft), nameof(OoklaTimeLeft))]
+    private string _estimatedTime = "";
+
+    /// <summary>The time left under the HTTP card: the estimate while its test runs, and nothing otherwise.</summary>
+    /// <remarks>
+    /// Both cards showed the one estimate, so during an Ookla run the HTTP card had a time left under its disabled Run
+    /// button and read as running too (#2884). Only one test runs at a time, so one estimate serves both.
+    /// </remarks>
+    public string HttpTimeLeft => IsHttpTesting ? EstimatedTime : "";
+
+    /// <summary>The time left under the Ookla card: the estimate while its test runs, and nothing otherwise.</summary>
+    public string OoklaTimeLeft => IsOoklaTesting ? EstimatedTime : "";
 
     /// <summary>Persisted history of HTTP speed test results (newest first).</summary>
     public BulkObservableCollection<SpeedTestResult> HttpHistory { get; } = new();

@@ -206,8 +206,15 @@
                                  AutomationProperties.Name="Ping interval in seconds"/>
                         <TextBlock Text="s" Style="{StaticResource Subtle}" VerticalAlignment="Center"/>
                         <TextBlock Text="Window" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                        <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" ItemsSource="{Binding Shared.WindowOptions}" Width="82" Margin="8,0,0,0"
-                                  AutomationProperties.Name="Chart time window"/>
+                        <ComboBox SelectedValue="{Binding Shared.WindowSeconds}" SelectedValuePath="Seconds"
+                                  ItemsSource="{Binding Shared.WindowOptions}" TextSearch.TextPath="Label" Width="82" Margin="8,0,0,0"
+                                  AutomationProperties.Name="Chart time window in minutes">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Label}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
                 </DockPanel>
                 <lvc:CartesianChart Grid.Row="1" Background="Transparent" MinHeight="200"

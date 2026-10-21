@@ -91,7 +91,7 @@ public sealed partial class NetworkSharedState : ObservableObject, IDisposable
     [ObservableProperty] private int _intervalSeconds = 1;
     [ObservableProperty] private int _windowSeconds = 60;
     [ObservableProperty] private int _traceIntervalSeconds = 60;
-    public int[] WindowOptions { get; } = { 60, 300, 600, 900 };
+    public IReadOnlyList<ChartWindowOption> WindowOptions { get; } = [new(60), new(300), new(600), new(900)];
     public int[] TraceIntervalOptions { get; } = { 30, 60, 120, 300, 600 };
 
     [ObservableProperty] private bool _isMonitoring;

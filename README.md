@@ -1338,9 +1338,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   - **Streaming** — YouTube, Twitch, Cloudflare, to correlate buffering with the network
 - **Your gateway is detected and added automatically**, so the first thing the chart can
   tell you apart is your own network from everything beyond it
-- **Live latency chart** with a window you pick in seconds (60, 300, 600 or 900 — one to
-  fifteen minutes) and a ping interval you type in seconds, default once per second. Each
-  target has its own on/off switch
+- **Live latency chart** with a window you pick in minutes (1, 5, 10 or 15) and a ping
+  interval you type in seconds, default once per second. Each target has its own on/off
+  switch
 - Headline numbers across all targets: average ping, worst loss, worst jitter
 - Start, Stop and Clear are separate, and the status line confirms what Clear did
 
@@ -1383,8 +1383,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **A reading it could not take says so.** When no ping gets an answer, which is common on
   networks that block ping, or the server refuses the upload, the card shows "—" and the line
   under it says why. The history records it as not measured, never as a perfect 0 ms ping
-- Progress bar with a time-remaining estimate and a Cancel button; the Ookla CLI is
-  downloaded on first run
+- Progress bar with a time-remaining estimate and a Cancel button, on the card of the test
+  that is running and not on the other; the Ookla CLI is downloaded on first run
 - Only one engine runs at a time, so the two cards can never show conflicting progress
 
 ### Network Repair
@@ -1465,6 +1465,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   detection source
 - **Export CSV** saves the history to a file you choose the location for. Worth doing before
   **Clear History**, which erases it — the button sits to the left of it for that reason
+- **An alert you have not acknowledged yet is marked New** in the list, so the count of new
+  alerts above it points at rows, and **Acknowledge All** clears the marks
 - Start/stop monitoring, **Acknowledge All**, clear history. While it is monitoring, **F5**
   checks for new installs straight away instead of waiting for the next 30-second pass. To
   see every program that is installed, use the Uninstaller

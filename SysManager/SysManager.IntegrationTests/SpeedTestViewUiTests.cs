@@ -151,6 +151,24 @@ public sealed class SpeedTestViewUiTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task ATimeLeft_ShowsOnlyOnTheCardOfTheTestThatRuns()
+    {
+        // Both cards showed the one estimate, so during an Ookla run the HTTP card read as running too (#2884).
+        var vm = await VmShowingBothAsync();
+        vm.IsSpeedTesting = true;
+        vm.IsOoklaTesting = true;
+        vm.EstimatedTime = "About 20 s left";
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+
+            Assert.Contains("About 20 s left", ShownTexts(CardTitled(view, "Ookla speed test")));
+            Assert.DoesNotContain("About 20 s left", ShownTexts(CardTitled(view, "HTTP speed test")));
+        });
+    }
+
     /// <summary>
     /// The text actually on screen under <paramref name="root"/>: a collapsed element still holds its bound text,
     /// so its subtree is skipped rather than read.

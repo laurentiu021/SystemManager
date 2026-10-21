@@ -79,6 +79,13 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     /// <summary>True while any repair on this tab is running.</summary>
     public bool IsAnyRunning => IsFixRunning || IsSfcRunning || IsDismRunning;
 
+    /// <summary>
+    /// The sentences SFC ends a scan with, by their first lines, as this Windows prints them. A seam: the default reads
+    /// <c>sfc.exe</c>'s message table, and a unit test gives the English ones instead.
+    /// </summary>
+    internal Func<IReadOnlyDictionary<string, SfcOutcome>> SfcSentences { get; init; } =
+        static () => SfcOutput.Sentences;
+
     /// <summary>Shared, capped, thread-safe console — same control the other repair/scan tabs use.</summary>
     public ConsoleViewModel Console { get; } = new();
 
@@ -185,26 +192,25 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         StatusMessage = "SFC running in background. You can keep using the app.";
         _sfcCts?.Dispose();
         _sfcCts = new CancellationTokenSource();
+        // Read off the UI thread while SFC runs.
+        var sentences = Task.Run(SfcSentences);
         var captured = new List<string>();
         void Collect(PowerShellLine l)
         {
             if (l.Kind == OutputKind.Output) captured.Add(l.Text);
-            if (l.Text.Contains('%') || l.Text.Contains("complete", StringComparison.OrdinalIgnoreCase))
+            if (SfcOutput.ProgressIn(l.Text) is { } pct)
             {
-                var m = SfcPercentRegex().Match(l.Text);
-                if (m.Success && int.TryParse(m.Groups[1].Value, out var pct) && pct is >= 0 and <= 100)
-                {
-                    Progress = pct;
-                    SfcEtaText = _sfcEta.Update(pct);
-                    IsProgressIndeterminate = false;
-                }
+                Progress = pct;
+                SfcEtaText = _sfcEta.Update(pct);
+                IsProgressIndeterminate = false;
             }
         }
         _runner.LineReceived += Collect;
         try
         {
-            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token, PowerShellRunner.OemEncoding);
-            var (verdict, color) = ParseSfcResult(captured, exit);
+            // SFC writes UTF-16, not the OEM code page the other tools write (#2835).
+            var exit = await _runner.RunProcessAsync("sfc.exe", "/scannow", _sfcCts.Token, SfcOutput.Encoding);
+            var (verdict, color) = ParseSfcResult(captured, exit, await sentences);
             SfcVerdict = verdict;
             SfcVerdictColorHex = color;
             SfcStatus = exit == 0 ? "Completed" : $"Finished (exit {exit})";
@@ -217,35 +223,57 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Parses the captured SFC output lines to produce a human-readable verdict
-    /// with an appropriate color. SFC writes its results in the OEM code page,
-    /// so we match on key phrases that appear in all locales.
+    /// The verdict on SFC's output: the worst of the outcomes its lines name, found by the first lines of SFC's own
+    /// messages in <paramref name="sentences"/>, so in whatever language Windows printed them (#2835).
     /// </summary>
-    internal static (string Verdict, string ColorHex) ParseSfcResult(IReadOnlyList<string> lines, int exitCode)
+    /// <remarks>
+    /// Output that names none of them is not called a success. Exit code 0 says SFC ran, not what it found, and the
+    /// English phrases this matched before ended a scan that could not repair files in green on any other language.
+    /// </remarks>
+    internal static (string Verdict, string ColorHex) ParseSfcResult(
+        IReadOnlyList<string> lines, int exitCode, IReadOnlyDictionary<string, SfcOutcome> sentences)
     {
-        var all = string.Join(" ", lines);
+        var seen = SfcOutput.OutcomesIn(lines, sentences);
+        foreach (var (outcome, verdict, color) in SfcVerdicts)
+        {
+            if (!seen.Contains(outcome)) continue;
+            return outcome == SfcOutcome.Repaired && seen.Contains(SfcOutcome.TakesEffectAfterRestart)
+                ? (verdict + " Restart Windows to finish the repair.", color)
+                : (verdict, color);
+        }
 
-        // "did not find any integrity violations"
-        if (all.Contains("did not find any integrity violations", StringComparison.OrdinalIgnoreCase))
-            return ("No integrity violations found — your system files are healthy.", StatusColors.Good);
-
-        // "found corrupt files and successfully repaired them"
-        if (all.Contains("successfully repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files were found and successfully repaired.", StatusColors.Warning);
-
-        // "found corrupt files but was unable to fix some of them"
-        if (all.Contains("unable to fix", StringComparison.OrdinalIgnoreCase))
-            return ("Corrupted files found but SFC could not repair them. Try running DISM /RestoreHealth first, then SFC again.", StatusColors.Bad);
-
-        // "could not perform the requested operation"
-        if (all.Contains("could not perform", StringComparison.OrdinalIgnoreCase))
-            return ("SFC could not run. Try rebooting into Safe Mode or running DISM first.", StatusColors.Bad);
-
-        // Fallback based on exit code
         return exitCode == 0
-            ? ("Scan completed successfully.", StatusColors.Good)
+            ? ("Scan finished. Its result is in the console output.", StatusColors.Neutral)
             : ($"Scan finished with exit code {exitCode}. Check the console output for details.", StatusColors.Warning);
     }
+
+    /// <summary>The verdict on each way SFC can end a scan, worst first, in <see cref="SfcOutcome"/> order.</summary>
+    internal static readonly IReadOnlyList<(SfcOutcome Outcome, string Verdict, string ColorHex)> SfcVerdicts =
+    [
+        (SfcOutcome.CouldNotPerform,
+            "SFC could not run. Try rebooting into Safe Mode or running DISM first.", StatusColors.Bad),
+        (SfcOutcome.ServiceDidNotStart,
+            "SFC could not start its repair service. Restart Windows, then run SFC again.", StatusColors.Bad),
+        (SfcOutcome.UnableToFix,
+            "Corrupted files found but SFC could not repair them. "
+            + "Try running DISM /RestoreHealth first, then SFC again.", StatusColors.Bad),
+        (SfcOutcome.CannotGuarantee,
+            "SFC found no damaged files, but could not check them all because Windows' repair source is damaged. "
+            + "Run DISM /RestoreHealth, then SFC again.", StatusColors.Warning),
+        (SfcOutcome.AnotherOperationRunning,
+            "Another repair or update is running. Wait for it to finish, then run SFC again.", StatusColors.Warning),
+        (SfcOutcome.RepairPending,
+            "A repair is waiting for a restart. Restart Windows, then run SFC again.", StatusColors.Warning),
+        (SfcOutcome.MaximumQueued,
+            "SFC queued as many repairs as it can at once. Restart Windows to finish them, then run SFC again.",
+            StatusColors.Warning),
+        (SfcOutcome.MaximumRepaired,
+            "SFC repaired as many files as it can at once. Run SFC again to repair the rest.", StatusColors.Warning),
+        (SfcOutcome.Repaired, "Corrupted files were found and successfully repaired.", StatusColors.Warning),
+        (SfcOutcome.TakesEffectAfterRestart,
+            "SFC's repairs take effect after a restart. Restart Windows to finish them.", StatusColors.Warning),
+        (SfcOutcome.NoViolations, "No integrity violations found — your system files are healthy.", StatusColors.Good),
+    ];
 
     /// <summary>
     /// Runs <c>DISM /Online /Cleanup-Image /RestoreHealth</c>: repairs the component store SFC
@@ -319,15 +347,19 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
     /// <summary>
     /// Parses DISM RestoreHealth output into a verdict with color.
     /// </summary>
+    /// <remarks>
+    /// DISM ends a repair and a run that found nothing to repair with the same sentence, "The restore operation
+    /// completed successfully.", so the verdict says the store is healthy now and to run SFC, the next step either way.
+    /// It said no repairs were needed, and the branch for a "corruption was repaired" sentence never ran: DISM has no
+    /// such sentence (#2835). The run passes <c>/English</c>, so these are DISM's sentences on any language.
+    /// </remarks>
     internal static (string Verdict, string ColorHex) ParseDismResult(IReadOnlyList<string> lines, int exitCode)
     {
         var all = string.Join(" ", lines);
 
         if (all.Contains("The restore operation completed successfully", StringComparison.OrdinalIgnoreCase))
-            return ("Component store is healthy — no repairs needed.", StatusColors.Good);
-
-        if (all.Contains("The component store corruption was repaired", StringComparison.OrdinalIgnoreCase))
-            return ("Component store was corrupted and has been repaired. Run SFC /scannow next.", StatusColors.Warning);
+            return ("Windows' repair source is healthy now. Run SFC next to repair any damaged Windows files.",
+                StatusColors.Good);
 
         if (all.Contains("source files could not be found", StringComparison.OrdinalIgnoreCase))
             return ("DISM could not find source files for repair. Try connecting to the internet or using a Windows ISO.", StatusColors.Bad);
@@ -620,10 +652,6 @@ public sealed partial class SystemFixesViewModel : ViewModelBase
         }
         base.Dispose(disposing);
     }
-
-    // SFC reports progress as a whole-number percentage, e.g. "50 %".
-    [GeneratedRegex(@"(\d+)\s*%")]
-    private static partial Regex SfcPercentRegex();
 
     // DISM reports progress as a decimal percentage, e.g. "50.0%".
     [GeneratedRegex(@"([\d.]+)%")]

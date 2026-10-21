@@ -649,10 +649,14 @@ need administrator rights:
 - **Repair damaged Windows files (SFC)** — runs `SFC /scannow`, which checks every
   protected Windows file against Windows' own known-good copy and replaces the damaged
   ones. Takes 5–15 minutes in the background, with a live percentage, an ETA, and a
-  plain-English verdict at the end rather than a raw exit code
+  plain-English verdict at the end rather than a raw exit code. The verdict is read from
+  SFC's own messages in whatever language Windows is in, says what to do next when a repair
+  waits for a restart, and points to the console rather than calling the scan a success when
+  SFC ends in a way it does not recognise
 - **Repair Windows' own repair source (DISM)** — runs `DISM /RestoreHealth`, which rebuilds
   the store of known-good copies that SFC draws from, downloading replacements through
-  Windows Update. Run this first when SFC reports files it could not fix. Takes 10–30 minutes
+  Windows Update. Run this first when SFC reports files it could not fix. Takes 10–30 minutes.
+  When it succeeds, it says the repair source is healthy and to run SFC next
 - **Reset Windows Update** — stop the update services and Windows Installer, rename the
   SoftwareDistribution and catroot2 caches so Windows rebuilds them, and restart the
   services. The confirmation says that it interrupts an installation running elsewhere, and
@@ -661,7 +665,8 @@ need administrator rights:
   of those can start until the reset is done. If a cache folder is still in use and cannot be
   renamed, the fix says so instead of asking for a pointless reboot — and restarts the services
   either way
-- **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail
+- **Reinstall WinGet** — re-register the App Installer when app installs/uninstalls fail: your
+  own copy, or the newest one on the PC if you have none
 - When either of these two stops, the status line and the console say why, for example that App
   Installer is not installed, and the reason is logged
 

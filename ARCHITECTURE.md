@@ -1796,6 +1796,13 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   `WingetExitCodes` (in `Models`), each pinned by a test to the number
   winget-cli's header gives it, and a fitness function keeps those numbers out
   of every other file.
+- `SfcOutput` — reads what `sfc.exe` prints (#2835). Redirected, SFC writes UTF-16, not the OEM
+  code page DISM and the other tools write. Its progress line is read by its one number, and the
+  sentences it ends a scan with by the first line of each of its own messages, matched whole.
+  `ReadTable` takes those from `sfc.exe`'s message table with `FormatMessage`, in Windows' display
+  language and in US English, beside the English kept in code, so a verdict does not depend on
+  Windows being in English. System Fixes shows the worst outcome a run names, and
+  `SfcMessageTableTests` reads this Windows' own table.
 - `FormatHelper` — byte-size and transfer-rate formatting, and `JoinForSentence` for an
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs.

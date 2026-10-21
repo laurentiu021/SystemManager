@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Management.Automation;
 using System.Reflection;
 using NSubstitute;
@@ -29,10 +30,14 @@ namespace SysManager.Tests;
 [Collection("ProcessWideStatics")]
 public class SystemFixesViewModelTests
 {
+    // SFC's sentences as English Windows prints them: reading this Windows' sfc.exe is the integration suite's job.
     private static SystemFixesViewModel NewVm(
         IPowerShellRunner? runner = null, IPowerShellRunner? serviceRunner = null) =>
         new(new SystemFixService(serviceRunner ?? Substitute.For<IPowerShellRunner>()),
-            runner ?? Substitute.For<IPowerShellRunner>());
+            runner ?? Substitute.For<IPowerShellRunner>())
+        {
+            SfcSentences = static () => SfcOutput.English,
+        };
 
     // ---------- construction & defaults ----------
 
@@ -292,6 +297,58 @@ public class SystemFixesViewModelTests
 
         await runner.Received(1).RunProcessAsync(
             "sfc.exe", "/scannow", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>());
+    }
+
+    [Fact]
+    public async Task RunSfc_ReadsSfcsOwnOutput_ForItsProgressAndItsVerdict()
+    {
+        // Redirected, SFC writes UTF-16, and the tab read it as the OEM code page: a NUL between every letter, so the
+        // bar never showed a percentage and the verdict was the exit code's green "Scan completed successfully."
+        // whatever SFC said (#2835). The runner decodes SFC's bytes with the encoding the tab asks for.
+        using var elevated = AdminHelper.ForceElevation(true);
+        using var dialog = new DialogAnswer(confirm: true);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("sfc.exe", "/scannow", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+            .Returns(call =>
+            {
+                RaiseEachLine(runner, SfcOutputAsWritten(), call.ArgAt<System.Text.Encoding?>(3));
+                return 0;
+            });
+        var vm = NewVm(runner);
+        List<int> progress = [];
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.Progress)) progress.Add(vm.Progress);
+        };
+
+        await vm.RunSfcCommand.ExecuteAsync(null);
+
+        Assert.Equal("No integrity violations found — your system files are healthy.", vm.SfcVerdict);
+        Assert.Equal(StatusColors.Good, vm.SfcVerdictColorHex);
+        Assert.True(progress is [.., 100] && progress.Count == 100,
+            $"the bar took {progress.Count} values, ending at {(progress.Count > 0 ? progress[^1] : "none")}");
+    }
+
+    /// <summary>
+    /// The start and end of a real scan's output, as SFC writes it redirected: UTF-16LE, a line ended with "\r\r\n",
+    /// and the progress line written over with a bare "\r", 0 to 100.
+    /// </summary>
+    private static byte[] SfcOutputAsWritten() => System.Text.Encoding.Unicode.GetBytes(
+        "\r\r\nBeginning system scan.  This process will take some time.\r\r\n\r\r\n"
+        + "Beginning verification phase of system scan.\r\r\n"
+        + string.Concat(Enumerable.Range(0, 101).Select(percent => $"\rVerification {percent}% complete."))
+        + "\r\n\r\r\nWindows Resource Protection did not find any integrity violations.\r\r\n");
+
+    // As PowerShellRunner hands on a process's output: a line at a time, the blank ones left out.
+    private static void RaiseEachLine(IPowerShellRunner runner, byte[] output, System.Text.Encoding? encoding)
+    {
+        using var reader = new StreamReader(new MemoryStream(output), encoding ?? System.Text.Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: false);
+        while (reader.ReadLine() is { } line)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+                runner.LineReceived += Raise.Event<Action<PowerShellLine>>(PowerShellLine.Output(line));
+        }
     }
 
     /// <summary>
@@ -622,68 +679,137 @@ public class SystemFixesViewModelTests
 
 // ---------- SFC result parsing ----------
 
+/// <summary>
+/// The verdict on SFC's output, read by the first lines of SFC's own messages. These give the English ones; the real
+/// message table is read in the integration suite's <c>SfcMessageTableTests</c>.
+/// </summary>
 public class SfcResultParsingTests
 {
+    private static (string Verdict, string ColorHex) Parse(int exitCode, params string[] lines) =>
+        SystemFixesViewModel.ParseSfcResult(lines, exitCode, SfcOutput.English);
+
+    private static string Sentence(SfcOutcome outcome) =>
+        SfcOutput.Messages.Single(m => m.Outcome == outcome).English;
+
+    [Fact]
+    public void EveryOutcome_HasOneVerdict_WorstFirst() =>
+        Assert.Equal(Enum.GetValues<SfcOutcome>(), SystemFixesViewModel.SfcVerdicts.Select(v => v.Outcome));
+
     [Fact]
     public void ParseSfcResult_NoViolations_ReturnsGreen()
     {
-        var lines = new[] { "Windows Resource Protection did not find any integrity violations." };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("No integrity violations", verdict);
+        var (verdict, color) = Parse(0, Sentence(SfcOutcome.NoViolations));
+        Assert.Contains("No integrity violations", verdict, StringComparison.Ordinal);
         Assert.Equal(StatusColors.Good, color);
     }
 
     [Fact]
     public void ParseSfcResult_SuccessfullyRepaired_ReturnsYellow()
     {
-        var lines = new[] { "Windows Resource Protection found corrupt files and successfully repaired them." };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("successfully repaired", verdict);
+        var (verdict, color) = Parse(0, Sentence(SfcOutcome.Repaired));
+        Assert.Equal("Corrupted files were found and successfully repaired.", verdict);
+        Assert.Equal(StatusColors.Warning, color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_RepairedWithARestartToFinish_SaysToRestart()
+    {
+        var (verdict, color) = Parse(0, Sentence(SfcOutcome.Repaired), Sentence(SfcOutcome.TakesEffectAfterRestart));
+        Assert.Equal(
+            "Corrupted files were found and successfully repaired. Restart Windows to finish the repair.", verdict);
         Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]
     public void ParseSfcResult_UnableToFix_ReturnsRed()
     {
-        var lines = new[] { "Windows Resource Protection found corrupt files but was unable to fix some of them." };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("could not repair", verdict);
+        var (verdict, color) = Parse(0, Sentence(SfcOutcome.UnableToFix));
+        Assert.Contains("could not repair", verdict, StringComparison.Ordinal);
         Assert.Equal(StatusColors.Bad, color);
     }
 
     [Fact]
     public void ParseSfcResult_CouldNotPerform_ReturnsRed()
     {
-        var lines = new[] { "Windows Resource Protection could not perform the requested operation." };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("could not run", verdict);
+        var (verdict, color) = Parse(0, Sentence(SfcOutcome.CouldNotPerform));
+        Assert.Contains("could not run", verdict, StringComparison.Ordinal);
         Assert.Equal(StatusColors.Bad, color);
     }
 
     [Fact]
-    public void ParseSfcResult_ExitZeroNoMatch_ReturnsGreenFallback()
+    public void ParseSfcResult_NoViolationsButCorruptMetadata_IsNotCalledHealthy()
     {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 0);
-        Assert.Contains("successfully", verdict);
-        Assert.Equal(StatusColors.Good, color);
+        // The message starts as the healthy one does, and the English phrase the tab matched found it in there: a
+        // store too damaged to check against ended in a green "your system files are healthy". These are its three
+        // lines as SFC prints them.
+        var (verdict, color) = Parse(0,
+            "Windows Resource Protection did not find any integrity violations but cannot",
+            "guarantee the integrity of the system because component metadata is corrupt.",
+            "Please run \"dism [/Online | /Image] /cleanup-image /restorehealth\" and try again.");
+        Assert.Contains("DISM /RestoreHealth", verdict, StringComparison.Ordinal);
+        Assert.DoesNotContain("healthy", verdict, StringComparison.Ordinal);
+        Assert.Equal(StatusColors.Warning, color);
+    }
+
+    [Theory]
+    [InlineData(nameof(SfcOutcome.ServiceDidNotStart), "Restart Windows", StatusColors.Bad)]
+    [InlineData(nameof(SfcOutcome.AnotherOperationRunning), "Wait for it to finish", StatusColors.Warning)]
+    [InlineData(nameof(SfcOutcome.RepairPending), "Restart Windows", StatusColors.Warning)]
+    [InlineData(nameof(SfcOutcome.MaximumQueued), "Restart Windows", StatusColors.Warning)]
+    [InlineData(nameof(SfcOutcome.MaximumRepaired), "Run SFC again", StatusColors.Warning)]
+    [InlineData(nameof(SfcOutcome.TakesEffectAfterRestart), "Restart Windows", StatusColors.Warning)]
+    public void ParseSfcResult_EveryOtherEnding_SaysWhatToDoNext(string outcome, string advice, string expected)
+    {
+        var (verdict, color) = Parse(0, Sentence(Enum.Parse<SfcOutcome>(outcome)));
+        Assert.Contains(advice, verdict, StringComparison.Ordinal);
+        Assert.Equal(expected, color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_TheWorstEnding_Wins()
+    {
+        var (_, color) = Parse(0, Sentence(SfcOutcome.Repaired), Sentence(SfcOutcome.UnableToFix));
+        Assert.Equal(StatusColors.Bad, color);
+    }
+
+    [Fact]
+    public void ParseSfcResult_ASentenceInAnotherLanguage_IsReadFromTheTableItIsGiven()
+    {
+        // Nothing here is English: a translated table's sentence is read, and with only that table, the English one
+        // is not.
+        var translated = new Dictionary<string, SfcOutcome>(StringComparer.Ordinal)
+        {
+            ["Alpha bravo charlie."] = SfcOutcome.UnableToFix,
+        };
+        Assert.Equal(StatusColors.Bad,
+            SystemFixesViewModel.ParseSfcResult(["Alpha bravo charlie."], 0, translated).ColorHex);
+        Assert.Equal(StatusColors.Neutral,
+            SystemFixesViewModel.ParseSfcResult([Sentence(SfcOutcome.UnableToFix)], 0, translated).ColorHex);
+    }
+
+    [Fact]
+    public void ParseSfcResult_ExitZeroNoMatch_IsNotCalledASuccess()
+    {
+        // Exit code 0 says SFC ran, not what it found.
+        var (verdict, color) = Parse(0, "Some unrecognized output");
+        Assert.Equal("Scan finished. Its result is in the console output.", verdict);
+        Assert.Equal(StatusColors.Neutral, color);
     }
 
     [Fact]
     public void ParseSfcResult_NonZeroExit_ReturnsYellowFallback()
     {
-        var lines = new[] { "Some unrecognized output" };
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult(lines, 1);
-        Assert.Contains("exit code 1", verdict);
+        var (verdict, color) = Parse(1, "Some unrecognized output");
+        Assert.Contains("exit code 1", verdict, StringComparison.Ordinal);
         Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]
     public void ParseSfcResult_EmptyLines_FallsBackToExitCode()
     {
-        var (verdict, color) = SystemFixesViewModel.ParseSfcResult([], 0);
-        Assert.Contains("successfully", verdict);
-        Assert.Equal(StatusColors.Good, color);
+        var (verdict, color) = Parse(0);
+        Assert.Equal("Scan finished. Its result is in the console output.", verdict);
+        Assert.Equal(StatusColors.Neutral, color);
     }
 }
 
@@ -699,21 +825,22 @@ public class SfcResultParsingTests
 public class DismResultParsingTests
 {
     [Fact]
-    public void ParseDismResult_RestoreSuccessful_ReturnsGreen()
+    public void ParseDismResult_RestoreSuccessful_SaysTheStoreIsHealthyNow_AndToRunSfc()
     {
-        var lines = new[] { "The restore operation completed successfully." };
+        // DISM ends a repair and a run that found nothing to repair with this one sentence, so the verdict cannot say
+        // no repairs were needed (#2835). The banner, the bar and the last line are as DISM prints them; the sentence
+        // before the last is the one DISM has for a restore, in CbsProvider.dll.mui.
+        string[] lines =
+        [
+            "Deployment Image Servicing and Management tool",
+            "[==========================100.0%==========================] ",
+            "The restore operation completed successfully.",
+            "The operation completed successfully.",
+        ];
         var (verdict, color) = SystemFixesViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("healthy", verdict);
+        Assert.Equal(
+            "Windows' repair source is healthy now. Run SFC next to repair any damaged Windows files.", verdict);
         Assert.Equal(StatusColors.Good, color);
-    }
-
-    [Fact]
-    public void ParseDismResult_CorruptionRepaired_ReturnsYellow()
-    {
-        var lines = new[] { "The component store corruption was repaired." };
-        var (verdict, color) = SystemFixesViewModel.ParseDismResult(lines, 0);
-        Assert.Contains("repaired", verdict);
-        Assert.Equal(StatusColors.Warning, color);
     }
 
     [Fact]

@@ -10,6 +10,28 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.45] - 2026-10-21
+
+**System Fixes reads SFC's progress and result whatever language Windows is in, DISM no longer says no repairs were
+needed after a repair, and Reinstall WinGet picks your own App Installer.**
+
+### Fixed
+
+- **SFC's progress and result were never read.** SFC writes its output as UTF-16, and System Fixes read it in the
+  console's code page, which put a NUL between every letter. The progress bar never showed a percentage or a time left,
+  and the verdict was always the exit code's: a green "Scan completed successfully." even when SFC found files it could
+  not repair. The output is read as UTF-16 now, and the verdict is matched against SFC's own messages, which the tab
+  takes from Windows in its display language, so it no longer depends on Windows being in English. SFC's other endings,
+  such as a repair waiting for a restart or another repair already running, say what to do next, and an ending the tab
+  does not recognise points to the console instead of being called a success. Since 0.14.0 for the verdict and 1.16.1
+  for the percentage.
+- **DISM said no repairs were needed after a repair.** DISM ends with the same sentence whether it repaired Windows'
+  repair source or found nothing to repair, and the tab read it as "no repairs needed". It says the repair source is
+  healthy now and to run SFC next. Since 0.14.0.
+- **Reinstall WinGet could pick an older App Installer.** On a PC with more than one account it registered whichever
+  copy Windows listed first, which can be an older one registered for another account, and Windows refuses that. It
+  registers your own App Installer now, or the newest one on the PC if you have none. Since 1.26.0.
+
 ## [1.130.44] - 2026-10-21
 
 **Ping and Traceroute lines are readable on a light theme from the start, and chart lines stay visible on a dark

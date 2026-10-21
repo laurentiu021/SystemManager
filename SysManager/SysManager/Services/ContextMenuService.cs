@@ -739,7 +739,9 @@ public sealed partial class ContextMenuService : IContextMenuService
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardError = true,
+                StandardOutputEncoding = PowerShellRunner.OemEncoding,
+                StandardErrorEncoding = PowerShellRunner.OemEncoding,
             };
 
             using var proc = Process.Start(psi);

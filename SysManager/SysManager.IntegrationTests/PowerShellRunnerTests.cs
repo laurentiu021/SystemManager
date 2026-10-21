@@ -2,8 +2,10 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Reflection;
+using Microsoft.Win32;
 using SysManager.Services;
 
 namespace SysManager.IntegrationTests;
@@ -1177,5 +1179,48 @@ public class PowerShellRunnerTests
         Assert.False((bool)m.Invoke(null, new object[] { "Hello World" })!);
         Assert.False((bool)m.Invoke(null, new object[] { "winget upgrade" })!);
         Assert.False((bool)m.Invoke(null, new object[] { "123" })!);
+    }
+
+    [Fact]
+    public async Task ConsoleOutput_IsReadInTheSystemsCodePage_WhateverTheRegionalFormat()
+    {
+        // Console tools write in the system's OEM code page, which a regional format does not change. The encoding
+        // came from the format: with Romanian formats on an English Windows it was 852, and "ñ", which cmd writes in
+        // 437 as 0xA4, came back as "Ą" (#2844).
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        var romanian = CultureInfo.GetCultureInfo("ro-RO");
+        // Where Windows keeps its OEM code page, read apart from the code under test.
+        const string CodePageKey = @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage";
+        var oemCodePage = int.Parse((string)Registry.GetValue(CodePageKey, "OEMCP", "")!, CultureInfo.InvariantCulture);
+        if (oemCodePage == romanian.TextInfo.OEMCodePage)
+            Assert.Skip($"This Windows writes in {oemCodePage}, the Romanian format's code page: they cannot differ.");
+        var system = System.Text.Encoding.GetEncoding(oemCodePage);
+        if (system.GetString(system.GetBytes("ñ")) != "ñ")
+            Assert.Skip($"Code page {oemCodePage} has no ñ for cmd to write.");
+
+        var before = CultureInfo.CurrentCulture;
+        System.Text.Encoding encoding;
+        try
+        {
+            CultureInfo.CurrentCulture = romanian;
+            encoding = PowerShellRunner.ReadOemEncoding();
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = before;
+        }
+
+        var runner = new PowerShellRunner();
+        List<string> lines = [];
+        runner.LineReceived += line =>
+        {
+            lock (lines) lines.Add(line.Text);
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await runner.RunProcessAsync("cmd.exe", "/c echo mañana", timeout.Token, encoding);
+
+        Assert.Equal(oemCodePage, encoding.CodePage);
+        lock (lines) Assert.Contains("mañana", lines);
     }
 }

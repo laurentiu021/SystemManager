@@ -16782,6 +16782,129 @@ public partial class ArchitectureTests
             + "directory:\n  " + string.Join("\n  ", offenders));
     }
 
+    /// <summary>
+    /// Every Windows tool started with a redirected stream is read in the code page it writes (#2844).
+    /// </summary>
+    /// <remarks>
+    /// A redirected stream with no encoding named is read in the console's code page, and a process with no console,
+    /// as SysManager is, has none: .NET falls back to the ANSI code page, 1252 on an English Windows, while the tools
+    /// write the OEM code page, 437 there. Measured with cmd's echo from a window-less process, "ñ" came back as "¤",
+    /// and Startup Manager read schtasks' errors that way. This reads every <c>ProcessStartInfo</c> initializer whose
+    /// <c>FileName</c> comes from <c>SystemPaths.ResolveSystemTool</c>, and fails one that redirects a stream without
+    /// naming its encoding.
+    /// </remarks>
+    [Fact]
+    public void EveryWindowsToolWithARedirectedStream_NamesTheEncodingItIsReadIn()
+    {
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var judged = 0;
+        var redirecting = 0;
+        foreach (var file in files)
+        {
+            foreach (var initializer in StartInfoInitializers(File.ReadAllText(file)))
+            {
+                if (!initializer.Contains("ResolveSystemTool(", StringComparison.Ordinal)) continue;
+                judged++;
+                var redirects = false;
+                foreach (var stream in (string[])["Output", "Error"])
+                {
+                    if (!initializer.Contains($"RedirectStandard{stream} = true", StringComparison.Ordinal)) continue;
+                    redirects = true;
+                    if (!initializer.Contains($"Standard{stream}Encoding =", StringComparison.Ordinal))
+                        offenders.Add($"{Path.GetFileName(file)}: Standard{stream}");
+                }
+                if (redirects) redirecting++;
+            }
+        }
+
+        // Measured at 14 constructions when this was written, 3 of them redirecting: PowerShellRunner.RunProcessAsync,
+        // Startup Manager's schtasks and Right-Click Menu's reg export.
+        Assert.True(judged >= 10 && redirecting >= 2,
+            $"only {judged} ProcessStartInfo constructions start a Windows tool and {redirecting} redirect a "
+            + "stream, so the scan is no longer finding them — fix the pattern rather than trusting the pass");
+        Assert.True(offenders.Count == 0,
+            "these start a Windows tool with a redirected stream and no encoding for it, so it is read in the ANSI "
+            + "code page while the tool writes the OEM one. Set it to PowerShellRunner.OemEncoding, or for sfc to "
+            + "SfcOutput.Encoding:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The code of each <c>new ProcessStartInfo(…) { … }</c> construction in <paramref name="source"/>, its literals
+    /// and comments blanked, ended where <see cref="SourceBraces.MatchingBrace"/> says its initializer ends.
+    /// </summary>
+    private static IEnumerable<string> StartInfoInitializers(string source)
+    {
+        var code = SourceBraces.CodeOnly(source);
+        foreach (Match start in StartInfoStart().Matches(code))
+        {
+            var open = start.Index + start.Length - 1;
+            var close = SourceBraces.MatchingBrace(source, open);
+            if (close > open) yield return code[start.Index..(close + 1)];
+        }
+    }
+
+    /// <summary>The start of a <c>ProcessStartInfo</c> initializer, up to its opening brace.</summary>
+    [GeneratedRegex(@"new (?:System\.Diagnostics\.)?ProcessStartInfo(?:\([^;{]*\))?\s*\{")]
+    private static partial Regex StartInfoStart();
+
+    /// <summary>
+    /// Every Windows tool the runner starts by name is read in the encoding it writes (#2844).
+    /// </summary>
+    /// <remarks>
+    /// Given no encoding, <c>RunProcessAsync</c> reads UTF-8, while powershell.exe, reg and the other Windows tools
+    /// write the OEM code page: Windows Features and the Uninstaller's registry export were read that way. This reads
+    /// every call whose program is an <c>.exe</c> literal and fails one with no encoding among its arguments. winget,
+    /// named without the extension, keeps the runner's UTF-8.
+    /// </remarks>
+    [Fact]
+    public void EveryWindowsToolTheRunnerStarts_NamesTheEncodingItIsReadIn()
+    {
+        var sourceDir = Path.Combine(TestPaths.RepoRoot(), "SysManager", "SysManager");
+        var files = Directory.GetFiles(sourceDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToArray();
+        Assert.NotEmpty(files);
+
+        List<string> offenders = [];
+        var judged = 0;
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            var code = SourceBraces.CodeOnly(source);
+            foreach (Match call in RunnerStartsATool().Matches(source))
+            {
+                // In a comment or a string, the call is text, not code.
+                if (code[call.Index] == ' ') continue;
+                judged++;
+                var arguments = BalancedFrom(code, call.Index + "RunProcessAsync".Length);
+                if (!arguments.Contains("Encoding", StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)}:{source[..call.Index].Count(c => c == '\n') + 1}");
+            }
+        }
+
+        // Measured at 23 when this was written, from sfc and DISM to powercfg's ten.
+        Assert.True(judged >= 18,
+            $"only {judged} runner calls start a Windows tool by name, so the scan is no longer finding them — fix "
+            + "the pattern rather than trusting the pass");
+        Assert.True(offenders.Count == 0,
+            "these start a Windows tool through the runner without the encoding it writes, so it is read as UTF-8. "
+            + "Pass PowerShellRunner.OemEncoding, or for sfc SfcOutput.Encoding:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// A runner call that names its program as an <c>.exe</c> literal: <c>RunProcessAsync("x.exe"</c>.
+    /// </summary>
+    [GeneratedRegex(@"(?<!Task<int>\s)\bRunProcessAsync\(\s*""[^""]+\.exe""", RegexOptions.IgnoreCase)]
+    private static partial Regex RunnerStartsATool();
+
     /// <summary>Any launch construct, whatever it is handed. The vacuity floor counts these.</summary>
     [GeneratedRegex(@"new ProcessStartInfo\(|(?<![A-Za-z0-9_])FileName\s*=")]
     private static partial Regex LaunchSite();

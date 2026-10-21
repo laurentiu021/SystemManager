@@ -42,7 +42,8 @@ public sealed partial class WindowsFeaturesService
             exitCode = await _runner.RunProcessAsync("powershell.exe",
                 "-NoProfile -Command \"Get-WindowsOptionalFeature -Online | " +
                 "Select-Object FeatureName, State | " +
-                "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct).ConfigureAwait(false);
+                "ForEach-Object { $_.FeatureName + '|' + $_.State }\"", ct, PowerShellRunner.OemEncoding)
+                .ConfigureAwait(false);
         }
         finally { _runner.LineReceived -= Collect; }
 
@@ -79,7 +80,8 @@ public sealed partial class WindowsFeaturesService
             var code = await _runner.RunProcessAsync("powershell.exe",
                 $"-NoProfile -Command \"try {{ Enable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart -All -ErrorAction Stop | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct,
+                PowerShellRunner.OemEncoding).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));
@@ -116,7 +118,8 @@ public sealed partial class WindowsFeaturesService
             var code = await _runner.RunProcessAsync("powershell.exe",
                 $"-NoProfile -Command \"try {{ Disable-WindowsOptionalFeature -Online " +
                 $"-FeatureName '{featureName}' -NoRestart -ErrorAction Stop | " +
-                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct).ConfigureAwait(false);
+                $"Select-Object RestartNeeded | ForEach-Object {{ $_.RestartNeeded }} }} catch {{ exit 1 }}\"", ct,
+                PowerShellRunner.OemEncoding).ConfigureAwait(false);
 
             var reboot = captured.Any(l =>
                 l.Contains("True", StringComparison.OrdinalIgnoreCase));

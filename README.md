@@ -1120,7 +1120,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   1,000; it says so when a folder holds more) and lists every process holding any of them
 - A path that does not exist, or a check Windows could not complete, is reported as
   exactly that — never as "no process is using it"
-- Shows process name, PID, type, and start time for each locker
+- Shows process name, PID, type, and start time for each locker. The type is in plain words,
+  such as App window, File Explorer, Windows service, or Needed by Windows for the process
+  that should not be ended
 - **Export CSV** saves the list to a file you choose the location for, including the flag that
   marks a process Windows will not let you safely end — the one row nobody should act on
 - **End process** — terminate a selected locker (with confirmation) to release
@@ -1668,7 +1670,9 @@ offers, "rate us" prompts:
 - Fully reversible (flip the switch back), per-user, no administrator needed
 
 ### Battery Health
-- Charge %, health %, wear level, cycle count, chemistry
+- Charge %, health %, wear level, cycle count, chemistry. Wear reads in the same plain colour
+  as health, not in the red kept for failures, and the verdict under the capacity chart says
+  whether it is a problem
 - Design vs full-charge capacity via WMI
 - Estimated runtime display
 - Gracefully shows "No battery detected" on desktops

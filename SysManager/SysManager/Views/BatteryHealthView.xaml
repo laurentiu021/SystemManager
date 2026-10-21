@@ -112,8 +112,9 @@
 
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="Wear" Style="{StaticResource Subtle}"/>
-                                    <!-- Danger red only when a real wear figure exists; "Not available"
-                                         is missing data, not a warning. -->
+                                    <!-- Muted while there is no figure; a real one reads like Health beside it.
+                                         It was Danger red whenever it existed, a new battery's 0% included, and the
+                                         verdict below is what says whether the wear is a problem (#2813). -->
                                     <TextBlock Text="{Binding Battery.WearDisplay, Mode=OneWay}"
                                                FontWeight="Bold" Margin="0,4,0,0">
                                         <!-- The rung comes through BasedOn rather than a Style attribute:
@@ -124,7 +125,7 @@
                                                 <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Battery.HasCapacityData, Mode=OneWay}" Value="True">
-                                                        <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>

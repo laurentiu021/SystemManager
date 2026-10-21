@@ -273,7 +273,7 @@ public sealed class FileLockService : IFileLockService
             Csv.AppendRow(sb, culture,
                 l.ProcessId.ToString(culture),
                 l.ProcessName,
-                l.AppType,
+                l.TypeDisplay,
                 l.StartTimeDisplay,
                 l.StartTime?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
                 l.IsCritical ? "yes" : "no");

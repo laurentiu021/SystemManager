@@ -166,6 +166,36 @@ public sealed class BatteryHealthViewUiTests
         });
     }
 
+    // ── The wear figure's colour (#2813) ──
+
+    [Fact]
+    public async Task AWearFigure_ReadsLikeTheHealthFigure_NotInFailureRed()
+    {
+        // The figure turned Danger red whenever there was one, a new battery's 0% included, beside an uncoloured Health
+        // figure and above a verdict that keeps a healthy battery out of that colour.
+        var battery = new BatteryInfo
+        {
+            HasBattery = true,
+            Name = "Primary",
+            ChargePercent = 80,
+            Status = "Charging",
+            DesignCapacityMWh = 57000,
+            FullChargeCapacityMWh = 54720,
+        };
+        var vm = await VmAsync(battery, History((0, 100), (182, 96)));
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+            var health = Assert.Single(Descendants<TextBlock>(view), t => t.Text == "96%");
+            var wear = Assert.Single(Descendants<TextBlock>(view), t => t.Text == "4%");
+            var danger = ((SolidColorBrush)view.FindResource("Danger")).Color;
+
+            Assert.Equal(((SolidColorBrush)health.Foreground).Color, ((SolidColorBrush)wear.Foreground).Color);
+            Assert.NotEqual(danger, ((SolidColorBrush)wear.Foreground).Color);
+        });
+    }
+
     /// <summary>The figure the details card shows beside <paramref name="label"/>, which comes right after it.</summary>
     private static string ValueOf(List<string> shown, string label)
     {

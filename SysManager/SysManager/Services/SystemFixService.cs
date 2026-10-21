@@ -100,21 +100,35 @@ public sealed class SystemFixService : IDisposable
     /// again. Requires admin. No reboot needed.
     /// </summary>
     public Task<SystemFixResult> ReinstallWinGetAsync(CancellationToken ct = default)
-    {
-        const string script = """
-            $ErrorActionPreference = 'Stop'
+        => RunFixAsync("Reinstall WinGet", ReinstallWinGetScript, needsReboot: false, ct);
+
+    /// <summary>The script <see cref="ReinstallWinGetAsync"/> runs.</summary>
+    /// <remarks>
+    /// It registers the user's own App Installer again, and when the user has none, the newest one on the PC. It took
+    /// whichever package <c>Get-AppxPackage -AllUsers</c> listed first, which with more than one account can be an
+    /// older version still registered for another user: <c>Add-AppxPackage -Register</c> then refuses it, because a
+    /// newer one is registered, or registers an old WinGet (#2835). <see cref="Helpers.SystemPaths.ResolveWinget"/>
+    /// sorts the package folders by version for the same reason.
+    /// <para>Internal so the integration suite can run this exact text in Windows PowerShell with the two Appx cmdlets
+    /// shadowed by functions.</para>
+    /// </remarks>
+    internal const string ReinstallWinGetScript = """
+        $ErrorActionPreference = 'Stop'
+        $byVersion = { [version]$_.Version }
+        $pkg = Get-AppxPackage Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue |
+               Sort-Object $byVersion -Descending | Select-Object -First 1
+        if (-not $pkg) {
             $pkg = Get-AppxPackage -AllUsers Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue |
-                   Select-Object -First 1
-            if ($pkg) {
-                Add-AppxPackage -DisableDevelopmentMode -Register `
-                    (Join-Path $pkg.InstallLocation 'AppXManifest.xml') -ErrorAction Stop
-                'WinGet (App Installer) re-registered successfully.'
-            } else {
-                throw 'App Installer package not found. Install "App Installer" from the Microsoft Store.'
-            }
-            """;
-        return RunFixAsync("Reinstall WinGet", script, needsReboot: false, ct);
-    }
+                   Sort-Object $byVersion -Descending | Select-Object -First 1
+        }
+        if ($pkg) {
+            Add-AppxPackage -DisableDevelopmentMode -Register `
+                (Join-Path $pkg.InstallLocation 'AppXManifest.xml') -ErrorAction Stop
+            'WinGet (App Installer) re-registered successfully.'
+        } else {
+            throw 'App Installer package not found. Install "App Installer" from the Microsoft Store.'
+        }
+        """;
 
     private async Task<SystemFixResult> RunFixAsync(string name, string script, bool needsReboot, CancellationToken ct)
     {

@@ -9,7 +9,8 @@ namespace SysManager.IntegrationTests;
 /// <summary>
 /// Runs <see cref="SystemFixService.ResetWindowsUpdateScript"/> in a real Windows PowerShell 5.1 with every cmdlet
 /// that would change the machine shadowed by a function, so the renames and the service restarts are observed, not
-/// performed (#2439).
+/// performed (#2439). <see cref="SystemFixService.ReinstallWinGetScript"/> runs the same way, with the App Installer
+/// packages it is shown chosen by the test and its registration observed (#2835).
 /// </summary>
 /// <remarks>
 /// The shipped script overrode its own <c>$ErrorActionPreference = 'Stop'</c> with <c>-ErrorAction SilentlyContinue</c>
@@ -65,5 +66,71 @@ public class SystemFixScriptTests
         Assert.Contains(SuccessSentence, output, StringComparison.Ordinal);
         Assert.Contains("SoftwareDistribution", output, StringComparison.Ordinal);
         Assert.Contains("catroot2", output, StringComparison.Ordinal);
+    }
+
+    // ---------- Reinstall WinGet (#2835) ----------
+
+    // Registering only writes the manifest it was given.
+    private const string RegisterStub =
+        "function Add-AppxPackage { [CmdletBinding()] param([switch]$DisableDevelopmentMode, [switch]$Register, " +
+        "[Parameter(Position = 0)]$Path) \"REGISTERED:$Path\" } ; ";
+
+    private static readonly string AppxGuard =
+        WindowsPowerShellScript.StubsInEffect("Get-AppxPackage", "Add-AppxPackage");
+
+    /// <summary>
+    /// <c>Get-AppxPackage</c> as Windows answers it: the user's own App Installer, if any, and with <c>-AllUsers</c>
+    /// one for every version registered on the PC, in the order given.
+    /// </summary>
+    private static string Packages(string? mine, params string[] everyone)
+    {
+        static string Package(string version) =>
+            $"[pscustomobject]@{{ Name = 'Microsoft.DesktopAppInstaller'; Version = '{version}'; " +
+            $"InstallLocation = 'C:\\Apps\\AppInstaller_{version}' }}";
+        return "function Get-AppxPackage { [CmdletBinding()] " +
+               "param([Parameter(Position = 0)]$Name, [switch]$AllUsers) " +
+               $"if ($AllUsers) {{ {string.Join(", ", everyone.Select(Package))} }} " +
+               $"else {{ {(mine is null ? "" : Package(mine))} }} }} ; ";
+    }
+
+    private static string ManifestOf(string version) => $@"REGISTERED:C:\Apps\AppInstaller_{version}\AppXManifest.xml";
+
+    [Fact]
+    public async Task ReinstallWinGet_RegistersTheUsersOwnAppInstaller_NotAnOlderOneListedFirst()
+    {
+        // With a second account, -AllUsers can list an older App Installer still registered for it first, and the
+        // script registered whichever came first: Windows refuses an older one while a newer one is registered.
+        var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
+            Packages("1.29.380.0", "1.21.3482.0", "1.29.380.0") + RegisterStub + AppxGuard
+            + SystemFixService.ReinstallWinGetScript);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(ManifestOf("1.29.380.0"), output, StringComparison.Ordinal);
+        Assert.DoesNotContain("1.21.3482.0", output, StringComparison.Ordinal);
+        Assert.Contains("re-registered successfully", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReinstallWinGet_WithNoneForTheUser_RegistersTheNewestOnThePC()
+    {
+        // By version, not by text, which puts 1.9 after 1.29.
+        var (exitCode, output, _) = await WindowsPowerShellScript.RunAsync(
+            Packages(mine: null, "1.9.25200.0", "1.29.380.0", "1.21.3482.0") + RegisterStub + AppxGuard
+            + SystemFixService.ReinstallWinGetScript);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(ManifestOf("1.29.380.0"), output, StringComparison.Ordinal);
+        Assert.Single(output.Split('\n'), line => line.StartsWith("REGISTERED:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReinstallWinGet_WithNoAppInstaller_SaysToInstallIt_AndRegistersNothing()
+    {
+        var (exitCode, output, error) = await WindowsPowerShellScript.RunAsync(
+            Packages(mine: null) + RegisterStub + AppxGuard + SystemFixService.ReinstallWinGetScript);
+
+        Assert.NotEqual(0, exitCode);
+        Assert.DoesNotContain("REGISTERED:", output, StringComparison.Ordinal);
+        Assert.Contains("package not found", error, StringComparison.Ordinal);
     }
 }

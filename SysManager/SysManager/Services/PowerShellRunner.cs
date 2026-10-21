@@ -120,8 +120,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
     public event Action<int>? ProgressChanged; // 0-100
 
     /// <summary>
-    /// OEM encoding for native Windows tools (chkdsk, sfc, DISM, ipconfig,
-    /// netsh, powercfg, sc). Requires CodePagesEncodingProvider registered at startup.
+    /// OEM encoding for native Windows tools (chkdsk, DISM, ipconfig, netsh, powercfg, sc).
+    /// Requires CodePagesEncodingProvider registered at startup. Not sfc, which writes UTF-16:
+    /// see <see cref="SysManager.Helpers.SfcOutput.Encoding"/>.
     /// </summary>
     public static System.Text.Encoding OemEncoding { get; } =
         GetOemEncodingSafe();
@@ -405,9 +406,9 @@ public sealed class PowerShellRunner : IPowerShellRunner, IDisposable
         if (string.IsNullOrWhiteSpace(workingDir) || !System.IO.Directory.Exists(workingDir))
             workingDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 
-        // Default to UTF-8 for most tools. System tools like sfc.exe, DISM.exe,
-        // and chkdsk.exe write in the OEM code page — callers should pass
-        // Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage).
+        // Default to UTF-8 for most tools. System tools like DISM.exe and chkdsk.exe
+        // write in the OEM code page — callers pass OemEncoding. sfc.exe writes
+        // UTF-16, and its caller passes SfcOutput.Encoding.
         var enc = outputEncoding ?? System.Text.Encoding.UTF8;
 
         var psi = new System.Diagnostics.ProcessStartInfo

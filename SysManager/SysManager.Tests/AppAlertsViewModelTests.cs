@@ -311,8 +311,8 @@ public class AppAlertsViewModelTests
     [Fact]
     public async Task F5_WhileMonitoring_ChecksAndKeepsMonitoring()
     {
-        // Carries the idx-235 regression over to the new F5: it must not switch off the busy/monitoring
-        // affordance, and it says what it did.
+        // Carries the idx-235 regression over to the new F5: it must not switch off monitoring, and it says what it
+        // did. Monitoring is a state rather than work, so the footer's bar is not shown for it (#2812).
         using var vm = NewVm();
         await vm.StartMonitoringCommand.ExecuteAsync(null);
 
@@ -321,7 +321,7 @@ public class AppAlertsViewModelTests
         await f5.ExecuteAsync(null);
 
         Assert.True(vm.IsMonitoring);
-        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsBusy);
         Assert.Contains("Checked", vm.MonitorStatus, StringComparison.Ordinal);
     }
 
@@ -339,7 +339,26 @@ public class AppAlertsViewModelTests
         await vm.StartMonitoringCommand.ExecuteAsync(null);
 
         Assert.True(vm.IsMonitoring);
-        Assert.True(vm.IsBusy);
+        Assert.False(vm.IsBusy);
+
+        vm.StopMonitoringCommand.Execute(null); // clean up watchers/timer
+    }
+
+    [Fact]
+    public async Task StartMonitoring_MovesTheBarForTheBaseline_AndShowsNoBarWhileMonitoring()
+    {
+        // Monitoring held IsBusy for as long as it was on, without the indeterminate flag, so the footer's bar sat
+        // empty and still the whole time (#2812). The baseline it takes first is the part that is work.
+        using var vm = NewVm();
+        var movedWhileBusy = false;
+        vm.PropertyChanged += (_, _) => movedWhileBusy |= vm.IsBusy && vm.IsProgressIndeterminate;
+
+        await vm.StartMonitoringCommand.ExecuteAsync(null);
+
+        Assert.True(movedWhileBusy);
+        Assert.True(vm.IsMonitoring);
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
 
         vm.StopMonitoringCommand.Execute(null); // clean up watchers/timer
     }

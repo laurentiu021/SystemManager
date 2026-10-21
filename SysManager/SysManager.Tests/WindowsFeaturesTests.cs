@@ -202,6 +202,36 @@ public class WindowsFeaturesTests
     }
 
     [Fact]
+    public async Task ToggleFeature_MovesTheBar_WhileItRuns()
+    {
+        // It set IsBusy alone, so the footer's bar sat empty and still through a DISM run of minutes (#2812).
+        var dism = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+              .Returns(dism.Task);
+        using var dialog = new DialogAnswer(confirm: true);
+        var vm = ElevatedVm(runner, NoRestorePoint());
+
+        var toggle = vm.ToggleFeatureCommand.ExecuteAsync(
+            new WindowsFeature { Name = "TelnetClient", DisplayName = "Telnet Client" });
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.True(vm.IsProgressIndeterminate);
+        }
+        finally
+        {
+            // Ended either way: a change left running holds the lock every later toggle in this class needs.
+            dism.SetResult(0);
+            await toggle;
+        }
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
+    [Fact]
     public async Task ToggleFeature_TakesTheRestorePointBeforeTouchingTheFeature()
     {
         var rp = RestorePointTaken();

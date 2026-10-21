@@ -85,14 +85,25 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
         // marshaled via the SynchronizationContext captured at service construction), then
         // resume on the UI thread to set the bound state.
         MonitorStatus = "Starting monitoring…";
-        await Task.Run(() =>
+        // The bar moves while the baseline is taken, the part that is work. Monitoring is a state, which the status
+        // line and the Stop button show: held busy for it, the footer's bar sat empty and still while it ran (#2812).
+        IsBusy = true;
+        IsProgressIndeterminate = true;
+        try
         {
-            _service.TakeBaseline();
-            _service.Start();
-        }).ConfigureAwait(true);
+            await Task.Run(() =>
+            {
+                _service.TakeBaseline();
+                _service.Start();
+            }).ConfigureAwait(true);
+        }
+        finally
+        {
+            IsBusy = false;
+            IsProgressIndeterminate = false;
+        }
 
         IsMonitoring = true;
-        IsBusy = true;
         MonitorStatus = "Monitoring active — watching for new installations...";
         Log.Information("App alert monitoring started by user");
     }
@@ -104,7 +115,6 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
 
         _service.Stop();
         IsMonitoring = false;
-        IsBusy = false;
         MonitorStatus = $"Monitoring stopped. {AlertCount} alert{(AlertCount == 1 ? "" : "s")} recorded.";
         Log.Information("App alert monitoring stopped by user");
     }

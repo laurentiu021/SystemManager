@@ -691,6 +691,34 @@ public class WindowsUpdateViewModelTests
         Assert.True(vm.InstallModuleCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task CheckModule_MovesTheBar_WhileItRuns()
+    {
+        // The bar beside the status line binds the download's value, so a check that set IsBusy alone showed whatever
+        // the last download had left there, standing still (#2812).
+        var probe = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunScriptViaPwshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(probe.Task);
+        var vm = new WindowsUpdateViewModel(runner, Substitute.For<IWindowsUpdateService>(),
+            new WindowsUpdatePolicyService(), () => false);
+
+        var check = vm.CheckModuleCommand.ExecuteAsync(null);
+        try
+        {
+            Assert.True(vm.IsBusy);
+            Assert.True(vm.IsProgressIndeterminate);
+        }
+        finally
+        {
+            // Ended either way, so a failure here leaves no check running.
+            probe.SetResult(0);
+            await check;
+        }
+
+        Assert.False(vm.IsBusy);
+        Assert.False(vm.IsProgressIndeterminate);
+    }
+
     // ── Confirmation-gate test (installing updates must route through Confirm) ──
 
     [Fact]

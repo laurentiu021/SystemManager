@@ -1487,6 +1487,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Start/stop monitoring, **Acknowledge All**, clear history. While it is monitoring, **F5**
   checks for new installs straight away instead of waiting for the next 30-second pass. To
   see every program that is installed, use the Uninstaller
+- Starting takes a moment while it notes what is already installed, and the progress bar moves
+  while it does. Monitoring itself is shown by the status line, not by a bar that never finishes
 - **The list is kept between sessions** — the last 200 detections, with the time each was noticed,
   in your `%LocalAppData%\SysManager` folder — and Recent Changes lists them too. Clear History clears
   both, and asks first, since it cannot be undone

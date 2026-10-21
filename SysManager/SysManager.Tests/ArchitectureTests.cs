@@ -4375,6 +4375,97 @@ public partial class ArchitectureTests
     private static partial Regex CountInverseVisibility();
 
     /// <summary>
+    /// Every member that sets <c>IsBusy</c>, in a view model whose tab shows a progress bar that follows it, says how
+    /// that bar moves.
+    /// </summary>
+    /// <remarks>
+    /// The shared footer, and the hand-built bars like it, show while <c>IsBusy</c> is true and animate only while
+    /// <c>IsProgressIndeterminate</c> is. Four members set busy alone, and their bars sat empty and still while they
+    /// ran (#2812): Windows Features turning a feature on or off, a DISM run that can take minutes; System Report's
+    /// export; Windows Update's module check, whose bar showed what the last download left; and New App Alerts, which
+    /// held busy for as long as monitoring was on. So a member that sets busy assigns the mode too, true for work of
+    /// unknown length or false beside a value it reports, or, where the view's bar binds a value, reports that value,
+    /// as the Uninstaller's run does app by app. Which view model a view shows comes from
+    /// <c>MainWindowViewModel</c>'s tab table, the table that opens it.
+    /// </remarks>
+    [Fact]
+    public void EveryBusyFlag_SaysHowTheBarFollowingItMoves()
+    {
+        var app = TestPaths.AppProject();
+        var table = File.ReadAllText(Path.Combine(app, "ViewModels", "MainWindowViewModel.cs"));
+        var viewModelOf = TabViewModelAndView().Matches(table)
+            .ToDictionary(m => m.Groups["view"].Value, m => m.Groups["vm"].Value, StringComparer.Ordinal);
+        var offenders = new List<string>();
+        var bars = 0;
+        var members = 0;
+
+        foreach (var file in Directory.GetFiles(Path.Combine(app, "Views"), "*.xaml").Order(StringComparer.Ordinal))
+        {
+            var view = Path.GetFileNameWithoutExtension(file);
+            if (view == "StatusFooter") continue;   // the footer itself: its bindings are what this reads
+            var xaml = WithoutXamlComments(File.ReadAllText(file));
+            var footer = xaml.Contains("<v:StatusFooter", StringComparison.Ordinal);
+            if (!footer && !BarFollowingBusy().IsMatch(xaml)) continue;
+            bars++;
+            var value = BarValue().Match(xaml);
+            var reports = value.Success
+                ? new Regex(@"\b" + Regex.Escape(value.Groups["path"].Value) + @"\s*=")
+                : null;
+
+            if (!viewModelOf.TryGetValue(view, out var viewModel))
+            {
+                offenders.Add($"{view} shows a bar that follows IsBusy, and the tab table names no view model for it");
+                continue;
+            }
+
+            var code = WithoutComments(File.ReadAllText(Path.Combine(app, "ViewModels", viewModel + ".cs")));
+            var starts = NextMemberDeclaration().Matches(code).Select(m => m.Index).Append(code.Length).ToList();
+            for (var i = 0; i + 1 < starts.Count; i++)
+            {
+                var member = code[starts[i]..starts[i + 1]];
+                if (!BusySetTrue().IsMatch(member)) continue;
+                members++;
+                if (member.Contains("IsProgressIndeterminate =", StringComparison.Ordinal)) continue;
+                if (reports?.IsMatch(member) == true) continue;
+
+                var head = member.TrimStart();
+                var paren = head.IndexOf('(', StringComparison.Ordinal);
+                offenders.Add($"{viewModel}: \"{(paren > 0 ? head[..paren] : head).Trim()}\" sets IsBusy without "
+                    + $"IsProgressIndeterminate, so {view}'s bar shows empty and still");
+            }
+        }
+
+        // Vacuity floor: 36 views showing such a bar and 71 members setting busy in their view models when measured.
+        // Far fewer means the patterns stopped matching, and every absence below is an absence of reading.
+        Assert.True(bars >= 30 && members >= 60,
+            $"only {bars} views with a bar that follows IsBusy and {members} members setting it were found, so the "
+            + "patterns are out of date and a pass proves nothing.");
+        Assert.True(offenders.Count == 0,
+            "these set IsBusy without saying how the bar that follows it moves, so the bar shows as an empty track "
+            + "that never moves, which reads as frozen. Set IsProgressIndeterminate with it, and back in the "
+            + "finally:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>A tab in <c>MainWindowViewModel</c>'s table, capturing its view model and its view.</summary>
+    [GeneratedRegex(@"Tab<(?<vm>\w+)>\(\s*""[^""]+""\s*,\s*""[^""]+""\s*,\s*typeof\(Views\.(?<view>\w+)\)",
+                    RegexOptions.Compiled)]
+    private static partial Regex TabViewModelAndView();
+
+    /// <summary>A hand-built progress bar that shows while busy and moves when indeterminate.</summary>
+    [GeneratedRegex(@"<ProgressBar\b(?=[^>]*IsIndeterminate=""\{Binding IsProgressIndeterminate\}"")"
+                    + @"(?=[^>]*Visibility=""\{Binding IsBusy\b)", RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex BarFollowingBusy();
+
+    /// <summary>The value a hand-built bar that shows while busy binds, capturing its path.</summary>
+    [GeneratedRegex(@"<ProgressBar\b(?=[^>]*Visibility=""\{Binding IsBusy\b)[^>]*?\bValue=""\{Binding (?<path>\w+)\}""",
+                    RegexOptions.Compiled | RegexOptions.Singleline)]
+    private static partial Regex BarValue();
+
+    /// <summary><c>IsBusy</c> set to true.</summary>
+    [GeneratedRegex(@"\bIsBusy\s*=\s*true\b", RegexOptions.Compiled)]
+    private static partial Regex BusySetTrue();
+
+    /// <summary>
     /// Every control an empty state's message names is on that view, under the label it names.
     /// </summary>
     /// <remarks>

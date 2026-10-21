@@ -99,6 +99,9 @@ public sealed partial class SystemReportViewModel : ViewModelBase
         if (dlg.ShowDialog() != true) return;
 
         IsBusy = true;
+        // Busy alone left the footer's bar empty and still while the report was generated again for the file (#2812).
+        // Generate sets both.
+        IsProgressIndeterminate = true;
         StatusMessage = "Exporting…";
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -112,7 +115,7 @@ public sealed partial class SystemReportViewModel : ViewModelBase
         catch (OperationCanceledException) { StatusMessage = "Export cancelled."; }
         catch (IOException ex) { StatusMessage = $"Export failed: {ex.Message}"; }
         catch (UnauthorizedAccessException ex) { StatusMessage = $"Export failed (access denied): {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     [RelayCommand(CanExecute = nameof(CanExport))]

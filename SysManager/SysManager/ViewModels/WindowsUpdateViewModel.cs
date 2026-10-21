@@ -295,6 +295,8 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
     private async Task CheckModuleAsync()
     {
         IsBusy = true;
+        // Without it the bar showed whatever value the last download left, standing still (#2812).
+        IsProgressIndeterminate = true;
         try
         {
             ModuleAvailable = await ProbeModuleAvailabilityAsync();
@@ -304,7 +306,7 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         }
         catch (InvalidOperationException ex) { ModuleStatus = $"Check failed: {ex.Message}"; }
         catch (OperationCanceledException) { ModuleStatus = "Module check cancelled."; }
-        finally { IsBusy = false; }
+        finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 
     private async Task<bool> ProbeModuleAvailabilityAsync()

@@ -4,6 +4,7 @@
 
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using SysManager.Models;
 
@@ -67,6 +68,66 @@ public sealed class ComboBoxTemplateTests
 
             Assert.Equal(["Speakers (Desk)"], Drawn(combo));
         });
+    }
+
+    // ── Where a click lands (#2815) ──
+
+    [Fact]
+    public void AClickAnywhereOnAClosedBox_ReachesThePartThatOpensIt()
+    {
+        // That part covered only the arrow's 23 px, and a click on the text reached the border behind it, which opens
+        // nothing: WPF's ComboBox takes focus on a press and leaves opening to that button.
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var combo = new ComboBox { Width = 300, ItemsSource = new[] { "Quick", "Standard" }, SelectedIndex = 0 };
+            Drawn(combo);
+            var opener = (ToggleButton)combo.Template.FindName("ToggleChevron", combo);
+
+            foreach (var x in new[] { 40.0, 150.0, 290.0 })
+                Assert.True(IsWithin(HitAt(combo, x), opener), $"a click {x} px in does not reach what opens the list");
+        });
+    }
+
+    [Fact]
+    public void AnEditableBox_KeepsClicksOnItsTextForTyping()
+    {
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var combo = new ComboBox { Width = 300, IsEditable = true, ItemsSource = new[] { "8.8.8.8", "1.1.1.1" } };
+            Drawn(combo);
+
+            Assert.True(IsWithin(HitAt(combo, 40), (TextBox)combo.Template.FindName("PART_EditableTextBox", combo)),
+                "a click on an editable box's text does not reach its text box");
+            Assert.True(IsWithin(HitAt(combo, 290), (ToggleButton)combo.Template.FindName("ToggleChevron", combo)),
+                "a click on an editable box's arrow does not open it");
+        });
+    }
+
+    [Fact]
+    public void AFocusedBox_DrawsTheAppsFocusRing()
+    {
+        // Windows' dotted rectangle in the system text colour barely showed on the dark card (#2815).
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            var combo = new ComboBox();
+            Drawn(combo);
+
+            Assert.Same(Application.Current.FindResource("FocusRing"), combo.FocusVisualStyle);
+        });
+    }
+
+    /// <summary>What a click <paramref name="x"/> px in from the box's left edge, halfway down, lands on.</summary>
+    private static DependencyObject? HitAt(ComboBox combo, double x) =>
+        VisualTreeHelper.HitTest(combo, new Point(x, combo.ActualHeight / 2))?.VisualHit;
+
+    private static bool IsWithin(DependencyObject? hit, DependencyObject ancestor)
+    {
+        for (var d = hit; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, ancestor)) return true;
+        return false;
     }
 
     /// <summary>Lays the closed box out the way a window would and returns the text it draws, in order.</summary>

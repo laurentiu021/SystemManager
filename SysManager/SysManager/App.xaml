@@ -932,12 +932,14 @@
                                               Padding="{TemplateBinding Padding}"
                                               VerticalAlignment="Center"/>
                             </Border>
+                            <!-- Focus after hover: the later trigger wins, and a focused field under the pointer
+                                 showed the hover border instead of its focus border (#2815). -->
                             <ControlTemplate.Triggers>
-                                <Trigger Property="IsKeyboardFocused" Value="True">
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                                </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BorderAccent}"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -972,6 +974,8 @@
                 <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="Height" Value="34"/>
+                <!-- Windows' dotted rectangle in the system text colour barely showed on the dark card (#2815). -->
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ComboBox">
@@ -1009,7 +1013,11 @@
                                                           ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                                           IsHitTestVisible="False"/>
 
-                                        <ToggleButton x:Name="ToggleChevron" Grid.Column="1"
+                                        <!-- The part that opens the list. It spans the selected text as well as the
+                                             arrow, so a click anywhere on a closed box opens it; it covered only the
+                                             arrow's 23 px (#2815). An editable box puts it back over the arrow, so its
+                                             text box keeps the clicks on the text. -->
+                                        <ToggleButton x:Name="ToggleChevron" Grid.Column="0" Grid.ColumnSpan="2"
                                                       Style="{StaticResource ComboBoxToggleButton}"
                                                       IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"/>
                                         <TextBlock Grid.Column="1" Text="&#xE70D;" IsHitTestVisible="False"
@@ -1038,12 +1046,15 @@
                                 <Trigger Property="IsEditable" Value="True">
                                     <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
                                     <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
-                                </Trigger>
-                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                    <Setter TargetName="ToggleChevron" Property="Grid.Column" Value="1"/>
+                                    <Setter TargetName="ToggleChevron" Property="Grid.ColumnSpan" Value="1"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource BorderAccent}"/>
+                                </Trigger>
+                                <!-- After the hover trigger, so the focus border wins under the pointer (#2815). -->
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -1164,7 +1175,15 @@
                             <Border Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
                                     CornerRadius="{StaticResource RadiusMd}" Padding="{TemplateBinding Padding}">
-                                <ContentPresenter TextBlock.Foreground="{DynamicResource TextPrimary}"/>
+                                <ContentPresenter TextBlock.Foreground="{DynamicResource TextPrimary}">
+                                    <!-- A string tooltip becomes a TextBlock that does not wrap, so one longer than
+                                         MaxWidth was cut off mid-sentence (#2815). -->
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                        </Style>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Border>
                         </ControlTemplate>
                     </Setter.Value>

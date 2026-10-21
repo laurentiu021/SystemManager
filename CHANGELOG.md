@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.37] - 2026-10-21
+
+**Progress bars move while Windows Features, System Report and Windows Update work, and New App Alerts no longer
+shows one for as long as it monitors.**
+
+### Fixed
+
+- **Turning a Windows feature on or off showed an empty bar that never moved.** The bar at the foot of a tab shows
+  while the tab works and moves only when the tab says it cannot tell how far the work has got, and this change, a
+  run of Windows' own servicing tool that can take minutes, said the first and not the second. System Report's export
+  and Windows Update's check for its history module did the same, and on Windows Update the bar showed whatever the
+  last download had left. Each now moves while it runs. Since 0.3.0 on Windows Update, 0.46.0 on Windows Features and
+  1.21.0 on System Report.
+- **New App Alerts showed an empty, still bar for as long as monitoring was on.** Monitoring is a state, not work, so
+  it no longer marks the tab as working: the bar, and the mark under the tab's name in the sidebar, show while it
+  notes what is already installed at the start, and the status line says it is monitoring. Since 1.44.1.
+
 ## [1.130.36] - 2026-10-21
 
 **A list emptied by a search or a filter says so, and an empty list names the buttons and switches you can see.**

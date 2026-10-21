@@ -139,6 +139,9 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         }
 
         IsBusy = true;
+        // The footer's bar shows while busy and moves only when indeterminate, and this set busy alone, so the bar sat
+        // empty and still through a DISM run that can take minutes (#2812). The scan above sets both.
+        IsProgressIndeterminate = true;
         feature.Status = feature.IsEnabled ? "Disabling…" : "Enabling…";
         StatusMessage = $"{(feature.IsEnabled ? "Disabling" : "Enabling")} {feature.DisplayName}…";
         _toggleCts?.Cancel();
@@ -196,6 +199,7 @@ public sealed partial class WindowsFeaturesViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+            IsProgressIndeterminate = false;
         }
     }
 

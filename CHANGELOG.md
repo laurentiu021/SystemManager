@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.49] - 2026-10-21
+
+**Edge/OneDrive Remover says that Edge will show "Your browser is managed by your organization" while it is
+disabled, and that the message comes from its own two settings.**
+
+### Fixed
+
+- **Disabling Edge made it say "Your browser is managed by your organization", and nothing said why.** The two
+  settings that stop Edge running on its own are machine policies, and Edge shows that message whenever one is set.
+  On a personal PC it reads like a sign that something harmful has taken over the browser. The Disable confirmation
+  and the Edge card now say that the message comes from those two settings and that Restore Edge removes it, and the
+  Restore confirmation says it ends the message. Since 1.53.0.
+
 ## [1.130.48] - 2026-10-21
 
 **A DNS preset on DNS & Hosts goes to the adapter Windows sends its traffic through, so a family filter that says it

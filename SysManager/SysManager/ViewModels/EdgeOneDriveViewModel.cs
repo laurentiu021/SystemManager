@@ -70,6 +70,9 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
             ? "Edge is de-integrated (background mode and startup boost are off)."
             : "Edge is active (background mode / startup boost may be on).");
 
+    /// <summary>What Edge says while it is disabled and why, on the Edge card (#2880).</summary>
+    public string EdgeManagedNotice => EdgeOneDriveService.ManagedBrowserNotice;
+
     /// <summary>What a card says before a read has worked, or null once one has.</summary>
     private string? UnreadState(string component) => StatusRead ? null
         : StatusUnreadable ? $"{component}'s state could not be read." : $"Checking {component}…";
@@ -182,7 +185,8 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
                 "it stops running on its own. Without those tasks Edge no longer updates itself in the " +
                 "background, so its security fixes can arrive late until you restore it. You can still " +
                 "open Edge normally, and you can undo all of " +
-                "this from the Restore button. This needs administrator rights.",
+                "this from the Restore button. This needs administrator rights.\n\n" +
+                EdgeOneDriveService.ManagedBrowserNotice,
                 "Disable & de-integrate Edge"))
         {
             StatusMessage = "Edge change cancelled.";
@@ -196,8 +200,9 @@ public sealed partial class EdgeOneDriveViewModel : ViewModelBase
     {
         if (!Confirm(
                 "Restore Microsoft Edge to its Windows defaults?\n\n" +
-                "This clears the background-mode and startup-boost policies and re-enables Edge's " +
-                "automatic-update tasks. This needs administrator rights.",
+                "This clears the background-mode and startup-boost policies, which also ends Edge's \"" +
+                EdgeOneDriveService.ManagedBrowserMessage + "\" message unless something else sets Edge " +
+                "policies too, and re-enables Edge's automatic-update tasks. This needs administrator rights.",
                 "Restore Edge"))
         {
             StatusMessage = "Edge restore cancelled.";

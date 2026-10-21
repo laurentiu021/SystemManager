@@ -2189,6 +2189,43 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// What Edge says while it is disabled, and why, is written once, in <c>EdgeOneDriveService</c>; the Edge card
+    /// shows it and the README quotes it (#2880).
+    /// </summary>
+    /// <remarks>
+    /// Edge says "Your browser is managed by your organization" while the two policies Disable sets are on, and
+    /// nothing told a reader that it came from there. The Disable confirmation, the Restore confirmation and the card
+    /// say it from one pair of constants, and the README is held to the notice's words, so none of them can drift.
+    /// The needle is assembled so this file cannot match itself, and comments are stripped so a remark that quotes
+    /// the message is not counted.
+    /// </remarks>
+    [Fact]
+    public void TheManagedBrowserNotice_IsWrittenInOnePlace_AndTheCardAndTheReadmeSayIt()
+    {
+        var needle = "managed by " + "your organization";
+        const string theOnePlace = "EdgeOneDriveService.cs";
+
+        var files = Directory.GetFiles(TestPaths.AppProject(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .ToList();
+        Assert.True(files.Count >= 300,
+            $"only {files.Count} app source files enumerated — this guard is reading the wrong folder.");
+
+        var holders = files
+            .Where(f => WithoutComments(File.ReadAllText(f)).Contains(needle, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+        Assert.Equal([theOnePlace], holders);
+
+        var view = File.ReadAllText(TestPaths.AppFile("Views", "EdgeOneDriveView.xaml"));
+        Assert.Contains("Text=\"{Binding EdgeManagedNotice}\"", view, StringComparison.Ordinal);
+
+        var readme = Collapse(File.ReadAllText(Path.Combine(TestPaths.RepoRoot(), "README.md")));
+        Assert.Contains(Collapse(EdgeOneDriveService.ManagedBrowserNotice), readme, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// No code sets a Dashboard alert to green directly. Green comes only from a <c>Classify…</c> method's
     /// measured good-news branch, which the unit tests pin.
     /// </summary>

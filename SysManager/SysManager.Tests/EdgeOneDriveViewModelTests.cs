@@ -322,4 +322,54 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
 
         Assert.Contains("security fixes can arrive late", Assert.Single(dialog.Messages), StringComparison.Ordinal);
     }
+
+    // ---------- Edge says it is managed while it is disabled (#2880) ----------
+
+    private async Task<EdgeOneDriveViewModel> EdgeVm()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(new Collection<PSObject>());
+        var vm = new EdgeOneDriveViewModel(
+            new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root), NoRestorePoint());
+        await vm.InitializationComplete;
+        vm.EdgeInstalled = true;
+        return vm;
+    }
+
+    [Fact]
+    public async Task DisablingEdge_Confirmation_SaysEdgeWillSayItIsManaged_AndWhy()
+    {
+        // The two policies make Edge say "Your browser is managed by your organization", which on a personal PC reads
+        // like a sign of a hijacked browser, and the confirmation explained everything else the button does.
+        var vm = await EdgeVm();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.DisableEdgeCommand.ExecuteAsync(null);
+
+        Assert.Contains(EdgeOneDriveService.ManagedBrowserNotice, Assert.Single(dialog.Messages),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RestoringEdge_Confirmation_SaysItEndsTheManagedMessage()
+    {
+        var vm = await EdgeVm();
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.RestoreEdgeCommand.ExecuteAsync(null);
+
+        Assert.Contains($"ends Edge's \"{EdgeOneDriveService.ManagedBrowserMessage}\" message",
+            Assert.Single(dialog.Messages), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheEdgeCard_ShowsTheNotice()
+    {
+        var vm = await EdgeVm();
+
+        Assert.Equal(EdgeOneDriveService.ManagedBrowserNotice, vm.EdgeManagedNotice);
+        Assert.Contains("\"Your browser is managed by your organization\"", vm.EdgeManagedNotice,
+            StringComparison.Ordinal);
+    }
 }

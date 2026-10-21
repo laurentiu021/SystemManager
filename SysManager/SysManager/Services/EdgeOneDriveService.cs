@@ -99,6 +99,23 @@ public sealed partial class EdgeOneDriveService
     private const string BackgroundModeValue = "BackgroundModeEnabled";
     private const string StartupBoostValue = "StartupBoostEnabled";
 
+    /// <summary>
+    /// What Edge says while it is disabled, and why. Shown in the Disable confirmation and on the tab, and quoted in
+    /// the README, which a guard holds to this text.
+    /// </summary>
+    /// <remarks>
+    /// The two values are machine policies, and Edge shows "Your browser is managed by your organization" whenever a
+    /// machine policy is set. On a personal PC that is the best-known sign of an unwanted program having taken over
+    /// the browser, and nothing said it came from here (#2880).
+    /// </remarks>
+    public const string ManagedBrowserNotice =
+        "While Edge is disabled, it says \"" + ManagedBrowserMessage + "\" in its menu and settings. "
+        + "That message comes from the two Edge policies SysManager sets, not from anything harmful. Restore Edge "
+        + "removes them, and the message with them, unless something else on this PC sets Edge policies too.";
+
+    /// <summary>The words Edge shows while a machine policy is set.</summary>
+    public const string ManagedBrowserMessage = "Your browser is managed by your organization";
+
     // The ONLY scheduled tasks this service will ever touch — Edge's two machine auto-update tasks.
     // A fixed allowlist (never a user- or catalog-supplied name) means the disable/enable path can
     // never be pointed at an arbitrary task. Each name is validated as embedding-safe by a unit test.

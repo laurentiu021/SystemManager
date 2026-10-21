@@ -1646,7 +1646,10 @@ Get Microsoft Edge and OneDrive out of your way — reversibly:
   fixes can arrive late until you restore it. The tasks are found by the start of their
   names, since Edge Update adds an ID to each; when none is found or one cannot be
   changed, the change is reported as failed, and the two policies go back to what they
-  were before
+  were before. While Edge is disabled, it says "Your browser is managed by your organization"
+  in its menu and settings. That message comes from the two Edge policies SysManager sets, not
+  from anything harmful. Restore Edge removes them, and the message with them, unless something
+  else on this PC sets Edge policies too.
 - **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
   clear the Edge policies and re-enable its update tasks — so nothing here is one-way.
   The OneDrive entry comes back only once its setup has succeeded; a failed reinstall

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.Reflection;
 using SysManager.Models;
 using SysManager.ViewModels;
@@ -26,9 +27,6 @@ public class LogsViewModelExtendedTests
     private static readonly MethodInfo _resolveSince =
         typeof(LogsViewModel).GetMethod("ResolveSince", BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private static readonly MethodInfo _csv =
-        typeof(LogsViewModel).GetMethod("Csv", BindingFlags.NonPublic | BindingFlags.Static)!;
-
     private static readonly MethodInfo _containsCi =
         typeof(LogsViewModel).GetMethod("ContainsCi", BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -40,9 +38,6 @@ public class LogsViewModelExtendedTests
 
     private static DateTime? ResolveSince(string range) =>
         (DateTime?)_resolveSince.Invoke(null, new object[] { range });
-
-    private static string Csv(string? s) =>
-        (string)_csv.Invoke(null, new object?[] { s })!;
 
     private static bool ContainsCi(string? s, string q) =>
         (bool)_containsCi.Invoke(null, new object?[] { s, q })!;
@@ -218,46 +213,29 @@ public class LogsViewModelExtendedTests
         Assert.InRange(diff.TotalHours, 23.9, 24.1);
     }
 
-    // ---------- Csv helper ----------
+    // ---------- ToCsv: the export, through the shared Csv helper (#2888) ----------
+    // The tab had an escaper of its own and wrote commas by hand. Its quoting cases are Csv's now, in CsvExportTests.
 
     [Fact]
-    public void Csv_PlainString_ReturnedAsIs()
+    public void ToCsv_WritesAHeaderAndEachEvent_QuotingWhatHasTo()
     {
-        Assert.Equal("hello", Csv("hello"));
+        var csv = LogsViewModel.ToCsv([Make(EventSeverity.Error, "disk \"C:\" full, again", provider: "Disk", id: 7)],
+            CultureInfo.InvariantCulture);
+
+        var lines = csv.Split("\r\n");
+        Assert.Equal("Timestamp,Severity,Log,Provider,EventId,Message,Explanation,Recommendation", lines[0]);
+        Assert.Contains(",Disk,7,\"disk \"\"C:\"\" full, again\",", lines[1], StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Csv_Null_ReturnsEmpty()
+    public void ToCsv_InARegionThatSplitsOnSemicolons_SplitsOnThem()
     {
-        Assert.Equal("", Csv(null));
-    }
+        var csv = LogsViewModel.ToCsv([Make(EventSeverity.Error, "a, b; c", provider: "Disk", id: 7)],
+            new CultureInfo("ro-RO"));
 
-    [Fact]
-    public void Csv_ContainsComma_Quoted()
-    {
-        var result = Csv("a,b");
-        Assert.StartsWith("\"", result);
-        Assert.EndsWith("\"", result);
-        Assert.Contains("a,b", result);
-    }
-
-    [Fact]
-    public void Csv_ContainsQuote_DoubleEscaped()
-    {
-        var result = Csv("say \"hi\"");
-        Assert.Contains("\"\"hi\"\"", result);
-    }
-
-    [Fact]
-    public void Csv_ContainsNewline_Quoted()
-    {
-        Assert.StartsWith("\"", Csv("line1\nline2"));
-    }
-
-    [Fact]
-    public void Csv_ContainsCarriageReturn_Quoted()
-    {
-        Assert.StartsWith("\"", Csv("line1\rline2"));
+        var lines = csv.Split("\r\n");
+        Assert.Equal("Timestamp;Severity;Log;Provider;EventId;Message;Explanation;Recommendation", lines[0]);
+        Assert.Contains(";Disk;7;\"a, b; c\";", lines[1], StringComparison.Ordinal);
     }
 
     // ---------- ContainsCi ----------

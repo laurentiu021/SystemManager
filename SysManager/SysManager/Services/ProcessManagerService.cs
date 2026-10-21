@@ -343,23 +343,24 @@ public sealed partial class ProcessManagerService
     /// against real dates. The display columns are what the user recognises from the tab; the raw ones are
     /// what makes the file answer questions the screen already answered.
     /// </remarks>
-    public static string ToCsv(IEnumerable<ProcessEntry> entries)
+    public static string ToCsv(IEnumerable<ProcessEntry> entries, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "PID", "Name", "Description", "Memory", "Memory (bytes)", "CPU %", "Threads",
+        Csv.AppendRow(sb, culture, "PID", "Name", "Description", "Memory", "Memory (bytes)", "CPU %", "Threads",
             "Status", "Started", "Started (raw)", "Category", "Safety", "Signature", "Path");
         foreach (var e in entries)
         {
-            Csv.AppendRow(sb,
-                e.Pid.ToString(CultureInfo.InvariantCulture),
+            Csv.AppendRow(sb, culture,
+                e.Pid.ToString(culture),
                 e.Name,
                 e.PlainDescription.Length > 0 ? e.PlainDescription : e.Description,
                 e.MemoryDisplay,
-                e.MemoryBytes.ToString(CultureInfo.InvariantCulture),
-                e.CpuPercent.ToString("F1", CultureInfo.InvariantCulture),
-                e.ThreadCount.ToString(CultureInfo.InvariantCulture),
+                e.MemoryBytes.ToString(culture),
+                e.CpuPercent.ToString("F1", culture),
+                e.ThreadCount.ToString(culture),
                 e.Status,
                 e.StartTimeDisplay,
                 e.StartTime == default

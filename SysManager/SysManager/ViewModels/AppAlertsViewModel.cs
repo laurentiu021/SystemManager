@@ -4,7 +4,6 @@
 
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -230,8 +229,8 @@ public sealed partial class AppAlertsViewModel : ViewModelBase
 
         try
         {
-            var csv = AppAlertService.ToCsv(Alerts);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = AppAlertService.ToCsv(Alerts, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {Alerts.Count} alert(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("App alerts exported", Path.GetFileName(dlg.FileName));
         }

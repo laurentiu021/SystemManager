@@ -301,6 +301,14 @@ of an update being downloaded. Reading those aloud would talk over you without t
 tab announces the coarsest line it has and leaves the fast-moving numbers on screen only. Both halves of that
 are enforced by a test, because a change that announced everything would look like an improvement.
 
+### CSV exports
+The eleven tabs with an **Export CSV** button write files that open in Excel with a double-click, in your own
+region. The columns are split on Windows' list separator and the numbers carry your decimal mark, so where
+decimals are written with a comma, Romanian, German and French among them, the columns are split on semicolons
+and 3,7 is a number Excel can sort. Each file is UTF-8 with the mark Excel looks for, so accented names and dashes
+arrive intact. A value that holds the separator, a quote or a line break is quoted, so a folder named
+`Grieg, Peer Gynt` stays in one column.
+
 ### Right-Click Menu
 Manage Windows Explorer right-click entries — toggle them on or off without
 deleting anything. Plain menu entries use the standard `LegacyDisable` registry

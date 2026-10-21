@@ -5,7 +5,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -581,8 +580,8 @@ public sealed partial class ProcessManagerViewModel : ViewModelBase
 
         try
         {
-            var csv = ProcessManagerService.ToCsv(FilteredProcesses);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = ProcessManagerService.ToCsv(FilteredProcesses, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {FilteredProcesses.Count} process(es) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Process list exported", Path.GetFileName(dlg.FileName));
         }

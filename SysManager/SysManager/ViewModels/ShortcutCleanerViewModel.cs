@@ -4,7 +4,6 @@
 
 using System.Globalization;
 using System.IO;
-using System.Text;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -243,8 +242,8 @@ public sealed partial class ShortcutCleanerViewModel : ViewModelBase
 
         try
         {
-            var csv = ShortcutCleanerService.ToCsv(BrokenShortcuts);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = ShortcutCleanerService.ToCsv(BrokenShortcuts, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {BrokenShortcuts.Count} shortcut(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Broken shortcuts exported", Path.GetFileName(dlg.FileName));
         }

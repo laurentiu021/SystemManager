@@ -5,7 +5,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -459,8 +458,8 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
 
         try
         {
-            var csv = DiskAnalyzerService.ToCsv(Entries);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = DiskAnalyzerService.ToCsv(Entries, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {Entries.Count} folder(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Disk usage exported", Path.GetFileName(dlg.FileName));
         }

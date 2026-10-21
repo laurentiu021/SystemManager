@@ -579,7 +579,7 @@ public sealed class RecentChangesViewModelTests
                 detail: "Deep Cleanup"),
             Change(ChangeKind.ProgramAppeared, "Search Pro Toolbar", new DateTime(2026, 10, 5, 15, 20, 0),
                 since: new DateTime(2026, 10, 2, 9, 0, 0), who: "An installer"),
-        ]);
+        ], System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.Equal(
             "When,Kind,What,Who,Detail\r\n"

@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
 using System.IO;
 using System.Security;
 using System.Text;
@@ -400,15 +401,16 @@ public sealed class SettingsWatchdogService : ISettingsWatchdogService
     /// the raw registry integers, plus whether each row can be restored — a drift the app cannot undo is the
     /// one the user most needs to keep a note of.
     /// </remarks>
-    public static string ToCsv(IEnumerable<SettingDrift> drifts)
+    public static string ToCsv(IEnumerable<SettingDrift> drifts, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(drifts);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "Setting", "Category", "Description", "Was", "Now", "Can restore");
+        Csv.AppendRow(sb, culture, "Setting", "Category", "Description", "Was", "Now", "Can restore");
         foreach (var d in drifts)
         {
-            Csv.AppendRow(sb,
+            Csv.AppendRow(sb, culture,
                 d.Setting.Name,
                 d.Setting.Category,
                 d.Setting.Description,

@@ -310,23 +310,24 @@ public sealed class DiskAnalyzerService
     /// by whoever made them and a comma in one is unremarkable. Hence <see cref="Csv"/> rather than raw
     /// concatenation.</para>
     /// </remarks>
-    public static string ToCsv(IEnumerable<DiskUsageEntry> entries)
+    public static string ToCsv(IEnumerable<DiskUsageEntry> entries, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "Name", "Full path", "Size", "Size (bytes)", "Share %", "Files", "Folders",
+        Csv.AppendRow(sb, culture, "Name", "Full path", "Size", "Size (bytes)", "Share %", "Files", "Folders",
             "Access denied");
         foreach (var e in entries)
         {
-            Csv.AppendRow(sb,
+            Csv.AppendRow(sb, culture,
                 e.Name,
                 e.FullPath,
                 e.SizeDisplay,
-                e.SizeBytes.ToString(CultureInfo.InvariantCulture),
-                e.Percentage.ToString("F1", CultureInfo.InvariantCulture),
-                e.FileCount.ToString(CultureInfo.InvariantCulture),
-                e.FolderCount.ToString(CultureInfo.InvariantCulture),
+                e.SizeBytes.ToString(culture),
+                e.Percentage.ToString("F1", culture),
+                e.FileCount.ToString(culture),
+                e.FolderCount.ToString(culture),
                 e.IsAccessDenied ? "yes" : "no");
         }
         return sb.ToString();

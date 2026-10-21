@@ -379,15 +379,16 @@ public sealed partial class ShortcutCleanerService
     /// path is the evidence for why — a file that no longer exists. An export naming only one of them cannot
     /// be checked by whoever reads it.
     /// </remarks>
-    public static string ToCsv(IEnumerable<BrokenShortcut> shortcuts)
+    public static string ToCsv(IEnumerable<BrokenShortcut> shortcuts, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(shortcuts);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "Name", "Location", "Shortcut path", "Missing target", "Selected");
+        Csv.AppendRow(sb, culture, "Name", "Location", "Shortcut path", "Missing target", "Selected");
         foreach (var s in shortcuts)
         {
-            Csv.AppendRow(sb, s.Name, s.Location, s.ShortcutPath, s.TargetPath,
+            Csv.AppendRow(sb, culture, s.Name, s.Location, s.ShortcutPath, s.TargetPath,
                 s.IsSelected ? "yes" : "no");
         }
         return sb.ToString();

@@ -796,6 +796,65 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// Every CSV a tab saves is built and written through <c>Csv</c>, in the user's region.
+    /// </summary>
+    /// <remarks>
+    /// Each tab wrote its file itself: with commas and dots whatever the region, so Excel in one that writes decimals
+    /// with a comma opened every row as one cell (#2888), and ten of eleven without the byte order mark Excel needs to
+    /// read UTF-8, so accented names came out garbled (#2794). A tab counts as exporting when its save dialog offers
+    /// "*.csv". It writes through <c>Csv.Write</c> or <c>Csv.WriteAsync</c>, never through <c>File.WriteAllText</c>
+    /// or a <c>StreamWriter</c> of its own, and hands every <c>ToCsv</c> the user's <c>CultureInfo.CurrentCulture</c>,
+    /// the region Excel reads the file in. The compiler already makes each call pass a culture; this makes it the
+    /// user's.
+    /// </remarks>
+    [Fact]
+    public void EveryCsvExport_IsWrittenThroughCsv_InTheUsersRegion()
+    {
+        var viewModels = Path.Combine(TestPaths.AppProject(), "ViewModels");
+        var offenders = new List<string>();
+        var exports = 0;
+        var calls = 0;
+
+        foreach (var file in Directory.EnumerateFiles(viewModels, "*.cs").Order(StringComparer.Ordinal))
+        {
+            var code = WithoutComments(File.ReadAllText(file));
+            if (!code.Contains("*.csv", StringComparison.Ordinal)) continue;
+            exports++;
+            var name = Path.GetFileName(file);
+
+            if (!code.Contains("Csv.Write", StringComparison.Ordinal))
+                offenders.Add($"{name} offers a .csv but does not write it through Csv.Write or Csv.WriteAsync");
+            if (code.Contains("File.WriteAllText", StringComparison.Ordinal)
+                || code.Contains("new StreamWriter(", StringComparison.Ordinal))
+                offenders.Add($"{name} writes a file itself, so its encoding is not the one Excel reads as UTF-8");
+
+            foreach (Match call in ToCsvCall().Matches(code))
+            {
+                calls++;
+                if (!call.Value.Contains("CultureInfo.CurrentCulture", StringComparison.Ordinal))
+                    offenders.Add($"{name}: {call.Value} does not export in the user's region");
+            }
+        }
+
+        // Vacuity floor: ELEVEN tabs export CSV when measured — New App Alerts, Bandwidth Monitor, Disk Analyzer,
+        // File Lock Detector, Camera/Mic/Location, Process Manager, Recent Changes, Resource History, Settings
+        // Watchdog, Shortcut Cleaner and System Logs — and each calls one ToCsv. A collapse means the search stopped
+        // finding them, and every absence below would be an absence of looking.
+        Assert.True(exports >= 11 && calls >= 11,
+            $"{exports} tabs offering a .csv and {calls} ToCsv calls were found, out of 11 each measured — the "
+            + "search is out of date, so a pass proves nothing.");
+
+        Assert.True(offenders.Count == 0,
+            "a CSV export does not go through Csv in the user's region, so Excel would open it with every row in one "
+            + "cell or with accented names garbled:\n  " + string.Join("\n  ", offenders));
+    }
+
+    // A call, not the declaration: "string ToCsv(" declares one. Up to the end of its statement, which holds every
+    // argument however the call nests.
+    [GeneratedRegex(@"(?<!\bstring\s+)\bToCsv\([^;]*;")]
+    private static partial Regex ToCsvCall();
+
+    /// <summary>
     /// Every <c>StatusFooter</c> names its own progress bar, and no view re-inlines the block it replaced.
     /// </summary>
     /// <remarks>

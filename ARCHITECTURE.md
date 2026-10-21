@@ -745,14 +745,15 @@ Key services:
   creation and last write, as an unpacked file keeps its archive time, and a folder's creation alone, as its last
   write moves when the clean-up empties it. The temp sweep, the size Quick Cleanup shows and every Deep Cleanup
   bucket with an age use it (#2890).
-- `Helpers/Csv` — RFC 4180 field escaping for the Export CSV buttons, defined once. It exists
-  because the first exporter (`ResourceHistoryService.ToCsv`) writes its fields raw, which is
-  safe for numbers and fixed-format timestamps but not for the app names, setting descriptions
-  and folder paths the later exports carry: `C:\Users\me\Music\Grieg, Peer Gynt` is an ordinary
-  folder name that silently becomes two columns without quoting. `Field` quotes only when the
-  value contains a comma, a quote, CR or LF; `AppendRow` terminates with CRLF because this is a
-  file format rather than console output. Nothing is trimmed or substituted — a lossy export of
-  a path is worse than a quoted one.
+- `Helpers/Csv` — builds and writes every Export CSV file, defined once. `AppendRow` and `Field` take the
+  culture of the sheet that opens the file: fields are split on its list separator, a semicolon wherever
+  decimals are written with a comma, and a field is quoted when it holds that separator, a quote, CR or LF.
+  Every `ToCsv` writes its numbers in the same culture, and the tabs pass the user's
+  `CultureInfo.CurrentCulture`, because Excel reads a CSV in Windows' regional settings (#2888). `Write` and
+  `WriteAsync` save UTF-8 with the byte order mark Excel needs to read UTF-8 (#2794). `AppendRow` terminates
+  with CRLF because this is a file format rather than console output. Nothing is trimmed or substituted — a
+  lossy export of a path is worse than a quoted one.
+  `ArchitectureTests.EveryCsvExport_IsWrittenThroughCsv_InTheUsersRegion` keeps every tab with a CSV export on it.
 - `Helpers/StorageLabels` — the one name for each `MSFT_PhysicalDisk` bus and media type, used by
   `SystemInfoService`, `DiskHealthService`, `FixedDriveService` and the System Report. Those three
   services each had a table, and the tables had drifted, so one disk on a RAID controller or an SD card

@@ -5,7 +5,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
@@ -185,8 +184,8 @@ public sealed partial class PrivacyMonitorViewModel : ViewModelBase
 
         try
         {
-            var csv = PrivacyMonitorService.ToCsv(Entries);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = PrivacyMonitorService.ToCsv(Entries, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {Entries.Count} entry(ies) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Access history exported", Path.GetFileName(dlg.FileName));
         }

@@ -228,8 +228,8 @@ public sealed partial class ResourceHistoryViewModel : ViewModelBase
         IsProgressIndeterminate = true;
         try
         {
-            var csv = ResourceHistoryService.ToCsv(_loaded);
-            await File.WriteAllTextAsync(dlg.FileName, csv, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var csv = ResourceHistoryService.ToCsv(_loaded, CultureInfo.CurrentCulture);
+            await Csv.WriteAsync(dlg.FileName, csv);
             StatusMessage = $"Exported {_loaded.Count} sample(s) to {Path.GetFileName(dlg.FileName)}.";
             ToastService.Instance.Show("Resource history exported", Path.GetFileName(dlg.FileName));
         }

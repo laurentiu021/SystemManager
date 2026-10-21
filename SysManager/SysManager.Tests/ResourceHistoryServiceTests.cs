@@ -3,6 +3,7 @@
 // License: MIT
 
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.AccessControl;
@@ -224,7 +225,7 @@ public class ResourceHistoryServiceTests
             Sample(now.AddSeconds(10), cpu: 1, ram: 2, gpu: null, cpuTemp: null, gpuTemp: null),
         };
 
-        var csv = ResourceHistoryService.ToCsv(samples);
+        var csv = ResourceHistoryService.ToCsv(samples, CultureInfo.InvariantCulture);
         var lines = csv.Trim().Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
 
         Assert.Equal("Timestamp,CPU %,RAM %,GPU %,CPU Temp °C,GPU Temp °C", lines[0]);
@@ -235,10 +236,23 @@ public class ResourceHistoryServiceTests
     }
 
     [Fact]
-    public void ToCsv_UsesInvariantDecimalSeparator()
+    public void ToCsv_InTheInvariantCulture_WritesADecimalDot()
     {
-        var csv = ResourceHistoryService.ToCsv([Sample(new DateTime(2026, 6, 29), cpu: 12.5)]);
-        Assert.Contains("12.5", csv);   // dot, never comma — comma is the CSV delimiter
+        var csv = ResourceHistoryService.ToCsv([Sample(new DateTime(2026, 6, 29), cpu: 12.5)],
+            CultureInfo.InvariantCulture);
+        Assert.Contains("12.5", csv);   // dot, never comma — comma is the separator there
+    }
+
+    [Fact]
+    public void ToCsv_InARegionThatWritesDecimalsWithAComma_SplitsOnSemicolons()
+    {
+        // It wrote commas and dots by hand, so a spreadsheet there opened each row as one cell (#2888).
+        var csv = ResourceHistoryService.ToCsv([Sample(new DateTime(2026, 6, 29), cpu: 12.5, ram: 40)],
+            new CultureInfo("ro-RO"));
+
+        var lines = csv.Split("\r\n");
+        Assert.Equal("Timestamp;CPU %;RAM %;GPU %;CPU Temp °C;GPU Temp °C", lines[0]);
+        Assert.Equal("2026-06-29 00:00:00;12,5;40,0;;;", lines[1]);
     }
 
     // ── Config contract ─────────────────────────────────────────────────────

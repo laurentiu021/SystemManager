@@ -261,16 +261,17 @@ public sealed class FileLockService : IFileLockService
     /// Restart Manager flags as critical is the one the user must NOT be told to end, and that warning has to
     /// survive into a file someone else may act on.
     /// </remarks>
-    public static string ToCsv(IEnumerable<FileLocker> lockers)
+    public static string ToCsv(IEnumerable<FileLocker> lockers, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(lockers);
+        ArgumentNullException.ThrowIfNull(culture);
 
         var sb = new StringBuilder();
-        Csv.AppendRow(sb, "PID", "Process", "Type", "Started", "Started (raw)", "Critical");
+        Csv.AppendRow(sb, culture, "PID", "Process", "Type", "Started", "Started (raw)", "Critical");
         foreach (var l in lockers)
         {
-            Csv.AppendRow(sb,
-                l.ProcessId.ToString(CultureInfo.InvariantCulture),
+            Csv.AppendRow(sb, culture,
+                l.ProcessId.ToString(culture),
                 l.ProcessName,
                 l.AppType,
                 l.StartTimeDisplay,

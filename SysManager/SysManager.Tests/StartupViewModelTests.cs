@@ -397,4 +397,16 @@ public class StartupViewModelTests
 
         Assert.Equal("Found 1 startup items.", vm.StatusMessage);
     }
+
+    [Fact]
+    public void TheEmptyListsAdvice_NamesTheSwitchByItsLabel()
+    {
+        // It said "Hide Windows entries" beside a switch labelled "Hide system" (#2811). Both now read one string.
+        var vm = NewVm(scan: () => new TaskCompletionSource<StartupScan>().Task);   // still on its first scan
+
+        Assert.Equal("Hide system", vm.HideSystemLabel);
+        Assert.Contains($"\"{vm.HideSystemLabel}\"", vm.EmptyMessage, StringComparison.Ordinal);
+        // What the toolbar says until that scan ends: the button is Refresh, not Scan.
+        Assert.Contains("Refresh", vm.ScanSummary, StringComparison.Ordinal);
+    }
 }

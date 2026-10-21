@@ -392,11 +392,17 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <!-- Empty state -->
+            <!-- Empty state: nothing listed yet. Gated on the full list rather than the filtered one, so a search
+                 that hides every app is not told to Scan, which keeps the search and changes nothing (#2811). -->
             <v:EmptyState Glyph="&#xE7B8;"
                           Title="No applications to show"
                           Message="Click Scan to list installed applications."
-                          Visibility="{Binding FilteredApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+                          Visibility="{Binding AllApps.Count, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
+            <!-- Listed, but the search hid every app. -->
+            <v:EmptyState Glyph="&#xE721;"
+                          Title="No applications match your search"
+                          Message="Nothing matches the current search. Clear it to see every installed application."
+                          Visibility="{Binding HasNoResults, Converter={StaticResource FlexVis}}"/>
             </Grid>
         </Border>
 

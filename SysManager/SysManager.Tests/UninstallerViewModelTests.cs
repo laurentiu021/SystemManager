@@ -48,6 +48,33 @@ public class UninstallerViewModelTests
         Assert.Equal("", vm.FilterText);
     }
 
+    // ── a search that matches nothing is not "click Scan" (#2811) ──────────
+
+    [Fact]
+    public void ASearchThatMatchesNothing_SetsHasNoResults_UntilItIsCleared()
+    {
+        // The empty state was bound to the filtered list and said "Click Scan" here too, and a scan keeps the search.
+        var vm = NewVm();
+        vm.AllApps.Add(new InstalledApp { Name = "Google Chrome", Id = "Google.Chrome" });
+
+        vm.FilterText = "zzzz";
+        Assert.True(vm.HasNoResults);
+
+        vm.FilterText = "";
+        Assert.False(vm.HasNoResults);
+    }
+
+    [Fact]
+    public void ASearchOverNothingListed_IsNotANoMatch()
+    {
+        // Nothing listed is the "click Scan" state, whatever the search box holds.
+        var vm = NewVm();
+
+        vm.FilterText = "zzzz";
+
+        Assert.False(vm.HasNoResults);
+    }
+
     [Fact]
     public void Summary_HasDefaultValue()
     {

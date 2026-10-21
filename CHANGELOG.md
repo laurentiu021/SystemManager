@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.36] - 2026-10-21
+
+**A list emptied by a search or a filter says so, and an empty list names the buttons and switches you can see.**
+
+### Fixed
+
+- **A search that matched nothing told you to scan again, or showed nothing at all.** On Uninstaller, Right-click
+  Menu and Task Scheduler, a list emptied by a search showed the message for a list with nothing in it yet, "Click
+  Scan" or "Run a scan", and scanning again keeps the search; on Task Scheduler the same went for "Hide system tasks"
+  hiding every task. Preinstalled Apps showed bare column headers. Each now says that nothing matches and how to bring
+  the rest back. Since 1.24.0 on Preinstalled Apps, 1.45.0 on Right-click Menu and Task Scheduler, and 1.52.38 on
+  Uninstaller.
+- **Some empty lists named controls by the wrong name or place.** DNS & Hosts said to add a redirect above the list,
+  where its boxes are below it. Startup Manager named a "Hide Windows entries" switch that is labelled "Hide system",
+  and its toolbar said "Click Scan" until the first scan ended, beside a button labelled Refresh; the switch's label
+  and the advice now read one string. System Logs called its severity switches checkboxes. Right-click Menu and Task
+  Scheduler said to run a scan, and their button is Refresh. Since 0.28.24 on Startup Manager's toolbar, 1.20.20 on
+  System Logs, 1.42.3 on DNS & Hosts, 1.45.0 on Right-click Menu and Task Scheduler, and 1.76.25 on Startup Manager's
+  list.
+
 ## [1.130.35] - 2026-10-21
 
 **The Edge/OneDrive Remover says whether OneDrive is really installed, reaches Edge's update tasks, and leaves things

@@ -40,6 +40,16 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     [ObservableProperty] private string _activePresetId = "";
     [ObservableProperty] private string _presetDescription = "";
 
+    /// <summary>True once a scan has listed entries, whatever the filters show.</summary>
+    [ObservableProperty] private bool _hasEntries;
+
+    /// <summary>
+    /// True when a scan listed entries but the search, the location and "Show system entries" hid every one, so the
+    /// list says nothing matches instead of asking for a scan, which keeps the filters (#2811). Same split as
+    /// <c>DriversViewModel.HasNoResults</c>.
+    /// </summary>
+    [ObservableProperty] private bool _hasNoResults;
+
     /// <summary>Available location filters for the ComboBox.</summary>
     /// <remarks>
     /// Must cover every <see cref="ContextMenuEntry.Location"/> the scan can produce, or a row shows
@@ -359,6 +369,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         }
 
         Entries.ReplaceWith(filtered);
+        HasEntries = _allEntries.Count > 0;
+        HasNoResults = HasEntries && Entries.Count == 0;
         UpdateCounts();
     }
 

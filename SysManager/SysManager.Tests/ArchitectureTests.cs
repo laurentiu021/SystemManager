@@ -10531,7 +10531,8 @@ public partial class ArchitectureTests
         {
             ("DebloaterViewModel.cs", "private async Task RemoveSelectedAsync()", "_service.RemoveAsync("),
             ("DefenderViewModel.cs", "private async Task RunOperationAsync(", "await change("),
-            ("EdgeOneDriveViewModel.cs", "private async Task RunOperationAsync(", "await operation("),
+            ("EdgeOneDriveViewModel.cs", "private async Task<EdgeOneDriveOutcome?> RunOperationAsync(",
+                "await operation("),
             ("PrivacyViewModel.cs", "private async Task ApplyChanges()", "_service.ApplyAll("),
             ("WindowsFeaturesViewModel.cs", "private async Task ToggleFeatureAsync(", "_service.DisableFeatureAsync("),
         };

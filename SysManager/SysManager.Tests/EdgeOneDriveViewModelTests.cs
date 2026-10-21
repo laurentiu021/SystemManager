@@ -4,6 +4,7 @@
 
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Management.Automation;
 using Microsoft.Win32;
 using NSubstitute;
@@ -109,6 +110,90 @@ public sealed class EdgeOneDriveViewModelTests : IDisposable
 
         vm.EdgeBackgroundDisabled = true;
         Assert.Contains("de-integrated", vm.EdgeStateText);
+    }
+
+    // ── Before the first read, and when it fails (#2810) ───────────────────
+
+    [Fact]
+    public async Task BeforeTheFirstRead_TheCardsSayTheyAreChecking()
+    {
+        // The flags start false, so until the read finished the card said "OneDrive is not installed.".
+        var reading = new TaskCompletionSource<Collection<PSObject>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns(reading.Task);
+        var vm = new EdgeOneDriveViewModel(ServiceWithNoOneDrive(ps), NoRestorePoint());
+
+        Assert.Equal("Checking OneDrive…", vm.OneDriveStateText);
+        Assert.Equal("Checking Microsoft Edge…", vm.EdgeStateText);
+
+        reading.SetResult(new Collection<PSObject>());
+        await vm.InitializationComplete;
+
+        Assert.Equal("OneDrive is not installed.", vm.OneDriveStateText);
+        Assert.DoesNotContain("Checking", vm.EdgeStateText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WhenTheFirstReadFails_TheCardsSaySo()
+    {
+        var ps = Substitute.For<IPowerShellRunner>();
+        ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+          .Returns<Task<Collection<PSObject>>>(_ => throw new InvalidOperationException("The runspace is broken."));
+        var vm = new EdgeOneDriveViewModel(ServiceWithNoOneDrive(ps), NoRestorePoint());
+        await vm.InitializationComplete;
+
+        Assert.Equal("OneDrive's state could not be read.", vm.OneDriveStateText);
+        Assert.Equal("Microsoft Edge's state could not be read.", vm.EdgeStateText);
+        Assert.StartsWith("Could not read status:", vm.StatusMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>A service over <paramref name="ps"/> that finds no OneDrive.exe and no OneDrive running.</summary>
+    private EdgeOneDriveService ServiceWithNoOneDrive(IPowerShellRunner ps) =>
+        new(ps, hkcuRoot: _root, hklmRoot: _root,
+            oneDriveClientPath: Path.Combine(
+                Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"), "OneDrive.exe"),
+            isOneDriveRunning: () => false);
+
+    // ── A failed removal says OneDrive was closed for it (#2810) ───────────
+
+    [Theory]
+    [InlineData(true, " It was closed for the attempt: open OneDrive from the Start menu to start it again.")]
+    [InlineData(false, "")]
+    public async Task RemoveOneDrive_WhenItFails_SaysWhetherOneDriveWasClosedForIt(bool wasRunning, string note)
+    {
+        // The uninstaller runs with OneDrive closed, and a failed removal left it closed with only "OneDrive could not
+        // be removed." to go on.
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", "EdgeOneDriveVm_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var setup = Path.Combine(dir, "OneDriveSetup.exe");
+            var client = Path.Combine(dir, "OneDrive.exe");
+            File.WriteAllBytes(setup, []);
+            File.WriteAllBytes(client, []);
+            var running = wasRunning;
+            var ps = Substitute.For<IPowerShellRunner>();
+            ps.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(new Collection<PSObject>());
+            // The stop step closes it, as Stop-Process does.
+            ps.RunAsync(Arg.Is<string>(s => s != null && s.Contains("Stop-Process", StringComparison.Ordinal)),
+                    Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+              .Returns(_ => { running = false; return new Collection<PSObject>(); });
+            ps.RunProcessAsync(setup, "/uninstall", Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(1);
+            var service = new EdgeOneDriveService(ps, hkcuRoot: _root, hklmRoot: _root, oneDriveSetupPath: setup,
+                oneDriveClientPath: client, isOneDriveRunning: () => running);
+            var vm = new EdgeOneDriveViewModel(service, NoRestorePoint());
+            await vm.InitializationComplete;
+            using var dialog = new DialogAnswer(confirm: true);
+
+            await vm.RemoveOneDriveCommand.ExecuteAsync(null);
+
+            Assert.Equal("OneDrive could not be removed." + note, vm.StatusMessage);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
     }
 
     // ── Confirm gate: a declined dialog performs no work ────────────────────

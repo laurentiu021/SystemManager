@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.35] - 2026-10-21
+
+**The Edge/OneDrive Remover says whether OneDrive is really installed, reaches Edge's update tasks, and leaves things
+as they were when a change fails.**
+
+### Fixed
+
+- **The OneDrive card said "OneDrive is installed." right after a removal that worked.** It looked for OneDrive's
+  setup, which Windows keeps after an uninstall so OneDrive can be put back, so on a standard Windows the card never
+  said "not installed" and Remove stayed on offer. It now looks for OneDrive itself, installed for your account or
+  for every account, and reads "Checking OneDrive…" until it has looked, where it said "not installed". When
+  OneDrive is installed but nothing to uninstall it with is found, Remove now says it could not remove it, not that
+  OneDrive is not installed. Since 1.53.0.
+- **Disabling Edge never reached its automatic-update tasks, and said it had.** Edge Update adds an ID to the name of
+  each of its two tasks, and the tab asked Windows for the names without one, so it found no task, changed none and
+  reported success; Restore did the same. The tasks are now found by the start of their names, and a change that
+  finds none or cannot change one is reported as failed, with any task it had changed put back. Since 1.53.0.
+- **A failed Disable Edge left Edge's background mode and startup boost switched off.** The two policies are written
+  first, and when the update tasks then failed, the change was reported as failed with both left in place. They now
+  go back to what they were before, a value set by whoever manages the PC included. Since 1.56.2.
+- **A failed Remove OneDrive took OneDrive out of File Explorer's sidebar anyway.** The entry was hidden whatever the
+  uninstaller answered, so a removal that failed left an installed OneDrive missing from the sidebar. It now goes
+  only with a removal that worked. The removal closes OneDrive first, and when it fails it now says so and that
+  OneDrive can be opened again from the Start menu. Since 1.53.0.
+
 ## [1.130.34] - 2026-10-21
 
 **The Delete key no longer takes a row off a list while nothing changes on the PC.**

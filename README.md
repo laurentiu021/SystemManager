@@ -1591,13 +1591,20 @@ Reclaim space and clear browsing traces, per browser:
 Get Microsoft Edge and OneDrive out of your way — reversibly:
 - **OneDrive: full removal for your account** — stops the client, runs the official
   uninstaller, and clears its File Explorer sidebar entry. No admin needed. Files
-  already synced to this PC stay on disk; cloud-only files simply aren't downloaded
+  already synced to this PC stay on disk; cloud-only files simply aren't downloaded.
+  The card says whether OneDrive itself is installed, for your account or for every
+  account, not whether Windows still keeps its setup, and reads "Checking OneDrive…"
+  until it knows. A removal that fails leaves the sidebar entry in place and says that
+  OneDrive was closed for the attempt, so you know to open it again
 - **Edge: disable & de-integrate, never uninstall** — Windows relies on Edge (WebView2)
   and reinstalls it if forced out, so instead this turns off its background mode and
   startup boost (via the documented Group-Policy keys) and disables its automatic-update
   scheduled tasks, so Edge stops running on its own. You can still open it normally.
   Without those tasks it no longer updates itself in the background, so its security
-  fixes can arrive late until you restore it
+  fixes can arrive late until you restore it. The tasks are found by the start of their
+  names, since Edge Update adds an ID to each; when none is found or one cannot be
+  changed, the change is reported as failed, and the two policies go back to what they
+  were before
 - **A Restore button for each** — reinstall OneDrive and re-pin its sidebar entry, or
   clear the Edge policies and re-enable its update tasks — so nothing here is one-way.
   The OneDrive entry comes back only once its setup has succeeded; a failed reinstall

@@ -1297,13 +1297,19 @@ Key services:
   at a path, seen without following a link; and whether a path is on one of this PC's drives or inside a folder.
 - `EdgeOneDriveService` — reversibly de-integrates Edge and OneDrive through the
   `IPowerShellRunner` seam plus injectable HKCU/HKLM roots. OneDrive is fully removed
-  per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin, no elevation); Edge is
-  never uninstalled — only its background/startup-boost Group-Policy keys and its two
-  auto-update scheduled tasks (a fixed, injection-safe allowlist) are toggled, which
-  needs admin. Each action has a matching restore. All scripts are hard-coded constants
-  (no user input); the pin/policy logic is unit-tested against a redirected registry, and
-  an optional setup-path override lets the remove/restore outcomes, which the setup's exit
-  code decides, be tested on a machine without OneDrive.
+  per-user (`OneDriveSetup.exe /uninstall` + nav-pane unpin once the uninstaller has succeeded,
+  no elevation), and "installed" means OneDrive.exe is there, not the setup Windows keeps after
+  an uninstall; Edge is never uninstalled — only its background/startup-boost Group-Policy keys
+  and its two auto-update scheduled tasks (a fixed, injection-safe allowlist of name prefixes,
+  matched in the root task folder, as Edge Update adds an ID to each name) are toggled, which
+  needs admin. The task scripts report how many tasks they found and whether one refused, and put
+  back what they changed when one does; none found is not done, and a Disable that is not done
+  puts the two policy values back as they were. Each action has a matching restore. All scripts
+  are hard-coded constants (no user input); the pin/policy logic is unit-tested against a
+  redirected registry, optional setup, OneDrive.exe and running-process overrides let the OneDrive
+  outcomes be tested on a machine without OneDrive, and the task scripts are internal so the
+  integration suite runs them in real Windows PowerShell with the cmdlets shadowed
+  (`EdgeOneDriveScriptTests`).
 - `PrivacyMonitorService` — read-only reader of the CapabilityAccessManager consent
   store (camera/microphone/location access history). Injectable registry root;
   friendly-name decoding and FILETIME conversion are pure, unit-tested static methods.

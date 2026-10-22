@@ -703,3 +703,23 @@ jobs:
       tag: ${{ needs.build-and-release.outputs.tag }}
     secrets:
       WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+  # Starts the release integrity check once this run is done with the release, whichever way it went. A
+  # workflow_run trigger on this workflow never fired: auto-release dispatches it with GITHUB_TOKEN, and GitHub
+  # starts no run from an event that token caused, apart from a dispatch (#2805). The check is given this run's
+  # id, because this run is still going as it starts and the check waits out every other release in flight.
+  integrity:
+    name: Start the release integrity check
+    needs: [guard, build-and-release, winget]
+    if: ${{ always() && needs.guard.outputs.should_release == 'true' }}
+    # Pinned like every Linux job here; auto-release.yml says why.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start release-integrity.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.run_id }}
+        run: gh workflow run release-integrity.yml --repo "${GITHUB_REPOSITORY}" --ref main -f after_run="${RUN}"

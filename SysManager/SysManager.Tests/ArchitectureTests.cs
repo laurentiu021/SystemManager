@@ -10366,8 +10366,7 @@ public partial class ArchitectureTests
 
         foreach (var required in new[]
                  {
-                     "workflow_run:", "workflows: [Release]", "cron: '0 7 * * *'",
-                     "for wf in auto-release.yml release.yml; do", "actions: read",
+                     "cron: '0 7 * * *'", "for wf in auto-release.yml release.yml; do", "actions: read",
                      "--paginate --slurp", "\"SysManager-\\($tag).exe\"",
                      "releases/latest", "sha256sum", "Expected SHA256", ".digest", "gh attestation verify",
                  })
@@ -10384,6 +10383,47 @@ public partial class ArchitectureTests
         {
             Assert.DoesNotContain(byTag, latest, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>
+    /// The release starts its integrity check with a dispatch, once it is done with the release whichever way that went,
+    /// and the check does not wait for the run that started it (#2805).
+    /// </summary>
+    /// <remarks>
+    /// The check was triggered by <c>workflow_run</c> on Release, and no release ever started it: auto-release dispatches
+    /// the release with <c>GITHUB_TOKEN</c>, and GitHub starts no run from an event that token caused, apart from a
+    /// dispatch. So release.yml's last job dispatches release-integrity.yml, after the release and the winget jobs and
+    /// whatever became of them. That job belongs to a run that is still going, and the check waits out every release in
+    /// flight, so it is given the run's id and leaves that run out. Comments are removed first, so prose naming the
+    /// dead trigger cannot trip this, nor prose naming the live one satisfy it.
+    /// </remarks>
+    [Fact]
+    public void TheRelease_StartsItsIntegrityCheck_WithADispatch_ThatDoesNotWaitForItself()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var release = File.ReadAllLines(Path.Combine(dir, "release.yml"));
+        var start = Array.FindIndex(release,
+            l => l.TrimStart().StartsWith("run: gh workflow run release-integrity.yml", StringComparison.Ordinal));
+        Assert.True(start >= 0, "release.yml does not start release-integrity.yml, so no release is checked after it.");
+        var job = WorkflowJobs.Containing(release, start);
+        foreach (var required in new[]
+                 {
+                     "needs: [guard, build-and-release, winget]",
+                     "if: ${{ always() && needs.guard.outputs.should_release == 'true' }}",
+                     "actions: write", "RUN: ${{ github.run_id }}", "-f after_run=\"${RUN}\"",
+                 })
+        {
+            Assert.Contains(required, job, StringComparison.Ordinal);
+        }
+
+        var integrity = File.ReadAllLines(Path.Combine(dir, "release-integrity.yml"));
+        var code = string.Join('\n', integrity.Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.DoesNotContain("workflow_run:", code, StringComparison.Ordinal);
+        Assert.Contains("after_run:", code, StringComparison.Ordinal);
+
+        var wait = ReleaseStepCode(integrity, ReleaseStepLine(integrity, "Wait out a release that is still publishing"));
+        Assert.Contains("AFTER_RUN: ${{ inputs.after_run }}", wait, StringComparison.Ordinal);
+        Assert.Contains("(.databaseId | tostring) != \\\"${AFTER_RUN}\\\"", wait, StringComparison.Ordinal);
     }
 
     /// <summary>

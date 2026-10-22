@@ -10143,6 +10143,37 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The release integrity check runs after each release and daily, and checks what the updater and the README
+    /// rely on (#2805).
+    /// </summary>
+    /// <remarks>
+    /// It ran on Mondays and looked at the newest CHANGELOG version only, so a release that lost its assets later
+    /// stayed without a download, Latest could be an older release after a backfill, the checksum, the release page
+    /// and the asset could disagree, and the attestation the README tells users to verify was never verified.
+    /// A run that starts between a merge and auto-release pushing its tag would report that version as missing, so
+    /// the wait for a release in flight counts auto-release runs as well. Comments are removed first, so prose
+    /// naming a check cannot stand in for it.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseIntegrityCheck_CoversWhatTheUpdaterAndTheReadmeRelyOn()
+    {
+        var code = string.Join('\n',
+            File.ReadAllLines(Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release-integrity.yml"))
+                .Where(l => !l.TrimStart().StartsWith('#')));
+
+        foreach (var required in new[]
+                 {
+                     "workflow_run:", "workflows: [Release]", "cron: '0 7 * * *'",
+                     "for wf in auto-release.yml release.yml; do",
+                     "--paginate --slurp", "\"SysManager-\\($tag).exe\"",
+                     "releases/latest", "sha256sum", "Expected SHA256", ".digest", "gh attestation verify",
+                 })
+        {
+            Assert.Contains(required, code, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// The release runs on its tag, and stops before building when its own commit is not the one it checked out, so its
     /// attestation names the commit that built the binary (#2805).
     /// </summary>

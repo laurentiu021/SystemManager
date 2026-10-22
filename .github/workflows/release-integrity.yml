@@ -10,13 +10,22 @@ name: Release integrity
 # failures were runs that never finished, so a verification step inside the same run would have been
 # abandoned along with everything else. A separate run on its own trigger is the only shape that
 # notices.
+#
+# Daily, and once each release run has ended, whichever way it ended. Releases go out several times a
+# day, and the in-app updater and every README download link read the Latest release, so a broken
+# update path waited up to a week for the Monday run (#2805).
 on:
   schedule:
-    - cron: '0 7 * * 1'   # every Monday 07:00 UTC, an hour after the CodeQL sweep
+    - cron: '0 7 * * *'   # every day at 07:00 UTC
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
+  # gh attestation verify reads the release's provenance from the attestations API.
+  attestations: read
 
 jobs:
   verify:
@@ -31,7 +40,32 @@ jobs:
         with:
           fetch-depth: 0        # tags are the whole point of this job
 
+      # A release in flight has its CHANGELOG entry on main before auto-release pushes its tag, its tag
+      # before its release, and its release before its assets, so checking then reports a gap that is
+      # about to close. The Release run that ends it starts this workflow again.
+      - name: Wait out a release that is still publishing
+        id: busy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          running=0
+          for wf in auto-release.yml release.yml; do
+            n=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow "${wf}" --limit 20 \
+              --json status --jq '[.[] | select(.status != "completed")] | length')
+            echo "${wf} runs still going: ${n}"
+            running=$((running + n))
+          done
+          if [ "${running}" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::A release is still publishing, so this run checks nothing; the run that ends it starts another."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Compare version tags against published releases
+        if: steps.busy.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -89,7 +123,54 @@ jobs:
 
           echo "Every version tag outside the known historical gaps has a published release."
 
+      # The next step checks the newest release's assets, and a release that loses its assets later is
+      # no longer the newest by then: its page stays without a download while every check stays green.
+      - name: Every release has its download
+        if: steps.busy.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # v1.57.0 and v1.57.1 were withdrawn, and their names say "superseded". Releases up to 0.13.2
+          # named the executable SysManager.exe, and the four earliest predate the checksum file.
+          NO_CHECKSUM="v0.3.0 v0.4.0 v0.5.0 v0.5.1"
+
+          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > /tmp/pages.json
+          jq 'add' /tmp/pages.json > /tmp/releases.json
+          COUNT=$(jq 'length' /tmp/releases.json)
+          echo "published releases: ${COUNT}"
+          if [ "${COUNT}" -lt 100 ]; then
+            echo "::error::Read back only ${COUNT} releases. This repository has hundreds, so the read failed and this check proved nothing."
+            exit 1
+          fi
+
+          jq -r --arg nochecksum " ${NO_CHECKSUM} " '
+            .[]
+            | select((.name // "") | test("superseded") | not)
+            | .tag_name as $tag
+            | ([.assets[] | {(.name): .size}] | add // {}) as $assets
+            | (if $assets["SysManager-\($tag).exe"] then "SysManager-\($tag).exe"
+               elif $assets["SysManager.exe"] then "SysManager.exe"
+               else null end) as $exe
+            | if $exe == null then "\($tag): no executable"
+              elif $assets[$exe] < 10000000 then "\($tag): \($exe) is only \($assets[$exe]) bytes"
+              elif $assets["\($exe).sha256"] == null and ($nochecksum | contains(" \($tag) ") | not)
+                then "\($tag): no \($exe).sha256"
+              else empty end' /tmp/releases.json > /tmp/broken.txt
+
+          if [ -s /tmp/broken.txt ]; then
+            echo "::error::$(wc -l < /tmp/broken.txt) release(s) lack the download a user fetches:"
+            sed 's/^/  /' /tmp/broken.txt
+            echo "Upload the missing assets with gh release upload, and check the SHA256 against the binary that release built."
+            exit 1
+          fi
+
+          echo "All ${COUNT} releases outside the withdrawn ones carry their executable and checksum."
+
       - name: The newest CHANGELOG version has a release
+        if: steps.busy.outputs.skip != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -142,3 +223,49 @@ jobs:
           fi
 
           echo "v${NEWEST} is published with its executable (${EXE_SIZE} bytes) and checksum."
+
+      # What the updater and the README rely on, which nothing compared: the in-app update reads
+      # releases/latest and refuses a download whose hash differs from the .sha256 asset, the release
+      # page carries an "Expected SHA256" line, and the README tells users to run gh attestation verify.
+      - name: The newest version is Latest, and its download checks out
+        if: steps.busy.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          NEWEST=$(grep -m1 -oP '^## \[\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          TAG="v${NEWEST}"
+          EXE="SysManager-${TAG}.exe"
+
+          # GitHub gives the Latest badge by date, not by version, so a backfill of an older tag takes it.
+          LATEST=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)
+          if [ "${LATEST}" != "${TAG}" ]; then
+            echo "::error::Latest is ${LATEST}, but the newest version is ${TAG}. The in-app update and the README links read Latest. Re-assert it: gh release edit ${TAG} --latest"
+            exit 1
+          fi
+
+          mkdir -p /tmp/latest
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir /tmp/latest \
+            --pattern "${EXE}" --pattern "${EXE}.sha256"
+          ACTUAL=$(sha256sum "/tmp/latest/${EXE}" | cut -d' ' -f1)
+          FILE=$(tr -d '\r' < "/tmp/latest/${EXE}.sha256" | cut -d' ' -f1 | tr 'A-F' 'a-f')
+          PAGE=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body \
+            | grep -oP 'Expected SHA256: `\K[0-9A-Fa-f]{64}' | head -n 1 | tr 'A-F' 'a-f' || true)
+          DIGEST=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            --jq ".assets[] | select(.name == \"${EXE}\") | .digest" | sed 's/^sha256://')
+          echo "downloaded ${ACTUAL}"
+          echo ".sha256    ${FILE}"
+          echo "page       ${PAGE}"
+          echo "asset      ${DIGEST}"
+          if [ "${FILE}" != "${ACTUAL}" ] || [ "${PAGE}" != "${ACTUAL}" ] || [ "${DIGEST}" != "${ACTUAL}" ]; then
+            echo "::error::${TAG}'s hashes disagree, so the updater refuses the download or a user's check fails. Re-upload the binary the release built and its checksum, and correct the release page."
+            exit 1
+          fi
+
+          if ! gh attestation verify "/tmp/latest/${EXE}" --repo "${GITHUB_REPOSITORY}"; then
+            echo "::error::${EXE} does not verify against its build attestation, which is the check the README gives users."
+            exit 1
+          fi
+
+          echo "${TAG} is Latest, its executable matches its checksum, its page and its asset digest, and it verifies."

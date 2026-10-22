@@ -6707,6 +6707,128 @@ public partial class ArchitectureTests
     private static partial Regex RunsOnLabel();
 
     /// <summary>
+    /// Every build of the app runs the single-file analyzer, not only the release's publish (#2806).
+    /// </summary>
+    /// <remarks>
+    /// The release publishes a single file, which turns the analyzer on (IL3000 to IL3003: <c>Assembly.Location</c>
+    /// and the APIs marked <c>RequiresAssemblyFiles</c>), and <c>TreatWarningsAsErrors</c> makes its warnings errors.
+    /// The pull-request build is a plain <c>dotnet build</c>, so a call it flags passed every check and failed the
+    /// release after auto-release had pushed the tag: a tag with no release. Unconditional, so a Debug build or a
+    /// CodeQL build cannot leave it out.
+    /// </remarks>
+    [Fact]
+    public void EveryAppBuild_RunsTheSingleFileAnalyzer()
+    {
+        var root = TestPaths.RepoRoot();
+        Assert.Contains("'-p:PublishSingleFile=true',", File.ReadAllText(Path.Combine(root, "publish.ps1")),
+            StringComparison.Ordinal);
+
+        var project = XDocument.Load(Path.Combine(root, "SysManager", "SysManager", "SysManager.csproj"));
+        var settings = project.Descendants("EnableSingleFileAnalyzer").ToList();
+        Assert.True(settings.Count == 1, $"the app's project sets EnableSingleFileAnalyzer {settings.Count} times.");
+        var setting = settings[0];
+        Assert.Equal("true", setting.Value.Trim());
+        Assert.Null(setting.Attribute("Condition"));
+        Assert.Equal("PropertyGroup", setting.Parent!.Name.LocalName);
+        Assert.Null(setting.Parent.Attribute("Condition"));
+    }
+
+    /// <summary>
+    /// Line endings come from <c>.gitattributes</c>, matching <c>.editorconfig</c>, so they do not depend on a
+    /// clone's <c>core.autocrlf</c> (#2806).
+    /// </summary>
+    /// <remarks>
+    /// <c>.editorconfig</c> requires CRLF, and LF for shell scripts and YAML. With no <c>.gitattributes</c>, a file's
+    /// endings were whatever the clone's <c>core.autocrlf</c> made of the stored LF: CI's
+    /// <c>dotnet format --verify-no-changes</c> passed because the Windows runner checks out with it on, a clone with it
+    /// off reported every C# file, and two UI test files had been stored with CRLF. Every extension
+    /// <c>.editorconfig</c> gives LF has to be LF here too, and an image in the repository is never converted.
+    /// </remarks>
+    [Fact]
+    public void LineEndings_ComeFromGitattributes_AsEditorconfigSaysThem()
+    {
+        var root = TestPaths.RepoRoot();
+        var attributes = File.ReadAllLines(Path.Combine(root, ".gitattributes"))
+            .Select(l => l.Trim())
+            .Where(l => l.Length > 0 && !l.StartsWith('#'))
+            .ToList();
+        Assert.Contains("* text=auto eol=crlf", attributes);
+
+        var lf = new List<string>();
+        string section = "";
+        foreach (var line in File.ReadAllLines(Path.Combine(root, ".editorconfig")).Select(l => l.Trim()))
+        {
+            if (line.StartsWith('[') && line.EndsWith(']'))
+                section = line[1..^1];
+            else if (line.Replace(" ", "", StringComparison.Ordinal) == "end_of_line=lf")
+                lf.AddRange(EditorconfigExtensions(section));
+            else if (section == "*" && line.Replace(" ", "", StringComparison.Ordinal).StartsWith("end_of_line=",
+                         StringComparison.Ordinal))
+                Assert.Equal("end_of_line=crlf", line.Replace(" ", "", StringComparison.Ordinal));
+        }
+        Assert.True(lf.Count >= 3, $"only {lf.Count} LF extension(s) were read from .editorconfig: {string.Join(", ", lf)}.");
+        foreach (var extension in lf)
+        {
+            Assert.Contains($"*.{extension} text eol=lf", attributes);
+        }
+
+        string[] images = [".png", ".gif", ".ico", ".jpg", ".jpeg", ".bmp"];
+        var present = new[] { "SysManager", "docs", ".github" }
+            .SelectMany(place => SourceFilesUnder(Path.Combine(root, place), images))
+            .Concat(Directory.EnumerateFiles(root).Where(f => images.Contains(Path.GetExtension(f).ToLowerInvariant())))
+            .Select(f => Path.GetExtension(f).ToLowerInvariant())
+            .Distinct()
+            .ToList();
+        Assert.NotEmpty(present);
+        foreach (var extension in present)
+        {
+            Assert.Contains($"*{extension} binary", attributes);
+        }
+    }
+
+    // The extensions an .editorconfig section names: "*.{sh,yml}" is sh and yml, "*.md" is md.
+    private static IEnumerable<string> EditorconfigExtensions(string section)
+        => section.StartsWith("*.{", StringComparison.Ordinal) && section.EndsWith('}')
+            ? section[3..^1].Split(',', StringSplitOptions.TrimEntries)
+            : section.StartsWith("*.", StringComparison.Ordinal) ? [section[2..]] : [];
+
+    /// <summary>
+    /// Every workflow that runs <c>dotnet</c> opts out of the .NET CLI's telemetry, for all of its jobs (#2806).
+    /// </summary>
+    /// <remarks>
+    /// ci.yml and release.yml set <c>DOTNET_CLI_TELEMETRY_OPTOUT</c> in their workflow-level <c>env</c>, so a new job
+    /// cannot be added without it; codeql.yml, which builds the app too, did not. Comments are removed first, so a
+    /// workflow that only mentions dotnet in prose is not counted.
+    /// </remarks>
+    [Fact]
+    public void EveryWorkflowThatRunsDotnet_OptsOutOfItsTelemetry()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var running = 0;
+        var missing = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(dir, "*.yml").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            var code = File.ReadAllLines(path).Where(l => !l.TrimStart().StartsWith('#')).ToList();
+            if (!code.Any(l => l.Contains("dotnet", StringComparison.Ordinal)))
+                continue;
+
+            running++;
+            var env = code.FindIndex(l => l == "env:");
+            IEnumerable<string> block = env < 0
+                ? []
+                : code.Skip(env + 1).TakeWhile(l => l.Length == 0 || l.StartsWith(' ')).Select(l => l.Trim());
+            if (!block.Contains("DOTNET_CLI_TELEMETRY_OPTOUT: 1"))
+                missing.Add(Path.GetFileName(path));
+        }
+
+        // Three run dotnet when measured: ci.yml, release.yml and codeql.yml.
+        Assert.True(running >= 3, $"only {running} workflow(s) were found running dotnet, out of 3 measured.");
+        Assert.True(missing.Count == 0,
+            "these workflows run dotnet without DOTNET_CLI_TELEMETRY_OPTOUT: 1 in their workflow-level env, so the "
+            + "SDK can report from them:\n  " + string.Join("\n  ", missing));
+    }
+
+    /// <summary>
     /// Every private-reporting route must point at a channel that exists. SECURITY.md and
     /// CODE_OF_CONDUCT.md both told reporters to email "the address on the GitHub profile" — that profile
     /// publishes no email, so the one page a security reporter reads named a dead end. A vulnerability

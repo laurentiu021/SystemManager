@@ -1,0 +1,12 @@
+# Line endings follow .editorconfig on every clone, whatever core.autocrlf is set to: CRLF, and LF for shell
+# scripts and YAML. The repository stores LF either way. Without this, dotnet format's line-ending check passed
+# only on a clone made with core.autocrlf=true (#2806).
+* text=auto eol=crlf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Images are binary: never converted, never diffed as text.
+*.png binary
+*.gif binary
+*.ico binary

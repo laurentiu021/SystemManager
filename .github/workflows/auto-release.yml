@@ -167,7 +167,10 @@ jobs:
         shell: bash
         run: |
           NEXT="${{ steps.next.outputs.version }}"
-          gh workflow run release.yml -f tag="$NEXT"
-          echo "Triggered release.yml for $NEXT"
+          # On the tag, so the run's own commit is the tag's. The attestation signs with the run's
+          # GITHUB_SHA and GITHUB_REF, and a run on main has main's head as of the dispatch, which is
+          # the tag's commit only while nothing has landed in between (#2805).
+          gh workflow run release.yml --ref "$NEXT" -f tag="$NEXT"
+          echo "Triggered release.yml on $NEXT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

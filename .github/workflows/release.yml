@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.5.3)"
+        description: "Tag to release (e.g. v0.5.3). Run it on that tag: gh workflow run release.yml --ref v0.5.3 -f tag=v0.5.3"
         required: true
 
 # Default for every job in this workflow: read-only. The guard job below only reads
@@ -93,6 +93,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
+
+      # The attestation further down signs with this run's own commit and ref, GITHUB_SHA and
+      # GITHUB_REF, not with the commit checked out above. A release dispatched from main builds the
+      # tag but belongs to main's head, so once anything has landed on main since the tag, as it has
+      # by the time a re-dispatch recovers a release, the permanent attestation would name a commit
+      # that did not build the binary (#2805). Stopped here, before anything is built.
+      - name: Check this run's commit is the one it builds
+        shell: pwsh
+        run: |
+          $built = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or -not $built) { throw "Could not read the checked-out commit." }
+          if ($built -ne $env:GITHUB_SHA) {
+              throw "This run belongs to $env:GITHUB_REF at $env:GITHUB_SHA, but it checked out $built, " +
+                    "so its attestation would name a commit that did not build the binary. Dispatch " +
+                    "the release on its tag: gh workflow run release.yml --ref <tag> -f tag=<tag>"
+          }
+          Write-Host "Building $built, this run's own commit."
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

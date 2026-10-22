@@ -16,9 +16,67 @@ namespace SysManager;
 
 public partial class App : Application
 {
-    private const string MutexName = "Global\\SysManager_SingleInstance_laurentiu021";
-    private const string PipeName = "SysManager_SingleInstance_Pipe_laurentiu021";
     private Mutex? _instanceMutex;
+
+    // The activation pipe of this account in this session, named in OnStartup.
+    private string _pipeName = "";
+
+    /// <summary>
+    /// The single-instance mutex's name for one account, in the <c>Local\</c> namespace so it is per session too.
+    /// </summary>
+    /// <remarks>
+    /// One name for the whole machine let a copy running for another Windows account own it: one left in the
+    /// notification area under fast user switching, or the account "Run as administrator" elevates to. A start was then
+    /// refused the mutex, or its connect to that copy's pipe, which admits only its own account, and either threw
+    /// before logging existed, so SysManager simply never opened (#2799).
+    /// </remarks>
+    internal static string MutexNameFor(string userKey) => $@"Local\SysManager_SingleInstance_laurentiu021_{userKey}";
+
+    /// <summary>
+    /// The activation pipe's name for one account in one session. Pipe names are machine-wide, so both are in it, as
+    /// the mutex's namespace and name hold both.
+    /// </summary>
+    internal static string PipeNameFor(string userKey, int sessionId) =>
+        $"SysManager_SingleInstance_Pipe_laurentiu021_{userKey}_{sessionId}";
+
+    /// <summary>
+    /// Takes the single-instance mutex named <paramref name="name"/>, or returns null and says why in
+    /// <paramref name="refused"/> when it is held, or squatted, by something this account may not open.
+    /// </summary>
+    /// <remarks>
+    /// A start that was refused here threw before logging existed, and never opened (#2799). Refused, this copy runs
+    /// without the mutex rather than not at all, so <paramref name="createdNew"/> is true, and the caller says so once
+    /// logging exists.
+    /// </remarks>
+    internal static Mutex? TakeInstanceMutex(string name, out bool createdNew, out string? refused)
+    {
+        refused = null;
+        try
+        {
+            return new Mutex(true, name, out createdNew);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException
+                                       or IOException)
+        {
+            // The kind and the code, not the message, which quotes the name and so the account's SID into the log.
+            refused = $"{ex.GetType().Name} 0x{ex.HResult:X8}";
+            createdNew = true;
+            return null;
+        }
+    }
+
+    // The account's SID, which no other account shares; its name only when Windows gives no SID.
+    private static string CurrentUserKey()
+    {
+        using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+        return identity.User?.Value ?? Environment.UserName;
+    }
+
+    private static int CurrentSessionId()
+    {
+        using var self = Process.GetCurrentProcess();
+        return self.SessionId;
+    }
 
     /// <summary>
     /// True once an exit has been requested programmatically rather than by the user pressing X.
@@ -114,7 +172,9 @@ public partial class App : Application
             return;
         }
 
-        _instanceMutex = new Mutex(true, MutexName, out bool createdNew);
+        var userKey = CurrentUserKey();
+        _pipeName = PipeNameFor(userKey, CurrentSessionId());
+        _instanceMutex = TakeInstanceMutex(MutexNameFor(userKey), out bool createdNew, out var mutexRefused);
         if (!createdNew)
         {
             // When this instance was started by "Run as administrator", the outgoing
@@ -128,13 +188,18 @@ public partial class App : Application
             }
             else
             {
-                ActivateExistingInstance();
+                ActivateExistingInstance(_pipeName);
                 Shutdown();
                 return;
             }
         }
 
         LogService.Init();
+        if (mutexRefused is not null)
+        {
+            LogService.Logger?.Warning(
+                "Single instance: the mutex could not be taken ({Error}), so this copy runs without it", mutexRefused);
+        }
 
         // Wire the crash handlers FIRST — before the DI build, tray, and resource-history
         // start below — so a throw anywhere in the remaining startup is logged rather than
@@ -257,17 +322,15 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    private static void ActivateExistingInstance()
+    private static void ActivateExistingInstance(string pipeName)
     {
-        // Try named pipe first — works even when the window is hidden (tray mode)
-        try
+        // Try named pipe first — works even when the window is hidden (tray mode). Connection alone signals the running
+        // instance to activate.
+        SignalThroughPipe(() =>
         {
-            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
             client.Connect(timeout: 2000);
-            // Connection alone signals the running instance to activate
-        }
-        catch (TimeoutException) { /* pipe not available, fall back to window activation */ }
-        catch (IOException) { /* pipe not available */ }
+        });
 
         // Fallback: find the window handle (works when window is visible)
         using var current = Process.GetCurrentProcess();
@@ -287,6 +350,26 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Asks the running copy to show its window by connecting to its pipe, and says whether the pipe answered.
+    /// </summary>
+    /// <remarks>
+    /// False, not an exception, for a pipe that is not listening, is not there, or is refused: the caller falls back to
+    /// looking for a visible window. A refusal used to escape (#2799). The pipe admits only the account that made it,
+    /// so another account's copy refused the connect, before logging existed and with nothing to catch it.
+    /// </remarks>
+    internal static bool SignalThroughPipe(Action connect)
+    {
+        try
+        {
+            connect();
+            return true;
+        }
+        catch (TimeoutException) { return false; }              // not listening
+        catch (IOException) { return false; }                   // not there
+        catch (UnauthorizedAccessException) { return false; }   // a copy this account may not reach
+    }
+
+    /// <summary>
     /// Listens for named pipe connections from subsequent instances and
     /// activates the main window when one connects. Returns a Task so the
     /// caller can fire-and-forget without using the async-void anti-pattern;
@@ -295,40 +378,86 @@ public partial class App : Application
     private async Task StartPipeListenerAsync()
     {
         _pipeCts = new CancellationTokenSource();
-        var ct = _pipeCts.Token;
+        await ListenForActivationsAsync(WaitForActivationAsync, ShowMainWindowSoon, TimeProvider.System, _pipeCts.Token)
+            .ConfigureAwait(false);
+    }
+
+    // One connection on the activation pipe.
+    private async Task WaitForActivationAsync(CancellationToken ct)
+    {
+        // Restrict the single-instance pipe to the current user only. The
+        // connection carries no payload (it is a pure "activate the window"
+        // signal), but an explicit DACL stops any other local account from
+        // poking the server, rather than relying on the default ACL.
+        await using var server = NamedPipeServerStreamAcl.Create(
+            _pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous, inBufferSize: 0, outBufferSize: 0,
+            CreateCurrentUserPipeSecurity());
+        await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
+    }
+
+    // A second instance connected — activate our window on the UI thread.
+    private void ShowMainWindowSoon() => _ = Dispatcher.BeginInvoke(() =>
+    {
+        var win = MainWindow;
+        if (win != null)
+        {
+            TrayIconService.ShowWindow(win);
+        }
+    });
+
+    /// <summary>How long the listener waits after a turn that failed before it listens again.</summary>
+    internal static readonly TimeSpan ActivationRetryDelay = TimeSpan.FromSeconds(1);
+
+    // ERROR_NO_DATA as an HRESULT, "The pipe is being closed": a client connected and closed before the wait began.
+    private const int PipeClosedBeforeTheWait = unchecked((int)0x800700E8);
+
+    /// <summary>
+    /// Waits for one connection after another with <paramref name="waitForOne"/>, calling <paramref name="activate"/>
+    /// for each, until <paramref name="ct"/> is cancelled.
+    /// </summary>
+    /// <remarks>
+    /// Only cancellation ends it (#2799). It used to end on any <see cref="IOException"/>, taken for a pipe broken
+    /// during shutdown, but shutdown cancels and comes out as <see cref="OperationCanceledException"/>. The one it did
+    /// see is "The pipe is being closed", from a second launch that connected and left before the wait began, and from
+    /// then on every later launch, with SysManager in the notification area, did nothing. That one is a connection, so
+    /// it activates; any other failure is logged and the next wait starts after <see cref="ActivationRetryDelay"/>, so
+    /// a pipe that keeps failing cannot spin.
+    /// </remarks>
+    internal static async Task ListenForActivationsAsync(
+        Func<CancellationToken, Task> waitForOne, Action activate, TimeProvider clock, CancellationToken ct)
+    {
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                // Restrict the single-instance pipe to the current user only. The
-                // connection carries no payload (it is a pure "activate the window"
-                // signal), but an explicit DACL stops any other local account from
-                // poking the server, rather than relying on the default ACL.
-                await using var server = NamedPipeServerStreamAcl.Create(
-                    PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous, inBufferSize: 0, outBufferSize: 0,
-                    CreateCurrentUserPipeSecurity());
-                await server.WaitForConnectionAsync(ct).ConfigureAwait(false);
-
-                // A second instance connected — activate our window on the UI thread
-                _ = Dispatcher.BeginInvoke(() =>
-                {
-                    var win = MainWindow;
-                    if (win != null)
-                    {
-                        TrayIconService.ShowWindow(win);
-                    }
-                });
+                await waitForOne(ct).ConfigureAwait(false);
+                activate();
+                continue;
             }
-            catch (OperationCanceledException) { break; }   // shutdown
-            catch (IOException) { break; }                  // pipe broken during shutdown
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }   // shutdown
+            catch (IOException ex) when (ex.HResult == PipeClosedBeforeTheWait)
+            {
+                // A second launch connected and left before the wait began: it still asked for the window.
+                activate();
+                continue;
+            }
             // A transient per-iteration fault (e.g. the OS refuses a pipe instance, or an
             // ObjectDisposedException on a torn-down handle) must NOT permanently kill
             // single-instance activation for the rest of the session — the old single-try
             // wrapping the whole loop did exactly that. Log it and keep listening.
             catch (Exception ex)
             {
-                LogService.Logger?.Warning(ex, "Single-instance pipe listener iteration failed; continuing to listen");
+                LogService.Logger?.Warning(ex, "Single-instance pipe listener iteration failed; listening again");
+            }
+
+            try
+            {
+                await Task.Delay(ActivationRetryDelay, clock, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;   // shutdown during the pause
             }
         }
     }

@@ -257,4 +257,36 @@ public class EventLogServiceTests
 
         Assert.True(checked_ >= 0, $"examined {checked_} entries");
     }
+
+    /// <summary>
+    /// System Report's count reads a week of the real System log inside the report's budget.
+    /// </summary>
+    /// <remarks>
+    /// It counts the whole window where the report used to read the 500 newest errors (#2827), so the budget is what
+    /// this proves: past it, the report would say the log could not be read in time on every run. No group is a
+    /// legitimate outcome on a machine with nothing in the week.
+    /// </remarks>
+    [Fact]
+    public async Task Tally_System_CountsTheWeek_WithinTheReportsBudget()
+    {
+        var svc = new EventLogService();
+        var since = DateTime.Now - SystemReportService.RecentProblemsWindow;
+        var opt = new EventLogQueryOptions
+        {
+            LogName = "System",
+            Since = since,
+            Severities = [EventSeverity.Critical, EventSeverity.Error],
+        };
+        using var cts = new CancellationTokenSource(SystemReportService.RecentProblemsBudget);
+
+        var tally = await svc.TallyAsync(opt, cts.Token);
+
+        Assert.Equal(EventLogService.ReadOutcome.Ok, tally.Outcome);
+        foreach (var g in tally.Groups)
+        {
+            Assert.True(g.Count > 0, $"{g.ProviderName}/{g.EventId} counted {g.Count}");
+            // A second's slack: the query compares at milliseconds.
+            Assert.True(g.LastSeen >= since.AddSeconds(-1), $"{g.ProviderName}/{g.EventId} last seen {g.LastSeen:O}");
+        }
+    }
 }

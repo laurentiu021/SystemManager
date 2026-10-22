@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.55] - 2026-10-22
+
+**System Report's list of problems from the last 7 days covers the whole week, so an older critical event is no
+longer left out.**
+
+### Fixed
+
+- **System Report's "last 7 days" problem list covered only the newest 500 errors.** One noisy source can log 500
+  errors in a day or two, and then a critical event from earlier in the week, such as an unexpected shutdown, was
+  never read, and the noisy one read "500 times" whatever its real count. The report now counts every critical and
+  error event of the week, and reads none of their messages, which was the slow part of reading them. Since 1.116.0.
+- **Two reports made at once could be told how the other's read of the System log went.** System Report and About
+  make their reports through one service, which kept the result of its last read of the log in one place. One report
+  could then say the System log could not be read because the other's read failed, or list a read that was cut short
+  as the whole week. Each report now goes by its own read. Since 1.116.0.
+
 ## [1.130.54] - 2026-10-22
 
 **About and Bulk Installer say when a switch that decides whether SysManager goes online could not be saved.**

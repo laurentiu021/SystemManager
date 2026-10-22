@@ -175,6 +175,125 @@ public sealed partial class EventLogService
         ct.ThrowIfCancellationRequested();
     }
 
+    /// <summary>
+    /// One source's events in a window: how many there were of the asked severities, when the newest was logged, and
+    /// whether any was critical.
+    /// </summary>
+    public sealed record EventGroup(string ProviderName, int EventId, int Count, DateTime LastSeen, bool Critical);
+
+    /// <summary>The groups a tally found, and how the read went, for this read alone.</summary>
+    public sealed record EventTally(IReadOnlyList<EventGroup> Groups, ReadOutcome Outcome);
+
+    /// <summary>What a count needs of one record, which is no message: its source, ID, level and time.</summary>
+    internal readonly record struct EventFacts(string ProviderName, int EventId, byte? Level, DateTime Time);
+
+    /// <summary>How many records a tally reads per hop to the thread pool.</summary>
+    internal const int TallyBatch = 256;
+
+    /// <summary>
+    /// Counts every record of the asked severities in the window, grouped by source and event ID, without reading a
+    /// single message. <see cref="EventLogQueryOptions.MaxResults"/> does not apply: the count is of the whole window.
+    /// </summary>
+    /// <remarks>
+    /// For System Report's problem list (#2827). It read the 500 newest errors and stopped, and one noisy source used
+    /// those up in a day or two, so an older critical event was never read and a count stopped at 500. Formatting the
+    /// message is the expensive part of a record, and a count needs none: on the PC it was measured on, counting a
+    /// week of the System log took under half a second.
+    /// <para>The outcome comes back with the groups rather than through <see cref="LastOutcome"/>, which two reports
+    /// running at once on one instance would share: one read's reset could hide the other's fault.</para>
+    /// </remarks>
+    public async Task<EventTally> TallyAsync(EventLogQueryOptions opt, CancellationToken ct)
+    {
+        EventLogReader reader;
+        try
+        {
+            reader = new EventLogReader(
+                new EventLogQuery(opt.LogName, PathType.LogName, BuildXPath(opt)) { ReverseDirection = true });
+        }
+        catch (UnauthorizedAccessException) { return new([], ReadOutcome.AccessDenied); }
+        catch (EventLogNotFoundException) { return new([], ReadOutcome.LogNotFound); }
+        catch (EventLogException) { return new([], ReadOutcome.Unavailable); }
+
+        using (reader)
+            return await Tally(opt, () => NextFacts(reader, opt.LogName), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The count, over a caller-supplied record source that returns null at the end. Separate from
+    /// <see cref="EventLogReader"/> for the reason <see cref="Enumerate"/> is: a real reader cannot be filled or made
+    /// to fault on demand.
+    /// </summary>
+    /// <remarks>
+    /// A fault ends the read as <see cref="ReadOutcome.Unavailable"/> with no groups, so the report says the log could
+    /// not be read rather than listing part of it as all of it. A cancelled read throws.
+    /// </remarks>
+    internal static async Task<EventTally> Tally(
+        EventLogQueryOptions opt, Func<EventFacts?> readNext, CancellationToken ct)
+    {
+        var groups = new Dictionary<(string ProviderName, int EventId), EventGroup>();
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            List<EventFacts> batch;
+            try
+            {
+                batch = await Task.Run(() => ReadBatch(readNext), ct).ConfigureAwait(false);
+            }
+            catch (EventLogException ex)
+            {
+                Log.Debug(ex, "EventLog: read faulted on {Log}, ending the tally", opt.LogName);
+                return new([], ReadOutcome.Unavailable);
+            }
+
+            foreach (var facts in batch)
+            {
+                if (!Matches(opt.Severities, facts.Level)) continue;
+                var key = (facts.ProviderName, facts.EventId);
+                var critical = MapLevel(facts.Level) == EventSeverity.Critical;
+                groups[key] = groups.TryGetValue(key, out var group)
+                    ? group with
+                    {
+                        Count = group.Count + 1,
+                        LastSeen = facts.Time > group.LastSeen ? facts.Time : group.LastSeen,
+                        Critical = group.Critical || critical,
+                    }
+                    : new EventGroup(facts.ProviderName, facts.EventId, 1, facts.Time, critical);
+            }
+
+            if (batch.Count < TallyBatch) return new([.. groups.Values], ReadOutcome.Ok);
+        }
+    }
+
+    private static List<EventFacts> ReadBatch(Func<EventFacts?> readNext)
+    {
+        var batch = new List<EventFacts>(TallyBatch);
+        while (batch.Count < TallyBatch && readNext() is { } facts)
+            batch.Add(facts);
+        return batch;
+    }
+
+    /// <summary>The next record's facts, past any that cannot be read, or null at the end.</summary>
+    private static EventFacts? NextFacts(EventLogReader reader, string logName)
+    {
+        while (true)
+        {
+            using var rec = reader.ReadEvent();
+            if (rec is null) return null;
+            try
+            {
+                return new EventFacts(rec.ProviderName ?? "", rec.Id, rec.Level, rec.TimeCreated ?? DateTime.MinValue);
+            }
+            catch (EventLogException ex)
+            {
+                Log.Debug(ex, "EventLog: skipped a record on {Log} that could not be read", logName);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log.Debug(ex, "EventLog: skipped a record on {Log} that could not be read", logName);
+            }
+        }
+    }
+
     private static FriendlyEventEntry Project(EventRecord rec, string logName)
     {
         var severity = MapLevel(rec.Level);

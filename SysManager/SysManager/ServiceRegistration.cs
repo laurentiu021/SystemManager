@@ -32,7 +32,8 @@ public static class ServiceRegistration
         services.AddSingleton<DiskHealthService>();
         services.AddSingleton<TemperatureService>();
         // Its own EventLogService rather than the Logs tab's: that service reports how a read went through
-        // LastOutcome, so two readers sharing one instance could each be told the other's answer.
+        // LastOutcome, so two readers sharing one instance could each be told the other's answer. The report's own
+        // count returns its outcome with it, because System Report and About share this instance (#2827).
         services.AddSingleton<SystemReportService>(sp => new SystemReportService(
             sp.GetRequiredService<SystemInfoService>(),
             sp.GetRequiredService<DiskHealthService>(),

@@ -385,28 +385,15 @@ public class SystemReportServiceTests
 
     // ---------- SummarizeProblems ----------
 
-    private static FriendlyEventEntry Event(string provider, int id, DateTime when,
-        EventSeverity severity = EventSeverity.Error, string message = "") => new()
-        {
-            ProviderName = provider,
-            EventId = id,
-            Timestamp = when,
-            Severity = severity,
-            Message = message,
-            FullMessage = message,
-        };
+    private static EventLogService.EventGroup Group(string provider, int id, DateTime lastSeen, int count = 1,
+        bool critical = false) => new(provider, id, count, lastSeen, critical);
 
     [Fact]
-    public void SummarizeProblems_GroupsBySourceAndId_CountingThemAndKeepingTheLatest()
+    public void SummarizeProblems_CarriesEachGroupsCountAndLatest()
     {
-        var problems = SystemReportService.SummarizeProblems(
-        [
-            Event("Service Control Manager", 7031, Monday.AddHours(-3)),
-            Event("Service Control Manager", 7031, Monday),
-            Event("Service Control Manager", 7031, Monday.AddHours(-1)),
-        ]);
+        var p = Assert.Single(
+            SystemReportService.SummarizeProblems([Group("Service Control Manager", 7031, Monday, count: 3)]));
 
-        var p = Assert.Single(problems);
         Assert.Equal(3, p.Count);
         Assert.Equal(Monday, p.LastSeen);
     }
@@ -414,11 +401,12 @@ public class SystemReportServiceTests
     [Fact]
     public void SummarizeProblems_PutsCriticalFirst_ThenNewest_AtMostFive()
     {
-        List<FriendlyEventEntry> entries = [Event("Microsoft-Windows-Kernel-Power", 41, Monday.AddDays(-3), EventSeverity.Critical)];
+        List<EventLogService.EventGroup> groups =
+            [Group("Microsoft-Windows-Kernel-Power", 41, Monday.AddDays(-3), critical: true)];
         for (var i = 0; i < 7; i++)
-            entries.Add(Event($"Source{i}", 100 + i, Monday.AddHours(-i)));
+            groups.Add(Group($"Source{i}", 100 + i, Monday.AddHours(-i)));
 
-        var problems = SystemReportService.SummarizeProblems(entries);
+        var problems = SystemReportService.SummarizeProblems(groups);
 
         Assert.Equal(SystemReportService.MaxRecentProblems, problems.Count);
         Assert.Equal("Microsoft-Windows-Kernel-Power", problems[0].Source);   // older, but critical
@@ -431,8 +419,8 @@ public class SystemReportServiceTests
     {
         var problems = SystemReportService.SummarizeProblems(
         [
-            Event("Microsoft-Windows-Kernel-Power", 41, Monday, EventSeverity.Critical),
-            Event("Some-Vendor-Driver", 9001, Monday.AddHours(-1)),
+            Group("Microsoft-Windows-Kernel-Power", 41, Monday, critical: true),
+            Group("Some-Vendor-Driver", 9001, Monday.AddHours(-1)),
         ]);
 
         Assert.True(EventExplainer.TryExplain("Microsoft-Windows-Kernel-Power", 41, out var written));
@@ -447,20 +435,14 @@ public class SystemReportServiceTests
     }
 
     [Fact]
-    public void SummarizeProblems_NeverCarriesTheEventsOwnMessage()
+    public void TheCount_ReadsNoEventMessage_SoNoneCanReachTheReport()
     {
-        // An event's message can name files, users and machines; the report keeps all three out (#2352).
-        const string message = @"Access to C:\Users\alice\Documents\taxes.pdf by PC-OF-ALICE failed.";
-        var problems = SystemReportService.SummarizeProblems([Event("Some-Vendor-Driver", 9001, Monday, message: message)]);
-
-        var text = SystemReportService.BuildText(WithHealth(SampleHealth(problems: problems)));
-        var html = SystemReportService.BuildHtml(WithHealth(SampleHealth(problems: problems)));
-        var json = SystemReportService.BuildJson(WithHealth(SampleHealth(problems: problems)));
-
-        foreach (var rendered in new[] { text, html, json })
-        {
-            Assert.DoesNotContain("alice", rendered, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("taxes", rendered, StringComparison.OrdinalIgnoreCase);
-        }
+        // An event's message can name files, users and machines; the report keeps all three out (#2352). The count
+        // the problems come from never reads one (#2827), and a message added to either record would be one the
+        // report could carry.
+        Assert.Equal(["Count", "Critical", "EventId", "LastSeen", "ProviderName"],
+            typeof(EventLogService.EventGroup).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(["EventId", "Level", "ProviderName", "Time"],
+            typeof(EventLogService.EventFacts).GetProperties().Select(p => p.Name).Order(StringComparer.Ordinal));
     }
 }

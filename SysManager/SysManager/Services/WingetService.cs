@@ -98,7 +98,22 @@ public sealed partial class WingetService : IWingetService
     [GeneratedRegex(@"^\s*Name\s+Id\s+Version\s+Available", RegexOptions.IgnoreCase)]
     private static partial Regex UpgradeHeaderPattern();
 
-    [GeneratedRegex(@"^\d+\s+(upgrades|packages|package)\s+", RegexOptions.IgnoreCase)]
+    // winget's summary line, "{0} upgrades available." (AvailableUpgrades in its string tables), in each language it
+    // ships, which ends the table. Only the English one was known, so on any other language the table never ended and
+    // the heading and header of the list winget prints below it were read as packages (#2849). "packages" and
+    // "package" are older English wordings.
+    [GeneratedRegex(@"^\s*(?:\d+\s+(?:upgrades|packages|package)\s+"
+        + @"|\d+\s+Aktualisierungen\s+verfügbar\."          // de-DE
+        + @"|\d+\s+actualizaciones\s+disponibles\."         // es-ES
+        + @"|\d+\s+mises\s+à\s+niveau\s+disponibles\."      // fr-FR
+        + @"|\d+\s+aggiornamenti\s+disponibili\."           // it-IT
+        + @"|\d+\s+アップグレードを利用できます。"           // ja-JP
+        + @"|\d+\s+업그레이드를\s+사용할\s+수\s+있습니다\."     // ko-KR
+        + @"|\d+\s+atualizações\s+disponíveis\."            // pt-BR
+        + @"|Доступны\s+обновления:\s+\d+\."                // ru-RU
+        + @"|\d+\s+升级可用。"                               // zh-CN
+        + @"|\d+\s+個升級可供使用。)",                        // zh-TW
+        RegexOptions.IgnoreCase)]
     private static partial Regex UpgradeSummaryPattern();
 
     /// <summary>Upgrades every app the upgrade list holds, one by one, and fails when any of them fails.</summary>

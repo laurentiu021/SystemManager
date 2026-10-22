@@ -282,4 +282,76 @@ public class WingetParserDeepTests
         var upgrade = Assert.Single(commands.Skip(1));
         Assert.StartsWith("upgrade --id \"Git.Git\" -e ", upgrade, StringComparison.Ordinal);
     }
+
+    // ---------- the list ends at winget's summary line, in every language winget ships (#2849) ----------
+
+    // winget's AvailableUpgrades line for two upgrades, as its string table for each language words it.
+    [Theory]
+    [InlineData("2 upgrades available.")]  // en-US
+    [InlineData("2 Aktualisierungen verfügbar.")]  // de-DE
+    [InlineData("2 actualizaciones disponibles.")]  // es-ES
+    [InlineData("2 mises à niveau disponibles.")]  // fr-FR
+    [InlineData("2 aggiornamenti disponibili.")]  // it-IT
+    [InlineData("2 アップグレードを利用できます。")]  // ja-JP
+    [InlineData("2 업그레이드를 사용할 수 있습니다.")]  // ko-KR
+    [InlineData("2 atualizações disponíveis.")]  // pt-BR
+    [InlineData("Доступны обновления: 2.")]  // ru-RU
+    [InlineData("2 升级可用。")]  // zh-CN
+    [InlineData("2 個升級可供使用。")]  // zh-TW
+    public void TheList_EndsAtWingetsSummaryLine_InEveryLanguageItShips(string summary)
+    {
+        // A package line after the summary would be listed as one more update if the summary did not end the list.
+        var result = Parse(
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget",
+            summary,
+            "Contoso Pinned               Contoso.Pinned                 1.0.0     1.1.0       winget",
+        ]);
+
+        Assert.Equal(["Git.Git", "OpenJS.NodeJS"], result.Select(p => p.Id));
+    }
+
+    [Fact]
+    public void AGermanList_FollowedByTheListOfAppsToNameOneByOne_HoldsOnlyItsOwnApps()
+    {
+        // What a German winget prints when an app has to be named to be updated: the summary, a heading, and a
+        // second list under its own header. The heading and that header were listed as apps, ticked.
+        var result = Parse(
+        [
+            "Name                     ID                         Version     Verfügbar   Quelle",
+            "----------------------------------------------------------------------------------",
+            "Git                      Git.Git                    2.47.0      2.48.0      winget",
+            "Mozilla Firefox (x64 de) Mozilla.Firefox.de         139.0       140.0       winget",
+            "2 Aktualisierungen verfügbar.",
+            "Für die folgenden Pakete ist ein Upgrade verfügbar, für das Upgrade ist jedoch eine explizite "
+                + "Zielgruppenadressierung erforderlich:",
+            "Name         ID           Version Verfügbar Quelle",
+            "--------------------------------------------------",
+            "Contoso Tool Contoso.Tool 1.0     1.1       winget",
+        ]);
+
+        Assert.Equal(["Git.Git", "Mozilla.Firefox.de"], result.Select(p => p.Id));
+    }
+
+    [Fact]
+    public void ARussianList_EndsAtItsSummary_WhereTheCountComesLast()
+    {
+        var result = Parse(
+        [
+            "Имя                      ИД                         Версия      Доступно    Источник",
+            "------------------------------------------------------------------------------------",
+            "Git                      Git.Git                    2.47.0      2.48.0      winget",
+            "Доступны обновления: 1.",
+            "Для следующих пакетов доступно обновление, но для обновления требуется явный выбор целевого "
+                + "объекта.",
+            "Имя          ИД           Версия  Доступно Источник",
+            "---------------------------------------------------",
+            "Contoso Tool Contoso.Tool 1.0     1.1      winget",
+        ]);
+
+        Assert.Equal(["Git.Git"], result.Select(p => p.Id));
+    }
 }

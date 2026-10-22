@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.62] - 2026-10-22
+
+**On a winget in a language other than English, App Updates no longer lists a heading or a column header as an
+app.**
+
+### Fixed
+
+- **On a German, French, Spanish, Russian or other non-English winget, the update list ran on past its end.** App
+  Updates knew only the English form of the line winget ends the list with, "3 upgrades available.", so in every
+  other language it kept reading. When winget printed its second list below, of apps that have to be updated one by
+  one, that list's heading and column header came through as apps with an update, ticked, counted on the Dashboard,
+  and failing when updated. The list now ends at that line in each of the eleven languages winget ships, and where
+  another list starts if winget words the line differently. Since 1.52.8.
+
 ## [1.130.61] - 2026-10-22
 
 **App Blocker now blocks a program whose name has a "+", brackets or a letter such as ă or é, and says what is wrong

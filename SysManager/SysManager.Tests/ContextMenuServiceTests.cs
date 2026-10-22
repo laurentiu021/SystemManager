@@ -110,4 +110,36 @@ public class ContextMenuServiceTests
         Assert.Null(Record.Exception(() =>
             ContextMenuService.BackupRegistry(@"HKCR\*\shell\evil"" ""C:\Windows\System32\pwned.reg"" /y")));
     }
+
+    // ---------- the menu style, over a stand-in for HKEY_CURRENT_USER (#2804) ----------
+
+    [Fact]
+    public void TheMenuStyle_IsWrittenAndReadUnderTheUserHiveItIsGiven()
+    {
+        var name = $@"Software\SysManagerTests\ContextMenu_{Guid.NewGuid():N}";
+        using var user = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(name, writable: true);
+        try
+        {
+            var service = new ContextMenuService(currentUser: user);
+            Assert.False(service.IsClassicMenuEnabled());
+
+            Assert.True(service.EnableClassicMenu());
+            Assert.True(service.IsClassicMenuEnabled());
+            using (var written = user.OpenSubKey(
+                       @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"))
+            {
+                Assert.NotNull(written);
+                Assert.Equal("", written!.GetValue(""));
+            }
+
+            Assert.True(service.DisableClassicMenu());
+            Assert.False(service.IsClassicMenuEnabled());
+            using var gone = user.OpenSubKey(@"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}");
+            Assert.Null(gone);
+        }
+        finally
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(name, throwOnMissingSubKey: false);
+        }
+    }
 }

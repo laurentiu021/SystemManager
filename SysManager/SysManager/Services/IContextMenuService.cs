@@ -17,10 +17,9 @@ namespace SysManager.Services;
 /// different ways depending on elevation, and the elevated one is the valuable half: it says the entry is
 /// owned by TrustedInstaller and no amount of elevating will help, which is what stops a user relaunching
 /// as administrator for nothing. Swapped, every user would take the useless path and nothing would fail.
-/// <para>Only the three instance members the view model reaches are here. The classic-menu and
-/// restart-Explorer operations stay static on <see cref="ContextMenuService"/>: the view model calls them
-/// through the type rather than through an injected instance, so putting them behind this seam would
-/// widen it without making anything newly testable.</para>
+/// <para>The menu style is here too. It was static and read the real HKEY_CURRENT_USER, so a preset whose
+/// style write failed could not be tested, and the tab restarted Explorer and said the preset was applied
+/// with the style unchanged (#2804). Restarting Explorer stays on <c>ExplorerShell</c>.</para>
 /// </remarks>
 public interface IContextMenuService
 {
@@ -39,4 +38,13 @@ public interface IContextMenuService
     /// as <see cref="DisableEntry"/>.
     /// </summary>
     bool EnableEntry(ContextMenuEntry entry);
+
+    /// <summary>Whether the classic, Windows 10 style, full menu is forced; false when it cannot be read.</summary>
+    bool IsClassicMenuEnabled();
+
+    /// <summary>Forces the classic full context menu. False when Windows would not accept the change.</summary>
+    bool EnableClassicMenu();
+
+    /// <summary>Puts back Windows 11's compact context menu. False when Windows would not accept the change.</summary>
+    bool DisableClassicMenu();
 }

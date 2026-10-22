@@ -344,7 +344,8 @@ anything a program registered, so both are undone by turning the switch back on:
 - Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
 - **Classic or modern menu** — Win10 Default switches to the classic full menu and Win11 Default to
   the modern compact one, restarting Explorer when the style changes. There is no separate style
-  switch, so changing the style also resets the entries to clean defaults
+  switch, so changing the style also resets the entries to clean defaults. When Windows will not let
+  SysManager switch the style, the preset says so and changes nothing, and Explorer is not restarted
 - **Visual preview on hover** — real screenshots of each menu style
 - **Entry explanations** — human-readable descriptions for common entries
 - **Add-ons listed too** — the COM shell extensions that programs like archivers, cloud sync

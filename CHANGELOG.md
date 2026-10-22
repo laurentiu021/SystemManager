@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.60] - 2026-10-22
+
+**A Right-click Menu preset whose menu style Windows will not change now says so, changes nothing, and does not
+restart Explorer.**
+
+### Fixed
+
+- **A preset reported the menu style switched when Windows had refused it, and restarted Explorer for nothing.**
+  Win10 Default and Win11 Default switch the menu style, and when Windows would not let SysManager write it, the
+  preset still restarted Explorer, closing every File Explorer window, showed the switch on the style asked for and
+  said the preset was applied. The preset now writes the style first, and when that is refused it changes no entry,
+  restarts nothing, keeps the switch on the real style and says why. Since 1.16.0.
+
 ## [1.130.59] - 2026-10-22
 
 **DNS & Hosts no longer drops a change another program made to the hosts file, keeps the file's own encoding, and

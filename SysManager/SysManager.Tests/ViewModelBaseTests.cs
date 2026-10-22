@@ -80,4 +80,35 @@ public class ViewModelBaseTests
         Assert.Equal(75, vm.Progress);
         Assert.True(vm.IsProgressIndeterminate);
     }
+
+    // ---------- InitializationComplete ----------
+
+    /// <summary>
+    /// A view model whose load starts a second load on another thread before its own <c>InitializeAsync</c> call
+    /// returns, as a load does that resumes off the UI thread when no dispatcher queues it, which is how the tests run.
+    /// </summary>
+    private sealed class NestingVm : ViewModelBase
+    {
+        public TaskCompletionSource Second { get; } = new();
+
+        public NestingVm() => InitializeAsync(() =>
+        {
+            var other = new Thread(() => InitializeAsync(() => Second.Task));
+            other.Start();
+            other.Join();
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task InitializationComplete_IsTheNewestLoad_WhenItStartedBeforeTheFirstReturned()
+    {
+        // The first call set the property to its own task as it returned, over the second's, so a test waiting on it
+        // went on while the second load was still running (#2947).
+        var vm = new NestingVm();
+
+        Assert.False(vm.InitializationComplete.IsCompleted);
+        vm.Second.SetResult();
+        await vm.InitializationComplete;
+    }
 }

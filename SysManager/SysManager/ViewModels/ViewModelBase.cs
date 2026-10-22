@@ -120,8 +120,8 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     protected internal virtual IRelayCommand? RefreshOnF5 => null;
 
     /// <summary>
-    /// Completes when the constructor's <see cref="InitializeAsync"/> work has finished
-    /// (or immediately if the VM does no async init). Production never awaits this — the
+    /// Completes when the newest <see cref="InitializeAsync"/> load has finished, the constructor's or one started
+    /// since (or immediately if the VM does no async init). Production never awaits this — the
     /// window paints while init runs in the background — but tests can await it to observe
     /// the loaded state deterministically instead of racing the fire-and-forget load.
     /// </summary>
@@ -168,7 +168,13 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
     /// </summary>
     protected void InitializeAsync(Func<Task> asyncAction, [System.Runtime.CompilerServices.CallerMemberName] string callerName = "")
     {
-        InitializationComplete = RunInitAsync(asyncAction, callerName);
+        // Set before the load starts rather than once this call returns. A load that resumes on another thread, as one
+        // does when no dispatcher queues it, can start a second load before then, and setting the property afterwards
+        // replaced that newer load's task with this older one, so whoever awaited it went on while the newer load was
+        // still running (#2947).
+        var start = new Task<Task>(() => RunInitAsync(asyncAction, callerName));
+        InitializationComplete = start.Unwrap();
+        start.RunSynchronously(TaskScheduler.Default);
     }
 
     private async Task RunInitAsync(Func<Task> asyncAction, string callerName)

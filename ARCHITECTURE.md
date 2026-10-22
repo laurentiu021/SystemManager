@@ -1964,7 +1964,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 ## Dependency Injection
 
 `ServiceRegistration.cs` configures `Microsoft.Extensions.DependencyInjection`.
-`App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`.
+`App.OnStartup` builds the `IServiceProvider` and exposes it as `App.Services`, and builds and shows
+`MainWindow` last. App.xaml names no `StartupUri`: WPF loads one after `OnStartup` returns even when it
+called `Shutdown()`, so the update applier and a second copy built every tab with no container (#2820).
 Most core services and ViewModels are registered as singletons — one shared
 instance per app lifetime. The exceptions are `IPowerShellRunner` / `PowerShellRunner`
 and `IWingetService` / `WingetService`, both registered **transient** so each

@@ -558,8 +558,12 @@ Key services:
   log needs elevation, and swallowing that made the UI report "0 events". Reset at
   the start of every query so a past refusal cannot outlive it. Because the outcome is instance
   state, the System Report gets its own `EventLogService` (a factory registration) rather than
-  the Logs tab's, so neither can be told the other's answer. `EventExplainer.TryExplain` returns
-  the written explanation for a known (source, ID) only, which is what the report uses.
+  the Logs tab's, so neither can be told the other's answer. `TallyAsync` is the report's count:
+  every record of the asked severities in the window, grouped by (source, ID) with no message
+  formatted, and its outcome returned with the groups rather than through `LastOutcome`, because
+  System Report and About make their reports through one `SystemReportService` (#2827).
+  `EventExplainer.TryExplain` returns the written explanation for a known (source, ID) only, which
+  is what the report uses.
 - `HealthAnalyzer` — the Ping tab's per-target latency, jitter and loss into one network verdict: is it the PC,
   the ISP or the server. Pure and static; `NetworkSharedState` calls it.
 - `SpeedVerdictAnalyzer` — a speed-test result into a plain-English verdict
@@ -1160,10 +1164,11 @@ Key services:
   HTML, or JSON so all three exports share a single source of truth.
   Every format opens with `SystemReportData.Health` (#1508): the health score and
   recommendations from `HealthScoreService.Evaluate`, each component's score or "could not
-  be read", and up to five recent System-log problems from `SummarizeProblems` — critical and
-  error events of the last 7 days grouped by source and ID, critical first, with the written
-  explanation where `EventExplainer` has one and never the event's own message. The log read
-  has a 15-second budget; a log that could not be read is said so, never reported as clean.
+  be read", and up to five recent System-log problems from `SummarizeProblems` — every critical
+  and error event of the last 7 days, counted by `EventLogService.TallyAsync` and grouped by source
+  and ID, critical first, with the written explanation where `EventExplainer` has one and never
+  the event's own message, which the count never reads. The count has a 15-second budget; a log
+  that could not be read is said so, never reported as clean.
   `GenerateDataAsync` applies `WithoutMachineIdentifiers` before returning, so **every**
   format — text, HTML, JSON, the on-screen report and the diagnostics bundle — replaces each
   adapter's MAC with "(not included)" and masks the last two parts of its IPv4 address. That

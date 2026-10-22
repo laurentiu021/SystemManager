@@ -445,4 +445,119 @@ public class EventLogServiceTests
             }
         });
     }
+
+    // ---------- System Report's count: every record in the window, and no message (#2827) ----------
+
+    private static readonly DateTime Noon = new(2026, 10, 19, 12, 0, 0, DateTimeKind.Local);
+
+    private static EventLogQueryOptions Problems() =>
+        new() { LogName = "System", Severities = [EventSeverity.Critical, EventSeverity.Error] };
+
+    private static EventLogService.EventFacts Facts(string provider, int id, byte level, DateTime time) =>
+        new(provider, id, level, time);
+
+    /// <summary>
+    /// A record source over <paramref name="records"/> that returns null at the end, as the reader does.
+    /// </summary>
+    private static Func<EventLogService.EventFacts?> Over(IEnumerable<EventLogService.EventFacts> records)
+    {
+        var next = records.GetEnumerator();
+        return () => next.MoveNext() ? next.Current : null;
+    }
+
+    [Fact]
+    public async Task Tally_CountsEveryRecordInTheWindow_PastTheFiveHundredTheReportStoppedAt()
+    {
+        // One source logged 600 errors in a day, and a critical event came before them. The report read the 500
+        // newest and stopped inside that one source's run, so it counted 500 and never saw the critical event.
+        var records = Enumerable.Range(0, 600)
+            .Select(i => Facts("Noisy-Driver", 7, level: 2, Noon.AddMinutes(-i)))
+            .Append(Facts("Microsoft-Windows-Kernel-Power", 41, level: 1, Noon.AddDays(-5)));
+
+        var tally = await EventLogService.Tally(Problems(), Over(records), CancellationToken.None);
+
+        Assert.Equal(EventLogService.ReadOutcome.Ok, tally.Outcome);
+        Assert.Equal(2, tally.Groups.Count);
+        var noisy = Assert.Single(tally.Groups, g => g.ProviderName == "Noisy-Driver");
+        Assert.Equal((7, 600, Noon, false), (noisy.EventId, noisy.Count, noisy.LastSeen, noisy.Critical));
+        var power = Assert.Single(tally.Groups, g => g.ProviderName == "Microsoft-Windows-Kernel-Power");
+        Assert.Equal((41, 1, Noon.AddDays(-5), true), (power.EventId, power.Count, power.LastSeen, power.Critical));
+    }
+
+    [Fact]
+    public async Task Tally_ALogThatEndsOnABatch_EndsWithEveryRecordCounted()
+    {
+        var records = Enumerable.Range(0, EventLogService.TallyBatch * 2)
+            .Select(i => Facts("Disk", 7, level: 2, Noon.AddMinutes(-i)));
+
+        var tally = await EventLogService.Tally(Problems(), Over(records), CancellationToken.None);
+
+        Assert.Equal(EventLogService.TallyBatch * 2, Assert.Single(tally.Groups).Count);
+    }
+
+    [Fact]
+    public async Task Tally_CountsOnlyTheAskedSeverities_BySourceAndId()
+    {
+        var tally = await EventLogService.Tally(Problems(), Over(
+        [
+            Facts("Disk", 7, level: 1, Noon.AddHours(-2)),
+            Facts("Disk", 7, level: 2, Noon.AddHours(-1)),
+            Facts("Disk", 153, level: 3, Noon),                         // a warning
+            Facts("Service Control Manager", 7036, level: 4, Noon),     // information
+            Facts("EventLog", 6013, level: 0, Noon),                    // logged always, which reads as information
+        ]), CancellationToken.None);
+
+        var disk = Assert.Single(tally.Groups);
+        Assert.Equal(("Disk", 7, 2), (disk.ProviderName, disk.EventId, disk.Count));
+        Assert.True(disk.Critical);                         // one of its two was
+        Assert.Equal(Noon.AddHours(-1), disk.LastSeen);     // the newest, not the first read
+    }
+
+    [Fact]
+    public async Task Tally_AFault_SaysTheLogCouldNotBeRead_AndListsNoneOfIt()
+    {
+        // Counted up to the fault, the list would show part of the week as all of it.
+        var reads = 0;
+
+        var tally = await EventLogService.Tally(Problems(), () =>
+            ++reads <= 300 ? Facts("Disk", 7, level: 2, Noon) : throw new EventLogException("reader is stale"),
+            CancellationToken.None);
+
+        Assert.Equal(EventLogService.ReadOutcome.Unavailable, tally.Outcome);
+        Assert.Empty(tally.Groups);
+        Assert.Equal(301, reads);   // ended on the fault, as Enumerate does, rather than retrying it
+    }
+
+    [Fact]
+    public async Task Tally_Cancelled_Throws_WithinABatchOfTheCancel()
+    {
+        // System Report gives the count a budget; past it, the report says the log could not be read in time.
+        using var cts = new CancellationTokenSource();
+        var reads = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => EventLogService.Tally(Problems(), () =>
+        {
+            if (++reads == EventLogService.TallyBatch + 1) cts.Cancel();
+            // Long enough that only the cancel ends it, and it does end, so a count that ignored the cancel fails here
+            // rather than hanging the run.
+            return reads <= EventLogService.TallyBatch * 100 ? Facts("Disk", 7, level: 2, Noon) : null;
+        }, cts.Token));
+
+        Assert.Equal(EventLogService.TallyBatch * 2, reads);
+    }
+
+    [Fact]
+    public async Task TallyAsync_ReturnsItsOwnOutcome_AndLeavesLastOutcomeAlone()
+    {
+        // System Report and About each make a report through one instance. Through LastOutcome, which every read
+        // resets, one report's reset could hide the other's fault.
+        var svc = new EventLogService();
+
+        var tally = await svc.TallyAsync(
+            new EventLogQueryOptions { LogName = "SysManagerNoSuchLog" }, CancellationToken.None);
+
+        Assert.Equal(EventLogService.ReadOutcome.LogNotFound, tally.Outcome);
+        Assert.Empty(tally.Groups);
+        Assert.Equal(EventLogService.ReadOutcome.Ok, svc.LastOutcome);
+    }
 }

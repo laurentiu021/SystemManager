@@ -516,8 +516,9 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Opens with what is wrong, before the inventory** — the same health score and
   "what to do" list as the Dashboard, each part of the score (or that Windows would not
   say), and up to five recent problems from the Windows System log: critical and error
-  events from the last 7 days, grouped so one noisy error cannot fill the list, critical
-  first, with a plain-English explanation where SysManager has one. Whoever you send it to
+  events from the whole of the last 7 days, grouped so one noisy error cannot fill the
+  list or push an older critical one out, critical first, with a plain-English explanation
+  where SysManager has one. Whoever you send it to
   reads the verdict in seconds. An event's own message is never included, because it can
   name your files, your user name or your computer
 - Storage section carries SMART detail when available — temperature, wear %,

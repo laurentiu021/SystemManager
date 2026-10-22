@@ -100,22 +100,22 @@ public sealed class SystemReportService
     /// </summary>
     private async Task<IReadOnlyList<ReportProblem>?> ReadRecentProblemsAsync(CancellationToken ct)
     {
+        // The whole window, counted: it read the 500 newest errors, which one noisy source can use up in a day or two,
+        // so an older critical event was never read and a count stopped at 500 (#2827).
         var options = new EventLogQueryOptions
         {
             LogName = "System",
             Severities = [EventSeverity.Critical, EventSeverity.Error],
             Since = DateTime.Now - RecentProblemsWindow,
-            MaxResults = 500,
         };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
         budget.CancelAfter(RecentProblemsBudget);
 
-        List<FriendlyEventEntry> entries = [];
+        EventLogService.EventTally tally;
         try
         {
-            await foreach (var entry in _events.ReadAsync(options, budget.Token).ConfigureAwait(false))
-                entries.Add(entry);
+            tally = await _events.TallyAsync(options, budget.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -124,12 +124,13 @@ public sealed class SystemReportService
             return null;
         }
 
-        if (_events.LastOutcome != EventLogService.ReadOutcome.Ok)
+        // This read's own outcome: System Report and About each make a report through this one instance.
+        if (tally.Outcome != EventLogService.ReadOutcome.Ok)
         {
-            Log.Debug("Report: the System log could not be read: {Outcome}", _events.LastOutcome);
+            Log.Debug("Report: the System log could not be read: {Outcome}", tally.Outcome);
             return null;
         }
-        return SummarizeProblems(entries);
+        return SummarizeProblems(tally.Groups);
     }
 
     /// <summary>
@@ -143,16 +144,13 @@ public sealed class SystemReportService
     /// fallback wording for an unknown event points at that message. An event nobody wrote an explanation for
     /// is listed by its source and ID alone, which is what to search for.
     /// </remarks>
-    internal static IReadOnlyList<ReportProblem> SummarizeProblems(IEnumerable<FriendlyEventEntry> entries) =>
+    internal static IReadOnlyList<ReportProblem> SummarizeProblems(IEnumerable<EventLogService.EventGroup> groups) =>
     [
-        .. entries
-            .GroupBy(e => (e.ProviderName, e.EventId))
+        .. groups
             .Select(g =>
             {
-                var latest = g.MaxBy(e => e.Timestamp)!;
-                var written = EventExplainer.TryExplain(latest.ProviderName, latest.EventId, out var known);
-                return new ReportProblem(latest.Timestamp, latest.ProviderName, latest.EventId,
-                    Critical: g.Any(e => e.Severity == EventSeverity.Critical), Count: g.Count(),
+                var written = EventExplainer.TryExplain(g.ProviderName, g.EventId, out var known);
+                return new ReportProblem(g.LastSeen, g.ProviderName, g.EventId, g.Critical, g.Count,
                     written ? known.Explanation : null, written ? known.Recommendation : null);
             })
             .OrderByDescending(p => p.Critical)

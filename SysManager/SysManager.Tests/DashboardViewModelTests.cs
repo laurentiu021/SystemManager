@@ -308,19 +308,58 @@ public class DashboardViewModelTests
     }
 
     [Fact]
-    public void ClassifyPendingReboot_True_IsYellow()
+    public void ClassifyPendingReboot_AReason_IsYellow_AndNamesIt()
     {
-        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(true);
+        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(["Windows Update"]);
         Assert.Equal("Pending reboot required (Windows Update)", title);
         Assert.Equal(AlertSeverity.Yellow, severity);
     }
 
     [Fact]
-    public void ClassifyPendingReboot_False_IsGreen()
+    public void ClassifyPendingReboot_EveryReason_IsNamed()
     {
-        var (title, severity) = DashboardViewModel.ClassifyPendingReboot(false);
+        // The three the Windows Update tab checks: the alert read only Windows Update's key (#2802).
+        var (title, _) = DashboardViewModel.ClassifyPendingReboot(
+            ["Windows features or components", "Windows Update", "files waiting to be replaced"]);
+        Assert.Equal(
+            "Pending reboot required (Windows features or components, Windows Update, files waiting to be replaced)",
+            title);
+    }
+
+    [Fact]
+    public void ClassifyPendingReboot_NoReason_IsGreen()
+    {
+        var (title, severity) = DashboardViewModel.ClassifyPendingReboot([]);
         Assert.Equal("No pending reboots", title);
         Assert.Equal(AlertSeverity.Green, severity);
+    }
+
+    // ---------- the critical-event count (#2802) ----------
+    // Its own query compared local time with the UTC Windows keeps, so "the last 7 days" moved by the UTC offset.
+
+    [Fact]
+    public void TheCriticalEventCount_CoversTheDaysAndSeveritiesTheLogsTabOpensOn()
+    {
+        var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Local);
+
+        var query = DashboardViewModel.CriticalEventsQuery(now);
+
+        Assert.Equal(LogsArrival.CriticalSystemEvents.Log, query.LogName);
+        Assert.Equal(LogsArrival.CriticalSystemEvents.Severities, query.Severities);
+        Assert.Equal(now - LogsArrival.CriticalSystemEvents.Within, query.Since);
+    }
+
+    [Fact]
+    public void TheCriticalEventCount_AddsUpEveryGroup_AndIsUnknownWhenTheLogWasNotRead()
+    {
+        var at = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Local);
+        EventLogService.EventGroup[] groups =
+            [new("Kernel-Power", 41, 2, at, Critical: true), new("Disk", 7, 1, at, Critical: true)];
+
+        Assert.Equal(3, DashboardViewModel.CriticalCount(new(groups, EventLogService.ReadOutcome.Ok)));
+        Assert.Equal(0, DashboardViewModel.CriticalCount(new([], EventLogService.ReadOutcome.Ok)));
+        Assert.Null(DashboardViewModel.CriticalCount(new([], EventLogService.ReadOutcome.AccessDenied)));
+        Assert.Null(DashboardViewModel.CriticalCount(new([], EventLogService.ReadOutcome.Unavailable)));
     }
 
     // ---------- a check that could not run is yellow, never green (#2479) ----------

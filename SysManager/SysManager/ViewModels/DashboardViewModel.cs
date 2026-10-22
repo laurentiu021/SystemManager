@@ -60,6 +60,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // Null when no caller supplied one, which leaves the question about a game mode session left on to Gaming Profile.
     // See the constructor's gaming parameter.
     private readonly IGamingProfileService? _gaming;
+    private readonly EventLogService _eventLog;
 
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _slowdownCts;
@@ -209,13 +210,19 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Asks, once the Dashboard has loaded, about a game mode session a previous run left on (#2592). Optional for the
     /// same reason as <paramref name="appBlocker"/>; null asks nothing, and Gaming Profile then asks when it is opened.
     /// </param>
+    /// <param name="eventLog">
+    /// Counts the critical events the Event Log alert reports. Optional for the same reason as
+    /// <paramref name="appBlocker"/>; null counts with a service of its own, over the same System log.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
         UpdateCheckPreferenceService updateCheck,
-        IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null)
+        IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null,
+        EventLogService? eventLog = null)
     {
+        _eventLog = eventLog ?? new EventLogService();
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
@@ -891,37 +898,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
         return ("No memory errors (30 days)", AlertSeverity.Green);
     }
 
-    private Task ScanEventLogAsync(DashboardAlert alert)
+    private async Task ScanEventLogAsync(DashboardAlert alert)
     {
-        int? criticalCount = null;
-        try
-        {
-            // The log and the days the alert's button opens System Logs on, so the count and that list cannot disagree
-            // (#2887). Level 1 is Critical, the one severity it shows.
-            var shown = LogsArrival.CriticalSystemEvents;
-            var since = DateTime.Now - shown.Within;
-            var query = new System.Diagnostics.Eventing.Reader.EventLogQuery(
-                shown.Log, System.Diagnostics.Eventing.Reader.PathType.LogName,
-                $"*[System[Level=1 and TimeCreated[@SystemTime>='{since.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}']]]");
+        // Counted by EventLogService, which the Logs tab reads with (#2802). The alert's own query compared local time
+        // with the UTC Windows keeps, so "the last 7 days" moved by the UTC offset, and it put the level in the native
+        // filter, which EventLogService explains can block a read for minutes.
+        var tally = await _eventLog.TallyAsync(CriticalEventsQuery(DateTime.Now), CancellationToken.None)
+            .ConfigureAwait(false);
 
-            var counted = 0;
-            using var reader = new System.Diagnostics.Eventing.Reader.EventLogReader(query);
-            // Each EventRecord wraps an unmanaged EVT_HANDLE and must be disposed —
-            // discarding them (as before) leaked a native handle per critical event.
-            System.Diagnostics.Eventing.Reader.EventRecord? rec;
-            while ((rec = reader.ReadEvent()) is not null)
-            {
-                using (rec) counted++;
-            }
-            criticalCount = counted;
-        }
-        // The two failures the memory check names for the same log: it could not be read, or reading was refused.
-        catch (Exception ex) when (ex is System.Diagnostics.Eventing.Reader.EventLogException or UnauthorizedAccessException)
-        {
-            Log.Debug("Alert scan failed: {Error}", ex.Message);
-        }
-
-        var (title, severity) = ClassifyEventLog(criticalCount);
+        var (title, severity) = ClassifyEventLog(CriticalCount(tally));
         UiThread.Post(() =>
         {
             alert.Title = title;
@@ -931,8 +916,28 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // not list them. The title names the Event Log, so that is where it has to go (#2359).
             alert.NavTargetId = NavTargetFor(severity, "nav-logs");
         });
-        return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// What the Event Log alert counts at <paramref name="now"/>: the log, severities and days the alert's button opens
+    /// System Logs on, so the count and that list cannot disagree (#2887). The service bounds the days in UTC.
+    /// </summary>
+    internal static EventLogQueryOptions CriticalEventsQuery(DateTime now)
+    {
+        var shown = LogsArrival.CriticalSystemEvents;
+        return new EventLogQueryOptions
+        {
+            LogName = shown.Log,
+            Severities = [.. shown.Severities],
+            Since = now - shown.Within,
+        };
+    }
+
+    /// <summary>
+    /// The critical events a count found, or null when the log could not be read or reading was refused.
+    /// </summary>
+    internal static int? CriticalCount(EventLogService.EventTally tally) =>
+        tally.Outcome == EventLogService.ReadOutcome.Ok ? tally.Groups.Sum(group => group.Count) : null;
 
     /// <summary>Pure decision for the Event Log alert. Testable without WPF.</summary>
     /// <remarks>Null means the log could not be read, which is yellow rather than the green it used to be (#2479).</remarks>
@@ -946,19 +951,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private Task ScanPendingRebootAsync(DashboardAlert alert)
     {
-        bool? pending = null;
-        try
-        {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired");
-            pending = key is not null;
-        }
-        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
-        {
-            Log.Debug("Alert scan failed: {Error}", ex.Message);
-        }
-
-        var (title, severity) = ClassifyPendingReboot(pending);
+        var (title, severity) = ClassifyPendingReboot(PendingReboot.Reasons());
         UiThread.Post(() =>
         {
             alert.Title = title;
@@ -970,19 +963,17 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     /// <summary>Pure decision for the pending-reboot alert. Testable without WPF.</summary>
     /// <remarks>
-    /// Null means the key could not be read. That is yellow, not the green "Feature check unavailable" it used to
-    /// be, which also named a check this alert does not make (#2479).
-    /// <para>A null check and a plain <c>bool</c>, not a switch. CodeQL's constant-condition rule reads a <c>false</c>
-    /// pattern that follows <c>true</c> as always matching, even on a <c>bool?</c> where null is still possible, and it
-    /// reported the switch in both orders it has been written in. Whatever the shape, the unknown case must not reach
-    /// green: only a definite <c>false</c> does.</para>
+    /// The reasons are the ones <see cref="PendingReboot.Reasons"/> reads, which the Windows Update tab shows too; the
+    /// alert read only Windows Update's key (#2802). Null means the registry could not be read. That is yellow, not the
+    /// green "Feature check unavailable" it used to be (#2479): only a read that found nothing reaches green.
     /// </remarks>
-    internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(bool? pending) =>
-        pending is not { } required
-            ? ("Pending reboot could not be checked", AlertSeverity.Yellow)
-            : required
-                ? ("Pending reboot required (Windows Update)", AlertSeverity.Yellow)
-                : ("No pending reboots", AlertSeverity.Green);
+    internal static (string Title, AlertSeverity Severity) ClassifyPendingReboot(IReadOnlyList<string>? reasons) =>
+        reasons switch
+        {
+            null => ("Pending reboot could not be checked", AlertSeverity.Yellow),
+            [] => ("No pending reboots", AlertSeverity.Green),
+            _ => ($"Pending reboot required ({string.Join(", ", reasons)})", AlertSeverity.Yellow),
+        };
 
     // ══════════════════════════════════════════════════════════════════════
     //  RECENT ACTIVITY

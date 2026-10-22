@@ -237,10 +237,13 @@ to scroll.
   through `OpenTabCommand`. The service is an optional constructor parameter, like `IAppBlockerService`.
   Once it has loaded it asks about a game mode session a previous run left on, through the optional
   `IGamingProfileService` and `GamingProfileViewModel.OfferToRevertLeftoverAsync`, and shows the outcome as a
-  toast (#2592).
+  toast (#2592). The pending-reboot alert reads `PendingReboot`, as the Windows Update tab does, and the
+  critical-event count is `EventLogService.TallyAsync` over `LogsArrival.CriticalSystemEvents`, bounded in UTC,
+  through an optional constructor parameter (#2802).
 - `AppUpdatesViewModel` — winget scan and bulk upgrade. Cancel and Escape stop a batch before its next app: the
   running winget has a token of its own, which only `Dispose` cancels (#2942).
-- `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
+- `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API. Its pending-reboot
+  check prints what `PendingReboot` reads, the check the Dashboard's alert makes (#2802).
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
   a link to the maker's support site. The tab is busy while a read or chkdsk runs, so a read that ends beside a
   chkdsk leaves it busy, and chkdsk takes the `Disk` lock, so it never runs beside a clean-up and closing
@@ -1763,7 +1766,9 @@ Key services:
   allows only Safe and Caution, so a level added later is refused until decided otherwise. Windows Features still
   offers the toggle.
 - `ThemeService` — runtime theme switching with 12 presets and persistence. Two corrections run inside `Shade`, on the already-shifted colours so nothing downstream can undo them: `PanelThatAdmitsReadableText` nudges a Surface toward the Background until this mode's most extreme text clears AA on it, and `Legible` then fits the text to per-surface floors (AAA on the Background, AA on the panels). Both are no-ops for the shipped presets. `ResetToDefault` restores the shipped preset and shade — the only undo Custom mode has, since the four typed colours are persisted and reloaded on every launch. A fourth mode, `AutoMode`, follows the Windows light/dark setting: it resolves through the same `GetCompanionPreset` pairing the Dark/Light pills use, so the colour family survives the switch, and it deliberately does NOT go through `SetPreset` — that would take the mode from the resolved preset and overwrite "auto" the moment it was chosen. `Initialize` re-resolves rather than restoring the saved arm, and one process-lifetime `SystemEvents.UserPreferenceChanged` subscription keeps it live, marshalled to the dispatcher and released by `Shutdown` from `App.OnExit`. The OS read is a `Func<bool>` seam, because the real one reads HKCU and a test without it would assert whatever the developer's machine is set to. Hover is two derived brushes, not one: `RowHover` lifts the surface toward the text colour by `RowHoverLerp(isDark)` — 0.15 on dark presets, 0.25 on light, because darkening a light surface by the same fraction buys about a third less contrast ratio — and `RowHoverMark` is the 3px bar on a hovered sidebar row, `RowHoverMarkColor(theme)` = `TextMuted`. The bar is the part that clears WCAG 1.4.11's 3:1 (6.05:1 or better on all twelve presets); a background tint on a dark theme cannot reach it at all. Both are exposed as `internal static` methods so `ThemeTextContrastTests` asserts the floors against the service rather than against a copy of the numbers, and the mark is deliberately NOT the accent — the selected row draws an Accent bar in the same 3px, so reusing it would make hover indistinguishable from selection. `Save` writes nothing after a `Load` that could not read `theme.json`, and a file that is not a theme it can use is set aside before the first write; the broad catch in `Load` stays, because every failure there means the file is not a usable theme.
-- `ToastService` — global glass-style toast notifications.
+- `ToastService` — global glass-style toast notifications. A toast raised before anything handles
+  `ToastRequested` is kept for the first handler, so one raised while the shell window is still being built,
+  as the previous session's crash is, reaches it (#2802).
 
 ## Helpers
 
@@ -1880,6 +1885,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs.
 - `EtaCalculator` — estimates time remaining for long-running operations.
+- `PendingReboot` — whether Windows waits for a restart and for what: component servicing (a Windows feature
+  change), Windows Update, and pending file renames. The one check the Dashboard and Windows Update share (#2802).
 - `KnownFolders` — resolves Windows Known Folder paths via shell API. `TryGetPath` resolves
   any known folder by its ID, and returns null for one Windows does not resolve.
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool

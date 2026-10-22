@@ -75,10 +75,40 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
     private bool _hasScanned;
 
-    public string EmptyTitle => HasScanned ? "No duplicates found" : "No scan yet";
-    public string EmptyMessage => HasScanned
-        ? "No files with identical content in the selected folder."
-        : "Pick a folder and scan to find files with identical content.";
+    // Why the last scan could not look at the folder at all. It used to arrive as an empty result, reported as "No
+    // duplicates found" (#2823).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EmptyTitle))]
+    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
+    private DuplicateFileService.ScanFailure _lastFailure;
+
+    public string EmptyTitle => LastFailure != DuplicateFileService.ScanFailure.None
+        ? CouldNotScanTitle
+        : HasScanned ? "No duplicates found" : "No scan yet";
+    public string EmptyMessage => LastFailure != DuplicateFileService.ScanFailure.None
+        ? DescribeFailure(LastFailure)
+        : HasScanned
+            ? "No files with identical content in the selected folder."
+            : "Pick a folder and scan to find files with identical content.";
+
+    /// <summary>The empty state's title, and the status line's start, when the folder could not be scanned.</summary>
+    internal const string CouldNotScanTitle = "This folder could not be scanned";
+
+    /// <summary>
+    /// What to tell the user when the chosen folder could not be scanned. Pure, so each case is testable.
+    /// </summary>
+    internal static string DescribeFailure(DuplicateFileService.ScanFailure failure) => failure switch
+    {
+        DuplicateFileService.ScanFailure.NotFound => FolderNotFoundReason,
+        DuplicateFileService.ScanFailure.IsLink =>
+            "It is a link to another location, or its details could not be read, so SysManager does not scan it. "
+            + "Pick the folder it points to instead.",
+        DuplicateFileService.ScanFailure.Unreadable => FolderUnreadableReason,
+        DuplicateFileService.ScanFailure.Excluded =>
+            "It is one of the folders Windows keeps for itself, such as the Recycle Bin and System Volume Information, "
+            + "which Duplicate Finder leaves out of every scan. Pick another folder.",
+        _ => "",
+    };
 
     public DuplicateFileViewModel(DuplicateFileService service)
     {
@@ -145,6 +175,7 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
         IsBusy = true;
         IsProgressIndeterminate = true;
         StatusMessage = ScanningLabel;
+        LastFailure = DuplicateFileService.ScanFailure.None;
         _onlineOnlySkipped = 0;
         Groups.Clear();
         TotalWasted = 0;
@@ -156,9 +187,19 @@ public sealed partial class DuplicateFileViewModel : ViewModelBase
             var minBytes = MinBytesFor(MinSizeKb);
             var progress = new SettlingProgress<DuplicateFileService.ScanProgress>(ApplyScanProgress);
 
-            var results = await progress.SettleAfterAsync(
+            var scan = await progress.SettleAfterAsync(
                 reporter => _service.ScanAsync(SelectedFolder, minBytes, reporter, ct));
 
+            if (scan.Failure != DuplicateFileService.ScanFailure.None)
+            {
+                // Not a scan: nothing says it completed, and nothing says no duplicates were found (#2823).
+                LastFailure = scan.Failure;
+                ScanSummary = CouldNotScanTitle + ".";
+                StatusMessage = $"{CouldNotScanTitle}. {DescribeFailure(scan.Failure)}";
+                return;
+            }
+
+            var results = scan.Groups;
             // Suggest a keeper per group BEFORE binding, so no group is ever shown as N equal rows with
             // no hint which file is the original.
             foreach (var group in results)

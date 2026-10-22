@@ -70,6 +70,34 @@ public sealed class DuplicateFileService
     /// </summary>
     internal const string CompletePhase = "Complete";
 
+    /// <summary>Why the chosen folder could not be scanned at all.</summary>
+    public enum ScanFailure
+    {
+        /// <summary>It was scanned.</summary>
+        None,
+
+        /// <summary>No folder exists at the path any more: renamed, deleted, or on a drive that was removed.</summary>
+        NotFound,
+
+        /// <summary>
+        /// It is a link to another location, or its attributes could not be read, which is treated the same way.
+        /// </summary>
+        IsLink,
+
+        /// <summary>Windows did not let SysManager list what is in it.</summary>
+        Unreadable,
+
+        /// <summary>It is one of the folders Windows keeps for itself, which every scan leaves out.</summary>
+        Excluded,
+    }
+
+    /// <summary>One scan: the duplicates found, or why the chosen folder could not be scanned.</summary>
+    /// <param name="Groups">
+    /// The duplicate groups, most space wasted first. Empty for a failure, and for a folder with none.
+    /// </param>
+    /// <param name="Failure"><see cref="ScanFailure.None"/> when the folder was scanned.</param>
+    public sealed record DuplicateScan(IReadOnlyList<DuplicateFileGroup> Groups, ScanFailure Failure);
+
     // Skip system subtrees that are slow, protected, or pointless.
     private static readonly string[] SkipSegments =
     {
@@ -86,35 +114,81 @@ public sealed class DuplicateFileService
     /// <summary>Minimum file size to consider (skip tiny files that are often config/metadata).</summary>
     private const long DefaultMinSize = 1024; // 1 KB
 
-    public Task<IReadOnlyList<DuplicateFileGroup>> ScanAsync(
+    /// <summary>Finds the duplicates under <paramref name="rootPath"/>, or says why it could not.</summary>
+    /// <remarks>
+    /// A folder that could not be scanned used to be an empty list, which the tab reported as "No duplicates found"
+    /// (#2823), as Disk Analyzer reported a folder it could not measure until #2504.
+    /// </remarks>
+    public Task<DuplicateScan> ScanAsync(
         string rootPath,
         long minSizeBytes = DefaultMinSize,
         IProgress<ScanProgress>? progress = null,
         CancellationToken ct = default)
-        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct), ct);
+        => Task.Run(() => Scan(rootPath, minSizeBytes, progress, ct, ListFiles, Directory.GetDirectories), ct);
 
-    private static IReadOnlyList<DuplicateFileGroup> Scan(
+    // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes and length come from
+    // the listing the OS already returned, so the reparse check in the walk is free and there is no second stat per
+    // file.
+    private static FileInfo[] ListFiles(string directory) => new DirectoryInfo(directory).GetFiles();
+
+    /// <summary><see cref="ScanAsync"/>'s body, handed the listings so each way the root fails is testable.</summary>
+    /// <remarks>
+    /// Handed them for the reason <see cref="DiskAnalyzerService.Analyze"/> is handed its own: a real folder cannot be
+    /// made unreadable on demand everywhere, because .NET opens a directory with backup semantics, so an elevated
+    /// process whose backup privilege is enabled lists it whatever its permissions say.
+    /// </remarks>
+    internal static DuplicateScan Scan(
         string rootPath,
         long minSizeBytes,
         IProgress<ScanProgress>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<string, FileInfo[]> listFiles,
+        Func<string, string[]> listDirectories)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
-            return [];
+            return new DuplicateScan([], ScanFailure.NotFound);
 
         // Guard the traversal ROOT, not just its children. The user picks this folder, so a junction or
         // symlink here walks into its target and reports duplicates OUTSIDE the folder they chose — and this
         // tab's results are acted on. Every walk in the cleanup services closes this; this one did not
         // (#2381). SafeFileWalk.IsReparsePoint fails closed, which is the same answer as "do not walk it".
         if (SafeFileWalk.IsReparsePoint(rootPath))
-            return [];
+            return new DuplicateScan([], ScanFailure.IsLink);
+
+        // A folder the walk leaves out, picked as the root, used to be skipped as the first folder of the walk.
+        if (ShouldSkipDir(rootPath))
+            return new DuplicateScan([], ScanFailure.Excluded);
+
+        // The root is listed on its own: a folder below it that cannot be listed is skipped, but when the root cannot
+        // be, nothing was scanned (#2823).
+        FileInfo[] rootFiles;
+        string[] rootDirs;
+        try
+        {
+            rootFiles = listFiles(rootPath);
+            rootDirs = listDirectories(rootPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Access denied listing {Root}", rootPath);
+            return new DuplicateScan([], ScanFailure.Unreadable);
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Removed between the existence check above and the listing.
+            return new DuplicateScan([], ScanFailure.NotFound);
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "I/O error listing {Root}", rootPath);
+            return new DuplicateScan([], ScanFailure.Unreadable);
+        }
 
         // ── Pass 1: discover files and group by size ──
         Dictionary<long, List<FileInfo>> sizeGroups = [];
         long discovered = 0;
         long onlineOnly = 0;
         var stack = new Stack<string>();
-        stack.Push(rootPath);
 
         // Zero, not the current tick: the throttle below is "not more often than every 200 ms", and seeding
         // it with now made that "not before 200 ms have passed" as well. A folder that scans in less than
@@ -123,24 +197,25 @@ public sealed class DuplicateFileService
         // time since boot, so the first file always clears the gap and every file after it is throttled.
         var lastReport = 0L;
 
+        Visit(rootFiles, rootDirs);
         while (stack.Count > 0 && !ct.IsCancellationRequested)
         {
             var dir = stack.Pop();
             if (ShouldSkipDir(dir)) continue;
 
-            // DirectoryInfo.GetFiles, not Directory.GetFiles: it returns FileInfo objects whose attributes
-            // and length come from the listing the OS already returned, so the reparse check below is free
-            // and the `new FileInfo(f)` that used to follow — a second stat per file — is gone.
             FileInfo[] files = [];
             string[] dirs = [];
-            var dirInfo = new DirectoryInfo(dir);
-            try { files = dirInfo.GetFiles(); }
+            try { files = listFiles(dir); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
-            try { dirs = Directory.GetDirectories(dir); }
+            try { dirs = listDirectories(dir); }
             catch (UnauthorizedAccessException) { /* skip protected directory */ }
             catch (IOException) { /* skip inaccessible directory */ }
+            Visit(files, dirs);
+        }
 
+        void Visit(FileInfo[] files, string[] dirs)
+        {
             foreach (var fi in files)
             {
                 if (ct.IsCancellationRequested) break;
@@ -204,6 +279,7 @@ public sealed class DuplicateFileService
         long hashed = 0;
         long bytesProcessed = 0;
         var hashGroups = new Dictionary<string, DuplicateFileGroup>();
+        var hashedFiles = new HashSet<FileIdentity>();
 
         // Reset the throttle at the phase boundary, for the same reason it starts at zero: the phase the
         // consumer announces changes here, and without this the first hashed file is only reported if 200 ms
@@ -242,7 +318,10 @@ public sealed class DuplicateFileService
                     if (ct.IsCancellationRequested) break;
                     try
                     {
-                        var hash = ComputeHash(fi.FullName, ct);
+                        // Null for another name of a file already hashed: a hard link is the same file, not a copy,
+                        // so deleting it frees nothing, and in a store built on hard links it breaks what uses that
+                        // name (#2823).
+                        if (ComputeHash(fi.FullName, hashedFiles, ct) is not { } hash) continue;
                         hashed++;
                         bytesProcessed += fi.Length;
 
@@ -282,15 +361,23 @@ public sealed class DuplicateFileService
         progress?.Report(new ScanProgress(discovered, hashed, bytesProcessed, "Done", CompletePhase, onlineOnly));
 
         // Only return groups with 2+ files (actual duplicates).
-        return hashGroups.Values
-            .Where(g => g.Files.Count >= 2)
-            .OrderByDescending(g => g.WastedBytes)
-            .ToList();
+        return new DuplicateScan(
+            [.. hashGroups.Values.Where(g => g.Files.Count >= 2).OrderByDescending(g => g.WastedBytes)],
+            ScanFailure.None);
     }
 
-    private static string ComputeHash(string filePath, CancellationToken ct)
+    /// <summary>
+    /// The SHA-256 of <paramref name="filePath"/>, or null when it is another name of a file in
+    /// <paramref name="hashedFiles"/>, which it is added to otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The identity is asked of the handle the hash reads, so it is the identity of the file read. A file whose
+    /// identity Windows does not give is hashed as before.
+    /// </remarks>
+    private static string? ComputeHash(string filePath, HashSet<FileIdentity> hashedFiles, CancellationToken ct)
     {
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920);
+        if (FileIdentity.Of(stream.SafeFileHandle) is { } identity && !hashedFiles.Add(identity)) return null;
         using var sha = SHA256.Create();
 
         var buffer = new byte[81920];

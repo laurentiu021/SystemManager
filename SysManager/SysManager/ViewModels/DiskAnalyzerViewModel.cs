@@ -116,13 +116,11 @@ public sealed partial class DiskAnalyzerViewModel : ViewModelBase
     /// <summary>What to tell the user when the chosen folder could not be measured. Pure, so each case is testable.</summary>
     internal static string DescribeFailure(DiskAnalyzerService.AnalysisFailure failure) => failure switch
     {
-        DiskAnalyzerService.AnalysisFailure.NotFound =>
-            "It no longer exists. Pick it again, or reconnect the drive it was on.",
+        DiskAnalyzerService.AnalysisFailure.NotFound => FolderNotFoundReason,
         DiskAnalyzerService.AnalysisFailure.IsLink =>
             "It is a link to another location, or its details could not be read, so SysManager does not measure it. "
             + "Pick the folder it points to instead.",
-        DiskAnalyzerService.AnalysisFailure.Unreadable =>
-            "Windows did not let SysManager list what is in it. Try Run as administrator, or pick another folder.",
+        DiskAnalyzerService.AnalysisFailure.Unreadable => FolderUnreadableReason,
         _ => "",
     };
 

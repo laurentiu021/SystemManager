@@ -979,6 +979,12 @@ System → System Fixes, where the tab name matches what they do.
 - **Files OneDrive keeps online only are not downloaded to compare them.** Reading one makes
   OneDrive download it, so such files are left unread, and the summary says how many were not
   checked
+- **A folder it could not scan says why**, rather than "No duplicates found": one that no longer
+  exists, a link to another location, one Windows would not let it list, or one of the folders
+  Windows keeps for itself, such as the Recycle Bin, which every scan leaves out
+- **Two names of one file are not two copies.** A hard link is a second name for the same file,
+  and deleting it frees nothing, so a file's other names are left out of its group and of the
+  space wasted
 - **Suggests which copy to keep** — one file per group is badged **Keep**, chosen as the
   oldest (usually the original). The rule is stated on screen rather than applied
   silently, each row shows its date so you can check it, and "Keep this one" moves the

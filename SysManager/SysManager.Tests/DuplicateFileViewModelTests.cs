@@ -470,4 +470,56 @@ public class DuplicateFileViewModelTests
         Assert.Equal("No duplicates found.", DuplicateFileViewModel.Summarize(0, 0, 0, onlineOnlySkipped: 0));
         Assert.Equal("2 groups · 5 files · 3.0 KB wasted", DuplicateFileViewModel.Summarize(2, 5, 3072, onlineOnlySkipped: 0));
     }
+
+    // ── A folder that could not be scanned says why (#2823) ──────────────────
+
+    [Fact]
+    public async Task AScanOfAFolderThatIsGone_SaysItCouldNotBeScanned_NotThatNoDuplicatesWereFound()
+    {
+        var vm = NewVm();
+        vm.SelectedFolder = Path.Combine(Path.GetTempPath(), "SysManagerNoSuchFolder_" + Guid.NewGuid().ToString("N"));
+
+        await vm.ScanCommand.ExecuteAsync(null);
+
+        Assert.Equal(DuplicateFileViewModel.CouldNotScanTitle, vm.EmptyTitle);
+        Assert.Equal(ViewModelBase.FolderNotFoundReason, vm.EmptyMessage);
+        Assert.Equal($"{DuplicateFileViewModel.CouldNotScanTitle}. {ViewModelBase.FolderNotFoundReason}",
+            vm.StatusMessage);
+        Assert.Equal(DuplicateFileViewModel.CouldNotScanTitle + ".", vm.ScanSummary);
+        Assert.False(vm.HasScanned);
+    }
+
+    [Fact]
+    public async Task AScanThatWorks_AfterOneThatCouldNot_SaysWhatItFound()
+    {
+        var vm = NewVm();
+        vm.SelectedFolder = Path.Combine(Path.GetTempPath(), "SysManagerNoSuchFolder_" + Guid.NewGuid().ToString("N"));
+        await vm.ScanCommand.ExecuteAsync(null);
+        var empty = Directory.CreateTempSubdirectory("SysManagerDupVm_").FullName;
+        try
+        {
+            vm.SelectedFolder = empty;
+
+            await vm.ScanCommand.ExecuteAsync(null);
+
+            Assert.Equal("No duplicates found", vm.EmptyTitle);
+            Assert.Equal("Scan complete.", vm.StatusMessage);
+        }
+        finally { Directory.Delete(empty, recursive: true); }
+    }
+
+    [Fact]
+    public void EveryReasonAFolderCouldNotBeScanned_HasItsOwnExplanation()
+    {
+        var failures = Enum.GetValues<Services.DuplicateFileService.ScanFailure>()
+            .Where(f => f != Services.DuplicateFileService.ScanFailure.None)
+            .ToList();
+        Assert.Equal(4, failures.Count);   // the floor: a reason added later is checked here too
+
+        var explanations = failures.Select(DuplicateFileViewModel.DescribeFailure).ToList();
+
+        Assert.All(explanations, e => Assert.False(string.IsNullOrWhiteSpace(e)));
+        Assert.Equal(failures.Count, explanations.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal("", DuplicateFileViewModel.DescribeFailure(Services.DuplicateFileService.ScanFailure.None));
+    }
 }

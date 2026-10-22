@@ -748,6 +748,10 @@ Key services:
   still test its traversal root through `SafeFileWalk.IsReparsePoint`, because the root is the one
   the user picks and a link there sends the whole scan somewhere else. The guard fails if an
   exempted file stops walking a tree (a stale name nobody would remove) or stops guarding its root.
+- `Helpers/FileIdentity` — which file a handle is open on: its volume's serial number and the 128-bit ID
+  `GetFileInformationByHandleEx` returns, the same for every hard link to the file, and `LinksOf`, how many
+  names the file has. Duplicate Finder leaves a file's other names out of its groups with the first, and File
+  Shredder refuses a file whose data other names share with the second (#2823).
 - `Helpers/CleanupAge` — how recent a file may be and still be removed, defined once. `TempFilesKeptFor` is
   the week a temp file is left alone, as Windows' own Disk Cleanup leaves them, and `IsRecent` reads a file's
   creation and last write, as an unpacked file keeps its archive time, and a folder's creation alone, as its last
@@ -831,7 +835,11 @@ Key services:
 - `DuplicateFileService` — three-pass duplicate finder (size grouping →
   partial hash pre-filter → full SHA-256). Read-only, never deletes. `IsOnlineOnly` leaves a file
   stored online only (offline or recall-on-access attributes) unread, because reading it downloads it,
-  and the final progress report counts them for the summary.
+  and the final progress report counts them for the summary. `ScanAsync` returns a `DuplicateScan`: the
+  groups, or why the chosen folder could not be scanned at all (`NotFound`, `IsLink`, `Unreadable`,
+  `Excluded`), so a failure is never an empty scan, as with `DiskAnalyzerService`'s `Analysis` (#2823). The
+  full hash asks the handle it reads for its `FileIdentity` and skips another name of a file already
+  hashed, so a hard link is not a duplicate.
 - `DiskAnalyzerService` — folder-level space breakdown with progress
   reporting and system-path skipping. `AnalyzeAsync` returns an `Analysis`: the folders,
   or why the chosen one could not be measured at all (`NotFound`, `IsLink`, `Unreadable`),

@@ -810,6 +810,10 @@ Across the tab:
 - **The list ends where winget's does, in any of the languages winget ships.** It stops at
   winget's count of updates, so the heading and header winget prints below it, for apps that
   have to be updated one by one, are never listed as apps
+- **Every column is read where winget wrote it** — by the column titles winget prints in each of
+  its languages, and counting a Chinese, Japanese or Korean character as two columns, as winget
+  does, so an app named in those scripts, or a winget in those languages, gets the right ID and
+  versions
 - **Each result says what winget reported.** A download that did not match what winget
   expected is named as that, not as "no update", and one that needs administrator says so
 - **An update that needs a restart is installed.** When the installer asks for Windows to
@@ -1799,6 +1803,9 @@ offers, "rate us" prompts:
   applications Windows reports without a package id — most of the older ones — are matched by
   name too, so they are not treated as one entry
 - Local app support — uninstalls apps not in winget via registry UninstallString
+- The list is read the same way on a winget in any of its languages: an app winget knows keeps its
+  source on a Spanish, Portuguese or Russian winget, and Chinese, Japanese or Korean text does not
+  shift the columns after it
 - **"Removed" means removed** — an app is taken off the list only once Windows stops listing it,
   whether SysManager runs its uninstaller directly or through winget. Some uninstallers hand over
   to a second copy of themselves and return straight away; those apps stay on the list, marked as

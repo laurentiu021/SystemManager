@@ -364,4 +364,259 @@ public class WingetTableParserTests
 
         Assert.Equal("Git.Git", Assert.Single(result).Id);
     }
+
+    // ── Columns where winget wrote them, on every language it ships (#2793, #2955) ──────────────────
+    // winget pads each field to its column measured in display columns, two for a Chinese, Japanese or Korean
+    // character, and these tables are padded the same way, with each language's own titles from winget's string
+    // tables. The second row's name is two wide characters, so every column after it starts two characters
+    // earlier in the string than in the first row.
+
+    public static TheoryData<string, string[]> UpgradeTables() => new()
+    {
+        {
+            "en-US",
+            [
+                "Name Id             Version   Available Source",
+                "----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21  winget",
+            ]
+        },
+        {
+            "de-DE",
+            [
+                "Name ID             Version   Verfügbar Quelle",
+                "----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21  winget",
+            ]
+        },
+        {
+            "es-ES",
+            [
+                "Nombre Id             Versión   Disponible Origen",
+                "-------------------------------------------------",
+                "Git    Git.Git        2.47.0    2.48.0     winget",
+                "微信   Tencent.WeChat 3.9.12.51 4.0.0.21   winget",
+            ]
+        },
+        {
+            "fr-FR",
+            [
+                "Nom  ID             Version   Disponible Source",
+                "-----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0     winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21   winget",
+            ]
+        },
+        {
+            "it-IT",
+            [
+                "Nome Id             Versione  Disponibile Origine",
+                "-------------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0      winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21    winget",
+            ]
+        },
+        {
+            "ja-JP",
+            [
+                "名前 ID             バージョン 利用可能 ソース",
+                "----------------------------------------------",
+                "Git  Git.Git        2.47.0     2.48.0   winget",
+                "微信 Tencent.WeChat 3.9.12.51  4.0.0.21 winget",
+            ]
+        },
+        {
+            "ko-KR",
+            [
+                "이름 장치 ID        버전      사용 가능 원본",
+                "----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21  winget",
+            ]
+        },
+        {
+            "pt-BR",
+            [
+                "Nome ID             Versão    Disponível Origem",
+                "-----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0     winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21   winget",
+            ]
+        },
+        {
+            "ru-RU",
+            [
+                "Имя  ИД             Версия    Доступно Источник",
+                "-----------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0   winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21 winget",
+            ]
+        },
+        {
+            "zh-CN",
+            [
+                "名称 ID             版本      可用     源",
+                "---------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0   winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21 winget",
+            ]
+        },
+        {
+            "zh-TW",
+            [
+                "名稱 識別碼         版本      可用     來源",
+                "---------------------------------------------",
+                "Git  Git.Git        2.47.0    2.48.0   winget",
+                "微信 Tencent.WeChat 3.9.12.51 4.0.0.21 winget",
+            ]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(UpgradeTables))]
+    public void AnUpgradeTable_InEachLanguage_IsReadColumnByColumn(string language, string[] table)
+    {
+        var rows = WingetTableParser.Parse([.. table], NeverMatches, NeverMatches);
+
+        Assert.True(rows.Count == 2, language);
+        Assert.Equal(("Git", "Git.Git", "2.47.0", "2.48.0", "winget"),
+            (rows[0].Name, rows[0].Id, rows[0].Version, rows[0].Available, rows[0].Source));
+        Assert.Equal(("微信", "Tencent.WeChat", "3.9.12.51", "4.0.0.21", "winget"),
+            (rows[1].Name, rows[1].Id, rows[1].Version, rows[1].Available, rows[1].Source));
+    }
+
+    public static TheoryData<string, string[]> ListTables() => new()
+    {
+        {
+            "en-US",
+            [
+                "Name Id             Version   Source",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "de-DE",
+            [
+                "Name ID             Version   Quelle",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "es-ES",
+            [
+                "Nombre Id             Versión   Origen",
+                "--------------------------------------",
+                "Git    Git.Git        2.47.0    winget",
+                "微信   Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "fr-FR",
+            [
+                "Nom  ID             Version   Source",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "it-IT",
+            [
+                "Nome Id             Versione  Origine",
+                "-------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "ja-JP",
+            [
+                "名前 ID             バージョン ソース",
+                "-------------------------------------",
+                "Git  Git.Git        2.47.0     winget",
+                "微信 Tencent.WeChat 3.9.12.51  winget",
+            ]
+        },
+        {
+            "ko-KR",
+            [
+                "이름 장치 ID        버전      원본",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "pt-BR",
+            [
+                "Nome ID             Versão    Origem",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "ru-RU",
+            [
+                "Имя  ИД             Версия    Источник",
+                "--------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "zh-CN",
+            [
+                "名称 ID             版本      源",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+        {
+            "zh-TW",
+            [
+                "名稱 識別碼         版本      來源",
+                "------------------------------------",
+                "Git  Git.Git        2.47.0    winget",
+                "微信 Tencent.WeChat 3.9.12.51 winget",
+            ]
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(ListTables))]
+    public void AListTable_InEachLanguage_FindsItsSourceColumn(string language, string[] table)
+    {
+        // A four-column list table has no positional fallback, so a Source title missing from the lists ran the
+        // Version column on to the end of the line and left Source empty.
+        var rows = WingetTableParser.Parse([.. table], NeverMatches, NeverMatches);
+
+        Assert.True(rows.Count == 2, language);
+        Assert.Equal(("Git.Git", "2.47.0", "", "winget"),
+            (rows[0].Id, rows[0].Version, rows[0].Available, rows[0].Source));
+        Assert.Equal(("Tencent.WeChat", "3.9.12.51", "", "winget"),
+            (rows[1].Id, rows[1].Version, rows[1].Available, rows[1].Source));
+    }
+
+    [Fact]
+    public void ARowShorterInCharactersThanInColumns_IsStillRead()
+    {
+        // Ten wide characters take twenty columns and ten characters, so this row reaches the Version column but its
+        // string is shorter than the column's position, and a check by length dropped it as a stray line.
+        var rows = WingetTableParser.Parse(
+        [
+            "Name                 Id  Version",
+            "--------------------------------",
+            "一二三四五六七八九十 A.B 1",
+        ], NeverMatches, NeverMatches);
+
+        Assert.Equal(("A.B", "1"), (Assert.Single(rows).Id, rows[0].Version));
+    }
 }

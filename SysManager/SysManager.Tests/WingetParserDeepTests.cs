@@ -392,4 +392,23 @@ public class WingetParserDeepTests
         Assert.Equal(WingetExitCodes.UpdateAllHasFailure, result.ExitCode);
         Assert.False(result.Succeeded);
     }
+
+    // ---------- a Japanese upgrade list, read where winget wrote each column (#2793) ----------
+
+    [Fact]
+    public void AJapaneseList_IsReadColumnByColumn()
+    {
+        // The header's titles are wide characters, so every column read by character index started too far left.
+        var result = Parse(
+        [
+            "名前 ID             バージョン 利用可能 ソース",
+            "----------------------------------------------",
+            "Git  Git.Git        2.47.0     2.48.0   winget",
+            "微信 Tencent.WeChat 3.9.12.51  4.0.0.21 winget",
+            "2 アップグレードを利用できます。",
+        ]);
+
+        Assert.Equal([("Git.Git", "2.47.0", "2.48.0"), ("Tencent.WeChat", "3.9.12.51", "4.0.0.21")],
+            result.Select(p => (p.Id, p.CurrentVersion, p.AvailableVersion)));
+    }
 }

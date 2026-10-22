@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace SysManager.Helpers;
@@ -14,7 +16,7 @@ namespace SysManager.Helpers;
 internal static partial class WingetTableParser
 {
     /// <summary>
-    /// Parsed column positions from a winget table header.
+    /// Parsed column positions from a winget table header, in display columns as winget counts them.
     /// </summary>
     internal readonly struct ColumnLayout
     {
@@ -46,7 +48,7 @@ internal static partial class WingetTableParser
     /// <summary>
     /// Parses a winget table output into raw rows. The headerPattern identifies the
     /// header line in the common (English) case; when it doesn't match — e.g. a localized
-    /// winget where the column titles are translated (de-DE "Name Kennung Version Verfügbar
+    /// winget where the column titles are translated (de-DE "Name ID Version Verfügbar
     /// Quelle") — the header is located as the line directly above the dashes separator row,
     /// so the parser works on any UI language. summaryPattern identifies the termination line, and a second
     /// table below the first ends it too, without the heading and header lines above that table.
@@ -83,7 +85,7 @@ internal static partial class WingetTableParser
 
             if (line.StartsWith("--")) continue;
             if (summaryPattern.IsMatch(line)) break;
-            if (line.Length < layout.Version) continue;
+            if (CellsOf(line) < layout.Version) continue;
 
             var name = Slice(line, layout.Name, layout.Id);
             var id = Slice(line, layout.Id, layout.Version);
@@ -137,18 +139,25 @@ internal static partial class WingetTableParser
         return -1;
     }
 
-    // Column titles winget prints, by column, across its shipped UI languages. A 4-column
-    // table is ambiguous by position alone (Name/Id/Version/Source for `list` vs
-    // Name/Id/Version/Available for a source-less `upgrade`), so we identify each optional
-    // column by matching its header word against these known localized titles — never by
-    // its ordinal position. Lower-cased for case-insensitive comparison.
-    private static readonly string[] IdTitles = ["id", "kennung", "identifiant", "identificador", "identificatore", "識別子", "标识符", "식별자"];
-    private static readonly string[] VersionTitles = ["version", "versione", "versión", "versão", "バージョン", "版本", "버전"];
-    private static readonly string[] AvailableTitles = ["available", "verfügbar", "disponible", "disponibile", "disponível", "利用可能", "可用", "사용 가능"];
-    private static readonly string[] SourceTitles = ["source", "quelle", "origine", "fuente", "fonte", "ソース", "源", "소스"];
+    // Column titles winget prints, by column, in each language it ships: SearchId, SearchVersion, AvailableHeader
+    // and SearchSource in its string tables, for en-US and the ten languages under Localization/Resources. Russian,
+    // Traditional Chinese, the Korean Id and Source, and the Spanish and Portuguese Source were missing, so a
+    // four-column list table, which has no positional fallback, ran Version on into Source (#2955). The other words
+    // were in these lists before and are kept. A 4-column table is ambiguous by position alone (Name/Id/Version/Source
+    // for `list` vs Name/Id/Version/Available for a source-less `upgrade`), so we identify each optional column by
+    // matching its header title against these — never by its ordinal position. Lower-cased for comparison.
+    private static readonly string[] IdTitles =
+        ["id", "ид", "識別碼", "장치 id", "kennung", "identifiant", "identificador", "identificatore", "識別子", "标识符", "식별자"];
+    private static readonly string[] VersionTitles =
+        ["version", "versione", "versión", "versão", "версия", "バージョン", "版本", "버전"];
+    private static readonly string[] AvailableTitles =
+        ["available", "verfügbar", "disponible", "disponibile", "disponível", "доступно", "利用可能", "可用", "사용 가능"];
+    private static readonly string[] SourceTitles =
+        ["source", "quelle", "origen", "origine", "origem", "источник", "ソース", "源", "來源", "원본",
+         "fuente", "fonte", "소스"];
     // "Match" (winget search) is not consumed by any caller; we don't need to localize it.
 
-    // Column titles are localized (de-DE: "Name Kennung Version Verfügbar Quelle"), but the
+    // Column titles are localized (de-DE: "Name ID Version Verfügbar Quelle"), but the
     // column ORDER is stable. We locate each column by matching its header token against the
     // known localized titles above, so both the layout (which optional columns exist) and the
     // positions are correct on any UI language — without the position-only ambiguity of a
@@ -200,30 +209,134 @@ internal static partial class WingetTableParser
         return -1;
     }
 
-    // Header tokens as (start offset, word). A "word" is a run of non-whitespace; note winget
-    // titles are single words in every shipped locale, so one token == one column.
+    // Header tokens as (start column, word), a word being a run of non-blank text. Two words one space apart are one
+    // token when together they are one title winget prints: Korean prints "장치 ID" for Id and "사용 가능" for
+    // Available, which split on spaces put Id at "ID" and could never match (#2793, #2955).
     private static List<(int Start, string Word)> HeaderTokens(string header)
     {
-        List<(int, string)> tokens = [];
-        int i = 0;
-        while (i < header.Length)
+        List<(int Start, int End, string Word)> words = [];
+        int column = 0, wordColumn = -1, wordIndex = 0;
+        for (int i = 0; i < header.Length;)
         {
-            if (char.IsWhiteSpace(header[i])) { i++; continue; }
-            int start = i;
-            while (i < header.Length && !char.IsWhiteSpace(header[i])) i++;
-            tokens.Add((start, header[start..i]));
+            int length = StringInfo.GetNextTextElementLength(header.AsSpan(i));
+            bool blank = char.IsWhiteSpace(header, i);
+            if (!blank && wordColumn < 0) { wordColumn = column; wordIndex = i; }
+            if (blank && wordColumn >= 0) { words.Add((wordColumn, column, header[wordIndex..i])); wordColumn = -1; }
+            column += Cells(header.AsSpan(i, length));
+            i += length;
+        }
+        if (wordColumn >= 0) words.Add((wordColumn, column, header[wordIndex..]));
+
+        List<(int Start, string Word)> tokens = [];
+        for (int w = 0; w < words.Count; w++)
+        {
+            var (start, end, word) = words[w];
+            if (w + 1 < words.Count && words[w + 1].Start == end + 1
+                && IsTitle($"{word} {words[w + 1].Word}".ToLowerInvariant()))
+            {
+                word = $"{word} {words[w + 1].Word}";
+                w++;
+            }
+            tokens.Add((start, word));
         }
         return tokens;
     }
 
+    private static bool IsTitle(string word) =>
+        IdTitles.Contains(word) || VersionTitles.Contains(word) || AvailableTitles.Contains(word)
+        || SourceTitles.Contains(word);
+
+    // The text of a row between two columns, both in display columns, end -1 for the end of the line.
     private static string Slice(string line, int start, int end)
     {
-        if (start < 0 || start >= line.Length) return string.Empty;
-        int actualEnd = end < 0 ? line.Length : Math.Min(end, line.Length);
+        if (start < 0) return string.Empty;
+        int from = IndexAtColumn(line, start);
+        int to = end < 0 ? line.Length : IndexAtColumn(line, end);
         // Guard against out-of-order columns (start > end): winget can emit headers
         // whose detected positions don't increase monotonically, which would make the
         // range operator throw ArgumentOutOfRangeException.
-        if (actualEnd <= start) return string.Empty;
-        return line[start..actualEnd].Trim();
+        if (to <= from) return string.Empty;
+        return line[from..to].Trim();
     }
+
+    // The index in line of the text element at display column `column`, or line.Length when the line ends first. A
+    // column that falls inside a wide character, which is never where winget starts one, starts after it.
+    private static int IndexAtColumn(string line, int column)
+    {
+        int at = 0;
+        for (int i = 0; i < line.Length;)
+        {
+            if (at >= column) return i;
+            int length = StringInfo.GetNextTextElementLength(line.AsSpan(i));
+            at += Cells(line.AsSpan(i, length));
+            i += length;
+        }
+        return line.Length;
+    }
+
+    // The display columns a line takes, as winget counts them.
+    private static int CellsOf(string line)
+    {
+        int cells = 0;
+        for (int i = 0; i < line.Length;)
+        {
+            int length = StringInfo.GetNextTextElementLength(line.AsSpan(i));
+            cells += Cells(line.AsSpan(i, length));
+            i += length;
+        }
+        return cells;
+    }
+
+    // The display columns one text element takes, as winget counts them. Utility::UTF8ColumnWidth scores each text
+    // element by its first code point, two when ICU calls it East Asian Wide or Fullwidth and one otherwise, and
+    // TableOutput pads every field to its column with that width. Counted as characters, every column after a
+    // Chinese, Japanese or Korean character, in a header or in a name, was read too far to the left (#2793).
+    private static int Cells(ReadOnlySpan<char> element)
+    {
+        Rune.DecodeFromUtf16(element, out var rune, out _);
+        return IsWide(rune.Value) ? 2 : 1;
+    }
+
+    private static bool IsWide(int codePoint)
+    {
+        int low = 0, high = WideRanges.Length - 1;
+        while (low <= high)
+        {
+            int middle = (low + high) / 2;
+            if (codePoint < WideRanges[middle].First) high = middle - 1;
+            else if (codePoint > WideRanges[middle].Last) low = middle + 1;
+            else return true;
+        }
+        return false;
+    }
+
+    // The East Asian Wide and Fullwidth code points of Unicode 15.0 (EastAsianWidth.txt, W and F), as ranges.
+    private static readonly (int First, int Last)[] WideRanges =
+    [
+        (0x1100, 0x115F), (0x231A, 0x231B), (0x2329, 0x232A), (0x23E9, 0x23EC), (0x23F0, 0x23F0),
+        (0x23F3, 0x23F3), (0x25FD, 0x25FE), (0x2614, 0x2615), (0x2648, 0x2653), (0x267F, 0x267F),
+        (0x2693, 0x2693), (0x26A1, 0x26A1), (0x26AA, 0x26AB), (0x26BD, 0x26BE), (0x26C4, 0x26C5),
+        (0x26CE, 0x26CE), (0x26D4, 0x26D4), (0x26EA, 0x26EA), (0x26F2, 0x26F3), (0x26F5, 0x26F5),
+        (0x26FA, 0x26FA), (0x26FD, 0x26FD), (0x2705, 0x2705), (0x270A, 0x270B), (0x2728, 0x2728),
+        (0x274C, 0x274C), (0x274E, 0x274E), (0x2753, 0x2755), (0x2757, 0x2757), (0x2795, 0x2797),
+        (0x27B0, 0x27B0), (0x27BF, 0x27BF), (0x2B1B, 0x2B1C), (0x2B50, 0x2B50), (0x2B55, 0x2B55),
+        (0x2E80, 0x2E99), (0x2E9B, 0x2EF3), (0x2F00, 0x2FD5), (0x2FF0, 0x2FFB), (0x3000, 0x303E),
+        (0x3041, 0x3096), (0x3099, 0x30FF), (0x3105, 0x312F), (0x3131, 0x318E), (0x3190, 0x31E3),
+        (0x31F0, 0x321E), (0x3220, 0x3247), (0x3250, 0x4DBF), (0x4E00, 0xA48C), (0xA490, 0xA4C6),
+        (0xA960, 0xA97C), (0xAC00, 0xD7A3), (0xF900, 0xFAFF), (0xFE10, 0xFE19), (0xFE30, 0xFE52),
+        (0xFE54, 0xFE66), (0xFE68, 0xFE6B), (0xFF01, 0xFF60), (0xFFE0, 0xFFE6), (0x16FE0, 0x16FE4),
+        (0x16FF0, 0x16FF1), (0x17000, 0x187F7), (0x18800, 0x18CD5), (0x18D00, 0x18D08), (0x1AFF0, 0x1AFF3),
+        (0x1AFF5, 0x1AFFB), (0x1AFFD, 0x1AFFE), (0x1B000, 0x1B122), (0x1B132, 0x1B132), (0x1B150, 0x1B152),
+        (0x1B155, 0x1B155), (0x1B164, 0x1B167), (0x1B170, 0x1B2FB), (0x1F004, 0x1F004), (0x1F0CF, 0x1F0CF),
+        (0x1F18E, 0x1F18E), (0x1F191, 0x1F19A), (0x1F200, 0x1F202), (0x1F210, 0x1F23B), (0x1F240, 0x1F248),
+        (0x1F250, 0x1F251), (0x1F260, 0x1F265), (0x1F300, 0x1F320), (0x1F32D, 0x1F335), (0x1F337, 0x1F37C),
+        (0x1F37E, 0x1F393), (0x1F3A0, 0x1F3CA), (0x1F3CF, 0x1F3D3), (0x1F3E0, 0x1F3F0), (0x1F3F4, 0x1F3F4),
+        (0x1F3F8, 0x1F43E), (0x1F440, 0x1F440), (0x1F442, 0x1F4FC), (0x1F4FF, 0x1F53D), (0x1F54B, 0x1F54E),
+        (0x1F550, 0x1F567), (0x1F57A, 0x1F57A), (0x1F595, 0x1F596), (0x1F5A4, 0x1F5A4), (0x1F5FB, 0x1F64F),
+        (0x1F680, 0x1F6C5), (0x1F6CC, 0x1F6CC), (0x1F6D0, 0x1F6D2), (0x1F6D5, 0x1F6D7), (0x1F6DC, 0x1F6DF),
+        (0x1F6EB, 0x1F6EC), (0x1F6F4, 0x1F6FC), (0x1F7E0, 0x1F7EB), (0x1F7F0, 0x1F7F0), (0x1F90C, 0x1F93A),
+        (0x1F93C, 0x1F945), (0x1F947, 0x1F9FF), (0x1FA70, 0x1FA7C), (0x1FA80, 0x1FA88), (0x1FA90, 0x1FABD),
+        (0x1FABF, 0x1FAC5), (0x1FACE, 0x1FADB), (0x1FAE0, 0x1FAE8), (0x1FAF0, 0x1FAF8), (0x20000, 0x2FFFD),
+        (0x30000, 0x3FFFD),
+    ];
 }

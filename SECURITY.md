@@ -457,19 +457,21 @@ reviews, and who approves a release for signing.
   (`ContinuousIntegrationBuild` + `Deterministic`).
 - **The winget publishing credential, and what it cannot reach.** Publishing to winget
   means opening a pull request against `microsoft/winget-pkgs`, which no token belonging
-  to this repository can do — so the release workflow uses a separate maintainer-held
+  to this repository can do — so the winget workflow uses a separate maintainer-held
   token (`WINGET_TOKEN`) whose only job is to sync a fork of that repository and open the
   manifest pull request. It is the only credential in the whole pipeline that is not
   either the ephemeral, repo-scoped `GITHUB_TOKEN` or the coverage upload token.
-  - **It acts only after the release already exists.** Every step that uses it runs after
-    `Create GitHub Release` has published the `.exe`, its SHA256 sum, the SBOM and the
-    build-provenance attestation, and none of those steps writes to this repository's
-    releases. The token itself is broader than that job: winget-releaser accepts only a
-    classic token, which needs at least the `public_repo` and `workflow` scopes, and those
-    reach this repository too. What makes misuse detectable is the attestation, recorded
-    before the token is first used: a replaced `.exe` fails `gh attestation verify`. The
-    app's own update check compares against the `.sha256` on the same release, so it would
-    not catch an asset and a hash replaced together. Before every publish, the release
+  - **It acts only after the release already exists.** Only the winget workflow uses it.
+    The release workflow starts that workflow once `Create GitHub Release` has published
+    the `.exe`, its SHA256 sum, the SBOM and the build-provenance attestation, and its
+    first step stops unless the release has all four, so a submission retried by hand
+    waits for them too. None of its steps writes to this repository's releases. The token
+    itself is broader than that job: winget-releaser accepts only a classic token, which
+    needs at least the `public_repo` and `workflow` scopes, and those reach this
+    repository too. What makes misuse detectable is the attestation, recorded before the
+    token is first used: a replaced `.exe` fails `gh attestation verify`. The app's own
+    update check compares against the `.sha256` on the same release, so it would not
+    catch an asset and a hash replaced together. Before every publish, the winget
     workflow prints the token's kind, scopes and expiry, and warns if it lacks a scope the
     publish needs ([#1676](https://github.com/laurentiu021/SystemManager/issues/1676)).
   - **What it could affect** is the winget manifest: the URL and hash that a

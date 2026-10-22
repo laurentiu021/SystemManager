@@ -343,14 +343,17 @@ public class SecurityPromiseTests
     /// <remarks>
     /// <c>WINGET_TOKEN</c> is the only credential in the pipeline that is neither the ephemeral, repo-scoped
     /// <c>GITHUB_TOKEN</c> nor the coverage token, and it necessarily carries write access to a fork of
-    /// <c>microsoft/winget-pkgs</c>. What bounds it is ORDERING, not scope: every step that uses it runs
-    /// after <c>Create GitHub Release</c> has published the exe, its SHA256, the SBOM and the attestation.
-    /// <para>That is a property of step order in one YAML file, which makes it exactly the kind of claim that
+    /// <c>microsoft/winget-pkgs</c>. What bounds it is ORDERING, not scope. Since #2805 only winget.yml uses it:
+    /// release.yml hands it over from a job that needs the one publishing the release and runs once that one
+    /// has, and winget.yml is one job whose first step stops unless the release has its exe, the exe's SHA256
+    /// file, the SBOM and an attestation for the exe. That step is what holds a run dispatched by hand to the
+    /// same order, since nothing published a release before it.
+    /// <para>That is a property of step order in two YAML files, which makes it exactly the kind of claim that
     /// stops being true without anyone noticing — moving one step, or adding a new winget step earlier for a
-    /// pre-flight check, would falsify a published security statement while every test stayed green. Six
-    /// steps reference the token today (a fork sync, three publish attempts and two re-syncs between them),
-    /// so the count is also the floor: if the detection stops finding them, this fails rather than reporting
-    /// clean.</para>
+    /// pre-flight check, would falsify a published security statement while every test stayed green. Seven
+    /// steps reference the token today (the token check, a fork sync, three publish attempts and two re-syncs
+    /// between them), so the count is also the floor: if the detection stops finding them, this fails rather
+    /// than reporting clean.</para>
     /// <para>Deliberately NOT asserted here: that the token is fine-grained, scoped to the single fork, or
     /// carries an expiry. None of that is visible from the repository — it lives in the maintainer's account
     /// settings — and SECURITY.md does not claim it, because a security document should not state a posture
@@ -359,37 +362,76 @@ public class SecurityPromiseTests
     [Fact]
     public void TheWingetToken_IsOnlyUsedAfterTheReleaseIsPublished()
     {
-        var workflow = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml");
-        Assert.True(File.Exists(workflow), $"release.yml not found at {workflow}");
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var release = File.ReadAllLines(Path.Combine(dir, "release.yml"));
+        var winget = File.ReadAllLines(Path.Combine(dir, "winget.yml"));
 
-        var lines = File.ReadAllLines(workflow);
-        var publish = Array.FindIndex(lines, l => l.Contains("- name: Create GitHub Release", StringComparison.Ordinal));
-        Assert.True(publish >= 0,
-            "the 'Create GitHub Release' step was not found in release.yml, so this guard cannot tell what "
-            + "runs before the asset exists. If the step was renamed, re-point this rather than deleting it.");
+        // release.yml names the token once, to hand it to winget.yml, from a job that waits for the release.
+        var handOver = CodeLines(release).Where(l => l.Text.Contains("WINGET_TOKEN", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(handOver.Count == 1 && handOver[0].Text == "WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}",
+            "release.yml should name the winget token once, handing it to winget.yml, and nowhere else:\n  "
+            + string.Join("\n  ", handOver.Select(u => $"line {u.Index + 1}: {u.Text}")));
+        var caller = WorkflowJobs.Containing(release, handOver[0].Index);
+        foreach (var required in new[]
+                 {
+                     "uses: ./.github/workflows/winget.yml", "needs: build-and-release",
+                     "needs.build-and-release.outputs.published == 'true'",
+                 })
+        {
+            Assert.Contains(required, caller, StringComparison.Ordinal);
+        }
 
-        var uses = lines
-            .Select((line, i) => (Line: line, Number: i + 1, Index: i))
-            .Where(l => l.Line.Contains("WINGET_TOKEN", StringComparison.Ordinal))
+        // winget.yml is one job, and its first step checks the release before any step uses the token.
+        Assert.Single(WorkflowJobs.Keys(winget));
+        var steps = Enumerable.Range(0, winget.Length)
+            .Where(i => winget[i].TrimStart().StartsWith("- name:", StringComparison.Ordinal))
+            .ToList();
+        Assert.True(steps.Count >= 2, $"only {steps.Count} step(s) were found in winget.yml.");
+        var check = steps[0];
+        Assert.Equal("- name: Check the release is published", winget[check].Trim());
+
+        var checkCode = string.Join('\n', winget[(check + 1)..steps[1]].Where(l => !l.TrimStart().StartsWith('#')));
+        foreach (var required in new[] { "/assets", "\"${EXE}.sha256\"", ".sbom.json", "/attestations/", "exit 1" })
+        {
+            Assert.Contains(required, checkCode, StringComparison.Ordinal);
+        }
+
+        // gh prints the body of an error reply on stdout, so a 404 for the attestation, captured as a count, failed
+        // the numeric test as an error rather than as "none" and let an unattested release through. Only a number
+        // may count.
+        Assert.Contains("if [[ ! \"${ATTESTATIONS}\" =~ ^[0-9]+$ ]] || [ \"${ATTESTATIONS}\" -lt 1 ]; then", checkCode,
+            StringComparison.Ordinal);
+        Assert.Contains("if [[ \"${found}\" =~ ^[0-9]+$ ]]; then id=\"${found}\"; break; fi", checkCode,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("WINGET_TOKEN", checkCode, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", checkCode, StringComparison.Ordinal);
+        Assert.DoesNotContain(checkCode.Split('\n'), l => l.TrimStart().StartsWith("if:", StringComparison.Ordinal));
+
+        var uses = CodeLines(winget).Where(l => l.Text.Contains("secrets.WINGET_TOKEN", StringComparison.Ordinal))
             .ToList();
 
-        // Floor: six references when measured — one fork sync, three publish attempts, two re-syncs.
-        Assert.True(uses.Count >= 6,
-            $"only {uses.Count} WINGET_TOKEN references were found, out of 6 measured — the detection is out "
-            + "of date, so the ordering check below reads a short list.");
+        // Floor: seven uses when measured — the token check, a fork sync, three publish attempts, two re-syncs.
+        Assert.True(uses.Count >= 7,
+            $"only {uses.Count} WINGET_TOKEN uses were found in winget.yml, out of 7 measured — the detection is "
+            + "out of date, so the ordering check below reads a short list.");
 
         var early = uses
-            .Where(u => u.Index < publish)
-            .Select(u => $"line {u.Number}: {u.Line.Trim()}")
+            .Where(u => u.Index < check)
+            .Select(u => $"line {u.Index + 1}: {u.Text}")
             .ToList();
 
         Assert.True(early.Count == 0,
-            $"the winget token is referenced before 'Create GitHub Release' (line {publish + 1}). "
+            $"the winget token is used before 'Check the release is published' (line {check + 1}). "
             + "SECURITY.md, \"Dependencies and supply chain\", states that it acts only after the release, "
             + "its SHA256, the SBOM and the attestation are already published — which is what stops it from "
             + "being able to alter the asset the verification instructions describe. Move the step after the "
-            + "release, or correct SECURITY.md:\n  " + string.Join("\n  ", early));
+            + "check, or correct SECURITY.md:\n  " + string.Join("\n  ", early));
     }
+
+    /// <summary>A workflow's lines, trimmed, with their indexes, leaving out comment lines.</summary>
+    private static List<(int Index, string Text)> CodeLines(string[] lines)
+        => lines.Select((line, i) => (Index: i, Text: line.Trim())).Where(l => !l.Text.StartsWith('#')).ToList();
 
     private static string StripComments(string source)
         => Regex.Replace(Regex.Replace(source, @"/\*.*?\*/", "", RegexOptions.Singleline),

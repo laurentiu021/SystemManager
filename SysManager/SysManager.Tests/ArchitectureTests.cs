@@ -9373,7 +9373,7 @@ public partial class ArchitectureTests
     {
         var at = Array.FindIndex(lines, l => l.Trim() == $"- name: {name}");
         Assert.True(at >= 0,
-            $"release.yml has no step named \"{name}\". If it was renamed, update this guard in the "
+            $"the workflow has no step named \"{name}\". If it was renamed, update this guard in the "
             + "same PR — do not delete it.");
         return at;
     }
@@ -9398,6 +9398,16 @@ public partial class ArchitectureTests
             $"the step at line {at + 1} has no non-comment body, so every assertion on it would pass "
             + "while inspecting nothing.");
         return code;
+    }
+
+    /// <summary>
+    /// The job in release.yml that calls winget.yml, as code, failing when there is none.
+    /// </summary>
+    private static string WingetCallerJob(string[] lines)
+    {
+        var call = Array.FindIndex(lines, l => l.Trim() == "uses: ./.github/workflows/winget.yml");
+        Assert.True(call >= 0, "release.yml does not call winget.yml, so nothing submits a release to winget.");
+        return WorkflowJobs.Containing(lines, call);
     }
 
     /// <summary>
@@ -10058,7 +10068,6 @@ public partial class ArchitectureTests
         var rename = StepLine("Rename exe with version");
         var smoke = StepLine("Smoke-check the published exe");
         var release = StepLine("Create GitHub Release");
-        var winget = StepLine("Sync the winget-pkgs fork with upstream");
         var announce = StepLine("Post announcement to Discussions");
 
         Assert.True(smoke > rename,
@@ -10069,7 +10078,6 @@ public partial class ArchitectureTests
         foreach (var (step, at) in new[]
                  {
                      ("Create GitHub Release", release),
-                     ("Sync the winget-pkgs fork with upstream", winget),
                      ("Post announcement to Discussions", announce)
                  })
         {
@@ -10078,6 +10086,15 @@ public partial class ArchitectureTests
                 + "failure would then be reported rather than prevented — the release, the package "
                 + "submission and the announcement would already be public.");
         }
+
+        // The winget submission is a job of its own since #2805, so it is ordered by its needs, not by its line: it
+        // waits for the job that runs the smoke check, and runs only when that job's "Create GitHub Release" did.
+        var winget = WingetCallerJob(lines);
+        Assert.Contains("needs: build-and-release", winget, StringComparison.Ordinal);
+        Assert.Contains("needs.build-and-release.outputs.published == 'true'", winget, StringComparison.Ordinal);
+        Assert.Contains("published: ${{ steps.release.outcome == 'success' }}",
+            string.Join('\n', lines.Where(l => !l.TrimStart().StartsWith('#'))), StringComparison.Ordinal);
+        Assert.Contains("id: release", ReleaseStepCode(lines, release), StringComparison.Ordinal);
 
         // The step body has to actually start the process and judge the outcome. Without these it
         // could be reduced to an echo and still satisfy the ordering above.
@@ -10316,6 +10333,9 @@ public partial class ArchitectureTests
     /// posted, so the release existed and nobody was told. The six winget steps carry
     /// <c>continue-on-error</c> for exactly that reason, and a separate step reports the outcome so a
     /// skipped publish is still visible.
+    /// <para>Since #2805 the six steps are winget.yml's, in a job that runs after the release job, so the
+    /// announcement no longer comes after them. <c>continue-on-error</c> still matters there: attempts 2 and 3
+    /// and the report run only when the job goes on past a failed attempt.</para>
     /// <para>Nothing pinned it. Stripping those six directives, or adding a winget condition to the
     /// announcement, left the whole suite green — the sibling guards assert the announcement step EXISTS
     /// and runs after the smoke check, which a suppressed announcement still satisfies.</para>
@@ -10328,6 +10348,8 @@ public partial class ArchitectureTests
     {
         var lines = File.ReadAllLines(
             Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var winget = File.ReadAllLines(
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "winget.yml"));
 
         string[] wingetSteps =
         [
@@ -10342,19 +10364,19 @@ public partial class ArchitectureTests
         var unguarded = new List<string>();
         foreach (var step in wingetSteps)
         {
-            var body = ReleaseStepCode(lines, ReleaseStepLine(lines, step));
+            var body = ReleaseStepCode(winget, ReleaseStepLine(winget, step));
             if (!body.Contains("continue-on-error: true", StringComparison.Ordinal))
                 unguarded.Add(step);
         }
 
         Assert.True(unguarded.Count == 0,
-            "these winget steps can fail the job, which would leave the release and its notes public "
-            + "with no announcement — a release nobody is told about. Restore continue-on-error, or "
-            + "move the announcement ahead of them and say why here:\n  "
+            "these winget steps can end the job when they fail, so the attempts after them and the report "
+            + "of the outcome would not run, and a failed submission would go unretried and unreported. "
+            + "Restore continue-on-error:\n  "
             + string.Join("\n  ", unguarded));
 
         // The outcome must still be reported, or continue-on-error turns a skipped publish into silence.
-        var outcome = ReleaseStepCode(lines, ReleaseStepLine(lines, "Determine the winget outcome"));
+        var outcome = ReleaseStepCode(winget, ReleaseStepLine(winget, "Determine the winget outcome"));
         Assert.DoesNotContain("continue-on-error", outcome, StringComparison.Ordinal);
 
         var announceBody = ReleaseStepCode(
@@ -10373,6 +10395,48 @@ public partial class ArchitectureTests
         {
             Assert.DoesNotContain("winget", condition, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    /// <summary>
+    /// The winget submission is a workflow of its own that the release calls, so a failed one can be retried
+    /// without rebuilding anything, and the report of a failed one says how (#2805).
+    /// </summary>
+    /// <remarks>
+    /// Its steps ended the release job, and the report of a failed submission said to re-run that workflow. A
+    /// re-run of a tag-push release finds the release in its guard and skips everything, and a re-run of a
+    /// dispatched one rebuilds the binary, attests it again and rewrites the release notes, so no path retried
+    /// only the submission. release.yml now calls winget.yml, which can also be dispatched with a tag. The
+    /// release job's outcome is not the gate: a step after "Create GitHub Release" failing, the announcement,
+    /// still leaves a release to submit. Comments are removed first, so prose naming a step cannot stand in
+    /// for it.
+    /// </remarks>
+    [Fact]
+    public void TheWingetSubmission_CanBeRetriedWithoutRebuildingTheRelease()
+    {
+        var dir = Path.Combine(TestPaths.RepoRoot(), ".github", "workflows");
+        var release = File.ReadAllLines(Path.Combine(dir, "release.yml"));
+        var winget = File.ReadAllLines(Path.Combine(dir, "winget.yml"));
+
+        var caller = WingetCallerJob(release);
+        Assert.Contains("if: ${{ !cancelled() && needs.build-and-release.outputs.published == 'true' }}", caller,
+            StringComparison.Ordinal);
+        Assert.Contains("tag: ${{ needs.build-and-release.outputs.tag }}", caller, StringComparison.Ordinal);
+
+        // One copy of the submission: none of its steps is left in release.yml beside the call.
+        var releaseCode = string.Join('\n', release.Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.DoesNotContain("winget-releaser", releaseCode, StringComparison.Ordinal);
+
+        var code = string.Join('\n', winget.Where(l => !l.TrimStart().StartsWith('#')));
+        Assert.Contains("workflow_call:", code, StringComparison.Ordinal);
+        Assert.Contains("workflow_dispatch:", code, StringComparison.Ordinal);
+
+        // A dispatched tag reaches a job that holds a credential, so its shape is checked before it is used.
+        var check = ReleaseStepCode(winget, ReleaseStepLine(winget, "Check the release is published"));
+        Assert.Contains("if [[ ! \"${TAG}\" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then", check, StringComparison.Ordinal);
+
+        var report = ReleaseStepCode(winget, ReleaseStepLine(winget, "Report a failed winget publish"));
+        Assert.Contains("gh workflow run winget.yml -f tag=$TAG", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Re-run this workflow", report, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -19367,7 +19431,7 @@ public partial class ArchitectureTests
     private static partial Regex ChartRow();
 
     /// <summary>
-    /// The release workflow checks the winget token before it uses it, not after.
+    /// The winget workflow checks the winget token before it uses it, not after.
     /// </summary>
     /// <remarks>
     /// The token is a PAT with a finite lifetime and nothing announced its expiry in advance — the first sign
@@ -19380,10 +19444,10 @@ public partial class ArchitectureTests
     /// release whose binary is already built.</para>
     /// </remarks>
     [Fact]
-    public void TheReleaseWorkflow_ChecksTheWingetTokenBeforeUsingIt()
+    public void TheWingetWorkflow_ChecksTheTokenBeforeUsingIt()
     {
         var lines = File.ReadAllLines(
-            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "winget.yml"));
 
         int StepLine(string name) => ReleaseStepLine(lines, name);
 
@@ -19402,6 +19466,15 @@ public partial class ArchitectureTests
 
         Assert.Contains("github-authentication-token-expiration", body, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("x-oauth-scopes", body, StringComparison.OrdinalIgnoreCase);
+
+        // GitHub answers a refused token too, with no scope list and no expiry, so read as headers it passed for a
+        // fine-grained token that never expires. The status line has to decide before the headers are read.
+        var refused = body.IndexOf("case \"$status\" in", StringComparison.Ordinal);
+        Assert.True(refused >= 0 && refused < body.IndexOf("x-oauth-scopes", StringComparison.OrdinalIgnoreCase),
+            "the token check reads the scopes before it has looked at the status of the reply, so a refused token "
+            + "reads as a fine-grained one that never expires.");
+        Assert.Contains("\"HTTP/\"*\" 2\"[0-9][0-9]*) ;;", body, StringComparison.Ordinal);
+        Assert.Contains("GitHub refused WINGET_TOKEN", body, StringComparison.Ordinal);
 
         // A classic token without workflow passes everything above, then fails all three publish attempts with
         // HTTP 422 once upstream has touched its own workflow files — which is how 1.115.0 to 1.116.1 missed

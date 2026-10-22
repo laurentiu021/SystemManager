@@ -354,4 +354,42 @@ public class WingetParserDeepTests
 
         Assert.Equal(["Git.Git"], result.Select(p => p.Id));
     }
+
+    // ---------- an update that needs a restart to finish is not a failure (#2849) ----------
+
+    [Fact]
+    public async Task UpdateAll_WhenAnAppNeedsARestartToFinish_Succeeds_AndSaysARestartIsNeeded()
+    {
+        var commands = new List<string>();
+
+        var result = await new WingetService(Winget(commands, _ => WingetExitCodes.InstallRebootRequiredToFinish))
+            .UpgradeAllAsync();
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.RestartRequired);
+    }
+
+    [Fact]
+    public async Task UpdateAll_WhenOneAppFails_AndAnotherNeedsARestart_StillFails()
+    {
+        string[] table =
+        [
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget",
+            "2 upgrades available.",
+        ];
+        var commands = new List<string>();
+        var winget = Winget(commands,
+            args => args.Contains("Git.Git", StringComparison.Ordinal)
+                ? WingetExitCodes.InstallRebootRequiredToFinish
+                : WingetExitCodes.MsiInstallFailed,
+            table);
+
+        var result = await new WingetService(winget).UpgradeAllAsync();
+
+        Assert.Equal(WingetExitCodes.UpdateAllHasFailure, result.ExitCode);
+        Assert.False(result.Succeeded);
+    }
 }

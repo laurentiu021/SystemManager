@@ -286,6 +286,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         var installed = 0;
         var alreadyInstalled = 0;
         var failed = 0;
+        var restartRequired = 0;
         InstallEtaText = string.Empty;
         _installEta.Reset();
 
@@ -305,10 +306,14 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                 try
                 {
                     var exitCode = await _service.InstallAsync(app.WingetId, _installerCts.Token);
-                    if (exitCode == 0)
+                    if (WingetExitCodes.Succeeded(exitCode))
                     {
-                        app.Status = "Installed";
+                        // Installed either way. winget ends on INSTALL_REBOOT_REQUIRED_TO_FINISH when the installer
+                        // asks for a restart, and that read "Failed — winget stopped with code 0x8A150109." (#2849).
+                        var restart = exitCode == WingetExitCodes.InstallRebootRequiredToFinish;
+                        app.Status = restart ? InstalledRestartRequiredStatus : "Installed";
                         installed++;
+                        if (restart) restartRequired++;
                     }
                     else if (WingetFailure.IsAlreadyInstalled(exitCode))
                     {
@@ -355,14 +360,16 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
             Progress = 100;
             InstallEtaText = string.Empty;
-            var summary = DescribeInstallRun(installed, alreadyInstalled, failed);
-            StatusMessage = $"Done. {summary}.";
+            var summary = $"{DescribeInstallRun(installed, alreadyInstalled, failed)}."
+                + WingetFailure.DescribeRestartRequired(restartRequired);
+            StatusMessage = $"Done. {summary}";
             ToastService.Instance.Show("Bulk Install complete", summary);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = $"Installation cancelled after {installed + alreadyInstalled + failed}/{selected.Count}. "
-                            + $"{DescribeInstallRun(installed, alreadyInstalled, failed)}.";
+                            + $"{DescribeInstallRun(installed, alreadyInstalled, failed)}."
+                            + WingetFailure.DescribeRestartRequired(restartRequired);
         }
         finally
         {
@@ -373,6 +380,9 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
 
     /// <summary>The row status for an app that was already installed, with nothing newer to put over it.</summary>
     internal const string AlreadyInstalledStatus = "Already installed";
+
+    /// <summary>The row status for an app that was installed and needs Windows restarted to finish.</summary>
+    internal const string InstalledRestartRequiredStatus = "Installed — restart required";
 
     /// <summary>
     /// The question Install Selected asks. It names the apps when there are few enough to read, as App Updates

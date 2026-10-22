@@ -214,4 +214,11 @@ public class WingetFailureTests
         Assert.DoesNotContain("error", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("failed", WingetFailure.WingetUnavailable, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(1, " Restart required for 1 app.")]
+    [InlineData(3, " Restart required for 3 apps.")]
+    public void DescribeRestartRequired_CountsTheAppsOnlyWhenThereAreAny(int apps, string expected)
+        => Assert.Equal(expected, WingetFailure.DescribeRestartRequired(apps));
 }

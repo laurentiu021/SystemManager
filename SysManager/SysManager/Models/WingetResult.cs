@@ -11,7 +11,10 @@ namespace SysManager.Models;
 public sealed record WingetResult(int ExitCode, bool Succeeded, string FriendlyMessage)
 {
     public static WingetResult From(int exitCode) =>
-        new(exitCode, exitCode == 0, WingetExitCodes.Describe(exitCode));
+        new(exitCode, WingetExitCodes.Succeeded(exitCode), WingetExitCodes.Describe(exitCode));
+
+    /// <summary>The app was installed, and Windows has to restart to finish it.</summary>
+    public bool RestartRequired => ExitCode == WingetExitCodes.InstallRebootRequiredToFinish;
 
     /// <summary>A cancelled operation (no meaningful exit code).</summary>
     public static WingetResult Cancelled { get; } = new(-1, false, "Cancelled");
@@ -64,6 +67,13 @@ public static class WingetExitCodes
     /// or uninstaller returned itself. A winget code is only readable in hex; as a signed decimal it is noise.
     /// </summary>
     public static bool IsWingetCode(int exitCode) => (unchecked((uint)exitCode) >> 16) == 0x8A15;
+
+    /// <summary>
+    /// True when an install or upgrade put the app on: 0, or INSTALL_REBOOT_REQUIRED_TO_FINISH, which winget ends on
+    /// when the installer asks for a restart (an MSI or Burn bundle's 3010, common for Visual C++ Redistributable
+    /// updates). That one was counted as a failure, though its own message says the update is installed (#2849).
+    /// </summary>
+    public static bool Succeeded(int exitCode) => exitCode is 0 or InstallRebootRequiredToFinish;
 
     /// <summary>The code in the form winget and its documentation print it, e.g. <c>0x8A150011</c>.</summary>
     public static string Hex(int exitCode) => $"0x{unchecked((uint)exitCode):X8}";

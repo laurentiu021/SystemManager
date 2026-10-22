@@ -75,6 +75,17 @@ public static class WingetFailure
     }
 
     /// <summary>
+    /// What a run's summary adds for the apps that were put on or taken off but need Windows restarted to finish,
+    /// in the same words on the Uninstaller, App Updates and the Bulk Installer; empty when there are none.
+    /// </summary>
+    public static string DescribeRestartRequired(int apps) => apps switch
+    {
+        0 => string.Empty,
+        1 => " Restart required for 1 app.",
+        _ => $" Restart required for {apps} apps.",
+    };
+
+    /// <summary>
     /// True when an INSTALL ended because the app is already there, which is not a failure. winget turns an
     /// install of an installed package into an upgrade, and that upgrade ends with UPDATE_NOT_APPLICABLE when
     /// nothing newer applies to this PC; the Bulk Installer used to count that as "Failed" (#2462). The other two

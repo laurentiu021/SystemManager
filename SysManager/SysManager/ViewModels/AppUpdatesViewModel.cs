@@ -221,7 +221,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         _cts = new CancellationTokenSource();
         _upgraderCts?.Dispose();
         _upgraderCts = new CancellationTokenSource();
-        int attempted = 0, succeeded = 0, failed = 0;
+        int attempted = 0, succeeded = 0, failed = 0, restartRequired = 0;
         var wingetUnavailable = false;
         var stopped = false;
         UpgradeEtaText = string.Empty;
@@ -248,6 +248,7 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                     var result = await _winget.UpgradeAsync(pkg.Id, _upgraderCts.Token);
                     pkg.Status = result.FriendlyMessage;
                     if (result.Succeeded) succeeded++; else failed++;
+                    if (result.RestartRequired) restartRequired++;
                 }
                 // Only closing SysManager ends a running update.
                 catch (OperationCanceledException) { pkg.Status = "Cancelled"; stopped = true; break; }
@@ -273,11 +274,12 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             // when there are any. If winget itself is missing, keep the friendly
             // "install App Installer" message instead of a misleading "Updated 0 of N".
             var failures = failed == 0 ? "" : $" · {failed} failed";
+            var restart = WingetFailure.DescribeRestartRequired(restartRequired);
             StatusMessage = wingetUnavailable
                 ? WingetUnavailableMessage
                 : stopped
-                    ? $"Stopped after {attempted} of {toUpgrade.Count}. Updated {succeeded}{failures}."
-                    : $"Updated {succeeded} of {toUpgrade.Count}{failures}.";
+                    ? $"Stopped after {attempted} of {toUpgrade.Count}. Updated {succeeded}{failures}.{restart}"
+                    : $"Updated {succeeded} of {toUpgrade.Count}{failures}.{restart}";
             Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
                 succeeded, failed, toUpgrade.Count);
         }

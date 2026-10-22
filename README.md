@@ -812,6 +812,9 @@ Across the tab:
   have to be updated one by one, are never listed as apps
 - **Each result says what winget reported.** A download that did not match what winget
   expected is named as that, not as "no update", and one that needs administrator says so
+- **An update that needs a restart is installed.** When the installer asks for Windows to
+  restart to finish, the row says so, the update counts as done rather than failed, and the
+  summary says how many apps need the restart. The Dashboard's Update All Apps says it too
 - **Cancel stops a batch between apps** — the update already running finishes first, because
   ending winget half-way ends the installer it started. `Escape` does the same
 
@@ -1547,6 +1550,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Already installed is not a failure** — an app that is already on the PC, with nothing
   newer to install, is marked "Already installed" and counted on its own, not as a failed
   install
+- **An install that needs a restart is installed** — the row reads "Installed — restart
+  required", it counts as installed, and the summary says how many apps need Windows restarted
 - Category filter and text search across the catalog, plus a button named for the chosen
   category, such as "Select Browsers", that ticks every app in it at once
 - Per-package install status tracking with ETA

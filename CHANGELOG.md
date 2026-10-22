@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.63] - 2026-10-22
+
+**An app update or install that needs Windows restarted to finish now counts as done, and says to restart, instead of
+being reported as failed.**
+
+### Fixed
+
+- **An update that ended "installed, restart required" was counted as a failure.** winget ends an install or upgrade
+  on its restart-required result whenever the installer asks for a restart, which is common for Visual C++
+  Redistributable updates. App Updates showed that row under "Updated 0 of 1 · 1 failed." and never said to restart,
+  the Dashboard's Update All Apps showed the run as failed, and the Bulk Installer said "Failed — winget stopped with
+  code 0x8A150109." App Updates and the Bulk Installer now count the app as installed, mark its row and add "Restart
+  required for 1 app." to the summary, as the Uninstaller already did, and Update All Apps ends with "All apps
+  updated — restart Windows to finish". Since 1.46.0.
+
 ## [1.130.62] - 2026-10-22
 
 **On a winget in a language other than English, App Updates no longer lists a heading or a column header as an

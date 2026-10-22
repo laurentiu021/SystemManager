@@ -490,4 +490,34 @@ public class AppUpdatesViewModelTests
             AppUpdatesViewModel.DescribeScan(found));
         Assert.Equal("1 upgradable package(s) found", AppUpdatesViewModel.DescribeScan([found[0]]));
     }
+
+    // ---------- an update that needs a restart to finish is counted as updated (#2849) ----------
+
+    [Fact]
+    public async Task AnUpdateThatNeedsARestart_IsCountedAsUpdated_AndTheSummarySaysToRestart()
+    {
+        // It read "Updated 0 of 1 · 1 failed." and never said to restart.
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync("a", Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(WingetExitCodes.InstallRebootRequiredToFinish));
+        winget.UpgradeAsync("b", Arg.Any<CancellationToken>()).Returns(WingetResult.From(0));
+        var vm = new AppUpdatesViewModel(winget);
+        foreach (var id in new[] { "a", "b" })
+        {
+            vm.Packages.Add(new AppPackage
+            {
+                Name = id.ToUpperInvariant(),
+                Id = id,
+                CurrentVersion = "1",
+                AvailableVersion = "2",
+                IsSelected = true,
+            });
+        }
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.UpgradeSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal("Updated 2 of 2. Restart required for 1 app.", vm.StatusMessage);
+        Assert.Equal("Update installed — restart required", vm.Packages.Single(p => p.Id == "a").Status);
+    }
 }

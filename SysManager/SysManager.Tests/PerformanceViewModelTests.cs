@@ -5,6 +5,7 @@
 using System.IO;
 using System.Reflection;
 using NSubstitute;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -28,10 +29,16 @@ public class PerformanceViewModelTests
     /// <param name="processes">What Trim RAM works through. Left out, it is none, never the machine's own (#2557).</param>
     /// <param name="trim">The trim call for each of <paramref name="processes"/>.</param>
     /// <param name="writeGpu">The NVIDIA setting's write. Left out, there is no card, never this PC's own.</param>
+    /// <param name="setUiEffects">The visual-effects write. Left out, nothing, never this PC's own.</param>
+    /// <param name="setGameMode">The Game Mode write, as above.</param>
+    /// <param name="setXboxGameBar">The Xbox Game Bar write, as above.</param>
     private static PerformanceViewModel NewVm(bool completeInitialization = false, Action<IPowerShellRunner>? configure = null,
                                               Func<System.Diagnostics.Process[]>? processes = null,
                                               Func<System.Diagnostics.Process, bool>? trim = null,
-                                              Func<bool, (bool Found, bool Ok)>? writeGpu = null)
+                                              Func<bool, (bool Found, bool Ok)>? writeGpu = null,
+                                              Action<bool>? setUiEffects = null,
+                                              Action<bool>? setGameMode = null,
+                                              Action<bool, bool>? setXboxGameBar = null)
     {
         var ps = Substitute.For<IPowerShellRunner>();
         var processCall = ps.RunProcessAsync(
@@ -56,7 +63,9 @@ public class PerformanceViewModelTests
             Path.GetTempPath(),
             "SysManagerPerformanceTests",
             Guid.NewGuid().ToString("N"));
-        return new(new PerformanceService(ps, new RestorePointService(ps), configDir, processes, trim, writeGpu: writeGpu),
+        return new(new PerformanceService(ps, new RestorePointService(ps), configDir, processes, trim,
+                                          writeGpu: writeGpu, setUiEffects: setUiEffects,
+                                          setGameMode: setGameMode, setXboxGameBar: setXboxGameBar),
                    NoGamingSession());
     }
 
@@ -685,5 +694,98 @@ public class PerformanceViewModelTests
         vm.IsBusy = false;
         Assert.True(vm.RefreshCommand.CanExecute(null));
         Assert.True(raised >= 2, $"CanExecuteChanged was raised {raised} time(s), so the button would not follow IsBusy");
+    }
+
+    // ── Each Apply touches only its own section (#2836) ──
+    //
+    // Every Apply ended in a read that set every switch from the PC, so a switch changed in another section and not
+    // applied yet went back, and that section's Apply then found nothing to do. The writes go to recorders here; the
+    // reads are this PC's, which are only read.
+
+    [Fact]
+    public async Task AnAppliedSection_LeavesAnotherSectionsSwitchAsTheyLeftIt()
+    {
+        var uiEffects = new List<bool>();
+        using var vm = NewVm(completeInitialization: true, setUiEffects: uiEffects.Add);
+        await vm.InitializationComplete;
+        // The opposite of what this PC has, so it is a change the person made, which the read cannot set back.
+        var gameModeOff = vm.Profile.GameModeEnabled;
+        vm.WantGameModeOff = gameModeOff;
+        var reduce = !vm.Profile.VisualEffectsReduced;
+        vm.WantVisualEffectsReduced = reduce;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyVisualEffectsCommand.ExecuteAsync(null);
+
+        Assert.Equal([!reduce], uiEffects);
+        Assert.Equal(gameModeOff, vm.WantGameModeOff);
+    }
+
+    [Fact]
+    public async Task ADeclinedApply_PutsBackOnlyItsOwnSwitch()
+    {
+        using var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.Profile = new PerformanceProfile { GameModeEnabled = true, VisualEffectsReduced = false };
+        vm.WantGameModeOff = true;
+        vm.WantVisualEffectsReduced = true;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ApplyVisualEffectsCommand.ExecuteAsync(null);
+
+        Assert.False(vm.WantVisualEffectsReduced);
+        Assert.True(vm.WantGameModeOff);
+    }
+
+    [Fact]
+    public async Task AnApplyTheLockRefuses_PutsBackOnlyItsOwnSwitch()
+    {
+        using var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.Profile = new PerformanceProfile { GameModeEnabled = true, VisualEffectsReduced = false };
+        vm.WantGameModeOff = true;
+        vm.WantVisualEffectsReduced = true;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var held = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Undo");
+        Assert.NotNull(held);
+
+        await vm.ApplyGameModeCommand.ExecuteAsync(null);
+
+        Assert.False(vm.WantGameModeOff);
+        Assert.True(vm.WantVisualEffectsReduced);
+    }
+
+    // ── A half-on Xbox Game Bar (#2836) ──
+
+    [Theory]
+    [InlineData(true)]    // asked to turn it off: the overlay is still on
+    [InlineData(false)]   // asked to turn it on: per-game recording is still off
+    public async Task AHalfOnXboxGameBar_IsInNeitherState_SoItsApplyAsks(bool turnOff)
+    {
+        using var vm = NewVm(completeInitialization: true);
+        await vm.InitializationComplete;
+        vm.Profile = new PerformanceProfile { XboxGameBarOn = true, XboxGameDvrOn = false };
+        vm.WantXboxGameBarOff = turnOff;
+        using var dialog = new DialogAnswer(confirm: false);
+
+        await vm.ApplyXboxGameBarCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.Calls);
+        Assert.NotEqual("Xbox Game Bar is already in the selected state.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task TurningAHalfOnXboxGameBarOff_WritesBothValuesOff()
+    {
+        var writes = new List<(bool Bar, bool Dvr)>();
+        using var vm = NewVm(completeInitialization: true, setXboxGameBar: (bar, dvr) => writes.Add((bar, dvr)));
+        await vm.InitializationComplete;
+        vm.Profile = new PerformanceProfile { XboxGameBarOn = true, XboxGameDvrOn = false };
+        vm.WantXboxGameBarOff = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyXboxGameBarCommand.ExecuteAsync(null);
+
+        Assert.Equal([(false, false)], writes);
     }
 }

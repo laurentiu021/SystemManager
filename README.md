@@ -1948,12 +1948,14 @@ offers, "rate us" prompts:
   them, and the status line says so
 
 ### Performance Mode
-- **Per-tweak Apply buttons** — each setting is independent
+- **Per-tweak Apply buttons** — each setting is independent. Applying one leaves the switches you
+  changed in the others as you set them, ready for their own Apply
 - **Power Plan**: Balanced / High Performance / Ultimate Performance — Ultimate is switched on in any
   Windows display language, and reported as failed rather than set when Windows does not provide it
 - **Visual Effects**: reduce animations via P/Invoke (instant, no logout)
 - **Game Mode**: enable/disable via registry
-- **Xbox Game Bar**: disable overlay and Game DVR via registry
+- **Xbox Game Bar**: disable overlay and Game DVR via registry. When only one of the two is off, the
+  tab says the Game Bar is partly on, and either Apply sets both
 - **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required). The
   reboot notice stays on the page for as long as SysManager is open, instead of going away the moment
   the settings are read again

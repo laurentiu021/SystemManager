@@ -29,7 +29,22 @@ public sealed partial class PerformanceProfile : ObservableObject
     [ObservableProperty] private bool _gameModeEnabled;
 
     // ── Xbox Game Bar / DVR overlay ──
-    [ObservableProperty] private bool _xboxGameBarDisabled;
+    // Two values that can differ: the overlay (AppCaptureEnabled) and per-game recording (GameDVR_Enabled). Read as
+    // one that was off when either was, a half-on Game Bar showed as disabled, and its Apply stopped at "already in the
+    // selected state", so the value still on was never written (#2836).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(XboxGameBarDisabled), nameof(XboxGameBarPartlyOn))]
+    private bool _xboxGameBarOn = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(XboxGameBarDisabled), nameof(XboxGameBarPartlyOn))]
+    private bool _xboxGameDvrOn = true;
+
+    /// <summary>Both the overlay and per-game recording are off.</summary>
+    public bool XboxGameBarDisabled => !XboxGameBarOn && !XboxGameDvrOn;
+
+    /// <summary>One of the two is on and the other off.</summary>
+    public bool XboxGameBarPartlyOn => XboxGameBarOn != XboxGameDvrOn;
 
     // ── NVIDIA GPU ──
     [ObservableProperty] private bool _gpuMaxPerformance;

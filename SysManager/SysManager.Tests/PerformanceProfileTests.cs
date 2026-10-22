@@ -125,7 +125,8 @@ public class PerformanceProfileTests
         p.ActivePlanName = "Test";
         p.VisualEffectsReduced = true;
         p.GameModeEnabled = true;
-        p.XboxGameBarDisabled = true;
+        p.XboxGameBarOn = false;
+        p.XboxGameDvrOn = false;
         p.GpuMaxPerformance = true;
         p.HasNvidiaGpu = true;
         p.ProcessorMaxState = true;
@@ -134,10 +135,27 @@ public class PerformanceProfileTests
         Assert.Contains("ActivePlanName", changed);
         Assert.Contains("VisualEffectsReduced", changed);
         Assert.Contains("GameModeEnabled", changed);
+        Assert.Contains("XboxGameBarOn", changed);
+        Assert.Contains("XboxGameDvrOn", changed);
         Assert.Contains("XboxGameBarDisabled", changed);
+        Assert.Contains("XboxGameBarPartlyOn", changed);
         Assert.Contains("GpuMaxPerformance", changed);
         Assert.Contains("HasNvidiaGpu", changed);
         Assert.Contains("ProcessorMaxState", changed);
         Assert.Contains("ProcessorMinPercent", changed);
+    }
+
+    // The overlay and per-game recording are two values. Read as one that was off when either was, a half-on Game Bar
+    // read as disabled (#2836).
+    [Theory]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, false, true)]
+    public void TheXboxGameBar_IsDisabledOnlyWhenBothValuesAreOff(bool bar, bool dvr, bool disabled, bool partlyOn)
+    {
+        var p = new PerformanceProfile { XboxGameBarOn = bar, XboxGameDvrOn = dvr };
+
+        Assert.Equal((disabled, partlyOn), (p.XboxGameBarDisabled, p.XboxGameBarPartlyOn));
     }
 }

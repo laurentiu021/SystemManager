@@ -64,6 +64,10 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
     // the file holds (#2521).
     private bool _hostsRead;
 
+    // The entries the list was read from, as HostsFileService.Fingerprint writes them: Save writes only while the file
+    // still holds them, so a mapping another program or the user made since the list was read is not undone (#2797).
+    private string _loadedFingerprint = "";
+
     // ── Elevation ────────────────────────────────────────────────────────
 
     [ObservableProperty] private bool _isElevated;
@@ -143,6 +147,7 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         try
         {
             var entries = await _hostsService.ReadHostsAsync(_cts.Token).ConfigureAwait(true);
+            _loadedFingerprint = HostsFileService.Fingerprint(entries);
             HostEntries.ReplaceWith(entries);
             _hostsRead = true;
             HostsStatus = $"Loaded {entries.Count} entries.";
@@ -586,10 +591,14 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
+        // Said only when this save will keep the copy: one is made only while there is none, and a hosts.bak another
+        // program or the user left there stays as it is (#2797).
         if (!DialogService.Instance.Confirm(
-                $"Overwrite the system hosts file with these {HostEntries.Count} entries?\n\n" +
-                "The original hosts file is preserved as hosts.bak (only the first time) " +
-                "and can be restored with \"Restore original\".",
+                $"Overwrite the system hosts file with these {HostEntries.Count} entries?"
+                + (_hostsService.HasBackup
+                    ? ""
+                    : "\n\nThe file as it is now is kept beside it first, as hosts.bak, and Restore original can "
+                      + "put it back."),
                 "Confirm Hosts File Change"))
         {
             HostsStatus = "Save cancelled.";
@@ -604,10 +613,22 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
         // synchronous file I/O (WriteAllLines + File.Replace on the System32 hosts file)
         // that would otherwise block the UI until the disk write completes.
         var snapshot = HostEntries.ToList();
+        var loaded = _loadedFingerprint;
         try
         {
-            await Task.Run(() => _hostsService.SaveHosts(snapshot)).ConfigureAwait(true);
-            HostsStatus = $"Saved {snapshot.Count} entries. Original preserved at hosts.bak.";
+            var outcome = await Task.Run(() => _hostsService.SaveHosts(snapshot, loaded)).ConfigureAwait(true);
+            if (outcome == HostsSaveOutcome.ChangedOutside)
+            {
+                HostsStatus = ChangedOutsideStatus;
+                Log.Information("Hosts file changed outside the tab since it was read; not saved");
+                return;
+            }
+
+            // The file holds this list now, so the next save checks for it.
+            _loadedFingerprint = HostsFileService.Fingerprint(snapshot);
+            HostsStatus = outcome == HostsSaveOutcome.SavedAndKeptACopy
+                ? $"Saved {snapshot.Count} entries. The file as it was is kept beside it as hosts.bak."
+                : $"Saved {snapshot.Count} entries.";
             Log.Information("Hosts file saved with {Count} entries", snapshot.Count);
         }
         catch (UnauthorizedAccessException)
@@ -630,15 +651,35 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             return;
         }
 
-        if (!_hostsService.HasBackup)
+        // The copy is offered only beside a file SysManager wrote, and only while putting it back would change it, as
+        // Undo Changes offers it: hosts.bak is made only while there is none, so it can be another program's, and
+        // restoring it replaced a file SysManager never touched with an old copy (#2797).
+        HostsBackupState? state;
+        try
         {
-            HostsStatus = "No backup found — nothing to restore.";
+            state = await Task.Run(_hostsService.ReadBackupState).ConfigureAwait(true);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            HostsStatus = "Access denied — run as administrator to restore hosts file.";
+            return;
+        }
+        catch (IOException ex)
+        {
+            HostsStatus = $"The hosts file could not be compared with the copy beside it, so nothing was restored: "
+                + ex.Message;
+            Log.Warning(ex, "Failed to compare the hosts file with its copy");
+            return;
+        }
+
+        if (DescribeUnrestorable(state) is { } why)
+        {
+            HostsStatus = why;
             return;
         }
 
         if (!DialogService.Instance.Confirm(
-                "Restore the original hosts file from backup? Your current SysManager " +
-                "changes to the hosts file will be discarded.",
+                HostsFileService.RestoreQuestion(UndoChangesService.FormatDate(state!.TakenAtUtc, TimeZoneInfo.Local)),
                 "Confirm Restore Hosts File"))
         {
             HostsStatus = "Restore cancelled.";
@@ -673,6 +714,25 @@ public sealed partial class DnsHostsViewModel : ViewModelBase
             Log.Error(ex, "Failed to restore hosts file");
         }
     }
+
+    /// <summary>What Save says when the file no longer holds the entries the list was read from.</summary>
+    internal const string ChangedOutsideStatus =
+        "The hosts file was changed outside SysManager after this tab read it, so it was not saved. Press Refresh to "
+        + "see the change, then make yours again.";
+
+    /// <summary>
+    /// Why the copy beside the hosts file is not offered, or null when Restore original may offer it. Pure, so each
+    /// case is testable.
+    /// </summary>
+    internal static string? DescribeUnrestorable(HostsBackupState? state) => state switch
+    {
+        null => "There is no copy of the hosts file to restore.",
+        { WrittenBySysManager: false } =>
+            "SysManager has not written the hosts file as it is now, so restoring hosts.bak beside it would undo "
+            + "changes it did not make. Nothing was restored.",
+        { DiffersFromHosts: false } => "The hosts file is already the same as the copy beside it.",
+        _ => null,
+    };
 
     [RelayCommand]
     private Task RefreshHostsAsync() => LoadHostsAsync();

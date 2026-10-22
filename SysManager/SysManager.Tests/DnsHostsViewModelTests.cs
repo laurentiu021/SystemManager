@@ -1572,7 +1572,8 @@ public class DnsHostsViewModelGateTests
         // A backup must exist for the gate to be reachable (HasBackup guard).
         var backup = hostsPath + ".bak";
         File.WriteAllText(backup, "# ORIGINAL pristine\n127.0.0.1 original\n");
-        var current = "# CURRENT managed\n10.0.0.1 managed\n";
+        // Written by SysManager, the only file the copy beside it is offered for (#2797).
+        var current = "# This file is managed by SysManager\n10.0.0.1 managed\n";
         File.WriteAllText(hostsPath, current);
 
         var prevDialog = DialogService.Instance;
@@ -1634,7 +1635,7 @@ public class DnsHostsViewModelGateTests
         var backup = hostsPath + ".bak";
         var original = "# ORIGINAL pristine\n127.0.0.1 original\n";
         File.WriteAllText(backup, original);
-        File.WriteAllText(hostsPath, "# CURRENT managed\n10.0.0.1 managed\n");
+        File.WriteAllText(hostsPath, "# This file is managed by SysManager\n10.0.0.1 managed\n");
 
         var prevDialog = DialogService.Instance;
         var dialog = Substitute.For<IDialogService>();
@@ -1655,5 +1656,142 @@ public class DnsHostsViewModelGateTests
             DialogService.Instance = prevDialog;
             DeleteTestDirectory(dir);
         }
+    }
+
+    // ── Save writes only over the entries it read, and Restore offers only SysManager's copy (#2797) ─────
+
+    private static IDialogService Answering(bool confirm, Action<string>? shown = null)
+    {
+        var dialog = Substitute.For<IDialogService>();
+        dialog.Confirm(Arg.Do<string>(m => shown?.Invoke(m)), Arg.Any<string>()).Returns(confirm);
+        return dialog;
+    }
+
+    [StaFact]
+    public async Task SaveHosts_AfterAnotherProgramChangedTheFile_WritesNothing_AndSaysSo()
+    {
+        // The list is read when the tab opens, and SysManager keeps running in the notification area. A mapping a VPN
+        // client, Docker Desktop or an edit in Notepad made since was dropped by the next save.
+        var (vm, hostsPath, dir, _) = NewVm();
+        var prevDialog = DialogService.Instance;
+        DialogService.Instance = Answering(confirm: true);
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            File.AppendAllText(hostsPath, "10.9.9.9 vpn.local\n");
+            var outside = File.ReadAllText(hostsPath);
+            vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "managed.local", IsEnabled = true });
+
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+
+            Assert.Equal(outside, File.ReadAllText(hostsPath));
+            Assert.Equal(DnsHostsViewModel.ChangedOutsideStatus, vm.HostsStatus);
+            Assert.False(File.Exists(hostsPath + ".bak"));
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task SaveHosts_TwiceInARow_SavesBothTimes_AndSaysWhenItKeptACopy()
+    {
+        // The second save checks against the list the first one wrote, not the one read before it.
+        var (vm, hostsPath, dir, _) = NewVm();
+        var prevDialog = DialogService.Instance;
+        string? asked = null;
+        DialogService.Instance = Answering(confirm: true, m => asked = m);
+        try
+        {
+            await vm.RefreshHostsCommand.ExecuteAsync(null);
+            vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.1", Hostname = "first.local", IsEnabled = true });
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+            Assert.Contains("kept beside it first, as hosts.bak", asked, StringComparison.Ordinal);
+            Assert.Equal("Saved 2 entries. The file as it was is kept beside it as hosts.bak.", vm.HostsStatus);
+
+            vm.HostEntries.Add(new HostsEntry { IpAddress = "10.0.0.2", Hostname = "second.local", IsEnabled = true });
+            await vm.SaveHostsCommand.ExecuteAsync(null);
+
+            // A copy is there now, and this save does not replace it, so neither the question nor the status says so.
+            Assert.DoesNotContain("hosts.bak", asked, StringComparison.Ordinal);
+            Assert.Equal("Saved 3 entries.", vm.HostsStatus);
+            Assert.Contains("second.local", File.ReadAllText(hostsPath), StringComparison.Ordinal);
+            Assert.Equal("127.0.0.1 localhost\n", File.ReadAllText(hostsPath + ".bak"));
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task RestoreHosts_BesideAFileSysManagerNeverWrote_RestoresNothing_AndAsksNothing()
+    {
+        // hosts.bak is the usual name for a manual copy, and SysManager makes one only while there is none. Restoring
+        // it replaced a file SysManager had never touched, and every entry written since that old copy was lost.
+        var (vm, hostsPath, dir, _) = NewVm();
+        File.WriteAllText(hostsPath + ".bak", "# a copy someone made years ago\n127.0.0.1 old\n");
+        var current = "127.0.0.1 localhost\n10.9.9.9 vpn.local\n";
+        File.WriteAllText(hostsPath, current);
+        var prevDialog = DialogService.Instance;
+        var dialog = Answering(confirm: true);
+        DialogService.Instance = dialog;
+        try
+        {
+            await vm.RestoreHostsCommand.ExecuteAsync(null);
+
+            dialog.DidNotReceive().Confirm(Arg.Any<string>(), Arg.Any<string>());
+            Assert.Equal(current, File.ReadAllText(hostsPath));
+            Assert.Equal(DnsHostsViewModel.DescribeUnrestorable(
+                    new HostsBackupState(DiffersFromHosts: true, WrittenBySysManager: false, DateTime.UtcNow)),
+                vm.HostsStatus);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [StaFact]
+    public async Task RestoreHosts_AsksWithTheCopysDate_AsUndoChangesDoes()
+    {
+        var (vm, hostsPath, dir, _) = NewVm();
+        var backup = hostsPath + ".bak";
+        File.WriteAllText(backup, "127.0.0.1 localhost\n");
+        var madeAt = new DateTime(2026, 3, 14, 9, 30, 0, DateTimeKind.Utc);
+        File.SetCreationTimeUtc(backup, madeAt);
+        File.WriteAllText(hostsPath, "# This file is managed by SysManager\n10.0.0.1 managed\n");
+        var prevDialog = DialogService.Instance;
+        string? asked = null;
+        DialogService.Instance = Answering(confirm: false, m => asked = m);
+        try
+        {
+            await vm.RestoreHostsCommand.ExecuteAsync(null);
+
+            Assert.Equal(
+                HostsFileService.RestoreQuestion(UndoChangesService.FormatDate(madeAt, TimeZoneInfo.Local)), asked);
+        }
+        finally
+        {
+            DialogService.Instance = prevDialog;
+            DeleteTestDirectory(dir);
+        }
+    }
+
+    [Fact]
+    public void TheCopy_IsOfferedOnlyBesideAFileSysManagerWrote_AndOnlyWhileItWouldChangeIt()
+    {
+        var now = DateTime.UtcNow;
+        Assert.Equal("There is no copy of the hosts file to restore.", DnsHostsViewModel.DescribeUnrestorable(null));
+        Assert.StartsWith("SysManager has not written the hosts file as it is now",
+            DnsHostsViewModel.DescribeUnrestorable(new HostsBackupState(true, WrittenBySysManager: false, now)),
+            StringComparison.Ordinal);
+        Assert.Equal("The hosts file is already the same as the copy beside it.",
+            DnsHostsViewModel.DescribeUnrestorable(new HostsBackupState(DiffersFromHosts: false, true, now)));
+        Assert.Null(DnsHostsViewModel.DescribeUnrestorable(new HostsBackupState(true, true, now)));
     }
 }

@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.59] - 2026-10-22
+
+**DNS & Hosts no longer drops a change another program made to the hosts file, keeps the file's own encoding, and
+restores only the copy SysManager kept.**
+
+### Fixed
+
+- **Saving the hosts file could undo changes another program had made to it.** The list is read when the tab opens,
+  and SysManager keeps running in the notification area, so Save could rebuild the file from a list days old, and a
+  mapping a VPN client, Docker Desktop, an ad-blocker or an edit in Notepad had made since was dropped or brought
+  back. Save now reads the file again first, and when its entries are no longer the ones the list was read from,
+  nothing is written and the tab says so. Since 1.6.0.
+- **Saving a hosts file kept in the ANSI code page destroyed its letters outside English.** It was read and written as
+  UTF-8, so a comment such as "# für Spiele" lost its "ü" at the first save. The file is now written back in the
+  encoding it is in, with its byte order mark or none. Since 1.6.0.
+- **Restore original put back any hosts.bak, even one SysManager had not made.** SysManager keeps a copy only while
+  there is none, so a manual copy or another program's stayed, and Restore original replaced the hosts file with it,
+  even on a PC where SysManager had never saved the file. It now offers the copy only once SysManager has written the
+  hosts file, as Undo Changes does, and asks with the date the copy was made. The save says it kept a copy only when
+  it made one. Since 1.20.0.
+
 ## [1.130.58] - 2026-10-22
 
 **Environment Variables no longer takes out of PATH a folder an installer added while the tab was open, and a new

@@ -723,8 +723,7 @@ public sealed class UndoChangesService : IUndoChangesService
             NeedsAdmin: true,
             "Restore the copy…",
             [],
-            $"Restore the hosts file from the copy beside it, made on {taken}?\n\nEverything written to it since — by "
-                + "SysManager or by any other program — is replaced by that copy.",
+            HostsFileService.RestoreQuestion(taken),
             "Restore the hosts file — Confirm"));
     }
 
@@ -1031,8 +1030,13 @@ public sealed class UndoChangesService : IUndoChangesService
             + "is already running.");
 
     /// <summary>A date the way the rows write it.</summary>
-    private string Format(DateTime utc) =>
-        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _zone)
+    private string Format(DateTime utc) => FormatDate(utc, _zone);
+
+    /// <summary>
+    /// A date the way the rows write it, in <paramref name="zone"/>; DNS &amp; Hosts writes the copy's alike.
+    /// </summary>
+    internal static string FormatDate(DateTime utc, TimeZoneInfo zone) =>
+        TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone)
             .ToString("d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
 
     /// <summary>"a", "a and b", "a, b and c".</summary>

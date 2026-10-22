@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.69] - 2026-10-22
+
+**A cancelled restore point no longer leaves the rest of the session without one, and a System Restore that stops
+answering can no longer hold up every other change.**
+
+### Fixed
+
+- **Cancelling the restore point step left every later change without a restore point.** Windows Features and
+  Preinstalled Apps can be cancelled while they make the session's restore point, and a cancel there still used up
+  its one attempt: every later change, on any tab, ran with no restore point, and the confirmations stopped
+  mentioning one. A cancelled attempt is now tried again at the next change. Since 1.68.0.
+- **A System Restore that stopped answering could block every system change until SysManager was restarted.** Undo
+  Changes stopped waiting for its restore point question after a minute but left the question running, and the next
+  change that makes a restore point waited behind it while holding the lock every other system change needs. The
+  question is now called off when the minute ends, and making a restore point gives up after ten minutes wherever it
+  is made. Since 1.123.0.
+- **Restore Points could say "Cancelled." about a point Windows had made.** A Cancel while the list was read after a
+  new point turned "Restore point created." into "Cancelled.", and a Cancel during Create said "Cancelled." without
+  looking, although Windows finishes a point it has begun. After a Cancel the tab now reads the list and says
+  whether the point was made. Since 1.23.0.
+
 ## [1.130.68] - 2026-10-22
 
 **Notification Blocker lists a program such as PowerShell under its own name, and muting it now silences it.**

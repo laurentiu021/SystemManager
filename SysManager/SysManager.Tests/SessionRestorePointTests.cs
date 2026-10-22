@@ -157,6 +157,47 @@ public class SessionRestorePointTests
         Assert.True(session.CreatedThisSession);
     }
 
+    // ---------- a cancel gives the attempt back (#2843) ----------
+    //
+    // Cancelled before Windows answered, the attempt was spent all the same: every later change of the session went
+    // without a restore point, and its confirmation stopped mentioning one.
+
+    [Fact]
+    public async Task EnsureAsync_CancelledByTheCaller_IsTriedAgainByTheNextChange()
+    {
+        var calls = 0;
+        var session = new SessionRestorePoint(
+            (_, ct) => ++calls == 1 ? Task.FromCanceled<bool>(ct) : Task.FromResult(true), isElevated: () => true);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.EnsureAsync("first", cancelled.Token));
+
+        Assert.NotEqual("", session.ConfirmationNotice);
+        Assert.False(session.CreatedThisSession);
+        Assert.True(await session.EnsureAsync("second"));
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task EnsureAsync_ACancelTheCallerDidNotAskFor_StillSpendsTheAttempt()
+    {
+        // Only the caller's own cancel gives the attempt back: one that ended any other way counts, as a failure does.
+        var calls = 0;
+        using var other = new CancellationTokenSource();
+        await other.CancelAsync();
+        var session = new SessionRestorePoint((_, _) =>
+        {
+            calls++;
+            return Task.FromCanceled<bool>(other.Token);
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => session.EnsureAsync("first"));
+
+        Assert.False(await session.EnsureAsync("second"));
+        Assert.Equal(1, calls);
+    }
+
     // ---------- the notice a confirmation shows before the attempt (#2483) ----------
     //
     // Creating the point turns System Protection back on when it is off. The Restore Points tab and Performance

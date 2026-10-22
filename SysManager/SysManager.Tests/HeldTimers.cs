@@ -9,7 +9,8 @@ namespace SysManager.Tests;
 /// without waiting for it. Hand-written, matching the fakes in <c>PingMonitorServiceLifecycleTests</c> and
 /// <c>EtaCalculatorTests</c>.
 /// </summary>
-internal sealed class HeldTimers : TimeProvider
+/// <param name="now">The time it reads, held as well; the real time when not given.</param>
+internal sealed class HeldTimers(DateTimeOffset? now = null) : TimeProvider
 {
     private readonly Lock _gate = new();
     private readonly List<(TimerCallback Callback, object? State, TimeSpan Due)> _timers = [];
@@ -19,6 +20,8 @@ internal sealed class HeldTimers : TimeProvider
         lock (_gate) _timers.Add((callback, state, dueTime));
         return new Held();
     }
+
+    public override DateTimeOffset GetUtcNow() => now ?? base.GetUtcNow();
 
     /// <summary>The due time of the one timer asked for.</summary>
     public TimeSpan OnlyDue

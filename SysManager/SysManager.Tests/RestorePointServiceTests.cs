@@ -181,6 +181,57 @@ public class RestorePointServiceTests
         Assert.False(created);
     }
 
+    // ---------- a creation that never ends (#2843) ----------
+    // With no time limit of its own, a System Restore that never answered kept the lock its caller holds, which
+    // refuses every other system change, until SysManager restarted. The limit is on a clock the test holds.
+
+    // A runner whose create never answers and ignores the stop, as a run stuck in Windows does. It hands the test the
+    // token the run was given.
+    private static IPowerShellRunner RunnerThatNeverAnswers(TaskCompletionSource<CancellationToken> asked)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                asked.TrySetResult(call.ArgAt<CancellationToken>(2));
+                return new TaskCompletionSource<System.Collections.ObjectModel.Collection<PSObject>>().Task;
+            });
+        return runner;
+    }
+
+    [Fact]
+    public async Task CreateAsync_ThatWindowsNeverFinishes_IsStoppedAtTheLimit_AndReadsAsNotMade()
+    {
+        var asked = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clock = new HeldTimers();
+        var service = new RestorePointService(RunnerThatNeverAnswers(asked), clock);
+
+        var creating = service.CreateAsync("Before changes");
+        var run = await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(RestorePointService.CreatePatience, clock.OnlyDue);
+        Assert.False(creating.IsCompleted);
+
+        clock.FireAll();
+
+        Assert.False(await creating.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.True(run.IsCancellationRequested);   // the run was asked to stop, not only left waiting
+    }
+
+    [Fact]
+    public async Task CreateAsync_CancelledByTheCaller_EndsTheWait_AsACancel()
+    {
+        // The stop is asked for and never lands; the caller's Cancel still gets its answer.
+        var asked = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new RestorePointService(RunnerThatNeverAnswers(asked), new HeldTimers());
+        using var cancel = new CancellationTokenSource();
+
+        var creating = service.CreateAsync("Before changes", cancel.Token);
+        await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await cancel.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => creating.WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
     private static IPowerShellRunner RunnerReturning(params object[] output)
     {
         var runner = Substitute.For<IPowerShellRunner>();

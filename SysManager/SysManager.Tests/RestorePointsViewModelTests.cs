@@ -2,8 +2,12 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Management.Automation;
 using NSubstitute;
 using SysManager.Helpers;
+using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -171,6 +175,168 @@ public class RestorePointsViewModelTests
         Assert.Equal("Restore points could not be listed", vm.EmptyTitle);
         Assert.DoesNotContain("administrator", vm.EmptyMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("No restore points", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ---------- what a Cancel during Create did (#2843) ----------
+    // A cancel stops SysManager waiting, not a checkpoint Windows has begun. The tab said "Cancelled." without looking,
+    // and the same over a point it had just made when the cancel came during the list read after it.
+
+    private const string Asked = "Before the test";
+    private static readonly DateTimeOffset Now = new(2026, 10, 22, 12, 0, 0, TimeSpan.Zero);
+
+    // A tab over a runner that answers the create script with create, and every list read after it with
+    // listAfterCreate. The tab's clock is held at Now.
+    private static (RestorePointsViewModel Vm, HeldTimers Clock) NewVm(
+        Func<CancellationToken, Task<Collection<PSObject>>> create,
+        Func<CancellationToken, Task<Collection<PSObject>>> listAfterCreate)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var created = false;
+        runner.RunAsync(Arg.Any<string>(), Arg.Any<IDictionary<string, object?>?>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var ct = call.ArgAt<CancellationToken>(2);
+                if (call.ArgAt<string>(0).Contains("Checkpoint-Computer", StringComparison.Ordinal))
+                {
+                    created = true;
+                    return create(ct);
+                }
+                return created ? listAfterCreate(ct) : Task.FromResult(new Collection<PSObject>());
+            });
+        var clock = new HeldTimers(Now);
+        return (new RestorePointsViewModel(new RestorePointService(runner), clock) { NewDescription = Asked }, clock);
+    }
+
+    // Answers when the run is cancelled, as a run that honours the stop does, and says when it was asked.
+    private static Func<CancellationToken, Task<Collection<PSObject>>> UntilCancelled(TaskCompletionSource asked) =>
+        ct =>
+        {
+            var stopped = new TaskCompletionSource<Collection<PSObject>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            ct.Register(() => stopped.TrySetCanceled(ct));
+            asked.TrySetResult();
+            return stopped.Task;
+        };
+
+    private static Func<CancellationToken, Task<Collection<PSObject>>> Answering(
+        params (int Seq, string Description, DateTimeOffset Created)[] points) => _ =>
+    {
+        Collection<PSObject> rows = [];
+        foreach (var (seq, description, created) in points)
+        {
+            var row = new PSObject();
+            row.Properties.Add(new PSNoteProperty("SequenceNumber", seq));
+            row.Properties.Add(new PSNoteProperty("Description", description));
+            var iso = created.ToString("o", CultureInfo.InvariantCulture);
+            row.Properties.Add(new PSNoteProperty("CreationTimeIso", iso));
+            row.Properties.Add(new PSNoteProperty("RestorePointType", "MODIFY_SETTINGS"));
+            row.Properties.Add(new PSNoteProperty("EventType", "BEGIN_SYSTEM_CHANGE"));
+            rows.Add(row);
+        }
+        return Task.FromResult(rows);
+    };
+
+    private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    [Fact]
+    public async Task Create_CancelledWhenWindowsHadMadeThePoint_SaysItIsInTheList()
+    {
+        var creating = Signal();
+        var (vm, _) = NewVm(UntilCancelled(creating), Answering((7, Asked, Now.AddSeconds(20))));
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+
+        var create = vm.CreateCommand.ExecuteAsync(null);
+        await creating.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        vm.CancelCommand.Execute(null);
+        await create.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("Windows had already made the restore point when you cancelled, so it is in the list.",
+            vm.StatusMessage);
+        Assert.Equal(7, Assert.Single(vm.RestorePoints).SequenceNumber);
+        Assert.Equal($"Created \"{Asked}\"", Assert.Single(ActivityLogService.Instance.GetRecent(10)).Detail);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Create_CancelledBeforeWindowsMadeAPoint_SaysNoneWasMade()
+    {
+        // The day's older point has the same name: only one made after Create was pressed is the one it asked for.
+        var creating = Signal();
+        var (vm, _) = NewVm(UntilCancelled(creating), Answering((6, Asked, Now.AddDays(-1))));
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+
+        var create = vm.CreateCommand.ExecuteAsync(null);
+        await creating.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        vm.CancelCommand.Execute(null);
+        await create.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("Cancelled. Windows did not make the restore point.", vm.StatusMessage);
+        Assert.Empty(ActivityLogService.Instance.GetRecent(10));
+    }
+
+    [Fact]
+    public async Task Create_CancelledWhenTheCheckGetsNoAnswer_SaysItCouldNotCheck()
+    {
+        var creating = Signal();
+        var listing = Signal();
+        var (vm, clock) = NewVm(UntilCancelled(creating), _ =>
+        {
+            listing.TrySetResult();
+            return new TaskCompletionSource<Collection<PSObject>>().Task;   // never answers, ignores the stop
+        });
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        var create = vm.CreateCommand.ExecuteAsync(null);
+        await creating.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        vm.CancelCommand.Execute(null);
+        await listing.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Equal(RestorePointService.ListPatience, clock.OnlyDue);
+        clock.FireAll();
+        await create.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("Cancelled. SysManager could not check whether Windows had already made the restore point; " +
+            "Refresh lists it if it did.", vm.StatusMessage);
+        Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Create_CancelledDuringTheListReadAfterIt_StillSaysThePointWasCreated()
+    {
+        var listing = Signal();
+        var (vm, _) = NewVm(
+            _ => Task.FromResult(new Collection<PSObject> { new(RestorePointService.CreateOkSentinel) }),
+            UntilCancelled(listing));
+        await vm.InitializationComplete;
+        using var dialog = new DialogAnswer(confirm: true);
+        using var log = new ActivityLogScope();
+
+        var create = vm.CreateCommand.ExecuteAsync(null);
+        await listing.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        vm.CancelCommand.Execute(null);
+        await create.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("Restore point created. Refresh lists it.", vm.StatusMessage);
+        Assert.Equal($"Created \"{Asked}\"", Assert.Single(ActivityLogService.Instance.GetRecent(10)).Detail);
+    }
+
+    [Theory]
+    [InlineData(Asked, 20, true)]
+    [InlineData(Asked, 0, true)]
+    [InlineData(Asked, -20, false)]                 // made before Create was pressed
+    [InlineData("Before the", 20, true)]            // the description as Windows shortened it
+    [InlineData("Another name", 20, false)]
+    [InlineData("", 20, false)]
+    public void IsTheOneAskedFor_IsAPointMadeAfterCreate_WithItsDescription(
+        string description, int secondsAfter, bool expected)
+    {
+        var point = new RestorePoint(7, description, Now.AddSeconds(secondsAfter).UtcDateTime, "MODIFY_SETTINGS", "");
+
+        Assert.Equal(expected, RestorePointsViewModel.IsTheOneAskedFor(point, Asked, Now));
     }
 
     [Fact]

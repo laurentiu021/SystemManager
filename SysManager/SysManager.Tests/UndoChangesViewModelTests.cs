@@ -270,6 +270,40 @@ public sealed class UndoChangesViewModelTests : IDisposable
         Assert.Equal("Newest: \"SysManager Privacy & Telemetry\", 5 Oct 2026, 19:39", vm.RestorePointText);
     }
 
+    /// <summary>
+    /// The minute calls the question off, not only the wait for it (#2843).
+    /// </summary>
+    /// <remarks>
+    /// The question went on after the card gave up, holding the one pipeline of the runner restore points are made
+    /// through, so the next change that takes the session's restore point queued behind it with the lock every other
+    /// system change needs, for as long as Windows stayed silent.
+    /// </remarks>
+    [Fact]
+    public async Task ARestorePointQuestionThatIsNeverAnswered_IsCalledOffWhenTheMinuteEnds()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var service = Service();
+        var asked = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.LookForRestorePointAsync(Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            asked.TrySetResult(call.Arg<CancellationToken>());
+            return new TaskCompletionSource<RestorePointLook>().Task;
+        });
+        var clock = new HeldTimers();
+        var vm = new UndoChangesViewModel(service, Substitute.For<INavigationService>(), clock);
+        await vm.InitializationComplete;
+
+        vm.IsActive = true;
+        var question = await asked.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.False(question.IsCancellationRequested);
+
+        clock.FireAll();
+        await vm.RestorePointLookup.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(question.IsCancellationRequested);
+        Assert.Equal(UndoChangesViewModel.RestorePointNotAnswered, vm.RestorePointText);
+    }
+
     // ── Putting one back ────────────────────────────────────────────────────
 
     [Fact]

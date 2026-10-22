@@ -2083,10 +2083,11 @@ offers, "rate us" prompts:
   note that some may be missing
 
 ### Dashboard
-- **The Windows edition, build and uptime** under the title, read when SysManager starts and
-  again on "Scan system"
+- **The Windows edition, build and uptime** under the title. The edition and build are read when
+  SysManager starts and again on "Scan system"; the uptime counts on while the Dashboard is shown
 - **Storage** — each fixed drive and how full it is, read without holding up the window. A drive that
-  cannot be read is left out and the others are still listed
+  cannot be read is left out and the others are still listed. It is read again after Quick Cleanup and
+  Quick Tune-Up, and when you come back to the Dashboard after something was cleaned up or removed elsewhere
 - **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the tab
   that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
   updates to App Updates, critical events to System Logs, opened on those events, low disk space to Deep
@@ -2110,7 +2111,7 @@ offers, "rate us" prompts:
   visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
   temperatures are available, and the card says so
 - **Recent Activity** — the five most recent things SysManager changed on this PC, with how long
-  ago: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
+  ago, kept current while the Dashboard is shown: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
   restore points, shredded files, game mode, and what Undo Changes put back. Not every tab writes
   here yet — Performance Mode, Services, Startup Manager, Windows Features and the App Updates tab,
   among others, do not. The history keeps the last 200, and **See all changes** opens Recent Changes,
@@ -2176,7 +2177,8 @@ offers, "rate us" prompts:
   left, cannot score green, and the recommendation says how many GB are left and points at Deep Cleanup.
   The free space is compared as Windows reports it, not rounded, so 9.7 GB counts as under 10.
   Color-coded ring (green / amber / red) with up to 3 actionable
-  recommendations. Auto-computes on load and refreshes with "Scan system".
+  recommendations. Auto-computes on load and refreshes with "Scan system", after Quick Cleanup and
+  Quick Tune-Up, and when you come back to the Dashboard after something was cleaned up or removed elsewhere.
   A battery counts only when its wear was actually read. Windows gives
   that only to administrators, so without elevation the battery is left
   out rather than scored as new.

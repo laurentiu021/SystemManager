@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.64] - 2026-10-22
+
+**App Updates, the Uninstaller and the Bulk Installer now read every column of winget's lists from where winget wrote
+it, on a Chinese, Japanese, Korean, Russian, Spanish or Portuguese winget and for apps named in Chinese, Japanese or
+Korean.**
+
+### Fixed
+
+- **Columns after a Chinese, Japanese or Korean character were read from the wrong place.** winget lines its columns
+  up on screen, where such a character takes the room of two, and SysManager counted characters. On a Japanese,
+  Chinese or Korean winget, whose column titles are such characters, every row was affected: an ID could lose its last
+  character or start with the end of the app's name, and the available version was read from inside the installed
+  one, so the update was offered with wrong versions and could not run. An app with a name in those scripts, such as
+  微信 (WeChat), was shifted the same way on any language. Columns are now counted as winget counts them. Since 0.3.0.
+- **Some column titles winget prints were not recognised.** The Russian titles, the Spanish, Portuguese and Korean
+  title of the Source column, the Traditional Chinese ones, and the Korean ID and Available titles, which are two
+  words. On a Spanish, Portuguese or Russian winget the Uninstaller showed a version such as "1.2.3   winget" with no
+  source and removed an app winget knows through its registry entry instead, and on a Korean winget App Updates read
+  the installed version as the available one. Since 1.52.8.
+
 ## [1.130.63] - 2026-10-22
 
 **An app update or install that needs Windows restarted to finish now counts as done, and says to restart, instead of

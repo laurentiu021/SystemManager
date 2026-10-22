@@ -1824,6 +1824,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   line, or where a second table starts below it, without that table's heading
   and header lines. `WingetService`'s summary pattern holds winget's
   "{0} upgrades available." line in each of the eleven languages winget ships.
+  Column positions are display columns, counted as winget counts them: per text
+  element, two for an East Asian Wide or Fullwidth character (Unicode 15.0) and
+  one otherwise. Columns are found by the titles winget prints in each of its
+  languages, two-word Korean titles included.
 - `WingetFailure` — the one translation of winget outcomes into plain language:
   why an install or uninstall failed, whether an install found the app already
   there, and the missing-App-Installer sentence. `UpgradeWarning` is the one

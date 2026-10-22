@@ -358,6 +358,31 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
     public void SaveLastConfig(GamingProfile profile)
         => UpdateStore(store => store with { LastConfig = profile });
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Profile Export / Import used to write the imported file over this one itself: the imported session record taken
+    /// out, this PC's not put back, and outside the store's lock. Importing while game mode was on, or after a run that
+    /// left it on, deleted the only record SysManager undoes it from, and a Start or a save at the same moment could
+    /// write over the import or be written over by it (#2801). Only the configuration is taken from the import: the
+    /// session record in it describes the PC that exported it.
+    /// </remarks>
+    public bool ImportConfiguration(string json)
+    {
+        GamingProfileStore? imported;
+        try
+        {
+            imported = JsonSerializer.Deserialize<GamingProfileStore>(json);
+        }
+        catch (JsonException ex)
+        {
+            Log.Warning("Imported gaming profiles could not be read: {Error}", ex.Message);
+            return false;
+        }
+
+        if (imported is null || imported.SchemaVersion > CurrentSchemaVersion) return false;
+        return UpdateStore(store => store with { LastConfig = imported.LastConfig });
+    }
+
     public async Task<GamingRevertResult> RecoverPendingAsync(CancellationToken ct = default)
     {
         // Opportunistic and non-refusing, exactly as in RevertAsync: this is a revert of a session

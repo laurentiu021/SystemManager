@@ -50,6 +50,7 @@ public sealed class ProfileService
     private const string PrivacySectionFileName = "privacy-profile.json";
 
     private readonly IPrivacyService _privacy;
+    private readonly IGamingProfileService _gaming;
     private readonly string _localConfigDir;
     private readonly string _roamingConfigDir;
 
@@ -63,9 +64,14 @@ public sealed class ProfileService
     private enum Base { Local, Roaming }
 
     /// <summary>
-    /// The set of config files a profile carries — logical key, label, file name, which AppData base it
-    /// lives under, and an optional import sanitiser. The base MUST match the owning service or
-    /// export/import silently reads/writes the wrong location.
+    /// The key of the gaming section, which its own service writes on import: see <see cref="ApplySections"/>.
+    /// </summary>
+    private const string GamingSectionKey = "gaming";
+
+    /// <summary>
+    /// The set of config files a profile carries — logical key, label, file name, and which AppData base it
+    /// lives under. The base MUST match the owning service or export/import silently reads/writes the wrong
+    /// location.
     /// <para>What is DELIBERATELY absent matters as much as what is here. A profile is meant to move a
     /// user's choices to another PC, so anything that describes THIS machine is excluded on purpose:</para>
     /// <list type="bullet">
@@ -87,64 +93,23 @@ public sealed class ProfileService
     ///   first launch would open without saying what the app is.</item>
     /// </list>
     /// </summary>
-    private static readonly (string Key, string DisplayName, string FileName, Base Base,
-        Func<string, string?>? OnImport)[] Catalog =
+    private static readonly (string Key, string DisplayName, string FileName, Base Base)[] Catalog =
     [
-        ("theme", "Theme & appearance", "theme.json", Base.Roaming, null),        // ThemeService → Roaming
-        ("speedtest", "Speed-test history", "speedtest-history.json", Base.Local, null), // SpeedTestHistoryService → Local
-        ("updatecheck", "Update-check preference", "update-check.json", Base.Roaming, null), // UpdateCheckPreferenceService → Roaming
-        ("darkmode", "Dark-mode schedule", "darkmode-schedule.json", Base.Roaming, null), // WindowsThemeService → Roaming
-        ("gaming", "Gaming profiles", "gaming-profiles.json", Base.Local, StripActiveSession), // GamingProfileService → Local
-        ("volume", "Volume presets", "volume-presets.json", Base.Local, null),   // VolumePresetService → Local
-        ("closebehaviour", "Close-button behaviour", "close-preference.json", Base.Local, null), // ClosePreferenceService → Local
-        ("standby", "Standby-memory preference", "standby-preference.json", Base.Local, null), // StandbyPreferenceService → Local
+        ("theme", "Theme & appearance", "theme.json", Base.Roaming),        // ThemeService → Roaming
+        ("speedtest", "Speed-test history", "speedtest-history.json", Base.Local), // SpeedTestHistoryService → Local
+        ("updatecheck", "Update-check preference", "update-check.json", Base.Roaming), // UpdateCheckPreferenceService → Roaming
+        ("darkmode", "Dark-mode schedule", "darkmode-schedule.json", Base.Roaming), // WindowsThemeService → Roaming
+        (GamingSectionKey, "Gaming profiles", "gaming-profiles.json", Base.Local), // GamingProfileService → Local
+        ("volume", "Volume presets", "volume-presets.json", Base.Local),   // VolumePresetService → Local
+        ("closebehaviour", "Close-button behaviour", "close-preference.json", Base.Local), // ClosePreferenceService → Local
+        ("standby", "Standby-memory preference", "standby-preference.json", Base.Local), // StandbyPreferenceService → Local
         // AppIconService → Local. This is a consent bit, not a cache: it records whether the Bulk
         // Installer may fetch icons from the web, and it defaults to off. It was the only user
         // preference the app persists that a profile did not carry, so exporting on one PC and
         // importing on another silently reset the choice — the same shape as "updatecheck", which is
         // also a network-consent preference and has always been carried.
-        ("appicons", "App-icon fetching", "icon-fetch.json", Base.Local, null),
+        ("appicons", "App-icon fetching", "icon-fetch.json", Base.Local),
     ];
-
-    /// <summary>
-    /// Removes <c>ActiveSession</c> from an imported gaming-profiles file. That field is the crash-recovery
-    /// marker for a game session on the machine that exported it: carried over, this PC would offer to
-    /// "restore" tweaks it never applied, for a game that never ran here. The user's actual profiles — the
-    /// part they configured — are kept.
-    /// <para>Returns <c>null</c> to skip the section when the JSON cannot be parsed, rather than writing
-    /// something unreadable over a working file.</para>
-    /// </summary>
-    private static string? StripActiveSession(string json)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
-
-            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
-            using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions
-            {
-                Indented = true,
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            }))
-            {
-                writer.WriteStartObject();
-                foreach (var property in doc.RootElement.EnumerateObject())
-                {
-                    if (string.Equals(property.Name, "ActiveSession", StringComparison.OrdinalIgnoreCase))
-                        continue;
-                    property.WriteTo(writer);
-                }
-                writer.WriteEndObject();
-            }
-            return Encoding.UTF8.GetString(buffer.WrittenSpan);
-        }
-        catch (JsonException ex)
-        {
-            Log.Warning("Profile: gaming profiles section is not valid JSON, skipping it: {Error}", ex.Message);
-            return null;
-        }
-    }
 
     /// <summary>
     /// Creates the service. When <paramref name="configDir"/> is given (tests), BOTH bases
@@ -152,10 +117,12 @@ public sealed class ProfileService
     /// real Roaming/Local <c>SysManager</c> folders.
     /// </summary>
     /// <param name="privacy">Reads the privacy toggles the privacy section is built from and checked against.</param>
+    /// <param name="gaming">Takes an imported gaming section, so this PC's game mode record is kept.</param>
     /// <param name="configDir">The folder both bases resolve to, for tests; null for the real ones.</param>
-    public ProfileService(IPrivacyService privacy, string? configDir = null)
+    public ProfileService(IPrivacyService privacy, IGamingProfileService gaming, string? configDir = null)
     {
         _privacy = privacy;
+        _gaming = gaming;
         _localConfigDir = configDir ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _roamingConfigDir = configDir ?? Path.Combine(
@@ -163,9 +130,11 @@ public sealed class ProfileService
     }
 
     /// <summary>Test seam: distinct Local/Roaming bases to verify each section lands in the right one.</summary>
-    internal ProfileService(IPrivacyService privacy, string localConfigDir, string roamingConfigDir)
+    internal ProfileService(
+        IPrivacyService privacy, IGamingProfileService gaming, string localConfigDir, string roamingConfigDir)
     {
         _privacy = privacy;
+        _gaming = gaming;
         _localConfigDir = localConfigDir;
         _roamingConfigDir = roamingConfigDir;
     }
@@ -179,9 +148,8 @@ public sealed class ProfileService
     public IReadOnlyList<ConfigSection> AvailableSections()
     {
         List<ConfigSection> sections = [];
-        // The import sanitiser is irrelevant on the way out — a section is exported as the owning
-        // service wrote it, and only sanitised when it lands on another machine.
-        foreach (var (key, display, fileName, baseDir, _) in Catalog)
+        // A section is exported as the owning service wrote it.
+        foreach (var (key, display, fileName, baseDir) in Catalog)
         {
             var path = Path.Combine(DirFor(baseDir), fileName);
             if (!File.Exists(path)) continue;
@@ -347,20 +315,16 @@ public sealed class ProfileService
                 Log.Warning("Profile: skipping unknown config section '{Key}'", section.Key);
                 continue;
             }
-            // Sections that carry machine-specific state are sanitised before they land. A sanitiser
-            // returning null means "this content is not safe or not readable" — skip rather than write
-            // something the owning service would choke on or act wrongly upon.
-            var content = section.Json;
-            if (known.OnImport is { } sanitize)
+            // The gaming store holds this PC's game mode session record beside the configuration, and only its
+            // service can keep the one while it takes the other, under the lock its other writes take (#2801).
+            if (known.Key == GamingSectionKey)
             {
-                if (sanitize(content) is not { } cleaned)
-                {
-                    Log.Warning("Profile: skipping section '{Key}' — its content did not survive the "
-                        + "import check", section.Key);
-                    continue;
-                }
-                content = cleaned;
+                if (_gaming.ImportConfiguration(section.Json)) applied++;
+                else Log.Warning("Profile: skipping section '{Key}' — the gaming store did not take it", section.Key);
+                continue;
             }
+
+            var content = section.Json;
 
             // Always use the catalog's own file name + base — never a path from the
             // (untrusted) profile — and write to the SAME folder the owning service reads.

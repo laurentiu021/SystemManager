@@ -852,7 +852,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             // Two runners, matching what DI hands it: IPowerShellRunner is Transient so the service's
             // stream and the one SFC/DISM drive directly cannot cross-contaminate each other.
             [typeof(SystemFixesViewModel)] = new SystemFixesViewModel(new SystemFixService(new PowerShellRunner()), new PowerShellRunner()),
-            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService(privacy), privacyChoices, designerNavigation),
+            [typeof(ProfileViewModel)] = new ProfileViewModel(new ProfileService(privacy, gamingProfiles), privacyChoices, designerNavigation),
             [typeof(BrowserCleanerViewModel)] = new BrowserCleanerViewModel(new BrowserCleanerService(), new BrowserExtensionService()),
             [typeof(PrivacyMonitorViewModel)] = new PrivacyMonitorViewModel(new PrivacyMonitorService()),
             [typeof(BootAnalyzerViewModel)] = new BootAnalyzerViewModel(bootAnalyzer, designerNavigation),

@@ -2306,7 +2306,9 @@ offers, "rate us" prompts:
   your choices: the undo baselines behind Performance Mode and Environment Variables,
   the Settings Watchdog's record of this machine's registry, the service-startup ledger,
   and the local activity log. Carrying those to another PC would restore it to settings
-  it was never on, or report differences that are only "a different computer"
+  it was never on, or report differences that are only "a different computer". Importing
+  gaming profiles takes only their settings: a game mode session still on here, or left
+  on by an earlier run, keeps the record SysManager undoes it from
 - An import writes only SysManager's own config files. It keeps no copy of the settings it
   overwrites, so export your own profile first if you may want them back. A privacy change goes
   through the Privacy & Telemetry tab's own Apply, with its confirmation and restore point

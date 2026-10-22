@@ -1570,7 +1570,8 @@ Key services:
   left on — and whether undoing it needs administrator rights — from none and from a record that could not be
   read or used, and `RecoverPendingAsync` refuses a record it cannot read rather than report it reverted
   (#1525). Every read-modify-write of
-  it holds `_storeLock`, and never across an await. Every revert path — Stop, the
+  it holds `_storeLock`, and never across an await; `ImportConfiguration`, which takes a profile import's
+  configuration and keeps this PC's session record, is one of them (#2801). Every revert path — Stop, the
   automatic revert when the game exits, the end of a session whose game closed while it was
   starting, and recovery — returns a `GamingRevertResult` naming
   the steps whose undo failed, so the tab never announces a restore it did not get. The
@@ -1638,7 +1639,9 @@ Key services:
   checked against the known toggle keys, for the Privacy & Telemetry tab to stage.
   A profile carrying it is format 2, one without it stays format 1 so an older
   build still imports it, and `Deserialize` drops a section with no key or no
-  content, where the import used to throw.
+  content, where the import used to throw. The gaming section is handed to
+  `IGamingProfileService.ImportConfiguration` rather than written over the store, which holds this PC's game
+  mode session record beside the configuration (#2801).
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).

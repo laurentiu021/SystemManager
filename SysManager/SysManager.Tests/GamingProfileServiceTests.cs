@@ -392,6 +392,102 @@ public class GamingProfileServiceTests
         finally { DeleteStore(path); }
     }
 
+    // ── An imported configuration (#2801) ───────────────────────────────
+    //
+    // Profile Export / Import wrote the imported store over this one itself, without this PC's session record and
+    // outside the store's lock: importing while game mode was on, or after a run left it on, lost the only record
+    // SysManager undoes it from.
+
+    private static string ImportedStore(GamingProfile lastConfig, bool withItsOwnSession = true) =>
+        SerializePendingStore(new GamingProfileStore
+        {
+            SchemaVersion = GamingProfileService.CurrentSchemaVersion,
+            LastConfig = lastConfig,
+            ActiveSession = withItsOwnSession
+                ? new GamingSessionRecord(new GamingProfile(), new GamingSnapshot())
+                : null,
+        });
+
+    [Fact]
+    public void ImportConfiguration_KeepsThisPCsSessionRecord_AndTakesTheConfiguration()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-import-{Guid.NewGuid():N}.json");
+        try
+        {
+            // This PC's session paused search indexing, the exporting PC's did nothing: which one is kept shows.
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                SchemaVersion = GamingProfileService.CurrentSchemaVersion,
+                LastConfig = new GamingProfile { SilenceNotifications = true },
+                ActiveSession = new GamingSessionRecord(
+                    new GamingProfile { PauseSearchIndexing = true }, new GamingSnapshot()),
+            }));
+            var svc = StoreOnlyService(path);
+
+            Assert.True(svc.ImportConfiguration(ImportedStore(new GamingProfile { FinestTimerResolution = true })));
+
+            Assert.Equal(new GamingProfile { FinestTimerResolution = true }, svc.LoadLastConfig());
+            Assert.Equal(new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: true), svc.ReadPendingRecovery());
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void ImportConfiguration_NeverBringsTheExportingPCsSession()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-import-{Guid.NewGuid():N}.json");
+        try
+        {
+            var svc = StoreOnlyService(path);
+
+            Assert.True(svc.ImportConfiguration(ImportedStore(new GamingProfile { FinestTimerResolution = true })));
+
+            Assert.Equal(PendingRecoveryKind.None, svc.ReadPendingRecovery().Kind);
+            Assert.True(svc.LoadLastConfig().FinestTimerResolution);
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Theory]
+    [InlineData("{ not json ][")]
+    [InlineData("null")]
+    [InlineData("{\"SchemaVersion\":99,\"LastConfig\":{\"FinestTimerResolution\":true}}")]   // a newer SysManager
+    public void ImportConfiguration_ThatCannotBeUsed_WritesNothing(string imported)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-import-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile { SilenceNotifications = true }));
+            var before = File.ReadAllBytes(path);
+
+            Assert.False(StoreOnlyService(path).ImportConfiguration(imported));
+
+            Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { DeleteStore(path); }
+    }
+
+    [Fact]
+    public void ImportConfiguration_WhenTheStoreCannotBeRead_WritesNothing_SoTheRecoveryRecordSurvives()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-import-held-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, PendingStore(new GamingProfile { SilenceNotifications = true }));
+            var before = File.ReadAllBytes(path);
+            var svc = StoreOnlyService(path);
+
+            bool taken;
+            using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Delete))
+                taken = svc.ImportConfiguration(ImportedStore(new GamingProfile { FinestTimerResolution = true }));
+
+            Assert.False(taken);
+            Assert.Equal(before, File.ReadAllBytes(path));
+            Assert.Equal(PendingRecoveryKind.LeftOn, StoreOnlyService(path).ReadPendingRecovery().Kind);
+        }
+        finally { DeleteStore(path); }
+    }
+
     [Fact]
     public void TheRecoveryQuestion_IsClaimedOnceARun()
     {

@@ -232,6 +232,13 @@ public partial class App : Application
         // Fire-and-forget is intentional — the listener loop runs for the app
         // lifetime and is cancelled via _pipeCts on OnExit.
         _ = StartPipeListenerAsync();
+
+        // Built here, last, rather than through App.xaml's StartupUri: WPF loads that once OnStartup returns
+        // without asking whether Shutdown was called, so the update applier and a second copy, which both end
+        // above with Shutdown(), built the window, and its view model, finding no container, built every tab
+        // against the real machine, from a copy about to close (#2820).
+        MainWindow = new MainWindow();
+        MainWindow.Show();
     }
 
     /// <summary>

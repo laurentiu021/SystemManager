@@ -5359,6 +5359,50 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The main window is built by a start-up that goes on, after the container, and never by one that ends in
+    /// <c>Shutdown()</c> (#2820).
+    /// </summary>
+    /// <remarks>
+    /// App.xaml named the window as its <c>StartupUri</c>, and WPF loads that once <c>OnStartup</c> returns without
+    /// asking whether <c>Shutdown</c> was called. The update applier and a second copy handing over to the running
+    /// one both end <c>OnStartup</c> with <c>Shutdown()</c> before the container exists, so each built the window, and
+    /// its view model, finding no container, built every tab against the real machine: the Dark Mode schedule was
+    /// applied again and winget ran, from a copy about to close. So App.xaml names no <c>StartupUri</c>, and
+    /// <c>OnStartup</c> builds the window itself, once, after the container, with a <c>return</c> right after every
+    /// <c>Shutdown()</c> before it. Comments and literals are blanked first, so prose cannot stand in for code.
+    /// </remarks>
+    [Fact]
+    public void TheMainWindow_IsBuiltOnlyByAStartupThatGoesOn()
+    {
+        Assert.Null(XDocument.Load(TestPaths.AppFile("App.xaml")).Root!.Attribute("StartupUri"));
+
+        var body = SourceBraces.CodeOnly(MethodBody(File.ReadAllText(TestPaths.AppFile("App.xaml.cs")), "OnStartup"));
+        Assert.True(body.Length > 500, $"OnStartup's body is only {body.Length} characters, so it was not found.");
+
+        var container = body.IndexOf(".BuildServiceProvider()", StringComparison.Ordinal);
+        var window = body.IndexOf("new MainWindow()", StringComparison.Ordinal);
+        Assert.True(container >= 0, "OnStartup no longer builds the container, so this guard reads the wrong method.");
+        Assert.True(window > container,
+            "OnStartup does not build the main window after the container, so the window's view model takes its "
+            + "no-container path and builds every tab itself.");
+        Assert.Equal(window, body.LastIndexOf("new MainWindow()", StringComparison.Ordinal));
+
+        var shutdowns = StartupShutdown().Matches(body).ToList();
+        Assert.True(shutdowns.Count >= 2,
+            $"only {shutdowns.Count} Shutdown() call(s) were found in OnStartup, out of 2 measured: the update "
+            + "applier's and the second copy's.");
+        foreach (var shutdown in shutdowns)
+        {
+            Assert.True(shutdown.Index < window, "OnStartup calls Shutdown() after it has built the window.");
+            Assert.StartsWith("return;", body[(shutdown.Index + shutdown.Length)..].TrimStart(), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>An <c>Application.Shutdown()</c> call with no arguments, as a statement.</summary>
+    [GeneratedRegex(@"(?<![\w.])Shutdown\(\);", RegexOptions.CultureInvariant)]
+    private static partial Regex StartupShutdown();
+
+    /// <summary>
     /// The text of a method from its signature to its closing brace, by brace matching.
     /// </summary>
     /// <remarks>

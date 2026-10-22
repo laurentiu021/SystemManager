@@ -10166,7 +10166,7 @@ public partial class ArchitectureTests
         foreach (var required in new[]
                  {
                      "workflow_run:", "workflows: [Release]", "cron: '0 7 * * *'",
-                     "for wf in auto-release.yml release.yml; do",
+                     "for wf in auto-release.yml release.yml; do", "actions: read",
                      "--paginate --slurp", "\"SysManager-\\($tag).exe\"",
                      "releases/latest", "sha256sum", "Expected SHA256", ".digest", "gh attestation verify",
                  })

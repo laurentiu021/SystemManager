@@ -24,6 +24,8 @@ on:
 
 permissions:
   contents: read
+  # The first step lists the Release and Auto-release runs that are still going.
+  actions: read
   # gh attestation verify reads the release's provenance from the attestations API.
   attestations: read
 

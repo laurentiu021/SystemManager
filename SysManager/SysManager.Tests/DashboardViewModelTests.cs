@@ -4,6 +4,7 @@
 
 using System.IO;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Models;
 using SysManager.Services;
 using SysManager.ViewModels;
@@ -257,6 +258,34 @@ public class DashboardViewModelTests
     {
         var vm = NewVm();
         Assert.NotNull(vm.Drives);
+    }
+
+    /// <summary>
+    /// The storage card lists each fixed drive that is ready, with the space used and its size, and a drive that
+    /// cannot be read leaves the others on it (#2802).
+    /// </summary>
+    /// <remarks>
+    /// The card held every drive in one <c>try</c> that caught only <see cref="IOException"/>: one drive that threw
+    /// it emptied the card, and an <see cref="UnauthorizedAccessException"/> ended the Dashboard's start.
+    /// </remarks>
+    [Theory]
+    [InlineData(typeof(IOException))]                  // emptied the card
+    [InlineData(typeof(UnauthorizedAccessException))]  // was not caught, and ended the Dashboard's start
+    public void TheStorageCard_ListsEveryReadableFixedDrive_WithItsUsedSpace(Type failure)
+    {
+        const long Gib = 1L << 30;
+        static DriveProbe Drive(string name, DriveType type, Func<long> total, long free) =>
+            new(name, type, () => true, total, () => free, () => "NTFS");
+
+        var usage = DashboardViewModel.DriveUsage(
+        [
+            Drive(@"C:\", DriveType.Fixed, () => 100 * Gib, 40 * Gib),
+            Drive(@"D:\", DriveType.CDRom, () => 4 * Gib, 0),
+            Drive(@"E:\", DriveType.Fixed, () => throw (Exception)Activator.CreateInstance(failure)!, 0),
+            Drive(@"G:\", DriveType.Fixed, () => 50 * Gib, 25 * Gib),
+        ]);
+
+        Assert.Equal([new("C:", 60, 100), new DriveUsageInfo("G:", 25, 50)], usage);
     }
 
     [Fact]

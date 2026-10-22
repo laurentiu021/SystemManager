@@ -34,11 +34,12 @@ public sealed class FixedDriveService
         // Primary source: DriveInfo (fast, always works, no admin).
         List<FixedDrive> drives = [];
 
-        // Filter only on DriveType/IsReady here — these are backed by cached kernel
-        // data and do not hit the volume. The DriveFormat check (which opens the
-        // volume handle and CAN throw IOException on BitLocker-locked/transiently-busy
-        // drives) is deferred to inside the per-drive try/catch below, so one flaky
-        // volume cannot abort enumeration of all remaining drives.
+        // Filter only on DriveType/IsReady here, in that order: DriveType does not touch the
+        // volume, so IsReady, which opens its root, is asked only of a fixed drive. Neither
+        // throws. The DriveFormat check (which opens the volume handle and CAN throw
+        // IOException on BitLocker-locked/transiently-busy drives) is deferred to inside the
+        // per-drive try/catch below, so one flaky volume cannot abort enumeration of all
+        // remaining drives.
         var fixedReady = DriveInfo.GetDrives()
             .Where(di => di.DriveType == DriveType.Fixed && di.IsReady);
 
@@ -51,19 +52,11 @@ public sealed class FixedDriveService
             // instead of aborting enumeration of the rest.
             try
             {
-                var format = (di.DriveFormat ?? string.Empty).ToUpperInvariant();
-                if (format is not ("NTFS" or "REFS"))
+                var format = di.DriveFormat ?? string.Empty;
+                if (format.ToUpperInvariant() is not ("NTFS" or "REFS"))
                     continue;
 
-                var letter = di.Name.TrimEnd('\\', '/');
-                drives.Add(new FixedDrive(
-                    Letter: letter,
-                    Label: string.IsNullOrWhiteSpace(di.VolumeLabel) ? letter : di.VolumeLabel,
-                    FileSystem: di.DriveFormat ?? "NTFS",
-                    SizeGB: Math.Round(di.TotalSize / 1024d / 1024d / 1024d, 0),
-                    FreeGB: Math.Round(di.AvailableFreeSpace / 1024d / 1024d / 1024d, 0),
-                    MediaType: "",
-                    BusType: ""));
+                drives.Add(Describe(di.Name, di.VolumeLabel, format, di.TotalSize, di.AvailableFreeSpace));
             }
             catch (IOException ex) { Log.Debug(ex, "Skipped drive that became unavailable mid-enumeration"); }
             catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Skipped drive — access denied mid-enumeration"); }
@@ -145,6 +138,29 @@ public sealed class FixedDriveService
         }
 
         return drives;
+    }
+
+    /// <summary>
+    /// The record for one volume, from what its <see cref="DriveInfo"/> answered: the letter without its separator,
+    /// the label or the letter when there is none, and the sizes in gigabytes as read.
+    /// </summary>
+    /// <remarks>
+    /// The sizes are not rounded (#2802). The Health Score's free-space floors compare them, and rounded to whole
+    /// gigabytes 9.7 GB free read as 10 and escaped the floor under 10, and 19.7 read as 20 and escaped the one under
+    /// 20, so on a drive whose percentage looked healthy it drew no recommendation to free space. What shows a size
+    /// rounds it for display.
+    /// </remarks>
+    internal static FixedDrive Describe(string name, string? label, string fileSystem, long totalBytes, long freeBytes)
+    {
+        var letter = name.TrimEnd('\\', '/');
+        return new FixedDrive(
+            Letter: letter,
+            Label: string.IsNullOrWhiteSpace(label) ? letter : label,
+            FileSystem: fileSystem,
+            SizeGB: totalBytes / 1024d / 1024d / 1024d,
+            FreeGB: freeBytes / 1024d / 1024d / 1024d,
+            MediaType: "",
+            BusType: "");
     }
 
     /// <summary>

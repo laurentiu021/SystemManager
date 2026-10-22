@@ -227,6 +227,8 @@ to scroll.
   alerts (checked at launch, on Scan system and after Update All Apps; a check that
   could not run is amber, never green), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
+  The storage card reads the drives off the UI thread through `DriveProbe.ReadFixed`, which asks only a fixed drive
+  whether it is ready and leaves out one that cannot be read (#2802).
   The launch's round of alerts asks winget for app updates only when About's switch allows it, read
   through the required `UpdateCheckPreferenceService` parameter (#2613); otherwise the alert is
   `AppUpdatesNotCheckedAtStartup`, `AlertSeverity.Neutral` (a grey dot) with an "Open App Updates"
@@ -324,7 +326,8 @@ to scroll.
   `LogsArrival`'s reach (`RangeCovering`), and the severities, clears the search box and loads once; a load
   already running is stopped and `RefreshAsync` loads the arrival's list next (#2887).
 - `AboutViewModel` — version info, auto-update, release history. BUILD is `BuildCommitOf` the informational
-  version, the commit the build stamps after its '+', rather than the exe's file date (#2611).
+  version, the commit the build stamps after its '+', rather than the exe's file date (#2611). The environment
+  info's drive lines are `StorageLines`, read through `DriveProbe.ReadFixed` (#2802).
 - `WindowsFeaturesViewModel` — list, enable, disable Windows optional features. Takes the shared `ISessionRestorePoint` snapshot before the first toggle of the session — after the confirmation and after the elevation refusal, so neither declining nor being unelevated spends the one point Windows grants per day. After every change it reads the feature back through `ReadFeatureAsync` and writes the row from that, says DISM's reason for a refusal through `DescribeFailure`, and turns the switch back with `WindowsFeature.ResetSwitch` whenever the change did not happen (#2834, #2739). Escape and Cancel stop only a scan, while `IsScanning` is set: stopping a change ended DISM part-way. Before a change it asks `IFeatureParentsService` what the feature needs, and the confirmation names what turning it on turns on with it, or what stays on when it is turned off; after turning one on, those rows are written from DISM's answer.
 - `AppAlertsViewModel` — monitors new app installations via FileSystemWatcher + registry. Its detections are kept
   in `IAppAlertHistory`, read and written on the UI thread as the list changes, so they outlive the session and
@@ -643,7 +646,8 @@ Key services:
   `SanitizePath` was called at 15 of 75 path-logging sites, so exposure depended on which
   service happened to fail, and no call-site fix can reach a path inside exception text —
   Serilog renders that separately from the message properties.
-- `FixedDriveService` — enumerate fixed NTFS/ReFS volumes.
+- `FixedDriveService` — enumerate fixed NTFS/ReFS volumes. `Describe` builds each record with the sizes as read,
+  not rounded, since the Health Score's free-space floors compare them (#2802).
 - `DeepCleanupService` — scan-first safe cleanup (vendor caches, gaming
   launcher caches, Windows caches). Per-file try/catch so locked files
   are skipped, not forced. The Delivery Optimization bucket (`IsDeliveryOptimizationCache`) is the one
@@ -1887,6 +1891,9 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
 - `EtaCalculator` — estimates time remaining for long-running operations.
 - `PendingReboot` — whether Windows waits for a restart and for what: component servicing (a Windows feature
   change), Windows Update, and pending file renames. The one check the Dashboard and Windows Update share (#2802).
+- `DriveProbe` — a drive as `DriveInfo` answers for it, behind delegates. `ReadFixed` reads each fixed drive that
+  is ready, asking the type first and catching each drive on its own, for the Dashboard's storage card and About's
+  environment info (#2802).
 - `KnownFolders` — resolves Windows Known Folder paths via shell API. `TryGetPath` resolves
   any known folder by its ID, and returns null for one Windows does not resolve.
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool

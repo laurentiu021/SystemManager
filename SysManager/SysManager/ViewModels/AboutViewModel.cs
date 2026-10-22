@@ -684,8 +684,8 @@ public sealed partial class AboutViewModel : ViewModelBase
             // Storage
             try
             {
-                foreach (var drive in DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady))
-                    sb.AppendLine($"Disk {drive.Name.TrimEnd('\\')} {drive.TotalSize / 1024.0 / 1024.0 / 1024.0:F0} GB total, {drive.AvailableFreeSpace / 1024.0 / 1024.0 / 1024.0:F0} GB free ({drive.DriveFormat})");
+                foreach (var line in StorageLines(DriveInfo.GetDrives().Select(DriveProbe.Of)))
+                    sb.AppendLine(line);
             }
             catch (IOException ex) { Log.Debug("Storage info unavailable: {Error}", ex.Message); }
             catch (UnauthorizedAccessException ex) { Log.Debug("Storage info access denied: {Error}", ex.Message); }
@@ -725,6 +725,15 @@ public sealed partial class AboutViewModel : ViewModelBase
             return $"Couldn't collect environment info: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// The environment info's line for each fixed drive that is ready: its size, its free space and its format. One
+    /// that cannot be read is left out and the rest are listed; the first that threw used to end the list (#2802).
+    /// </summary>
+    internal static List<string> StorageLines(IEnumerable<DriveProbe> drives) =>
+        DriveProbe.ReadFixed(drives, drive =>
+            $"Disk {drive.Name.TrimEnd('\\')} {drive.TotalSize() / 1024.0 / 1024.0 / 1024.0:F0} GB total, "
+            + $"{drive.FreeSpace() / 1024.0 / 1024.0 / 1024.0:F0} GB free ({drive.Format()})");
 
     private static string DescribeWindows()
     {

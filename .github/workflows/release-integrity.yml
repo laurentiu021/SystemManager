@@ -11,16 +11,20 @@ name: Release integrity
 # abandoned along with everything else. A separate run on its own trigger is the only shape that
 # notices.
 #
-# Daily, and once each release run has ended, whichever way it ended. Releases go out several times a
-# day, and the in-app updater and every README download link read the Latest release, so a broken
-# update path waited up to a week for the Monday run (#2805).
+# Daily, and once each release run is done with its release, whichever way it went: release.yml's last
+# job starts this. Releases go out several times a day, and the in-app updater and every README download
+# link read the Latest release, so a broken update path waited up to a week for the Monday run (#2805).
+# A workflow_run trigger on Release never fired, because auto-release dispatches the release with
+# GITHUB_TOKEN, and GitHub starts no run from an event that token caused, apart from a dispatch.
 on:
   schedule:
     - cron: '0 7 * * *'   # every day at 07:00 UTC
-  workflow_run:
-    workflows: [Release]
-    types: [completed]
   workflow_dispatch:
+    inputs:
+      after_run:
+        description: "The Release run that started this check, which the wait below does not wait for"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -44,18 +48,25 @@ jobs:
 
       # A release in flight has its CHANGELOG entry on main before auto-release pushes its tag, its tag
       # before its release, and its release before its assets, so checking then reports a gap that is
-      # about to close. The Release run that ends it starts this workflow again.
+      # about to close. The Release run that ends it starts this workflow again, from its last job, so
+      # that run is still going here and is the one run not waited for.
       - name: Wait out a release that is still publishing
         id: busy
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          AFTER_RUN: ${{ inputs.after_run }}
         run: |
           set -euo pipefail
+          # A dispatch input, so only a run id counts.
+          if [[ -n "${AFTER_RUN}" && ! "${AFTER_RUN}" =~ ^[0-9]+$ ]]; then
+            echo "::error::after_run is not a run id."
+            exit 1
+          fi
           running=0
           for wf in auto-release.yml release.yml; do
-            n=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow "${wf}" --limit 20 \
-              --json status --jq '[.[] | select(.status != "completed")] | length')
+            n=$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow "${wf}" --limit 20 --json databaseId,status \
+              --jq "[.[] | select(.status != \"completed\" and (.databaseId | tostring) != \"${AFTER_RUN}\")] | length")
             echo "${wf} runs still going: ${n}"
             running=$((running + n))
           done

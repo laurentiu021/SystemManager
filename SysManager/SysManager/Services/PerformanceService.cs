@@ -5,6 +5,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Text.Json;
@@ -36,6 +37,7 @@ public sealed partial class PerformanceService : IDisposable
     private readonly Func<System.Diagnostics.Process[]> _processes;
     private readonly Func<System.Diagnostics.Process, bool> _trimWorkingSet;
     private readonly Func<string, RecordedAdapter> _findAdapter;
+    private readonly Func<IReadOnlySet<string>?> _presentAdapters;
     private readonly Func<bool, (bool Found, bool Ok)> _writeGpu;
     private readonly Action<bool> _setUiEffects;
     private readonly Action<bool> _setGameMode;
@@ -65,6 +67,10 @@ public sealed partial class PerformanceService : IDisposable
     internal const string GameConfigStoreKey = @"System\GameConfigStore";
     internal const string GpuClassRoot = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
 
+    // The display-adapter device class, the last part of GpuClassRoot, which a present adapter's Driver value names
+    // before its subkey.
+    private const string DisplayClass = "{4d36e968-e325-11ce-bfc1-08002be10318}";
+
     // ── P/Invoke for visual effects ──
     private const uint SPI_GETUIEFFECTS = 0x103E;
     private const uint SPI_SETUIEFFECTS = 0x103F;
@@ -92,7 +98,8 @@ public sealed partial class PerformanceService : IDisposable
             setUiEffects: SetUiEffects,
             setGameMode: SetGameMode,
             setXboxGameBar: SetXboxGameBar,
-            restoreGpu: SetGpuMaxPerformance)
+            restoreGpu: SetGpuMaxPerformance,
+            presentAdapters: PresentAdapterKeys)
     {
     }
 
@@ -121,6 +128,10 @@ public sealed partial class PerformanceService : IDisposable
     /// </param>
     /// <param name="setGameMode">The Game Mode write a restore makes; nothing unless given, as above.</param>
     /// <param name="setXboxGameBar">The Game Bar and Game DVR write a restore makes; nothing unless given.</param>
+    /// <param name="presentAdapters">
+    /// The display-class subkeys of the adapters in the PC, null when not known. Unless given it is not known, so a
+    /// test reads no WMI and the NVIDIA key is the first one the registry names, as it was.
+    /// </param>
     /// <param name="restoreGpu">
     /// The write that puts the recorded NVIDIA adapter's setting back, by its subkey. Unless given it writes nothing
     /// and says so, so a restore that reaches a card a test did not provide for fails rather than writing this PC's.
@@ -136,14 +147,16 @@ public sealed partial class PerformanceService : IDisposable
         Action<bool>? setUiEffects = null,
         Action<bool>? setGameMode = null,
         Action<bool, bool>? setXboxGameBar = null,
-        Func<string, bool, bool>? restoreGpu = null)
+        Func<string, bool, bool>? restoreGpu = null,
+        Func<IReadOnlySet<string>?>? presentAdapters = null)
     {
         _ps = ps;
         _restorePoints = restorePoints;
         _snapshotPath = Path.Combine(configDir, "performance-snapshot.json");
         _processes = processes ?? (() => []);
         _trimWorkingSet = trimWorkingSet ?? TrimWorkingSet;
-        _findAdapter = findAdapter ?? FindRecordedAdapter;
+        _presentAdapters = presentAdapters ?? (() => null);
+        _findAdapter = findAdapter ?? (subKey => FindRecordedAdapter(subKey, ReadAdapterNames, _presentAdapters));
         _writeGpu = writeGpu ?? (_ => (Found: false, Ok: false));
         _setUiEffects = setUiEffects ?? (_ => { });
         _setGameMode = setGameMode ?? (_ => { });
@@ -182,7 +195,7 @@ public sealed partial class PerformanceService : IDisposable
     public async Task<OriginalSnapshot> TakeSnapshotAsync(CancellationToken ct = default)
     {
         var (name, guid) = await GetActivePlanAsync(ct).ConfigureAwait(false);
-        var nvidiaKey = FindNvidiaSubKey();
+        var nvidiaKey = FindNvidiaSubKey(_presentAdapters());
 
         return new OriginalSnapshot(
             PowerPlanGuid: guid,
@@ -380,7 +393,7 @@ public sealed partial class PerformanceService : IDisposable
         profile.XboxGameBarOn = ReadXboxGameBarEnabled();
         profile.XboxGameDvrOn = ReadXboxGameDvrEnabled();
 
-        var nvidiaKey = FindNvidiaSubKey();
+        var nvidiaKey = FindNvidiaSubKey(_presentAdapters());
         profile.HasNvidiaGpu = nvidiaKey is not null;
         if (nvidiaKey is not null)
         {
@@ -678,37 +691,130 @@ public sealed partial class PerformanceService : IDisposable
     /// Scans 0000, 0001, 0002, ... and checks DriverDesc/ProviderName
     /// for "NVIDIA". Returns null if no NVIDIA GPU found.
     /// </summary>
-    internal static string? FindNvidiaSubKey()
+    internal static string? FindNvidiaSubKey() => FindNvidiaSubKey(PresentAdapterKeys());
+
+    /// <summary><see cref="FindNvidiaSubKey()"/> among the adapters <paramref name="present"/> names.</summary>
+    internal static string? FindNvidiaSubKey(IReadOnlySet<string>? present)
     {
         try
         {
             using var classRoot = Registry.LocalMachine.OpenSubKey(GpuClassRoot);
-            if (classRoot is null) return null;
+            return classRoot is null ? null : FindNvidiaSubKey(classRoot.GetSubKeyNames(), ReadAdapterNames, present);
+        }
+        catch (SecurityException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
 
-            foreach (var subName in classRoot.GetSubKeyNames().Where(s => int.TryParse(s, out _)))
+    /// <summary>
+    /// The first of <paramref name="subKeys"/> whose names mention NVIDIA, among the adapters in the PC when
+    /// <paramref name="present"/> says which those are, and among every key when it is null.
+    /// </summary>
+    /// <remarks>
+    /// Windows keeps a removed card's key until the device is uninstalled, and it sorts before its replacement's, so
+    /// after a GPU upgrade, or a move from NVIDIA to another maker, the first key naming NVIDIA was the card taken out.
+    /// The tab showed it as detected, and wrote its setting, which needs a restart, where no running driver reads it
+    /// (#2836).
+    /// </remarks>
+    internal static string? FindNvidiaSubKey(
+        IEnumerable<string> subKeys, Func<string, (string DriverDesc, string Provider)?> readNames,
+        IReadOnlySet<string>? present)
+    {
+        foreach (var subName in subKeys.Where(s => int.TryParse(s, out _)))
+        {
+            if (present is not null && !present.Contains(subName)) continue;
+            try
             {
-                try
+                if (readNames(subName) is { } names
+                    && (names.DriverDesc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
+                        || names.Provider.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)))
                 {
-                    using var sub = classRoot.OpenSubKey(subName);
-                    if (sub is null) continue;
-
-                    var driverDesc = sub.GetValue("DriverDesc")?.ToString() ?? "";
-                    var provider = sub.GetValue("ProviderName")?.ToString() ?? "";
-
-                    if (driverDesc.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase)
-                        || provider.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return subName;
-                    }
+                    return subName;
                 }
-                catch (SecurityException) { /* skip inaccessible subkeys */ }
-                catch (UnauthorizedAccessException) { /* skip inaccessible subkeys */ }
+            }
+            catch (SecurityException) { /* skip inaccessible subkeys */ }
+            catch (UnauthorizedAccessException) { /* skip inaccessible subkeys */ }
+        }
+        return null;
+    }
+
+    /// <summary>How long the read of the adapters in the PC may take: it bounds a WMI service that hangs.</summary>
+    private static readonly TimeSpan AdapterReadTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The display-class subkeys of the adapters in the PC now, or null when they could not be read.
+    /// </summary>
+    /// <remarks>
+    /// <c>Win32_VideoController</c> lists only the adapters that are present, and each one's device key names its class
+    /// subkey in its <c>Driver</c> value.
+    /// </remarks>
+    internal static IReadOnlySet<string>? PresentAdapterKeys()
+    {
+        List<string> devices = [];
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                new ManagementScope(@"\\.\root\cimv2"),
+                new ObjectQuery("SELECT PNPDeviceID FROM Win32_VideoController"),
+                new System.Management.EnumerationOptions
+                {
+                    Timeout = AdapterReadTimeout,
+                    ReturnImmediately = true,
+                    Rewindable = false,
+                });
+            using var collection = searcher.Get();
+            foreach (ManagementObject mo in collection)
+            {
+                using (mo)
+                {
+                    if (mo["PNPDeviceID"] is string device && device.Length > 0) devices.Add(device);
+                }
             }
         }
-        catch (SecurityException) { /* registry not accessible */ }
-        catch (UnauthorizedAccessException) { /* registry not accessible */ }
+        catch (ManagementException ex) { Log.Debug("Display adapters unreadable: {Error}", ex.Message); return null; }
+        catch (COMException ex) { Log.Debug("Display adapters WMI COM error: {Error}", ex.Message); return null; }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Display adapters access denied: {Error}", ex.Message);
+            return null;
+        }
 
-        return null;
+        return PresentAdapterKeys(devices, ReadDeviceDriver);
+    }
+
+    /// <summary>
+    /// The class subkeys the drivers of <paramref name="devices"/> name, or null when none names one: a PC always has a
+    /// display adapter, so an empty answer is a read that did not work, not a PC without a graphics card.
+    /// </summary>
+    internal static IReadOnlySet<string>? PresentAdapterKeys(
+        IEnumerable<string> devices, Func<string, string?> readDriver)
+    {
+        HashSet<string> keys = new(StringComparer.OrdinalIgnoreCase);
+        foreach (var device in devices)
+        {
+            try
+            {
+                if (ClassSubKeyOf(readDriver(device)) is { } subKey) keys.Add(subKey);
+            }
+            catch (SecurityException) { /* skip a device key that cannot be read */ }
+            catch (UnauthorizedAccessException) { /* skip a device key that cannot be read */ }
+            catch (IOException) { /* skip a device key that cannot be read */ }
+        }
+        return keys.Count == 0 ? null : keys;
+    }
+
+    /// <summary>The display-class subkey a device's <c>Driver</c> value names, or null for another class.</summary>
+    internal static string? ClassSubKeyOf(string? driver)
+    {
+        if (driver is null || !driver.StartsWith(DisplayClass + @"\", StringComparison.OrdinalIgnoreCase)) return null;
+        var subKey = driver[(DisplayClass.Length + 1)..];
+        return NvidiaSubKeyRegex().IsMatch(subKey) ? subKey : null;
+    }
+
+    // The Driver value of a device's key, which names its class and subkey.
+    private static string? ReadDeviceDriver(string device)
+    {
+        using var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Enum\{device}");
+        return key?.GetValue("Driver") as string;
     }
 
     /// <summary>Read the NVIDIA GPU friendly name from DriverDesc.</summary>
@@ -789,15 +895,28 @@ public sealed partial class PerformanceService : IDisposable
     /// to write its setting back to, and a restore that stopped there could never finish. One whose key could not be
     /// read may still be there, and leaving it out would lose its setting for good.
     /// </remarks>
-    internal static RecordedAdapter FindRecordedAdapter(string subKey) => FindRecordedAdapter(subKey, ReadAdapterNames);
+    internal static RecordedAdapter FindRecordedAdapter(string subKey) =>
+        FindRecordedAdapter(subKey, ReadAdapterNames, PresentAdapterKeys);
 
     /// <summary>
     /// <see cref="FindRecordedAdapter(string)"/>, with the read of the adapter's key a parameter, so that a test can
     /// drive every answer — a read that fails among them — without the registry of the PC running it.
     /// </summary>
     internal static RecordedAdapter FindRecordedAdapter(string subKey, Func<string, (string DriverDesc, string Provider)?> readNames)
+        => FindRecordedAdapter(subKey, readNames, present: () => null);
+
+    /// <summary>
+    /// What has become of the adapter <paramref name="subKey"/> names, as above, and gone too when
+    /// <paramref name="present"/>, read only for a key that could be one, says which adapters are in the PC and this
+    /// one is not. A removed card's key keeps its NVIDIA names until the device is uninstalled, so a restore wrote the
+    /// setting back where no driver reads it (#2836).
+    /// </summary>
+    internal static RecordedAdapter FindRecordedAdapter(
+        string subKey, Func<string, (string DriverDesc, string Provider)?> readNames,
+        Func<IReadOnlySet<string>?> present)
     {
         if (!NvidiaSubKeyRegex().IsMatch(subKey)) return RecordedAdapter.Gone;
+        if (present() is { } inThePC && !inThePC.Contains(subKey)) return RecordedAdapter.Gone;
         try
         {
             return readNames(subKey) is { } names

@@ -1278,7 +1278,9 @@ Key services:
   Firefox) under injectable LOCALAPPDATA/APPDATA roots. Chrome, Edge, Brave and Vivaldi share
   one per-profile expansion; Opera is the family exception (no `\Default\` segment, two roots)
   and is driven by a channel table — Stable, GX, Beta, Developer — so each channel is its own
-  row rather than a copy of the code. Scan is read-only (sizes);
+  row rather than a copy of the code. History is `HistoryFiles` in every Chromium profile: History and
+  what the browser's own clear removes with it (Shortcuts, Top Sites, Network Action Predictor, Visited
+  Links, and their journals). Scan is read-only (sizes);
   Clean deletes only discovered files, skips locked files, and never follows
   reparse points. Cookies/sessions are flagged sensitive. Firefox cache lives under
   Local and its cookies/sessions under Roaming (like Opera's split); each targets

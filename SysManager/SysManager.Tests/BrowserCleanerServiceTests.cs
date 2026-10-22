@@ -182,6 +182,50 @@ public sealed class BrowserCleanerServiceTests : IDisposable
         Assert.True(File.Exists(secret), "Clean must not delete files through a junction.");
     }
 
+    // --- History takes the address-bar suggestions and the New Tab tiles with it (#2851) ---
+
+    [Fact]
+    public async Task CleaningHistory_RemovesWhatTheBrowsersOwnClearRemoves_AndNothingElse()
+    {
+        // What "Clear browsing history" removes with History. Only History and its journal were deleted, so a site
+        // came back as an address-bar suggestion and a New Tab tile.
+        string[] history =
+        [
+            "History", "History-journal", "Shortcuts", "Shortcuts-journal", "Top Sites", "Top Sites-journal",
+            "Network Action Predictor", "Network Action Predictor-journal", "Visited Links",
+        ];
+        const string profile = @"Google\Chrome\User Data\Default";
+        foreach (var name in history) WriteFile($@"{profile}\{name}", 100);
+        WriteFile($@"{profile}\Bookmarks", 100);
+        WriteFile($@"{profile}\Preferences", 100);
+
+        var item = (await _svc.ScanAsync()).Single(i => i.Browser == "Google Chrome" && i.Category == "History");
+        Assert.Equal(900, item.SizeBytes);
+        Assert.Equal(9, item.FileCount);
+        Assert.Contains("address bar's suggestions", item.Description, StringComparison.Ordinal);
+
+        Assert.Equal(9, await _svc.CleanAsync([item]));
+
+        Assert.All(history, name => Assert.False(File.Exists(Path.Combine(_local, profile, name)), name));
+        Assert.True(File.Exists(Path.Combine(_local, profile, "Bookmarks")));
+        Assert.True(File.Exists(Path.Combine(_local, profile, "Preferences")));
+    }
+
+    [Fact]
+    public async Task CleaningOperasHistory_RemovesItsSuggestions_UnderRoaming()
+    {
+        WriteRoamingFile(@"Opera Software\Opera Stable\History", 100);
+        WriteRoamingFile(@"Opera Software\Opera Stable\Shortcuts", 100);
+        WriteRoamingFile(@"Opera Software\Opera Stable\Top Sites", 100);
+
+        var item = (await _svc.ScanAsync()).Single(i => i.Browser == "Opera" && i.Category == "History");
+        Assert.Equal(3, item.FileCount);
+
+        Assert.Equal(3, await _svc.CleanAsync([item]));
+        Assert.False(File.Exists(Path.Combine(_roaming, @"Opera Software\Opera Stable\Shortcuts")));
+        Assert.False(File.Exists(Path.Combine(_roaming, @"Opera Software\Opera Stable\Top Sites")));
+    }
+
     // --- Opera: Chromium-based but no "\Default\" profile segment, and its Cookies/History/
     // Sessions live under Roaming (only Cache is under Local). Regression for the silent no-op
     // where Opera was routed through ChromiumDefs (all paths under a non-existent \Default\). ---

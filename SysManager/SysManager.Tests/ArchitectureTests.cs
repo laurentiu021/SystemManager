@@ -6701,6 +6701,68 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// A slider that runs from 0 to 1 moves in small steps from the keyboard (#2807).
+    /// </summary>
+    /// <remarks>
+    /// <c>RangeBase</c>'s own steps are 0.1 for an arrow key and 1.0 for Page Up and Page Down: a tenth, and the whole
+    /// of a 0-to-1 range. The two volume sliders kept them, so Page Up on "Volume for all sound on this PC" set every
+    /// sound on the PC to full volume, and a screen reader's large step did the same. A slider sets its steps itself,
+    /// or takes them from a style in App.xaml that does.
+    /// </remarks>
+    [Fact]
+    public void EveryUnitRangeSlider_MovesInSmallStepsFromTheKeyboard()
+    {
+        var app = TestPaths.AppProject();
+        var presentation = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml/presentation");
+        var xaml = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+
+        static bool Small(string? small, string? large)
+            => double.TryParse(small, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) && s > 0 && s <= 0.01
+               && double.TryParse(large, NumberStyles.Float, CultureInfo.InvariantCulture, out var l) && l > 0
+               && l <= 0.1;
+
+        // The styles that give a slider small steps, by key.
+        var stepping = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var style in XDocument.Load(Path.Combine(app, "App.xaml")).Descendants(presentation + "Style"))
+        {
+            if ((string?)style.Attribute("TargetType") != "Slider" || (string?)style.Attribute(xaml + "Key") is not { } key)
+                continue;
+            string? Setter(string property) => style.Elements(presentation + "Setter")
+                .FirstOrDefault(s => (string?)s.Attribute("Property") == property)?.Attribute("Value")?.Value;
+            if (Small(Setter("SmallChange"), Setter("LargeChange")))
+                stepping.Add(key);
+        }
+
+        var sliders = 0;
+        var offenders = new List<string>();
+        foreach (var view in Directory.EnumerateFiles(Path.Combine(app, "Views"), "*.xaml")
+                     .OrderBy(p => p, StringComparer.Ordinal))
+        {
+            foreach (var slider in XDocument.Load(view).Descendants(presentation + "Slider"))
+            {
+                if ((string?)slider.Attribute("Minimum") != "0" || (string?)slider.Attribute("Maximum") != "1")
+                    continue;
+
+                sliders++;
+                var style = StaticResourceKey().Match((string?)slider.Attribute("Style") ?? string.Empty);
+                var styled = style.Success && stepping.Contains(style.Groups["key"].Value);
+                if (!styled && !Small((string?)slider.Attribute("SmallChange"), (string?)slider.Attribute("LargeChange")))
+                {
+                    offenders.Add($"{Path.GetFileName(view)}: the slider named \""
+                                  + $"{(string?)slider.Attribute("AutomationProperties.Name")}\"");
+                }
+            }
+        }
+
+        // Three run from 0 to 1 when measured: the two volume sliders and the theme's background shade.
+        Assert.True(sliders >= 3, $"only {sliders} 0-to-1 slider(s) were found in Views/, out of 3 measured.");
+        Assert.True(offenders.Count == 0,
+            "these 0-to-1 sliders keep RangeBase's steps of 0.1 and 1.0, so Page Up or Page Down jumps to the end of "
+            + "the range. Give them SmallChange of at most 0.01 and LargeChange of at most 0.1, or a style that "
+            + "sets them:\n  " + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
     /// The runner label on a job's <c>runs-on:</c> line, without a trailing comment.
     /// </summary>
     [GeneratedRegex(@"^\s+runs-on:\s*(?<label>[^\s#]+)")]

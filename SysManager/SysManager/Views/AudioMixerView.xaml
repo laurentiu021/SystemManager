@@ -131,7 +131,8 @@
                                            Foreground="{DynamicResource TextSecondary}"/>
                                 <TextBlock Text="All sound" FontWeight="SemiBold" Style="{StaticResource Body}"/>
                             </DockPanel>
-                            <Slider Minimum="0" Maximum="1" Value="{Binding Volume}"
+                            <Slider Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="1"
+                                    Value="{Binding Volume}"
                                     VerticalAlignment="Center" IsMoveToPointEnabled="True"
                                     Thumb.DragStarted="VolumeSlider_DragStarted"
                                     Thumb.DragCompleted="VolumeSlider_DragCompleted"
@@ -237,7 +238,8 @@
                                             <!-- Drag (Thumb.DragStarted/Completed) and keyboard focus
                                                  both set IsUserAdjusting so a background refresh won't
                                                  overwrite the value while the user is adjusting it. -->
-                                            <Slider Minimum="0" Maximum="1" Value="{Binding Volume}"
+                                            <Slider Style="{StaticResource VolumeSlider}" Minimum="0" Maximum="1"
+                                                    Value="{Binding Volume}"
                                                     VerticalAlignment="Center" IsMoveToPointEnabled="True"
                                                     Thumb.DragStarted="VolumeSlider_DragStarted"
                                                     Thumb.DragCompleted="VolumeSlider_DragCompleted"

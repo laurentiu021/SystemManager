@@ -10,6 +10,27 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.76] - 2026-10-22
+
+**An empty entry in a saved history or preset file no longer breaks the tab that reads it: the entry is skipped and
+the rest still load.**
+
+### Fixed
+
+- **Disk Analyzer ended every analysis in an error.** An empty entry among its saved scans, or one without its
+  folder, is valid in the file, which a hand edit, a sync tool or a damaged write can leave, and the comparison with
+  the last scan threw on it. Since 1.73.0.
+- **Speed Test failed to save every result.** An empty entry in its history threw each time the history was read
+  or written. Since 0.41.0.
+- **Volume Control's presets could not be saved, deleted or applied.** An empty preset, one without its name or
+  its list of apps, or an empty app in one, threw. Since 1.55.0.
+- **Recent Changes could not load.** An empty entry in the activity history was in every list it read, and it was
+  written back with each new entry. Since 1.125.0.
+- **Gaming Profile would not open.** Settings saved or imported as nothing at all reached the tab, which threw as
+  it was built, on every start. An imported profile like that is now skipped, and saved settings like that load
+  the defaults. A record of a game mode session missing part of what it needs is reported as one that cannot be
+  used, rather than breaking the offer to undo it. Since 1.52.38.
+
 ## [1.130.75] - 2026-10-22
 
 **The Dashboard keeps up with what you do: its storage card and health score move after a cleanup, the uptime counts

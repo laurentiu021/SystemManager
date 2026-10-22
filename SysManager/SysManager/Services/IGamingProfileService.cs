@@ -59,8 +59,8 @@ public interface IGamingProfileService
 
     /// <summary>
     /// Takes the configuration an imported gaming store carries, as <see cref="SaveLastConfig"/> saves one, and keeps
-    /// this PC's own session record. False, with nothing written, when the imported store does not parse or a newer
-    /// SysManager wrote it, or when this PC's store could not be read or written.
+    /// this PC's own session record. False, with nothing written, when the imported store does not parse, holds no
+    /// configuration or a newer SysManager wrote it, or when this PC's store could not be read or written.
     /// </summary>
     bool ImportConfiguration(string json);
 

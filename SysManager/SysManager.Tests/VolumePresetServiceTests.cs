@@ -73,6 +73,32 @@ public class VolumePresetServiceTests : IDisposable
     public void Parse_BlankOrMalformed_ReturnsEmpty(string? json)
         => Assert.Empty(VolumePresetService.Parse(json));
 
+    /// <summary>
+    /// A null preset, one without its name or its entries, and a null entry or one without its executable are left
+    /// out, and the rest load; an entry without a display name shows its executable (#2749).
+    /// </summary>
+    /// <remarks>Each of them is valid JSON, and Save, Delete and Apply threw on them.</remarks>
+    [Fact]
+    public void Parse_LeavesOutWhatSaveDeleteAndApplyCannotUse()
+    {
+        var presets = VolumePresetService.Parse("""
+            [
+              null,
+              { "Name": null, "Entries": [] },
+              { "Name": "No entries", "Entries": null },
+              { "Name": "Games", "Entries": [
+                  null,
+                  { "ExecutableName": null, "DisplayName": "Nameless", "Volume": 0.5, "IsMuted": false },
+                  { "ExecutableName": "game.exe", "DisplayName": null, "Volume": 0.8, "IsMuted": true }
+              ] }
+            ]
+            """);
+
+        var only = Assert.Single(presets);
+        Assert.Equal("Games", only.Name);
+        Assert.Equal([new VolumePresetEntry("game.exe", "game.exe", 0.8f, true)], only.Entries);
+    }
+
     // ── Upsert (add vs replace by name, case-insensitive) ──────────────────
 
     [Fact]

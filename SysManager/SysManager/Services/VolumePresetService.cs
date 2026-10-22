@@ -138,10 +138,26 @@ public sealed class VolumePresetService
     public static IReadOnlyList<VolumePreset> Parse(string? json) => TryParse(json) ?? [];
 
     /// <summary><see cref="Parse"/>, except that input which is not a preset list at all is null rather than empty.</summary>
+    /// <remarks>
+    /// A null preset, one without its name or its entries, and a null entry or one without its executable are valid
+    /// JSON too, and Save, Delete and Apply threw on them (#2749). They are left out and the rest load, as the app
+    /// alert and installed program histories leave theirs out; an entry without a display name shows its executable.
+    /// </remarks>
     internal static IReadOnlyList<VolumePreset>? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return [];
-        try { return JsonSerializer.Deserialize<List<VolumePreset>>(json, JsonOptions) ?? []; }
+        try
+        {
+            return JsonSerializer.Deserialize<List<VolumePreset>>(json, JsonOptions)?
+                .Where(p => p is { Name.Length: > 0, Entries: not null })
+                .Select(p => p with
+                {
+                    Entries = [.. p.Entries
+                        .Where(e => e is { ExecutableName.Length: > 0 })
+                        .Select(e => e with { DisplayName = e.DisplayName ?? e.ExecutableName })],
+                })
+                .ToList() ?? [];
+        }
         catch (JsonException ex) { Log.Debug("Volume presets parse failed: {Error}", ex.Message); return null; }
     }
 

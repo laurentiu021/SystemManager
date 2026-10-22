@@ -152,6 +152,26 @@ public sealed class SpeedTestHistoryServiceTests : IDisposable
         Assert.Equal(0, only.UploadMbps);
     }
 
+    /// <summary>
+    /// A null element in the file is left out, the rest load, and a result saved after it is kept (#2749).
+    /// </summary>
+    /// <remarks>
+    /// Mapping a null element threw on every load and every save, so each finished test failed to save.
+    /// </remarks>
+    [Fact]
+    public async Task ANullElementInTheFile_IsLeftOut_AndTheRestLoadAndSave()
+    {
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Result("HTTP", 100)));
+        var saved = (await File.ReadAllTextAsync(HistoryFile)).TrimStart();
+        Assert.StartsWith("[", saved);
+        await File.WriteAllTextAsync(HistoryFile, "[null," + saved[1..]);
+
+        Assert.Equal([100], (await LoadedAsync(svc)).Select(r => r.DownloadMbps));
+        Assert.True(await svc.SaveAsync(Result("HTTP", 200)));
+        Assert.Equal([200, 100], (await LoadedAsync(svc)).Select(r => r.DownloadMbps).OrderDescending());
+    }
+
     [Fact]
     public async Task ClearAsync_OneEngine_LeavesTheOtherEnginesResults()
     {

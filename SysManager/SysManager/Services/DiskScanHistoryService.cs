@@ -204,12 +204,16 @@ public sealed class DiskScanHistoryService : IDisposable
             var entries = JsonSerializer.Deserialize<List<DiskScanSnapshot>>(json, JsonOpts);
             if (entries is null) return ([], false);
 
-            // A file that parses but omits TopFolders leaves that list null on the DTO; normalise so no
-            // caller has to null-check a collection that is documented as never-null.
-            foreach (var e in entries)
-                e.TopFolders ??= [];
+            // A null element, or one without its root, is valid JSON too, and Normalize() threw on it from every
+            // Find and Save, so each analysis ended in the error dialog (#2749). It is dropped and the rest load, as
+            // the app alert and installed program histories drop theirs. A file that parses but omits TopFolders
+            // leaves that list null on the DTO; normalise so no caller has to null-check a collection that is
+            // documented as never-null, without a null folder in it either.
+            var usable = entries.Where(e => e is { RootPath.Length: > 0 }).ToList();
+            foreach (var e in usable)
+                e.TopFolders = [.. (e.TopFolders ?? []).Where(f => f is { Name: not null })];
 
-            return (entries, false);
+            return (usable, false);
         }
         catch (JsonException ex)
         {

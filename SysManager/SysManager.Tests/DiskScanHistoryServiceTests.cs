@@ -48,6 +48,32 @@ public sealed class DiskScanHistoryServiceTests : IDisposable
         return snapshot;
     }
 
+    /// <summary>
+    /// A null element, or one without its root, is left out, and the rest are found and saved again; a null folder in
+    /// a scan is left out too (#2749).
+    /// </summary>
+    /// <remarks>
+    /// Normalize() trims each scan's root, so a null element or a null root threw from every Find and Save, and each
+    /// analysis ended in the error dialog.
+    /// </remarks>
+    [Fact]
+    public async Task ANullOrRootlessElementInTheFile_IsLeftOut_AndTheRestAreFoundAndSaved()
+    {
+        using var svc = NewService();
+        Assert.True(await svc.SaveAsync(Snap(@"C:\Data", 100, new DateTime(2026, 1, 1), ("Sub", 50))));
+        var saved = (await File.ReadAllTextAsync(HistoryFile)).TrimStart();
+        Assert.StartsWith("[", saved);
+        await File.WriteAllTextAsync(HistoryFile,
+            """[null, {"rootPath": null, "totalSize": 7},"""
+            + """ {"rootPath": "D:\\Other", "totalSize": 9, "topFolders": [null]},"""
+            + saved[1..]);
+
+        Assert.Equal(100, (await FoundAsync(svc, @"C:\Data"))?.TotalSize);
+        Assert.Empty((await FoundAsync(svc, @"D:\Other"))!.TopFolders);
+        Assert.True(await svc.SaveAsync(Snap(@"E:\New", 5, new DateTime(2026, 1, 2))));
+        Assert.Equal([@"C:\Data", @"D:\Other", @"E:\New"], (await LoadedAsync(svc)).Select(s => s.RootPath).Order());
+    }
+
     private static DiskScanSnapshot Snap(string root, long total, DateTime at, params (string Name, long Size)[] folders)
         => new()
         {

@@ -104,7 +104,9 @@ public sealed class SpeedTestHistoryService : IDisposable
             var entries = JsonSerializer.Deserialize<List<SpeedTestHistoryEntry>>(json, JsonOpts);
             if (entries is null) return ([], false);
 
-            return (entries.Select(e => new SpeedTestResult(
+            // A null element is valid JSON too, and reading its engine threw on every load and every save, so each
+            // finished test failed to be saved (#2749). It is dropped and the rest load.
+            return (entries.Where(e => e is not null).Select(e => new SpeedTestResult(
                 e.Engine ?? "HTTP",
                 e.DownloadMbps,
                 e.UploadMbps,

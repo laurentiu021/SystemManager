@@ -379,7 +379,10 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
             return false;
         }
 
-        if (imported is null || imported.SchemaVersion > CurrentSchemaVersion) return false;
+        // A section whose configuration is null parses too, and taking it left this PC's store without one, which
+        // the Gaming Profile tab then threw on as it was built (#2749).
+        if (imported is null || imported.SchemaVersion > CurrentSchemaVersion || imported.LastConfig is null)
+            return false;
         return UpdateStore(store => store with { LastConfig = imported.LastConfig });
     }
 
@@ -667,7 +670,18 @@ public sealed class GamingProfileService : IGamingProfileService, IDisposable
                     store.SchemaVersion, CurrentSchemaVersion);
                 return (NewStore(), true);
             }
-            return (store, false);
+
+            // A session record without its configuration or its snapshot cannot be undone from, and the start-up
+            // offer and the revert read both (#2749). It is a store this build cannot use, as one that does not parse.
+            if (store.ActiveSession is { Profile: null } or { Snapshot: null })
+            {
+                Log.Warning("Gaming profile store holds an incomplete session record; ignoring");
+                return (NewStore(), true);
+            }
+
+            // A null configuration, which JSON allows, loads the default one and keeps the session record: the Gaming
+            // Profile tab threw on it as it was built (#2749).
+            return (store.LastConfig is null ? store with { LastConfig = GamingProfile.Default } : store, false);
         }
         catch (JsonException ex)
         {

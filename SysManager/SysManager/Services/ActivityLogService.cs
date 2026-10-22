@@ -182,7 +182,12 @@ public sealed class ActivityLogService
         if (json.Length == 0) return ([], false);
         try
         {
-            return (JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [], false);
+            // A null entry is valid JSON too, and it was in every list GetRecent returned, and written back with each
+            // new entry, so Recent Changes threw on it (#2749). It is dropped, and an entry without its action or its
+            // detail reads it as empty.
+            return ([.. (JsonSerializer.Deserialize<List<ActivityEntry>>(json) ?? [])
+                .Where(e => e is not null)
+                .Select(e => e with { Action = e.Action ?? "", Detail = e.Detail ?? "" })], false);
         }
         catch (JsonException ex)
         {

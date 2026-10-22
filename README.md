@@ -633,6 +633,12 @@ Edit Windows environment variables without the cramped built-in dialog:
   Preinstalled Apps, Edge/OneDrive Remover and Defender Tweaks. Those say it only while that
   attempt is still to come and SysManager is running as administrator, since otherwise
   nothing is changed
+- **A Cancel says what Windows did.** Cancelling stops SysManager waiting, not a
+  restore point Windows has already begun, so after a Cancel the tab reads the list
+  and says whether the point was made. When a change is cancelled while it makes the
+  session's restore point, the next change tries again, and making a point gives up
+  after ten minutes, so a System Restore that stops answering cannot hold up every
+  other change
 - **Restore** the PC to a selected point, with a clear confirmation that warns
   Windows will restart and that programs/drivers added since that point are removed
 - Admin elevation banner. Listing, creating and restoring all need administrator

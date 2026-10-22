@@ -36,10 +36,9 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         "Windows did not answer about its restore points within a minute. Refresh asks again.";
 
     /// <summary>
-    /// How long the restore point question may go unanswered. It waits on System Restore and the shadow copy service,
-    /// and a minute is far longer than either takes on a PC where they work.
+    /// How long the restore point question may go unanswered: <see cref="RestorePointService.ListPatience"/>.
     /// </summary>
-    internal static readonly TimeSpan RestorePointPatience = TimeSpan.FromMinutes(1);
+    internal static readonly TimeSpan RestorePointPatience = RestorePointService.ListPatience;
 
     private readonly IUndoChangesService _service;
     private readonly INavigationService _navigation;
@@ -232,26 +231,41 @@ public sealed partial class UndoChangesViewModel : ViewModelBase
         if (IsDisposed || !IsElevated) return;
         RestorePointText = LookingForRestorePoint;
 
-        var ct = _cts.Token;
         RestorePointLook look;
+        using var question = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        using var patience = new CancellationTokenSource(RestorePointPatience, _clock);
         try
         {
-            // The wait is bounded, not the question (#2606). It waits on System Restore and the shadow copy service, and
-            // with no end of its own the card stayed on "Looking…" for as long as they did not answer, and Refresh would
-            // not ask again while it was out. An answer that comes after the minute is dropped; the next look asks again.
-            // Closing the tab still ends the wait by calling the question off, not by abandoning it.
-            look = await Task.Run(() => _service.LookForRestorePointAsync(ct)).WaitAsync(RestorePointPatience, _clock);
+            // The wait has an end (#2606), and so does the question (#2843). It waits on System Restore and the shadow
+            // copy service, and with no end of its own the card stayed on "Looking…" for as long as they did not
+            // answer, and Refresh would not ask again while it was out. Closing the tab calls the question off and
+            // waits for it to stop. The token is read here, not inside the run, which can start after this method has
+            // given up, when its source no longer hands out tokens.
+            var asking = question.Token;
+            look = await Task.Run(() => _service.LookForRestorePointAsync(asking)).WaitAsync(patience.Token);
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
         {
             // The tab was disposed while Windows was asked: there is no card left to fill.
             return;
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException) when (patience.IsCancellationRequested)
         {
-            if (IsDisposed) return;
+            // The minute is up: the card stops waiting, and the question is called off as well. It went on after the
+            // wait, holding the one pipeline of the runner restore points are made through, so the next change that
+            // takes the session's point queued behind it with the lock every other system change needs. An answer
+            // after the minute is dropped, and the next look asks again.
             Log.Warning("Undo Changes: Windows did not answer about its restore points within {Patience}", RestorePointPatience);
             RestorePointText = RestorePointNotAnswered;
+            try
+            {
+                question.Cancel();
+            }
+            catch (AggregateException ex)
+            {
+                // As on closing the tab: a session that broke can throw while it is stopped.
+                Log.Debug(ex, "Undo Changes: calling off the unanswered restore point question threw");
+            }
             return;
         }
 

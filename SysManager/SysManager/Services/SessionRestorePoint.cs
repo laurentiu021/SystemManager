@@ -61,6 +61,16 @@ public sealed class SessionRestorePoint(
             Log.Information("Session restore point for {Description}: created={Created}", description, created);
             return created;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The caller cancelled before the attempt had an answer, so the attempt is given back: the next change
+            // tries again, and says so in its confirmation. Kept, it left every later change of the session without a
+            // restore point and without a word about one (#2843). Windows refuses a second point within a day, so one
+            // it made before the cancel landed is not made twice.
+            Interlocked.Exchange(ref _attempted, 0);
+            Log.Debug("Session restore point cancelled ({Description}); the next change tries again", description);
+            throw;
+        }
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
         {
             // Not an error path worth surfacing: no admin, System Restore disabled, or rate-limited.

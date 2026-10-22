@@ -364,7 +364,8 @@ to scroll.
   their own undo (`UndoSwitch`) and, looked for only when shown and outside Busy, the newest restore point —
   asked for only as an administrator, one question at a time, called off when the tab is disposed, and given
   `RestorePointPatience` (a minute, on an injectable `TimeProvider`) before the card says Windows did not answer,
-  so a question that never ends cannot keep Refresh from asking again (#2606). No "undo everything".
+  so a question that never ends cannot keep Refresh from asking again (#2606). The minute calls the question off
+  as well, so it lets go of the runner restore points are made through (#2843). No "undo everything".
 - `RecentChangesViewModel` — the Recent Changes tab (#1507): one `IRecentChangesService.LookAsync` over
   `RecentChangesService.LongestPeriodDays`, which the period and kind chips then filter without looking again.
   `BuildDays` lays the changes out by day, newest first, folding two or more installed updates on one day into one
@@ -373,7 +374,7 @@ to scroll.
   look is what keeps the list of installed programs, and once more when a look was asked for while one ran. A row's
   button opens the tab that can act on it through `INavigationService`, and the problems line opens System Logs on
   `LogsArrival.AppProblems` of the period chosen (#2887). Read-only.
-- `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation).
+- `RestorePointsViewModel` — list, create, and restore Windows System Restore points (admin for all three, since Windows refuses a standard user the list, which the empty state says rather than reporting none; restore reboots, gated by confirmation). A Cancel during Create is followed by one read of the list, bounded by `RestorePointService.ListPatience`, that says whether Windows had already made the point, and a Cancel during the read after a made point still says it was made (#2843).
 - `LegacyPanelsViewModel` — one-click launcher for the fixed catalog of classic Windows applets (pure launchers, no system modification).
 - `SystemFixesViewModel` — consolidated one-click repairs (SFC, DISM `/RestoreHealth`, Windows Update reset, WinGet reinstall, Restart Explorer, Rebuild icon & thumbnail cache) with per-fix confirmation + live output; opens netplwiz for secure auto-logon. The network-stack resets live on Network Repair. It overrides no `EscapeCancel`: every run changes Windows, so Escape stops none of them and the Cancel button does (#2834).
 - `BootAnalyzerViewModel` — read-only boot-time history + slow-component breakdown from the Diagnostics-Performance log, with a trend vs recent average; needs admin to read the log.
@@ -1260,11 +1261,17 @@ Key services:
   `ListAsync` returns null for a refusal and an empty list only for a PC with no
   restore points, which lets the tab say which one it is. The integration suite runs
   all three scripts in real Windows PowerShell with the cmdlets shadowed by functions.
+  `CreateAsync` has a time limit of its own, `CreatePatience` (ten minutes, on an
+  injectable `TimeProvider`): at the limit the run is asked to stop, the wait ends
+  whether or not the stop lands, and it returns false, so no caller holding the
+  system-modification lock waits on a System Restore that stopped answering (#2843).
+  `ListPatience` is how long a caller waits for the list.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
   Each of the six consumers listed below calls `EnsureAsync` before its first mutation; the first
   call wins and the rest are no-ops, so a session takes at most one point no matter how many of them
   the user visits — Windows grants roughly one per 24 hours, so two independent attempts meant the
-  second reported "no snapshot" while a good one existed. Takes `RestorePointService.CreateAsync` as
+  second reported "no snapshot" while a good one existed. A cancel by the caller gives the attempt
+  back, so the next change tries again (#2843). Takes `RestorePointService.CreateAsync` as
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `GamingProfileService`, `EdgeOneDriveViewModel`,

@@ -28,6 +28,7 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
         IsBusy ? CancelCommand : null;
 
     private readonly RestorePointService _service;
+    private readonly TimeProvider _clock;
     private CancellationTokenSource? _cts;
 
     public BulkObservableCollection<RestorePoint> RestorePoints { get; } = new();
@@ -57,9 +58,15 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
 
     public bool HasSelection => SelectedPoint is not null;
 
-    public RestorePointsViewModel(RestorePointService service)
+    /// <summary>Builds the tab and starts its first read of the restore points.</summary>
+    /// <param name="service">What the tab lists, creates and restores through.</param>
+    /// <param name="clock">
+    /// What a cancelled Create's check is timed on, and the time it compares a new point's with. A test holds it.
+    /// </param>
+    public RestorePointsViewModel(RestorePointService service, TimeProvider? clock = null)
     {
         _service = service;
+        _clock = clock ?? TimeProvider.System;
         IsElevated = AdminHelper.IsElevated();
         StatusMessage = "Loading restore points…";
         PropertyChanged += OnVmPropertyChanged;
@@ -146,9 +153,23 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
         StatusMessage = "Creating restore point…";
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        var asked = _clock.GetUtcNow();
         try
         {
-            var ok = await _service.CreateAsync(description, _cts.Token).ConfigureAwait(true);
+            bool ok;
+            try
+            {
+                ok = await _service.CreateAsync(description, _cts.Token).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // A cancel stops SysManager waiting, not a checkpoint Windows has begun, so the tab looks before it
+                // says what happened. "Cancelled." without looking hid a point that was made, and the next Create was
+                // then refused as the day's second (#2843).
+                await ReportCancelledCreateAsync(description, asked).ConfigureAwait(true);
+                return;
+            }
+
             if (ok)
             {
                 NewDescription = "";
@@ -156,12 +177,15 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
                 ActivityLogService.Instance.Log("Restore point", $"Created \"{description}\"");
                 ToastService.Instance.Show("Restore point created", description);
                 // Null only if Windows refused the read straight after making the point. The list then stays
-                // as it was rather than emptying.
-                if (await _service.ListAsync(_cts.Token).ConfigureAwait(true) is { } points)
+                // as it was rather than emptying. A cancel here stops only the list's refresh: the point is made, as
+                // the toast and Recent activity say, and the status said "Cancelled." over them (#2843).
+                try
                 {
-                    ListWasRefused = false;
-                    RestorePoints.ReplaceWith(points);
-                    HasPoints = points.Count > 0;
+                    if (await _service.ListAsync(_cts.Token).ConfigureAwait(true) is { } points) ShowPoints(points);
+                }
+                catch (OperationCanceledException)
+                {
+                    StatusMessage = "Restore point created. Refresh lists it.";
                 }
             }
             else
@@ -170,7 +194,6 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
                     "and System Restore must be enabled for the system drive.";
             }
         }
-        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
         // CreateAsync runs PowerShell; a runspace/WMI-level fault would otherwise
         // escape this async command unobserved. Surface it as a status message.
         catch (System.Management.Automation.RuntimeException ex) { StatusMessage = $"Could not create a restore point: {ex.Message}"; }
@@ -181,6 +204,58 @@ public sealed partial class RestorePointsViewModel : ViewModelBase
             IsBusy = false;
             IsProgressIndeterminate = false;
         }
+    }
+
+    // Says what a cancelled Create did, read from Windows' own list. Asked with a time limit of its own rather than
+    // with the cancelled token, since the question comes after the cancel.
+    private async Task ReportCancelledCreateAsync(string description, DateTimeOffset asked)
+    {
+        StatusMessage = "Checking whether Windows made the restore point…";
+        IReadOnlyList<RestorePoint>? points;
+        using var patience = new CancellationTokenSource(RestorePointService.ListPatience, _clock);
+        try
+        {
+            points = await _service.ListAsync(patience.Token).WaitAsync(patience.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            points = null;
+        }
+
+        if (points is null)
+        {
+            StatusMessage = "Cancelled. SysManager could not check whether Windows had already made the restore " +
+                "point; Refresh lists it if it did.";
+            return;
+        }
+
+        ShowPoints(points);
+        if (!points.Any(point => IsTheOneAskedFor(point, description, asked)))
+        {
+            StatusMessage = "Cancelled. Windows did not make the restore point.";
+            return;
+        }
+
+        NewDescription = "";
+        ActivityLogService.Instance.Log("Restore point", $"Created \"{description}\"");
+        StatusMessage = "Windows had already made the restore point when you cancelled, so it is in the list.";
+    }
+
+    /// <summary>
+    /// Whether <paramref name="point"/> is the one a Create pressed at <paramref name="asked"/> asked for: made after
+    /// that, with <paramref name="description"/>, in full or as Windows shortened it.
+    /// </summary>
+    internal static bool IsTheOneAskedFor(RestorePoint point, string description, DateTimeOffset asked) =>
+        point.CreationTime.ToUniversalTime() >= asked.UtcDateTime
+        && point.Description.Length > 0
+        && description.StartsWith(point.Description, StringComparison.Ordinal);
+
+    // The list Windows gave, shown as Refresh shows it.
+    private void ShowPoints(IReadOnlyList<RestorePoint> points)
+    {
+        ListWasRefused = false;
+        RestorePoints.ReplaceWith(points);
+        HasPoints = points.Count > 0;
     }
 
     [RelayCommand(CanExecute = nameof(CanRestore))]

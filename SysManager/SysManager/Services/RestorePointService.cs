@@ -25,6 +25,7 @@ namespace SysManager.Services;
 public sealed class RestorePointService
 {
     private readonly IPowerShellRunner _ps;
+    private readonly TimeProvider _clock;
 
     /// <summary>Printed by <see cref="BuildCreateScript"/> only after Windows confirmed a new restore point.</summary>
     internal const string CreateOkSentinel = "__SM_RP_CREATED__";
@@ -48,7 +49,26 @@ public sealed class RestorePointService
         "Windows cannot create a restore point otherwise. Protection then reserves some disk space for " +
         "restore points until you turn it off again in System Properties.";
 
-    public RestorePointService(IPowerShellRunner ps) => _ps = ps;
+    /// <summary>
+    /// How long a caller waits for Windows to list the restore points. It waits on System Restore and the shadow copy
+    /// service, and a minute is far longer than either takes on a PC where they work.
+    /// </summary>
+    internal static readonly TimeSpan ListPatience = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// How long <see cref="CreateAsync"/> waits for Windows to make a point, its turn on the runner included. Making
+    /// one takes seconds to a few minutes, so ten is a limit only a System Restore that has stopped answering reaches.
+    /// </summary>
+    internal static readonly TimeSpan CreatePatience = TimeSpan.FromMinutes(10);
+
+    /// <summary>Builds the service over the runner every one of its scripts goes through.</summary>
+    /// <param name="ps">The runner.</param>
+    /// <param name="clock">What <see cref="CreatePatience"/> is measured on. A test holds it.</param>
+    public RestorePointService(IPowerShellRunner ps, TimeProvider? clock = null)
+    {
+        _ps = ps;
+        _clock = clock ?? TimeProvider.System;
+    }
 
     /// <summary>
     /// The script <see cref="ListAsync"/> runs. <c>Get-ComputerRestorePoint</c> surfaces SequenceNumber,
@@ -130,24 +150,55 @@ public sealed class RestorePointService
     };
 
     /// <summary>
-    /// Creates a restore point. Requires admin. Returns true only when the script confirms Windows made one.
+    /// Creates a restore point. Requires admin. Returns true only when the script confirms Windows made one, and false
+    /// when Windows has not finished within <see cref="CreatePatience"/>.
     /// </summary>
+    /// <remarks>
+    /// The time limit is the creation's own, so every caller has it: the session's point a change waits for, the
+    /// Restore Points tab and Performance Mode, each holding the lock that refuses every other system change. Without
+    /// one, a System Restore that never answered, or a question about it ahead on this runner, kept that lock until
+    /// SysManager restarted (#2843). At the limit the run is asked to stop, and the wait ends then whether or not the
+    /// stop lands. A caller's own cancel ends the wait the same way, and still comes out as a cancel.
+    /// </remarks>
     public async Task<bool> CreateAsync(string description, CancellationToken ct = default)
     {
+        using var patience = new CancellationTokenSource(CreatePatience, _clock);
+        using var run = CancellationTokenSource.CreateLinkedTokenSource(ct, patience.Token);
+        Task<Collection<PSObject>>? running = null;
         try
         {
-            var results = await _ps.RunAsync(BuildCreateScript(description), cancellationToken: ct).ConfigureAwait(false);
+            running = _ps.RunAsync(BuildCreateScript(description), cancellationToken: run.Token);
+            var results = await running.WaitAsync(run.Token).ConfigureAwait(false);
             var ok = Confirms(results, CreateOkSentinel);
             if (!ok)
                 Log.Warning("RestorePoint: Checkpoint-Computer did not confirm success (it may be rate-limited to one per 24h).");
             return ok;
+        }
+        catch (OperationCanceledException) when (patience.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            Log.Warning("RestorePoint: Windows did not make the restore point within {Patience}, so it was stopped",
+                CreatePatience);
+            return false;
         }
         catch (RuntimeException ex)
         {
             Log.Warning("RestorePoint: creation failed: {Error}", ex.Message);
             return false;
         }
+        finally
+        {
+            if (running is { IsCompleted: false }) LeaveToFinish(running);
+        }
     }
+
+    // A run the wait above stopped waiting for finishes on its own, once its stop lands or Windows answers. How it ends
+    // is read here, so an error it ends with is not logged as an exception nobody observed.
+    private static void LeaveToFinish(Task run) =>
+        _ = run.ContinueWith(
+            static t => _ = t.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     /// <summary>
     /// The script <see cref="CreateAsync"/> runs: success is the sentinel it prints last, never the absence of

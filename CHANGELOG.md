@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.74] - 2026-10-22
+
+**The Dashboard no longer freezes over a drive that is slow to answer, one drive it cannot read no longer empties its
+storage card, and the health score judges free space by what the drive really has.**
+
+### Fixed
+
+- **The Dashboard could stop responding as it opened and on every Scan system.** Its storage card asked each drive
+  letter whether it was ready, on the window's own thread, before checking whether it was a local drive at all, so
+  a mapped network drive whose server could not be reached, or a disc drive spinning up, held the window until
+  Windows gave up on it. It now asks only local drives, and away from the window. Since 1.17.0.
+- **One drive that could not be read emptied the storage card, and one that refused to be read stopped the
+  Dashboard from starting.** Each drive is now read on its own: one that fails is left out and the others are
+  listed. Since 1.17.0. The drive list in About's copied environment info had the same flaw and stopped at such a
+  drive, losing the ones after it. Since 0.14.0.
+- **The health score rounded free space to whole gigabytes before comparing it with its limits.** 9.7 GB free
+  counted as 10 and escaped the limit under 10 GB, and 19.7 GB counted as 20, which on a drive whose percentage
+  looked fine left out the advice to free up space. The score, and "Why is it slow?", which judges the drive the
+  same way, now compare the space as Windows reports it. Since 1.78.0.
+
 ## [1.130.73] - 2026-10-22
 
 **The Dashboard says when SysManager crashed last time, its restart alert agrees with the Windows Update tab, and

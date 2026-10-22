@@ -346,8 +346,8 @@ public sealed class HealthScoreService
         var drive = drives.FirstOrDefault(d =>
             string.Equals(d.Letter, systemDrive, StringComparison.OrdinalIgnoreCase));
 
-        // SizeGB is rounded to whole gigabytes, so a zero here means either no such drive or one too small
-        // to divide by. Neither is a measurement.
+        // No such drive, or one whose size read as zero and leaves nothing to divide by. Neither is a measurement.
+        // The sizes arrive as read, not rounded, so the floors below see 9.7 GB as under 10 (#2802).
         if (drive is null || drive.SizeGB <= 0) return UnknownComponentScore;
 
         var percentFree = drive.FreeGB / drive.SizeGB * 100;

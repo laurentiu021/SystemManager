@@ -2085,7 +2085,8 @@ offers, "rate us" prompts:
 ### Dashboard
 - **The Windows edition, build and uptime** under the title, read when SysManager starts and
   again on "Scan system"
-- **Storage** — each fixed drive and how full it is
+- **Storage** — each fixed drive and how full it is, read without holding up the window. A drive that
+  cannot be read is left out and the others are still listed
 - **Every finding links to its fix** — alerts and health recommendations show a "Fix this" link to the tab
   that can act on them: disk and memory to System Health, a pending restart to Windows Update, waiting
   updates to App Updates, critical events to System Logs, opened on those events, low disk space to Deep
@@ -2173,6 +2174,7 @@ offers, "rate us" prompts:
   commonest reason a PC feels slow and the one thing on that list you can
   fix today — so a system drive with less than 10 GB free, or under 5% free with less than 25 GB
   left, cannot score green, and the recommendation says how many GB are left and points at Deep Cleanup.
+  The free space is compared as Windows reports it, not rounded, so 9.7 GB counts as under 10.
   Color-coded ring (green / amber / red) with up to 3 actionable
   recommendations. Auto-computes on load and refreshes with "Scan system".
   A battery counts only when its wear was actually read. Windows gives

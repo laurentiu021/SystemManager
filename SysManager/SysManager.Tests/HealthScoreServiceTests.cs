@@ -558,8 +558,7 @@ public class HealthScoreServiceTests
 
     /// <summary>A drive reporting zero size is not a measurement.</summary>
     /// <remarks>
-    /// <c>SizeGB</c> is rounded to whole gigabytes, so a zero means either a drive too small to divide by or a
-    /// read that produced nothing. Dividing by it would produce infinity and the top band.
+    /// A zero <c>SizeGB</c> is a read that produced nothing. Dividing by it would produce infinity and the top band.
     /// </remarks>
     [Fact]
     public void ComputeFreeSpaceScore_ZeroSizedDrive_IsUnknownRatherThanPerfect()

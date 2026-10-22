@@ -246,7 +246,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     {
         ReportPreviousCrash();
         await LoadStaticInfoAsync();
-        LoadDrives();
+        await LoadDrivesAsync();
         LoadActivity();
         StartPollingLoop();   // starts BOTH the vitals and temperature loops
         await LoadHealthScoreAsync();
@@ -472,24 +472,53 @@ public sealed partial class DashboardViewModel : ViewModelBase
     //  STORAGE DRIVES
     // ══════════════════════════════════════════════════════════════════════
 
-    private void LoadDrives()
+    /// <summary>
+    /// Fills the storage card, reading the drives off the UI thread, as Disk Analyzer and Duplicate Finder read theirs.
+    /// </summary>
+    /// <remarks>
+    /// It read them on the UI thread, at start and on every Scan system, and asked every letter whether it was ready
+    /// before its type ruled it out, so a mapped drive whose server could not be reached, or an optical drive spinning
+    /// up, held the window until it gave up (#2802).
+    /// </remarks>
+    private async Task LoadDrivesAsync()
+    {
+        var drives = await Task.Run(ReadDrives).ConfigureAwait(true);
+        if (drives is not null) Drives.ReplaceWith(drives);
+    }
+
+    /// <summary>The card's drives, or null when Windows could not list them, which leaves the card as it was.</summary>
+    private static List<DriveUsageInfo>? ReadDrives()
     {
         try
         {
-            var drives = DriveInfo.GetDrives()
-                .Where(d => d is { IsReady: true, DriveType: DriveType.Fixed })
-                .Select(d => new DriveUsageInfo(
-                    d.Name.TrimEnd('\\'),
-                    (d.TotalSize - d.AvailableFreeSpace) / 1024.0 / 1024.0 / 1024.0,
-                    d.TotalSize / 1024.0 / 1024.0 / 1024.0))
-                .ToList();
-            Drives.ReplaceWith(drives);
+            return DriveUsage(DriveInfo.GetDrives().Select(DriveProbe.Of));
         }
         catch (IOException ex)
         {
             Log.Debug("Drive info failed: {Error}", ex.Message);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Drive info refused: {Error}", ex.Message);
+            return null;
         }
     }
+
+    /// <summary>
+    /// What the storage card shows for <paramref name="drives"/>: each fixed drive that is ready, with the space used
+    /// and its size. One that cannot be read is left out, not the others (#2802).
+    /// </summary>
+    internal static List<DriveUsageInfo> DriveUsage(IEnumerable<DriveProbe> drives) =>
+        DriveProbe.ReadFixed(drives, drive =>
+        {
+            var total = drive.TotalSize();
+            var free = drive.FreeSpace();
+            return new DriveUsageInfo(
+                drive.Name.TrimEnd('\\'),
+                (total - free) / 1024.0 / 1024.0 / 1024.0,
+                total / 1024.0 / 1024.0 / 1024.0);
+        });
 
     // ══════════════════════════════════════════════════════════════════════
     //  TEMPERATURES
@@ -1322,7 +1351,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         try
         {
             await LoadStaticInfoAsync();
-            LoadDrives();
+            await LoadDrivesAsync();
             await LoadHealthScoreAsync();
             // After the health score, as at launch, because the disk alert reads the score just computed.
             var alerts = StartAlertScans();

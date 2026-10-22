@@ -5,6 +5,7 @@
 using System.IO;
 using System.Net.Http;
 using NSubstitute;
+using SysManager.Helpers;
 using SysManager.Services;
 using SysManager.ViewModels;
 
@@ -573,6 +574,34 @@ public class AboutViewModelTests
         Assert.NotEqual(
             $"https://github.com/{UpdateService.Owner}/{UpdateService.Repo}/discussions",
             url);
+    }
+
+    /// <summary>
+    /// The environment info lists each fixed drive that is ready, and a drive that cannot be read leaves the others in
+    /// it (#2802).
+    /// </summary>
+    /// <remarks>
+    /// The drives were listed in one <c>try</c>, so a drive that went away or refused to be read while the list was
+    /// built ended it there, and the drives after it were missing from the copied report.
+    /// </remarks>
+    [Fact]
+    public void StorageLines_ListEveryReadableFixedDrive()
+    {
+        const long Gib = 1L << 30;
+        static DriveProbe Drive(string name, DriveType type, long total, long free, Func<string> format) =>
+            new(name, type, () => true, () => total, () => free, format);
+
+        var lines = AboutViewModel.StorageLines(
+        [
+            Drive(@"C:\", DriveType.Fixed, 100 * Gib, 40 * Gib, () => "NTFS"),
+            Drive(@"D:\", DriveType.Fixed, 200 * Gib, 10 * Gib, () => throw new IOException("locked")),
+            Drive(@"E:\", DriveType.Network, 500 * Gib, 100 * Gib, () => "NTFS"),
+            Drive(@"F:\", DriveType.Fixed, 50 * Gib, 25 * Gib, () => "exFAT"),
+        ]);
+
+        Assert.Equal(
+            ["Disk C: 100 GB total, 40 GB free (NTFS)", "Disk F: 50 GB total, 25 GB free (exFAT)"],
+            lines);
     }
 }
 

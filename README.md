@@ -449,7 +449,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   across restarts, and are stored locally in `%LocalAppData%\SysManager`. The summary counts
   only the apps Windows actually changed, and says how many it refused — an app that has
   just stopped playing, for example. A preset that could not be saved or deleted says so, and
-  saved presets that cannot be read are never written over
+  saved presets that cannot be read are never written over. An empty preset, or an empty app in
+  one, is skipped and the rest load
 - **Tray shortcut** — a "Volume mixer" item in the system-tray menu opens the app straight
   to this tab, alongside "What's using my PC" (Process Manager) and "Free up space" (Quick
   Cleanup)
@@ -1049,7 +1050,7 @@ System → System Fixes, where the tab name matches what they do.
   my disk fill up?". It is always phrased as *since your last scan*, never as live monitoring, because
   you choose when to scan. Stored only on this PC and never carried to another (folder sizes here mean
   nothing there). If the earlier scans cannot be read, the tab says so, and never saves a new scan over
-  them
+  them. An empty entry among them is skipped and the rest are still compared
 
 ### Large Files
 Answers "what is actually using my space?" by listing the biggest files in one place.
@@ -1473,7 +1474,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   upload, ping and server — clearable on its own, because comparing an HTTP run against an
   Ookla run is not a comparison. A quick test from the Dashboard joins the HTTP history too,
   even while this tab is open. If the saved results cannot be read, the tab says so rather
-  than showing none, and a new result is never saved over them
+  than showing none, and a new result is never saved over them. An empty entry among them is
+  skipped and the rest are shown
 - A history table that has nothing left to scroll the way the wheel turns passes the turn to the page
 - **A trend above each history**, drawn from the same results, so "is my internet worse than
   it used to be, or is it just today?" is answered at a glance: download and upload over time,
@@ -1877,7 +1879,9 @@ offers, "rate us" prompts:
   when you open Gaming Profile if that comes first, and only once a run. Until then Undo Changes lists
   the session as left on. If the record cannot be read when you answer, nothing
   is changed and the record is kept, so you are asked again the next time. If SysManager cannot read
-  that record when you press Start, Start changes nothing and says so, rather than writing over it
+  that record when you press Start, Start changes nothing and says so, rather than writing over it.
+  A record missing part of what it needs is reported as one that cannot be used, and settings saved as
+  nothing at all load the defaults
 - **Undo Changes can turn it off too** — while game mode is on, or after a run that did not end
   cleanly left it on, Undo Changes lists it with **Turn it off…**, and this tab then says that Undo
   Changes turned game mode off. Putting back a session left on that paused search indexing needs
@@ -2121,7 +2125,8 @@ offers, "rate us" prompts:
   test, which goes into the Speed Test history instead. It does note when SysManager closed
   unexpectedly the previous time. A cleanup run from the command line or from Scheduled
   Maintenance appears here too, even while SysManager is open. If the history cannot be read
-  for a moment, a new action waits and is written once it can be, rather than replacing it.
+  for a moment, a new action waits and is written once it can be, rather than replacing it. An
+  empty entry in it is skipped, and is not written back.
 - **Quick Tune-Up** — one-click wizard that cleans temp files, permanently
   empties the Recycle Bin, scans for broken shortcuts, checks disk SMART
   health, flags high uptime (more than 7 days) and high RAM usage (more than 80%), the same

@@ -122,6 +122,30 @@ public sealed class ActivityLogServiceTests : IDisposable
         Assert.Empty(log.GetRecent(10));
     }
 
+    /// <summary>
+    /// A null entry is left out and is not written back, and an entry without its action or detail reads them as
+    /// empty (#2749).
+    /// </summary>
+    /// <remarks>
+    /// A null entry was in every list <c>GetRecent</c> returned, so Recent Changes threw on it, and <c>Log</c> wrote it
+    /// back with each new entry.
+    /// </remarks>
+    [Fact]
+    public void ANullEntryInTheFile_IsLeftOut_AndNotWrittenBack()
+    {
+        File.WriteAllText(StoreFile,
+            """[null, {"Action": null, "Detail": null, "Timestamp": "2026-10-01T10:00:00"}]""");
+
+        var log = new ActivityLogService(_dir);
+        var entry = Assert.Single(log.GetRecent(10));
+        Assert.Equal(("", ""), (entry.Action, entry.Detail));
+
+        log.Log("Quick Cleanup", "Freed 1 MB");
+
+        Assert.Equal(["Quick Cleanup", ""], new ActivityLogService(_dir).GetRecent(10).Select(e => e.Action));
+        Assert.DoesNotContain("null", File.ReadAllText(StoreFile), StringComparison.Ordinal);
+    }
+
     // ── a file that cannot be read or parsed (#2521) ────────────────────────
     // A failed read gave Log this instance's own list, which it wrote over the file, so a read that failed at
     // startup lost the whole history. The file is held open with delete sharing only while a read must fail: the

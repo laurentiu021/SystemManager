@@ -452,6 +452,7 @@ public class GamingProfileServiceTests
     [InlineData("{ not json ][")]
     [InlineData("null")]
     [InlineData("{\"SchemaVersion\":99,\"LastConfig\":{\"FinestTimerResolution\":true}}")]   // a newer SysManager
+    [InlineData("{\"SchemaVersion\":1,\"LastConfig\":null}")]   // no configuration, which the tab threw on (#2749)
     public void ImportConfiguration_ThatCannotBeUsed_WritesNothing(string imported)
     {
         var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-import-{Guid.NewGuid():N}.json");
@@ -463,6 +464,60 @@ public class GamingProfileServiceTests
             Assert.False(StoreOnlyService(path).ImportConfiguration(imported));
 
             Assert.Equal(before, File.ReadAllBytes(path));
+        }
+        finally { DeleteStore(path); }
+    }
+
+    /// <summary>
+    /// A stored null configuration loads the default one and keeps the session record beside it (#2749).
+    /// </summary>
+    /// <remarks>
+    /// JSON allows the null, and the Gaming Profile tab threw on it as it was built, on every start.
+    /// </remarks>
+    [Fact]
+    public void AStoredNullConfiguration_LoadsTheDefault_AndKeepsTheSessionRecord()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-nullconfig-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                LastConfig = null!,
+                ActiveSession = new GamingSessionRecord(
+                    new GamingProfile { PauseSearchIndexing = true }, new GamingSnapshot()),
+            }));
+            var svc = StoreOnlyService(path);
+
+            Assert.Equal(GamingProfile.Default, svc.LoadLastConfig());
+            Assert.Equal(new PendingRecovery(PendingRecoveryKind.LeftOn, NeedsAdmin: true), svc.ReadPendingRecovery());
+        }
+        finally { DeleteStore(path); }
+    }
+
+    /// <summary>
+    /// A stored session record without its configuration or its snapshot is one this build cannot use (#2749).
+    /// </summary>
+    /// <remarks>
+    /// The start-up offer read the record's configuration, and the revert both parts, so either null threw there.
+    /// </remarks>
+    [Theory]
+    [InlineData(true)]    // no configuration
+    [InlineData(false)]   // no snapshot
+    public void AStoredSessionRecordMissingAPart_IsUnusable(bool withoutItsConfiguration)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sm-gaming-halfsession-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, SerializePendingStore(new GamingProfileStore
+            {
+                LastConfig = GamingProfile.Default,
+                ActiveSession = withoutItsConfiguration
+                    ? new GamingSessionRecord(null!, new GamingSnapshot())
+                    : new GamingSessionRecord(new GamingProfile(), null!),
+            }));
+
+            Assert.Equal(
+                new PendingRecovery(PendingRecoveryKind.Unusable), StoreOnlyService(path).ReadPendingRecovery());
         }
         finally { DeleteStore(path); }
     }

@@ -1108,12 +1108,14 @@ Key services:
   the file rather than written as null, so a version from before they could be missing still reads it.
   `LoadAsync` returns null for a history that could not be read, and the tab says so; a save or a
   one-engine clear then writes nothing, and a history that does not parse is set aside by `StoreFile`.
+  A null element in a file that parses is left out (#2749).
 - `DiskScanHistoryService` — remembers the last Disk Analyzer scan per root (one snapshot each,
   capped roots and capped folders-per-root) in `disk-scan-history.json`, so the tab can show what
   changed since last time. Same never-throw-on-IO contract and `configDir` test seam as
   `SpeedTestHistoryService`, and the same rule for a history that could not be read: `LoadAsync` is
   null, `FindAsync` says it is not `Readable` rather than "never scanned", and `SaveAsync` writes
-  nothing over it. Machine-specific by nature (absolute paths + sizes on this disk), so it
+  nothing over it. A null element, one without its `RootPath`, and a null folder are left out of a file
+  that parses (#2749). Machine-specific by nature (absolute paths + sizes on this disk), so it
   is deliberately absent from `ProfileService.Catalog` and pinned OUT by a test.
 - `ShortcutCleanerService` — scans the Desktop and Public Desktop, both Start Menus, Quick Launch and Recent
   Items for broken shortcuts (dead targets) and offers safe removal. A network target is never judged gone,
@@ -1477,7 +1479,8 @@ Key services:
   sessions" plan are pure, unit-tested static helpers; the file IO never throws to the caller.
   `Load` returns null for a file that could not be read, and `Save`/`Delete` return null, writing
   nothing, when the file could not be read or written; one that does not parse is set aside by
-  `StoreFile` first.
+  `StoreFile` first. `TryParse` leaves out a null preset, one without its name or entries, and a null entry
+  or one without its executable, and gives an entry without a display name its executable's (#2749).
 - `ClosePreferenceService` — remembers what the window's close button should do, as JSON under
   `%LocalAppData%\SysManager\close-preference.json`. `MainWindow.OnClosing` asks once
   (`IDialogService.AskCloseOrMinimize`, a three-way prompt) and honours the stored answer
@@ -1581,7 +1584,9 @@ Key services:
   read or used, and `RecoverPendingAsync` refuses a record it cannot read rather than report it reverted
   (#1525). Every read-modify-write of
   it holds `_storeLock`, and never across an await; `ImportConfiguration`, which takes a profile import's
-  configuration and keeps this PC's session record, is one of them (#2801). Every revert path — Stop, the
+  configuration and keeps this PC's session record, is one of them (#2801), and it refuses an import with no
+  configuration. `ReadStore` reads a null `LastConfig` as `GamingProfile.Default`, and a session record without
+  its `Profile` or `Snapshot` as a store it cannot use (#2749). Every revert path — Stop, the
   automatic revert when the game exits, the end of a session whose game closed while it was
   starting, and recovery — returns a `GamingRevertResult` naming
   the steps whose undo failed, so the tab never announces a restore it did not get. The
@@ -1670,7 +1675,8 @@ Key services:
   `activity.json.lock` beside it, a file lock so the lock is bound to the file it protects. Without that,
   the open app's next write erased a scheduled run's entry. A file that could not be read is never written
   over: the entry waits in `_unsaved`, is listed by `GetRecent`, and is written by the next `Log` that can
-  read the file. One that does not parse is set aside first.
+  read the file. One that does not parse is set aside first. A null entry in one that parses is left out, and
+  a null `Action` or `Detail` reads as empty (#2749).
 - `ResourceHistoryService` — always-on background sampler (started at app startup,
   runs while minimized to tray) that records CPU/RAM/GPU usage + CPU/GPU temperatures
   every 10s as append-only NDJSON in `%LocalAppData%\SysManager\resource-history.ndjson`,

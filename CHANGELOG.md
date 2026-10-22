@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.72] - 2026-10-22
+
+**Importing a profile no longer erases the record SysManager needs to undo a game mode session.**
+
+### Fixed
+
+- **Importing gaming profiles could leave game mode's changes on for good.** Profile Export / Import wrote the
+  imported gaming file over this PC's, and dropped the record of a game mode session still on, or left on by an
+  earlier run. That record is what the offer at start and Undo Changes put the session's changes back from, so
+  after the import neither offered anything, and the PC kept what the session changed: the Ultimate Performance
+  plan, silenced notifications, paused search indexing. The import now takes only the gaming settings and keeps
+  this PC's record. Since 1.67.0.
+
 ## [1.130.71] - 2026-10-22
 
 **SysManager opens for each Windows account, even while another account's copy is running, and starting it again

@@ -227,8 +227,8 @@ public partial class ArchitectureTests
     [InlineData("new AppIconService(null, otherDir)", false)]
     [InlineData("new PerformanceService(runner, restore)", true)]
     [InlineData("new PerformanceService(runner, restore, dir)", false)]
-    [InlineData("new ProfileService(privacy)", true)]
-    [InlineData("new ProfileService(privacy, local, roaming)", false)]
+    [InlineData("new ProfileService(privacy, gaming)", true)]
+    [InlineData("new ProfileService(privacy, gaming, local, roaming)", false)]
     public void TheConfigDirScan_JudgesEachConstructionByTheOverloadItBindsTo(string construction, bool leaks)
     {
         // Proves the guard above from both sides, against the real overloads reflection finds: a construction that

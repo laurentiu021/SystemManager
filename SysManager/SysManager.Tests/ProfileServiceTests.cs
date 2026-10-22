@@ -19,13 +19,14 @@ namespace SysManager.Tests;
 public class ProfileServiceTests : IDisposable
 {
     private readonly string _dir;
+    private readonly IGamingProfileService _gaming = Substitute.For<IGamingProfileService>();
     private readonly ProfileService _svc;
 
     public ProfileServiceTests()
     {
         _dir = Path.Combine(Path.GetTempPath(), "SysManagerProfileTest_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
-        _svc = new ProfileService(FakePrivacy.AllOff(), _dir);
+        _svc = new ProfileService(FakePrivacy.AllOff(), _gaming, _dir);
     }
 
     public void Dispose()
@@ -185,7 +186,7 @@ public class ProfileServiceTests : IDisposable
         var roaming = Path.Combine(_dir, "Roaming");
         Directory.CreateDirectory(local);
         Directory.CreateDirectory(roaming);
-        var svc = new ProfileService(FakePrivacy.AllOff(), local, roaming);
+        var svc = new ProfileService(FakePrivacy.AllOff(), _gaming, local, roaming);
 
         // Apply both sections.
         svc.ApplySections(
@@ -218,7 +219,7 @@ public class ProfileServiceTests : IDisposable
 
         var otherPc = Path.Combine(_dir, "other-pc");
         Directory.CreateDirectory(otherPc);
-        Assert.Equal(1, new ProfileService(FakePrivacy.AllOff(), otherPc).ApplySections(exported.Sections));
+        Assert.Equal(1, new ProfileService(FakePrivacy.AllOff(), _gaming, otherPc).ApplySections(exported.Sections));
 
         var carried = new UpdateCheckPreferenceService(otherPc).Load();
         Assert.NotNull(carried);
@@ -352,8 +353,9 @@ public class ProfileServiceTests : IDisposable
         // The privacy section lives outside the catalog but shares its key and file-name space: a catalog entry
         // keyed "privacy" would be handed to the Privacy & Telemetry tab instead of written. Its real values,
         // read off a built section rather than restated here.
-        var privacy = Assert.Single(new ProfileService(FakePrivacy.Returning(FakePrivacy.Toggle("tips", on: true)), _dir)
-            .AvailableSections());
+        var privacy = Assert.Single(
+            new ProfileService(FakePrivacy.Returning(FakePrivacy.Toggle("tips", on: true)), _gaming, _dir)
+                .AvailableSections());
         keys.Add(privacy.Key);
         fileNames.Add(privacy.FileName);
 
@@ -405,39 +407,26 @@ public class ProfileServiceTests : IDisposable
     }
 
     /// <summary>
-    /// A gaming profile carries the user's tick-boxes, but ActiveSession is the crash-recovery marker for
-    /// a game running on the machine that exported it. Imported as-is, this PC would offer to restore
-    /// tweaks it never applied for a game that never ran here.
+    /// The gaming store holds this PC's game mode session record beside the configuration, so the section goes to
+    /// the service that owns the store, which keeps the record and writes under its lock (#2801). This class writing
+    /// the file itself deleted the record, and with it the only way back from a session left on.
     /// </summary>
-    [Fact]
-    public void ApplySections_GamingProfiles_KeepsTheProfilesAndDropsTheLiveSession()
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public void ApplySections_GamingProfiles_GoToTheGamingService_NotOverItsFile(bool taken, int expected)
     {
-        var foreign = "{\"SchemaVersion\":1,\"LastConfig\":{\"FinestTimerResolution\":true},"
-            + "\"ActiveSession\":{\"Profile\":{},\"Snapshot\":{}}}";
+        const string mine = "{\"SchemaVersion\":1,\"LastConfig\":{\"Mine\":true},\"ActiveSession\":{}}";
+        const string imported = "{\"SchemaVersion\":1,\"LastConfig\":{\"FinestTimerResolution\":true}}";
+        WriteConfig("gaming-profiles.json", mine);
+        _gaming.ImportConfiguration(imported).Returns(taken);
 
-        var applied = _svc.ApplySections([new ConfigSection("gaming", "Gaming profiles", "gaming-profiles.json", foreign)]);
+        var applied = _svc.ApplySections(
+            [new ConfigSection("gaming", "Gaming profiles", "gaming-profiles.json", imported)]);
 
-        Assert.Equal(1, applied);
-        var written = File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json"));
-        Assert.DoesNotContain("ActiveSession", written, StringComparison.Ordinal);
-        Assert.Contains("FinestTimerResolution", written, StringComparison.Ordinal);
-        Assert.Contains("SchemaVersion", written, StringComparison.Ordinal);
-    }
-
-    /// <summary>
-    /// An unreadable section is skipped, not written. Overwriting a working local file with content the
-    /// owning service cannot parse would turn a bad import into lost settings.
-    /// </summary>
-    [Fact]
-    public void ApplySections_GamingProfiles_UnparseableContentIsSkippedAndLeavesTheLocalFileAlone()
-    {
-        WriteConfig("gaming-profiles.json", "{\"SchemaVersion\":1,\"LastConfig\":{\"Mine\":true}}");
-
-        var applied = _svc.ApplySections([new ConfigSection("gaming", "Gaming profiles", "gaming-profiles.json", "{ not json ][")]);
-
-        Assert.Equal(0, applied);
-        Assert.Contains("Mine", File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json")),
-            StringComparison.Ordinal);
+        Assert.Equal(expected, applied);
+        _gaming.Received(1).ImportConfiguration(imported);
+        Assert.Equal(mine, File.ReadAllText(Path.Combine(_dir, "gaming-profiles.json")));
     }
 
     // ---------- A profile file someone else made (the import's trust boundary) ----------
@@ -475,7 +464,8 @@ public class ProfileServiceTests : IDisposable
 
     private static readonly DateTime ExportedAt = new(2026, 10, 5, 9, 0, 0, DateTimeKind.Local);
 
-    private ProfileService WithPrivacy(params PrivacyToggle[] toggles) => new(FakePrivacy.Returning(toggles), _dir);
+    private ProfileService WithPrivacy(params PrivacyToggle[] toggles) =>
+        new(FakePrivacy.Returning(toggles), _gaming, _dir);
 
     [Fact]
     public void AvailableSections_ListsThePrivacyChoices_OnlyOnceAProtectionIsOn()
@@ -512,7 +502,7 @@ public class ProfileServiceTests : IDisposable
         var tipsOn = true;
         var privacy = Substitute.For<IPrivacyService>();
         privacy.LoadToggles().Returns(_ => [FakePrivacy.Toggle("tips", tipsOn), FakePrivacy.Toggle("widgets", on: true)]);
-        var svc = new ProfileService(privacy, _dir);
+        var svc = new ProfileService(privacy, _gaming, _dir);
         Assert.Single(svc.BuildProfile(ExportedAt).Sections);
 
         tipsOn = false;

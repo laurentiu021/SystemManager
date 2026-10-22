@@ -58,6 +58,13 @@ public interface IGamingProfileService
     void SaveLastConfig(GamingProfile profile);
 
     /// <summary>
+    /// Takes the configuration an imported gaming store carries, as <see cref="SaveLastConfig"/> saves one, and keeps
+    /// this PC's own session record. False, with nothing written, when the imported store does not parse or a newer
+    /// SysManager wrote it, or when this PC's store could not be read or written.
+    /// </summary>
+    bool ImportConfiguration(string json);
+
+    /// <summary>
     /// What a previous run left on disk: a session still applied (closed or crashed mid-game), which the UI offers to
     /// revert on startup — crash recovery for the machine-wide tweaks — or none, or a record that could not be read or
     /// used. None while game mode is on in this run.

@@ -42,7 +42,9 @@ public class ProfileViewModelTests : IDisposable
     /// </summary>
     private async Task<ProfileViewModel> NewVmAsync(IPrivacyService? privacy = null)
     {
-        var vm = new ProfileViewModel(new ProfileService(privacy ?? FakePrivacy.AllOff(), _dir), _handoff, _navigation);
+        var vm = new ProfileViewModel(
+            new ProfileService(privacy ?? FakePrivacy.AllOff(), Substitute.For<IGamingProfileService>(), _dir),
+            _handoff, _navigation);
         await vm.InitializationComplete;
         return vm;
     }

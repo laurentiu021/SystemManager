@@ -1,0 +1,428 @@
+name: Winget
+
+# Submits a published release to winget: syncs the winget-pkgs fork and opens the manifest pull
+# request. release.yml calls it once the release is published, and it runs by itself to retry a
+# submission that failed, with nothing rebuilt:
+#
+#   gh workflow run winget.yml -f tag=v1.2.3
+#
+# These steps used to end the release job, and no path retried them alone (#2805). A re-run of a
+# tag-push release found the release in its guard and skipped everything, and a re-run of a
+# dispatched one rebuilt and re-attested the binary and rewrote the release notes.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag to submit (e.g. v1.2.3)"
+        required: true
+        type: string
+    secrets:
+      WINGET_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release to submit (e.g. v1.2.3)"
+        required: true
+
+# Read-only. The one write this workflow makes goes to the winget-pkgs fork, with WINGET_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Submit the release to winget
+    # Windows, where these steps ran while they were part of the release job.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # The first step looks up the build attestation of the release's .exe.
+      attestations: read
+    # One submission of a version at a time: two would race to create the same branch on the fork.
+    concurrency:
+      group: winget-${{ inputs.tag }}
+      cancel-in-progress: false
+
+    steps:
+      # Nothing below runs unless the release is out: its .exe, the .exe's SHA256 file and SBOM, and a
+      # build attestation for that .exe. SECURITY.md says the winget token acts only after those are
+      # published. That held by position while these steps sat in the release job after "Create
+      # GitHub Release", and a run dispatched by hand has no such step before it, so this checks.
+      #
+      # The tag is a dispatch input reaching a job that holds a credential, so its shape is checked
+      # before it is used. The assets are read through the release's id, because the by-tag record is
+      # the view that served an empty assets array for hours after v1.112.9 (see the wait step below)
+      # while the release read by id listed them.
+      - name: Check the release is published
+        id: published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Not echoed when it fails the check: a line of it could read as a workflow command.
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The tag given is not a release tag like v1.2.3."
+            exit 1
+          fi
+          EXE="SysManager-${TAG}.exe"
+
+          # gh api prints the body of an error reply on stdout, so only a number is an id or a count.
+          id=""
+          for i in $(seq 1 24); do
+            found=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .id 2>/dev/null || true)
+            if [[ "${found}" =~ ^[0-9]+$ ]]; then id="${found}"; break; fi
+            echo "read ${i}: no release found for ${TAG}"
+            if [ "${i}" -lt 24 ]; then sleep 5; fi
+          done
+          if [ -z "${id}" ]; then
+            echo "::error::${TAG} has no release, so there is nothing to submit to winget."
+            exit 1
+          fi
+
+          ASSETS=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${id}/assets?per_page=100" \
+            --jq '.[] | "\(.name) \(.size) \(.digest // "")"')
+          MISSING=""
+          for name in "${EXE}" "${EXE}.sha256" "SysManager-${TAG}.sbom.json"; do
+            if ! printf '%s\n' "${ASSETS}" | grep -qF "${name} "; then
+              MISSING="${MISSING} ${name}"
+            fi
+          done
+          if [ -n "${MISSING}" ]; then
+            echo "::error::${TAG}'s release has no${MISSING}, so it is not submitted to winget."
+            exit 1
+          fi
+
+          SIZE=$(printf '%s\n' "${ASSETS}" | awk -v n="${EXE}" '$1 == n { print $2 }')
+          DIGEST=$(printf '%s\n' "${ASSETS}" | awk -v n="${EXE}" '$1 == n { print $3 }')
+          if [[ ! "${SIZE}" =~ ^[0-9]+$ ]] || [ "${SIZE}" -lt 10000000 ]; then
+            echo "::error::${EXE} is only ${SIZE:-0} bytes, so its upload was truncated or empty."
+            exit 1
+          fi
+          if [[ ! "${DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::GitHub reports no SHA256 digest for ${EXE}, so its attestation cannot be looked up."
+            exit 1
+          fi
+
+          ATTESTATIONS=$(gh api "repos/${GITHUB_REPOSITORY}/attestations/${DIGEST}" \
+            --jq '.attestations | length' 2>/dev/null || true)
+          if [[ ! "${ATTESTATIONS}" =~ ^[0-9]+$ ]] || [ "${ATTESTATIONS}" -lt 1 ]; then
+            echo "::error::${EXE} has no build attestation, so it is not submitted to winget."
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "${TAG} is published: ${EXE} (${SIZE} bytes), its .sha256 and SBOM, and ${ATTESTATIONS} attestation(s) for its digest."
+
+      # winget-releaser creates its manifest branch on our winget-pkgs fork, and that
+      # branch must descend from current upstream. When the fork drifts, the branch
+      # creation fails — which is what silently broke the 1.56.6 and 1.56.8 publishes
+      # (the fork had fallen 5452 commits behind and komac reported the failure as a
+      # token problem, sending the diagnosis down the wrong path twice). Upstream
+      # recommends an external fork-sync app; syncing here instead means the fork is
+      # current at the exact moment it is used, with no dependency on a third-party
+      # service's schedule.
+      #
+      # Non-fatal by design: a sync failure must not abort a release whose binary is
+      # already published. If the fork is genuinely broken the winget step below fails
+      # and reports it, which is the correct place for that error to surface.
+      # The PAT the three winget steps depend on has a finite lifetime, and nothing announced that in
+      # advance: the first sign was a release publishing to GitHub and never reaching winget, with the
+      # failure reported as a permissions error. This asks GitHub about the token BEFORE using it.
+      #
+      # GitHub returns `github-authentication-token-expiration` only for a token that actually has an
+      # expiry, and `X-Oauth-Scopes` only for a CLASSIC PAT — a fine-grained token has no scope header at
+      # all. So the two headers together identify which KIND of token the secret holds and how long it has
+      # left, which is precisely what the secret's name cannot tell anyone (#1676).
+      #
+      # Never fatal, and never prints the token: only the expiry date and the scope list, both safe in a
+      # public log. A release must not be blocked by a warning about a future problem.
+      - name: Check the winget token before using it
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          headers=$(gh api -i user 2>/dev/null | sed -n '1,40p' || true)
+
+          if [ -z "$headers" ]; then
+            echo "::warning::Could not query the winget token — it may already be expired or revoked."
+            exit 0
+          fi
+
+          # gh prints the reply to a refused token as well, so the status line decides. Read as headers, a
+          # 401 has no scope list and no expiry, and was reported as a fine-grained token that never expires.
+          status=$(printf '%s\n' "$headers" | head -n 1 | tr -d '\r')
+          case "$status" in
+            "HTTP/"*" 2"[0-9][0-9]*) ;;
+            *)
+              echo "::error::GitHub refused WINGET_TOKEN ($status): it has expired or been revoked. The winget publish below will fail until it is replaced."
+              exit 0
+              ;;
+          esac
+
+          expiry=$(printf '%s' "$headers" | grep -i '^github-authentication-token-expiration:' | cut -d' ' -f2- | tr -d '\r' || true)
+          scopes=$(printf '%s' "$headers" | grep -i '^x-oauth-scopes:' | cut -d' ' -f2- | tr -d '\r' || true)
+
+          # winget-releaser takes a CLASSIC token only: its README says fine-grained tokens are not supported
+          # (its issue #172). The least it needs is public_repo for the manifest pull request, plus workflow so
+          # the fork sync can bring in upstream changes to winget-pkgs' own workflow files. The token in use has
+          # the full repo scope and no expiry, and it stays that way by the account holder's decision (#1676):
+          # its scopes are printed here, and only a scope the publish cannot do without is warned about.
+          if [ -n "$scopes" ]; then
+            echo "Token kind: CLASSIC personal access token"
+            echo "Scopes: $scopes"
+            # A token without workflow passes every other check here and then fails all three publish attempts
+            # with HTTP 422 the first time upstream has touched its own workflow files, which reads as a winget
+            # outage rather than a missing box (1.115.0 to 1.116.1 never reached winget that way). Name it here.
+            case ",$(printf '%s' "$scopes" | tr -d ' ')," in
+              *,workflow,*) ;;
+              *) echo "::warning::WINGET_TOKEN has no workflow scope. The winget-pkgs fork sync needs it whenever upstream changes its own workflow files, and without it every publish attempt below fails with HTTP 422. Tick workflow on the token; its value does not change, so the secret stays as it is (#1676)." ;;
+            esac
+          else
+            echo "::warning::WINGET_TOKEN is not a classic personal access token. winget-releaser supports classic tokens only, so the winget publish below will probably fail."
+          fi
+
+          if [ -z "$expiry" ]; then
+            echo "No expiry reported — this token does not expire."
+            exit 0
+          fi
+
+          echo "Expires: $expiry"
+          expiry_epoch=$(date -u -d "$expiry" +%s 2>/dev/null || echo "")
+          if [ -z "$expiry_epoch" ]; then
+            echo "::warning::Could not parse the token expiry '$expiry' — check it by hand."
+            exit 0
+          fi
+
+          days=$(( (expiry_epoch - $(date -u +%s)) / 86400 ))
+          echo "Days remaining: $days"
+
+          if [ "$days" -le 0 ]; then
+            echo "::error::WINGET_TOKEN has EXPIRED. The winget publish below will fail until it is replaced."
+          elif [ "$days" -le 30 ]; then
+            echo "::warning::WINGET_TOKEN expires in $days day(s), on $expiry. Replace it before then, or a release will publish to GitHub and silently not reach winget."
+          fi
+
+      # winget-releaser resolves the release BY TAG: its first internal step calls
+      # /releases/tags/<tag> and collects the installer URLs out of that payload's `assets`
+      # array. On v1.112.9 the array came back EMPTY even though the upload step above had
+      # logged a tick for all three files, so the action invoked komac with nothing after
+      # --urls and komac refused: "a value is required for '--urls <URLS>...' but none was
+      # supplied". Reading the release by ID, or /releases/latest, or the release page,
+      # returned all three the entire time — only the by-tag view was wrong, and that is
+      # precisely the one view this action uses.
+      #
+      # The same run had already warned "Release <id> is not yet discoverable by tag <tag>,
+      # retrying...", so the tag lookup was already lagging while the release was being
+      # created and went on serving a record from the moment it still had no assets attached.
+      #
+      # It is not one lagging index that heals monotonically: reading the by-tag record
+      # repeatedly returns 0 assets on most reads and the correct 3 on an occasional one
+      # (1 in 16, measured hours after the release). So a gate that stops at the FIRST
+      # successful read can be satisfied by one lucky reply while the read winget-releaser
+      # itself makes a moment later still lands on a stale copy — a pass that proves
+      # nothing. Hence the streak: three consecutive agreeing reads, with the counter reset
+      # by any miss.
+      #
+      # The three publish attempts below re-sync the fork but never WAIT, because they were
+      # built for a different failure (a stale fork racing a busy upstream). Against this one
+      # all three fired inside 14 seconds against the same payload and failed identically.
+      # So poll the exact endpoint the action reads, for the exact pattern it matches, before
+      # spending them.
+      #
+      # Bounded and non-fatal: if the lookup never settles the attempts still run, so this can
+      # only ever add a wait, never block a release that would otherwise have published. It
+      # would NOT have saved v1.112.9, whose record was still flapping hours later — no
+      # reasonable ceiling covers that. What it does there is make the failure legible, by
+      # naming the cause in the report below instead of sending a reader to three wrong ones.
+      - name: Wait for the release to be visible by tag
+        id: tagvisible
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.published.outputs.tag }}
+        run: |
+          set -o pipefail
+          streak=0
+          for i in $(seq 1 40); do
+            count=$(gh api "repos/$REPO/releases/tags/$TAG" \
+              --jq '[.assets[] | select(.name | test("\\.exe$"))] | length' 2>/dev/null) || count=0
+            count=${count:-0}
+            if [ "$count" -ge 1 ]; then streak=$((streak + 1)); else streak=0; fi
+            echo "read $i: /releases/tags/$TAG lists $count installer(s) — streak $streak/3"
+            if [ "$streak" -ge 3 ]; then
+              echo "visible=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$i" -lt 40 ]; then sleep 5; fi
+          done
+          echo "visible=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=release not visible by tag::/releases/tags/$TAG did not report its .exe asset on three consecutive reads within 3 minutes, although the release has one. winget-releaser reads that endpoint, so the publish below will probably fail with \"a value is required for '--urls'\". Compare it against /releases/<id>/assets."
+
+      - name: Sync the winget-pkgs fork with upstream
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          behind=$(gh api "repos/microsoft/winget-pkgs/compare/master...laurentiu021:winget-pkgs:master" \
+            --jq '.behind_by' 2>/dev/null) || behind="unknown"
+          echo "Fork is behind upstream by: $behind commit(s)"
+          if [ "$behind" = "0" ]; then
+            echo "Already current — nothing to do."
+            exit 0
+          fi
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"'
+          after=$(gh api "repos/microsoft/winget-pkgs/compare/master...laurentiu021:winget-pkgs:master" \
+            --jq '.behind_by' 2>/dev/null) || after="unknown"
+          echo "Fork is now behind by: $after commit(s)"
+          # A small non-zero value here is NORMAL, not a failure: upstream moved while we synced.
+          # The retry below is what makes that survivable — see its comment.
+
+      # continue-on-error: publishing to winget depends on a third-party repository and on a PAT that
+      # can expire. When this broke on 1.57.2 ("does not have the correct permissions to execute
+      # CreateRef") it took down every step after it — so the release existed on GitHub with its
+      # binary, checksum, SBOM and attestation, but no announcement was ever posted. Telling users
+      # about a release that IS published must not depend on a second distribution channel. The
+      # failure is still surfaced: the step stays red and the step below writes a loud summary.
+      # Since #2805 these steps are a job of their own, after the one that posts the announcement,
+      # and continue-on-error is what still lets the retries and the summary run.
+      #
+      # RETRIED, because syncing once is not enough. v1.61.3 published on GitHub and never reached
+      # winget; the log showed the sync working (38 commits behind -> 1) and the publish failing
+      # moments later with "Ref cannot be created". microsoft/winget-pkgs merges continuously, so the
+      # fork was stale again within seconds of being synced. Nothing was wrong with the token (no
+      # 403/422 in that run) or with the sync logic — it is a race against a very busy upstream.
+      #
+      # Each attempt re-syncs IMMEDIATELY before it, so the window between "fork is current" and
+      # "create the branch" is as small as this workflow can make it. Three attempts, because the
+      # failure is probabilistic: one retry already makes a repeat unlikely, and a third costs
+      # seconds. A version that still cannot land after three is a real problem worth reporting
+      # rather than retrying forever.
+      - name: Update winget package (attempt 1)
+        id: winget1
+        continue-on-error: true
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.published.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Re-sync the fork before retrying
+        if: steps.winget1.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          echo "Attempt 1 failed. Re-syncing the fork immediately before retrying."
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"' || echo "merge-upstream reported no change"
+
+      - name: Update winget package (attempt 2)
+        id: winget2
+        if: steps.winget1.outcome == 'failure'
+        continue-on-error: true
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.published.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Re-sync the fork before the final attempt
+        if: steps.winget1.outcome == 'failure' && steps.winget2.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -o pipefail
+          echo "Attempt 2 failed. Re-syncing once more before the final attempt."
+          gh api -X POST repos/laurentiu021/winget-pkgs/merge-upstream -f branch=master \
+            --jq '"\(.merge_type): \(.message)"' || echo "merge-upstream reported no change"
+
+      - name: Update winget package (attempt 3)
+        id: winget3
+        if: steps.winget1.outcome == 'failure' && steps.winget2.outcome == 'failure'
+        continue-on-error: true
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: laurentiu021.SysManager
+          installers-regex: '\.exe$'
+          release-tag: ${{ steps.published.outputs.tag }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+      # Collapse the three attempts into one outcome, so the reporting step below has a single
+      # condition to test and the summary can say WHICH attempt worked. Written as a step rather
+      # than a compound `if:` because the three-way expression would otherwise be repeated in the
+      # report and could drift out of agreement with reality.
+      - name: Determine the winget outcome
+        id: wingetresult
+        shell: bash
+        run: |
+          if [ "${{ steps.winget1.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=1" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.winget2.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=2" >> "$GITHUB_OUTPUT"
+            echo "::notice title=winget published on retry::Attempt 1 failed (upstream moved); attempt 2 succeeded."
+          elif [ "${{ steps.winget3.outcome }}" = "success" ]; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"; echo "attempt=3" >> "$GITHUB_OUTPUT"
+            echo "::notice title=winget published on retry::Attempts 1 and 2 failed (upstream moved); attempt 3 succeeded."
+          else
+            echo "outcome=failure" >> "$GITHUB_OUTPUT"; echo "attempt=3" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Make a skipped winget publish impossible to miss. With continue-on-error the job goes green
+      # (correctly — the release did publish), so without this the only trace would be one red step
+      # inside a passing run, which is exactly the kind of thing that goes unnoticed for weeks.
+      - name: Report a failed winget publish
+        if: steps.wingetresult.outputs.outcome == 'failure'
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.published.outputs.tag }}
+          TAG_VISIBLE: ${{ steps.tagvisible.outputs.visible }}
+        run: |
+          echo "::warning title=winget publish failed::$TAG is published on GitHub but did NOT reach winget after 3 attempts. Users upgrading via 'winget upgrade' will not see it until this is resolved."
+          {
+            echo "### winget publish failed — all 3 attempts"
+            echo
+            echo "\`$TAG\` **is** published on GitHub — binary, checksum, SBOM and attestation are all present."
+            echo "It did **not** reach winget, so \`winget upgrade\` will not offer it yet."
+            echo
+            if [ "$TAG_VISIBLE" = "false" ]; then
+              echo "**The wait step above timed out**, so cause 1 is the likely one: the release's assets never"
+              echo "became visible through \`/releases/tags/$TAG\`."
+              echo
+            fi
+            echo "Each attempt re-synced the fork immediately beforehand, so this is unlikely to be the"
+            echo "upstream race that caused the v1.61.3 miss. Check, in this order:"
+            echo "1. **GitHub is serving a stale release record by tag.** winget-releaser resolves the release"
+            echo "   through \`/releases/tags/<tag>\` and builds \`--urls\` from that payload's \`assets\`; if the array"
+            echo "   is empty it calls komac with nothing after the flag and komac refuses with"
+            echo "   \`a value is required for '--urls <URLS>...' but none was supplied\`. That is what happened on"
+            echo "   v1.112.9. The discriminator, because only this one view is wrong:"
+            echo "   \`gh api repos/$REPO/releases/tags/$TAG --jq '.assets|length'\` returns 0 while"
+            echo "   \`gh api repos/$REPO/releases/<id>/assets --jq 'length'\` returns 3. **Read the first one"
+            echo "   several times** — it flaps, returning the correct count on roughly one read in sixteen, so a"
+            echo "   single reply of 3 does not clear this cause. A \`PATCH\` to the release does not heal it, and"
+            echo "   \`gh release download $TAG\` reports \"no assets\" while still exiting 0."
+            echo "2. The \`WINGET_TOKEN\` secret has expired or been revoked — it is a PAT with a finite lifetime."
+            echo "3. A branch for this version already exists on the \`laurentiu021/winget-pkgs\` fork from an earlier"
+            echo "   partial run — \`Ref cannot be created\` also means \"already there\". Delete it and retry."
+            echo "4. Upstream has rejected the manifest shape (a schema version bump on their side)."
+            echo
+            echo "Once fixed, retry only the submission: \`gh workflow run winget.yml -f tag=$TAG\`. The release"
+            echo "itself does not need to be rebuilt."
+          } >> "$GITHUB_STEP_SUMMARY"

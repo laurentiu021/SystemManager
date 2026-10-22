@@ -10143,6 +10143,50 @@ public partial class ArchitectureTests
     }
 
     /// <summary>
+    /// The release runs on its tag, and stops before building when its own commit is not the one it checked out, so its
+    /// attestation names the commit that built the binary (#2805).
+    /// </summary>
+    /// <remarks>
+    /// <c>actions/attest-build-provenance</c> signs with the run's <c>GITHUB_SHA</c> and <c>GITHUB_REF</c>.
+    /// Auto-release dispatched the release without <c>--ref</c>, so the run belonged to main at its head as of the
+    /// dispatch, while the job checked out and built the tag. The two matched only while nothing landed on main in
+    /// between, and a re-dispatch, the workflow's recovery for a release that failed partway, comes after main has
+    /// moved.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseRun_IsItsTagsOwn_SoItsAttestationNamesTheCommitItBuilt()
+    {
+        var root = TestPaths.RepoRoot();
+        var dispatches = File.ReadAllLines(Path.Combine(root, ".github", "workflows", "auto-release.yml"))
+            .Select(l => l.Trim())
+            .Where(l => !l.StartsWith('#') && l.Contains("gh workflow run release.yml", StringComparison.Ordinal))
+            .ToList();
+        Assert.NotEmpty(dispatches);
+        Assert.All(dispatches, l => Assert.Contains("--ref \"$NEXT\"", l, StringComparison.Ordinal));
+
+        var lines = File.ReadAllLines(Path.Combine(root, ".github", "workflows", "release.yml"));
+        var check = ReleaseStepLine(lines, "Check this run's commit is the one it builds");
+        var checkout = ReleaseStepLine(lines, "Checkout");
+        var attest = ReleaseStepLine(lines, "Attest build provenance");
+        Assert.True(checkout < check && check < attest,
+            $"the commit check (line {check + 1}) has to come after the checkout (line {checkout + 1}) and before the "
+            + $"attestation (line {attest + 1}).");
+
+        var code = ReleaseStepCode(lines, check);
+        Assert.Contains("git rev-parse HEAD", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", code, StringComparison.Ordinal);
+
+        // The mismatch itself has to fail the job: a step that only says so leaves the wrong attestation to be
+        // signed. Checked in the comparison's own branch, because the step throws elsewhere too.
+        var codeLines = code.Split('\n').Select(l => l.Trim()).ToList();
+        var compare = codeLines.FindIndex(l => l.StartsWith("if (", StringComparison.Ordinal)
+                                               && l.Contains("-ne $env:GITHUB_SHA", StringComparison.Ordinal));
+        Assert.True(compare >= 0 && compare + 1 < codeLines.Count,
+            "the step does not compare the checked-out commit with $env:GITHUB_SHA");
+        Assert.StartsWith("throw ", codeLines[compare + 1], StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The release guard builds only when the tag has no release, and fails on any answer that does not say (#2805).
     /// </summary>
     /// <remarks>

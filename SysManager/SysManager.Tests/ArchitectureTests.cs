@@ -6649,7 +6649,7 @@ public partial class ArchitectureTests
     /// </summary>
     /// <remarks>
     /// The four Linux jobs are the tagging path: auto-release computes and pushes the next version tag, CI
-    /// checks that the tag landed, and the release guard and the weekly integrity check read the releases.
+    /// checks that the tag landed, and the release guard and the integrity check read the releases.
     /// <c>ubuntu-latest</c> moves to each new Ubuntu release when GitHub decides, which changes the shell
     /// tools under that arithmetic with no diff in this repository. Why they are pinned is written at
     /// auto-release.yml's <c>runs-on</c>. This keeps an edit or a new job from going back to the moving

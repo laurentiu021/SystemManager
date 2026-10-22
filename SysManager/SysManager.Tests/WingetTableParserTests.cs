@@ -319,4 +319,49 @@ public class WingetTableParserTests
         Assert.Equal("", result[0].Available);
         Assert.Equal("", result[0].Source);
     }
+
+    // ── A second table below the first (#2849) ──────────────────────────────
+    // winget prints one under the upgrade list for the apps that have to be named one by one, below a heading and
+    // its own header. When the summary line between them is not recognised, both of those lines were read as rows.
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]   // with the blank line winget prints above the heading, which the runner drops
+    public void ASecondTable_EndsTheFirst_AndItsHeadingAndHeaderAreNotRows(bool blankLineAboveTheHeading)
+    {
+        var lines = new List<string>
+        {
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+            "Node.js                      OpenJS.NodeJS                  20.11.0   22.1.0      winget",
+            "2 upgrades, in a wording no pattern here knows.",
+        };
+        if (blankLineAboveTheHeading) lines.Add("");
+        lines.Add("The following packages have an upgrade available, but require explicit targeting for upgrade:");
+        lines.Add("Name         Id           Version Available Source");
+        lines.Add("--------------------------------------------------");
+        lines.Add("Contoso Tool Contoso.Tool 1.0     1.1       winget");
+
+        var result = WingetTableParser.Parse(lines, HeaderPattern, NeverMatches);
+
+        Assert.Equal(["Git.Git", "OpenJS.NodeJS"], result.Select(r => r.Id));
+    }
+
+    [Fact]
+    public void ASeparatorBeforeAnyRow_IsStillSkipped()
+    {
+        // Only a separator after rows starts another table.
+        var lines = new List<string>
+        {
+            "Name                         Id                             Version   Available   Source",
+            "-----------------------------------------------------------------------------------------",
+            "-----------------------------------------------------------------------------------------",
+            "Git                          Git.Git                        2.47.0    2.48.0      winget",
+        };
+
+        var result = WingetTableParser.Parse(lines, HeaderPattern, NeverMatches);
+
+        Assert.Equal("Git.Git", Assert.Single(result).Id);
+    }
 }

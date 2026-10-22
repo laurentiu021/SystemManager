@@ -1820,7 +1820,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   fails on a line marked live that does not announce, on one that announces without being marked,
   and on a live setting on an element with no automation peer, as the toast's Border was.
 - `WingetTableParser` — parses the fixed-width table output from `winget`
-  CLI commands into structured objects.
+  CLI commands into structured objects. A table ends at the caller's summary
+  line, or where a second table starts below it, without that table's heading
+  and header lines. `WingetService`'s summary pattern holds winget's
+  "{0} upgrades available." line in each of the eleven languages winget ships.
 - `WingetFailure` — the one translation of winget outcomes into plain language:
   why an install or uninstall failed, whether an install found the app already
   there, and the missing-App-Installer sentence. `UpgradeWarning` is the one

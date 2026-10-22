@@ -48,26 +48,39 @@ internal static partial class WingetTableParser
     /// header line in the common (English) case; when it doesn't match — e.g. a localized
     /// winget where the column titles are translated (de-DE "Name Kennung Version Verfügbar
     /// Quelle") — the header is located as the line directly above the dashes separator row,
-    /// so the parser works on any UI language. summaryPattern identifies the termination line.
+    /// so the parser works on any UI language. summaryPattern identifies the termination line, and a second
+    /// table below the first ends it too, without the heading and header lines above that table.
     /// </summary>
     internal static List<RawRow> Parse(
         List<string> lines,
         Regex headerPattern,
         Regex summaryPattern)
     {
-        List<RawRow> rows = [];
+        // Each row with the line it was read from, so the lines of a table that follows can be taken back out.
+        List<(int Line, RawRow Row)> read = [];
 
         int headerIdx = LocateHeader(lines, headerPattern);
-        if (headerIdx < 0) return rows;
+        if (headerIdx < 0) return [];
 
         var header = lines[headerIdx];
         var layout = DetectColumns(header);
-        if (layout.Id < 0 || layout.Version < 0) return rows;
+        if (layout.Id < 0 || layout.Version < 0) return [];
 
         for (int i = headerIdx + 2; i < lines.Count; i++)
         {
             var line = lines[i];
             if (string.IsNullOrWhiteSpace(line)) continue;
+
+            // Another table: winget prints one below the upgrade list for the packages that need to be named one by
+            // one, and one for pinned packages, each under a heading line and its own header. Both were read as rows
+            // of this table when its summary line was not recognised, so they go, and this table ends here (#2849).
+            if (read.Count > 0 && DashesSeparator().IsMatch(line))
+            {
+                var heading = SecondLineAbove(lines, i);
+                read.RemoveAll(r => r.Line >= heading);
+                break;
+            }
+
             if (line.StartsWith("--")) continue;
             if (summaryPattern.IsMatch(line)) break;
             if (line.Length < layout.Version) continue;
@@ -80,17 +93,29 @@ internal static partial class WingetTableParser
 
             if (string.IsNullOrWhiteSpace(id)) continue;
 
-            rows.Add(new RawRow
+            read.Add((i, new RawRow
             {
                 Name = name,
                 Id = id,
                 Version = version,
                 Available = available,
                 Source = source
-            });
+            }));
         }
 
-        return rows;
+        return [.. read.Select(r => r.Row)];
+    }
+
+    // The index of the second non-blank line above lines[separator]: the heading of the table that separator starts,
+    // above its header.
+    private static int SecondLineAbove(List<string> lines, int separator)
+    {
+        int found = 0;
+        for (int i = separator - 1; i >= 0; i--)
+        {
+            if (!string.IsNullOrWhiteSpace(lines[i]) && ++found == 2) return i;
+        }
+        return 0;
     }
 
     /// <summary>

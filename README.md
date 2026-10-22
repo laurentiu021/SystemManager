@@ -807,6 +807,9 @@ Across the tab:
 - **A check that fails says so.** If winget cannot finish the query — none of its sources
   reachable, for example — the tab says it couldn't check for updates, and why, instead of
   reporting everything up to date
+- **The list ends where winget's does, in any of the languages winget ships.** It stops at
+  winget's count of updates, so the heading and header winget prints below it, for apps that
+  have to be updated one by one, are never listed as apps
 - **Each result says what winget reported.** A download that did not match what winget
   expected is named as that, not as "no update", and one that needs administrator says so
 - **Cancel stops a batch between apps** — the update already running finishes first, because

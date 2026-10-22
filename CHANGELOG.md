@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.66] - 2026-10-22
+
+**On Performance Mode, applying one setting no longer resets the switches you changed in the others, and a half-on
+Xbox Game Bar now reads as partly on and can be turned fully off or on.**
+
+### Fixed
+
+- **Applying one section reset the switches of the others.** Every Apply ended by reading the settings again, which
+  set every switch back to the PC's state. Someone who turned on "Disable Game Mode" and "Reduce visual effects" and
+  pressed Apply Visual Effects found the Game Mode switch back where it was, and Apply Game Mode then said it was
+  already in the selected state. A switch you changed now stays as you set it until its own Apply, and declining an
+  Apply, or one refused because another change is running, puts back only its own switch. Since 0.12.0.
+- **The Xbox Game Bar read as off when only half of it was.** Its overlay and per-game recording are two settings, and
+  the tab called the Game Bar disabled when either was off, then stopped at "already in the selected state", so the
+  one still on was never turned off. The tab now reads them as two, shows "PARTLY ON", and either Apply sets both.
+  Since 0.12.0.
+
 ## [1.130.65] - 2026-10-22
 
 **Clearing History on Browser Cleaner now also clears the address-bar suggestions and the New Tab page's most visited

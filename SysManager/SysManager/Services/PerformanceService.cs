@@ -377,7 +377,8 @@ public sealed partial class PerformanceService : IDisposable
 
         profile.VisualEffectsReduced = !GetUiEffectsEnabled();
         profile.GameModeEnabled = ReadGameMode();
-        profile.XboxGameBarDisabled = !ReadXboxGameBarEnabled() || !ReadXboxGameDvrEnabled();
+        profile.XboxGameBarOn = ReadXboxGameBarEnabled();
+        profile.XboxGameDvrOn = ReadXboxGameDvrEnabled();
 
         var nvidiaKey = FindNvidiaSubKey();
         profile.HasNvidiaGpu = nvidiaKey is not null;
@@ -825,6 +826,19 @@ public sealed partial class PerformanceService : IDisposable
     /// restore goes through here, so that it says what the restore will do.
     /// </summary>
     internal RecordedAdapter FindAdapter(string subKey) => _findAdapter(subKey);
+
+    /// <summary>Performance Mode's Apply of the visual effects, through the write a restore makes.</summary>
+    /// <remarks>
+    /// The Apply commands called the static writes themselves, so no test could reach their success path without
+    /// changing the settings of the PC running it. Through the constructor's writes, a test's are its own.
+    /// </remarks>
+    internal void ApplyUiEffects(bool enabled) => _setUiEffects(enabled);
+
+    /// <summary>Performance Mode's Apply of Game Mode, through the write a restore makes.</summary>
+    internal void ApplyGameMode(bool enabled) => _setGameMode(enabled);
+
+    /// <summary>Performance Mode's Apply of the Xbox Game Bar: the overlay and per-game recording together.</summary>
+    internal void ApplyXboxGameBar(bool enabled) => _setXboxGameBar(enabled, enabled);
 
     /// <summary>
     /// Finds the NVIDIA card and writes its max-performance setting: <c>Found</c> is false when there is no card, and

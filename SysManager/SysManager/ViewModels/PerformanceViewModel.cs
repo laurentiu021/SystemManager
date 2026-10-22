@@ -295,7 +295,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         Summary = $"Active plan: {Profile.ProfileSummary} · "
                 + $"Visual FX: {(Profile.VisualEffectsReduced ? "Reduced" : "Normal")} · "
                 + $"Game Mode: {(Profile.GameModeEnabled ? "ON" : "OFF")} · "
-                + $"Xbox Bar: {(Profile.XboxGameBarDisabled ? "OFF" : "ON")}";
+                + $"Xbox Bar: {(Profile.XboxGameBarDisabled ? "OFF"
+                    : Profile.XboxGameBarPartlyOn ? "PARTLY ON" : "ON")}";
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -315,8 +316,9 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
     // The read behind Refresh. It says loaded only once the settings are read, so a read that failed keeps saying so.
     // It leaves NeedsReboot alone: a change that needs a restart still needs it after a read, and a read cannot tell
-    // whether the PC has restarted since, which is the only thing that clears it (#2607).
-    private async Task ReadSettingsAsync(string loaded)
+    // whether the PC has restarted since, which is the only thing that clears it (#2607). After an Apply it keeps the
+    // switches the person changed in other sections (#2836).
+    private async Task ReadSettingsAsync(string loaded, bool keepChanges = false)
     {
         // A read that starts now is after any put-back heard so far, so it answers that one.
         _readAgain = false;
@@ -327,7 +329,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
 
         try
         {
-            await ShowSettingsAsync();
+            await ShowSettingsAsync(keepChanges);
             StatusMessage = loaded;
         }
         catch (InvalidOperationException ex)
@@ -356,11 +358,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (_readAgain) await ReadSettingsAsync(loaded: ReadAgainAfterPutBack);
     }
 
+    // The read an Apply ends with, which leaves the other sections' switches as the person set them.
+    private Task ReadAfterApplyAsync() => ReadSettingsAsync(loaded: "Settings loaded.", keepChanges: true);
+
     // The settings as the tab shows them: the profile, the toggles, hibernation and the summary.
-    private async Task ShowSettingsAsync()
+    private async Task ShowSettingsAsync(bool keepChanges = false)
     {
         Profile = await _service.ReadProfileAsync();
-        SyncTogglesFromProfile();
+        SyncTogglesFromProfile(keepChanges);
         IsHibernationEnabled = PerformanceService.ReadHibernationEnabled();
         UpdateSummary();
     }
@@ -450,7 +455,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
                     break;
             }
 
-            await RefreshAsync();
+            await ReadAfterApplyAsync();
             StatusMessage = $"Power plan set to {planName}.";
             Log.Information("Power plan changed to {PlanName}", planName);
         }
@@ -478,14 +483,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var action = reduce ? "Reduce" : "Restore";
         if (!DialogService.Instance.Confirm(
             $"{action} visual effects (animations, fades, shadows)?",
-            "Visual Effects — Confirm")) { SyncTogglesFromProfile(); return; }
+            "Visual Effects — Confirm")) { WantVisualEffectsReduced = Profile.VisualEffectsReduced; return; }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply visual effects");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            SyncTogglesFromProfile();
+            WantVisualEffectsReduced = Profile.VisualEffectsReduced;
             return;
         }
 
@@ -496,8 +501,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             await EnsureSnapshotAsync();
             // Registry write + SystemParametersInfo broadcast off the UI thread so the window
             // stays responsive, busy-gated like ApplyPowerPlanAsync.
-            await Task.Run(() => PerformanceService.SetUiEffects(!reduce)).ConfigureAwait(true);
-            await RefreshAsync();
+            await Task.Run(() => _service.ApplyUiEffects(!reduce)).ConfigureAwait(true);
+            await ReadAfterApplyAsync();
             StatusMessage = $"Visual effects {(reduce ? "reduced" : "restored")}.";
             Log.Information("Visual effects {Action}", reduce ? "reduced" : "restored");
         }
@@ -524,14 +529,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var action = enabling ? "Enable" : "Disable";
         if (!DialogService.Instance.Confirm(
             $"{action} Game Mode?",
-            "Game Mode — Confirm")) { SyncTogglesFromProfile(); return; }
+            "Game Mode — Confirm")) { WantGameModeOff = !Profile.GameModeEnabled; return; }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Game Mode");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            SyncTogglesFromProfile();
+            WantGameModeOff = !Profile.GameModeEnabled;
             return;
         }
 
@@ -540,8 +545,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             await EnsureSnapshotAsync();
-            await Task.Run(() => PerformanceService.SetGameMode(enabling)).ConfigureAwait(true);
-            await RefreshAsync();
+            await Task.Run(() => _service.ApplyGameMode(enabling)).ConfigureAwait(true);
+            await ReadAfterApplyAsync();
             StatusMessage = $"Game Mode {(enabling ? "enabled" : "disabled")}.";
             Log.Information("Game Mode {Action}", enabling ? "enabled" : "disabled");
         }
@@ -559,7 +564,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     private async Task ApplyXboxGameBarAsync()
     {
         var disabling = WantXboxGameBarOff;
-        if (disabling == Profile.XboxGameBarDisabled)
+        // Done only when both values already are what is asked: half on is neither, so either Apply writes (#2836).
+        if (disabling ? Profile.XboxGameBarDisabled : Profile.XboxGameBarOn && Profile.XboxGameDvrOn)
         {
             StatusMessage = "Xbox Game Bar is already in the selected state.";
             return;
@@ -568,14 +574,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var action = disabling ? "Disable" : "Enable";
         if (!DialogService.Instance.Confirm(
             $"{action} Xbox Game Bar and Game DVR overlay?",
-            "Xbox Game Bar — Confirm")) { SyncTogglesFromProfile(); return; }
+            "Xbox Game Bar — Confirm")) { WantXboxGameBarOff = Profile.XboxGameBarDisabled; return; }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply Xbox Game Bar");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            SyncTogglesFromProfile();
+            WantXboxGameBarOff = Profile.XboxGameBarDisabled;
             return;
         }
 
@@ -584,8 +590,8 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         try
         {
             await EnsureSnapshotAsync();
-            await Task.Run(() => PerformanceService.SetXboxGameBar(!disabling)).ConfigureAwait(true);
-            await RefreshAsync();
+            await Task.Run(() => _service.ApplyXboxGameBar(!disabling)).ConfigureAwait(true);
+            await ReadAfterApplyAsync();
             StatusMessage = $"Xbox Game Bar {(disabling ? "disabled" : "enabled")}.";
             Log.Information("Xbox Game Bar {Action}", disabling ? "disabled" : "enabled");
         }
@@ -620,14 +626,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         if (!DialogService.Instance.Confirm(
             $"{action} NVIDIA GPU max performance (DisableDynamicPstate)?\n\n"
             + "⚠ This change requires a REBOOT to take effect.",
-            "GPU Performance — Confirm")) { SyncTogglesFromProfile(); return; }
+            "GPU Performance — Confirm")) { WantGpuMaxPerformance = Profile.GpuMaxPerformance; return; }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply GPU performance");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            SyncTogglesFromProfile();
+            WantGpuMaxPerformance = Profile.GpuMaxPerformance;
             return;
         }
 
@@ -644,7 +650,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             // The read that shows the new state comes first and the outcome after it, as in the other Apply
             // commands. The outcome used to be written first, and the read replaced the line with "Settings
             // loaded." (#2607).
-            await RefreshAsync();
+            await ReadAfterApplyAsync();
             if (found)
             {
                 if (ok)
@@ -689,14 +695,14 @@ public sealed partial class PerformanceViewModel : ViewModelBase
         var action = maxState ? "Set to 100%" : "Restore default";
         if (!DialogService.Instance.Confirm(
             $"{action} processor minimum state?",
-            "Processor State — Confirm")) { SyncTogglesFromProfile(); return; }
+            "Processor State — Confirm")) { WantProcessorMaxState = Profile.ProcessorMaxState; return; }
 
         // Serialize with the app-wide system-modification lock (see ApplyPowerPlanAsync).
         using var opLock = OperationLockService.Instance.TryAcquire(OperationCategory.SystemModification, "Apply processor state");
         if (opLock is null)
         {
             StatusMessage = $"Cannot start — {OperationLockService.Instance.GetActiveOperationName(OperationCategory.SystemModification)} is already running.";
-            SyncTogglesFromProfile();
+            WantProcessorMaxState = Profile.ProcessorMaxState;
             return;
         }
 
@@ -709,7 +715,7 @@ public sealed partial class PerformanceViewModel : ViewModelBase
             // (null), fall back to the Windows default of 5% for this explicit user action.
             var target = maxState ? 100 : (_snapshot!.ProcessorMinPercentAc ?? 5);
             await _service.SetProcessorMinStateAsync(target);
-            await RefreshAsync();
+            await ReadAfterApplyAsync();
             StatusMessage = $"Processor min state set to {target}%.";
             Log.Information("Processor min state set to {Percent}%", target);
         }
@@ -1000,14 +1006,31 @@ public sealed partial class PerformanceViewModel : ViewModelBase
     private bool MatchesPlan(string planGuid) =>
         Profile.ActivePlanGuid.Contains(planGuid, StringComparison.OrdinalIgnoreCase);
 
-    private void SyncTogglesFromProfile()
+    // The switches as the last read of the PC set them. Null until the first read.
+    private Toggles? _readToggles;
+
+    private readonly record struct Toggles(
+        string Plan, bool VisualEffectsReduced, bool GameModeOff, bool XboxGameBarOff, bool GpuMaxPerformance,
+        bool ProcessorMaxState);
+
+    // Sets the switches from what was read. With keepChanges, after an Apply, a switch that is no longer what the last
+    // read set it to is the person's, not yet applied, and stays as they set it. Every Apply ended in a read that put
+    // every other section's switch back, so a second section's Apply then found nothing to do (#2836).
+    private void SyncTogglesFromProfile(bool keepChanges = false)
     {
-        SelectedPlan = GetCurrentPlanKey();
-        WantVisualEffectsReduced = Profile.VisualEffectsReduced;
-        WantGameModeOff = !Profile.GameModeEnabled;
-        WantXboxGameBarOff = Profile.XboxGameBarDisabled;
-        WantGpuMaxPerformance = Profile.GpuMaxPerformance;
-        WantProcessorMaxState = Profile.ProcessorMaxState;
+        var read = new Toggles(GetCurrentPlanKey(), Profile.VisualEffectsReduced, !Profile.GameModeEnabled,
+            Profile.XboxGameBarDisabled, Profile.GpuMaxPerformance, Profile.ProcessorMaxState);
+        var last = keepChanges ? _readToggles : null;
+        if (last is null || SelectedPlan == last.Value.Plan) SelectedPlan = read.Plan;
+        if (last is null || WantVisualEffectsReduced == last.Value.VisualEffectsReduced)
+            WantVisualEffectsReduced = read.VisualEffectsReduced;
+        if (last is null || WantGameModeOff == last.Value.GameModeOff) WantGameModeOff = read.GameModeOff;
+        if (last is null || WantXboxGameBarOff == last.Value.XboxGameBarOff) WantXboxGameBarOff = read.XboxGameBarOff;
+        if (last is null || WantGpuMaxPerformance == last.Value.GpuMaxPerformance)
+            WantGpuMaxPerformance = read.GpuMaxPerformance;
+        if (last is null || WantProcessorMaxState == last.Value.ProcessorMaxState)
+            WantProcessorMaxState = read.ProcessorMaxState;
+        _readToggles = read;
         HasNvidiaGpu = Profile.HasNvidiaGpu;
         NvidiaGpuName = Profile.NvidiaGpuName;
 

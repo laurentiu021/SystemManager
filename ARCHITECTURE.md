@@ -286,7 +286,9 @@ to scroll.
   that follows an uninstall. Cancel and Escape stop a batch before its next app: the uninstaller already running
   has a token of its own, which only `Dispose` cancels (#2834).
 - `PerformanceViewModel` — per-tweak performance tuning with snapshot restore. Refresh is off while `IsBusy`,
-  and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607).
+  and a read leaves `NeedsReboot` alone, so a graphics change's reboot notice lasts the session (#2607). The read
+  after an Apply keeps any switch that differs from the last read, and a declined or locked-out Apply puts back only
+  its own switch (#2836). The Apply commands write through `PerformanceService`'s constructor writes.
 - `PingViewModel` — live ping monitoring with latency chart and health verdict.
 - `TracerouteViewModel` — auto-traceroute + manual trace. Its Start/Stop drive the auto-trace monitor in
   `NetworkSharedState`, which traces the Ping tab's targets plus the host typed here: `TrackAutoTraceHost` gives the
@@ -920,7 +922,8 @@ Key services:
   folder an installed app still lives in — judged against every uninstall entry Windows holds, hidden ones
   included, not only the list on screen.
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
-  Game Bar, NVIDIA GPU, processor state, restore point creation, RAM
+  Game Bar (its overlay and per-game recording read as two values), NVIDIA GPU,
+  processor state, restore point creation, RAM
   working set trim, hibernation toggle. The trim works through a process list and a trim call the
   constructor takes. The public constructor passes every process; both trim through `EmptyWorkingSet`
   unless a test passes its own call, and the test one defaults to no processes, so a test that passes no

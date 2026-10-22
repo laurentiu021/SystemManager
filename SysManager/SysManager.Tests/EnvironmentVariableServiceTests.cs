@@ -1084,4 +1084,18 @@ public class EnvironmentVariableServiceTests
             env.Service.EnsureBackup(includeUser: true, includeMachine: false));
         Assert.Equal(1, env.GetUserBackupRaw());
     }
+
+    // ---------- one variable read again, as Apply does before writing (#2798) ----------
+
+    [Fact]
+    public void TryReadValue_ReadsTheRawValueNow_AndNullForNone()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("TOOL_HOME", @"%ProgramFiles%\Tool", RegistryValueKind.ExpandString);
+
+        Assert.True(env.Service.TryReadValue("TOOL_HOME", EnvVarScope.User, out var raw));
+        Assert.Equal(@"%ProgramFiles%\Tool", raw);   // unexpanded, as the tab read it
+        Assert.True(env.Service.TryReadValue("NO_SUCH_VARIABLE", EnvVarScope.User, out var none));
+        Assert.Null(none);
+    }
 }

@@ -347,7 +347,7 @@ to scroll.
   administrator rights that this session does not have.
 - `ContextMenuViewModel` — scan and manage Explorer right-click context menu entries.
 - `SystemReportViewModel` — generate a read-only full-system snapshot, opening with a health verdict and recent problems, and export it as text, HTML, or JSON.
-- `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup.
+- `EnvironmentVariablesViewModel` — view/edit User and System environment variables with a dedicated PATH editor (reorder, dedupe, missing-folder detection); staged edits with a one-time backup. Apply reads every variable it is about to write or delete again through `EnvironmentVariableService.TryReadValue`, after the confirmation, and applies nothing when one changed since the tab read it, so an installer's PATH entry is never written over (#2798). A new variable's scope comes from `NewScopes`, User or System.
   Each PATH folder is checked once per selection, by a task off the UI thread kept per folder, and a folder on a share
   (`IsOnTheNetwork`) is not checked at all (#2873).
 - `CliInterfaceViewModel` — read-only reference tab listing the headless CLI commands (sourced from `CliRunner.Commands`) with copy-to-clipboard; documents the flags, runs nothing itself.

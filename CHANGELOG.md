@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.58] - 2026-10-22
+
+**Environment Variables no longer takes out of PATH a folder an installer added while the tab was open, and a new
+variable is User or System.**
+
+### Fixed
+
+- **Apply on Environment Variables could remove a folder another program had just added to PATH.** Installers such
+  as Python, Node.js, Git and the JDK add themselves to PATH, and the tab stays open for as long as SysManager runs.
+  Moving, adding or removing a PATH row there and pressing Apply wrote back the PATH the tab had read, so that tool
+  was no longer found on the command line. Apply now reads every variable it is about to change again first, and when
+  one has changed since the tab read it, nothing is applied and the status line names it, so Refresh shows the change
+  before you make yours again. Since 1.22.0.
+- **"All" in the new variable's scope list made a User variable.** The status line then said "Added All variable".
+  The list now offers User and System. Since 1.22.0.
+
 ## [1.130.57] - 2026-10-22
 
 **Duplicate Finder says why a folder could not be scanned instead of "No duplicates found", and no longer lists two

@@ -59,5 +59,8 @@ public sealed partial class EnvVariable : ObservableObject
         IsPathLike && !Name.Equals("PATHEXT", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Human-readable scope label for the grid ("User" / "System").</summary>
-    public string ScopeLabel => Scope == EnvVarScope.Machine ? "System" : "User";
+    public string ScopeLabel => LabelOf(Scope);
+
+    /// <summary>The word the tab uses for a scope.</summary>
+    public static string LabelOf(EnvVarScope scope) => scope == EnvVarScope.Machine ? "System" : "User";
 }

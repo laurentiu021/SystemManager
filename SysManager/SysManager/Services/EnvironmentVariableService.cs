@@ -235,6 +235,41 @@ public sealed partial class EnvironmentVariableService
         return [.. result.OrderBy(v => v.Name, StringComparer.OrdinalIgnoreCase)];
     }
 
+    /// <summary>
+    /// Reads one variable's raw value as the registry holds it now, null when there is none. False when the read was
+    /// refused.
+    /// </summary>
+    /// <remarks>
+    /// Raw, as <see cref="Read"/> reads it, so it compares with what the tab loaded: Apply reads every variable it is
+    /// about to write again, because an installer can change one while the tab is open (#2798).
+    /// </remarks>
+    public bool TryReadValue(string name, EnvVarScope scope, out string? value)
+    {
+        value = null;
+        var (hive, path) = Location(scope);
+        try
+        {
+            using var key = hive.OpenSubKey(path);
+            value = key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames)?.ToString();
+            return true;
+        }
+        catch (System.Security.SecurityException ex)
+        {
+            Log.Warning(ex, "Environment: reading {Scope} scope again denied", scope);
+            return false;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Warning(ex, "Environment: reading {Scope} scope again denied", scope);
+            return false;
+        }
+        catch (IOException ex)
+        {
+            Log.Warning(ex, "Environment: reading {Scope} scope again failed", scope);
+            return false;
+        }
+    }
+
     /// <summary>Reads both scopes into one list (User first, then Machine).</summary>
     public List<EnvVariable> ReadAll()
     {

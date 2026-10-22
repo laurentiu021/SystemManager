@@ -375,7 +375,7 @@ anything a program registered, so both are undone by turning the switch back on:
 ### Environment Variables
 Edit Windows environment variables without the cramped built-in dialog:
 - **User and System scopes in one grid** — filter by scope, search by name or value
-- **In-place value editing**, plus add and remove variables
+- **In-place value editing**, plus add and remove variables. A new variable is User or System
 - **Dedicated PATH editor** for PATH-like variables — reorder directories, remove
   entries, and strip duplicates in one click
 - **Missing folders highlighted** so you can spot dead PATH entries at a glance. The folders are
@@ -386,6 +386,11 @@ Edit Windows environment variables without the cramped built-in dialog:
   snapshot before its first write. New User snapshots stay under HKCU; System
   snapshots use access-controlled HKLM storage, and only that protected source can
   restore machine-wide variables
+- **Apply never undoes a change it did not see.** Installers such as Python, Node.js and Git
+  add themselves to PATH, and can do it while the tab is open. Apply reads every variable it
+  is about to write or delete again first, and when one has changed since the tab read it,
+  nothing is applied and the status line names it, so Refresh shows the change before you
+  make yours again
 - **Restore backup** puts every variable back to that snapshot and removes the ones added
   since, after a confirmation — the machine-wide ones only as administrator — and **Discard**
   drops the staged changes. A snapshot another program has open just then is said to be

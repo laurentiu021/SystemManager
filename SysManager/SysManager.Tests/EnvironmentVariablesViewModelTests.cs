@@ -246,4 +246,114 @@ public class EnvironmentVariablesViewModelTests : IDisposable
     {
         Assert.Equal(onTheNetwork, EnvironmentVariablesViewModel.IsOnTheNetwork(folder));
     }
+
+    // ---------- Apply keeps what changed outside the tab, and a new variable has a scope (#2798) ----------
+    // Over a redirected environment, so the user's and the machine's variables are never read or written.
+
+    private const string ChangedOutsideOne =
+        "PATH (User) was changed outside SysManager after this tab read it, so nothing was applied. "
+        + "Press Refresh to see the change, then make yours again.";
+
+    [Fact]
+    public async Task Apply_AfterAnInstallerAddedItselfToPath_KeepsItsFolder_AndWritesNothing()
+    {
+        // Python, Node.js, Git and JDK installers add themselves to PATH. With the tab open, moving one PATH row and
+        // pressing Apply wrote back the PATH the tab had read, and the installer's folder was gone.
+        using var env = new RedirectedEnvironment();
+        var vm = await WithUserPath(env, @"C:\Tools;C:\Git\cmd", _ => true);
+        env.SetUser("PATH", @"C:\Tools;C:\Git\cmd;C:\Program Files\nodejs");
+        UserPath(vm).Value = @"C:\Git\cmd;C:\Tools";
+        Assert.Equal(1, vm.PendingChangeCount);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(@"C:\Tools;C:\Git\cmd;C:\Program Files\nodejs", env.GetUser("PATH"));
+        Assert.Equal(ChangedOutsideOne, vm.StatusMessage);
+        Assert.Equal(1, vm.PendingChangeCount);   // the edit is still there to make again
+        Assert.False(env.Service.HasBackup);      // and nothing was written, the safety copy included
+    }
+
+    [Fact]
+    public async Task Apply_WithNothingChangedOutside_StillWrites()
+    {
+        using var env = new RedirectedEnvironment();
+        var vm = await WithUserPath(env, @"C:\Tools;C:\Git\cmd", _ => true);
+        UserPath(vm).Value = @"C:\Git\cmd;C:\Tools";
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(@"C:\Git\cmd;C:\Tools", env.GetUser("PATH"));
+        Assert.Equal(0, vm.PendingChangeCount);
+    }
+
+    [Fact]
+    public async Task Apply_OfANewVariable_ThatAppearedOutsideMeanwhile_WritesNothing()
+    {
+        using var env = new RedirectedEnvironment();
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete.WaitAsync(Bound);
+        vm.NewName = "JAVA_HOME";
+        vm.NewValue = @"C:\Java\17";
+        vm.AddVariableCommand.Execute(null);
+        env.SetUser("JAVA_HOME", @"C:\Java\21");
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(@"C:\Java\21", env.GetUser("JAVA_HOME"));
+        Assert.StartsWith("JAVA_HOME (User) was changed outside SysManager", vm.StatusMessage,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Apply_OfADeletion_OfAVariableChangedOutsideMeanwhile_DeletesNothing()
+    {
+        using var env = new RedirectedEnvironment();
+        env.SetUser("TOOL_HOME", @"C:\Tool\1");
+        var vm = new EnvironmentVariablesViewModel(env.Service);
+        await vm.InitializationComplete.WaitAsync(Bound);
+        var tool = vm.Variables.Single(v => v.Name == "TOOL_HOME");
+        using var dialog = new DialogAnswer(confirm: true);
+        vm.DeleteVariableCommand.Execute(tool);
+        env.SetUser("TOOL_HOME", @"C:\Tool\2");
+
+        await vm.ApplyChangesCommand.ExecuteAsync(null);
+
+        Assert.Equal(@"C:\Tool\2", env.GetUser("TOOL_HOME"));
+        Assert.StartsWith("TOOL_HOME (User) was changed outside SysManager", vm.StatusMessage,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1, "PATH (User) was changed outside SysManager after this tab read it")]
+    [InlineData(2, "PATH (User) and TEMP (User) were changed outside SysManager after this tab read them")]
+    [InlineData(3,
+        "PATH (User), TEMP (User) and Path (System) were changed outside SysManager after this tab read them")]
+    [InlineData(5, "PATH (User), TEMP (User) and 3 more were changed outside SysManager after this tab read them")]
+    public void TheApplyRefusal_NamesWhatChanged(int count, string start)
+    {
+        string[] names = ["PATH (User)", "TEMP (User)", "Path (System)", "TMP (System)", "JAVA_HOME (User)"];
+
+        var message = EnvironmentVariablesViewModel.DescribeChangedOutside(names[..count]);
+
+        Assert.StartsWith(start + ", so nothing was applied. ", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ANewVariable_IsUserOrSystem_NeverAll()
+    {
+        // The picker listed the scope filter's own choices, so "All" made one User variable and the status line said
+        // "Added All variable".
+        var vm = NewVm();
+        Assert.Equal(["User", "System"], vm.NewScopes);
+
+        var view = System.Xml.Linq.XDocument.Load(
+            Path.Combine(TestPaths.AppProject(), "Views", "EnvironmentVariablesView.xaml"));
+        var picker = Assert.Single(view.Descendants(), e => e.Name.LocalName == "ComboBox"
+            && e.Attributes().Any(a => a.Name.LocalName == "AutomationProperties.Name"
+                                       && a.Value == "New variable scope"));
+        Assert.Equal("{Binding NewScopes}", (string?)picker.Attribute("ItemsSource"));
+    }
 }

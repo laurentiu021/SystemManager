@@ -72,6 +72,12 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
 
     public List<string> ScopeFilters { get; } = ["All", "User", "System"];
 
+    /// <summary>
+    /// The scopes a new variable can have. Not <see cref="ScopeFilters"/>: its "All" made one User variable, and the
+    /// status line said "Added All variable" (#2798).
+    /// </summary>
+    public List<string> NewScopes { get; } = ["User", "System"];
+
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private string _selectedScopeFilter = "All";
     [ObservableProperty] private bool _isElevated;
@@ -448,6 +454,18 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             return;
         }
 
+        // What the tab read can be old by now. An installer that adds itself to PATH writes it while the tab is open,
+        // and writing the edited copy over it took that folder out of PATH (#2798). So every variable about to be
+        // written or deleted is read again, after the confirmation, and one that changed stops the whole apply.
+        var changedOutside = ChangedOutside(changedVariables, deletedEntries);
+        if (changedOutside.Count > 0)
+        {
+            StatusMessage = DescribeChangedOutside(changedOutside);
+            Log.Information("Environment: {Count} variables changed outside the tab; nothing applied",
+                changedOutside.Count);
+            return;
+        }
+
         try { _service.EnsureBackup(touchesUser, touchesMachine); }
         catch (InvalidDataException ex)
         {
@@ -532,6 +550,45 @@ public sealed partial class EnvironmentVariablesViewModel : ViewModelBase
             StatusMessage = $"Applied {applied} change{(applied == 1 ? "" : "s")}; {failures} need administrator rights.";
             Log.Warning("Environment: {Applied} applied, {Failed} failed (likely elevation required)", applied, failures);
         }
+    }
+
+    /// <summary>
+    /// The variables about to be written or deleted whose value in the registry is no longer the one the tab read, or
+    /// could not be read again; for a new one, a variable of that name that has appeared since.
+    /// </summary>
+    private List<string> ChangedOutside(
+        List<EnvVariable> changed, List<(EnvVarScope scope, string name)> deleted)
+    {
+        List<string> names = [];
+        foreach (var v in changed) Check(v.Scope, v.Name);
+        foreach (var (scope, name) in deleted) Check(scope, name);
+        return names;
+
+        void Check(EnvVarScope scope, string name)
+        {
+            var loaded = _baseline.TryGetValue(Key(scope, name), out var value);
+            if (!_service.TryReadValue(name, scope, out var now)
+                || (loaded ? !string.Equals(value, now, StringComparison.Ordinal) : now is not null))
+            {
+                names.Add($"{name} ({EnvVariable.LabelOf(scope)})");
+            }
+        }
+    }
+
+    /// <summary>What Apply says when variables it was about to write changed outside the tab.</summary>
+    internal static string DescribeChangedOutside(IReadOnlyList<string> names)
+    {
+        var which = names.Count switch
+        {
+            1 => names[0],
+            2 => $"{names[0]} and {names[1]}",
+            3 => $"{names[0]}, {names[1]} and {names[2]}",
+            _ => $"{names[0]}, {names[1]} and {names.Count - 2} more",
+        };
+        var one = names.Count == 1;
+        return $"{which} {(one ? "was" : "were")} changed outside SysManager after this tab read "
+               + $"{(one ? "it" : "them")}, so nothing was applied. "
+               + "Press Refresh to see the change, then make yours again.";
     }
 
     private IEnumerable<EnvVariable> ChangedVariables() => Variables.Where(v =>

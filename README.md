@@ -1662,6 +1662,9 @@ Reclaim space and clear browsing traces, per browser:
   cannot drift onto the other when you rescan
 - **Per-category** with size shown: Cache, History, Cookies, Sessions. The Size column sorts by
   bytes, not by its text
+- **History is cleared the way the browser clears it** — with the address bar's suggestions
+  and the New Tab page's most visited sites, so a site you cleared does not come back as a
+  suggestion or a tile
 - **Cookies/sessions are flagged and left unticked** by default — cleaning them
   signs you out, so it's always an explicit choice; cache and history are pre-selected
 - **Your ticks survive a rescan, in both directions** — unticking cache or history is not

@@ -33,6 +33,21 @@ public sealed class BrowserCleanerService
 
     private sealed record Def(string Browser, string Category, string Description, bool Sensitive, string[] RelativePaths, bool Roaming = false);
 
+    // A Chromium profile's history files: History itself, and what the browser's own "Clear browsing history" removes
+    // with it, the address bar's suggestions (Shortcuts), the New Tab page's most visited sites (Top Sites), the
+    // typed-text predictions (Network Action Predictor), and the visited-link colours older versions keep in Visited
+    // Links. Only History was deleted, so the sites came back as suggestions and tiles (#2851).
+    private static readonly string[] HistoryFiles =
+    [
+        "History", "History-journal", "Shortcuts", "Shortcuts-journal", "Top Sites", "Top Sites-journal",
+        "Network Action Predictor", "Network Action Predictor-journal", "Visited Links",
+    ];
+
+    private static string[] HistoryPaths(string profileRel) => [.. HistoryFiles.Select(f => $@"{profileRel}\{f}")];
+
+    private const string HistoryDescription =
+        "Browsing and download history, with the address bar's suggestions and the New Tab page's most visited sites";
+
     // Chrome/Edge/Brave keep per-profile data under "<UserData>\<profile>\..." in LocalAppData,
     // where <profile> is "Default" for the first profile and "Profile 1", "Profile 2", … for each
     // one the user adds. The profile segment used to be the literal "Default", so a second profile
@@ -44,8 +59,7 @@ public sealed class BrowserCleanerService
     [
         new(browser, "Cache", $"Cached images and files{profileLabel}.", false,
             [$@"{profileRel}\Cache", $@"{profileRel}\Code Cache", $@"{profileRel}\GPUCache"]),
-        new(browser, "History", $"Browsing and download history{profileLabel}.", false,
-            [$@"{profileRel}\History", $@"{profileRel}\History-journal"]),
+        new(browser, "History", $"{HistoryDescription}{profileLabel}.", false, HistoryPaths(profileRel)),
         new(browser, "Cookies", $"Cookies{profileLabel} — clearing these signs you out of websites.", true,
             [$@"{profileRel}\Network\Cookies", $@"{profileRel}\Network\Cookies-journal"]),
         new(browser, "Sessions", $"Open tabs / session restore data{profileLabel}.", true,
@@ -80,8 +94,7 @@ public sealed class BrowserCleanerService
             new(browser, "Cache", "Cached images and files.", false,
                 [$@"{profileRel}\Cache", $@"{profileRel}\Code Cache", $@"{profileRel}\GPUCache"]),
             // Cookies/History/Sessions live under Roaming AppData (Roaming: true).
-            new(browser, "History", "Browsing and download history.", false,
-                [$@"{profileRel}\History", $@"{profileRel}\History-journal"], Roaming: true),
+            new(browser, "History", $"{HistoryDescription}.", false, HistoryPaths(profileRel), Roaming: true),
             new(browser, "Cookies", "Cookies — clearing these signs you out of websites.", true,
                 [$@"{profileRel}\Network\Cookies", $@"{profileRel}\Network\Cookies-journal"], Roaming: true),
             new(browser, "Sessions", "Open tabs / session restore data.", true,

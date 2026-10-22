@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.65] - 2026-10-22
+
+**Clearing History on Browser Cleaner now also clears the address-bar suggestions and the New Tab page's most visited
+sites in Chrome, Edge, Brave, Vivaldi and Opera.**
+
+### Fixed
+
+- **A cleared site still came up as an address-bar suggestion and a New Tab tile.** The History row deleted only the
+  browser's History file. Chromium browsers keep the sites you visited in other files too, which their own "Clear
+  browsing history" removes with it: the address bar's suggestions, the New Tab page's most visited sites, the
+  predictions made from what you type, and, in older versions, the visited-link colours. The History row now deletes
+  those as well, and says so. Bookmarks, passwords and settings are left alone. Since 1.31.0.
+
 ## [1.130.64] - 2026-10-22
 
 **App Updates, the Uninstaller and the Bulk Installer now read every column of winget's lists from where winget wrote

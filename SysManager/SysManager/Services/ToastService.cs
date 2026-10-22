@@ -13,7 +13,30 @@ public sealed class ToastService
     private static ToastService? _instance;
     public static ToastService Instance => _instance ??= new ToastService();
 
-    public event Action<string, string>? ToastRequested;
+    private Action<string, string>? _toastRequested;
+
+    // A toast raised before anything listened, kept for the first handler.
+    private (string Title, string Detail, int AutoHideMs)? _undelivered;
+
+    /// <summary>Raised on the UI thread with a toast's title and detail.</summary>
+    /// <remarks>
+    /// The first handler added is given the toast raised before any was, when there was one (#2802). The shell window
+    /// subscribes only after its InitializeComponent, and the Dashboard, built inside it, reports the previous
+    /// session's crash at once: that toast was raised to nobody, and the crash marker it came from was already gone,
+    /// so it was never shown. The first toast is the one kept, since a start raises that one.
+    /// </remarks>
+    public event Action<string, string>? ToastRequested
+    {
+        add
+        {
+            _toastRequested += value;
+            if (_undelivered is not { } toast) return;
+            _undelivered = null;
+            Raise(toast.Title, toast.Detail, toast.AutoHideMs);
+        }
+        remove => _toastRequested -= value;
+    }
+
     public event Action? DismissRequested;
 
     private DispatcherTimer? _autoDismiss;
@@ -37,22 +60,34 @@ public sealed class ToastService
     {
         if (Application.Current?.Dispatcher is null) return;
 
-        UiThread.Post(() =>
-        {
-            _autoDismiss?.Stop();
-            ToastRequested?.Invoke(title, detail);
+        UiThread.Post(() => Raise(title, detail, autoHideMs));
+    }
 
-            if (autoHideMs > 0)
+    /// <summary>
+    /// Shows the toast through the handlers, on the UI thread, or keeps it for the first handler when there is none
+    /// yet and none is kept already.
+    /// </summary>
+    internal void Raise(string title, string detail, int autoHideMs)
+    {
+        if (_toastRequested is not { } show)
+        {
+            _undelivered ??= (title, detail, autoHideMs);
+            return;
+        }
+
+        _autoDismiss?.Stop();
+        show(title, detail);
+
+        if (autoHideMs > 0)
+        {
+            _autoDismiss = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(autoHideMs) };
+            _autoDismiss.Tick += (_, _) =>
             {
-                _autoDismiss = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(autoHideMs) };
-                _autoDismiss.Tick += (_, _) =>
-                {
-                    _autoDismiss.Stop();
-                    DismissRequested?.Invoke();
-                };
-                _autoDismiss.Start();
-            }
-        });
+                _autoDismiss.Stop();
+                DismissRequested?.Invoke();
+            };
+            _autoDismiss.Start();
+        }
     }
 
     public void Dismiss()

@@ -514,30 +514,14 @@ public sealed partial class WindowsUpdateViewModel : ViewModelBase
         StatusMessage = "Checking pending reboot…";
         ShowConsole = true;
         Console.ClearCommand.Execute(null);
-        _cts?.Dispose();
-        _cts = new CancellationTokenSource();
         try
         {
-            await _runner.RunScriptViaPwshAsync(@"
-                $pending = $false
-                $reasons = @()
-                if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
-                    $pending = $true; $reasons += 'Component Based Servicing'
-                }
-                if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') {
-                    $pending = $true; $reasons += 'Windows Update'
-                }
-                try {
-                    $p = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop).PendingFileRenameOperations
-                    if ($p) { $pending = $true; $reasons += 'Pending file rename operations' }
-                } catch {}
-                if ($pending) { ""REBOOT REQUIRED - reasons: $($reasons -join ', ')"" }
-                else         { 'No pending reboot detected.' }
-            ", cancellationToken: _cts.Token);
+            // The check the Dashboard's alert makes, so the two cannot disagree (#2802); a script of its own here read
+            // three places while the alert read one.
+            var reasons = await Task.Run(() => PendingReboot.Reasons()).ConfigureAwait(true);
+            Console.Append(PowerShellLine.Output(PendingReboot.Describe(reasons)));
             StatusMessage = "Done";
         }
-        catch (OperationCanceledException) { StatusMessage = "Cancelled."; }
-        catch (InvalidOperationException ex) { StatusMessage = $"Error: {ex.Message}"; }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
 

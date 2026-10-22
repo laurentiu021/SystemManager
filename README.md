@@ -777,7 +777,8 @@ Across the tab:
 - Honest aggregate reporting:
   `Installed X/Y. Failed: Z. Not applied: W.`
 - Reboot detection — toast notification if any update requires reboot
-- Pending-reboot check, update history (last 30 — via PSWindowsUpdate)
+- Pending-reboot check, the same one the Dashboard's alert makes, and update history (last 30 — via
+  PSWindowsUpdate)
 - Admin banner with a one-click "Run as administrator" relaunch. Installing needs it, and so
   does changing when updates are installed — deferring, pausing or restoring the default;
   without it the tab says so before asking you to approve anything
@@ -2092,11 +2093,15 @@ offers, "rate us" prompts:
   Findings with nothing wrong show no link, and neither do the two pieces of advice no tab here can carry
   out — restarting, and replacing a worn battery
 - **System Alerts** — disk health, app updates, memory errors in the last 30 days, critical events in the
-  last 7 days, a pending reboot, and any app block that cannot be undone normally. They are checked when
+  last 7 days, a pending reboot, and any app block that cannot be undone normally. A pending reboot is looked
+  for where the Windows Update tab looks: Windows Update, a Windows feature change, and files a program left
+  to replace at the next start. They are checked when
   SysManager starts, again when you press "Scan system", and after Update All Apps. A check that could not
   run says so in amber rather than reading as good news. With the app-update check at startup switched off
   in About, that line reads "App updates not checked at startup" in grey, with a link to App Updates, and
   "Scan system" still checks it
+- **After a crash** — when SysManager closed unexpectedly last time, a notice says so as it next starts,
+  and where the details are
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
   indicator dots. GPU usage is read from NVIDIA cards only.

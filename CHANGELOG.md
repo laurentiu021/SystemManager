@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.73] - 2026-10-22
+
+**The Dashboard says when SysManager crashed last time, its restart alert agrees with the Windows Update tab, and
+its critical-event count covers exactly the last 7 days.**
+
+### Fixed
+
+- **The notice that SysManager closed unexpectedly was never shown.** The Dashboard raised it while the window was
+  still being built, before the window listened for notices, and the record of the crash it came from was already
+  gone, so it was never offered again. A notice raised that early now waits for the window. Since 1.57.2.
+- **The Dashboard said "No pending reboots" when the Windows Update tab said one was required.** Its alert read
+  only Windows Update's record, so after a Windows feature change, which leaves a restart pending, or after an
+  installer asked to replace files at the next start, it stayed green. Both now make the same check, over all
+  three places Windows records a pending restart. Since 1.17.0.
+- **The critical-event count covered the wrong 7 days.** It measured the week in local time against the UTC times
+  Windows keeps, so it was off by the time zone's offset: three hours short at UTC+3, five hours long at UTC-5.
+  It now counts the way the System Logs tab reads. Since 1.17.0.
+
 ## [1.130.72] - 2026-10-22
 
 **Importing a profile no longer erases the record SysManager needs to undo a game mode session.**

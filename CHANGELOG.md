@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.68] - 2026-10-22
+
+**Notification Blocker lists a program such as PowerShell under its own name, and muting it now silences it.**
+
+### Fixed
+
+- **A program that Windows identifies by its location was listed as a code in braces, and muting it did nothing.**
+  Windows records a program with no app ID of its own, PowerShell among them, by the folder it is in and its path
+  there. Notification Blocker read only the folder, so every such program in one folder shared a single row named by
+  the folder's code, with no recent activity, and turning that row off wrote a setting Windows never reads: the
+  programs kept notifying while the row read as muted. Each one now has its own row under the program's name, and
+  its switch changes the setting Windows reads for it. Since 1.56.0.
+
 ## [1.130.67] - 2026-10-22
 
 **After a graphics card upgrade, Performance Mode now finds the NVIDIA card that is in the PC, not the settings Windows

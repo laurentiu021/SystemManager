@@ -17,7 +17,10 @@ public sealed partial class NotificationApp : ObservableObject
     /// <summary>Whether Windows may show this app's notifications (the Settings per-app switch).</summary>
     [ObservableProperty] private bool _isEnabled;
 
-    /// <summary>The Application User Model ID — the registry subkey name identifying the sender.</summary>
+    /// <summary>
+    /// The Application User Model ID, which is the path of the sender's key under <c>Notifications\Settings</c>: one
+    /// key name for most senders, and a key for each part of an ID that is a program's path.
+    /// </summary>
     public required string Aumid { get; init; }
 
     /// <summary>Human-readable name resolved from the AUMID registration (or prettified from the AUMID).</summary>

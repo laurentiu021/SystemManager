@@ -44,6 +44,13 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     // Display names for AUMIDs are registered here by desktop apps that show toasts.
     private const string AumidClassesPath = @"Software\Classes\AppUserModelId";
 
+    // How deep the walk for a sender's key goes. A desktop program with no ID of its own has an ID made of a known
+    // folder and the program's path under it, as PowerShell's is
+    // "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe", and a key name cannot hold a
+    // backslash, so each part is a key under the one before. A program's path seldom has more than a dozen parts: the
+    // limit only bounds a walk over keys that any program running as the user can write.
+    private const int MaxSenderDepth = 16;
+
     // Windows' own housekeeping subkeys under Notifications\Settings that are not app senders.
     private static readonly HashSet<string> NonAppSubkeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -67,6 +74,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
 
     private readonly RegistryKey _baseKey;
     private readonly string _ledgerPath;
+    private readonly Func<Guid, string?> _knownFolderPath;
 
     /// <summary>
     /// Serializes <see cref="RecordMainToggleWrite"/> against itself. It is a read-increment-write over
@@ -89,9 +97,19 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     /// HKCU subkey) so reads/writes never touch the machine's real configuration.
     /// </summary>
     public NotificationBlockerService(RegistryKey? baseKey = null, string? configDir = null)
+        : this(baseKey, configDir, KnownFolders.TryGetPath)
+    {
+    }
+
+    /// <summary>
+    /// <see cref="NotificationBlockerService(RegistryKey?, string?)"/>, with the lookup of a known folder's path a
+    /// parameter, so a test, not the PC running it, decides where the folder of a program's ID is.
+    /// </summary>
+    internal NotificationBlockerService(RegistryKey? baseKey, string? configDir, Func<Guid, string?> knownFolderPath)
     {
         _baseKey = baseKey ?? Registry.CurrentUser;
         _ledgerPath = LedgerPath(configDir);
+        _knownFolderPath = knownFolderPath;
     }
 
     /// <summary>Resolves the ledger file, overridable for tests exactly as the registry root is.</summary>
@@ -208,36 +226,7 @@ public sealed class NotificationBlockerService : INotificationBlockerService
             foreach (var aumid in settings.GetSubKeyNames())
             {
                 if (NonAppSubkeys.Contains(aumid)) continue;
-
-                try
-                {
-                    using var appKey = settings.OpenSubKey(aumid);
-                    if (appKey is null) continue;
-
-                    // Absent Enabled value = notifications allowed (Windows default).
-                    var enabled = appKey.GetValue(EnabledValueName) is not int e || e != 0;
-                    var count = appKey.GetValue("PeriodicNotificationCount") is int c ? c : 0;
-
-                    DateTime? last = null;
-                    // FILETIME (100ns ticks since 1601) stored as QWORD; registry returns it as long.
-                    if (appKey.GetValue("LastNotificationAddedTime") is long ft && ft > 0)
-                    {
-                        try { last = DateTime.FromFileTime(ft); }
-                        catch (ArgumentOutOfRangeException) { /* corrupt timestamp — leave null */ }
-                    }
-
-                    apps.Add(new NotificationApp
-                    {
-                        Aumid = aumid,
-                        DisplayName = ResolveDisplayName(aumid),
-                        RecentCount = count,
-                        LastNotification = last,
-                        IsEnabled = enabled,
-                    });
-                }
-                catch (System.Security.SecurityException) { /* skip unreadable sender */ }
-                catch (UnauthorizedAccessException) { /* skip unreadable sender */ }
-                catch (System.IO.IOException) { /* skip unreadable sender */ }
+                AddSenders(settings, aumid, depth: 1, apps);
             }
         }
         catch (System.Security.SecurityException ex) { Log.Debug("Notification senders read denied: {Error}", ex.Message); }
@@ -250,13 +239,71 @@ public sealed class NotificationBlockerService : INotificationBlockerService
             .ToList();
     }
 
+    /// <summary>
+    /// Adds the sender whose key is <paramref name="aumid"/> under <paramref name="settings"/>, or, for a key that
+    /// holds only subkeys, the senders nested under it.
+    /// </summary>
+    /// <remarks>
+    /// A key with values, or with nothing at all, is a sender, and its ID is its path under Notifications\Settings. A
+    /// key with subkeys and no values is a folder of a nested ID, and was listed as a sender of its own, named by its
+    /// GUID, which every program under that folder collapsed into and whose switch Windows never reads (#2838). A
+    /// sender's own subkeys are not senders.
+    /// </remarks>
+    private void AddSenders(RegistryKey settings, string aumid, int depth, List<NotificationApp> apps)
+    {
+        try
+        {
+            using var appKey = settings.OpenSubKey(aumid);
+            if (appKey is null) return;
+
+            if (appKey.ValueCount > 0 || appKey.SubKeyCount == 0)
+            {
+                apps.Add(ReadSender(appKey, aumid));
+                return;
+            }
+
+            if (depth >= MaxSenderDepth) return;
+            foreach (var child in appKey.GetSubKeyNames())
+                AddSenders(settings, $@"{aumid}\{child}", depth + 1, apps);
+        }
+        catch (System.Security.SecurityException) { /* skip unreadable sender */ }
+        catch (UnauthorizedAccessException) { /* skip unreadable sender */ }
+        catch (System.IO.IOException) { /* skip unreadable sender */ }
+    }
+
+    private NotificationApp ReadSender(RegistryKey appKey, string aumid)
+    {
+        // Absent Enabled value = notifications allowed (Windows default).
+        var enabled = appKey.GetValue(EnabledValueName) is not int e || e != 0;
+        var count = appKey.GetValue("PeriodicNotificationCount") is int c ? c : 0;
+
+        DateTime? last = null;
+        // FILETIME (100ns ticks since 1601) stored as QWORD; registry returns it as long.
+        if (appKey.GetValue("LastNotificationAddedTime") is long ft && ft > 0)
+        {
+            try { last = DateTime.FromFileTime(ft); }
+            catch (ArgumentOutOfRangeException) { /* corrupt timestamp — leave null */ }
+        }
+
+        return new NotificationApp
+        {
+            Aumid = aumid,
+            DisplayName = ResolveDisplayName(aumid),
+            RecentCount = count,
+            LastNotification = last,
+            IsEnabled = enabled,
+        };
+    }
+
     /// <inheritdoc />
     public bool SetAppEnabled(string aumid, bool enabled)
     {
         if (string.IsNullOrWhiteSpace(aumid)) return false;
-        // AUMIDs are registry subkey names we enumerated ourselves, but the write API is
-        // public on the seam — refuse separators so a caller can never escape SettingsPath.
-        if (aumid.Contains('\\') || aumid.Contains('/')) return false;
+        // AUMIDs are registry subkey names we enumerated ourselves, but the write API is public on the seam. A backslash
+        // keeps the parts of an ID that is a program's path (#2838), and every part must be a key name: RegistryKey
+        // collapses an empty part and drops a trailing one, which would reach another sender's key, and "." and ".."
+        // are refused with them. The key must be there already; none is created.
+        if (!IsSenderPath(aumid)) return false;
 
         try
         {
@@ -277,9 +324,14 @@ public sealed class NotificationBlockerService : INotificationBlockerService
         catch (System.IO.IOException ex) { Log.Warning("Notification toggle failed for {Aumid}: {Error}", aumid, ex.Message); return false; }
     }
 
+    // True when every part of an ID is a key name: none empty, and none "." or "..".
+    internal static bool IsSenderPath(string aumid) =>
+        !aumid.Contains('/') && aumid.Split('\\').All(part => part.Length > 0 && part is not ("." or ".."));
+
     /// <summary>
     /// Best human-readable name for an AUMID: the DisplayName a desktop app registered under
-    /// <c>HKCU\Software\Classes\AppUserModelId</c>, else a prettified tail of the AUMID itself
+    /// <c>HKCU\Software\Classes\AppUserModelId</c>, else, for an ID made of a known folder and a program's path, the
+    /// program's own description, else a prettified tail of the AUMID itself
     /// (e.g. <c>com.squirrel.slack.slack</c> → <c>Slack</c>).
     /// </summary>
     internal string ResolveDisplayName(string aumid)
@@ -293,7 +345,33 @@ public sealed class NotificationBlockerService : INotificationBlockerService
         catch (System.Security.SecurityException) { /* fall through to prettify */ }
         catch (UnauthorizedAccessException) { /* fall through to prettify */ }
 
-        return PrettifyAumid(aumid);
+        return ProgramDescription(aumid, _knownFolderPath) ?? PrettifyAumid(aumid);
+    }
+
+    /// <summary>
+    /// The description of the program a "{known folder}\path\program.exe" ID names, or null when the ID is not one,
+    /// <paramref name="folderOf"/> does not resolve the folder, or the file has none. The file is only read, never run,
+    /// and only inside the folder: a part such as "C:" that would root the path elsewhere names nothing.
+    /// </summary>
+    internal static string? ProgramDescription(string aumid, Func<Guid, string?> folderOf)
+    {
+        var parts = aumid.Split('\\');
+        if (parts.Length < 2 || !IsSenderPath(aumid) || !Guid.TryParseExact(parts[0], "B", out var folderId))
+            return null;
+        if (folderOf(folderId) is not { Length: > 0 } folder) return null;
+
+        try
+        {
+            // Resolved against the folder, never the current directory, so where a path lands depends on the ID alone.
+            var file = Path.GetFullPath(Path.Join(parts[1..]), folder);
+            if (!SystemPaths.IsInsideSubtree(file, folder) || !File.Exists(file)) return null;
+            var description = System.Diagnostics.FileVersionInfo.GetVersionInfo(file).FileDescription?.Trim();
+            return string.IsNullOrEmpty(description) ? null : description;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (ArgumentException) { return null; }
+        catch (NotSupportedException) { return null; }
     }
 
     /// <summary>
@@ -305,6 +383,14 @@ public sealed class NotificationBlockerService : INotificationBlockerService
     internal static string PrettifyAumid(string aumid)
     {
         if (string.IsNullOrWhiteSpace(aumid)) return aumid;
+
+        // An ID that is a program's path ends in the program's file, and is named by that file without its folder or
+        // extension. A file name keeps the underscores and dots the shapes below cut a family name at.
+        if (aumid.Contains('\\'))
+        {
+            var file = aumid[(aumid.LastIndexOf('\\') + 1)..];
+            return Capitalized(Path.GetFileNameWithoutExtension(file) is { Length: > 0 } name ? name : file);
+        }
 
         var s = aumid;
 
@@ -331,9 +417,10 @@ public sealed class NotificationBlockerService : INotificationBlockerService
             s = last;
         }
 
-        // Capitalize the first letter so "slack" reads as "Slack".
-        return s.Length > 0 && char.IsLower(s[0])
-            ? char.ToUpperInvariant(s[0]) + s[1..]
-            : s;
+        return Capitalized(s);
     }
+
+    // The first letter capitalized, so "slack" reads as "Slack".
+    private static string Capitalized(string s) =>
+        s.Length > 0 && char.IsLower(s[0]) ? char.ToUpperInvariant(s[0]) + s[1..] : s;
 }

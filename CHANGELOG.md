@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.57] - 2026-10-22
+
+**Duplicate Finder says why a folder could not be scanned instead of "No duplicates found", and no longer lists two
+names of one file as duplicates.**
+
+### Fixed
+
+- **A folder Duplicate Finder could not scan read as one with no duplicates.** A folder that no longer existed, a link
+  to another location, one Windows would not let it list, or one of the folders every scan leaves out, such as System
+  Volume Information, came back as "No duplicates found". The tab now says the folder could not be scanned, and why.
+  Since 0.7.0.
+- **Two names of one file were listed as duplicates.** A hard link is a second name for the same file, so deleting
+  either frees nothing, and where a folder is built on hard links, as a package store can be, deleting one breaks
+  what uses that name. Duplicate Finder now asks Windows which file it has opened and leaves a file's other names out
+  of its group and of the space wasted. Since 0.7.0.
+
 ## [1.130.56] - 2026-10-22
 
 **Escape no longer ends an app update, an install or a component store cleanup part-way, and Cancel stops an update or

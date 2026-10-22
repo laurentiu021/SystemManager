@@ -79,6 +79,16 @@ public abstract partial class ViewModelBase : ObservableObject, IDisposable
         + "SysManager closes.";
 
     /// <summary>
+    /// Why a folder picked to scan could not be: it is gone. Disk Analyzer and Duplicate Finder say it alike.
+    /// </summary>
+    internal const string FolderNotFoundReason =
+        "It no longer exists. Pick it again, or reconnect the drive it was on.";
+
+    /// <summary>Why a folder picked to scan could not be: Windows would not list it.</summary>
+    internal const string FolderUnreadableReason =
+        "Windows did not let SysManager list what is in it. Try Run as administrator, or pick another folder.";
+
+    /// <summary>
     /// The command Escape should run on this tab, or <c>null</c> when there is nothing to stop.
     /// </summary>
     /// <remarks>

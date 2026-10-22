@@ -118,9 +118,9 @@ public sealed partial class FileShredderService
             // links). Unlinking a single name is not a secure shred either — the data survives via
             // the other links — so refuse outright. Best-effort: if the query fails we proceed
             // (a normal single-link file is the overwhelming case), never blocking a real shred.
-            if (NativeMethods.GetFileInformationByHandle(stream.SafeFileHandle, out var info) && info.NumberOfLinks > 1)
+            if (FileIdentity.LinksOf(stream.SafeFileHandle) is > 1 and var links)
                 throw new IOException(
-                    $"This file has {info.NumberOfLinks} hard links, so its data is shared with other locations. " +
+                    $"This file has {links} hard links, so its data is shared with other locations. " +
                     "Securely shredding it would destroy that shared data — remove the extra links first, or delete it normally.");
 
             var fileLength = stream.Length;
@@ -548,35 +548,5 @@ public sealed partial class FileShredderService
             [Out] char[] lpszFilePath,
             uint cchFilePath,
             uint dwFlags);
-
-        [LibraryImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        internal static partial bool GetFileInformationByHandle(
-            SafeFileHandle hFile,
-            out ByHandleFileInformation lpFileInformation);
-
-        // Layout must match the native BY_HANDLE_FILE_INFORMATION exactly. All fields are plain
-        // 4-byte DWORDs — each FILETIME is two DWORDs, expanded here — so the struct is fully
-        // blittable. LibraryImport rejects a struct that needs runtime marshalling (SYSLIB1051),
-        // and enabling assembly-wide DisableRuntimeMarshalling would break the classic
-        // [DllImport] surfaces that DO rely on it. Expanding keeps NumberOfLinks at its native
-        // offset (40) with no padding.
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct ByHandleFileInformation
-        {
-            public uint FileAttributes;
-            public uint CreationTimeLow;
-            public uint CreationTimeHigh;
-            public uint LastAccessTimeLow;
-            public uint LastAccessTimeHigh;
-            public uint LastWriteTimeLow;
-            public uint LastWriteTimeHigh;
-            public uint VolumeSerialNumber;
-            public uint FileSizeHigh;
-            public uint FileSizeLow;
-            public uint NumberOfLinks;
-            public uint FileIndexHigh;
-            public uint FileIndexLow;
-        }
     }
 }

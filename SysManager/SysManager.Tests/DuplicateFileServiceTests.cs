@@ -50,7 +50,7 @@ public class DuplicateFileServiceTests : IDisposable
     [Fact]
     public async Task Scan_EmptyDir_ReturnsEmpty()
     {
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Empty(result);
     }
 
@@ -58,7 +58,7 @@ public class DuplicateFileServiceTests : IDisposable
     public async Task Scan_SingleFile_ReturnsEmpty()
     {
         CreateFile("only.bin", 2048);
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Empty(result);
     }
 
@@ -67,7 +67,7 @@ public class DuplicateFileServiceTests : IDisposable
     {
         CreateFile("a.bin", 2048, fill: 0xAA);
         CreateFile("b.bin", 2048, fill: 0xBB);
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Empty(result);
     }
 
@@ -76,7 +76,7 @@ public class DuplicateFileServiceTests : IDisposable
     {
         CreateFile("a.bin", 2048, fill: 0xAA);
         CreateFile("b.bin", 4096, fill: 0xAA);
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Empty(result);
     }
 
@@ -90,7 +90,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("copy1.bin", content);
         CreateFile("copy2.bin", content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         Assert.Equal(2, result[0].Count);
         Assert.Equal(2, result[0].Files.Count);
@@ -105,7 +105,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("b.bin", content);
         CreateFile("c.bin", content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         Assert.Equal(3, result[0].Count);
     }
@@ -123,7 +123,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("g2a.bin", content2);
         CreateFile("g2b.bin", content2);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Equal(2, result.Count);
     }
 
@@ -135,7 +135,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("top.bin", content);
         CreateFile(Path.Combine("sub", "nested.bin"), content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         Assert.Equal(2, result[0].Files.Count);
     }
@@ -149,7 +149,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("tiny1.bin", content);
         CreateFile("tiny2.bin", content);
 
-        var result = await _service.ScanAsync(_root, minSizeBytes: 1024);
+        var result = (await _service.ScanAsync(_root, minSizeBytes: 1024)).Groups;
         Assert.Empty(result);
     }
 
@@ -160,7 +160,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("small1.bin", content);
         CreateFile("small2.bin", content);
 
-        var result = await _service.ScanAsync(_root, minSizeBytes: 50);
+        var result = (await _service.ScanAsync(_root, minSizeBytes: 50)).Groups;
         Assert.Single(result);
     }
 
@@ -175,7 +175,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("b.bin", content);
         CreateFile("c.bin", content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         // 3 files, 4096 each → wasted = (3-1) * 4096 = 8192
         Assert.Equal(8192, result[0].WastedBytes);
@@ -197,32 +197,38 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("b2.bin", big);
         CreateFile("b3.bin", big);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Equal(2, result.Count);
         Assert.True(result[0].WastedBytes >= result[1].WastedBytes);
     }
 
     // ── Invalid inputs ──
 
+    // A folder that could not be scanned is not one with no duplicates in it: the tab said "No duplicates found" for
+    // all three (#2823).
+
     [Fact]
-    public async Task Scan_NullRoot_ReturnsEmpty()
+    public async Task Scan_NullRoot_SaysNotFound()
     {
-        var result = await _service.ScanAsync(null!);
-        Assert.Empty(result);
+        var scan = await _service.ScanAsync(null!);
+        Assert.Equal(DuplicateFileService.ScanFailure.NotFound, scan.Failure);
+        Assert.Empty(scan.Groups);
     }
 
     [Fact]
-    public async Task Scan_EmptyRoot_ReturnsEmpty()
+    public async Task Scan_EmptyRoot_SaysNotFound()
     {
-        var result = await _service.ScanAsync("");
-        Assert.Empty(result);
+        var scan = await _service.ScanAsync("");
+        Assert.Equal(DuplicateFileService.ScanFailure.NotFound, scan.Failure);
+        Assert.Empty(scan.Groups);
     }
 
     [Fact]
-    public async Task Scan_NonExistentRoot_ReturnsEmpty()
+    public async Task Scan_NonExistentRoot_SaysNotFound()
     {
-        var result = await _service.ScanAsync(@"C:\NoSuchDir_" + Guid.NewGuid().ToString("N"));
-        Assert.Empty(result);
+        var scan = await _service.ScanAsync(@"C:\NoSuchDir_" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(DuplicateFileService.ScanFailure.NotFound, scan.Failure);
+        Assert.Empty(scan.Groups);
     }
 
     // ── Cancellation ──
@@ -244,19 +250,13 @@ public class DuplicateFileServiceTests : IDisposable
         // Regression: the outer scan loops BREAK on cancellation (only the mid-hash hashing
         // throws), so a scan cancelled between files used to fall through to the "Complete"
         // progress report and return partial results. It must throw instead, so the VM's cancel
-        // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize. We invoke the
-        // private Scan directly with a pre-cancelled token: ScanAsync's Task.Run(ct) would
+        // branch shows "Scan cancelled." — mirroring LargeFileScanner's finalize. We call Scan
+        // directly with a pre-cancelled token: ScanAsync's Task.Run(ct) would
         // short-circuit before the body ran, so it cannot exercise this finalize path.
-        var scan = typeof(DuplicateFileService)
-            .GetMethod("Scan", BindingFlags.NonPublic | BindingFlags.Static)!;
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var ex = Record.Exception(() => scan.Invoke(null, new object?[] { _root, 1L, null, cts.Token }));
-
-        Assert.NotNull(ex);
-        // Reflection wraps the thrown exception; the underlying one must be a cancellation.
-        Assert.IsAssignableFrom<OperationCanceledException>(ex!.InnerException);
+        Assert.ThrowsAny<OperationCanceledException>(() => ScanWith(_root, cts.Token));
     }
 
     // ── Progress reporting ──
@@ -287,7 +287,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("a.bin", content);
         CreateFile("b.bin", content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         Assert.False(string.IsNullOrWhiteSpace(result[0].Hash));
         Assert.Equal(64, result[0].Hash.Length); // SHA-256 hex = 64 chars
@@ -302,7 +302,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("test.bin", content);
         CreateFile("test2.bin", content);
 
-        var result = await _service.ScanAsync(_root);
+        var result = (await _service.ScanAsync(_root)).Groups;
         Assert.Single(result);
         var entry = result[0].Files[0];
         Assert.False(string.IsNullOrWhiteSpace(entry.Name));
@@ -391,7 +391,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("dup1.bin", content);
         CreateFile("dup2.bin", content);
 
-        var results = await _service.ScanAsync(_root, minSizeBytes: 1);
+        var results = (await _service.ScanAsync(_root, minSizeBytes: 1)).Groups;
         Assert.Single(results);
         Assert.Equal(2, results[0].Files.Count);
     }
@@ -408,7 +408,7 @@ public class DuplicateFileServiceTests : IDisposable
         CreateFile("a.bin", content1);
         CreateFile("b.bin", content2);
 
-        var results = await _service.ScanAsync(_root, minSizeBytes: 1);
+        var results = (await _service.ScanAsync(_root, minSizeBytes: 1)).Groups;
         Assert.Empty(results);
     }
 
@@ -418,7 +418,7 @@ public class DuplicateFileServiceTests : IDisposable
         Path.Combine(Path.GetTempPath(), "smdup_" + Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public async Task ScanAsync_RootIsALink_FindsNothing()
+    public async Task ScanAsync_RootIsALink_SaysSo()
     {
         // The root guard. A junction as the chosen folder reported duplicates living somewhere else
         // entirely, and this tab's results are what the user deletes from.
@@ -433,8 +433,9 @@ public class DuplicateFileServiceTests : IDisposable
 
         try
         {
-            var groups = await new DuplicateFileService().ScanAsync(rootLink, minSizeBytes: 1);
-            Assert.Empty(groups);
+            var result = await new DuplicateFileService().ScanAsync(rootLink, minSizeBytes: 1);
+            Assert.Equal(DuplicateFileService.ScanFailure.IsLink, result.Failure);
+            Assert.Empty(result.Groups);
         }
         finally { Symlinks.RemoveLinkThenTree(rootLink, baseDir); }
     }
@@ -455,7 +456,7 @@ public class DuplicateFileServiceTests : IDisposable
 
         try
         {
-            var groups = await new DuplicateFileService().ScanAsync(root, minSizeBytes: 1);
+            var groups = (await new DuplicateFileService().ScanAsync(root, minSizeBytes: 1)).Groups;
             Assert.Empty(groups);
         }
         finally { Symlinks.RemoveLinkThenTree(link, root); }
@@ -475,7 +476,7 @@ public class DuplicateFileServiceTests : IDisposable
         File.SetAttributes(online, File.GetAttributes(online) | FileAttributes.Offline);
         var progress = new SyncProgress<DuplicateFileService.ScanProgress>();
 
-        var result = await _service.ScanAsync(_root, progress: progress);
+        var result = (await _service.ScanAsync(_root, progress: progress)).Groups;
 
         Assert.Empty(result);   // the only copy beside it was never read
         var complete = Assert.Single(progress.Reports, r => r.Phase == DuplicateFileService.CompletePhase);
@@ -492,4 +493,100 @@ public class DuplicateFileServiceTests : IDisposable
     [InlineData(0x00000003, false)]   // read-only, hidden
     public void OnlyTheAttributesOfAFileNotOnThisPC_MarkItOnlineOnly(int attributes, bool expected)
         => Assert.Equal(expected, DuplicateFileService.IsOnlineOnly((FileAttributes)attributes));
+
+    // ── A folder that could not be scanned says why (#2823) ──────────────────
+
+    private static FileInfo[] Files(string directory) => new DirectoryInfo(directory).GetFiles();
+
+    /// <summary>The scan, with the real listings unless a test hands it one that fails.</summary>
+    private static DuplicateFileService.DuplicateScan ScanWith(
+        string root, CancellationToken ct = default,
+        Func<string, FileInfo[]>? listFiles = null, Func<string, string[]>? listDirectories = null) =>
+        DuplicateFileService.Scan(root, 1, null, ct, listFiles ?? Files, listDirectories ?? Directory.GetDirectories);
+
+    public static TheoryData<Exception, DuplicateFileService.ScanFailure> RootListingFaults() => new()
+    {
+        { new UnauthorizedAccessException("Access to the path is denied."),
+            DuplicateFileService.ScanFailure.Unreadable },
+        { new IOException("The device is not ready."), DuplicateFileService.ScanFailure.Unreadable },
+        // Removed between the existence check and the listing.
+        { new DirectoryNotFoundException("Could not find a part of the path."),
+            DuplicateFileService.ScanFailure.NotFound },
+    };
+
+    [Theory]
+    [MemberData(nameof(RootListingFaults))]
+    public void Scan_ARootThatCannotBeListed_SaysWhy(Exception fault, DuplicateFileService.ScanFailure expected)
+    {
+        // A real folder cannot be made unreadable on demand: .NET opens a directory with backup semantics, so an
+        // elevated test run lists it whatever its permissions say. C:\System Volume Information is the real case.
+        var result = ScanWith(_root, listFiles: dir => dir == _root ? throw fault : Files(dir));
+
+        Assert.Equal(expected, result.Failure);
+        Assert.Empty(result.Groups);
+    }
+
+    [Fact]
+    public void Scan_ASubfolderThatCannotBeListed_IsLeftOut_AndTheRestIsScanned()
+    {
+        var content = new byte[2048];
+        Array.Fill(content, (byte)0x3C);
+        CreateFile("a.bin", content);
+        CreateFile("b.bin", content);
+        var locked = Directory.CreateDirectory(Path.Combine(_root, "locked")).FullName;
+        File.WriteAllBytes(Path.Combine(locked, "c.bin"), content);
+
+        var result = ScanWith(_root,
+            listFiles: dir => dir == locked ? throw new UnauthorizedAccessException("denied") : Files(dir));
+
+        Assert.Equal(DuplicateFileService.ScanFailure.None, result.Failure);
+        Assert.Equal(2, Assert.Single(result.Groups).Files.Count);
+    }
+
+    [Fact]
+    public async Task Scan_AFolderEveryScanLeavesOut_PickedAsTheRoot_SaysSo()
+    {
+        // It was skipped as the walk's first folder, and the empty result read as no duplicates.
+        var recycleBin = Directory.CreateDirectory(Path.Combine(_root, "$Recycle.Bin")).FullName;
+        var content = new byte[2048];
+        File.WriteAllBytes(Path.Combine(recycleBin, "a.bin"), content);
+        File.WriteAllBytes(Path.Combine(recycleBin, "b.bin"), content);
+
+        var result = await _service.ScanAsync(recycleBin, minSizeBytes: 1);
+
+        Assert.Equal(DuplicateFileService.ScanFailure.Excluded, result.Failure);
+        Assert.Empty(result.Groups);
+    }
+
+    // ── Two names of one file are not two copies (#2823) ─────────────────────
+
+    [Fact]
+    public async Task Scan_TwoNamesOfOneFile_AreNotDuplicates()
+    {
+        // A hard link is a second name for the same file: deleting either frees nothing. On a PC, a 64 KB file with a
+        // second name came back as a group of two with 65,536 bytes wasted.
+        var original = CreateFile("original.bin", new byte[65536]);
+        Symlinks.RequireHardLink(Path.Combine(_root, "second-name.bin"), original);
+
+        var result = await _service.ScanAsync(_root, minSizeBytes: 1);
+
+        Assert.Equal(DuplicateFileService.ScanFailure.None, result.Failure);
+        Assert.Empty(result.Groups);
+    }
+
+    [Fact]
+    public async Task Scan_ACopyBesideTwoNamesOfOneFile_IsOneDuplicate_WastingOneFile()
+    {
+        var content = new byte[4096];
+        Array.Fill(content, (byte)0x7E);
+        var original = CreateFile("original.bin", content);
+        Symlinks.RequireHardLink(Path.Combine(_root, "second-name.bin"), original);
+        CreateFile("copy.bin", content);
+
+        var group = Assert.Single((await _service.ScanAsync(_root, minSizeBytes: 1)).Groups);
+
+        Assert.Equal(2, group.Count);
+        Assert.Equal(4096, group.WastedBytes);
+        Assert.Contains(group.Files, f => f.Name == "copy.bin");
+    }
 }

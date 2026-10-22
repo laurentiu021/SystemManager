@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.79] - 2026-10-22
+
+**Opening SysManager again while it runs in the notification area no longer switches the Windows theme back to the
+Dark Mode schedule's or starts winget in the background: a second start only brings the open window forward.**
+
+### Fixed
+
+- **A second start, and each in-app update, ran every tab in a hidden copy of SysManager.** Opening SysManager from
+  its shortcut while it was already running handed over to the open window, as it should, but the copy about to
+  close still built its window and every tab before it went, against the real PC: the Dark Mode schedule was
+  applied again, which switched back a theme chosen by hand in Windows Settings, winget started listing the
+  installed apps, and every other tab started the work it does when it opens, none of it logged. The update's file
+  swap did the same. A second start now only brings the open window forward, and the swap only swaps the file.
+  Since 0.13.2.
+
 ## [1.130.78] - 2026-10-22
 
 **Page Up on a Volume Control slider no longer takes the sound all the way to full: from the keyboard, a volume now

@@ -57,8 +57,8 @@ public static class AppResources
         // App.xaml declares every style INLINE under <Application.Resources>, so there is no standalone
         // dictionary to merge and nothing generic to load — App's generated InitializeComponent is the
         // only loader for them. Constructing App runs no startup logic: the single-instance mutex, the DI
-        // container, the tray icon and the pipe listener all live in OnStartup, which only Run() invokes,
-        // and StartupUri is never acted on without it.
+        // container, the tray icon, the pipe listener and the main window all live in OnStartup, which only
+        // Run() invokes.
         if (Application.Current is null)
         {
             try

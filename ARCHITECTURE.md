@@ -938,7 +938,11 @@ Key services:
   stops the change, and an invalid one is set aside by `StoreFile` and the change stopped once.
   The graphics step of a restore (`RestoreGraphics`) asks what has become of the NVIDIA card the snapshot
   names — still there, gone, or unreadable (`RecordedAdapter`) — and leaves out only one that is gone, so
-  Restore All can finish once the card was taken out or its driver removed. `RestoreOriginalAsync` is handed the
+  Restore All can finish once the card was taken out or its driver removed. A card is there only while it is among
+  the adapters in the PC (`PresentAdapterKeys`: `Win32_VideoController`'s devices and the class subkeys their
+  `Driver` values name, read with a time limit), so the key Windows keeps for a removed card is gone, and the NVIDIA
+  key Performance Mode finds is a present card's (#2836). Which adapters are present is a constructor seam too: the
+  test constructor does not know, so a test reads no WMI. `RestoreOriginalAsync` is handed the
   card as the question about the restore found it (`AdapterOf`, which asks `FindAdapter`), so the restore does what
   the question said. The lookup is a constructor seam, so what a question says does not depend on the graphics card
   of the PC running a test, and the read of the card's key behind `FindRecordedAdapter` is a parameter, so a read that

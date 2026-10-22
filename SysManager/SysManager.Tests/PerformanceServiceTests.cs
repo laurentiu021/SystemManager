@@ -520,6 +520,86 @@ public class PerformanceServiceTests
             PerformanceService.FindRecordedAdapter("0000", _ => throw thrown));
     }
 
+    // ── The NVIDIA key of a card that is in the PC (#2836) ──
+    // Windows keeps a removed card's key until the device is uninstalled, numbered before its replacement's.
+
+    private static (string DriverDesc, string Provider)? AdapterNames(string subKey) => subKey switch
+    {
+        "0000" => ("NVIDIA GeForce GTX 1060", "NVIDIA"),                         // the card taken out
+        "0001" => ("NVIDIA GeForce RTX 4070", "NVIDIA"),                         // the card in the PC
+        "0002" => ("AMD Radeon RX 7800 XT", "Advanced Micro Devices, Inc."),
+        _ => null,
+    };
+
+    [Fact]
+    public void TheNvidiaKey_IsTheCardInThePC_NotARemovedOneBeforeIt()
+        => Assert.Equal("0001", PerformanceService.FindNvidiaSubKey(
+            ["0000", "0001", "0002"], AdapterNames, new HashSet<string> { "0001" }));
+
+    [Fact]
+    public void AfterAMoveToAnotherMaker_NoNvidiaKeyIsFound()
+        => Assert.Null(PerformanceService.FindNvidiaSubKey(
+            ["0000", "0002"], AdapterNames, new HashSet<string> { "0002" }));
+
+    [Fact]
+    public void WhenWhichAdaptersAreInThePCIsNotKnown_TheFirstNvidiaKeyIsTaken_AsBefore()
+        => Assert.Equal("0000", PerformanceService.FindNvidiaSubKey(["0000", "0001"], AdapterNames, present: null));
+
+    [Fact]
+    public void ARecordedCardThatIsNoLongerInThePC_IsGone()
+    {
+        // Its key still names NVIDIA, so a restore wrote the setting back where no driver reads it.
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone,
+            PerformanceService.FindRecordedAdapter("0000", AdapterNames, () => new HashSet<string> { "0001" }));
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0001", AdapterNames, () => new HashSet<string> { "0001" }));
+        Assert.Equal(PerformanceService.RecordedAdapter.Present,
+            PerformanceService.FindRecordedAdapter("0000", AdapterNames, () => null));
+    }
+
+    [Fact]
+    public void WhichAdaptersAreInThePC_IsNotAsked_ForAKeyThatCannotBeOne()
+    {
+        var asked = 0;
+
+        Assert.Equal(PerformanceService.RecordedAdapter.Gone,
+            PerformanceService.FindRecordedAdapter(@"..\Other", AdapterNames, () => { asked++; return null; }));
+        Assert.Equal(0, asked);
+    }
+
+    [Theory]
+    [InlineData(@"{4d36e968-e325-11ce-bfc1-08002be10318}\0001", "0001")]
+    [InlineData(@"{4D36E968-E325-11CE-BFC1-08002BE10318}\0003", "0003")]
+    [InlineData(@"{4d36e972-e325-11ce-bfc1-08002be10318}\0001", null)]       // a network adapter's class
+    [InlineData(@"{4d36e968-e325-11ce-bfc1-08002be10318}\..\0001", null)]
+    [InlineData(@"{4d36e968-e325-11ce-bfc1-08002be10318}", null)]
+    [InlineData(null, null)]
+    public void ClassSubKeyOf_ReadsADisplayDriversSubkey_AndNothingElse(string? driver, string? expected)
+        => Assert.Equal(expected, PerformanceService.ClassSubKeyOf(driver));
+
+    [Fact]
+    public void TheAdaptersInThePC_AreTheSubkeysTheirDriversName()
+    {
+        var drivers = new Dictionary<string, string?>
+        {
+            [@"PCI\VEN_10DE&DEV_2786\4&1A2B3C4D&0&0008"] = @"{4d36e968-e325-11ce-bfc1-08002be10318}\0001",
+            [@"PCI\VEN_8086&DEV_A780\3&11583659&0&10"] = @"{4d36e968-e325-11ce-bfc1-08002be10318}\0002",
+            [@"ROOT\DISPLAY\0000"] = null,
+        };
+
+        var present = PerformanceService.PresentAdapterKeys(drivers.Keys, device => drivers[device]);
+
+        Assert.Equal(["0001", "0002"], present!.Order());
+    }
+
+    [Fact]
+    public void NoAdapterInThePC_IsAReadThatDidNotWork_NotAPCWithoutOne()
+    {
+        // Every PC has a display adapter. Taken as an answer, an empty one would hide the NVIDIA card it has.
+        Assert.Null(PerformanceService.PresentAdapterKeys([], _ => null));
+        Assert.Null(PerformanceService.PresentAdapterKeys([@"ROOT\DISPLAY\0000"], _ => null));
+    }
+
     // ── OriginalSnapshot ──
 
     [Fact]

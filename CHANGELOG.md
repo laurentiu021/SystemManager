@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.67] - 2026-10-22
+
+**After a graphics card upgrade, Performance Mode now finds the NVIDIA card that is in the PC, not the settings Windows
+keeps for the one taken out.**
+
+### Fixed
+
+- **The NVIDIA switch could show and change a card that was no longer in the PC.** Windows keeps a removed card's
+  settings until the device is uninstalled, and lists them before its replacement's, so after a GPU upgrade, or a
+  move from NVIDIA to AMD or Intel, Performance Mode showed the old card as detected and wrote its setting, which needs
+  a restart, where no driver reads it, then read it back as applied. It now uses only the cards Windows reports as
+  present, and Restore All leaves a removed card's setting out as it does for one whose driver was removed. When
+  Windows cannot say which cards are present, it works as before. Since 0.12.0.
+
 ## [1.130.66] - 2026-10-22
 
 **On Performance Mode, applying one setting no longer resets the switches you changed in the others, and a half-on

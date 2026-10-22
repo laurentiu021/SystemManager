@@ -1958,7 +1958,8 @@ offers, "rate us" prompts:
   tab says the Game Bar is partly on, and either Apply sets both
 - **NVIDIA GPU**: force max performance with auto-detected GPU subkey (reboot required). The
   reboot notice stays on the page for as long as SysManager is open, instead of going away the moment
-  the settings are read again
+  the settings are read again. The card is the one in the PC now: after a graphics card upgrade, the
+  settings Windows keeps for the card that was taken out are left alone
 - **Refresh is off while a change or Restore All is running**, so it cannot start a second read in the
   middle of one
 - **Processor State**: force CPU min state to 100%. Under the High Performance and Ultimate
@@ -1979,8 +1980,9 @@ offers, "rate us" prompts:
   back. If the saved baseline cannot be read, the change is stopped and nothing is recorded. A
   damaged one is set aside once, you are told, and the next Apply records your current settings
   as the new original
-- **Restore All finishes even when the NVIDIA card it recorded is gone** — taken out, or its driver
-  removed. That card's setting has nothing to go back to, so the question lists it as "unchanged
+- **Restore All finishes even when the NVIDIA card it recorded is gone** — taken out, even when
+  Windows still keeps its settings, or its driver removed. That card's setting has nothing to go back
+  to, so the question lists it as "unchanged
   (SysManager no longer finds the NVIDIA card this was recorded on)", and every other setting goes back
 - **The NVIDIA setting and the hibernation toggle need administrator rights**, and so does Restore All
   while the NVIDIA card it recorded is still found: without them it puts back the power plan, visual

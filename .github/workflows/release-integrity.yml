@@ -238,22 +238,34 @@ jobs:
           TAG="v${NEWEST}"
           EXE="SysManager-${TAG}.exe"
 
+          # One read of the Latest record, the one the updater reads, and everything below comes from it.
+          # The by-tag view has served a release without its assets for hours (v1.112.9), and
+          # gh release download and gh release view both resolve through it.
+          gh api "repos/${GITHUB_REPOSITORY}/releases/latest" > /tmp/latest.json
+
           # GitHub gives the Latest badge by date, not by version, so a backfill of an older tag takes it.
-          LATEST=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)
+          LATEST=$(jq -r .tag_name /tmp/latest.json)
           if [ "${LATEST}" != "${TAG}" ]; then
             echo "::error::Latest is ${LATEST}, but the newest version is ${TAG}. The in-app update and the README links read Latest. Re-assert it: gh release edit ${TAG} --latest"
             exit 1
           fi
 
           mkdir -p /tmp/latest
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir /tmp/latest \
-            --pattern "${EXE}" --pattern "${EXE}.sha256"
+          for name in "${EXE}" "${EXE}.sha256"; do
+            ASSET=$(jq -r --arg n "${name}" '.assets[] | select(.name == $n) | .id' /tmp/latest.json)
+            if [ -z "${ASSET}" ]; then
+              echo "::error::The Latest release, ${TAG}, lists no ${name}, and the in-app update needs both the .exe and its .sha256."
+              exit 1
+            fi
+            gh api -H "Accept: application/octet-stream" "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET}" \
+              > "/tmp/latest/${name}"
+          done
           ACTUAL=$(sha256sum "/tmp/latest/${EXE}" | cut -d' ' -f1)
           FILE=$(tr -d '\r' < "/tmp/latest/${EXE}.sha256" | cut -d' ' -f1 | tr 'A-F' 'a-f')
-          PAGE=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body \
+          PAGE=$(jq -r .body /tmp/latest.json \
             | grep -oP 'Expected SHA256: `\K[0-9A-Fa-f]{64}' | head -n 1 | tr 'A-F' 'a-f' || true)
-          DIGEST=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            --jq ".assets[] | select(.name == \"${EXE}\") | .digest" | sed 's/^sha256://')
+          DIGEST=$(jq -r --arg n "${EXE}" '.assets[] | select(.name == $n) | .digest // ""' /tmp/latest.json \
+            | sed 's/^sha256://')
           echo "downloaded ${ACTUAL}"
           echo ".sha256    ${FILE}"
           echo "page       ${PAGE}"

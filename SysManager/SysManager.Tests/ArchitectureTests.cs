@@ -10105,15 +10105,22 @@ public partial class ArchitectureTests
             Assert.Contains(required, body, StringComparison.Ordinal);
         }
 
+        // A process that is still alive at the check can have faulted on the UI thread, which App.OnUi handles,
+        // logs at Error and survives. The step looked for the crash marker instead, which only App.OnDomain writes,
+        // as the process dies, so that verdict could never fire, and requiring the marker's name held it in place
+        // (#2805). It is the startup log's error and fatal lines that show it, so the scan has to be there as code.
+        var code = ReleaseStepCode(lines, smoke);
+        Assert.Contains(@"-match '\[(ERR|FTL)\]'", code, StringComparison.Ordinal);
+
         // `throw` is counted on non-comment lines only, and more than one is required: the step raises on
-        // three distinct verdicts (the exe self-exited, it left a crash marker, it would not die when
-        // killed). A bare Contains was satisfied by the word "throw" in this step's own explanatory
+        // three distinct verdicts at least (the exe self-exited, it logged an error or a fatal line, it would not
+        // die when killed). A bare Contains was satisfied by the word "throw" in this step's own explanatory
         // comment, and by whichever verdict was left intact when another was turned into a Write-Warning.
         var throwingLines = body.Split('\n')
             .Count(l => !l.TrimStart().StartsWith('#') && l.Contains("throw ", StringComparison.Ordinal));
         Assert.True(throwingLines >= 3,
             $"the smoke check raises on only {throwingLines} verdict(s). It must fail the job when the exe "
-          + "self-exits, when it leaves a crash marker, AND when it will not terminate — a verdict "
+          + "self-exits, when it logs an error, AND when it will not terminate — a verdict "
           + "downgraded to a warning makes the launch advisory, which is the one thing it must not be.");
 
         // A check that never fails the job is decoration. continue-on-error on this step would make
@@ -10133,6 +10140,42 @@ public partial class ArchitectureTests
         // made this fail against the fixed tree, which is a guard that forbids its own explanation.
         Assert.DoesNotContain(".CloseMainWindow(", body, StringComparison.Ordinal);
         Assert.Contains(".Kill()", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The release guard builds only when the tag has no release, and fails on any answer that does not say (#2805).
+    /// </summary>
+    /// <remarks>
+    /// It decided with <c>gh release view ... &gt;/dev/null 2&gt;&amp;1</c>, so every failure read as "no release yet":
+    /// a network error, a 5xx, a rate limit or a token problem as well as a 404. If one came while a tag was moved,
+    /// which is the case the guard exists for, the build rebuilt from the moved commit and replaced the published
+    /// release's exe and hash with ones nobody had downloaded.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseGuard_BuildsOnlyWhenTheTagHasNoRelease()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release.yml"));
+        var code = ReleaseStepCode(lines, ReleaseStepLine(lines, "Check for an existing release"));
+
+        Assert.DoesNotContain("gh release view", code, StringComparison.Ordinal);
+        Assert.Contains("releases/tags/$tag", code, StringComparison.Ordinal);
+
+        // Three answers, each with its own branch: found, a 404, and anything else, which fails the job.
+        var codeLines = code.Split('\n').Select(l => l.Trim()).ToList();
+        var notFound = codeLines.FindIndex(
+            l => l.StartsWith("elif", StringComparison.Ordinal) && l.Contains("(HTTP 404)", StringComparison.Ordinal));
+        // From the 404 branch on: the manual-dispatch check above it has an if and a fi of its own.
+        var otherwise = notFound < 0 ? -1 : codeLines.FindIndex(notFound, l => l == "else");
+        var end = otherwise < 0 ? -1 : codeLines.FindIndex(otherwise, l => l == "fi");
+        Assert.True(notFound > 0 && otherwise > notFound && end > otherwise,
+            $"the guard does not branch found / 404 / anything else (elif at {notFound}, else at {otherwise}, "
+            + $"fi at {end})");
+        Assert.Contains(
+            "should_release=true", string.Join('\n', codeLines[notFound..otherwise]), StringComparison.Ordinal);
+        var unknown = string.Join('\n', codeLines[otherwise..end]);
+        Assert.DoesNotContain("should_release=true", unknown, StringComparison.Ordinal);
+        Assert.Contains("exit 1", unknown, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -10346,8 +10389,8 @@ public partial class ArchitectureTests
             .Count(l => l.Contains("throw ", StringComparison.Ordinal));
         Assert.True(startupChecks >= 6,
             $"the smoke check raises on only {startupChecks} verdict(s). Three belong to the launch "
-            + "(self-exit, crash marker, will not die) and three to the version (no log, no startup "
-            + "line, wrong version) — an unverifiable version must fail rather than pass quietly.");
+            + "(self-exit, an error in the startup log, will not die) and three to the version (no log, no "
+            + "startup line, wrong version) — an unverifiable version must fail rather than pass quietly.");
 
         // Finally, the app side of the contract: the gate can only read a version out of the log
         // while Init still puts one there.

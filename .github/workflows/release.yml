@@ -54,12 +54,20 @@ jobs:
           # A brand-new release has no GitHub Release yet; a moved tag already does.
           # Only release when none exists, so moving old tags can't re-trigger a
           # full release (which would hijack the "Latest" flag and flood Discussions).
-          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          #
+          # Only a 404 means "none exists". Any failure of `gh release view` used to read that way, so a
+          # network error, a 5xx, a rate limit or a token problem on a moved tag rebuilt it and replaced
+          # the published release's exe and hash with different ones (#2805). Any other answer fails here,
+          # which skips the build and leaves the run red.
+          if found=$(gh api "repos/${{ github.repository }}/releases/tags/$tag" --jq .id 2>&1); then
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             echo "Release for $tag already exists — skipping (tag move or re-push)."
-          else
+          elif [[ "$found" == *"(HTTP 404)"* ]]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             echo "No release for $tag yet — proceeding."
+          else
+            echo "::error::Could not tell whether $tag already has a release, so nothing is built: $found"
+            exit 1
           fi
 
   build-and-release:
@@ -324,19 +332,14 @@ jobs:
           }
 
           if (-not $alive) {
+              # App.OnDomain writes the marker as the process dies, so this is where it can exist.
+              if (Test-Path $marker) {
+                  Write-Host "--- last-crash.json ---"
+                  Get-Content $marker -Raw | Write-Host
+              }
               throw "The published exe exited on its own within 25 seconds (exit code " +
                     "$exitCode). It builds and passes the unit tests but does not run, so this " +
                     "release must not be published. The log tail above is from the failed launch."
-          }
-
-          # An unhandled exception on a background thread kills the process, but one on the UI
-          # thread is handled and logged while the window stays up — so "still alive" alone is
-          # not proof of a clean start. App.xaml.cs writes this marker on the fatal path.
-          if (Test-Path $marker) {
-              Write-Host "--- last-crash.json ---"
-              Get-Content $marker -Raw | Write-Host
-              throw "The published exe recorded a crash marker during startup. It survived the " +
-                    "25-second window but faulted, so this release must not be published."
           }
 
           # The version the RUNNING app reports, which is a different property from the version
@@ -350,6 +353,19 @@ jobs:
               throw "No log file was produced, so the version the running app reports could not be " +
                     "verified. LogService.Init writes the startup line before any window appears, " +
                     "so its absence is itself a failure."
+          }
+
+          # An unhandled exception on a background thread kills the process, but one on the UI
+          # thread is handled while the window stays up, so "still alive" alone is not proof of a
+          # clean start. App.OnUi logs that one at Error, and a tab whose start faults logs Error or
+          # Fatal. This step looked for the crash marker instead, which only App.OnDomain writes, as
+          # the process dies, so a process still alive here never had one (#2805).
+          $faults = @(Get-Content $log.FullName | Where-Object { $_ -match '\[(ERR|FTL)\]' })
+          if ($faults.Count -gt 0) {
+              Write-Host "--- error and fatal lines from the startup log ---"
+              $faults | ForEach-Object { Write-Host $_ }
+              throw "The published exe logged $($faults.Count) error or fatal line(s) while it started. " +
+                    "It survived the 25-second window but faulted, so this release must not be published."
           }
 
           $expected = "SysManager $env:VERSION started"
@@ -368,7 +384,7 @@ jobs:
           }
           Write-Host "The running app reports version $env:VERSION."
 
-          Write-Host "The published exe started, stayed alive for 25s and recorded no crash."
+          Write-Host "The published exe started, stayed alive for 25s and logged no error."
 
       - name: Extract release notes from CHANGELOG
         id: notes

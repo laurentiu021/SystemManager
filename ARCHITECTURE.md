@@ -534,7 +534,10 @@ Key services:
   the whole run; and each script runs in a scope of its own
   (`AddScript(script, useLocalScope: true)`), so no variable or preference one script
   sets reaches the next. In the runspace's global scope they did, from 1.78.7 to 1.130.13.
-  `Dispose` releases it deterministically where a consumer is disposed.
+  `Dispose` releases it deterministically where a consumer is disposed. It does not wait for the gate, so the
+  idle eviction, which can be running on its timer thread as SysManager closes, and a run still going then never
+  release or take the gate once it is disposed, and the runspace a run opened after `Dispose` is released when the
+  run ends (#2803).
   A session that stops working under a run surfaces as `RuntimeException`, the type
   every service already turns into its failed state, rather than as the two
   `SystemException`s PowerShell raises for it. A run also watches its child process

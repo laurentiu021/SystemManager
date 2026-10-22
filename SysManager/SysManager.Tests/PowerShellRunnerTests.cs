@@ -685,6 +685,110 @@ public class PowerShellRunnerTests
         }
     }
 
+    // ── Disposed while the gate is held, as SysManager closes (#2803) ──────
+
+    /// <summary>
+    /// Disposing the runner while its idle eviction is closing the runspace ends without an error.
+    /// </summary>
+    /// <remarks>
+    /// Disposing the timer does not wait for a callback already running, and the eviction holds the pipeline gate
+    /// while it closes the runspace and its child. Dispose then disposed the gate, the eviction's <c>finally</c>
+    /// released it, and the <see cref="ObjectDisposedException"/> that threw on the timer thread had no handler, so
+    /// SysManager's exit ended in a crash. The eviction is called from a task here rather than from the timer, so the
+    /// old code fails this test instead of ending the test run. The teardown is held until the runner is disposed.
+    /// </remarks>
+    [Fact]
+    public async Task DisposingTheRunner_WhileItRetiresItsIdleRunspace_EndsWithoutAnError()
+    {
+        var teardownMayFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var teardownStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()),
+                new HeldDisposable(teardownStarted, teardownMayFinish.Task), null),
+            idleRunspaceLifetime: TimeSpan.FromHours(1));
+
+        try
+        {
+            await runner.RunAsync("2 + 2");
+            var evicting = Task.Run(runner.EvictIdleRunspace);
+            await teardownStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            runner.Dispose();
+            teardownMayFinish.TrySetResult();
+
+            await evicting.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        finally
+        {
+            teardownMayFinish.TrySetResult();
+        }
+    }
+
+    /// <summary>An idle eviction that fires once the runner is disposed does nothing.</summary>
+    /// <remarks>
+    /// A timer callback already queued when Dispose ran still runs, and it took the disposed gate, which threw on the
+    /// timer thread with no handler as well.
+    /// </remarks>
+    [Fact]
+    public async Task AnEvictionThatFiresAfterDispose_DoesNothing()
+    {
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: runspace => Task.Run(runspace.Open),
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()), null, null),
+            idleRunspaceLifetime: TimeSpan.FromHours(1));
+        await runner.RunAsync("2 + 2");
+        runner.Dispose();
+
+        runner.EvictIdleRunspace();
+    }
+
+    /// <summary>
+    /// A run still going when the runner is disposed returns its own result, and the runspace it opened is released.
+    /// </summary>
+    /// <remarks>
+    /// Its <c>finally</c> released the gate Dispose had disposed, so the run threw
+    /// <see cref="ObjectDisposedException"/> in place of its result, which a tab's start then logged as a fault on a
+    /// clean exit. The runspace the run opened after Dispose was also left cached, where nothing released it or its
+    /// child. The run is held in its open here until the runner has been disposed.
+    /// </remarks>
+    [Fact]
+    public async Task ARunStillGoingWhenTheRunnerIsDisposed_ReturnsItsResult_AndReleasesItsRunspace()
+    {
+        var opening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mayOpen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        List<string> released = [];
+        var runner = new PowerShellRunner(
+            action => Task.Run(action),
+            openRunspace: async runspace =>
+            {
+                opening.TrySetResult();
+                await mayOpen.Task;
+                await Task.Run(runspace.Open);
+            },
+            createRunspace: () => (RunspaceFactory.CreateRunspace(InitialSessionState.CreateDefault2()),
+                new RecordingDisposable("the runspace's child", released), null),
+            idleRunspaceLifetime: TimeSpan.FromHours(1));
+
+        try
+        {
+            var run = runner.RunAsync("2 + 2");
+            await opening.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            runner.Dispose();
+            mayOpen.TrySetResult();
+
+            Assert.Equal(4, (int)(await run.WaitAsync(TimeSpan.FromSeconds(30)))[0].BaseObject);
+            Assert.Equal(["the runspace's child"], released);
+        }
+        finally
+        {
+            mayOpen.TrySetResult();
+        }
+    }
+
     // ── A child process that dies under a run (#2637) ──────────────────────
 
     /// <summary>A script that says it has started and then runs for a minute, unless it is stopped.</summary>

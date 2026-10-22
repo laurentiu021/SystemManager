@@ -186,9 +186,36 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
         finally
         {
             ArmIdleEviction();
-            _pipeline.Release();
+            ReleasePipeline();
+
+            // A run that ended after Dispose may have opened a runspace Dispose could not see, and nothing would
+            // release it or its child now.
+            if (_disposed && TakeCached() is { } leftover) Retire(leftover);
         }
     }
+
+    /// <summary>
+    /// Releases the pipeline gate unless <see cref="Dispose"/> has already disposed it.
+    /// </summary>
+    /// <remarks>
+    /// Every caller is a <c>finally</c>, and releasing a disposed <see cref="SemaphoreSlim"/> throws. A run still going
+    /// when SysManager closed threw that instead of returning its own result, and the idle eviction, which holds the
+    /// gate on a timer thread while it closes the runspace, threw it with no handler, which ended the exit and left
+    /// the next start reporting a crash (#2803). <c>DnsService</c> guards its gate the same way.
+    /// </remarks>
+    private void ReleasePipeline()
+    {
+        if (_disposed) return;
+        try { _pipeline.Release(); }
+        catch (ObjectDisposedException) { /* disposed between the check and the release, as SysManager closed */ }
+    }
+
+    /// <summary>The cached runspace, which is no longer cached once this returns it.</summary>
+    /// <remarks>
+    /// One exchange, so the idle eviction, <see cref="Dispose"/> and a run that ends after it cannot each take the
+    /// same runspace and retire it twice: <see cref="Dispose"/> does not wait for the gate.
+    /// </remarks>
+    private RunspaceResources? TakeCached() => Interlocked.Exchange(ref _cached, null);
 
     private async Task<Collection<PSObject>> RunOnLeasedRunspaceAsync(
         string script,
@@ -1000,7 +1027,8 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
         if (_cached is null || _disposed) return;
 
         _idleEviction ??= new Timer(_ => EvictIdleRunspace(), null, Timeout.Infinite, Timeout.Infinite);
-        _idleEviction.Change(_idleRunspaceLifetime, Timeout.InfiniteTimeSpan);
+        try { _idleEviction.Change(_idleRunspaceLifetime, Timeout.InfiniteTimeSpan); }
+        catch (ObjectDisposedException) { /* Dispose took the timer away between the check and the change */ }
     }
 
     /// <summary>
@@ -1010,20 +1038,24 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
     /// Takes the pipeline gate with a zero wait rather than blocking on it. A run that started between the
     /// timer firing and this callback holds the gate, and tearing its runspace down underneath it would turn
     /// a working call into a broken one; re-arming instead costs one more idle period and cannot.
+    /// <para>Disposing the timer does not wait for a callback already running, so this can run, and hold the gate,
+    /// while <see cref="Dispose"/> runs (#2803). It neither takes nor releases a disposed gate.</para>
     /// </remarks>
-    private void EvictIdleRunspace()
+    internal void EvictIdleRunspace()
     {
-        if (!_pipeline.Wait(0)) { ArmIdleEviction(); return; }
+        if (_disposed) return;
+        bool held;
+        try { held = _pipeline.Wait(0); }
+        catch (ObjectDisposedException) { return; }
+        if (!held) { ArmIdleEviction(); return; }
 
         try
         {
-            var idle = _cached;
-            _cached = null;
-            if (idle is not null) Retire(idle);
+            if (TakeCached() is { } idle) Retire(idle);
         }
         finally
         {
-            _pipeline.Release();
+            ReleasePipeline();
         }
     }
 
@@ -1071,9 +1103,7 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
 
         _idleEviction?.Dispose();
 
-        var cached = _cached;
-        _cached = null;
-        if (cached is not null) Retire(cached);
+        if (TakeCached() is { } cached) Retire(cached);
 
         _pipeline.Dispose();
     }

@@ -16,12 +16,14 @@ query-filters:
   - exclude:
       id: cs/useless-assignment-to-local
   # Intentional use of CreateFromSignedFile for Authenticode verification — no modern
-  # .NET replacement exists without P/Invoke. Used in UpdateService.cs AND
-  # SpeedTestService.cs, both already wrapped in #pragma warning disable SYSLIB0057.
+  # .NET replacement exists without P/Invoke. It is called in Helpers/Authenticode.cs,
+  # under #pragma warning disable SYSLIB0057, and the rest of the app reads signatures
+  # through that helper. Excluding the query loses nothing: any other call to
+  # an obsolete API is a compiler warning (CS0618 or its SYSLIB id), and
+  # TreatWarningsAsErrors fails the build on it.
   # Excluded by id alone: the `path:` key is NOT honoured inside query-filters (only
   # `id`/`tags` are — see the cs/useless-upcast note below), so a path-scoped exclude
-  # silently covered the whole repo anyway AND would have missed the SpeedTestService
-  # usage if it ever were honoured. There are no other call sites, so id-only is correct.
+  # silently covers the whole repo anyway.
   - exclude:
       id: cs/call-to-obsolete-method
   # cs/useless-cast-to-self fires only on [GeneratedRegex] source-generator output
@@ -52,9 +54,10 @@ query-filters:
   - exclude:
       id: cs/nested-if-statements
   # cs/path-combine flags Path.Combine arguments that embed a directory separator
-  # (which can silently discard earlier segments). Every occurrence here passes only
-  # separator-free literals ("$Recycle.Bin", "Steam", "drivers"/"etc"/"hosts"), i.e.
-  # textbook-correct usage — the rule has no real finding on this codebase.
+  # (an absolute one silently discards the segments before it). The literals passed here
+  # are separator-free ("$Recycle.Bin", "Steam", "drivers"/"etc"/"hosts") or relative,
+  # such as ShortcutCleanerService's @"Microsoft\Internet Explorer\Quick Launch", and a
+  # relative segment discards nothing — the rule has no real finding on this codebase.
   - exclude:
       id: cs/path-combine
   # cs/missed-using-statement misfires on two disposed-elsewhere cases it cannot
@@ -94,16 +97,15 @@ query-filters:
       id: cs/missed-ternary-operator
   # cs/call-to-unmanaged-code and cs/unmanaged-code are inventory queries: they report every
   # P/Invoke by design, as an aid to a human reviewing interop. This app reads hardware,
-  # power plans, the registry and process state, so it declares 41 of them across 17 files
-  # (28 [LibraryImport] and 13 [DllImport], counted by attribute rather than by grepping lines)
-  # and the count can never reach zero — every new declaration adds another alert with
-  # nothing to fix. They accounted for 33 of 40 open alerts, which is what makes a real
-  # alert easy to overlook. What these queries gesture at is real, but they do not check it:
-  # neither reports whether an entry point is bound correctly, only that interop exists. The
-  # check that matters — an A/W-variant function must name its EntryPoint explicitly, or the
-  # bare name binds to no export — is currently a manual test step plus a review rule
-  # treating any P/Invoke diff as merge-blocking. A source-scanning architecture test for it
-  # is the follow-up to this change, and is what actually replaces the coverage.
+  # power plans, the registry and process state through [LibraryImport] and [DllImport]
+  # declarations, so the count can never reach zero — every new declaration adds another
+  # alert with nothing to fix. When they were excluded they made up 33 of 40 open alerts,
+  # which is what makes a real alert easy to overlook. What these queries gesture at is
+  # real, but they do not check it: neither reports whether an entry point is bound
+  # correctly, only that interop exists. The check that matters — an A/W-variant function
+  # must name its EntryPoint explicitly, or the bare name binds to no export — is
+  # ArchitectureTests.EveryStringMarshallingInterop_BindsTheWideEntryPoint, alongside a
+  # review rule treating any P/Invoke diff as merge-blocking.
   - exclude:
       id: cs/call-to-unmanaged-code
   - exclude:

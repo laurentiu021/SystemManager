@@ -67,7 +67,9 @@ dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Rel
 ```
 
 **Check the formatting** — CI runs this on all four projects and fails the PR on any
-difference. A clean build does not catch it, so run it before you push:
+difference. A clean build does not catch it, so run it before you push. Line endings come
+from `.gitattributes` (CRLF, and LF for YAML), so a clone gets the ones this check expects
+whatever your `core.autocrlf` is:
 
 ```powershell
 # All four, because CI checks all four — a single-project run passes while the PR fails.

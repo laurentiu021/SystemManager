@@ -12,6 +12,11 @@ permissions:
   contents: read
   security-events: write
 
+# See the same block in ci.yml. This workflow runs dotnet but no tests, so the SDK's opt-out is the one that
+# applies (#2806).
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+
 jobs:
   analyze:
     name: Analyze (csharp)

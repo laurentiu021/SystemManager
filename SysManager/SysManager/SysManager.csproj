@@ -13,6 +13,10 @@
     <NoWarn>$(NoWarn);NU1603;NU1701</NoWarn>
     <!-- The documentation file exists for the compiler's checks; it is not part of what ships. -->
     <PublishDocumentationFile>false</PublishDocumentationFile>
+    <!-- The release publishes a single file, which turns on the SDK's single-file analyzer (IL3000 to IL3003:
+         Assembly.Location and the APIs marked RequiresAssemblyFiles). Set here, every build runs it, so a pull
+         request fails on what would otherwise fail only the release, after its tag exists (#2806). -->
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <Version>1.130.77</Version>
     <FileVersion>1.130.77.0</FileVersion>
     <AssemblyVersion>1.130.77.0</AssemblyVersion>

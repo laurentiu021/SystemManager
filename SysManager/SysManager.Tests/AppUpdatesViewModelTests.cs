@@ -389,6 +389,94 @@ public class AppUpdatesViewModelTests
         Assert.Same(vm.CancelCommand, vm.EscapeCancel);
     }
 
+    // ---------- Cancel and Escape stop a batch between apps (#2942) ----------
+
+    private static AppPackage Package(string name, string id) =>
+        new() { Name = name, Id = id, CurrentVersion = "1", AvailableVersion = "2", IsSelected = true };
+
+    [Fact]
+    public async Task UpgradeSelected_WhenEscapeIsPressed_LetsTheRunningUpdateFinish_ThenStopsBeforeTheNextApp()
+    {
+        // Escape ran Cancel, whose token winget had, so a keypress ended winget part-way and the installer it had
+        // started with it (#2942).
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<WingetResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync("a", Arg.Any<CancellationToken>()).Returns(callInfo =>
+        {
+            runningToken = callInfo.ArgAt<CancellationToken>(1);
+            started.TrySetResult(true);
+            return pending.Task;
+        });
+        var vm = new AppUpdatesViewModel(winget);
+        vm.Packages.Add(Package("App A", "a"));
+        vm.Packages.Add(Package("App B", "b"));
+
+        using var dialog = new DialogAnswer(confirm: true);
+        var execution = Task.CompletedTask;
+        try
+        {
+            execution = vm.UpgradeSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.EscapeCancel!.Execute(null);
+
+            Assert.False(runningToken.IsCancellationRequested);
+            Assert.Equal("Stopping after App A. Its update finishes first, so it is not left half-installed.",
+                vm.StatusMessage);
+
+            pending.SetResult(new WingetResult(0, true, ""));
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal("Stopped after 1 of 2. Updated 1.", vm.StatusMessage);
+            await winget.DidNotReceive().UpgradeAsync("b", Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            // Ended either way: a batch left running holds the install lock the next test needs.
+            pending.TrySetResult(new WingetResult(0, true, ""));
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_WhileAnUpdateRuns_StillEndsIt()
+    {
+        // Closing SysManager asks first while the update holds its lock, and then ends what is running, as before.
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<WingetResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAsync("a", Arg.Any<CancellationToken>()).Returns(callInfo =>
+        {
+            runningToken = callInfo.ArgAt<CancellationToken>(1);
+            runningToken.Register(() => pending.TrySetCanceled(runningToken));
+            started.TrySetResult(true);
+            return pending.Task;
+        });
+        var vm = new AppUpdatesViewModel(winget);
+        var package = Package("App A", "a");
+        vm.Packages.Add(package);
+
+        using var dialog = new DialogAnswer(confirm: true);
+        var execution = Task.CompletedTask;
+        try
+        {
+            execution = vm.UpgradeSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.Dispose();
+
+            Assert.True(runningToken.IsCancellationRequested);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("Cancelled", package.Status);
+        }
+        finally
+        {
+            pending.TrySetResult(new WingetResult(0, true, ""));
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
     [Fact]
     public void TheScanStatus_SaysHowManyWereLeftUnticked_AndWhy()
     {

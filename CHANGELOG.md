@@ -10,6 +10,22 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.56] - 2026-10-22
+
+**Escape no longer ends an app update, an install or a component store cleanup part-way, and Cancel stops an update or
+install batch before its next app.**
+
+### Fixed
+
+- **Escape ended winget, and the installer it had started, in the middle of an update or an install.** On App Updates
+  and Bulk Installer, Escape ran Cancel, and Cancel ended the winget run, so a bare keypress could leave an app
+  half-installed. Cancel and Escape now stop a batch before its next app: the update or install already running
+  finishes first, and the status line says so. Only closing SysManager still ends one that is running. Since 1.76.0
+  on Bulk Installer and 1.127.10 on App Updates.
+- **Escape stopped a component store cleanup on Quick Cleanup part-way**, which leaves Windows to finish the servicing
+  transaction on its own. Escape now leaves the cleanup alone, and still stops the temporary-file clean-up, the
+  Recycle Bin and the analysis. The Cancel button still stops the cleanup, as its confirmation says. Since 1.127.10.
+
 ## [1.130.55] - 2026-10-22
 
 **System Report's list of problems from the last 7 days covers the whole week, so an older critical event is no

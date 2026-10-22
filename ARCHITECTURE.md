@@ -238,13 +238,15 @@ to scroll.
   Once it has loaded it asks about a game mode session a previous run left on, through the optional
   `IGamingProfileService` and `GamingProfileViewModel.OfferToRevertLeftoverAsync`, and shows the outcome as a
   toast (#2592).
-- `AppUpdatesViewModel` — winget scan and bulk upgrade.
+- `AppUpdatesViewModel` — winget scan and bulk upgrade. Cancel and Escape stop a batch before its next app: the
+  running winget has a token of its own, which only `Dispose` cancels (#2942).
 - `WindowsUpdateViewModel` — user-triggered Windows Update scan/install via the WUA COM API.
 - `SystemHealthViewModel` — SMART, memory diagnostic, multi-drive chkdsk, and the BIOS and board details with
   a link to the maker's support site. The tab is busy while a read or chkdsk runs, so a read that ends beside a
   chkdsk leaves it busy, and chkdsk takes the `Disk` lock, so it never runs beside a clean-up and closing
   SysManager asks first (#2876).
-- `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware).
+- `CleanupViewModel` — TEMP, Recycle Bin, component store (background-aware). Escape stops everything but a component
+  store cleanup, which only the Cancel button stops (#2942).
 - `DeepCleanupViewModel` — scan-first deep cleanup over the safe-to-remove category list. Clean is off while a
   scan runs, and the service is handed the categories the confirmation listed rather than the list on screen, which
   a scan finishing behind the modal confirmation could replace (#2702).
@@ -325,7 +327,7 @@ to scroll.
 - `ShortcutCleanerViewModel` — scans and removes broken desktop/Start Menu shortcuts.
 - `AppBlockerViewModel` — block/unblock apps via IFEO (Image File Execution Options) registry mechanism. A block list that could not be read sets `ListFailed`; a failed refresh keeps the list and its warning.
 - `FileShredderViewModel` — secure multi-pass file overwrite and deletion.
-- `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade.
+- `BulkInstallerViewModel` — batch app installation via winget with progress tracking. Install Selected confirms first, because winget turns an install of an installed app into an upgrade. Cancel and Escape stop a batch before its next app: the running winget has a token of its own, which only `Dispose` cancels (#2942).
   A winget search marks the tab busy as an install does, and the install's Cancel, its bar and the Install Selected
   gate follow `IsInstalling` alone, so a search leaves them as they are (#2876).
 - `DnsHostsViewModel` — DNS server configuration and hosts file editor in one tab.
@@ -1942,9 +1944,9 @@ Four keys are handled at the shell. Two of them ask the OPEN TAB what to do, thr
   stop. One property rather than a flag beside a command, because the app answers "is
   something running?" five different ways (`IsBusy` on most tabs, plus `IsShredding`,
   `IsScanning`, `IsHttpTesting`, `IsOoklaTesting`), so a shell testing `IsBusy` would skip
-  four tabs. 26 tabs override it: every tab with a Cancel button, whether the button hides
-  while nothing runs or stays on screen, and Display Profiles, whose Escape is Revert now while
-  a new mode waits to be kept. One that stays states no flag in the view, so its
+  four tabs. 25 tabs override it: every tab with a Cancel button but System Fixes, whether the
+  button hides while nothing runs or stays on screen, and Display Profiles, whose Escape is
+  Revert now while a new mode waits to be kept. One that stays states no flag in the view, so its
   override still returns null while nothing runs, on its Cancel command's `CanExecute` flag
   where it has one (#2597).
 - `RefreshOnF5` — the command F5 runs. A property per view model because the tabs do not

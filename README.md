@@ -235,8 +235,9 @@ cycles the themes inside it, and `Escape` closes it and puts focus back on the b
 the 25 tabs that can be cancelled from the keyboard: every tab with a Cancel button but System Fixes, and Display
 Profiles, where it puts back the previous mode while a new one waits for "Keep". Every run on System Fixes repairs
 Windows, so stopping one is left to its Cancel button rather than a keypress. On Windows Features `Escape` stops a
-scan, never a change, and on Uninstaller it stops a batch before its next app, once the uninstaller already running
-has finished. It only acts
+scan, never a change. On Uninstaller, App Updates and Bulk Installer it stops a batch before its next app, once the
+uninstaller, update or install already running has finished, and on Quick Cleanup it stops everything but a component
+store cleanup, which only its Cancel button stops. It only acts
 while something is running, and only after the control you are on has had its own chance to use the key,
 so it still closes a drop-down or undoes a text edit first.
 
@@ -801,8 +802,9 @@ Across the tab:
   reachable, for example — the tab says it couldn't check for updates, and why, instead of
   reporting everything up to date
 - **Each result says what winget reported.** A download that did not match what winget
-  expected is named as that, not as "no update"; an update you cancelled reads "Cancelled",
-  and one that needs administrator says so
+  expected is named as that, not as "no update", and one that needs administrator says so
+- **Cancel stops a batch between apps** — the update already running finishes first, because
+  ending winget half-way ends the installer it started. `Escape` does the same
 
 ### Quick Cleanup
 Freeing up disk space, and nothing else — the Windows repairs that used to sit here are on
@@ -825,6 +827,10 @@ System → System Fixes, where the tab name matches what they do.
   a confirmation that states the cost — after a cleanup, updates already installed can no
   longer be uninstalled. `/ResetBase` is never used, and a test makes it impossible to add
   by accident. The component-store steps and the Windows TEMP folder need administrator rights
+- **`Escape` never stops a component store cleanup.** Stopping it part-way leaves Windows to
+  finish the servicing transaction on its own, so only the Cancel button stops it, as the
+  confirmation before it says. `Escape` still stops the Temp clean-up, the Recycle Bin and the
+  analysis
 
 ### Deep Cleanup
 - **Scan-first**: every category is discovered with size + file count
@@ -1519,6 +1525,8 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Category filter and text search across the catalog, plus a button named for the chosen
   category, such as "Select Browsers", that ticks every app in it at once
 - Per-package install status tracking with ETA
+- **Cancel stops a batch between apps** — the install already running finishes first, because
+  ending winget half-way ends the installer it started. `Escape` does the same
 - The catalog is grouped under category headings, and an app already on this PC carries an
   **Installed** badge
 - Some apps install system-wide and need administrator rights; the banner at the top says so

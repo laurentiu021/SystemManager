@@ -20,8 +20,13 @@ public sealed partial class CleanupViewModel : ViewModelBase
     protected internal override IRelayCommand? RefreshOnF5 => RescanCommand;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Not while the component store is being cleaned up. Escape is a bare keypress, and stopping
+    /// <c>/StartComponentCleanup</c> part-way leaves Windows to finish the servicing transaction on its own
+    /// (#2942). The Cancel button still stops it, and the confirmation before it says what that costs.
+    /// </remarks>
     protected internal override IRelayCommand? EscapeCancel =>
-        IsAnyRunning ? CancelCommand : null;
+        IsAnyRunning && !_cleaningStore ? CancelCommand : null;
 
     private readonly IPowerShellRunner _runner;
 
@@ -39,6 +44,9 @@ public sealed partial class CleanupViewModel : ViewModelBase
     private CancellationTokenSource? _tempCts;
     private CancellationTokenSource? _binCts;
     private CancellationTokenSource? _storeCts;
+
+    // Whether the component store run is the cleanup rather than the analysis: Escape stops the analysis, not this.
+    private bool _cleaningStore;
 
     // Temp Cleanup and both component-store operations stream through the single shared _runner
     // and its LineReceived/ProgressChanged events into the one Console, so only one may run at a
@@ -422,6 +430,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         }
 
         IsStoreRunning = true;
+        _cleaningStore = !analyzing;
         IsProgressIndeterminate = true;
         StoreStatus = analyzing ? "Analysing — usually under a minute" : "Cleaning up — can take 10–30 minutes";
         StoreVerdict = "";
@@ -469,7 +478,7 @@ public sealed partial class CleanupViewModel : ViewModelBase
         catch (OperationCanceledException) { StoreStatus = "Cancelled."; StoreVerdict = analyzing ? "Analysis was cancelled." : "Cleanup was cancelled — Windows will finish the servicing transaction itself."; StoreVerdictColorHex = StatusColors.Neutral; StatusMessage = StoreStatus; }
         catch (InvalidOperationException ex) { StoreStatus = $"Error: {ex.Message}"; StoreVerdict = ex.Message; StoreVerdictColorHex = StatusColors.Bad; StatusMessage = StoreStatus; }
         catch (System.ComponentModel.Win32Exception ex) { StoreStatus = $"Error: {ex.Message}"; StoreVerdict = ex.Message; StoreVerdictColorHex = StatusColors.Bad; StatusMessage = StoreStatus; }
-        finally { _runner.LineReceived -= Collect; EndConsoleOp(); IsStoreRunning = false; IsProgressIndeterminate = false; StoreEtaText = string.Empty; }
+        finally { _runner.LineReceived -= Collect; EndConsoleOp(); _cleaningStore = false; IsStoreRunning = false; IsProgressIndeterminate = false; StoreEtaText = string.Empty; }
     }
 
     /// <summary>Neither component-store operation may start while one is already running.</summary>

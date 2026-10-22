@@ -31,6 +31,8 @@
                             <RowDefinition Height="Auto"/>
                             <!-- Startup app-update check preference (#2613). -->
                             <RowDefinition Height="Auto"/>
+                            <!-- A startup choice that could not be saved (#2833). -->
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Column="0">
                             <StackPanel Orientation="Horizontal">
@@ -150,6 +152,11 @@
                                   IsChecked="{Binding CheckAppUpdatesOnStartup, Mode=TwoWay}"
                                   AutomationProperties.Name="Check winget for app updates when SysManager starts"
                                   ToolTip="On by default, so the Dashboard can say which of your apps have updates. SysManager asks winget, and winget asks Microsoft's package sources — nothing about you is added. Turn it off and the check runs only when you press Scan system on the Dashboard, or on the App Updates tab."/>
+                        <!-- Says when either choice above could not be saved, so it holds only until SysManager closes
+                             (#2833). Collapsed otherwise, like the report and rollback lines above. -->
+                        <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="{Binding StartupChecksStatus}"
+                                   Style="{StaticResource SubtleStatusLine}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Visibility="{Binding StartupChecksStatus, Converter={StaticResource FlexVis}, Mode=OneWay}"/>
                     </Grid>
                 </Border>
 

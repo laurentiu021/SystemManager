@@ -133,6 +133,41 @@ public class AboutViewUiTests
         });
     }
 
+    /// <summary>
+    /// A switch whose choice could not be saved says so on screen, under the two switches (#2833).
+    /// </summary>
+    /// <remarks>
+    /// About shows no shared status line, so a sentence set anywhere else would be read by nobody. A folder where the
+    /// file goes makes the write fail.
+    /// </remarks>
+    [Fact]
+    public void AStartupChoiceThatCannotBeSaved_SaysSoUnderTheSwitches()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "SysManagerTests", Guid.NewGuid().ToString("N"));
+        var prefs = new UpdateCheckPreferenceService(dir);
+        Directory.CreateDirectory(Path.Combine(dir, UpdateCheckPreferenceService.FileName));
+
+        StaHelper.Run(() =>
+        {
+            AppResources.Ensure();
+            using var vm = new AboutViewModel(new UpdateService(),
+                new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
+                autoCheck: false, preferences: prefs, updatesDir: dir);
+            var view = new AboutView { DataContext = vm };
+            view.Measure(new Size(1200, 2400));
+            view.Arrange(new Rect(0, 0, 1200, 2400));
+            view.UpdateLayout();
+            Assert.DoesNotContain(Descendants<TextBlock>(view),
+                t => t.Text == ViewModelBase.ChangeNotSavedStatus && t.Visibility == Visibility.Visible);
+
+            vm.CheckForUpdatesOnStartup = !vm.CheckForUpdatesOnStartup;
+            view.UpdateLayout();
+
+            Assert.Contains(Descendants<TextBlock>(view),
+                t => t.Text == ViewModelBase.ChangeNotSavedStatus && t.Visibility == Visibility.Visible);
+        });
+    }
+
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
     {
         var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);

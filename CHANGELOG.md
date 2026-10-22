@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.54] - 2026-10-22
+
+**About and Bulk Installer say when a switch that decides whether SysManager goes online could not be saved.**
+
+### Fixed
+
+- **The three switches that decide whether SysManager goes online said nothing when their save failed.** About's
+  "Check GitHub for a new version when SysManager starts" and "Check winget for app updates when SysManager starts",
+  and Bulk Installer's "Load app icons from the web", showed the new choice even when it could not be written, and
+  the next start read the old one and went online after you had switched it off. Each now says that the change takes
+  effect now but will not be kept after SysManager closes, as the other tabs that save a setting at once do: on About
+  under the two checkboxes, on Bulk Installer on its status line. Since 1.52.0 for the icons, 1.58.0 for the version
+  check and 1.130.0 for the app-updates check.
+
 ## [1.130.53] - 2026-10-21
 
 **Windows Features names the features Windows turns on with the one you enable, and shows them on afterwards.**

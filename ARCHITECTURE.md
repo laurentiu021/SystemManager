@@ -1433,7 +1433,9 @@ Key services:
   and tried again at the next way out; the screen closes either way. Local and left out of `ProfileService.Catalog`,
   because "seen here" is about this PC and a profile carried to a new one should not keep its first launch quiet.
 - `UpdateCheckPreferenceService` — gates the startup version check, one of the two network calls the app
-  makes on its own, and since #2613 the other one too, the Dashboard's `winget upgrade` alert
+  makes on its own. `Save` and the two setters return whether the file was written, and About shows
+  `ChangeNotSavedStatus` under the checkboxes when it was not (#2833). It also gates the other call it
+  makes on its own since #2613, the Dashboard's `winget upgrade` alert
   (`CheckAppUpdatesOnStartup`, on by default and when a file from before the switch lacks it;
   `ShouldCheckAppUpdatesAtStartup` answers false for a setting that could not be read). Persists
   whether the startup version check may run, plus when it last ran, as JSON under
@@ -1590,6 +1592,7 @@ Key services:
   content, where the import used to throw.
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
+  `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
   only the NVIDIA GPU and the disks' SMART temperatures. It does not poll: the Dashboard asks

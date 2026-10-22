@@ -70,14 +70,17 @@ public sealed class AppIconService
     }
 
     /// <summary>
-    /// Enables or disables network icon fetching and persists the choice. Returns the
-    /// effective value. Disabling does not delete already-cached icons.
+    /// Enables or disables network icon fetching and persists the choice. Returns false when the choice could not be
+    /// saved, so it lasts only until SysManager closes. Disabling does not delete already-cached icons.
     /// </summary>
+    /// <remarks>
+    /// It returned the flag it had just set, whether or not the file was written, and the next start loaded the old
+    /// choice and fetched icons for someone who had switched it off (#2833).
+    /// </remarks>
     public bool SetNetworkFetchEnabled(bool enabled)
     {
         NetworkFetchEnabled = enabled;
-        SavePreference(enabled);
-        return NetworkFetchEnabled;
+        return SavePreference(enabled);
     }
 
     private bool LoadPreference()
@@ -93,15 +96,17 @@ public sealed class AppIconService
         catch (JsonException ex) { Log.Debug(ex, "Icon-fetch preference malformed"); return false; }
     }
 
-    private void SavePreference(bool enabled)
+    private bool SavePreference(bool enabled)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
             AtomicFile.WriteAllText(_settingsPath, JsonSerializer.Serialize(new IconFetchPreference(enabled)));
+            return true;
         }
         catch (IOException ex) { Log.Debug(ex, "Icon-fetch preference write failed"); }
         catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Icon-fetch preference write denied"); }
+        return false;
     }
 
     private sealed record IconFetchPreference(bool NetworkFetchEnabled);

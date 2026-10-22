@@ -145,4 +145,35 @@ public class WingetResultTests
     [InlineData(unchecked((int)0x80070005), false)] // E_ACCESSDENIED: an HRESULT, but not winget's
     public void IsWingetCode_RecognisesOnlyWingetsOwnRange(int exitCode, bool expected)
         => Assert.Equal(expected, WingetExitCodes.IsWingetCode(exitCode));
+
+    // ---------- an update that needs a restart to finish is installed (#2849) ----------
+
+    [Fact]
+    public void From_RestartRequiredToFinish_IsSucceeded_AndNeedsARestart()
+    {
+        // winget ends an upgrade on INSTALL_REBOOT_REQUIRED_TO_FINISH when the installer asks for a restart. Its own
+        // sentence says the update is installed, and it was counted as a failure.
+        var r = WingetResult.From(unchecked((int)0x8A150109u));
+
+        Assert.True(r.Succeeded);
+        Assert.True(r.RestartRequired);
+        Assert.Equal("Update installed — restart required", r.FriendlyMessage);
+    }
+
+    [Fact]
+    public void From_RestartRequiredBeforeTheInstall_IsStillAFailure()
+    {
+        // INSTALL_REBOOT_REQUIRED_FOR_INSTALL: Windows has to restart before the installer can run, so nothing is on.
+        var r = WingetResult.From(unchecked((int)0x8A15010Au));
+
+        Assert.False(r.Succeeded);
+        Assert.False(r.RestartRequired);
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(0x8A15002Bu)]   // UPDATE_NOT_APPLICABLE
+    [InlineData(0x8A150049u)]   // MSI_INSTALL_FAILED
+    public void From_AnyOtherCode_NeedsNoRestart(uint code)
+        => Assert.False(WingetResult.From(unchecked((int)code)).RestartRequired);
 }

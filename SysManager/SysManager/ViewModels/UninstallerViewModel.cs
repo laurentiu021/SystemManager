@@ -336,12 +336,7 @@ public sealed partial class UninstallerViewModel : ViewModelBase
             }
 
             UninstallEtaText = string.Empty;
-            var restartMessage = restartRequired switch
-            {
-                0 => string.Empty,
-                1 => " Restart required for 1 app.",
-                _ => $" Restart required for {restartRequired} apps."
-            };
+            var restartMessage = WingetFailure.DescribeRestartRequired(restartRequired);
             var stillOpenMessage = DescribeStillOpen(stillOpen);
             if (cancellationRequested)
             {

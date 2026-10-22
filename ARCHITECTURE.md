@@ -1835,7 +1835,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   read as an empty result. winget's own result codes are named constants on
   `WingetExitCodes` (in `Models`), each pinned by a test to the number
   winget-cli's header gives it, and a fitness function keeps those numbers out
-  of every other file.
+  of every other file. `WingetExitCodes.Succeeded` is the one rule for an install
+  or upgrade that put the app on, which counts one that needs a restart to finish,
+  and `DescribeRestartRequired` is the restart note in the summaries of the
+  Uninstaller, App Updates and the Bulk Installer.
 - `SfcOutput` — reads what `sfc.exe` prints (#2835). Redirected, SFC writes UTF-16, not the OEM
   code page DISM and the other tools write. Its progress line is read by its one number, and the
   sentences it ends a scan with by the first line of each of its own messages, matched whole.

@@ -1697,4 +1697,21 @@ public class DashboardViewModelTests
         Assert.Equal("Freed 120.0 MB of temporary files and permanently emptied the Recycle Bin (12 items, 3.0 GB)",
             entry.Detail);
     }
+
+    // ---------- Update All Apps, when an app needs a restart to finish (#2849) ----------
+
+    [Fact]
+    public async Task QuickUpdateApps_WhenAnAppNeedsARestartToFinish_IsDone_AndSaysToRestart()
+    {
+        var winget = Substitute.For<IWingetService>();
+        winget.UpgradeAllAsync(Arg.Any<CancellationToken>())
+            .Returns(WingetResult.From(WingetExitCodes.InstallRebootRequiredToFinish));
+        var vm = NewVm(winget);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.QuickUpdateAppsCommand.ExecuteAsync(null);
+
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+        Assert.Equal("All apps updated — restart Windows to finish", vm.QuickActionDetail);
+    }
 }

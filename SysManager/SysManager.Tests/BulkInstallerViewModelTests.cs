@@ -524,4 +524,27 @@ public class BulkInstallerViewModelTests
             await execution.WaitAsync(TimeSpan.FromSeconds(10));
         }
     }
+
+    // ---------- an install that needs a restart to finish is installed (#2849) ----------
+
+    [Fact]
+    public async Task InstallSelected_WhenTheAppNeedsARestartToFinish_CountsItAsInstalled_AndSaysToRestart()
+    {
+        // winget ends on INSTALL_REBOOT_REQUIRED_TO_FINISH when the installer asks for a restart, and the row read
+        // "Failed — winget stopped with code 0x8A150109."
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(Task.FromResult(unchecked((int)0x8A150109))); // INSTALL_REBOOT_REQUIRED_TO_FINISH
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        var app = vm.Apps[0];
+        app.IsSelected = true;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.InstallSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal(BulkInstallerViewModel.InstalledRestartRequiredStatus, app.Status);
+        Assert.Equal("Done. Installed: 1, Failed: 0. Restart required for 1 app.", vm.StatusMessage);
+    }
 }

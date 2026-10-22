@@ -1088,7 +1088,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
             var result = await _winget.UpgradeAllAsync(CancellationToken.None);
             QuickActionProgress = 100;
             ActivityLogService.Instance.Log("App Updates",
-                result.Succeeded ? "Upgrade all completed" : $"Upgrade all: {result.FriendlyMessage}");
+                result.Succeeded
+                    ? "Upgrade all completed" + RestartNote(result)
+                    : $"Upgrade all: {result.FriendlyMessage}");
             // Checked again whether or not every package upgraded, because either way the number the app update
             // alert showed is out of date, and it used to stay beside "All apps updated" (#2479).
             _ = StartAlertScans();
@@ -1097,9 +1099,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // above the failure text (#2437). Its failure branch shows the message as the detail.
             if (!result.Succeeded)
                 throw new InvalidOperationException(result.FriendlyMessage);
-            QuickActionDetail = "All apps updated";
+            QuickActionDetail = "All apps updated" + RestartNote(result);
         });
     }
+
+    // An app that needs Windows restarted to finish is updated, and the card says to restart rather than that the
+    // run failed (#2849).
+    private static string RestartNote(WingetResult result) =>
+        result.RestartRequired ? " — restart Windows to finish" : "";
 
     /// <summary>
     /// Checks Windows Update from here and says what it found. The card's link then opens the Windows Update

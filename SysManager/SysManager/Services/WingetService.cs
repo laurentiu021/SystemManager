@@ -121,7 +121,8 @@ public sealed partial class WingetService : IWingetService
     /// By id rather than <c>upgrade --all</c>, which took SysManager's own package too and had winget replace the file
     /// SysManager runs from (#2889). An app whose installed version winget cannot read is left out, as
     /// <c>upgrade --all</c> leaves it: it was reinstalled on every press, and the Dashboard's count leaves it out too.
-    /// A failure is reported with the code <c>upgrade --all</c> ends on when one of its apps fails.
+    /// A failure is reported with the code <c>upgrade --all</c> ends on when one of its apps fails, and, when none
+    /// failed, an app that needs Windows restarted to finish with the code winget ends that upgrade on.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// The upgrade list could not be read, so nothing was upgraded.
@@ -129,6 +130,7 @@ public sealed partial class WingetService : IWingetService
     public async Task<WingetResult> UpgradeAllAsync(CancellationToken ct = default)
     {
         var failed = false;
+        var restart = false;
         foreach (var package in (await ListUpgradableAsync(ct).ConfigureAwait(false)).Where(p => !p.HasUnknownVersion))
         {
             if (!WingetId.IsValid(package.Id))
@@ -137,9 +139,12 @@ public sealed partial class WingetService : IWingetService
                 continue;
             }
 
-            failed |= !(await UpgradeAsync(package.Id, ct).ConfigureAwait(false)).Succeeded;
+            var result = await UpgradeAsync(package.Id, ct).ConfigureAwait(false);
+            failed |= !result.Succeeded;
+            restart |= result.RestartRequired;
         }
 
-        return WingetResult.From(failed ? WingetExitCodes.UpdateAllHasFailure : 0);
+        return WingetResult.From(failed ? WingetExitCodes.UpdateAllHasFailure
+            : restart ? WingetExitCodes.InstallRebootRequiredToFinish : 0);
     }
 }

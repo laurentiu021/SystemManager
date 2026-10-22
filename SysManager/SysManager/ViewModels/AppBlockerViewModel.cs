@@ -199,6 +199,14 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
         if (!exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             exeName += ".exe";
 
+        // Before the confirmation, by the service's own rule. A name it would not block was refused only after the
+        // user had agreed to block it, and the message spoke of a folder path the user had not typed (#2850).
+        if (AppBlockerService.CheckName(exeName).Fault is not AppBlockerService.NameFault.None)
+        {
+            BlockStatus = DescribeUnusableName(exeName);
+            return;
+        }
+
         // A read that failed (null) goes on to the confirmation like "not blocked": TryBlockApp never overwrites a
         // Debugger value SysManager did not set, and reports its own failure when the key cannot be opened.
         if (_blocker.IsBlocked(exeName) == true)
@@ -253,9 +261,7 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
             AppBlockerService.BlockResult.ExternalDebuggerPresent =>
                 $"Another program has already registered a debugger for {exeName}. SysManager will not "
                 + "overwrite it, because doing so would break that program's setup and could not be undone here.",
-            AppBlockerService.BlockResult.InvalidName =>
-                $"\"{exeName}\" is not a valid executable name. Enter just the file name, "
-                + "for example notepad.exe, without a folder path.",
+            AppBlockerService.BlockResult.InvalidName => DescribeUnusableName(exeName),
             AppBlockerService.BlockResult.EmptyName =>
                 "Enter an executable name (e.g., notepad.exe).",
             AppBlockerService.BlockResult.AccessDenied =>
@@ -265,6 +271,49 @@ public sealed partial class AppBlockerViewModel : ViewModelBase
                 $"Could not block {exeName}: the registry change failed. The app log has the details."
         };
     }
+
+    /// <summary>
+    /// Why <paramref name="exeName"/> cannot be blocked, worded after what is wrong with it.
+    /// </summary>
+    /// <remarks>
+    /// A name with a line break or another invisible character in it is not repeated, because it would break the
+    /// status line. The last arm is reached only if the service refused a name this check accepts, which it does
+    /// not do, because it refuses by the same check.
+    /// </remarks>
+    internal static string DescribeUnusableName(string exeName)
+    {
+        var (fault, character) = AppBlockerService.CheckName(exeName);
+        var shown = exeName.Any(char.IsControl) ? "This name" : $"\"{exeName}\"";
+        return fault switch
+        {
+            AppBlockerService.NameFault.Folder =>
+                $"{shown} includes a folder. Enter only the program's file name, for example notepad.exe.",
+            AppBlockerService.NameFault.Character =>
+                $"{shown} cannot be blocked: Windows does not allow {CharacterName(character)} in a file name, so no "
+                + "program is named that.",
+            AppBlockerService.NameFault.NoName =>
+                "Enter the program's file name before .exe, for example notepad.exe.",
+            AppBlockerService.NameFault.TooLong =>
+                $"That name is {exeName.Length} characters long. Windows allows at most "
+                + $"{AppBlockerService.MaxNameLength} in a file name, so no program is named that.",
+            _ => $"{shown} is not a valid executable name.",
+        };
+    }
+
+    private static string CharacterName(char character) => character switch
+    {
+        ':' => "a colon (:)",
+        '*' => "an asterisk (*)",
+        '?' => "a question mark (?)",
+        '"' => "a double quote (\")",
+        '<' => "a less-than sign (<)",
+        '>' => "a greater-than sign (>)",
+        '|' => "a vertical bar (|)",
+        '\r' or '\n' => "a line break",
+        '\t' => "a tab",
+        _ when char.IsControl(character) => "an invisible control character",
+        _ => $"the character {character}",
+    };
 
     [RelayCommand]
     private void UnblockSelected()

@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.61] - 2026-10-22
+
+**App Blocker now blocks a program whose name has a "+", brackets or a letter such as ă or é, and says what is wrong
+with a name it cannot use before it asks you to confirm.**
+
+### Fixed
+
+- **A program named `notepad++.exe`, `Setup (1).exe` or with a letter such as ă or é could not be blocked, and the
+  name was called invalid only after the confirmation.** App Blocker accepted only English letters, digits, `_`, `-`,
+  `.` and spaces, so these names were refused even when Browse had filled them in, and the refusal came after the
+  block had been confirmed, telling you to leave out a folder path you had not typed. It now accepts any name a file
+  can have. A name with a folder in it, a character Windows does not allow in a file name, or nothing before `.exe` is
+  refused before the confirmation, and the tab says which of these it is. Since 0.35.11.
+
 ## [1.130.60] - 2026-10-22
 
 **A Right-click Menu preset whose menu style Windows will not change now says so, changes nothing, and does not

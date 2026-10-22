@@ -535,4 +535,92 @@ public class AppBlockerViewModelTests
         Assert.Contains("every program named \"setup.exe\" on this PC, for every user", message, StringComparison.Ordinal);
         blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
     }
+
+    // ---------- a name that cannot be blocked is refused before the confirmation (#2850) ----------
+
+    [Theory]
+    [InlineData(@"a\b.exe",
+        "\"a\\b.exe\" includes a folder. Enter only the program's file name, for example notepad.exe.")]
+    [InlineData(@"..\x.exe", "includes a folder")]
+    [InlineData(@"C:\Windows\notepad.exe", "includes a folder")]
+    [InlineData("a?b.exe",
+        "\"a?b.exe\" cannot be blocked: Windows does not allow a question mark (?) in a file name, so no program is "
+        + "named that.")]
+    [InlineData("a:b", "\"a:b.exe\" cannot be blocked: Windows does not allow a colon (:) in a file name")]
+    [InlineData("a|b.exe", "a vertical bar (|)")]
+    [InlineData(".exe", "Enter the program's file name before .exe, for example notepad.exe.")]
+    public void ANameNoFileCanHave_IsRefusedBeforeTheConfirmation_WithWhatIsWrong(string typed, string expected)
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.NewExeName = typed;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.BlockAppCommand.Execute(null);
+
+        Assert.Equal(0, dialog.Calls);
+        blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
+        Assert.Contains(expected, vm.BlockStatus, StringComparison.Ordinal);
+        Assert.Equal(typed, vm.NewExeName);   // left to be corrected
+    }
+
+    [Fact]
+    public void ANameWithALineBreak_IsRefusedBeforeTheConfirmation_WithoutBeingRepeated()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.NewExeName = "note\npad.exe";
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.BlockAppCommand.Execute(null);
+
+        Assert.Equal(0, dialog.Calls);
+        blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
+        Assert.Equal(
+            "This name cannot be blocked: Windows does not allow a line break in a file name, so no program is "
+            + "named that.",
+            vm.BlockStatus);
+    }
+
+    [Fact]
+    public void ANameLongerThanAFileNameCanBe_IsRefusedBeforeTheConfirmation()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        var vm = NewVm(blocker);
+        vm.NewExeName = new string('a', 252) + ".exe";
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.BlockAppCommand.Execute(null);
+
+        Assert.Equal(0, dialog.Calls);
+        blocker.DidNotReceive().TryBlockApp(Arg.Any<string>());
+        Assert.Equal(
+            "That name is 256 characters long. Windows allows at most 255 in a file name, so no program is named that.",
+            vm.BlockStatus);
+    }
+
+    [Theory]
+    [InlineData("notepad++.exe")]
+    [InlineData("LibreOffice (x64).exe")]
+    [InlineData("Setup (1).exe")]
+    [InlineData("Größe.exe")]
+    [InlineData("Tom & Jerry.exe")]
+    public void ANameAFileCanHave_IsAskedAbout_AndBlocked(string name)
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var blocker = Substitute.For<IAppBlockerService>();
+        blocker.TryBlockApp(Arg.Any<string>()).Returns(AppBlockerService.BlockResult.Success);
+        var vm = NewVm(blocker);
+        vm.NewExeName = name;
+        using var dialog = new DialogAnswer(confirm: true);
+
+        vm.BlockAppCommand.Execute(null);
+
+        Assert.Equal(1, dialog.Calls);
+        blocker.Received(1).TryBlockApp(name);
+        Assert.Equal($"Blocked {name}.", vm.BlockStatus);
+    }
 }

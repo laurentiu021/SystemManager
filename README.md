@@ -427,7 +427,9 @@ Edit Windows environment variables without the cramped built-in dialog:
   moves the sound to other speakers. Plug in headphones or switch from the taskbar and the
   card, and the app list under it, follow within about ten seconds
 - **Per-app volume mixer** — lists every app currently playing sound, on any of your
-  playback devices, each with its own volume slider, mute toggle, and a live peak meter
+  playback devices, each with its own volume slider, mute toggle, and a live peak meter.
+  From the keyboard, an arrow key moves a volume 1% and Page Up or Page Down 10%, on these
+  sliders and the PC's
 - **Live and lightweight** — the app list reconciles on a ~1-second loop and the meters
   update on a shared timer, both paused while the tab is hidden so it costs nothing in
   the background. The refresh never replaces a message on the status line, so a saved preset

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.78] - 2026-10-22
+
+**Page Up on a Volume Control slider no longer takes the sound all the way to full: from the keyboard, a volume now
+moves 1% or 10% at a time.**
+
+### Fixed
+
+- **One key press could set every sound on the PC to full volume.** Volume Control's sliders kept the steps a
+  slider has when nothing sets them, a tenth of the range and all of it, so an arrow key moved a volume 10%, and
+  Page Up or Page Down, or a screen reader's large step, went straight to 100% or to 0%. On "All sound" that was
+  the whole PC. An arrow key now moves a volume 1%, and Page Up or Page Down 10%. Since 1.121.0 on the PC's slider,
+  and since 1.52.38 on each app's.
+
 ## [1.130.77] - 2026-10-22
 
 **Closing SysManager no longer ends, now and then, in a crash that the next start reports.**

@@ -1156,6 +1156,13 @@
                 </Setter>
             </Style>
 
+            <!-- A volume from 0 to 1: an arrow key moves it 1%, Page Up and Page Down 10%. RangeBase's own steps
+                 are 0.1 and 1.0, so Page Up on the PC's volume set every sound to full (#2807). -->
+            <Style x:Key="VolumeSlider" TargetType="Slider" BasedOn="{StaticResource {x:Type Slider}}">
+                <Setter Property="SmallChange" Value="0.01"/>
+                <Setter Property="LargeChange" Value="0.1"/>
+            </Style>
+
             <!-- ============================================================ -->
             <!-- ToolTip — theme-aware surface (default inherits WPF-UI's dark   -->
             <!-- chrome; the tooltip text DID re-theme via the TextBlock style,  -->

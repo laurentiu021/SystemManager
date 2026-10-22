@@ -194,6 +194,35 @@ public sealed class AudioMixerViewUiTests : IDisposable
         });
     }
 
+    /// <summary>
+    /// The keyboard moves each volume a step: Page Up adds 10% and an arrow key 1%, not the rest of the range (#2807).
+    /// </summary>
+    /// <remarks>
+    /// Both sliders kept RangeBase's own steps, 0.1 and 1.0 on a volume from 0 to 1, so Page Up on the PC's slider set
+    /// every sound on the PC to full volume. Run through the sliders' own commands, the ones their keys are bound to.
+    /// </remarks>
+    [Fact]
+    public async Task PageUpAndAnArrowKey_MoveEachVolumeAStep_NotToTheEnd()
+    {
+        using var vm = await VmAsync(new FakeAudio());
+
+        StaHelper.Run(() =>
+        {
+            var view = Laid(vm);
+            foreach (var name in new[] { "Volume for all sound on this PC", "Spotify volume" })
+            {
+                var slider = Named<Slider>(view, name);
+                var before = slider.Value;
+
+                Slider.IncreaseLarge.Execute(null, slider);
+                Assert.Equal(before + 0.1, slider.Value, precision: 5);
+
+                Slider.DecreaseSmall.Execute(null, slider);
+                Assert.Equal(before + 0.09, slider.Value, precision: 5);
+            }
+        });
+    }
+
     [Fact]
     public async Task TheMuteGlyph_FollowsTheCard_AndEachRow()
     {

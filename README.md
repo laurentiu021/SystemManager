@@ -1583,7 +1583,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - Blocks applications from executing using Image File Execution Options (IFEO)
   registry mechanism
 - Enter an exe name or browse for a file, confirm, and the app is prevented
-  from launching
+  from launching. Any name a program file can have works, such as `notepad++.exe`,
+  `Setup (1).exe` or a name with ă or é. A name no file can have, with a folder or a
+  character Windows does not allow in it, is refused before the confirmation, and the
+  tab says what is wrong with it
 - Fully reversible — unblock restores normal execution, and a block an older version wrote is
   listed and can be lifted wherever Windows is installed
 - A block goes by file name: it stops every program with that name on the PC, for every

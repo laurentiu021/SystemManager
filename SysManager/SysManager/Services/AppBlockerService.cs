@@ -2,6 +2,7 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Buffers;
 using System.IO;
 using System.Security;
 using Microsoft.Win32;
@@ -22,7 +23,7 @@ namespace SysManager.Services;
 /// against a redirected hive (e.g. a key under HKCU) without admin or touching
 /// the machine's real configuration.</para>
 /// </summary>
-public sealed partial class AppBlockerService : IAppBlockerService
+public sealed class AppBlockerService : IAppBlockerService
 {
     private const string IfeoPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options";
 
@@ -220,7 +221,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
             exeName += ".exe";
 
         // SEC-004: reject path separators and invalid chars to prevent registry path injection
-        if (!ExeNamePattern().IsMatch(exeName))
+        if (CheckName(exeName).Fault is not NameFault.None)
         {
             Log.Warning("Rejected invalid exeName: {ExeName}", exeName);
             return BlockResult.InvalidName;
@@ -298,7 +299,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
             exeName += ".exe";
 
         // SEC-004: apply same validation as BlockApp to prevent registry path injection
-        if (!ExeNamePattern().IsMatch(exeName))
+        if (CheckName(exeName).Fault is not NameFault.None)
         {
             Log.Warning("Rejected invalid exeName for unblock: {ExeName}", exeName);
             return false;
@@ -359,7 +360,7 @@ public sealed partial class AppBlockerService : IAppBlockerService
 
         // Checked as Block and Unblock check it. A name longer than a registry key name can be reached OpenSubKey,
         // which throws ArgumentException for it, and the tab asks this before anything else when Block is pressed.
-        if (!ExeNamePattern().IsMatch(exeName)) return false;
+        if (CheckName(exeName).Fault is not NameFault.None) return false;
 
         try
         {
@@ -431,9 +432,58 @@ public sealed partial class AppBlockerService : IAppBlockerService
         return blocked;
     }
 
-    // \A…\z (absolute anchors): ^…$ would accept a trailing newline after ".exe". At most 251 characters before
-    // ".exe", because a registry key name is at most 255: OpenSubKey and CreateSubKey throw ArgumentException for a
-    // longer one, and a pasted name crashed Block with the app's generic error box.
-    [System.Text.RegularExpressions.GeneratedRegex(@"\A[A-Za-z0-9_\-. ]{1,251}\.exe\z", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
-    private static partial System.Text.RegularExpressions.Regex ExeNamePattern();
+    /// <summary>What keeps an executable name from being blocked.</summary>
+    public enum NameFault
+    {
+        /// <summary>Nothing: the name can be blocked.</summary>
+        None,
+
+        /// <summary>The name has a folder in it, a <c>\</c> or a <c>/</c>.</summary>
+        Folder,
+
+        /// <summary>The name has a character Windows does not allow in a file name.</summary>
+        Character,
+
+        /// <summary>Nothing but spaces comes before ".exe".</summary>
+        NoName,
+
+        /// <summary>The name is longer than <see cref="MaxNameLength"/>.</summary>
+        TooLong,
+    }
+
+    /// <summary>The longest name that can be blocked, the longest a registry key name or file name can be.</summary>
+    internal const int MaxNameLength = 255;
+
+    // The runtime's own list: \ / : * ? " < > | and the control characters.
+    private static readonly SearchValues<char> NotInAFileName = SearchValues.Create(Path.GetInvalidFileNameChars());
+
+    /// <summary>
+    /// What keeps <paramref name="exeName"/>, with ".exe" already on it, from being blocked, and the character at
+    /// fault when it is one.
+    /// </summary>
+    /// <remarks>
+    /// The name only becomes the name of a key under Image File Execution Options, so it has to be a single file
+    /// name: no folder, which would put the key somewhere else, and no character Windows does not allow in a file
+    /// name, because no program can be called that. Everything else a file name can hold is accepted. A pattern of
+    /// ASCII letters, digits, <c>_</c>, <c>-</c>, <c>.</c> and space refused <c>notepad++.exe</c>,
+    /// <c>Setup (1).exe</c> and names with letters such as ă or é, even from Browse, and only after the user had
+    /// confirmed the block (#2850).
+    /// <para>A folder is reported before a character, so a pasted path is called one rather than refused for its
+    /// drive's colon. At most <see cref="MaxNameLength"/> characters, because <c>OpenSubKey</c> and
+    /// <c>CreateSubKey</c> throw <see cref="ArgumentException"/> for a longer key name, and a pasted name crashed
+    /// Block with the app's generic error box.</para>
+    /// </remarks>
+    internal static (NameFault Fault, char Character) CheckName(string exeName)
+    {
+        var folder = exeName.AsSpan().IndexOfAny('\\', '/');
+        if (folder >= 0) return (NameFault.Folder, exeName[folder]);
+
+        var invalid = exeName.AsSpan().IndexOfAny(NotInAFileName);
+        if (invalid >= 0) return (NameFault.Character, exeName[invalid]);
+
+        var name = exeName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exeName[..^4] : exeName;
+        if (string.IsNullOrWhiteSpace(name)) return (NameFault.NoName, '\0');
+
+        return exeName.Length > MaxNameLength ? (NameFault.TooLong, '\0') : (NameFault.None, '\0');
+    }
 }

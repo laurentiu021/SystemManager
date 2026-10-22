@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.71] - 2026-10-22
+
+**SysManager opens for each Windows account, even while another account's copy is running, and starting it again
+keeps bringing its window back.**
+
+### Fixed
+
+- **SysManager did not open while a copy was running for another Windows account.** One single-instance check
+  served the whole PC, so with a copy left in the notification area by another account, under fast user switching,
+  or by the account "Run as administrator" switches to, a new start was refused by that copy's lock or by its
+  activation pipe, and ended before it wrote anything to its log: no window and no log line. Each account now has
+  its own check in each session, and a refusal no longer ends the start. Since 0.13.2.
+- **Starting SysManager again could stop bringing its window back.** The copy that listens for a second start
+  stopped for good on the first pipe error it met while running, which a second start causes when it leaves before
+  the wait begins. From then on, starting SysManager again while it sat in the notification area did nothing. A
+  start that leaves early now counts as one, and after any other error the copy logs it and listens again a second
+  later. Since 1.52.15.
+
 ## [1.130.70] - 2026-10-22
 
 **Network Repair's Winsock and TCP/IP resets now try a restore point first, as every other change to Windows

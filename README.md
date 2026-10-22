@@ -2186,6 +2186,10 @@ offers, "rate us" prompts:
   remembers the answer. If you pick the notification area, it tells you where the
   window went so it doesn't look like it vanished. Right-click the tray icon to
   reopen or exit at any time.
+- **One copy per account** — starting SysManager again brings the running copy's window
+  back, from the notification area too. Each Windows account gets its own copy, including
+  the one "Run as administrator" switches to, so a copy someone else left running never
+  stops yours from opening
 - **Nothing is cut off by closing** — if SysManager is still in the middle of a disk check
   or of something that changes your system (a repair, a Windows feature or update being
   installed, a clean-up), closing the window, **Exit** in the tray, **Run as administrator**

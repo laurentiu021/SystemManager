@@ -6649,7 +6649,7 @@ public partial class ArchitectureTests
     /// </summary>
     /// <remarks>
     /// The four Linux jobs are the tagging path: auto-release computes and pushes the next version tag, CI
-    /// checks that the tag landed, and the release guard and the weekly integrity check read the releases.
+    /// checks that the tag landed, and the release guard and the integrity check read the releases.
     /// <c>ubuntu-latest</c> moves to each new Ubuntu release when GitHub decides, which changes the shell
     /// tools under that arithmetic with no diff in this repository. Why they are pinned is written at
     /// auto-release.yml's <c>runs-on</c>. This keeps an edit or a new job from going back to the moving
@@ -10140,6 +10140,49 @@ public partial class ArchitectureTests
         // made this fail against the fixed tree, which is a guard that forbids its own explanation.
         Assert.DoesNotContain(".CloseMainWindow(", body, StringComparison.Ordinal);
         Assert.Contains(".Kill()", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The release integrity check runs after each release and daily, and checks what the updater and the README
+    /// rely on (#2805).
+    /// </summary>
+    /// <remarks>
+    /// It ran on Mondays and looked at the newest CHANGELOG version only, so a release that lost its assets later
+    /// stayed without a download, Latest could be an older release after a backfill, the checksum, the release page
+    /// and the asset could disagree, and the attestation the README tells users to verify was never verified.
+    /// A run that starts between a merge and auto-release pushing its tag would report that version as missing, so
+    /// the wait for a release in flight counts auto-release runs as well. The newest release is read from the Latest
+    /// record, the one the updater reads: the by-tag view has served a release without its assets for hours, and
+    /// <c>gh release download</c> and <c>gh release view</c> resolve through it. Comments are removed first, so
+    /// prose naming a check cannot stand in for it.
+    /// </remarks>
+    [Fact]
+    public void TheReleaseIntegrityCheck_CoversWhatTheUpdaterAndTheReadmeRelyOn()
+    {
+        var lines = File.ReadAllLines(
+            Path.Combine(TestPaths.RepoRoot(), ".github", "workflows", "release-integrity.yml"));
+        var code = string.Join('\n', lines.Where(l => !l.TrimStart().StartsWith('#')));
+
+        foreach (var required in new[]
+                 {
+                     "workflow_run:", "workflows: [Release]", "cron: '0 7 * * *'",
+                     "for wf in auto-release.yml release.yml; do", "actions: read",
+                     "--paginate --slurp", "\"SysManager-\\($tag).exe\"",
+                     "releases/latest", "sha256sum", "Expected SHA256", ".digest", "gh attestation verify",
+                 })
+        {
+            Assert.Contains(required, code, StringComparison.Ordinal);
+        }
+
+        var latest = ReleaseStepCode(
+            lines, ReleaseStepLine(lines, "The newest version is Latest, and its download checks out"));
+        Assert.Contains("releases/latest\" > /tmp/latest.json", latest, StringComparison.Ordinal);
+        Assert.Contains("LATEST=$(jq -r .tag_name /tmp/latest.json)", latest, StringComparison.Ordinal);
+        Assert.Contains("if [ \"${LATEST}\" != \"${TAG}\" ]; then", latest, StringComparison.Ordinal);
+        foreach (var byTag in new[] { "releases/tags/", "gh release download", "gh release view" })
+        {
+            Assert.DoesNotContain(byTag, latest, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>

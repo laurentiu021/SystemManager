@@ -37,7 +37,8 @@ public class DashboardViewModelTests
                                             MemoryTestService? memTest = null,
                                             ISlowdownService? slowdown = null,
                                             IGamingProfileService? gaming = null,
-                                            UpdateCheckPreferenceService? updateCheck = null)
+                                            UpdateCheckPreferenceService? updateCheck = null,
+                                            TimeProvider? clock = null)
     {
         var sys = new SystemInfoService();
         var diskHealth = new DiskHealthService();
@@ -76,7 +77,10 @@ public class DashboardViewModelTests
             slowdown,
             // Null by default, which asks nothing about a game mode session left on. A test that asks passes a
             // substitute: the real one reads this machine's record of game mode.
-            gaming);
+            gaming,
+            // The system clock by default. A test of the minute Recent activity is read again after passes one
+            // whose timers fire when it says.
+            clock: clock);
     }
 
     // ---------- empty states on the cards ----------
@@ -286,6 +290,181 @@ public class DashboardViewModelTests
         ]);
 
         Assert.Equal([new("C:", 60, 100), new DriveUsageInfo("G:", 25, 50)], usage);
+    }
+
+    // ---------- the drives, the score, the uptime and the ages keep up (#2802) ----------
+
+    /// <summary>Counts the reads of the drives and of the score, from what the view model raises for each.</summary>
+    private sealed class StorageReads
+    {
+        private int _drives;
+        private int _scores;
+
+        public StorageReads(DashboardViewModel vm)
+        {
+            vm.Drives.CollectionChanged += (_, _) => Interlocked.Increment(ref _drives);
+            vm.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(DashboardViewModel.IsHealthScoreLoading) && vm.IsHealthScoreLoading)
+                    Interlocked.Increment(ref _scores);
+            };
+        }
+
+        public int Drives => Volatile.Read(ref _drives);
+        public int Scores => Volatile.Read(ref _scores);
+    }
+
+    /// <summary>
+    /// A Quick Cleanup that finished reads the drives and the score again, so what it freed shows on the storage card
+    /// and in the score.
+    /// </summary>
+    /// <remarks>
+    /// Both were read only at start and on Scan system, so "Freed 3.2 GB" sat beside bars that had not moved and a
+    /// score still advising to free space.
+    /// </remarks>
+    [Fact]
+    public async Task AQuickCleanupThatFinished_ReadsTheDrivesAndTheScoreAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.CleanTempFilesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult((BytesFreed: 3L << 30, FilesDeleted: 12, Errors: 0)));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.QuickCleanupCommand.ExecuteAsync(null);
+
+        Assert.Equal("✓ Done", vm.QuickActionStatus);
+        Assert.Equal(1, reads.Drives);
+        Assert.Equal(1, reads.Scores);
+    }
+
+    /// <summary>A Quick Tune-Up that finished reads the drives and the score again too.</summary>
+    [Fact]
+    public async Task AQuickTuneUpThatFinished_ReadsTheDrivesAndTheScoreAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TuneUpResult { TempBytesFreed = 120L * 1024 * 1024 }));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, reads.Drives);
+        Assert.Equal(1, reads.Scores);
+    }
+
+    /// <summary>A Quick Tune-Up that was cancelled changed nothing to show, so nothing is read again.</summary>
+    [Fact]
+    public async Task AQuickTuneUpThatWasCancelled_ReadsNothingAgain()
+    {
+        using var activity = new ActivityLogScope();
+        using var confirm = new DialogAnswer(confirm: true);
+        var tuneUp = Substitute.For<ITuneUpService>();
+        tuneUp.RunAsync(Arg.Any<bool>(), Arg.Any<IProgress<(int, string)>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<TuneUpResult>(new OperationCanceledException()));
+        var vm = NewVm(QuietWinget(), tuneUp: tuneUp);
+        await vm.InitializationComplete;
+        var reads = new StorageReads(vm);
+
+        await vm.RunTuneUpCommand.ExecuteAsync(null);
+
+        Assert.Equal("Tune-Up cancelled.", vm.StatusMessage);
+        Assert.Equal(0, reads.Drives);
+        Assert.Equal(0, reads.Scores);
+    }
+
+    /// <summary>
+    /// Coming back to the tab reads the drives and the score again when something was logged since they were read,
+    /// such as a Deep Cleanup on its own tab, and not otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Coming back re-read only Recent activity, so a Deep Cleanup's entry showed there while the storage card and the
+    /// score stayed as they were. Reading them on every return would compute the score each time the user moves
+    /// between tabs.
+    /// </remarks>
+    [Fact]
+    public async Task ComingBack_ReadsTheDrivesAndTheScoreAgain_OnlyWhenSomethingWasLoggedSince()
+    {
+        using var activity = new ActivityLogScope();
+        var vm = NewVm(QuietWinget());
+        await vm.InitializationComplete;
+        vm.IsActive = true;
+        await vm.StorageRead;
+        var reads = new StorageReads(vm);
+
+        vm.IsActive = false;
+        vm.IsActive = true;
+        await vm.StorageRead;
+        Assert.Equal(0, reads.Scores);
+
+        vm.IsActive = false;
+        ActivityLogService.Instance.Log("Deep Cleanup", "Freed 2.0 GB");
+        vm.IsActive = true;
+        await vm.StorageRead;
+        Assert.Equal(1, reads.Drives);
+        Assert.Equal(1, reads.Scores);
+
+        vm.IsActive = false;
+        vm.IsActive = true;
+        await vm.StorageRead;
+        Assert.Equal(1, reads.Scores);
+    }
+
+    /// <summary>The uptime line follows the live poll rather than standing at what the start read.</summary>
+    [Fact]
+    public async Task EachSample_KeepsTheUptimeLineCurrent()
+    {
+        var vm = NewVm(QuietWinget());
+        await vm.InitializationComplete;
+
+        vm.ShowVitals(Sample(new TimeSpan(1, 2, 3, 0)));
+        Assert.Equal("Uptime 1d 2h 3m", vm.UptimeLine);
+
+        vm.ShowVitals(Sample(new TimeSpan(1, 2, 4, 0)));
+        Assert.Equal("Uptime 1d 2h 4m", vm.UptimeLine);
+    }
+
+    private static SystemSnapshot Sample(TimeSpan uptime) => new(
+        new OsInfo("Windows 11 Pro", "10.0.26200", "26200", uptime, "64-bit"),
+        new CpuInfo("CPU", 8, 16, 3600, 12),
+        new MemoryInfo(16, 8, 8, 50, []),
+        [],
+        new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Local));
+
+    /// <summary>
+    /// While the tab is shown, Recent activity is read again each minute, so the ages it shows move; once the tab is
+    /// hidden, the minute reads nothing.
+    /// </summary>
+    /// <remarks>
+    /// A row reads its age once, when the list is built, and the list was built only at start, on coming back to the
+    /// tab and after the Dashboard's own actions. On the tab SysManager opens on, "Just now" kept saying it for hours.
+    /// </remarks>
+    [Fact]
+    public async Task RecentActivity_IsReadAgainEachMinute_WhileTheTabIsShown()
+    {
+        using var activity = new ActivityLogScope();
+        var clock = new HeldTimers();
+        var vm = NewVm(QuietWinget(), clock: clock);
+        await vm.InitializationComplete;
+        vm.IsActive = true;
+        Assert.Equal(TimeSpan.FromMinutes(1), clock.OnlyDue);
+
+        ActivityLogService.Instance.Log("Deep Cleanup", "Freed 2.0 GB");
+        Assert.DoesNotContain(vm.RecentActivity, entry => entry.Action == "Deep Cleanup");
+        clock.FireAll();
+        Assert.Contains(vm.RecentActivity, entry => entry.Action == "Deep Cleanup");
+
+        vm.IsActive = false;
+        ActivityLogService.Instance.Log("Uninstall", "Removed 1 app");
+        clock.FireAll();
+        Assert.DoesNotContain(vm.RecentActivity, entry => entry.Action == "Uninstall");
     }
 
     [Fact]

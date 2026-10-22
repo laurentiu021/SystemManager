@@ -61,6 +61,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
     // See the constructor's gaming parameter.
     private readonly IGamingProfileService? _gaming;
     private readonly EventLogService _eventLog;
+    private readonly TimeProvider _clock;
+
+    // Re-reads Recent activity each minute while the tab is shown, so the ages it shows move (#2802).
+    private ITimer? _agesTimer;
+
+    // The newest Recent activity entry when the drives and the health score were last read. A different one on coming
+    // back to the tab is something done since, which may have freed or used space (#2802).
+    private ActivityEntry? _newestAtStorageRead;
 
     private CancellationTokenSource? _tuneUpCts;
     private CancellationTokenSource? _slowdownCts;
@@ -214,15 +222,20 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Counts the critical events the Event Log alert reports. Optional for the same reason as
     /// <paramref name="appBlocker"/>; null counts with a service of its own, over the same System log.
     /// </param>
+    /// <param name="clock">
+    /// Times the minute after which Recent activity is read again while the tab is shown. Null is the system clock; a
+    /// test gives one whose timers fire when it says.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
         UpdateCheckPreferenceService updateCheck,
         IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null,
-        EventLogService? eventLog = null)
+        EventLogService? eventLog = null, TimeProvider? clock = null)
     {
         _eventLog = eventLog ?? new EventLogService();
+        _clock = clock ?? TimeProvider.System;
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
@@ -246,6 +259,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     {
         ReportPreviousCrash();
         await LoadStaticInfoAsync();
+        _newestAtStorageRead = NewestActivity();
         await LoadDrivesAsync();
         LoadActivity();
         StartPollingLoop();   // starts BOTH the vitals and temperature loops
@@ -291,6 +305,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
             // refresh — so coming back here after a Deep Cleanup or an uninstall showed a stale card,
             // making the new entries look like they had not registered at all.
             LoadActivity();
+
+            // The storage card and the score had the same gap: neither moved after a Deep Cleanup or an uninstall
+            // until Scan system (#2802). Read again only when something was logged since, so moving between tabs
+            // does not compute the score each time, and not during the start, which reads both itself.
+            if (InitializationComplete.IsCompleted && !Equals(NewestActivity(), _newestAtStorageRead))
+                _ = RefreshStorageAsync();
         }
 
         if (value && _pollingCts is null)
@@ -301,6 +321,8 @@ public sealed partial class DashboardViewModel : ViewModelBase
             _pollingCts = null;
             old?.Cancel();
             old?.Dispose();
+            _agesTimer?.Dispose();
+            _agesTimer = null;
         }
     }
 
@@ -317,6 +339,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
         // after OnIsActiveChanged cancelled the original token).
         StartTemperaturePolling(ct);
 
+        // Recent activity says how long ago each entry was, and a row reads that once, when the list is built, which
+        // happened only at start, on coming back to the tab and after the Dashboard's own actions. While the tab
+        // stayed shown, "Just now" kept saying it for hours (#2802).
+        _agesTimer?.Dispose();
+        _agesTimer = _clock.CreateTimer(_ => UiThread.Post(ReadActivityAgain), null, AgesReadEvery, AgesReadEvery);
+
         _ = Task.Run(async () =>
         {
             while (!ct.IsCancellationRequested)
@@ -324,14 +352,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 try
                 {
                     var snapshot = await _sys.CaptureAsync();
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                    {
-                        CpuPercent = snapshot.Cpu.LoadPercent;
-                        RamPercent = snapshot.Memory.UsedPercent;
-                        RamUsedGB = snapshot.Memory.UsedGB;
-                        RamTotalGB = snapshot.Memory.TotalGB;
-                        RamAvailableGB = snapshot.Memory.AvailableGB;
-                    });
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ShowVitals(snapshot));
 
                     UpdateGpuUsage();
                     await Task.Delay(300, ct);
@@ -347,6 +368,35 @@ public sealed partial class DashboardViewModel : ViewModelBase
             }
         }, ct);
     }
+
+    /// <summary>How often Recent activity is read again while the tab is shown.</summary>
+    internal static readonly TimeSpan AgesReadEvery = TimeSpan.FromMinutes(1);
+
+    /// <summary>Recent activity read again, for its ages, unless the tab was hidden since the timer was set.</summary>
+    private void ReadActivityAgain()
+    {
+        if (IsActive) LoadActivity();
+    }
+
+    /// <summary>
+    /// What one sample of the live poll shows: the processor, the memory and the uptime.
+    /// </summary>
+    /// <remarks>
+    /// The uptime line was set once, from the start's own snapshot, although every sample carries it, so it stood
+    /// still while the Dashboard stayed open (#2802).
+    /// </remarks>
+    internal void ShowVitals(SystemSnapshot snapshot)
+    {
+        CpuPercent = snapshot.Cpu.LoadPercent;
+        RamPercent = snapshot.Memory.UsedPercent;
+        RamUsedGB = snapshot.Memory.UsedGB;
+        RamTotalGB = snapshot.Memory.TotalGB;
+        RamAvailableGB = snapshot.Memory.AvailableGB;
+        UptimeLine = UptimeText(snapshot.Os.Uptime);
+    }
+
+    /// <summary>The uptime line under the title.</summary>
+    internal static string UptimeText(TimeSpan uptime) => $"Uptime {uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
 
     private void UpdateGpuUsage()
     {
@@ -452,7 +502,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             CpuName = snap.Cpu.Name;
             CpuCores = $"{snap.Cpu.Cores} cores · {snap.Cpu.LogicalProcessors} threads";
             OsLine = $"{snap.Os.Caption} · Build {snap.Os.BuildNumber}";
-            UptimeLine = $"Uptime {snap.Os.Uptime.Days}d {snap.Os.Uptime.Hours}h {snap.Os.Uptime.Minutes}m";
+            UptimeLine = UptimeText(snap.Os.Uptime);
 
             if (snap.Memory.Modules.Count > 0)
             {
@@ -1013,6 +1063,36 @@ public sealed partial class DashboardViewModel : ViewModelBase
         RecentActivity.ReplaceWith(ActivityLogService.Instance.GetRecent(5));
     }
 
+    /// <summary>The newest Recent activity entry, or null when there is none.</summary>
+    private static ActivityEntry? NewestActivity() =>
+        ActivityLogService.Instance.GetRecent(1) is [var newest] ? newest : null;
+
+    /// <summary>
+    /// Reads the storage card and the health score again, after something may have changed how full a drive is.
+    /// </summary>
+    /// <remarks>
+    /// Both were read only at start and on Scan system, so after Quick Cleanup or Quick Tune-Up said "Freed 3.2 GB"
+    /// the bars had not moved and the score still advised freeing space, as though the cleanup had done nothing
+    /// (#2802).
+    /// </remarks>
+    private Task RefreshStorageAsync() => StorageRead = ReadStorageAsync();
+
+    private async Task ReadStorageAsync()
+    {
+        _newestAtStorageRead = NewestActivity();
+        await LoadDrivesAsync();
+        await LoadHealthScoreAsync();
+    }
+
+    /// <summary>
+    /// The most recent read of the drives and the score after the start. It completes when both are read.
+    /// </summary>
+    /// <remarks>
+    /// Nothing waits for the one coming back to the tab starts. A test awaits this to observe it, as
+    /// <see cref="AlertScans"/> exposes a round of alerts.
+    /// </remarks>
+    internal Task StorageRead { get; private set; } = Task.CompletedTask;
+
     // ══════════════════════════════════════════════════════════════════════
     //  HEALTH SCORE
     // ══════════════════════════════════════════════════════════════════════
@@ -1074,7 +1154,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
                 ? string.Create(CultureInfo.InvariantCulture, $"Freed {freedMB / 1024:F1} GB")
                 : $"Freed {freedMB:F0} MB";
             ActivityLogService.Instance.Log("Quick Cleanup", QuickActionDetail);
-        });
+        }, readsStorageAfter: true);
     }
 
     [RelayCommand(CanExecute = nameof(CanRunQuickAction))]
@@ -1298,7 +1378,16 @@ public sealed partial class DashboardViewModel : ViewModelBase
 
     private bool CanRunQuickAction() => !IsQuickActionRunning || IsQuickActionDone;
 
-    private async Task RunQuickActionAsync(string name, string tabLabel, string navId, Func<Task> action)
+    /// <summary>
+    /// Runs one of the Dashboard's quick actions on its card, which says it is running and then that it is done or
+    /// why it failed, with a link to the tab that has more.
+    /// </summary>
+    /// <param name="readsStorageAfter">
+    /// Whether the action changes how full a drive is, so the storage card and the score are read again once it is
+    /// done.
+    /// </param>
+    private async Task RunQuickActionAsync(
+        string name, string tabLabel, string navId, Func<Task> action, bool readsStorageAfter = false)
     {
         IsQuickActionRunning = true;
         IsQuickActionDone = false;
@@ -1313,12 +1402,14 @@ public sealed partial class DashboardViewModel : ViewModelBase
         QuickWindowsUpdateCommand.NotifyCanExecuteChanged();
         QuickSpeedTestCommand.NotifyCanExecuteChanged();
 
+        var done = false;
         try
         {
             await action();
             QuickActionStatus = "✓ Done";
             IsQuickActionDone = true;
             LoadActivity();
+            done = true;
         }
         catch (Exception ex)
         {
@@ -1336,6 +1427,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
             QuickWindowsUpdateCommand.NotifyCanExecuteChanged();
             QuickSpeedTestCommand.NotifyCanExecuteChanged();
         }
+
+        // After the card says it is done, so the action reads as finished while the score is computed.
+        if (done && readsStorageAfter) await RefreshStorageAsync();
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -1351,6 +1445,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         try
         {
             await LoadStaticInfoAsync();
+            _newestAtStorageRead = NewestActivity();
             await LoadDrivesAsync();
             await LoadHealthScoreAsync();
             // After the health score, as at launch, because the disk alert reads the score just computed.
@@ -1410,6 +1505,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             TuneUpStep = p.Message;
             TuneUpProgress = Math.Min((p.Step + 1) * 100 / 6, 100);
         });
+        var tunedUp = false;
 
         try
         {
@@ -1421,6 +1517,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
             ToastService.Instance.Show("Tune-Up complete", $"{TuneUpResult.TotalFreedDisplay} freed");
             ActivityLogService.Instance.Log("Quick Tune-Up", TuneUpResult.ActivityDetail);
             LoadActivity();
+            tunedUp = true;
         }
         catch (OperationCanceledException) { StatusMessage = "Tune-Up cancelled."; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1434,6 +1531,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
             _tuneUpCts = null;
             RunTuneUpCommand.NotifyCanExecuteChanged();
         }
+
+        // Once the Tune-Up reads as finished: what it freed shows on the storage card and in the score (#2802).
+        if (tunedUp) await RefreshStorageAsync();
     }
 
     private bool CanRunTuneUp() => !IsTuneUpRunning;
@@ -1555,6 +1655,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         {
             _pollingCts?.Cancel();
             _pollingCts?.Dispose();
+            _agesTimer?.Dispose();
             _tuneUpCts?.Cancel();
             _tuneUpCts?.Dispose();
             _slowdownCts?.Cancel();

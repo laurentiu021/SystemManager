@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.75] - 2026-10-22
+
+**The Dashboard keeps up with what you do: its storage card and health score move after a cleanup, the uptime counts
+on, and Recent activity's "5m ago" stays true.**
+
+### Fixed
+
+- **After Quick Cleanup or Quick Tune-Up, the storage card and the health score did not move.** "Freed 3.2 GB" sat
+  beside drive bars that had not changed and a score still advising to free up space, so the cleanup looked as
+  though it had done nothing. Both are now read again when either finishes, and when you come back to the
+  Dashboard after something was cleaned up or removed on another tab. Since 0.37.0.
+- **The uptime under the title stood still while the Dashboard stayed open.** It was read once, as SysManager
+  started, although the live readings beside it carry it every moment. It now follows them. Since 1.17.0.
+- **Recent activity's ages froze.** An entry that said "Just now" or "5m ago" kept saying it for as long as the
+  Dashboard stayed on screen, which is where SysManager opens. The list is read again every minute while it is
+  shown. Since 1.17.0.
+
 ## [1.130.74] - 2026-10-22
 
 **The Dashboard no longer freezes over a drive that is slow to answer, one drive it cannot read no longer empties its

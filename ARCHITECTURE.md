@@ -228,7 +228,10 @@ to scroll.
   could not run is amber, never green), quick actions with inline progress, health score,
   and recent activity log. IsActive pattern pauses polling when tab not visible.
   The storage card reads the drives off the UI thread through `DriveProbe.ReadFixed`, which asks only a fixed drive
-  whether it is ready and leaves out one that cannot be read (#2802).
+  whether it is ready and leaves out one that cannot be read (#2802). The drives and the score are read again
+  (`StorageRead`) after Quick Cleanup and Quick Tune-Up, and on coming back when Recent activity's newest entry is not
+  the one seen at the last read; the uptime line follows the live poll (`ShowVitals`), and Recent activity is read
+  again each minute while the tab is shown, on an optional `TimeProvider` (#2802).
   The launch's round of alerts asks winget for app updates only when About's switch allows it, read
   through the required `UpdateCheckPreferenceService` parameter (#2613); otherwise the alert is
   `AppUpdatesNotCheckedAtStartup`, `AlertSeverity.Neutral` (a grey dot) with an "Open App Updates"

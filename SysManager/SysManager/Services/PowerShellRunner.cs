@@ -158,6 +158,15 @@ public sealed partial class PowerShellRunner : IPowerShellRunner, IDisposable
     private static partial uint GetOEMCP();
 
     /// <summary>
+    /// The encoding of the system's ANSI code page, as <c>GetACP</c> gives it: the one older Notepad and many localised
+    /// tools save a text file in. Read on each use, so it follows the code page provider once one is registered.
+    /// </summary>
+    internal static System.Text.Encoding AnsiEncoding => EncodingOfCodePage((int)GetACP());
+
+    [System.Runtime.InteropServices.LibraryImport("kernel32.dll")]
+    private static partial uint GetACP();
+
+    /// <summary>
     /// Execute a script and return the collected PSObject results. Every run happens in a
     /// Windows PowerShell 5.1 child process with a sanitized module path, in a scope of its own:
     /// the runspace is kept for the next run, and nothing one script sets reaches it.

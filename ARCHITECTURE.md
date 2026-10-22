@@ -1148,7 +1148,14 @@ Key services:
   that copy and whether SysManager has written it (its header), for Undo Changes, since the copy is never
   deleted and need not be SysManager's. `SaveHosts` re-reads the file to keep the lines it
   does not manage, and throws before writing when that read fails. `DnsHostsViewModel` refuses
-  Save until a read of the file has succeeded, since Save rewrites it from the list.
+  Save until a read of the file has succeeded, since Save rewrites it from the list. Given the
+  `Fingerprint` of the entries the list was read from, `SaveHosts` writes nothing and returns
+  `HostsSaveOutcome.ChangedOutside` when the file no longer holds them, and otherwise says whether it
+  kept the copy (`SavedAndKeptACopy`). `Decode` reads the file in its own encoding (a byte order mark's,
+  strict UTF-8, else the ANSI code page from `PowerShellRunner.AnsiEncoding`), which the save writes it
+  back in (#2797). `RestoreQuestion` is the question both Restore original and Undo Changes ask, with the
+  copy's date from `UndoChangesService.FormatDate`, and Restore original offers the copy only on the
+  same terms as Undo Changes: beside a file SysManager wrote, while it differs.
 - `ContextMenuService` — scans Explorer context menu registrations in both
   shapes Windows stores them in: `shell` verbs (a name and a command line,
   hidden with `LegacyDisable`) and `shellex\ContextMenuHandlers` COM

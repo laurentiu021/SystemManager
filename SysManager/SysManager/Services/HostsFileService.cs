@@ -4,6 +4,7 @@
 
 using System.IO;
 using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using SysManager.Helpers;
 using SysManager.Models;
@@ -24,8 +25,8 @@ public sealed partial class HostsFileService
 
     /// <summary>
     /// Serializes <see cref="SaveHosts"/> against itself and against <see cref="RestoreBackup"/>. Both
-    /// rewrite the WHOLE hosts file, and <see cref="SaveHosts"/> first reads it back through
-    /// <see cref="ReadPreservedLines"/> to re-emit the user's hand-written comments. The staged write and
+    /// rewrite the WHOLE hosts file, and <see cref="SaveHosts"/> first reads it back, keeping the user's
+    /// hand-written comments through <see cref="PreservedLines"/> to re-emit them. The staged write and
     /// the swap are each atomic — <see cref="AtomicFile.SwapIntoPlace"/> owns that — but the
     /// read-then-write PAIR is not: without this, whichever saves last swaps in a file built from
     /// content it captured before the other landed, and the other save's entries and comments are gone.
@@ -79,10 +80,15 @@ public sealed partial class HostsFileService
     /// </summary>
     public async Task<List<HostsEntry>> ReadHostsAsync(CancellationToken ct = default)
     {
-        List<HostsEntry> entries = [];
-        if (!File.Exists(HostsPath)) return entries;
+        if (!File.Exists(HostsPath)) return [];
+        var (lines, _) = Decode(await File.ReadAllBytesAsync(HostsPath, ct).ConfigureAwait(false));
+        return ParseEntries(lines);
+    }
 
-        var lines = await File.ReadAllLinesAsync(HostsPath, ct).ConfigureAwait(false);
+    /// <summary>The entries in <paramref name="lines"/>, as <see cref="ReadHostsAsync"/> reads them.</summary>
+    private static List<HostsEntry> ParseEntries(IEnumerable<string> lines)
+    {
+        List<HostsEntry> entries = [];
         foreach (string line in lines.Select(l => l.Trim()))
         {
             if (string.IsNullOrEmpty(line)) continue;
@@ -152,19 +158,15 @@ public sealed partial class HostsFileService
     /// is exactly a line ReadHostsAsync did not turn into an entry, so nothing is duplicated and
     /// nothing is dropped. Returns an empty list when the file is absent, so a file of plain entries
     /// produces output byte-identical to the earlier behaviour.
-    /// <para>A file that is there and could not be read throws, and <see cref="SaveHosts"/> with it, before
-    /// anything is written. It used to read as "nothing to keep", so a save during a lock dropped every comment
-    /// and every line the parser could not read (#2521).</para>
+    /// <para>Handed the lines <see cref="SaveHosts"/> read, in the file's own encoding. A file that is there and
+    /// could not be read throws in that read, before anything is written. It used to read as "nothing to keep", so a
+    /// save during a lock dropped every comment and every line the parser could not read (#2521).</para>
     /// </remarks>
-    private List<string> ReadPreservedLines()
+    private static List<string> PreservedLines(IEnumerable<string> rawLines)
     {
         List<string> preserved = [];
-        if (!File.Exists(HostsPath)) return preserved;
 
-        var rawLines = File.ReadAllLines(HostsPath);
-
-        // Trim in the projection: the loop body never needs the untrimmed line, and rawLines is
-        // already a materialised array from ReadAllLines, so this is the same work in the same order.
+        // Trim in the projection: the loop body never needs the untrimmed line.
         foreach (var line in rawLines.Select(r => r.Trim()))
         {
 
@@ -201,7 +203,74 @@ public sealed partial class HostsFileService
         return preserved;
     }
 
-    /// <summary>True if a pristine pre-SysManager backup of the hosts file exists.</summary>
+    // Valid UTF-8 or nothing: a byte that is not throws, which is how a file saved in an ANSI code page is told apart.
+    private static readonly UTF8Encoding StrictUtf8 =
+        new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
+    /// The lines of a hosts file, and the encoding it is in: that of its byte order mark, UTF-8 when every byte is
+    /// valid UTF-8, and otherwise the system's ANSI code page, which older Notepad and many localised tools save in.
+    /// </summary>
+    /// <remarks>
+    /// The file was read and written as UTF-8 whatever it was in, so in a file saved in an ANSI code page every letter
+    /// outside ASCII was read as U+FFFD and written back as that, and a comment such as "# für Spiele" was destroyed by
+    /// the first save (#2797). <see cref="SaveHosts"/> writes the file back in the encoding read here, with the same
+    /// byte order mark or none. Split into lines as <see cref="File.ReadAllLines(string)"/> splits them.
+    /// </remarks>
+    internal static (List<string> Lines, Encoding Encoding) Decode(byte[] bytes)
+    {
+        ReadOnlySpan<byte> content = bytes;
+        Encoding encoding;
+        if (content.StartsWith(Encoding.UTF8.Preamble))
+        {
+            encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+            content = content[3..];
+        }
+        else if (content.StartsWith(Encoding.Unicode.Preamble))
+        {
+            encoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+            content = content[2..];
+        }
+        else if (content.StartsWith(Encoding.BigEndianUnicode.Preamble))
+        {
+            encoding = new UnicodeEncoding(bigEndian: true, byteOrderMark: true);
+            content = content[2..];
+        }
+        else
+        {
+            try
+            {
+                _ = StrictUtf8.GetCharCount(content);
+                encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            }
+            catch (DecoderFallbackException)
+            {
+                encoding = PowerShellRunner.AnsiEncoding;
+            }
+        }
+
+        List<string> lines = [];
+        using var reader = new StringReader(encoding.GetString(content));
+        while (reader.ReadLine() is { } line) lines.Add(line);
+        return (lines, encoding);
+    }
+
+    /// <summary>
+    /// The entries in a form that compares equal exactly when they are the same entries in the same order. Save writes
+    /// only while the file still holds the entries the list was read from (#2797).
+    /// </summary>
+    public static string Fingerprint(IEnumerable<HostsEntry> entries) =>
+        string.Join("\n", entries.Select(e => $"{e.IpAddress}\t{e.Hostname}\t{e.Comment}\t{(e.IsEnabled ? 1 : 0)}"));
+
+    /// <summary>
+    /// The question before the hosts file is put back from the copy beside it, made on <paramref name="madeOn"/>:
+    /// on DNS &amp; Hosts' Restore original and on Undo Changes alike.
+    /// </summary>
+    public static string RestoreQuestion(string madeOn) =>
+        $"Restore the hosts file from the copy beside it, made on {madeOn}?\n\nEverything written to it since — by "
+        + "SysManager or by any other program — is replaced by that copy.";
+
+    /// <summary>True if a copy of the hosts file is kept beside it as hosts.bak, whoever made it.</summary>
     public bool HasBackup => File.Exists(BackupPath);
 
     /// <summary>
@@ -269,20 +338,43 @@ public sealed partial class HostsFileService
     /// (a typo'd IP, an IP with no hostname). Without that, editing one entry through the UI
     /// silently deleted the rest of the file's hand-written content. SysManager's own managed-header
     /// lines are excluded from the capture, making the rewrite a fixed point — repeated saves don't
-    /// accumulate duplicate headers or blanks. See <see cref="ReadPreservedLines"/>.
+    /// accumulate duplicate headers or blanks. See <see cref="PreservedLines"/>.
     ///
     /// The whole body is inside <see cref="_writeLock"/>, because the rewrite is built from content
     /// this method just read: the capture and the swap have to be one step or a concurrent save's
     /// entries are dropped. Not <c>async</c> and no <c>await</c>, so the lock is never held across a
-    /// yield. <see cref="ReadPreservedLines"/> is called only from here and so needs no gate of its own.
+    /// yield.
+    /// <para>The list was read from the file when the tab opened, and SysManager keeps running in the notification
+    /// area, so it can be days old. Rebuilt from it, the file lost every mapping a VPN client, Docker Desktop, an
+    /// ad-blocker or an edit in Notepad had made since (#2797). With <paramref name="loadedFingerprint"/>, the
+    /// <see cref="Fingerprint"/> of the entries the list was read from, nothing is written unless the file still holds
+    /// those entries. The file is written back in the encoding it was read in (<see cref="Decode"/>).</para>
     /// </remarks>
-    public void SaveHosts(List<HostsEntry> entries)
+    /// <param name="entries">The entries to write.</param>
+    /// <param name="loadedFingerprint">
+    /// The <see cref="Fingerprint"/> of the entries the list was read from, or null to write whatever the file holds.
+    /// </param>
+    public HostsSaveOutcome SaveHosts(List<HostsEntry> entries, string? loadedFingerprint = null)
     {
         lock (_writeLock)
         {
+            var exists = File.Exists(HostsPath);
+            var (current, encoding) = exists
+                ? Decode(File.ReadAllBytes(HostsPath))
+                : ([], new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            if (loadedFingerprint is not null
+                && !string.Equals(Fingerprint(ParseEntries(current)), loadedFingerprint, StringComparison.Ordinal))
+            {
+                return HostsSaveOutcome.ChangedOutside;
+            }
+
             // Preserve the pristine original: back up only if we have never backed up before.
-            if (File.Exists(HostsPath) && !File.Exists(BackupPath))
+            var keptACopy = false;
+            if (exists && !File.Exists(BackupPath))
+            {
                 File.Copy(HostsPath, BackupPath, overwrite: false);
+                keptACopy = true;
+            }
 
             var lines = new List<string>
             {
@@ -294,7 +386,7 @@ public sealed partial class HostsFileService
             // Re-emit the user's own standalone comments/blank lines (not IP mappings — those are
             // carried by `entries`). Without this, editing one entry through the UI silently deleted
             // every hand-written comment on the next save.
-            var preserved = ReadPreservedLines();
+            var preserved = PreservedLines(current);
             if (preserved.Count > 0)
             {
                 lines.AddRange(preserved);
@@ -317,7 +409,7 @@ public sealed partial class HostsFileService
             var tempPath = AtomicFile.UniqueTempPath(HostsPath, "sysmanager.tmp");
             try
             {
-                File.WriteAllLines(tempPath, lines);
+                File.WriteAllLines(tempPath, lines, encoding);
 
                 // AtomicFile.SwapIntoPlace owns the two-branch swap and the flush that has to precede
                 // it, so the ACL rationale is stated once there instead of twice here: File.Replace copies
@@ -334,6 +426,7 @@ public sealed partial class HostsFileService
                     catch (UnauthorizedAccessException) { /* best-effort temp cleanup */ }
                 }
             }
+            return keptACopy ? HostsSaveOutcome.SavedAndKeptACopy : HostsSaveOutcome.Saved;
         }
     }
 
@@ -413,8 +506,8 @@ public sealed partial class HostsFileService
     /// <remarks>
     /// This is the single acceptance test for "would ReadHostsAsync turn this into a HostsEntry", and
     /// all three callers depend on that being one definition rather than three lookalikes:
-    /// ReadHostsAsync itself, to decide whether a '#' line is a disabled entry; and
-    /// <see cref="ReadPreservedLines"/> twice, to avoid re-emitting a line that is already carried as
+    /// <see cref="ParseEntries"/>, which both reads go through, to decide whether a '#' line is a disabled entry;
+    /// and <see cref="PreservedLines"/> twice, to avoid re-emitting a line that is already carried as
     /// an entry. If this drifted from what ReadHostsAsync accepts, lines would be silently duplicated
     /// or silently dropped depending on which way it drifted.
     /// <para>Named for what it computes rather than for one caller. It replaced a
@@ -441,3 +534,16 @@ public sealed partial class HostsFileService
 /// <param name="WrittenBySysManager">True when the hosts file starts with the header SysManager writes into it.</param>
 /// <param name="TakenAtUtc">When the copy was made.</param>
 public sealed record HostsBackupState(bool DiffersFromHosts, bool WrittenBySysManager, DateTime TakenAtUtc);
+
+/// <summary>What <see cref="HostsFileService.SaveHosts"/> did.</summary>
+public enum HostsSaveOutcome
+{
+    /// <summary>Written.</summary>
+    Saved,
+
+    /// <summary>Written, after keeping the file as it was beside it as hosts.bak, there being no copy yet.</summary>
+    SavedAndKeptACopy,
+
+    /// <summary>Not written: the file no longer holds the entries the list was read from.</summary>
+    ChangedOutside,
+}

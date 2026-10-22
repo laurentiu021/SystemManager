@@ -3,6 +3,7 @@
 // License: MIT
 
 using System.IO;
+using System.Text;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -713,5 +714,112 @@ public class HostsFileServiceTests
                 try { Directory.Delete(dir, recursive: true); } catch { }
             }
         }
+    }
+
+    // ---------- Save writes only over the entries read, and keeps the file's encoding (#2797) ----------
+
+    private static void Remove(string dir)
+    {
+        try { Directory.Delete(dir, recursive: true); }
+        catch (IOException) { /* a scanner holding a file; the temp folder is cleared later */ }
+        catch (UnauthorizedAccessException) { /* the same, for a file marked read-only by something else */ }
+    }
+
+    private static List<HostsEntry> Localhost() =>
+        [new HostsEntry { IpAddress = "127.0.0.1", Hostname = "localhost", IsEnabled = true }];
+
+    [Fact]
+    public async Task SaveHosts_OverEntriesTheFileNoLongerHolds_WritesNothing()
+    {
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            var loaded = HostsFileService.Fingerprint(await svc.ReadHostsAsync());
+            File.AppendAllText(hosts, "10.9.9.9 vpn.local\n");   // another program adds a mapping
+            var before = File.ReadAllBytes(hosts);
+
+            var outcome = svc.SaveHosts(Localhost(), loaded);
+
+            Assert.Equal(HostsSaveOutcome.ChangedOutside, outcome);
+            Assert.Equal(before, File.ReadAllBytes(hosts));
+            Assert.False(File.Exists(hosts + ".bak"));
+        }
+        finally { Remove(dir); }
+    }
+
+    [Fact]
+    public async Task SaveHosts_OverTheEntriesItRead_Writes_AndKeepsACopyOnlyTheFirstTime()
+    {
+        var (svc, hosts, dir) = NewServiceWithTempHosts("127.0.0.1 localhost\n");
+        try
+        {
+            var loaded = HostsFileService.Fingerprint(await svc.ReadHostsAsync());
+
+            Assert.Equal(HostsSaveOutcome.SavedAndKeptACopy, svc.SaveHosts(Localhost(), loaded));
+            Assert.Equal(HostsSaveOutcome.Saved, svc.SaveHosts(Localhost(), HostsFileService.Fingerprint(Localhost())));
+            Assert.Equal("127.0.0.1 localhost\n", File.ReadAllText(hosts + ".bak"));
+        }
+        finally { Remove(dir); }
+    }
+
+    [Fact]
+    public async Task SaveHosts_KeepsAFileSavedInTheAnsiCodePage_InIt()
+    {
+        // Older Notepad and many localised tools save in the ANSI code page. Read as UTF-8, every letter outside ASCII
+        // became U+FFFD, and the first save wrote that back, so the comment below lost its ü for good.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var ansi = PowerShellRunner.AnsiEncoding;
+        if (!ansi.IsSingleByte)
+            Assert.Skip($"the ANSI code page here is {ansi.CodePage}, which is not one a byte is a letter in");
+        const string comment = "# für Spiele blockiert";
+        var bytes = ansi.GetBytes(comment + "\r\n127.0.0.1 localhost\r\n");
+        Assert.Throws<DecoderFallbackException>(() => new UTF8Encoding(false, true).GetString(bytes));   // not UTF-8
+        var (svc, hosts, dir) = NewServiceWithTempHosts("");
+        File.WriteAllBytes(hosts, bytes);
+        try
+        {
+            svc.SaveHosts(await svc.ReadHostsAsync());
+
+            var written = ansi.GetString(File.ReadAllBytes(hosts));
+            Assert.Contains(comment, written, StringComparison.Ordinal);
+            Assert.Contains("localhost", written, StringComparison.Ordinal);
+        }
+        finally { Remove(dir); }
+    }
+
+    [Fact]
+    public async Task SaveHosts_KeepsAByteOrderMark_AndWritesNoneWhereThereWasNone()
+    {
+        var (svc, hosts, dir) = NewServiceWithTempHosts("");
+        File.WriteAllBytes(hosts,
+            [.. Encoding.UTF8.Preamble, .. Encoding.UTF8.GetBytes("# Größe\n127.0.0.1 localhost\n")]);
+        var (plain, plainHosts, plainDir) = NewServiceWithTempHosts("# Größe\n127.0.0.1 localhost\n");
+        try
+        {
+            svc.SaveHosts(await svc.ReadHostsAsync());
+            plain.SaveHosts(await plain.ReadHostsAsync());
+
+            var withMark = File.ReadAllBytes(hosts);
+            Assert.True(withMark.AsSpan().StartsWith(Encoding.UTF8.Preamble), "the byte order mark was dropped");
+            Assert.Contains("# Größe", Encoding.UTF8.GetString(withMark), StringComparison.Ordinal);
+            var without = File.ReadAllBytes(plainHosts);
+            Assert.False(without.AsSpan().StartsWith(Encoding.UTF8.Preamble), "a byte order mark was added");
+            Assert.Contains("# Größe", Encoding.UTF8.GetString(without), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Remove(dir);
+            Remove(plainDir);
+        }
+    }
+
+    [Fact]
+    public void Decode_ReadsUtf16ByItsMark_AndSplitsLinesAsReadAllLinesDoes()
+    {
+        var (lines, encoding) = HostsFileService.Decode(
+            [.. Encoding.Unicode.Preamble, .. Encoding.Unicode.GetBytes("# a\r\n127.0.0.1 b\nlast\r\n")]);
+
+        Assert.Equal(["# a", "127.0.0.1 b", "last"], lines);
+        Assert.Equal(Encoding.Unicode.CodePage, encoding.CodePage);
     }
 }

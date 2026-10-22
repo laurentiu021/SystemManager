@@ -1508,9 +1508,19 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   hosts file with a clean table UI. Add IP + hostname pairs, toggle entries,
   or remove them; the changes are written to the hosts file when you press Save,
   and the tab says so. The first save keeps a copy of the file as it was (`hosts.bak`,
-  beside it), later saves never replace that copy, and **Restore original** puts it back.
+  beside it) unless one is there already, later saves never replace that copy, and the
+  save says when it kept one. **Restore original** puts the copy back, after a question
+  that says when it was made, and only once SysManager has written the hosts file: a
+  `hosts.bak` beside a file SysManager never wrote can be anyone's, so it is left alone.
   It never saves a list it could not read from the file: after a failed read, Save asks
   you to Refresh first
+- **Save never undoes a change it did not see.** A VPN client, Docker Desktop, an ad-blocker
+  or an edit in Notepad can change the hosts file while the tab is open. Save reads the file
+  again first, and when its entries are no longer the ones the list was read from, nothing is
+  written and the tab says so, so Refresh shows the change before you make yours again
+- **The file keeps its encoding.** A hosts file saved in the system's ANSI code page, as older
+  Notepad and many localised tools save it, is written back in it, and a byte order mark stays,
+  so a comment with letters outside English keeps them
 - **Undo Changes can restore that copy too** — once SysManager has written the hosts file,
   and while the file differs from the copy, Undo Changes lists it as "Hosts file"
   (administrator rights needed). After it restores the copy, this tab reads the file again

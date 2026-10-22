@@ -24,6 +24,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
     private readonly IWingetService _winget;
     private readonly EtaCalculator _upgradeEta = new();
     private CancellationTokenSource? _cts;
+
+    // The token the running winget gets. Only closing SysManager cancels it: Cancel, and Escape with it, stop a batch
+    // before its next app, because ending winget part-way ends the installer it started (#2942).
+    private CancellationTokenSource? _upgraderCts;
+    private AppPackage? _upgrading;
     private readonly Action<PowerShellLine> _lineHandler;
 
     /// <summary>
@@ -214,8 +219,11 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         IsBusy = true;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        _upgraderCts?.Dispose();
+        _upgraderCts = new CancellationTokenSource();
         int attempted = 0, succeeded = 0, failed = 0;
         var wingetUnavailable = false;
+        var stopped = false;
         UpgradeEtaText = string.Empty;
         _upgradeEta.Reset();
         _winget.LineReceived += _lineHandler; // op-scoped subscription (see constructor note)
@@ -223,20 +231,26 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
         {
             foreach (var pkg in toUpgrade)
             {
-                if (_cts.IsCancellationRequested) break;
+                if (_cts.IsCancellationRequested)
+                {
+                    stopped = true;
+                    break;
+                }
                 pkg.Status = "Upgrading…";
                 StatusMessage = $"Upgrading {pkg.Name} ({attempted + 1}/{toUpgrade.Count})";
                 Progress = (int)((attempted / (double)toUpgrade.Count) * 100);
                 UpgradeEtaText = _upgradeEta.Update(Progress);
+                _upgrading = pkg;
                 try
                 {
                     // WingetResult carries a friendly message translated from the exit code,
                     // so the per-app status is human-readable (never a raw "exit 0x8A15…").
-                    var result = await _winget.UpgradeAsync(pkg.Id, _cts.Token);
+                    var result = await _winget.UpgradeAsync(pkg.Id, _upgraderCts.Token);
                     pkg.Status = result.FriendlyMessage;
                     if (result.Succeeded) succeeded++; else failed++;
                 }
-                catch (OperationCanceledException) { pkg.Status = "Cancelled"; break; }
+                // Only closing SysManager ends a running update.
+                catch (OperationCanceledException) { pkg.Status = "Cancelled"; stopped = true; break; }
                 catch (InvalidOperationException ex) { pkg.Status = $"Error: {ex.Message}"; failed++; }
                 // A single invalid package Id throws ArgumentException from UpgradeAsync
                 // BEFORE any process runs; record it on the row and keep upgrading the rest
@@ -250,26 +264,34 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
                     wingetUnavailable = true;
                     break;
                 }
+                finally { _upgrading = null; }
                 attempted++;
             }
-            Progress = 100;
+            if (!stopped) Progress = 100;
             UpgradeEtaText = string.Empty;
             // Honest summary: separate succeeded from failed, and only mention failures
             // when there are any. If winget itself is missing, keep the friendly
             // "install App Installer" message instead of a misleading "Updated 0 of N".
+            var failures = failed == 0 ? "" : $" · {failed} failed";
             StatusMessage = wingetUnavailable
                 ? WingetUnavailableMessage
-                : failed == 0
-                    ? $"Updated {succeeded} of {toUpgrade.Count}."
-                    : $"Updated {succeeded} of {toUpgrade.Count} · {failed} failed.";
+                : stopped
+                    ? $"Stopped after {attempted} of {toUpgrade.Count}. Updated {succeeded}{failures}."
+                    : $"Updated {succeeded} of {toUpgrade.Count}{failures}.";
             Log.Information("App upgrade batch: {Succeeded} ok, {Failed} failed of {Total}",
                 succeeded, failed, toUpgrade.Count);
         }
         finally { _winget.LineReceived -= _lineHandler; IsBusy = false; UpgradeEtaText = string.Empty; }
     }
 
+    /// <summary>Stops a scan, or a batch before its next app: the update running now finishes.</summary>
     [RelayCommand]
-    private void Cancel() => _cts?.Cancel();
+    private void Cancel()
+    {
+        _cts?.Cancel();
+        if (_upgrading is { } pkg)
+            StatusMessage = $"Stopping after {pkg.Name}. Its update finishes first, so it is not left half-installed.";
+    }
 
     protected override void Dispose(bool disposing)
     {
@@ -279,6 +301,8 @@ public sealed partial class AppUpdatesViewModel : ViewModelBase
             PropertyChanged -= OnVmPropertyChanged;
             _cts?.Cancel();
             _cts?.Dispose();
+            _upgraderCts?.Cancel();
+            _upgraderCts?.Dispose();
         }
         base.Dispose(disposing);
     }

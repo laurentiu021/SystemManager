@@ -366,4 +366,93 @@ public sealed class ComponentStoreCleanupTests
         Assert.True(vm.IsAnyRunning);
         Assert.True(vm.CancelCommand.CanExecute(null));
     }
+
+    // ── Escape leaves a running cleanup alone (#2942) ────────────────────────
+
+    /// <summary>A runner on which the given DISM run starts and waits until its token is cancelled.</summary>
+    private static IPowerShellRunner HeldDism(string arguments, TaskCompletionSource<CancellationToken> started)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("DISM.exe", arguments, Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+            .Returns(callInfo =>
+            {
+                var token = callInfo.ArgAt<CancellationToken>(2);
+                var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                token.Register(() => pending.TrySetCanceled(token));
+                started.TrySetResult(token);
+                return pending.Task;
+            });
+        return runner;
+    }
+
+    [Fact]
+    public async Task Escape_DoesNotStopARunningCleanup_ButTheCancelButtonStillDoes()
+    {
+        // Escape is a bare keypress, and stopping /StartComponentCleanup part-way leaves Windows to finish the
+        // servicing transaction on its own. The button stays, and the confirmation before the cleanup says what
+        // stopping costs.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = NewVm(HeldDism("/Online /English /Cleanup-Image /StartComponentCleanup", started));
+        vm.CanCleanStore = true;
+
+        using var dialog = new DialogAnswer(confirm: true);
+        var execution = vm.CleanComponentStoreCommand.ExecuteAsync(null);
+        try
+        {
+            var token = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Null(vm.EscapeCancel);
+
+            vm.CancelCommand.Execute(null);
+            Assert.True(token.IsCancellationRequested);
+        }
+        finally
+        {
+            vm.CancelCommand.Execute(null);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        Assert.Equal("Cancelled.", vm.StoreStatus);
+        Assert.Null(vm.EscapeCancel);   // and nothing is left marked as running
+    }
+
+    [Fact]
+    public async Task Escape_StopsARunningAnalysis()
+    {
+        // The analysis only reads, so a keypress may stop it.
+        using var elevated = AdminHelper.ForceElevation(true);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = NewVm(HeldDism("/Online /English /Cleanup-Image /AnalyzeComponentStore", started));
+
+        var execution = vm.AnalyzeComponentStoreCommand.ExecuteAsync(null);
+        try
+        {
+            var token = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+            vm.EscapeCancel!.Execute(null);
+            Assert.True(token.IsCancellationRequested);
+        }
+        finally
+        {
+            vm.CancelCommand.Execute(null);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        Assert.Equal("Cancelled.", vm.StoreStatus);
+    }
+
+    [Fact]
+    public async Task Escape_StopsTheOtherRuns_OnceACleanupHasEnded()
+    {
+        using var elevated = AdminHelper.ForceElevation(true);
+        var vm = NewVm();   // the cleanup's DISM run ends at once, with exit code 0
+        vm.CanCleanStore = true;
+        using (new DialogAnswer(confirm: true))
+            await vm.CleanComponentStoreCommand.ExecuteAsync(null);
+        Assert.Equal("Completed", vm.StoreStatus);   // the premise: it ran
+
+        vm.IsBinRunning = true;
+
+        Assert.Same(vm.CancelCommand, vm.EscapeCancel);
+    }
 }

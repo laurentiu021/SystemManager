@@ -29,6 +29,11 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
     private readonly EtaCalculator _installEta = new();
     private CancellationTokenSource? _cts;
 
+    // The token the running winget gets. Only closing SysManager cancels it: Cancel, and Escape with it, stop a batch
+    // before its next app, because ending winget part-way ends the installer it started (#2942).
+    private CancellationTokenSource? _installerCts;
+    private InstallableApp? _installing;
+
     public BulkObservableCollection<InstallableApp> Apps { get; } = new();
     public BulkObservableCollection<InstallableApp> FilteredApps { get; } = new();
     public ICollectionView GroupedView { get; }
@@ -275,6 +280,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         // install can never have its CTS disposed out from under it by a second click.
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
+        _installerCts?.Dispose();
+        _installerCts = new CancellationTokenSource();
 
         var installed = 0;
         var alreadyInstalled = 0;
@@ -294,9 +301,10 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                 InstallEtaText = _installEta.Update(Progress);
                 StatusMessage = $"Installing {app.Name} ({i + 1}/{selected.Count})…";
 
+                _installing = app;
                 try
                 {
-                    var exitCode = await _service.InstallAsync(app.WingetId, _cts.Token);
+                    var exitCode = await _service.InstallAsync(app.WingetId, _installerCts.Token);
                     if (exitCode == 0)
                     {
                         app.Status = "Installed";
@@ -318,6 +326,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                         failed++;
                     }
                 }
+                // Only closing SysManager ends a running install.
                 catch (OperationCanceledException)
                 {
                     app.Status = "Cancelled";
@@ -341,6 +350,7 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
                     failed++;
                     Log.Warning(ex, "Failed to install {WingetId}", app.WingetId);
                 }
+                finally { _installing = null; }
             }
 
             Progress = 100;
@@ -351,7 +361,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
-            StatusMessage = "Installation cancelled.";
+            StatusMessage = $"Installation cancelled after {installed + alreadyInstalled + failed}/{selected.Count}. "
+                            + $"{DescribeInstallRun(installed, alreadyInstalled, failed)}.";
         }
         finally
         {
@@ -384,8 +395,15 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
             ? $"Installed: {installed}, Failed: {failed}"
             : $"Installed: {installed}, Already installed: {alreadyInstalled}, Failed: {failed}";
 
+    /// <summary>Stops a batch before its next app: the install running now finishes.</summary>
     [RelayCommand]
-    private void Cancel() => _cts?.Cancel();
+    private void Cancel()
+    {
+        _cts?.Cancel();
+        if (_installing is { } app)
+            StatusMessage = $"Stopping after {app.Name}. Its installer finishes first, so it is not left "
+                            + "half-installed.";
+    }
 
     [RelayCommand]
     private void SelectAll()
@@ -619,6 +637,8 @@ public sealed partial class BulkInstallerViewModel : ViewModelBase
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            _installerCts?.Cancel();
+            _installerCts?.Dispose();
         }
         base.Dispose(disposing);
     }

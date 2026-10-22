@@ -428,4 +428,100 @@ public class BulkInstallerViewModelTests
         Assert.False(vm.IsBusy);
         Assert.False(vm.IsProgressIndeterminate);
     }
+
+    // ── Cancel and Escape stop a batch between apps (#2942) ──
+
+    [Fact]
+    public async Task InstallSelected_WhenEscapeIsPressed_LetsTheRunningInstallFinish_ThenStopsBeforeTheNextApp()
+    {
+        // Escape ran Cancel, whose token winget had, so a keypress ended winget part-way and the installer it had
+        // started with it (#2942).
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
+        var installs = 0;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(callInfo =>
+              {
+                  if (Interlocked.Increment(ref installs) != 1) return Task.FromResult(0);
+                  runningToken = callInfo.ArgAt<CancellationToken>(2);
+                  started.TrySetResult(true);
+                  return pending.Task;
+              });
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        var first = vm.Apps[0];
+        first.IsSelected = true;
+        vm.Apps[1].IsSelected = true;
+
+        using var dialog = new DialogAnswer(confirm: true);
+        var execution = Task.CompletedTask;
+        try
+        {
+            execution = vm.InstallSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.EscapeCancel!.Execute(null);
+
+            Assert.False(runningToken.IsCancellationRequested);
+            Assert.Equal(
+                $"Stopping after {first.Name}. Its installer finishes first, so it is not left half-installed.",
+                vm.StatusMessage);
+
+            pending.SetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal("Installed", first.Status);
+            Assert.Equal("Installation cancelled after 1/2. Installed: 1, Failed: 0.", vm.StatusMessage);
+            Assert.Equal(1, installs);
+        }
+        finally
+        {
+            // Ended either way: a batch left running holds the install lock the next test needs.
+            pending.TrySetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_WhileAnInstallRuns_StillEndsIt()
+    {
+        // Closing SysManager asks first while the install holds its lock, and then ends what is running, as before.
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken runningToken = default;
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Is<string>(args => args.StartsWith("install", StringComparison.Ordinal)),
+                               Arg.Any<CancellationToken>(), Arg.Any<System.Text.Encoding?>())
+              .Returns(callInfo =>
+              {
+                  runningToken = callInfo.ArgAt<CancellationToken>(2);
+                  runningToken.Register(() => pending.TrySetCanceled(runningToken));
+                  started.TrySetResult(true);
+                  return pending.Task;
+              });
+        var vm = VmWithSubstitutedRunner(runner);
+        vm.DeselectAllCommand.Execute(null);
+        var app = vm.Apps[0];
+        app.IsSelected = true;
+
+        using var dialog = new DialogAnswer(confirm: true);
+        var execution = Task.CompletedTask;
+        try
+        {
+            execution = vm.InstallSelectedCommand.ExecuteAsync(null);
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.Dispose();
+
+            Assert.True(runningToken.IsCancellationRequested);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("Cancelled", app.Status);
+        }
+        finally
+        {
+            pending.TrySetResult(0);
+            await execution.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
 }

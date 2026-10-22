@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using Microsoft.Win32;
 using SysManager.Services;
@@ -171,17 +173,212 @@ public sealed class NotificationBlockerServiceTests : IDisposable
         Assert.False(_svc.SetAppEnabled("does.not.exist", false));
     }
 
-    // Negative: the seam's write API must never escape the Settings subtree via a
-    // crafted AUMID — separators are rejected before any registry access.
+    // Negative: the seam's write API must never reach a key outside the Settings subtree, or one an ID does not name,
+    // through a crafted AUMID. A backslash keeps the parts of an ID that is a program's path (#2838), but every part
+    // must be a key name. RegistryKey collapses a doubled backslash and drops a trailing one, so those would reach
+    // another sender's key; ".", "..", a forward slash and a blank ID are refused with them.
     [Theory]
+    [InlineData(@"Contoso\\App")]
+    [InlineData(@"Contoso\App\")]
+    [InlineData(@"Contoso\")]
+    [InlineData(@"\Contoso\App")]
+    [InlineData(@"Contoso\.\App")]
+    [InlineData(@"Contoso\App\..")]
     [InlineData(@"..\..\Run")]
-    [InlineData(@"evil\sub")]
-    [InlineData("evil/sub")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("Contoso/App")]
     [InlineData("")]
     [InlineData("   ")]
-    public void SetAppEnabled_RejectsPathSeparatorsAndBlank(string aumid)
+    public void SetAppEnabled_RefusesAnIdThatIsNotAPathOfKeyNames(string aumid)
     {
+        // The keys a lenient reading of these IDs would reach, so a refusal is not only a key that is not there.
+        using var folder = CreateSender("Contoso");
+        using var app = CreateSender(@"Contoso\App");
+
         Assert.False(_svc.SetAppEnabled(aumid, false));
+
+        Assert.Null(folder.GetValue(NotificationBlockerService.EnabledValueName));
+        Assert.Null(app.GetValue(NotificationBlockerService.EnabledValueName));
+    }
+
+    [Theory]
+    [InlineData("Slack", true)]
+    [InlineData(PowerShellId, true)]
+    [InlineData(@"Contoso\..\App", false)]
+    [InlineData(@"Contoso\.\App", false)]
+    [InlineData(@"Contoso\\App", false)]
+    [InlineData(@"\Contoso", false)]
+    [InlineData(@"Contoso\", false)]
+    [InlineData("Contoso/App", false)]
+    public void IsSenderPath_AcceptsOnlyAPathOfKeyNames(string aumid, bool expected)
+    {
+        Assert.Equal(expected, NotificationBlockerService.IsSenderPath(aumid));
+    }
+
+    // ── Senders whose ID is a program's path (#2838) ───────────────────────
+
+    // PowerShell's ID: the System folder's known-folder ID, then the program's path under it.
+    private const string SystemFolder = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}";
+    private const string PowerShellId = SystemFolder + @"\WindowsPowerShell\v1.0\powershell.exe";
+
+    // A known folder only these tests know, where the test assembly stands in for a program: it is on every PC that
+    // runs them, and it has a description.
+    private static readonly Guid TestFolder = new("5D2F7C41-8A3B-4E69-B0D1-2C7E9F4A6B38");
+    private static readonly string ThisFile = typeof(NotificationBlockerServiceTests).Assembly.Location;
+    private static readonly string ThisFileId = $@"{TestFolder:B}\{Path.GetFileName(ThisFile)}";
+
+    private static Func<Guid, string?> FolderAt(string path) => id => id == TestFolder ? path : null;
+
+    // A service that finds no known folder, so a program's sender is named from its ID on any PC.
+    private NotificationBlockerService WithoutFolders() => new(_root, _configDir, _ => null);
+
+    // A sender's values: one recent notification, so its key is a sender's and not a folder's.
+    private static void OneRecent(RegistryKey key) =>
+        key.SetValue("PeriodicNotificationCount", 1, RegistryValueKind.DWord);
+
+    [Fact]
+    public void GetApps_ListsASenderWhoseIdIsAPath_OnceUnderItsWholeId()
+    {
+        var stamp = new DateTime(2026, 10, 1, 9, 0, 0, DateTimeKind.Local);
+        using var _ = CreateSender(PowerShellId, k =>
+        {
+            k.SetValue("PeriodicNotificationCount", 3, RegistryValueKind.DWord);
+            k.SetValue("LastNotificationAddedTime", stamp.ToFileTime(), RegistryValueKind.QWord);
+        });
+
+        var app = Assert.Single(WithoutFolders().GetApps());
+
+        Assert.Equal(PowerShellId, app.Aumid);
+        Assert.Equal("Powershell", app.DisplayName);
+        Assert.Equal(3, app.RecentCount);
+        Assert.Equal(stamp, app.LastNotification);
+    }
+
+    [Fact]
+    public void GetApps_ListsEachProgramUnderAFolder_AndNotTheFolder()
+    {
+        const string cmdId = SystemFolder + @"\cmd.exe";
+        using var _1 = CreateSender(PowerShellId, OneRecent);
+        using var _2 = CreateSender(cmdId, k => k.SetValue("PeriodicNotificationCount", 2, RegistryValueKind.DWord));
+        using var _3 = CreateSender("Slack");
+
+        Assert.Equal([cmdId, PowerShellId, "Slack"], WithoutFolders().GetApps().Select(a => a.Aumid));
+    }
+
+    [Fact]
+    public void GetApps_DoesNotListASendersOwnSubkeys()
+    {
+        using var _ = CreateSender("Contoso.App", k =>
+        {
+            k.SetValue("PeriodicNotificationCount", 1, RegistryValueKind.DWord);
+            k.CreateSubKey("Details")!.Dispose();
+        });
+
+        Assert.Equal(["Contoso.App"], WithoutFolders().GetApps().Select(a => a.Aumid));
+    }
+
+    [Fact]
+    public void GetApps_ListsASenderAsDeepAsALongProgramPath()
+    {
+        // Nine parts, as a program kept in a versioned folder of a per-user install has.
+        const string id = @"{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}\Contoso\Toolbox\apps\Studio"
+                          + @"\ch-0\233.11799\bin\studio64.exe";
+        using var _ = CreateSender(id, OneRecent);
+
+        Assert.Equal([id], WithoutFolders().GetApps().Select(a => a.Aumid));
+    }
+
+    [Fact]
+    public void GetApps_NamesASenderWhoseIdIsAProgramsPath_ByTheProgramsDescription()
+    {
+        var expected = FileVersionInfo.GetVersionInfo(ThisFile).FileDescription?.Trim();
+        Assert.False(string.IsNullOrEmpty(expected));   // without one, the case below would prove nothing
+        using var _ = CreateSender(ThisFileId, OneRecent);
+
+        var svc = new NotificationBlockerService(_root, _configDir, FolderAt(Path.GetDirectoryName(ThisFile)!));
+
+        Assert.Equal(expected, Assert.Single(svc.GetApps()).DisplayName);
+    }
+
+    [Fact]
+    public void SetAppEnabled_ASenderWhoseIdIsAPath_MutesTheKeyWindowsReads_NotTheFolder()
+    {
+        var svc = WithoutFolders();
+        using var sender = CreateSender(PowerShellId, OneRecent);
+
+        Assert.True(svc.SetAppEnabled(PowerShellId, false));
+
+        Assert.Equal(0, sender.GetValue(NotificationBlockerService.EnabledValueName));
+        using (var folder = _root.OpenSubKey($@"{NotificationBlockerService.SettingsPath}\{SystemFolder}"))
+            Assert.Null(folder!.GetValue(NotificationBlockerService.EnabledValueName));
+        Assert.False(Assert.Single(svc.GetApps()).IsEnabled);
+
+        Assert.True(svc.SetAppEnabled(PowerShellId, true));
+
+        Assert.Null(sender.GetValue(NotificationBlockerService.EnabledValueName));
+    }
+
+    [Fact]
+    public void SetAppEnabled_APathIdWithNoKey_IsRefused_AndCreatesNothing()
+    {
+        using var _ = CreateSender("Slack");
+
+        Assert.False(_svc.SetAppEnabled(PowerShellId, false));
+
+        using var settings = _root.OpenSubKey(NotificationBlockerService.SettingsPath);
+        Assert.Equal(["Slack"], settings!.GetSubKeyNames());
+    }
+
+    [Fact]
+    public void ProgramDescription_IsTheDescriptionOfTheFileTheIdNames()
+    {
+        var expected = FileVersionInfo.GetVersionInfo(ThisFile).FileDescription?.Trim();
+        Assert.False(string.IsNullOrEmpty(expected));   // without one, the case below would prove nothing
+
+        var found = NotificationBlockerService.ProgramDescription(
+            ThisFileId, FolderAt(Path.GetDirectoryName(ThisFile)!));
+
+        Assert.Equal(expected, found);
+    }
+
+    [Fact]
+    public void ProgramDescription_IsNull_ForAPathThatLeavesTheFolder()
+    {
+        // The test assembly's whole path after the folder's ID. Its drive part roots the path outside the folder,
+        // every part is a key name, and the file is there, so only the confinement to the folder can refuse it.
+        var id = $@"{TestFolder:B}\{ThisFile}";
+        Assert.True(NotificationBlockerService.IsSenderPath(id));
+
+        var found = NotificationBlockerService.ProgramDescription(
+            id, FolderAt(Path.Combine(Path.GetDirectoryName(ThisFile)!, "Programs")));
+
+        Assert.Null(found);
+    }
+
+    // {0} is the test folder's ID, {1} the test assembly's file name, {2} an ID the lookup does not resolve, and {3}
+    // the test folder's ID without the braces Windows writes it with.
+    [Theory]
+    [InlineData("{0}")]
+    [InlineData(@"{0}\missing.exe")]
+    [InlineData(@"{0}\..\{1}")]
+    [InlineData(@"{2}\{1}")]
+    [InlineData(@"{3}\{1}")]
+    [InlineData(@"Contoso\{1}")]
+    public void ProgramDescription_IsNull_ForAnIdThatNamesNoProgramInItsFolder(string shape)
+    {
+        var id = string.Format(CultureInfo.InvariantCulture, shape,
+            TestFolder.ToString("B"), Path.GetFileName(ThisFile), Guid.Empty.ToString("B"), TestFolder.ToString("D"));
+
+        Assert.Null(NotificationBlockerService.ProgramDescription(id, FolderAt(Path.GetDirectoryName(ThisFile)!)));
+    }
+
+    [Fact]
+    public void ProgramDescription_IsNull_ForAFileWithNoDescription()
+    {
+        File.WriteAllText(Path.Combine(_configDir, "notes.txt"), "not a program");
+
+        Assert.Null(NotificationBlockerService.ProgramDescription($@"{TestFolder:B}\notes.txt", FolderAt(_configDir)));
     }
 
     // ── Display-name resolution ────────────────────────────────────────────
@@ -202,6 +399,9 @@ public sealed class NotificationBlockerServiceTests : IDisposable
     [InlineData("Microsoft.WindowsStore_8wekyb3d8bbwe!App", "WindowsStore")]
     [InlineData("Chrome", "Chrome")]
     [InlineData("Zoom", "Zoom")]
+    [InlineData(PowerShellId, "Powershell")]
+    [InlineData(@"{F1B32785-6FBA-4FCF-9D55-7B8E7F157091}\Programs\my_tool\my_tool.exe", "My_tool")]
+    [InlineData(@"{6D809377-6AF0-444B-8957-A3773F02200E}\Contoso\Contoso.Notes.exe", "Contoso.Notes")]
     public void PrettifyAumid_ProducesReadableNames(string aumid, string expected)
     {
         Assert.Equal(expected, NotificationBlockerService.PrettifyAumid(aumid));

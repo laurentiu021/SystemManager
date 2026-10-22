@@ -1758,7 +1758,9 @@ Manage Microsoft Defender without digging through Windows Security:
 Mute the apps that nag you with pop-up notifications — update reminders, trial
 offers, "rate us" prompts:
 - **Lists every app that has shown a notification**, most recently active first,
-  with how many notifications it sent recently so the noisy ones stand out
+  with how many notifications it sent recently so the noisy ones stand out.
+  A program Windows identifies by its location, such as PowerShell, gets its
+  own row under the program's name
 - **Mute per app** with a switch — it flips the same per-app setting as Windows
   Settings > Notifications, so nothing is hooked or hacked, and Windows itself
   honors it

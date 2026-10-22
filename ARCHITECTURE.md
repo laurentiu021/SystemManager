@@ -1027,7 +1027,11 @@ Key services:
   compares at apply and at revert to keep a mute the user made during a game.
   `ReadMainToggleWriteCount` returns null for a ledger that cannot be read or parsed, and the
   revert then restores; a write still counts from 0 over such a ledger, because its number only
-  has to change.
+  has to change. A program with no app ID of its own is a sender whose ID is its path,
+  `{known folder}\path\program.exe`, kept as one key per part: `GetApps` walks a key that holds
+  only subkeys as a folder, up to 16 parts deep, and names the row from the file's description,
+  read through `KnownFolders.TryGetPath`, a lookup the internal constructor takes for tests.
+  `SetAppEnabled` takes a backslash ID only when every part is a key name and the key is there.
 - `BatteryService` — battery charge, health, wear level and cycle count via WMI
   (`Win32_Battery`, then the `root\WMI` capacity classes). `GetBatteryInfo` returns null
   when the `Win32_Battery` query fails, so a failed read is never reported as no battery.
@@ -1863,7 +1867,8 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   "a, b and c" list. Durations are `EtaCalculator.FormatTimeSpan`'s.
 - `GatewayHelper` — default gateway IP lookup for network tabs.
 - `EtaCalculator` — estimates time remaining for long-running operations.
-- `KnownFolders` — resolves Windows Known Folder paths via shell API.
+- `KnownFolders` — resolves Windows Known Folder paths via shell API. `TryGetPath` resolves
+  any known folder by its ID, and returns null for one Windows does not resolve.
 - `SystemPaths` — the one place the tools SysManager launches are resolved. A bare tool
   name becomes a full path under System32 (or the Windows PowerShell 5.1 folder), and winget
   resolves to its admin-only-writable install rather than the per-user alias, so nothing

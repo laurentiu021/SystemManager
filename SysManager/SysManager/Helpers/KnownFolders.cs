@@ -50,13 +50,15 @@ internal static partial class KnownFolders
     /// <summary>Gets the actual Videos folder path (respects user relocation).</summary>
     public static string GetVideosPath() => GetPath(Videos);
 
-    private static string GetPath(Guid folderId)
+    private static string GetPath(Guid folderId) => TryGetPath(folderId) ?? Fallback(folderId);
+
+    /// <summary>The path of any known folder, by its GUID, or null when Windows does not resolve it.</summary>
+    internal static string? TryGetPath(Guid folderId)
     {
         // The import returns the HRESULT. Because this is a plain (non-COM-interface)
         // LibraryImport, a failure does NOT throw — it returns a non-zero HRESULT and a
-        // null pointer. Check the HRESULT (and guard the path) and fall back to the
-        // SpecialFolder equivalent on any failure. The returned PWSTR is CoTaskMem and
-        // MUST be freed by us.
+        // null pointer. Check the HRESULT (and guard the path); the caller falls back on
+        // any failure. The returned PWSTR is CoTaskMem and MUST be freed by us.
         nint ptr = nint.Zero;
         try
         {
@@ -68,14 +70,14 @@ internal static partial class KnownFolders
                     return path;
             }
         }
-        catch (COMException) { /* fall through to the SpecialFolder fallback below */ }
+        catch (COMException) { /* not resolved: the caller decides */ }
         finally
         {
             if (ptr != nint.Zero)
                 Marshal.FreeCoTaskMem(ptr);
         }
 
-        return Fallback(folderId);
+        return null;
     }
 
     private static string Fallback(Guid folderId) =>

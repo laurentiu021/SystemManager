@@ -38,6 +38,22 @@ public class KnownFoldersTests
     }
 
     [Fact]
+    public void TryGetPath_ResolvesTheSystemFolder()
+    {
+        // FOLDERID_System, the folder PowerShell's notification ID starts with.
+        var system = KnownFolders.TryGetPath(new Guid("1AC14E77-02E7-4E5D-B744-2EB1AE5198B7"));
+
+        Assert.Equal(Environment.SystemDirectory, system, ignoreCase: true);
+    }
+
+    [Fact]
+    public void TryGetPath_IsNull_ForAnIdThatIsNoKnownFolder()
+    {
+        Assert.Null(KnownFolders.TryGetPath(Guid.Empty));
+        Assert.Null(KnownFolders.TryGetPath(new Guid("5D2F7C41-8A3B-4E69-B0D1-2C7E9F4A6B38")));
+    }
+
+    [Fact]
     public void GetDownloadsPath_IsStableAcrossManyCalls()
     {
         // Repeated calls must return the same path and must not crash — exercises the

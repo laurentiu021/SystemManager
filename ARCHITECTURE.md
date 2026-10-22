@@ -1163,8 +1163,10 @@ Key services:
   Both are hideable, by different mechanisms — a verb through `LegacyDisable`
   with an HKCU override fallback, a COM handler through the machine-wide
   `Shell Extensions\Blocked` list, which needs elevation. Takes injectable
-  stand-ins for `HKEY_CLASSES_ROOT` and `HKEY_LOCAL_MACHINE`, so both the scan
-  and the block/unblock writes are testable against a disposable hive.
+  stand-ins for `HKEY_CLASSES_ROOT`, `HKEY_LOCAL_MACHINE` and `HKEY_CURRENT_USER`, so the scan,
+  the block/unblock writes and the menu style are testable against a disposable hive. The menu style
+  (`IsClassicMenuEnabled`, `EnableClassicMenu`, `DisableClassicMenu`) is on `IContextMenuService`, and
+  a preset whose style write Windows refuses changes nothing and restarts no Explorer (#2804).
 - `BackupRegistry` exports the affected key to `%LocalAppData%\SysManager\Backups\ContextMenu`
   before each change, and `PruneBackups` keeps only `BackupsKeptPerKey` (3) per key. Ordered by
   FILE NAME, whose `yyyyMMdd_HHmmss` tail sorts chronologically and cannot be rewritten by a copy

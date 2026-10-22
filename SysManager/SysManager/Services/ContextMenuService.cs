@@ -79,13 +79,19 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// </remarks>
     private readonly RegistryKey _localMachine;
 
+    /// <summary>Where the menu style is kept: HKEY_CURRENT_USER, or a test's stand-in for it.</summary>
+    private readonly RegistryKey _currentUser;
+
     /// <summary>
-    /// Reads from <c>HKEY_CLASSES_ROOT</c> and <c>HKEY_LOCAL_MACHINE</c> unless handed somewhere else.
+    /// Reads from <c>HKEY_CLASSES_ROOT</c>, <c>HKEY_LOCAL_MACHINE</c> and <c>HKEY_CURRENT_USER</c> unless handed
+    /// somewhere else.
     /// </summary>
-    public ContextMenuService(RegistryKey? classesRoot = null, RegistryKey? localMachine = null)
+    public ContextMenuService(RegistryKey? classesRoot = null, RegistryKey? localMachine = null,
+                              RegistryKey? currentUser = null)
     {
         _classesRoot = classesRoot ?? Registry.ClassesRoot;
         _localMachine = localMachine ?? Registry.LocalMachine;
+        _currentUser = currentUser ?? Registry.CurrentUser;
     }
 
     /// <summary>
@@ -768,16 +774,17 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// The registry key that controls whether Windows 11 shows the classic
     /// full context menu or the modern compact menu.
     /// </summary>
-    private const string ClassicMenuClsid = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32";
+    private const string ClassicMenuClass = @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}";
+    private const string ClassicMenuClsid = ClassicMenuClass + @"\InprocServer32";
 
     /// <summary>
     /// Checks whether the classic (Win10-style) context menu is currently forced.
     /// </summary>
-    public static bool IsClassicMenuEnabled()
+    public bool IsClassicMenuEnabled()
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(ClassicMenuClsid, writable: false);
+            using var key = _currentUser.OpenSubKey(ClassicMenuClsid, writable: false);
             return key is not null;
         }
         catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
@@ -790,11 +797,11 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// Enables the classic (Win10-style) full context menu by creating the
     /// InprocServer32 key with an empty default value.
     /// </summary>
-    public static bool EnableClassicMenu()
+    public bool EnableClassicMenu()
     {
         try
         {
-            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(ClassicMenuClsid);
+            using var key = _currentUser.CreateSubKey(ClassicMenuClsid);
             key.SetValue("", "", Microsoft.Win32.RegistryValueKind.String);
             Log.Information("Classic context menu enabled via registry");
             return true;
@@ -809,12 +816,11 @@ public sealed partial class ContextMenuService : IContextMenuService
     /// <summary>
     /// Disables the classic context menu, restoring Win11's modern menu.
     /// </summary>
-    public static bool DisableClassicMenu()
+    public bool DisableClassicMenu()
     {
         try
         {
-            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(
-                @"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}", throwOnMissingSubKey: false);
+            _currentUser.DeleteSubKeyTree(ClassicMenuClass, throwOnMissingSubKey: false);
             Log.Information("Classic context menu disabled — restored Win11 modern menu");
             return true;
         }

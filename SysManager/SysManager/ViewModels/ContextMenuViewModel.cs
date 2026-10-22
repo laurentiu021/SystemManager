@@ -67,7 +67,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
     {
         _service = service;
         IsElevated = AdminHelper.IsElevated();
-        IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
+        IsClassicMenuEnabled = _service.IsClassicMenuEnabled();
         ActivePresetId = IsClassicMenuEnabled ? "win10" : "win11";
         PresetDescription = IsClassicMenuEnabled
             ? ContextMenuPreset.All["win10"].Description
@@ -134,7 +134,7 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                                       .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
                 _allEntries.Add(item);
 
-            IsClassicMenuEnabled = ContextMenuService.IsClassicMenuEnabled();
+            IsClassicMenuEnabled = _service.IsClassicMenuEnabled();
             ApplyFilter();
             StatusMessage = $"Found {_allEntries.Count} context menu entries.";
             ToastService.Instance.Show("Right-Click Menu scan complete", $"Found {_allEntries.Count} entries");
@@ -250,14 +250,15 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
             // Registry writes + the Explorer restart are synchronous and can take a moment
             // (Explorer restart especially) — run them off the UI thread so the window
             // stays responsive. No UI state is touched inside the Task.Run body.
-            var (disabled, enabled) = await Task.Run(() =>
+            var (styleSet, disabled, enabled) = await Task.Run(() =>
             {
-                if (needsRestart)
+                // The style first, and nothing else when Windows refuses it. Its result was dropped, so a refused
+                // write still restarted Explorer, closing every File Explorer window, and the tab said the preset
+                // was applied with the style unchanged (#2804).
+                if (needsRestart
+                    && !(preset.ForcesClassicMenu ? _service.EnableClassicMenu() : _service.DisableClassicMenu()))
                 {
-                    if (preset.ForcesClassicMenu)
-                        ContextMenuService.EnableClassicMenu();
-                    else
-                        ContextMenuService.DisableClassicMenu();
+                    return (false, 0, 0);
                 }
 
                 // Disable all third-party entries to restore clean default
@@ -279,8 +280,15 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                 if (needsRestart)
                     ExplorerShell.Restart();
 
-                return (dis, en);
+                return (true, dis, en);
             });
+
+            if (!styleSet)
+            {
+                StatusMessage = DescribeStyleRefused(preset);
+                Log.Warning("Context menu preset {Preset} not applied: the menu style write was refused", preset.Name);
+                return;
+            }
 
             IsClassicMenuEnabled = preset.ForcesClassicMenu;
             ActivePresetId = presetId;
@@ -300,6 +308,11 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
         }
         finally { IsBusy = false; IsProgressIndeterminate = false; }
     }
+
+    /// <summary>What a preset says when Windows would not let SysManager switch the menu style.</summary>
+    internal static string DescribeStyleRefused(ContextMenuPreset preset) =>
+        $"\"{preset.Name}\" was not applied: Windows would not let SysManager switch the menu style, so nothing was "
+        + "changed and Explorer was not restarted.";
 
     [RelayCommand(CanExecute = nameof(NotBusy))]
     private Task RefreshAsync() => ScanAsync();

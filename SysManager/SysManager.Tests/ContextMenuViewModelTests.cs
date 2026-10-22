@@ -292,4 +292,65 @@ public class ContextMenuViewModelTests
         Assert.False(vm.HasEntries);
         Assert.False(vm.HasNoResults);
     }
+
+    // ── A preset whose menu style Windows refuses changes nothing (#2804) ────────────────────────────
+    // Over a substitute, so no shell key is written and Explorer is never restarted: the refusal returns before the
+    // restart, and the other preset needs none.
+
+    /// <summary>A view model listing one third-party entry that is on, with the menu style it reports.</summary>
+    private static ContextMenuViewModel WithThirdPartyEntry(bool classicMenu, out IContextMenuService service)
+    {
+        service = Substitute.For<IContextMenuService>();
+        service.ScanEntries().Returns([NewEntry(enabled: true)]);
+        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        service.IsClassicMenuEnabled().Returns(classicMenu);
+
+        var vm = new ContextMenuViewModel(service);
+        vm.InitializationComplete.GetAwaiter().GetResult();
+        return vm;
+    }
+
+    [Fact]
+    public void TheMenuStyle_IsTheOneTheServiceReads()
+    {
+        var vm = WithThirdPartyEntry(classicMenu: true, out _);
+
+        Assert.True(vm.IsClassicMenuEnabled);
+        Assert.Equal("win10", vm.ActivePresetId);
+    }
+
+    [Fact]
+    public async Task APreset_WhoseMenuStyleWindowsRefuses_ChangesNothing_AndRestartsNothing()
+    {
+        // The write's result was dropped: Explorer restarted, closing every File Explorer window, and the tab said
+        // the preset was applied with the style unchanged.
+        var vm = WithThirdPartyEntry(classicMenu: false, out var service);
+        service.EnableClassicMenu().Returns(false);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyPresetCommand.ExecuteAsync("win10");
+
+        Assert.Equal(ContextMenuViewModel.DescribeStyleRefused(ContextMenuPreset.All["win10"]), vm.StatusMessage);
+        Assert.False(vm.IsClassicMenuEnabled);
+        Assert.Equal("win11", vm.ActivePresetId);
+        service.Received(1).EnableClassicMenu();
+        service.DidNotReceive().DisableEntry(Arg.Any<ContextMenuEntry>());
+        service.DidNotReceive().EnableEntry(Arg.Any<ContextMenuEntry>());
+    }
+
+    [Fact]
+    public async Task APreset_ThatKeepsTheMenuStyle_WritesNoStyle_AndStillTurnsTheEntriesOff()
+    {
+        var vm = WithThirdPartyEntry(classicMenu: false, out var service);
+        using var dialog = new DialogAnswer(confirm: true);
+
+        await vm.ApplyPresetCommand.ExecuteAsync("win11");
+
+        service.DidNotReceive().EnableClassicMenu();
+        service.DidNotReceive().DisableClassicMenu();
+        service.Received(1).DisableEntry(Arg.Any<ContextMenuEntry>());
+        Assert.StartsWith("\"" + ContextMenuPreset.All["win11"].Name + "\" applied", vm.StatusMessage,
+            StringComparison.Ordinal);
+    }
 }

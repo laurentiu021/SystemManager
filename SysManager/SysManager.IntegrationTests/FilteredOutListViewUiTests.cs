@@ -66,6 +66,12 @@ public sealed class FilteredOutListViewUiTests
         public bool DisableEntry(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
 
         public bool EnableEntry(ContextMenuEntry entry) => throw new NotSupportedException("nothing here changes");
+
+        public bool IsClassicMenuEnabled() => false;
+
+        public bool EnableClassicMenu() => throw new NotSupportedException("nothing here changes");
+
+        public bool DisableClassicMenu() => throw new NotSupportedException("nothing here changes");
     }
 
     /// <summary>The Uninstaller's leftovers, never reached: no app is removed here.</summary>

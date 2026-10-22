@@ -10,6 +10,18 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.77] - 2026-10-22
+
+**Closing SysManager no longer ends, now and then, in a crash that the next start reports.**
+
+### Fixed
+
+- **Closing SysManager just after a tab's system check could end in a crash.** About 20 seconds after a tab last
+  ran a check, SysManager closes the background Windows PowerShell it kept for it, and closing the app at that
+  moment let the close step reach something the exit had already discarded. The exit ended in an error, and the
+  next start said SysManager had closed unexpectedly. A check still running as SysManager closed also ended in an
+  error rather than with its own result, and the PowerShell it had started could be left behind. Since 1.78.7.
+
 ## [1.130.76] - 2026-10-22
 
 **An empty entry in a saved history or preset file no longer breaks the tab that reads it: the entry is skipped and

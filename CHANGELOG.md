@@ -10,6 +10,20 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.80] - 2026-10-23
+
+**Restarting Windows Explorer from SysManager, run as administrator, no longer restarts the desktop of other people
+signed in to the same PC.**
+
+### Fixed
+
+- **Restarting Explorer as administrator also ended every other signed-in account's Explorer.** "Restart Windows
+  Explorer" and "Rebuild icon & thumbnail cache" on System Fixes, and the restart after a change on Right-click
+  Menu, ended every process named Explorer on the PC, and run as administrator SysManager can end another
+  account's too. Someone still signed in through Switch user or Remote Desktop lost their open File Explorer
+  windows, and a copy or move it was running stopped part-way. Only the Explorer in your own session is restarted
+  now. Since 1.16.0.
+
 ## [1.130.79] - 2026-10-22
 
 **Opening SysManager again while it runs in the notification area no longer switches the Windows theme back to the

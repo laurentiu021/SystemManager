@@ -8,14 +8,15 @@ using SysManager.Helpers;
 namespace SysManager.Tests;
 
 /// <summary>
-/// Tests for the half of <see cref="ExplorerShell"/> that can be tested: the cache sweep, against a
-/// temp folder.
+/// Tests for the parts of <see cref="ExplorerShell"/> that can be tested: the cache sweep, against a
+/// temp folder, and which Explorer processes a stop ends, against stand-in processes.
 /// </summary>
 /// <remarks>
-/// <see cref="ExplorerShell.Stop"/>/<see cref="ExplorerShell.Start"/> are deliberately NOT exercised —
-/// they end and relaunch the real desktop, which no test may do. Splitting the sweep out behind a
-/// directory parameter is what makes the part with actual logic (which patterns, what is counted,
-/// what happens to a locked file) provable without touching the shell.
+/// <see cref="ExplorerShell.Stop()"/>/<see cref="ExplorerShell.Start"/> themselves are deliberately NOT
+/// exercised — they end and relaunch the real desktop, which no test may do. Splitting the sweep out behind a
+/// directory parameter, and the stop behind a list of processes and a session, is what makes the parts with
+/// actual logic (which patterns, what is counted, what happens to a locked file, which shells are ended)
+/// provable without touching the shell.
 /// </remarks>
 public class ExplorerShellTests : IDisposable
 {
@@ -165,5 +166,84 @@ public class ExplorerShellTests : IDisposable
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             dir,
             StringComparison.Ordinal);
+    }
+
+    /// <summary>A stand-in Explorer: records what was done to it, and can refuse a step.</summary>
+    private sealed class FakeShell(int id, int session) : ExplorerShell.IShellProcess
+    {
+        public Exception? SessionFails { get; init; }
+        public Exception? KillFails { get; init; }
+        public bool Killed { get; private set; }
+        public bool Disposed { get; private set; }
+
+        public int Id => id;
+        public int SessionId => SessionFails is { } failure ? throw failure : session;
+
+        public void Kill()
+        {
+            if (KillFails is { } failure) throw failure;
+            Killed = true;
+        }
+
+        public bool WaitForExit(int milliseconds) => true;
+        public void Dispose() => Disposed = true;
+    }
+
+    /// <summary>
+    /// A stop ends the Explorer in SysManager's own session and leaves another account's alone (#2821).
+    /// </summary>
+    /// <remarks>
+    /// Run as administrator, SysManager can end another session's processes, so the old loop over every process
+    /// named explorer ended the shell of every account signed in to the PC. Every process is disposed either way.
+    /// </remarks>
+    [Fact]
+    public void Stop_EndsTheExplorerInItsOwnSession_AndLeavesAnotherAccountsAlone()
+    {
+        var own = new FakeShell(100, session: 2);
+        var other = new FakeShell(200, session: 3);
+        var console = new FakeShell(300, session: 1);
+
+        ExplorerShell.Stop([own, other, console], ownSession: 2);
+
+        Assert.True(own.Killed);
+        Assert.False(other.Killed);
+        Assert.False(console.Killed);
+        Assert.All(new[] { own, other, console }, shell => Assert.True(shell.Disposed));
+    }
+
+    /// <summary>An Explorer whose session cannot be read is left running, and the loop goes on.</summary>
+    [Fact]
+    public void Stop_LeavesAnExplorerWhoseSessionCannotBeRead_AndGoesOn()
+    {
+        var unreadable = new FakeShell(100, session: 2)
+        {
+            SessionFails = new System.ComponentModel.Win32Exception(5, "Access is denied."),
+        };
+        var exited = new FakeShell(200, session: 2) { SessionFails = new InvalidOperationException("exited") };
+        var own = new FakeShell(300, session: 2);
+
+        ExplorerShell.Stop([unreadable, exited, own], ownSession: 2);
+
+        Assert.False(unreadable.Killed);
+        Assert.False(exited.Killed);
+        Assert.True(own.Killed);
+        Assert.All(new[] { unreadable, exited, own }, shell => Assert.True(shell.Disposed));
+    }
+
+    /// <summary>One Explorer that will not end does not keep the next one in the session running.</summary>
+    [Fact]
+    public void Stop_GoesOnPastAnExplorerThatWillNotEnd()
+    {
+        var refuses = new FakeShell(100, session: 2)
+        {
+            KillFails = new System.ComponentModel.Win32Exception(5, "Access is denied."),
+        };
+        var gone = new FakeShell(200, session: 2) { KillFails = new InvalidOperationException("exited") };
+        var own = new FakeShell(300, session: 2);
+
+        ExplorerShell.Stop([refuses, gone, own], ownSession: 2);
+
+        Assert.True(own.Killed);
+        Assert.All(new[] { refuses, gone, own }, shell => Assert.True(shell.Disposed));
     }
 }

@@ -17,7 +17,7 @@ namespace SysManager.Helpers;
 /// "my taskbar is frozen" and "my desktop disappeared" are what a user actually reports. Routing both
 /// through one helper keeps the kill loop from drifting between copies, the same reason
 /// <see cref="RecycleBinHelper"/> exists.
-/// <para><see cref="Stop"/> and <see cref="Start"/> are separate from <see cref="Restart"/> because
+/// <para><see cref="Stop()"/> and <see cref="Start"/> are separate from <see cref="Restart"/> because
 /// rebuilding the icon cache has to happen BETWEEN them: Explorer holds those .db files open, so a
 /// delete attempted while it runs fails on exactly the files that are caching the wrong icons.</para>
 /// </remarks>
@@ -40,29 +40,91 @@ public static class ExplorerShell
         "Microsoft", "Windows", "Explorer");
 
     /// <summary>
-    /// Ends every Explorer instance. Each process is killed individually so one unkillable instance
-    /// (a higher-integrity or other-session explorer) cannot abort the loop and leave the user
+    /// Ends the Explorer in SysManager's own session. Each process is killed individually so one
+    /// unkillable instance (a higher-integrity explorer) cannot abort the loop and leave the user
     /// without a shell.
     /// </summary>
+    /// <remarks>
+    /// <see cref="Process.GetProcessesByName(string)"/> lists every session's processes, and run as
+    /// administrator SysManager can end them: .NET turns on the debug privilege an administrator's token
+    /// holds the first time a process API is used. So a restart ended the Explorer of every other account
+    /// signed in to the PC, closing its windows and stopping any copy it was running, while
+    /// <see cref="Start"/> brings back only this session's (#2821). Filtered by session, not by owner: a
+    /// standard user who elevates with an administrator's password runs SysManager as that administrator
+    /// inside their own session, beside their own Explorer.
+    /// </remarks>
     public static void Stop()
     {
-        foreach (var proc in Process.GetProcessesByName("explorer"))
+        using var self = Process.GetCurrentProcess();
+        Stop(Process.GetProcessesByName("explorer").Select(p => (IShellProcess)new ShellProcess(p)), self.SessionId);
+    }
+
+    /// <summary>
+    /// Ends the processes in <paramref name="ownSession"/> and leaves the others running, disposing all of them.
+    /// </summary>
+    /// <remarks>A seam, so a test can pin which processes are ended without ending a real shell.</remarks>
+    internal static void Stop(IEnumerable<IShellProcess> processes, int ownSession)
+    {
+        foreach (var proc in processes)
         {
-            try
+            using (proc)
             {
-                proc.Kill();
-                proc.WaitForExit(3000);
-            }
-            catch (InvalidOperationException) { /* it had already exited */ }
-            catch (System.ComponentModel.Win32Exception ex)
-            {
-                Log.Debug("Could not kill explorer PID {Pid}: {Error}", proc.Id, ex.Message);
-            }
-            finally
-            {
-                proc.Dispose();
+                int session;
+                try
+                {
+                    session = proc.SessionId;
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    Log.Debug("Left explorer PID {Pid} running: its session could not be read ({Error})", proc.Id,
+                        ex.Message);
+                    continue;
+                }
+
+                if (session != ownSession)
+                {
+                    Log.Debug("Left explorer PID {Pid} running: it belongs to session {Session}", proc.Id, session);
+                    continue;
+                }
+
+                try
+                {
+                    proc.Kill();
+                    proc.WaitForExit(3000);
+                }
+                catch (InvalidOperationException) { /* it had already exited */ }
+                catch (System.ComponentModel.Win32Exception ex)
+                {
+                    Log.Debug("Could not kill explorer PID {Pid}: {Error}", proc.Id, ex.Message);
+                }
             }
         }
+    }
+
+    /// <summary>One Explorer process, as <see cref="Stop()"/> sees it.</summary>
+    internal interface IShellProcess : IDisposable
+    {
+        /// <summary>The process id, for the log.</summary>
+        int Id { get; }
+
+        /// <summary>The Windows session the process runs in; throws when it cannot be read.</summary>
+        int SessionId { get; }
+
+        /// <summary>Ends the process.</summary>
+        void Kill();
+
+        /// <summary>Waits up to <paramref name="milliseconds"/> for the process to end.</summary>
+        bool WaitForExit(int milliseconds);
+    }
+
+    /// <summary>A real process behind <see cref="IShellProcess"/>.</summary>
+    private sealed class ShellProcess(Process process) : IShellProcess
+    {
+        public int Id => process.Id;
+        public int SessionId => process.SessionId;
+        public void Kill() => process.Kill();
+        public bool WaitForExit(int milliseconds) => process.WaitForExit(milliseconds);
+        public void Dispose() => process.Dispose();
     }
 
     /// <summary>Relaunches Explorer. Safe to call when one is already running — Windows reuses it.</summary>
@@ -79,7 +141,7 @@ public static class ExplorerShell
         }
     }
 
-    /// <summary>Stops every Explorer instance and brings one back.</summary>
+    /// <summary>Stops the Explorer in SysManager's own session and brings one back.</summary>
     public static void Restart()
     {
         Stop();

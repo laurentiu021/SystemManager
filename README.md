@@ -696,8 +696,9 @@ need administrator rights:
 to try when the taskbar, the Start menu or the icons misbehave. Both close any open File
 Explorer windows; the taskbar and desktop come back on their own within a few seconds:
 - **Restart Windows Explorer** — for a taskbar that has stopped responding, a Start
-  menu that will not open, or a desktop with no icons. Every Explorer instance is
-  ended individually, so one unkillable process cannot leave you without a shell
+  menu that will not open, or a desktop with no icons. Each Explorer in your own
+  session is ended individually, so one unkillable process cannot leave you without a
+  shell, and the desktop of anyone else signed in to the PC is left alone
 - **Rebuild icon & thumbnail cache** — for icons or previews that come up blank,
   wrong, or as a plain white page. Explorer is stopped first, because it holds those
   cache files open — a delete with the shell running clears only the files that are

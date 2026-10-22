@@ -630,7 +630,8 @@ Edit Windows environment variables without the cramped built-in dialog:
   otherwise, and protection then keeps some disk space for restore points. The confirmation
   says so here and on Performance Mode, and on the tabs that try a point before their first
   change of a session: Windows Features, Gaming Profile, Privacy & Telemetry,
-  Preinstalled Apps, Edge/OneDrive Remover and Defender Tweaks. Those say it only while that
+  Preinstalled Apps, Edge/OneDrive Remover, Defender Tweaks and Network Repair's two resets.
+  Those say it only while that
   attempt is still to come and SysManager is running as administrator, since otherwise
   nothing is changed
 - **A Cancel says what Windows did.** Cancelling stops SysManager waiting, not a
@@ -1503,6 +1504,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   standing on screen permanently
 - Each of the three is confirmed before it runs, and the buttons disable while a repair is
   in flight so two resets cannot overlap
+- **A restore point before the first reset.** Like the other tabs that change Windows, the
+  Winsock and TCP/IP resets try to create the session's System Restore point before they run,
+  and the TCP/IP confirmation says that a fixed IP address, routes and adapter settings you set
+  yourself are removed
 
 ### DNS & Hosts
 - **DNS Preset Switching** — one-click DNS change: plain resolvers (Google,

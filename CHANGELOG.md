@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.70] - 2026-10-22
+
+**Network Repair's Winsock and TCP/IP resets now try a restore point first, as every other change to Windows
+does.**
+
+### Fixed
+
+- **The two network resets were the only changes to Windows that took no restore point.** Every other tab that
+  changes Windows tries the session's System Restore point before its first change, and says so in its
+  confirmation. Reset TCP/IP removes a fixed IP address and routes you added, with no way back in SysManager, and
+  its confirmation said only that the settings go back to their defaults. Both resets now try the restore point
+  before they run and say so, and the TCP/IP confirmation says what it removes. Since 1.68.0.
+
 ## [1.130.69] - 2026-10-22
 
 **A cancelled restore point no longer leaves the rest of the session without one, and a System Restore that stops

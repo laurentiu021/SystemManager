@@ -35,7 +35,8 @@ public enum OperationCategory
     /// System modification: the repairs that service the running Windows image (SFC, DISM, the component-store
     /// cleanup), Windows feature changes, Windows Update installs and resets, creating or restoring a restore point,
     /// and the tabs that change Windows settings or services: Performance Mode, Gaming Profile, Environment Variables,
-    /// Preinstalled Apps, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services.
+    /// Preinstalled Apps, Privacy &amp; Telemetry, Defender Tweaks, Edge/OneDrive Remover and Services. Network
+    /// Repair's Winsock and TCP/IP resets take it beside their Network one, with the restore point before them.
     /// Deep Cleanup takes it too while it deletes one of its Windows Update caches.
     /// </summary>
     /// <remarks>

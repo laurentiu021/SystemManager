@@ -169,7 +169,7 @@ jobs:
             exit 1
           fi
 
-          echo "All ${COUNT} releases outside the withdrawn ones carry their executable and checksum."
+          echo "Read ${COUNT} releases: each one not withdrawn carries its executable, and its checksum after the first four."
 
       - name: The newest CHANGELOG version has a release
         if: steps.busy.outputs.skip != 'true'

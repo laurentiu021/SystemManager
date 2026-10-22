@@ -302,7 +302,9 @@ to scroll.
 - `SpeedTrendChart` — one engine's history as a chart: download, upload and a dashed usual-download line, plus
   the sentence `SpeedTrendAnalyzer` writes. Builds its SkiaSharp paints once, repaints them through
   `ChartTheme` on a theme change, and releases them and the theme subscription in `Dispose`.
-- `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset.
+- `NetworkRepairViewModel` — DNS flush, Winsock reset, TCP/IP reset. The two resets take the session restore point
+  (`ISessionRestorePoint`) before netsh runs, holding the `SystemModification` lock beside the `Network` one, and
+  their confirmations carry its notice; the TCP/IP one says what the reset removes (#2843).
 - `NetworkSharedState` — shared targets, buffers, pinger, tracer and health verdict for the Ping, Traceroute,
   Speed Test and Network Repair view-models. `ApplyRoute` lists and charts a traced host that is not a Ping target
   beside the targets, one such host at a time, and routes compare hosts in any letter case (#2870).
@@ -1267,7 +1269,7 @@ Key services:
   system-modification lock waits on a System Restore that stopped answering (#2843).
   `ListPatience` is how long a caller waits for the list.
 - `SessionRestorePoint` — the single owner of the AUTOMATIC restore point (`ISessionRestorePoint`).
-  Each of the six consumers listed below calls `EnsureAsync` before its first mutation; the first
+  Each of the seven consumers listed below calls `EnsureAsync` before its first mutation; the first
   call wins and the rest are no-ops, so a session takes at most one point no matter how many of them
   the user visits — Windows grants roughly one per 24 hours, so two independent attempts meant the
   second reported "no snapshot" while a good one existed. A cancel by the caller gives the attempt
@@ -1275,7 +1277,8 @@ Key services:
   a delegate rather than the sealed service, which keeps it substitutable without unsealing
   production code. Returns true only when THIS call created a point, so no caller can claim one that
   Windows refused. Consumed by `GamingProfileService`, `EdgeOneDriveViewModel`,
-  `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel` and `WindowsFeaturesViewModel`. The
+  `DebloaterViewModel`, `PrivacyViewModel`, `DefenderViewModel`, `WindowsFeaturesViewModel` and
+  `NetworkRepairViewModel`. The
   tabs outside that list take none: Undo Changes only looks for the newest point
   (`UndoChangesService.LookForRestorePointAsync`), and Performance Mode and Restore Points create one
   only when asked, through `RestorePointService.CreateAsync`.

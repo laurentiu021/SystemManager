@@ -76,28 +76,50 @@ internal static class UpdateApplier
     /// double quote, so a quote here means tampering/injection — reject rather
     /// than emit an argument string that could be mis-parsed.
     /// </summary>
-    public static string BuildArguments(string targetExe, int pid)
+    /// <param name="verifiedHash">
+    /// The SHA-256 the caller checked the file against, which the applier checks again on its own open
+    /// handle before installing anything. Install passes the published <c>.sha256</c>; rollback passes the
+    /// sidecar written when the copy was made (#2832).
+    /// </param>
+    public static string BuildArguments(string targetExe, int pid, string verifiedHash)
     {
         if (targetExe.Contains('"'))
             throw new InvalidOperationException("Update target path contains an invalid character.");
-        return $"{ApplyUpdateArg} \"{targetExe}\" {pid}";
+        if (!IsSha256(verifiedHash))
+            throw new InvalidOperationException("Update hash is not a SHA-256 value.");
+        return $"{ApplyUpdateArg} \"{targetExe}\" {pid} {verifiedHash}";
     }
+
+    /// <summary>Exactly 64 hexadecimal digits, which is the only shape a SHA-256 argument may take.</summary>
+    /// <remarks>
+    /// Checked on the way out AND on the way in: the applier's arguments arrive from <c>argv</c>, so whatever
+    /// this app emits says nothing about what the next process is handed.
+    /// </remarks>
+    internal static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
 
     /// <summary>
     /// Recognises applier mode from a process's command-line arguments. Returns
-    /// true and the parsed target/pid when <paramref name="args"/> begins with
-    /// <see cref="ApplyUpdateArg"/> followed by a target path and a numeric pid.
+    /// true and the parsed target/pid/hash when <paramref name="args"/> begins with
+    /// <see cref="ApplyUpdateArg"/> followed by a target path, a numeric pid and a SHA-256.
     /// The OS has already removed the surrounding quotes from the path argument.
     /// </summary>
-    public static bool TryParseArgs(string[] args, out string targetExe, out int pid)
+    /// <remarks>
+    /// The hash is required, not optional: a command line without one is not from this app, and accepting it
+    /// would be an install with nothing to check the bytes against — which is the whole of #2832.
+    /// </remarks>
+    public static bool TryParseArgs(string[] args, out string targetExe, out int pid, out string expectedHash)
     {
         targetExe = string.Empty;
+        expectedHash = string.Empty;
         pid = 0;
-        if (args is null || args.Length < 3) return false;
+        if (args is null || args.Length < 4) return false;
         if (!string.Equals(args[0], ApplyUpdateArg, StringComparison.OrdinalIgnoreCase)) return false;
         if (string.IsNullOrWhiteSpace(args[1])) return false;
         if (!int.TryParse(args[2], out pid) || pid <= 0) return false;
+        if (!IsSha256(args[3])) return false;
         targetExe = args[1];
+        expectedHash = args[3];
         return true;
     }
 
@@ -258,13 +280,16 @@ internal static class UpdateApplier
     }
 
     /// <summary>
-    /// Stages <paramref name="sourceExe"/> over <paramref name="targetExe"/> via
-    /// a sibling <c>.new</c> temp file and an atomic move, retrying briefly while
-    /// the target is still locked (the old process or an AV scanner may hold it
-    /// for a moment after exit). The move is the only step that touches the live
-    /// target path, so a failure mid-copy leaves the existing executable intact.
-    /// Returns true on success.
+    /// Opens <paramref name="sourceExe"/> deny-write and stages it over <paramref name="targetExe"/>, for tests
+    /// of the staging, the retry and the retention — the parts that do not care where the bytes came from.
     /// </summary>
+    /// <remarks>
+    /// NOT for the applier itself, which passes the handle it verified: reading the file by name again is the
+    /// defect this sits beside, not a shortcut for it (#2832). Its own name rather than an overload of
+    /// <c>ApplyCopy</c>, so the guards that slice that method by its declaration cannot land on the wrong one —
+    /// one of them did, and reported the retry loop missing. Pinned by
+    /// <c>ArchitectureTests.TheApplier_InstallsTheBytesItVerified</c>.
+    /// </remarks>
     /// <param name="updatesDir">
     /// Where the retained previous generation is written; null resolves the real profile. This
     /// parameter exists because omitting it is not a harmless default in a test: the retained copy
@@ -272,18 +297,40 @@ internal static class UpdateApplier
     /// rollback build with a temp fixture. Redirecting <paramref name="targetExe"/> alone is not
     /// enough — see the ratchet note in ArchitectureTests and issue #1772.
     /// </param>
-    internal static bool ApplyCopy(
+    internal static bool ApplyCopyFromPath(
         string sourceExe, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null)
     {
-        // A missing source is non-recoverable — without this guard File.Copy throws
-        // FileNotFoundException (an IOException subtype), which the retry block below
-        // would misread as a transient lock and burn the full backoff before failing.
+        // A missing source is non-recoverable, and it is worth its own message: without this the open below
+        // throws FileNotFoundException, which the retry block would misread as a transient lock.
         if (!File.Exists(sourceExe))
         {
             Log.Error("Update apply: source executable not found at {Source}", LogService.SanitizePath(sourceExe));
             return false;
         }
 
+        using var source = new FileStream(sourceExe, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return ApplyCopy(source, targetExe, maxAttempts, delayMs, updatesDir);
+    }
+
+    /// <summary>
+    /// Stages the bytes of <paramref name="source"/> over <paramref name="targetExe"/> via
+    /// a sibling <c>.new</c> temp file and an atomic move, retrying briefly while
+    /// the target is still locked (the old process or an AV scanner may hold it
+    /// for a moment after exit). The move is the only step that touches the live
+    /// target path, so a failure mid-copy leaves the existing executable intact.
+    /// Returns true on success.
+    /// </summary>
+    /// <param name="source">
+    /// The open handle the bytes come from, rewound before the copy. The applier passes the one it hashed, so
+    /// what is installed is what was checked (#2832).
+    /// </param>
+    /// <param name="updatesDir">
+    /// Where the retained previous generation is written; null resolves the real profile — see the overload
+    /// above for why a test must redirect it.
+    /// </param>
+    internal static bool ApplyCopy(
+        Stream source, string targetExe, int maxAttempts = 10, int delayMs = 500, string? updatesDir = null)
+    {
         var staging = targetExe + ".new";
 
         // STAGED ONCE, outside the retry loop. Only the move can be blocked by the lock the retries exist
@@ -293,7 +340,12 @@ internal static class UpdateApplier
         // on (#2377).
         try
         {
-            File.Copy(sourceExe, staging, overwrite: true);
+            // From the open, already-hashed handle rather than by name. The two used to be separate reads of a
+            // file in a folder the user can write to: the hash was taken from one and the bytes installed came
+            // from the other, so nothing tied what was installed to what was checked (#2832).
+            source.Position = 0;
+            using (var stagingFile = new FileStream(staging, FileMode.Create, FileAccess.Write, FileShare.None))
+                source.CopyTo(stagingFile);
 
             // Keep the outgoing build BEFORE the move destroys it. The move is what makes an
             // interrupted copy safe, but it also means a SUCCESSFUL update into a broken build
@@ -469,11 +521,16 @@ internal static class UpdateApplier
     /// refusal, not a skip — the same decision <c>UpdateService</c> makes for a missing published
     /// <c>.sha256</c>.</para>
     /// </remarks>
+    /// <param name="verifiedHash">
+    /// The checksum the retained build was proved against, which the caller passes on to the applier so it can
+    /// check the same bytes through a handle of its own (#2832).
+    /// </param>
     internal static bool TryOpenVerifiedPreviousBuild(
-        string? updatesDir, out FileStream? verifiedStream, out string reason)
+        string? updatesDir, out FileStream? verifiedStream, out string reason, out string verifiedHash)
     {
         verifiedStream = null;
         reason = "";
+        verifiedHash = "";
 
         var previous = PreviousBuildPath(updatesDir);
         var hashFile = PreviousBuildHashPath(updatesDir);
@@ -501,7 +558,7 @@ internal static class UpdateApplier
             }
 
             var expected = File.ReadAllText(hashFile).Trim();
-            if (expected.Length != 64)
+            if (!IsSha256(expected))
             {
                 reason = "the recorded checksum for the saved version is not readable";
                 return false;
@@ -518,6 +575,7 @@ internal static class UpdateApplier
             }
 
             verifiedStream = stream;
+            verifiedHash = expected;
             return true;
         }
         catch (IOException ex)
@@ -546,7 +604,11 @@ internal static class UpdateApplier
     /// launch the updated app. If the swap fails the original executable is left
     /// untouched and relaunched, so a failed update can never brick the install.
     /// </summary>
-    public static void Run(string targetExe, int oldPid)
+    /// <param name="expectedHash">
+    /// The SHA-256 the launching app checked this executable against. Checked again here, on a handle this
+    /// process opens and keeps, and the bytes installed are read from that same handle (#2832).
+    /// </param>
+    public static void Run(string targetExe, int oldPid, string expectedHash)
     {
         // SEC: the gate sits here rather than in TryParseArgs so it cannot be bypassed by a future
         // second caller — Run is the only thing that writes, so Run is what must refuse.
@@ -566,10 +628,51 @@ internal static class UpdateApplier
             return;
         }
 
+        // SEC: opened deny-write and held for the rest of the run, hashed through that handle, and the install
+        // below reads the bytes from it. Before this, the launching app verified a hash and closed its handle,
+        // and the applier then read the file by NAME out of a user-writable folder — two separate reads, with
+        // whatever the name meant at the second one being installed and started elevated (#2832).
+        FileStream verified;
+        try
+        {
+            verified = new FileStream(sourceExe, FileMode.Open, FileAccess.Read, FileShare.Read);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error(ex, "Update apply: could not open this build to verify it");
+            return;
+        }
+
+        using (verified)
+        {
+            if (!IsSha256(expectedHash))
+            {
+                Log.Error("Update apply: refusing to install — no usable checksum was passed for this build");
+                return;
+            }
+
+            var actual = Convert.ToHexString(SHA256.HashData(verified));
+            if (!actual.Equals(expectedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Error(
+                    "Update apply: refusing to install — this build does not match the checksum it was "
+                    + "launched with (expected {Expected}, got {Actual})", expectedHash, actual);
+                return;
+            }
+
+            SwapAndRelaunch(verified, targetExe, oldPid);
+        }
+    }
+
+    /// <summary>
+    /// The rest of the applier sequence, on an executable already verified through <paramref name="verified"/>.
+    /// </summary>
+    private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid)
+    {
         Log.Information("Update apply: waiting for old process {Pid} to exit", oldPid);
         WaitForProcessExit(oldPid, TimeSpan.FromSeconds(30));
 
-        var applied = ApplyCopy(sourceExe, targetExe);
+        var applied = ApplyCopy(verified, targetExe);
         Log.Information(applied
             ? "Update apply: swapped new build into place, relaunching"
             : "Update apply: copy failed, relaunching existing build unchanged");

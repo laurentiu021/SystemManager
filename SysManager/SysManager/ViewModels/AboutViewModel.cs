@@ -1020,9 +1020,11 @@ public sealed partial class AboutViewModel : ViewModelBase
                     unusable: true);
                 return;
             }
-            if (!verified)
+            if (!verified || expected is null)
             {
                 // The published hash could not be fetched or the file read, which says nothing against the file.
+                // A verified result with no hash to show cannot happen, and if it ever did there would be nothing
+                // to hand the applier, so it is refused the same way rather than installed unchecked (#2832).
                 InstallStopped("Could not check the download against its published hash. Check the internet "
                     + "connection, then press Install again.", unusable: false);
                 return;
@@ -1069,9 +1071,16 @@ public sealed partial class AboutViewModel : ViewModelBase
             // succeeds without releasing our lock. The OS loads the executable image from
             // this same file — and Windows itself holds the image section object open for
             // the lifetime of the new process, so even after we close our handle on
-            // shutdown the binary remains immutable until the applier has fully loaded.
+            // shutdown the image that is RUNNING cannot change.
+            //
+            // What that does NOT cover is the file the applier then installs: this handle is closed in the
+            // finally below, and the applier used to read the path again by name, out of a folder the user can
+            // write to. So the hash goes with the launch and the applier checks the bytes on a handle of its
+            // own before installing them (#2832).
             var pid = Environment.ProcessId;
-            var args = UpdateApplier.BuildArguments(currentExe, pid);
+            // The hash travels with the launch, so the applier can check the bytes it is about to install on a
+            // handle of its own rather than trusting this one, which is closed by the time it reads (#2832).
+            var args = UpdateApplier.BuildArguments(currentExe, pid, expected);
 
             DownloadStatus = "Installing update — SysManager will restart...";
 
@@ -1169,7 +1178,8 @@ public sealed partial class AboutViewModel : ViewModelBase
         // Before the confirmation, deliberately: never ask the user to approve something that is then
         // refused. It also means the deny-write handle is already held while the dialog is open, so the
         // file cannot be swapped during the seconds the prompt sits on screen.
-        if (!UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var verifiedStream, out var why))
+        if (!UpdateApplier.TryOpenVerifiedPreviousBuild(_updatesDir, out var verifiedStream, out var why,
+                                                        out var previousHash))
         {
             RollBackStatus = $"Cannot go back safely — {why}.";
             RefreshRollbackAvailability();
@@ -1188,7 +1198,7 @@ public sealed partial class AboutViewModel : ViewModelBase
                 return;
             }
 
-            var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId);
+            var args = UpdateApplier.BuildArguments(currentExe, Environment.ProcessId, previousHash);
             RollBackStatus = "Going back — SysManager will restart…";
 
             _launch(new ProcessStartInfo

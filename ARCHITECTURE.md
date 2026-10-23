@@ -689,7 +689,9 @@ Key services:
   a download Install refused, with the hash stored beside it, because the cache hands a file back
   whenever it matches that stored hash, which is its own.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the
-  old one and restart, before any DI/UI is built (see the Updates flow below).
+  old one and restart, before any DI/UI is built. It re-checks its own bytes against the
+  SHA256 it was launched with and installs from that handle, so the install is tied to the
+  verification (see the Updates flow below).
 - `StartupService` — enumerate and toggle startup programs across seven kinds of
   location, each a distinct `StartupSource` because the enable/disable state lives
   in a different place per kind: the `Run`/`RunOnce` keys in both hives, the
@@ -2203,11 +2205,24 @@ reads the signer certificate without validating the file against it, so it canno
 detect a tampered signed binary, and the hash comparison runs first.
 
 It then hands off to `UpdateApplier`: the freshly-downloaded exe is relaunched with
-`--apply-update`, which `App.OnStartup` intercepts before any window opens. That
-process waits for the old instance to exit, swaps itself over the old executable
-via a staged atomic move (a sibling `.new` file plus `File.Move`, so an
-interrupted copy can never leave a half-written binary), and relaunches —
-inheriting the original's elevation. No on-disk script is involved.
+`--apply-update`, the target path, the old pid **and the verified SHA256**, which
+`App.OnStartup` intercepts before any window opens. That process opens its own
+deny-write handle on itself, checks those bytes against the checksum it was launched
+with, refuses on a mismatch or a checksum that is not one, waits for the old instance
+to exit, swaps itself over the old executable via a staged atomic move (a sibling
+`.new` file plus `File.Move`, so an interrupted copy can never leave a half-written
+binary) **reading from that same handle**, and relaunches — inheriting the original's
+elevation. No on-disk script is involved.
+
+The hash argument exists because the verifying handle and the installing read used to be
+two separate opens of a file in a user-writable folder: the launching app hashed the
+download and closed its handle, and the applier then read the path again by name, so
+nothing tied what was installed to what was checked (#2832). `BuildArguments` refuses a
+value that is not 64 hex digits and `TryParseArgs` requires one, so a command line
+without a usable checksum is not applier mode at all; `Run` checks again regardless,
+because `Run` is the only thing that writes. `ApplyCopy` has two overloads — the applier
+passes the verified `Stream`, and the path-taking one exists for the tests of staging,
+retry and retention.
 
 Before that move, `PreserveCurrentBuild` copies the outgoing executable to
 `SysManager-previous.exe` in the same updates folder, and writes that copy's SHA256
@@ -2220,8 +2235,9 @@ and would otherwise be deleted by the next download — and retention is best-ef
 the folder cannot be written the update still proceeds. `AboutViewModel.CanRollBack`
 surfaces a "Go back to the previous version" button only when the copy and its hash
 both exist; the rollback opens the copy through `TryOpenVerifiedPreviousBuild`, which
-checks it against that hash and fails closed without one, and then reuses this same
-applier path rather than a second file-copy implementation. `IsValidApplyTarget` guards
+checks it against that hash, fails closed without one, and hands the hash back so the
+launch carries it, and then reuses this same applier path rather than a second file-copy
+implementation. `IsValidApplyTarget` guards
 `--apply-update`'s target, which arrives straight from the command line: it must be an existing
 file carrying SysManager's own product resource, outside the system folders, or nothing is
 replaced.

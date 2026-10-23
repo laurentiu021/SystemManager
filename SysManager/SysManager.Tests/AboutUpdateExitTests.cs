@@ -47,6 +47,12 @@ public sealed class AboutUpdateExitTests : IDisposable
 
     private readonly IUpdateService _updates = Substitute.For<IUpdateService>();
 
+    /// <summary>
+    /// A SHA-256-shaped value, because the install hands the verified hash to the applier and
+    /// <c>UpdateApplier.BuildArguments</c> refuses anything that is not 64 hex digits (#2832). "hash" used to do.
+    /// </summary>
+    private const string VerifiedHash = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+
     /// <summary>A view-model over the substitute update client, with the start and the shutdown recorded.</summary>
     /// <param name="verify">What the hash check answers; it passes unless a test says otherwise.</param>
     /// <param name="launch">What starting the new version does; it records the start unless a test says otherwise.</param>
@@ -55,7 +61,7 @@ public sealed class AboutUpdateExitTests : IDisposable
         _updates.GetLatestAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release));
         _updates.VerifyHashAsync(Release, Arg.Any<Stream>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<(bool, string?, string?)>(verify ?? (true, "hash", "hash")));
+            .Returns(Task.FromResult<(bool, string?, string?)>(verify ?? (true, VerifiedHash, VerifiedHash)));
 
         return new AboutViewModel(_updates, new SystemReportService(new SystemInfoService(), new DiskHealthService(), new BatteryService(), new EventLogService()),
             autoCheck: false, preferences: new UpdateCheckPreferenceService(_dir), updatesDir: _dir,
@@ -104,6 +110,10 @@ public sealed class AboutUpdateExitTests : IDisposable
         var started = Assert.Single(_launched);
         Assert.Equal(vm.DownloadedPath, started.FileName);
         Assert.Equal(1, _shutdowns);
+
+        // The verified hash goes with the launch, because the applier re-checks the bytes it installs against
+        // it on a handle of its own — this one is closed by the time it reads (#2832).
+        Assert.EndsWith(VerifiedHash, started.Arguments, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -231,13 +231,20 @@ What the app can and cannot do by design:
   own self-issued certificate would be accepted like a legitimate build. Note that
   Authenticode inspection reads the signer certificate; it does not by itself
   validate the file against the signature, which is why SHA256 remains the
-  integrity gate rather than a fallback. The swap is then performed
+  integrity gate rather than a fallback. **That checksum travels with the install**: the
+  downloaded build is launched with the verified SHA256 on its command line, and before it
+  writes anything it opens its own deny-write handle on itself, checks the bytes against that
+  value, and installs from that same handle. So what is installed and started is what was
+  checked — the check and the install are no longer two separate reads of a file in a folder
+  your account can write to. A build that does not match, or a launch with no usable checksum,
+  installs nothing. The swap is then performed
   from within the downloaded executable itself (no intermediate script on
   disk) using a staged atomic file move, so an interrupted update cannot
   leave a half-written, unstartable binary. Separately, the build being replaced
   is copied aside first, so an update that *succeeds* into a version that does not
   work is also recoverable: the About tab offers "Go back to the previous version"
-  whenever a retained copy and the checksum recorded with it exist. Exactly one generation is kept, in
+  whenever a retained copy and the checksum recorded with it exist, and that recorded checksum is
+  what the applier checks the retained build against before installing it. Exactly one generation is kept, in
   `%LocalAppData%\SysManager\updates`, and retaining it is best-effort — if it
   cannot be written the update still proceeds rather than failing. You can also
   download manually and verify the binary yourself.

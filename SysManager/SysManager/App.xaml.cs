@@ -151,10 +151,10 @@ public partial class App : Application
         // swap itself over the old executable, do only that and exit — no mutex,
         // no DI, no window. This must run before anything else (and before the
         // single-instance guard, since the old instance may still hold the mutex).
-        if (UpdateApplier.TryParseArgs(e.Args, out var targetExe, out var oldPid))
+        if (UpdateApplier.TryParseArgs(e.Args, out var targetExe, out var oldPid, out var verifiedHash))
         {
             LogService.Init();
-            UpdateApplier.Run(targetExe, oldPid);
+            UpdateApplier.Run(targetExe, oldPid, verifiedHash);
             Shutdown();
             return;
         }

@@ -170,6 +170,8 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
 
         if (success)
         {
+            FollowTheToggledAddOn(entry);
+
             ActivePresetId = "custom";
             PresetDescription = ContextMenuPreset.All["custom"].Description;
             UpdateCounts();
@@ -202,6 +204,28 @@ public sealed partial class ContextMenuViewModel : ViewModelBase
                     ? $"Could not change {entry.Name} — Windows would not accept the change to its blocked add-ons list."
                     : $"Could not toggle {entry.Name} — protected by Windows (owned by TrustedInstaller).";
             }
+        }
+    }
+
+    /// <summary>
+    /// Switches the other rows of the add-on behind <paramref name="toggled"/> to match it, after a toggle that
+    /// took.
+    /// </summary>
+    /// <remarks>
+    /// A handler is blocked by its CLSID, which takes the add-on off every place it is registered, so its other
+    /// rows, such as Folders beside Files, follow the one that was switched (#2822). Only rows with the CLSID of
+    /// the row the user just switched: this is not a preset decision, and cannot reach another add-on.
+    /// </remarks>
+    private void FollowTheToggledAddOn(ContextMenuEntry toggled)
+    {
+        if (toggled.Kind != ContextMenuEntryKind.Handler) return;
+
+        foreach (var row in _allEntries.Where(e => e.Kind == ContextMenuEntryKind.Handler
+                                                   && !ReferenceEquals(e, toggled)
+                                                   && string.Equals(e.Clsid, toggled.Clsid,
+                                                       StringComparison.OrdinalIgnoreCase)))
+        {
+            row.IsEnabled = toggled.IsEnabled;
         }
     }
 

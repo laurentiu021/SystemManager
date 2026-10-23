@@ -12797,6 +12797,9 @@ public partial class ArchitectureTests
     /// <para>Source-shape rather than behavioural because the command's own path is unreachable from a
     /// test — it confirms through <c>DialogService</c> and can restart Explorer. The predicate's clauses
     /// and all of its call sites are checkable without running it.</para>
+    /// <para>One query is not a preset decision and is exempt by name: <c>FollowTheToggledAddOn</c>, which
+    /// switches a toggled handler's other rows to match it (#2822). Its clauses are asserted instead, so it
+    /// stays limited to rows of the add-on the user just switched.</para>
     /// </remarks>
     [Fact]
     public void EveryPresetDecisionOverTheEntryList_IsLimitedToVerbRows()
@@ -12830,8 +12833,25 @@ public partial class ArchitectureTests
             $"Expected at least 2 queries over _allEntries, found {queries.Count} — the regex has stopped "
             + "matching, which would let this pass while inspecting nothing.");
 
+        // The one query that is not a preset decision: after a handler toggle, the other rows of the same add-on
+        // follow it (#2822). Exempt by name, and held to what makes it safe: only handler rows with the CLSID of
+        // the row the user just switched, so it can never become a preset's way to reach other add-ons.
+        var follow = Collapse(MethodBody(source, "FollowTheToggledAddOn"));
+        Assert.False(follow.Length == 0,
+            "ContextMenuViewModel.FollowTheToggledAddOn could not be located, so the exemption below would cover "
+            + "nothing. Re-point it at whatever now updates a toggled add-on's other rows.");
+        foreach (var clause in new[]
+                 {
+                     "e.Kind == ContextMenuEntryKind.Handler",
+                     "string.Equals(e.Clsid, toggled.Clsid, StringComparison.OrdinalIgnoreCase)",
+                 })
+        {
+            Assert.Contains(clause, follow, StringComparison.Ordinal);
+        }
+        Assert.DoesNotContain("IsPreset", follow, StringComparison.Ordinal);
+
         var loose = queries
-            .Where(q => !PresetPredicate().IsMatch(q))
+            .Where(q => !PresetPredicate().IsMatch(q) && !follow.Contains(Collapse(q), StringComparison.Ordinal))
             .ToList();
 
         Assert.True(loose.Count == 0,

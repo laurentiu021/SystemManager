@@ -341,7 +341,9 @@ mechanism; add-ons use Windows' own blocked-extensions list. Neither removes
 anything a program registered, so both are undone by turning the switch back on:
 - **Presets:** Win10 Default (classic full menu), Win11 Default (modern compact), Custom
 - The preset currently applied is marked with a tick, so you can see which style you are on without applying one
-- Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually
+- Selecting a preset resets to clean defaults, disabling third-party entries — re-enable individually.
+  Windows' own entries are left on, including ones Windows labels only through an indirect string
+  from one of its own files, such as File ownership
 - **Classic or modern menu** — Win10 Default switches to the classic full menu and Win11 Default to
   the modern compact one, restarting Explorer when the style changes. There is no separate style
   switch, so changing the style also resets the entries to clean defaults. When Windows will not let
@@ -357,7 +359,10 @@ anything a program registered, so both are undone by turning the switch back on:
   Windows checks before loading a shell add-on, which is the same reversible mechanism Autoruns
   writes. Nothing the program installed is deleted; switching the row back on removes the entry.
   It is a machine-wide setting, so it needs administrator rights, and the row's tooltip says so
-  before you click
+  before you click. An add-on registered for both files and folders has a row for each, and
+  switching one switches the other, because Windows blocks the add-on everywhere at once. An add-on
+  another tool blocked for your account only shows as off, and switching it back on clears that
+  list too, which needs no administrator rights
 - **Restart Explorer button** — Explorer decides which add-ons to load when it starts, so a blocked
   add-on is still in the menu until it restarts. The button does it after confirming, rather than
   leaving you to conclude the switch did nothing
@@ -367,7 +372,9 @@ anything a program registered, so both are undone by turning the switch back on:
   the machine
 - **"Applies to" column** — shows whether the entry affects Files, Folders, Files and folders,
   Desktop, or Directory Background
-- **HKCU fallback** — system-protected entries can be toggled via user-level registry override
+- **HKCU fallback** — system-protected entries can be toggled via user-level registry override,
+  and turning one back on removes that override once it holds nothing else. An entry whose key is
+  gone is reported as such rather than hidden by creating a key for it
 - Before each change, a copy of the affected registry key is saved to
   `%LocalAppData%\SysManager\Backups\ContextMenu`, the three most recent per entry. The switch is
   the undo; the copy is for someone who would rather restore the key by hand

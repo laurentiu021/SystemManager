@@ -74,16 +74,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private CancellationTokenSource? _slowdownCts;
     private CancellationTokenSource? _pollingCts;
 
-    // GPU adapter name and usage availability are effectively static for a session,
-    // but the polling loop runs every 300ms — so initialise the NVIDIA API at most
-    // once and resolve the adapter name only once (via NvAPI, else a single WMI
-    // query), instead of re-initialising and re-querying on every tick.
-    private bool _nvApiInitTried;
-    private bool _nvApiAvailable;
-    // Cached NVIDIA GPU handle, resolved once during init instead of re-enumerating every
-    // 300ms poll — matches the "resolve static hardware once" pattern used for the GPU name.
-    private NvAPIWrapper.GPU.PhysicalGPU? _gpu;
+    // The adapter name of a GPU that is not NVIDIA's is static for a session, so it is resolved by a
+    // single WMI query rather than on every 300 ms tick. NVIDIA's API, its set-up and its handles
+    // belong to the app's one INvidiaGpuReader, which caches the handles for the same reason and
+    // replaces them when a read fails (#2829).
     private bool _gpuNameResolved;
+    private readonly INvidiaGpuReader? _nvidia;
 
     // ── Real-time vitals (300ms polling) ──────────────────────────────────
     [ObservableProperty] private double _cpuPercent;
@@ -235,16 +231,22 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Times the minute after which Recent activity is read again while the tab is shown. Null is the system clock; a
     /// test gives one whose timers fire when it says.
     /// </param>
+    /// <param name="nvidia">
+    /// The app's one reader of NVIDIA's API, which the container always passes (#2829). Null reads no NVIDIA GPU,
+    /// which is what a test without that driver would get anyway, and keeps this class from ever building a reader
+    /// of its own — a second one would set that global API up again, unsynchronised with the app's.
+    /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
         CrashMarkerService crashMarkers, MemoryTestService memTest, INavigationService navigation,
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
         UpdateCheckPreferenceService updateCheck,
         IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null,
-        EventLogService? eventLog = null, TimeProvider? clock = null)
+        EventLogService? eventLog = null, TimeProvider? clock = null, INvidiaGpuReader? nvidia = null)
     {
         _eventLog = eventLog ?? new EventLogService();
         _clock = clock ?? TimeProvider.System;
+        _nvidia = nvidia;
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
@@ -407,61 +409,37 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// <summary>The uptime line under the title.</summary>
     internal static string UptimeText(TimeSpan uptime) => $"Uptime {uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
 
+    /// <summary>
+    /// Shows the first NVIDIA GPU's load, name and memory, or the adapter's name alone when there is no NVIDIA
+    /// reading to show.
+    /// </summary>
+    /// <remarks>
+    /// This used to enumerate the GPU once and keep the handle for the life of the process. NVIDIA invalidates a
+    /// handle when the GPU or the display is reconfigured, for example after a driver reset or a driver update
+    /// installed while Windows runs, after which every 300 ms tick threw, the catch only logged — about 10,000 lines
+    /// an hour — and <see cref="GpuPercent"/> kept the last value it had read while the dot beside it still said
+    /// live (#2829). The reader hands back no reading until it has working handles again, so the number goes to zero
+    /// and the name falls back to the one Windows reports rather than standing still.
+    /// </remarks>
     private void UpdateGpuUsage()
     {
-        // Initialise NvAPI at most once per session. Repeated Initialize() calls on
-        // the 300ms loop are wasted work; once we know it's unavailable (non-NVIDIA),
-        // we never retry and fall through to the one-time WMI name lookup.
-        if (!_nvApiInitTried)
+        var gpus = _nvidia?.ReadUsage() ?? [];
+        if (gpus.Count > 0)
         {
-            _nvApiInitTried = true;
-            try
+            var gpu = gpus[0];
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                NvAPIWrapper.NVIDIA.Initialize();
-                // Resolve the GPU handle ONCE and cache it; each poll then reads live usage and
-                // memory off this handle instead of re-enumerating all physical GPUs every tick.
-                var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-                _gpu = gpus.Length > 0 ? gpus[0] : null;
-                _nvApiAvailable = _gpu is not null;
-            }
-            catch (Exception ex)
-            {
-                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
-                // document: no driver, an old one, a remote session.
-                _nvApiAvailable = false;
-                Log.Debug("NVIDIA GPU API unavailable: {Error}", ex.Message);
-            }
+                GpuPercent = gpu.UsagePercent;
+                GpuName = gpu.Name;
+                GpuVram = string.Create(CultureInfo.InvariantCulture,
+                    $"{gpu.MemoryUsedGB:F1} / {gpu.MemoryTotalGB:F1} GB VRAM");
+            });
+            return;
         }
 
-        if (_nvApiAvailable && _gpu is not null)
-        {
-            try
-            {
-                var usage = _gpu.UsageInformation.GPU.Percentage;
-                var memTotal = _gpu.MemoryInformation.DedicatedVideoMemoryInkB / 1024.0 / 1024.0;
-                var memUsed = (_gpu.MemoryInformation.DedicatedVideoMemoryInkB -
-                               _gpu.MemoryInformation.AvailableDedicatedVideoMemoryInkB) / 1024.0 / 1024.0;
-                var name = _gpu.FullName;
-
-                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-                {
-                    GpuPercent = usage;
-                    GpuName = name;
-                    GpuVram = string.Create(CultureInfo.InvariantCulture, $"{memUsed:F1} / {memTotal:F1} GB VRAM");
-                });
-                return;
-            }
-            catch (Exception ex)
-            {
-                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
-                // document: no driver, an old one, a remote session.
-                Log.Debug("NVIDIA GPU polling error: {Error}", ex.Message);
-            }
-        }
-
-        // No NVIDIA GPU (NvAPI only covers NVIDIA). The adapter name is static, so
-        // resolve it via WMI exactly once — live usage % is NVIDIA-only because it
-        // requires vendor-specific APIs.
+        // Nothing from NVIDIA: either this is an AMD or Intel adapter, or NVIDIA's handles are being replaced. The
+        // load stays unreadable — it needs a vendor API — and the name is static, so one WMI query answers it.
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => GpuPercent = 0);
         if (!_gpuNameResolved)
             UpdateGpuNameFromWmi();
     }

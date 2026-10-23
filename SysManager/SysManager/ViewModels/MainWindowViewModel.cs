@@ -804,14 +804,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         // through the services Process Manager and Startup Manager use (#1529).
         var processes = new ProcessManagerService();
         var startup = new StartupService();
+        // One reader for the three that read NVIDIA's API, as the container gives the app (#2829). This is the
+        // no-container path, so it is built here rather than resolved.
+        var nvidia = new NvidiaGpuReader();
 
         return new Dictionary<Type, object>
         {
             // The switch for the app-updates check at startup over lookRecords, which holds no setting, so this graph checks
             // as a first launch does, whatever the user has ticked in About (#2613).
-            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
+            [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth, nvidia: nvidia), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
                 new UpdateCheckPreferenceService(lookRecords),
-                slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles),
+                slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles,
+                nvidia: nvidia),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
@@ -864,7 +868,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(TaskSchedulerViewModel)] = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner())),
             [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService()),
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
-            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth))),
+            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth, nvidia: nvidia), nvidia: nvidia)),
             [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService()),
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(watchdog),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),

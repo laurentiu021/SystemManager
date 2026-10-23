@@ -36,6 +36,7 @@ public sealed class ResourceHistoryService : IDisposable
 
     private readonly SystemInfoService _sys;
     private readonly TemperatureService _temps;
+    private readonly INvidiaGpuReader? _nvidia;
     private readonly SemaphoreSlim _fileLock = new(1, 1);
     private readonly string _dataDir;
     private readonly string _dataPath;
@@ -45,11 +46,6 @@ public sealed class ResourceHistoryService : IDisposable
     private Task? _loopTask;
     private bool _disposed;
     private int _samplesSincePrune;
-
-    // GPU usage is NVIDIA-only and the adapter availability is static for a session —
-    // initialise the vendor API at most once, exactly like DashboardViewModel does.
-    private bool _nvApiInitTried;
-    private bool _nvApiAvailable;
 
     private int _retentionDays = 7;
 
@@ -66,10 +62,12 @@ public sealed class ResourceHistoryService : IDisposable
     /// known-folder API and ignores the <c>LOCALAPPDATA</c> environment variable, so not even a child
     /// process could redirect it away from the real profile.</para>
     /// </summary>
-    public ResourceHistoryService(SystemInfoService sys, TemperatureService temps, string? configDir = null)
+    public ResourceHistoryService(SystemInfoService sys, TemperatureService temps, string? configDir = null,
+        INvidiaGpuReader? nvidia = null)
     {
         _sys = sys;
         _temps = temps;
+        _nvidia = nvidia;
         _dataDir = configDir ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _dataPath = Path.Join(_dataDir, "resource-history.ndjson");
@@ -166,38 +164,17 @@ public sealed class ResourceHistoryService : IDisposable
             gpuPercent, cpuTemp, gpuTemp);
     }
 
+    /// <summary>The first NVIDIA GPU's load, or null when there is none to read.</summary>
+    /// <remarks>
+    /// Through the app's one reader of NVIDIA's API. This used to set that global API up itself, unlocked and with
+    /// its own init-once flags, as the Dashboard and the temperature read also did; both loops come out of the same
+    /// first <see cref="SystemInfoService.CaptureAsync"/>, so they set it up at almost the same moment and a losing
+    /// race switched this sampler's GPU column off for the session (#2829).
+    /// </remarks>
     private double? ReadGpuUsage()
     {
-        if (!_nvApiInitTried)
-        {
-            _nvApiInitTried = true;
-            try
-            {
-                NvAPIWrapper.NVIDIA.Initialize();
-                _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
-            }
-            catch (Exception ex)
-            {
-                // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
-                // document: no driver, an old one, a remote session.
-                _nvApiAvailable = false;
-                Log.Debug("Resource history: NVIDIA GPU API unavailable: {Error}", ex.Message);
-            }
-        }
-
-        if (!_nvApiAvailable) return null;
-        try
-        {
-            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-            return gpus.Length > 0 ? gpus[0].UsageInformation.GPU.Percentage : null;
-        }
-        catch (Exception ex)
-        {
-            // Broad on purpose: NvAPIWrapper calls the NVIDIA driver's native API, which fails in ways it does not
-            // document: no driver, an old one, a remote session.
-            Log.Debug("Resource history: NVIDIA GPU usage read failed: {Error}", ex.Message);
-            return null;
-        }
+        var gpus = _nvidia?.ReadUsage() ?? [];
+        return gpus.Count > 0 ? gpus[0].UsagePercent : null;
     }
 
     // ── Disk access ──────────────────────────────────────────────────────

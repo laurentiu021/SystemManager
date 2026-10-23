@@ -30,7 +30,11 @@ public static class ServiceRegistration
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();
-        services.AddSingleton<TemperatureService>();
+        // One owner of NVIDIA's global API for the whole app: the Dashboard's 300 ms loop, the Resource History
+        // sampler and the temperature read all go through it, so its set-up happens once, under one lock (#2829).
+        services.AddSingleton<INvidiaGpuReader, NvidiaGpuReader>();
+        services.AddSingleton<TemperatureService>(sp => new TemperatureService(
+            sp.GetRequiredService<DiskHealthService>(), nvidia: sp.GetRequiredService<INvidiaGpuReader>()));
         // Its own EventLogService rather than the Logs tab's: that service reports how a read went through
         // LastOutcome, so two readers sharing one instance could each be told the other's answer. The report's own
         // count returns its outcome with it, because System Report and About share this instance (#2827).
@@ -118,7 +122,9 @@ public static class ServiceRegistration
         services.AddSingleton<StandbyPreferenceService>();
         services.AddSingleton<ServiceStartupLedgerService>();
         services.AddSingleton<CrashMarkerService>();
-        services.AddSingleton<ResourceHistoryService>();
+        services.AddSingleton<ResourceHistoryService>(sp => new ResourceHistoryService(
+            sp.GetRequiredService<SystemInfoService>(), sp.GetRequiredService<TemperatureService>(),
+            nvidia: sp.GetRequiredService<INvidiaGpuReader>()));
         services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();

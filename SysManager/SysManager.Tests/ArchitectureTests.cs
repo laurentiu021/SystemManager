@@ -11879,6 +11879,110 @@ public partial class ArchitectureTests
             "the automatic restore point must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
     }
 
+    /// <summary>
+    /// NVIDIA's global API has exactly ONE owner, and no other file calls it or builds a second reader.
+    /// </summary>
+    /// <remarks>
+    /// <para>It had three owners. <c>TemperatureService</c>, <c>ResourceHistoryService</c> and
+    /// <c>DashboardViewModel</c> each called <c>NVIDIA.Initialize()</c> and <c>GetPhysicalGPUs()</c> behind
+    /// init-once flags of their own, and only the first held a lock while doing it. Those are global native calls
+    /// that are not documented as thread-safe, and two of the three begin by awaiting the same first
+    /// <c>SystemInfoService.CaptureAsync</c>, so on a normal launch they set the API up at almost the same moment;
+    /// a set-up that lost that race switched its own component's GPU reading off for the whole session (#2829).</para>
+    /// <para>Nothing else can catch a fourth copy. Each one compiles, each one works alone on a developer machine
+    /// with one GPU and no driver reset, and the failure is a race whose only symptom is a number that stops
+    /// moving. So the contract is mechanical: <c>NvidiaGpuReader</c> is the only file that may name
+    /// <c>NvAPIWrapper</c>, and only the two wiring sites may construct it — the container, which registers it as
+    /// a singleton, and the designer graph, which is the no-container path and so builds one by hand.</para>
+    /// <para>The construction check is by <c>new NvidiaGpuReader</c> rather than by the type name: every consumer
+    /// legitimately names <c>INvidiaGpuReader</c> in its constructor, and a guard keyed on the name would have to
+    /// allow them all and would then pass for a consumer that quietly built its own.</para>
+    /// <para>Which is why the three consumers take the seam as <c>INvidiaGpuReader?</c> and read nothing from NVIDIA
+    /// when it is null, rather than falling back to a reader of their own. A fallback would be indistinguishable
+    /// here from the defect: the container always passes the app's instance, and the only caller that passes
+    /// nothing is a test, which has no NVIDIA driver to read either way.</para>
+    /// </remarks>
+    [Fact]
+    public void TheNvidiaReader_IsTheOnlyOwnerOfThatApi()
+    {
+        var appDir = TestPaths.AppProject();
+        var sources = Directory
+            .EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal)
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                                       StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.True(sources.Length >= 50,
+            $"only {sources.Length} app source files found — the scan is not seeing the codebase, so a clean "
+            + "result would mean nothing.");
+
+        // Files allowed to construct the reader, and why. Every other file takes INvidiaGpuReader.
+        var mayConstruct = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ServiceRegistration.cs"] = "registers the app's single instance",
+            ["ViewModels/MainWindowViewModel.cs"] = "the designer graph's equivalent wiring, with no container",
+            ["Services/NvidiaGpuReader.cs"] = "declares it",
+        };
+
+        var offenders = new List<string>();
+        var apiFiles = new List<string>();
+        var constructions = new List<string>();
+        var consumers = 0;
+
+        foreach (var file in sources)
+        {
+            var relative = Path.GetRelativePath(appDir, file).Replace(Path.DirectorySeparatorChar, '/');
+            // Comments stripped: the paragraphs explaining this contract name both NvAPIWrapper and the reader,
+            // and a guard that reads its own prose reports the opposite of the truth.
+            var code = WithoutComments(File.ReadAllText(file));
+
+            if (code.Contains("NvAPIWrapper", StringComparison.Ordinal))
+                apiFiles.Add(relative);
+
+            if (NvidiaReaderConstruction().IsMatch(code))
+            {
+                constructions.Add(relative);
+                if (!mayConstruct.ContainsKey(relative))
+                    offenders.Add($"{relative} builds its own NvidiaGpuReader. Take INvidiaGpuReader instead — a "
+                        + "second instance sets that global API up again, unsynchronised with the app's own.");
+            }
+
+            if (code.Contains("INvidiaGpuReader", StringComparison.Ordinal)
+                && relative is not ("Services/INvidiaGpuReader.cs" or "Services/NvidiaGpuReader.cs"))
+                consumers++;
+        }
+
+        // The floor: the three consumers plus the container. The designer graph is NOT among them — it builds the
+        // concrete reader and passes it on, so it never names the interface, which the construction checks below
+        // cover instead. Below this floor the patterns have stopped matching the real code and a pass proves nothing.
+        Assert.True(consumers >= 4,
+            $"only {consumers} files name INvidiaGpuReader — the three consumers and the container were expected, "
+            + "so this guard is no longer reading the real graph.");
+
+        Assert.Equal(["Services/NvidiaGpuReader.cs"], apiFiles);
+
+        // Registered as a singleton: a transient would hand each consumer its own set-up, which is the defect
+        // with extra steps.
+        var registration = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs")));
+        Assert.Contains("AddSingleton<INvidiaGpuReader, NvidiaGpuReader>()", registration, StringComparison.Ordinal);
+
+        // And the designer graph builds ONE and hands it on, rather than one per consumer.
+        var designer = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+        Assert.Single(NvidiaReaderConstruction().Matches(designer));
+        Assert.True(designer.Split("nvidia: nvidia").Length - 1 >= 3,
+            "the designer graph must pass its one reader to all three consumers (the Dashboard, its temperature "
+            + "service and the Resource History service), or that graph has readers of its own after all.");
+
+        Assert.True(offenders.Count == 0,
+            "NVIDIA's API must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
+    }
+
+    /// <summary>Captures a construction of the concrete reader, which only the wiring sites may do.</summary>
+    [GeneratedRegex(@"new\s+NvidiaGpuReader\s*\(", RegexOptions.Compiled)]
+    private static partial Regex NvidiaReaderConstruction();
+
     [GeneratedRegex(@"bool\s+_restorePoint\w*Attempted\w*\s*;", RegexOptions.Compiled)]
     private static partial Regex RestorePointAttemptFlag();
 
@@ -20243,14 +20347,14 @@ public partial class ArchitectureTests
             ["Services/GamingProfileService.cs"] = 3,
             ["Services/OperationLockService.cs"] = 1,
             ["Services/PowerShellRunner.cs"] = 1,
-            ["Services/ResourceHistoryService.cs"] = 3,
+            ["Services/ResourceHistoryService.cs"] = 1,
             ["Services/TemperatureService.cs"] = 5,
             ["Services/ThemeService.cs"] = 1,
             ["Services/TrayIconService.cs"] = 2,
             ["ViewModels/AudioMixerViewModel.cs"] = 2,
             ["ViewModels/BandwidthMonitorViewModel.cs"] = 1,
             ["ViewModels/BulkInstallerViewModel.cs"] = 3,
-            ["ViewModels/DashboardViewModel.cs"] = 8,
+            ["ViewModels/DashboardViewModel.cs"] = 6,
             ["ViewModels/DnsHostsViewModel.cs"] = 4,
             ["ViewModels/ProcessManagerViewModel.cs"] = 1,
             ["ViewModels/StandbyMemoryViewModel.cs"] = 1,

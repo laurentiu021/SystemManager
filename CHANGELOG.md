@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.85] - 2026-10-23
+
+**About: a download that stops arriving now gives up and says so, you can cancel one, and a check that cannot
+reach GitHub no longer takes away the update it already found.**
+
+### Fixed
+
+- **A download that stopped receiving data waited for as long as SysManager stayed open.** The bar and the
+  megabyte count froze where they were, the Download button stayed hidden, and nothing said anything — a Wi-Fi
+  hand-off, a router dropping the connection, or sleep and resume part way through the 85 MB file was enough.
+  Thirty seconds with nothing arriving now ends it, with the same failure row and Manual download button any other
+  failed download gets, and the half-finished file is removed. Since 0.5.0.
+- **A download could not be cancelled.** The Download button is hidden while one runs, so the only way to stop one
+  was to close SysManager. There is a **Cancel** button beside the progress bar now, and `Escape` does the same.
+  Cancelling says so, instead of reporting a timed-out download that nothing went wrong with. Since 0.5.0.
+- **Pressing Check for updates with no connection hid the update it had already found.** The whole update card,
+  Install button and download bar included, disappeared until a later check succeeded, although the update was
+  still there and possibly already downloaded. A check that fails now keeps what the last one found and reports
+  the failure beside it. Since 0.5.0.
+- **A release-notes refresh that failed replaced the notes on screen with nothing.** The ten most recent releases
+  vanished, which reads as the feature being broken rather than the connection being down. A refresh that cannot
+  reach GitHub now leaves them and says so; a repository that really has no releases still reads as nothing to
+  show. Since 0.5.0.
+
 ## [1.130.84] - 2026-10-23
 
 **One part of SysManager now talks to the graphics card's own interface, so a graphics driver restart no longer

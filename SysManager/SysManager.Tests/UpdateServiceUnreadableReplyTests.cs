@@ -32,11 +32,71 @@ public class UpdateServiceUnreadableReplyTests
     [InlineData("gzip")]
     [InlineData("brotli")]
     [InlineData("not JSON")]
-    public async Task GetRecentAsync_WhenTheReplyCannotBeRead_ReturnsNothing(string failure)
+    public async Task GetRecentAsync_WhenTheReplyCannotBeRead_SaysSoRatherThanAnsweringNoReleases(string failure)
     {
         var releases = await ServiceWhoseReplyFails(failure).GetRecentAsync(10);
 
-        Assert.Empty(releases);
+        // Null, not an empty list: About shows "GitHub could not be reached" and keeps the notes it has, where an
+        // empty list would read as "this repository has no releases" and replace them with nothing (#2831).
+        Assert.Null(releases);
+    }
+
+    /// <summary>
+    /// A connection that never reached GitHub answers "could not be read", not "no releases".
+    /// </summary>
+    /// <remarks>
+    /// The branch About's own test could not reach: it substitutes the service and throws from there, so the
+    /// service's own network catch had nothing covering it, and returning an empty list from it would have
+    /// erased the notes on screen exactly as before (#2831).
+    /// </remarks>
+    [Fact]
+    public async Task GetRecentAsync_WhenGitHubCannotBeReached_SaysSoRatherThanAnsweringNoReleases()
+    {
+        var service = new UpdateService(new RefusesToConnect());
+
+        Assert.Null(await service.GetRecentAsync(10));
+    }
+
+    /// <summary>A reply that is literally <c>null</c> is also "could not be read".</summary>
+    /// <remarks>Its own branch in the service, and the one the two above never reach.</remarks>
+    [Fact]
+    public async Task GetRecentAsync_WhenTheReplyIsJsonNull_SaysSoRatherThanAnsweringNoReleases()
+    {
+        var service = new UpdateService(new ReplyIs("null"));
+
+        Assert.Null(await service.GetRecentAsync(10));
+    }
+
+    /// <summary>An empty list of releases is an answer, and stays one.</summary>
+    /// <remarks>
+    /// The negative control for both: "this repository has no releases" must not become "could not be read", or
+    /// the section would claim a connection problem that is not there.
+    /// </remarks>
+    [Fact]
+    public async Task GetRecentAsync_WhenThereAreNoReleases_AnswersWithNone()
+    {
+        var service = new UpdateService(new ReplyIs("[]"));
+
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<UpdateService.ReleaseInfo>>(
+            await service.GetRecentAsync(10)));
+    }
+
+    /// <summary>Fails to connect at all, as a machine with no network does.</summary>
+    private sealed class RefusesToConnect : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("No such host is known."));
+    }
+
+    /// <summary>Answers every request with a 200 whose body is exactly <paramref name="json"/>.</summary>
+    private sealed class ReplyIs(string json) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            return Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = content, RequestMessage = request });
+        }
     }
 
     [Theory]

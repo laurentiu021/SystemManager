@@ -319,10 +319,10 @@ public class AboutViewModelTests
         var updates = Substitute.For<IUpdateService>();
         updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(failure switch
         {
-            "empty" => Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([]),
-            "network" => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(
+            "empty" => Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([]),
+            "network" => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>?>(
                 new HttpRequestException("No such host is known.")),
-            _ => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(
+            _ => Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>?>(
                 new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.")),
         });
 
@@ -652,7 +652,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         updates.GetLatestAsync(Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(Release()));
         updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([Release()]));
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([Release()]));
         return updates;
     }
 
@@ -669,7 +669,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         updates.GetLatestAsync(Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(null));
         updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>([]));
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([]));
         updates.LastError.Returns("Network: No such host is known.");
         return updates;
     }
@@ -693,6 +693,214 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         var preference = new UpdateCheckPreferenceService(dir).Load();
         Assert.NotNull(preference);
         return preference;
+    }
+
+    /// <summary>
+    /// A check that fails after an update was found keeps the update, its Install button and its download.
+    /// </summary>
+    /// <remarks>
+    /// Every failure branch set <c>UpdateAvailable = false</c>, and the whole update card — the Install button and
+    /// the download bar with it — is shown only while that is true. So pressing Check for updates offline, or after
+    /// GitHub's unauthenticated rate limit, hid a downloaded update's Install button until a later check succeeded,
+    /// although the release and the downloaded path were both still held (#2831). The failure is reported inside the
+    /// card instead, through the status line it already shows.
+    /// </remarks>
+    [Fact]
+    public async Task ACheckThatFails_KeepsAnUpdateItAlreadyFound()
+    {
+        var updates = Substitute.For<IUpdateService>();
+        var newer = Release() with { Version = new Version(99, 99, 99), Tag = "v99.99.99" };
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(newer));
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([newer]));
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+        Assert.True(vm.UpdateAvailable, "the first check has to find the update, or the rest proves nothing");
+
+        // Now GitHub cannot be reached, and the user presses Check for updates again.
+        updates.LastError.Returns("Network: No such host is known.");
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(null));
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.True(vm.UpdateAvailable, "a check that could not reach GitHub took the update away");
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.Contains("Couldn't reach GitHub", vm.UpdateStatus, StringComparison.Ordinal);
+        // And it says what to press, which is not the Retry button: that one lives in the other card, and the two
+        // are mutually exclusive on UpdateAvailable.
+        Assert.Contains("Check for updates", vm.UpdateStatus, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A check that fails by THROWING keeps the update too, on both of the branches that catch.
+    /// </summary>
+    /// <remarks>
+    /// The real service turns most failures into a null return, but not all: its own timeout surfaces as
+    /// <see cref="TaskCanceledException"/> and a connection that never opens as
+    /// <see cref="HttpRequestException"/>, and each had its own <c>UpdateAvailable = false</c>. The test above
+    /// only covers the null return, so without this one either catch could take the update away unnoticed.
+    /// </remarks>
+    [Theory]
+    [InlineData("network")]
+    [InlineData("timeout")]
+    public async Task ACheckThatThrows_KeepsAnUpdateItAlreadyFound(string failure)
+    {
+        var updates = Substitute.For<IUpdateService>();
+        var newer = Release() with { Version = new Version(99, 99, 99), Tag = "v99.99.99" };
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(newer));
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([newer]));
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+        Assert.True(vm.UpdateAvailable, "the first check has to find the update, or the rest proves nothing");
+
+        updates.GetLatestAsync(Arg.Any<CancellationToken>()).Returns(failure == "network"
+            ? Task.FromException<UpdateService.ReleaseInfo?>(new HttpRequestException("No such host is known."))
+            : Task.FromException<UpdateService.ReleaseInfo?>(new TaskCanceledException("The request timed out.")));
+        await vm.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.True(vm.UpdateAvailable, $"a check that failed with a {failure} took the update away");
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.Contains("Check for updates", vm.UpdateStatus, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The download is handed a token Cancel can act on, and cancelling says so instead of reporting a failure.
+    /// </summary>
+    /// <remarks>
+    /// The Download button is hidden while a download runs, so until this existed the only way to stop one was to
+    /// close SysManager (#2831). The token is what makes the button work at all: without it passed through, Cancel
+    /// would cancel nothing and the download would carry on to the end.
+    /// </remarks>
+    [Fact]
+    public async Task CancelDownload_StopsTheDownloadThroughItsOwnToken()
+    {
+        var updates = Substitute.For<IUpdateService>();
+        var newer = Release() with { Version = new Version(99, 99, 99), Tag = "v99.99.99" };
+        updates.GetLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<UpdateService.ReleaseInfo?>(newer));
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([newer]));
+
+        // The download parks until the test lets it answer, and reports back the token it was given, so the test
+        // can prove Cancel reached the work rather than merely setting a flag beside it.
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parked = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken given = default;
+        updates.DownloadAsync(Arg.Any<UpdateService.ReleaseInfo>(), Arg.Any<IProgress<(long, long?)>>(),
+                              Arg.Any<CancellationToken>())
+               .Returns(call =>
+               {
+                   given = call.Arg<CancellationToken>();
+                   // Ends only when the token says so, through the token itself rather than a delay: nothing here
+                   // waits on the clock, so the test asserts what the code does and not how fast this machine is.
+                   given.Register(() => parked.TrySetCanceled(given));
+                   started.TrySetResult();
+                   return parked.Task;
+               });
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+
+        var download = vm.DownloadCommand.ExecuteAsync(null);
+        await started.Task;
+
+        Assert.True(given.CanBeCanceled, "the download was given a token nothing can cancel");
+        vm.CancelDownloadCommand.Execute(null);
+        await download;
+
+        Assert.True(given.IsCancellationRequested, "Cancel did not reach the download");
+        Assert.Contains("cancelled", vm.DownloadStatus, StringComparison.OrdinalIgnoreCase);
+        // Cancelling is not a failure: the Manual download button belongs to a download that broke, not one the
+        // user stopped, and the Download button has to come back.
+        Assert.False(vm.AutoDownloadFailed);
+        Assert.False(vm.IsDownloading);
+    }
+
+    /// <summary>
+    /// With no update known, a failed check still leaves the quiet card to report it with its Retry button.
+    /// </summary>
+    [Fact]
+    public async Task ACheckThatFails_WithNoUpdateKnown_StillReportsItWhereRetryIs()
+    {
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), NewFailingUpdates());
+        await vm.InitializationComplete;
+
+        Assert.False(vm.UpdateAvailable);
+        Assert.True(vm.UpdateCheckFailed);
+        Assert.Contains("Click Retry", vm.UpdateStatus, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A release-notes refresh that fails leaves the notes already on screen there.
+    /// </summary>
+    /// <remarks>
+    /// <c>GetRecentAsync</c> answered every failure with an empty list, which About assigned, so a refresh that
+    /// could not reach GitHub replaced the ten notes on screen with nothing — while the comment beside the
+    /// assignment said both failures left the list as it was, true only of the exceptions that reach it (#2831).
+    /// The service says null for "could not be read" now, and nothing is assigned for it.
+    /// </remarks>
+    [Fact]
+    public async Task NotesThatCannotBeRefreshed_LeaveTheOnesOnScreen()
+    {
+        var updates = NewUpdates();
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+        Assert.Single(vm.ReleaseHistory);
+        Assert.False(vm.HistoryUnavailable);
+
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>(null));
+        await vm.LoadHistoryCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.ReleaseHistory);
+        // And the "Could not reach GitHub" block stays hidden, because it is a full empty-state card with a glyph
+        // and a title: under a list of notes it would read as the section being broken. It is for the case below,
+        // where there is genuinely nothing to show.
+        Assert.False(vm.HistoryUnavailable);
+    }
+
+    /// <summary>
+    /// A first load that cannot reach GitHub does show the empty state, since there is nothing else to show.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the flag, and the reason it cannot simply be "the last refresh failed": with no notes the
+    /// section would otherwise promise notes "pulled live from GitHub" and render nothing at all.
+    /// </remarks>
+    [Fact]
+    public async Task NotesThatNeverLoaded_ShowTheEmptyState()
+    {
+        var updates = NewUpdates();
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>(null));
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.ReleaseHistory);
+        Assert.True(vm.HistoryUnavailable);
+    }
+
+    /// <summary>
+    /// A repository that answers with no releases is reported as nothing to show, not as a failure to read.
+    /// </summary>
+    /// <remarks>The negative control for the null above: an empty list is still an answer.</remarks>
+    [Fact]
+    public async Task NotesThatComeBackEmpty_AreReportedAsNothingToShow()
+    {
+        var updates = NewUpdates();
+        updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>([]));
+
+        using var vm = NewVm(new UpdateCheckPreferenceService(_dir), updates);
+        await vm.InitializationComplete;
+
+        Assert.Empty(vm.ReleaseHistory);
+        Assert.True(vm.HistoryUnavailable);
     }
 
     [Fact]
@@ -994,7 +1202,7 @@ public sealed class AboutViewModelUpdateGateTests : IDisposable
         var prefs = new UpdateCheckPreferenceService(_dir);
         var updates = NewUpdates();
         updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-               .Returns(Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>>(failure));
+               .Returns(Task.FromException<IReadOnlyList<UpdateService.ReleaseInfo>?>(failure));
 
         using var vm = NewVm(prefs, updates);
         await vm.InitializationComplete;
@@ -1353,7 +1561,7 @@ public sealed class AboutViewModelReleaseHistoryTests : IDisposable
 
         var updates = Substitute.For<IUpdateService>();
         updates.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>>(
+               .Returns(Task.FromResult<IReadOnlyList<UpdateService.ReleaseInfo>?>(
                    [Release(newerTag), Release(runningTag), Release(olderTag)]));
 
         using var vm = NewVm(updates);

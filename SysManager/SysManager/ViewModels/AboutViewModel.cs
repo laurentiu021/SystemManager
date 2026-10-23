@@ -24,6 +24,14 @@ public sealed partial class AboutViewModel : ViewModelBase
     /// <inheritdoc/>
     protected internal override IRelayCommand? RefreshOnF5 => LoadHistoryCommand;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Only while a download runs: Escape stops that, and nothing else on this tab is cancellable — the check and
+    /// the notes are short reads, and an install that has started is a new process, not work this tab holds.
+    /// </remarks>
+    protected internal override IRelayCommand? EscapeCancel =>
+        IsDownloading ? CancelDownloadCommand : null;
+
     private readonly IUpdateService _updates;
     private readonly SystemReportService _reportService;
     private readonly DiagnosticsBundleService _bundle;
@@ -357,8 +365,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             if (latest is null)
             {
                 var detail = string.IsNullOrWhiteSpace(_updates.LastError) ? "Unknown error." : _updates.LastError;
-                UpdateStatus = $"Couldn't reach GitHub — {detail} Click Retry to try again.";
-                UpdateAvailable = false;
+                UpdateStatus = $"Couldn't reach GitHub — {detail} {RetryLine}";
                 UpdateCheckFailed = true;
                 return;
             }
@@ -383,18 +390,25 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
         catch (HttpRequestException ex)
         {
-            UpdateStatus = $"Network error — could not reach GitHub: {ex.Message}. Click Retry to try again.";
-            UpdateAvailable = false;
+            UpdateStatus = $"Network error — could not reach GitHub: {ex.Message}. {RetryLine}";
             UpdateCheckFailed = true;
         }
         catch (TaskCanceledException ex)
         {
-            UpdateStatus = $"Request timed out: {ex.Message}. Click Retry to try again.";
-            UpdateAvailable = false;
+            UpdateStatus = $"Request timed out: {ex.Message}. {RetryLine}";
             UpdateCheckFailed = true;
         }
         finally { IsCheckingForUpdates = false; }
     }
+
+    /// <summary>
+    /// What a failed check tells the user to do. Says "Check for updates" rather than "Retry" when an update is
+    /// already known, because the Retry button lives in the other card: the two are mutually exclusive on
+    /// <see cref="UpdateAvailable"/>, and a check that failed while an update was known keeps the update card up.
+    /// </summary>
+    private string RetryLine => UpdateAvailable
+        ? "The update found earlier is still here — press Check for updates to look again."
+        : "Click Retry to try again.";
 
     [RelayCommand]
     private async Task LoadHistoryAsync()
@@ -402,6 +416,14 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             var list = await _updates.GetRecentAsync(10);
+            if (list is null)
+            {
+                // GitHub could not be read. Nothing is assigned, so a refresh that failed leaves the notes that
+                // are on screen there (#2831).
+                HistoryUnavailable = ReleaseHistory.Count == 0;
+                return;
+            }
+
             var notes = list.Select(r => new ReleaseNote
             {
                 Version = $"v{r.Version.ToString(3)}",
@@ -433,6 +455,25 @@ public sealed partial class AboutViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Cancels the download in flight. Its own source rather than the tab's, so closing the tab does not stop a
+    /// download the user left running, and so the button can stop one without stopping anything else (#2831).
+    /// </summary>
+    private CancellationTokenSource? _downloadCts;
+
+    /// <summary>What the tab says about a download the user stopped. Not a failure: nothing went wrong with it.</summary>
+    private const string CancelledLine = "Download cancelled. Press Download to start again.";
+
+    /// <summary>Stops the download in flight.</summary>
+    [RelayCommand]
+    private void CancelDownload()
+    {
+        // Cancelled explicitly rather than through a linked source: an await can resume inside the cancelling
+        // callbacks and dispose a linked one before its own callback runs (#2843).
+        try { _downloadCts?.Cancel(); }
+        catch (ObjectDisposedException) { /* the download has just finished; there is nothing to stop */ }
+    }
+
     [RelayCommand]
     private async Task DownloadAsync()
     {
@@ -443,6 +484,12 @@ public sealed partial class AboutViewModel : ViewModelBase
         DownloadPercent = 0;
         DownloadStatus = "Downloading...";
         DownloadProgressLine = DownloadStatus;
+
+        // Declared out here, not inside the try, so the catch below can tell the user's own Cancel from a failure:
+        // the download throws OperationCanceledException for both, and the only difference is whose token it was.
+        using var cts = new CancellationTokenSource();
+        _downloadCts = cts;
+        var token = cts.Token;
         try
         {
             var progress = new SettlingProgress<(long read, long? total)>(p =>
@@ -458,7 +505,15 @@ public sealed partial class AboutViewModel : ViewModelBase
                 }
             });
 
-            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(_latest, reporter));
+            var path = await progress.SettleAfterAsync(reporter => _updates.DownloadAsync(_latest, reporter, token));
+            if (token.IsCancellationRequested)
+            {
+                // The service answers a cancellation with null rather than throwing, so this is the live path and
+                // the catch below is for one that throws instead.
+                DownloadStatus = CancelledLine;
+                return;
+            }
+
             if (path is not null && File.Exists(path))
             {
                 DownloadedPath = path;
@@ -470,6 +525,13 @@ public sealed partial class AboutViewModel : ViewModelBase
                 AutoDownloadFailed = true;
                 DownloadStatus = "Automatic download failed — the server may be temporarily unavailable. Click 'Manual download' to get it directly from GitHub, or try again later.";
             }
+        }
+        // Before the three below, and before TaskCanceledException in particular: that is what a cancelled await
+        // throws, so without this the user's own Cancel was reported as "Download timed out" with the failure row
+        // and the Manual download button, for a download nothing had gone wrong with.
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            DownloadStatus = CancelledLine;
         }
         catch (HttpRequestException ex)
         {
@@ -486,7 +548,11 @@ public sealed partial class AboutViewModel : ViewModelBase
             AutoDownloadFailed = true;
             DownloadStatus = $"Download timed out: {ex.Message}";
         }
-        finally { IsDownloading = false; }
+        finally
+        {
+            _downloadCts = null;
+            IsDownloading = false;
+        }
     }
 
     [RelayCommand]

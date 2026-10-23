@@ -51,15 +51,44 @@ public sealed class UpdateService : IUpdateService
     private static readonly SearchValues<char> VersionSuffixSeparators = SearchValues.Create("-+ ");
 
     private readonly HttpClient _http;
+    private readonly TimeSpan _stallAfter;
+    private readonly string? _downloadDir;
+    private readonly TimeProvider _time;
+
+    /// <summary>
+    /// How long a download may receive nothing before it is given up.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="HttpClient.Timeout"/> is 15 s, but the download asks for the body with
+    /// <see cref="HttpCompletionOption.ResponseHeadersRead"/>, so that timeout ends once the headers arrive and
+    /// nothing bounded the body reads after it. A connection that went quiet part way through the ~85 MB file — a
+    /// Wi-Fi hand-off, a router dropping the connection, sleep and resume — left the bar and the megabyte count
+    /// frozen, <c>IsDownloading</c> true, the Download button hidden and no failure row, for as long as SysManager
+    /// stayed open (#2831). Thirty seconds is far longer than any gap a working connection has and short enough
+    /// that the user is still watching.
+    /// </remarks>
+    internal static readonly TimeSpan DefaultStallAfter = TimeSpan.FromSeconds(30);
 
     /// <summary>The app's service, on one client for the life of the process.</summary>
-    public UpdateService() => _http = SharedHttp;
+    public UpdateService() : this(SharedHttp, DefaultStallAfter, null, TimeProvider.System) { }
 
     /// <summary>
     /// Sends through <paramref name="handler"/> rather than the network, so a test can make GitHub's reply fail in
-    /// a given way. The client is set up as the app's is.
+    /// a given way. The client is set up as the app's is. <paramref name="downloadDir"/> keeps a download test out
+    /// of the developer's own update cache, and <paramref name="time"/> drives the no-data clock, so a test of a
+    /// body that stops arriving says when it stopped rather than waiting thirty real seconds for it.
     /// </summary>
-    internal UpdateService(HttpMessageHandler handler) => _http = CreateClient(handler);
+    internal UpdateService(HttpMessageHandler handler, string? downloadDir = null, TimeProvider? time = null,
+        TimeSpan? stallAfter = null)
+        : this(CreateClient(handler), stallAfter ?? DefaultStallAfter, downloadDir, time ?? TimeProvider.System) { }
+
+    private UpdateService(HttpClient http, TimeSpan stallAfter, string? downloadDir, TimeProvider time)
+    {
+        _http = http;
+        _stallAfter = stallAfter;
+        _downloadDir = downloadDir;
+        _time = time;
+    }
 
     private static HttpClient CreateClient(HttpMessageHandler handler)
     {
@@ -133,32 +162,39 @@ public sealed class UpdateService : IUpdateService
     }
 
     /// <summary>
-    /// Fetches the last N releases (for a full changelog view).
+    /// Fetches the last N releases (for a full changelog view), or null when GitHub could not be read.
     /// </summary>
-    public async Task<IReadOnlyList<ReleaseInfo>> GetRecentAsync(int count = 10, CancellationToken ct = default)
+    /// <remarks>
+    /// Null rather than an empty list for a failure, because the caller shows the two differently and cannot tell
+    /// them apart otherwise: About assigned whatever came back, so a refresh that failed replaced the ten notes on
+    /// screen with nothing while the comment beside the assignment said both failures left the list as it was —
+    /// true only of the exceptions that reach it, which these never did (#2831). An empty list still means the
+    /// repository has no releases to show.
+    /// </remarks>
+    public async Task<IReadOnlyList<ReleaseInfo>?> GetRecentAsync(int count = 10, CancellationToken ct = default)
     {
         try
         {
             var url = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page={count}";
             var dto = await _http.GetFromJsonAsync<GhRelease[]>(url, ct).ConfigureAwait(false);
-            if (dto is null) return [];
+            if (dto is null) return null;
             return dto.Select(Map).OfType<ReleaseInfo>().ToList();
         }
         catch (OperationCanceledException)
         {
-            return [];
+            return null;
         }
         catch (HttpRequestException ex)
         {
             Serilog.Log.Warning(ex, "Failed to fetch recent releases (network)");
-            return [];
+            return null;
         }
         // It caught only the JSON failure, so a body cut off part way or one that did not decompress reached About as
         // an error dialog (#2663).
         catch (Exception ex) when (IsUnreadableReply(ex))
         {
             Serilog.Log.Warning(ex, "Failed to read recent releases");
-            return [];
+            return null;
         }
     }
 
@@ -207,7 +243,7 @@ public sealed class UpdateService : IUpdateService
     {
         if (string.IsNullOrWhiteSpace(rel.AssetUrl)) return null;
 
-        var dir = Path.Join(
+        var dir = _downloadDir ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysManager", "updates");
         var target = Path.Join(dir, $"SysManager-{rel.Version}.exe");
@@ -253,15 +289,39 @@ public sealed class UpdateService : IUpdateService
             await using var net = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             await using var file = File.Create(tempFile);
 
+            // The body reads are bounded on their own: the client's timeout ended with the headers, so nothing else
+            // stops a connection that goes quiet mid-body. It runs on the injected TimeProvider, so a test drives
+            // the clock instead of waiting for it. Both tokens are read once, here, rather than off their sources
+            // inside the loop (#2843).
+            //
+            // Armed by CancelAfter rather than by the constructor's delay, and armed in BOTH places on purpose:
+            // once before the first read, because a body that never sends anything at all must time out too, and
+            // again after every chunk, so the clock measures the gap between two chunks rather than the whole
+            // download, which on a slow line is minutes long. One mechanism, visible in both places — the
+            // constructor's delay would be a second one, and a test driving a manual clock never sees it.
+            //
+            // Infinite at construction, since that is the only overload that takes the TimeProvider: it stores the
+            // provider without arming anything, so every CancelAfter below runs on the injected clock.
+            using var stall = new CancellationTokenSource(Timeout.InfiniteTimeSpan, _time);
+            using var readUntil = CancellationTokenSource.CreateLinkedTokenSource(ct, stall.Token);
+            var readToken = readUntil.Token;
+
             var buf = new byte[81920];
             long read = 0;
-            int n;
-            while ((n = await net.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
+            stall.CancelAfter(_stallAfter);
+            while (true)
             {
-                await file.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
+                var n = await net.ReadAsync(buf, readToken).ConfigureAwait(false);
+                if (n <= 0) break;
+
+                await file.WriteAsync(buf.AsMemory(0, n), readToken).ConfigureAwait(false);
                 read += n;
                 progress?.Report((read, total));
+                stall.CancelAfter(_stallAfter);
             }
+
+            // Nothing below may be stopped by the stall clock; the hash and the move are the caller's to cancel.
+            stall.CancelAfter(Timeout.InfiniteTimeSpan);
 
             // Flush before hashing — and onto the device, not merely out of the managed buffer, so
             // the move below cannot become durable while the download is still in the write-back cache.
@@ -296,6 +356,15 @@ public sealed class UpdateService : IUpdateService
             PruneOldDownloads(dir, keep: target);
 
             return target;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The stall clock fired: the connection stopped sending and the caller did not ask to stop. Reported as
+            // a failure rather than a cancellation so About shows its failure row and offers the manual download.
+            Serilog.Log.Warning("Update download received nothing for {Seconds:F0}s — giving up",
+                _stallAfter.TotalSeconds);
+            CleanupFile(tempFile);
+            return null;
         }
         catch (OperationCanceledException)
         {

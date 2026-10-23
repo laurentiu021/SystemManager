@@ -202,7 +202,17 @@
                             <ProgressBar AutomationProperties.Name="Update download progress" Height="6" Minimum="0" Maximum="100" Value="{Binding DownloadPercent}"/>
                             <!-- Not announced: it counts the megabytes as they arrive, which read aloud is continuous
                                  speech. The outcome rows below are, once the download ends. -->
-                            <TextBlock Text="{Binding DownloadProgressLine}" Style="{StaticResource Subtle}" Margin="0,4,0,0"/>
+                            <DockPanel Margin="0,4,0,0">
+                                <!-- The way out of a download in progress: the Download button is hidden while one
+                                     runs, so until this existed the only way to stop one was to close SysManager
+                                     (#2831). Ghost rather than Secondary: it sits under the bar, not in the row of
+                                     actions above. -->
+                                <Button DockPanel.Dock="Right" Content="Cancel" Command="{Binding CancelDownloadCommand}"
+                                        Style="{StaticResource GhostButton}" Padding="10,4" Margin="8,0,0,0"
+                                        AutomationProperties.Name="Cancel the update download"/>
+                                <TextBlock Text="{Binding DownloadProgressLine}" Style="{StaticResource Subtle}"
+                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </DockPanel>
                         </StackPanel>
 
                         <!-- What is actually IN the update being offered. LatestNotes was assigned from the

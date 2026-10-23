@@ -232,7 +232,7 @@ on, the way it opens a folder in File Explorer. Opening the appearance panel mov
 cycles the themes inside it, and `Escape` closes it and puts focus back on the button you opened it from.
 
 `Escape` also stops whatever the open tab is doing — a disk scan, a duplicate search, a speed test — on
-the 25 tabs that can be cancelled from the keyboard: every tab with a Cancel button but System Fixes, and Display
+the 26 tabs that can be cancelled from the keyboard: every tab with a Cancel button but System Fixes, and Display
 Profiles, where it puts back the previous mode while a new one waits for "Keep". Every run on System Fixes repairs
 Windows, so stopping one is left to its Cancel button rather than a keypress. On Windows Features `Escape` stops a
 scan, never a change. On Uninstaller, App Updates and Bulk Installer it stops a batch before its next app, once the
@@ -2274,8 +2274,13 @@ offers, "rate us" prompts:
 - Auto-check on startup against the GitHub Releases API, at most once a day, plus a manual
   "Check for updates" button in the About tab.
 - Discreet banner in the main window when a check finds a newer version.
-- **Download** fetches the new build in the background with a progress bar. If the
-  download is blocked, a "Manual download" button opens GitHub in the
+- **A check that cannot reach GitHub keeps what the last one found.** An update already found,
+  with its Download or Install button, stays where it is and the failure is reported beside it,
+  instead of the whole card disappearing until a later check succeeds.
+- **Download** fetches the new build in the background with a progress bar, and **Cancel**
+  beside it stops one you no longer want. A download that stops receiving data gives up after
+  thirty seconds rather than leaving the bar frozen, and either way SysManager says what
+  happened. If the download is blocked, a "Manual download" button opens GitHub in the
   browser.
 - SHA256 hash verification before install — the downloaded build is checked
   against the published `.sha256`, so a damaged or truncated download is blocked.
@@ -2302,8 +2307,8 @@ offers, "rate us" prompts:
 - Full release-note history pulled live from GitHub — the notes for the newest
   version appear under the update check, the last ten releases below it, and each
   card links to its release on GitHub. The list is fetched with the startup check, or when you
-  press its **Refresh** (or F5). If GitHub cannot be reached, the section
-  says so instead of going blank.
+  press its **Refresh** (or F5). If GitHub cannot be reached, the section says so instead of
+  going blank, and a refresh that fails leaves the notes already on screen there.
 - **"Report a problem"** opens the GitHub bug-report form with your SysManager
   version and administrator state already filled in — the two fields reports most
   often miss — and **"Ask a question"** opens Discussions for anything that is not

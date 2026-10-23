@@ -107,6 +107,8 @@ public class DashboardViewModelTests
 
         Assert.Empty(vm.Temperatures);
         Assert.True(vm.TemperaturesUnavailable);
+        // Nothing read is not a missing driver: the line about PawnIO stays hidden (#2828).
+        Assert.False(vm.TemperaturesNeedDriver);
     }
 
     /// <summary>

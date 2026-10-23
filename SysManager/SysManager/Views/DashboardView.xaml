@@ -77,7 +77,7 @@
             <!-- ═══ ROW 1: Elevation banner ═══ -->
             <v:AdminBanner Grid.Row="1" Margin="0,0,0,12"
                            NotElevatedMessage="Some features require administrator privileges for full data."
-                           ElevatedMessage="Running as administrator — all sensors and quick actions have full access."/>
+                           ElevatedMessage="Running as administrator — quick actions have full access, and more temperature sensors can be read."/>
 
             <!-- ═══ ROW 2: Why is it slow? — checking ═══ -->
             <!-- The five things it looks at, each ticked off as it is done with: they finish at different times, and the
@@ -502,7 +502,7 @@
                             <TextBlock Text="TEMPERATURES" Style="{StaticResource Caption}" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"/>
                             <Button Command="{Binding RelaunchAsAdminCommand}" Margin="10,0,0,0"
-                                    AutomationProperties.Name="Run as administrator for all temperature sensors"
+                                    AutomationProperties.Name="Run as administrator for more temperature sensors"
                                     Padding="6,3" FontSize="10" VerticalAlignment="Center"
                                     Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}">
                                 <Button.Template>
@@ -521,7 +521,7 @@
                                 </Button.Template>
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE83D;" FontFamily="Segoe Fluent Icons,Segoe MDL2 Assets" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Run as admin for all sensors" Foreground="{DynamicResource WarningText}"
+                                    <TextBlock Text="Run as admin for more sensors" Foreground="{DynamicResource WarningText}"
                                                Style="{StaticResource Micro}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
@@ -529,6 +529,11 @@
                         <TextBlock Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}" FontStyle="Italic"
                                    Visibility="{Binding IsElevated, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"
                                    Text="Without admin, only NVIDIA GPU and disk SMART temperatures are available."/>
+                        <!-- Elevated or not: running as administrator cannot reach these without the driver (#2828). -->
+                        <TextBlock Style="{StaticResource Micro}" Foreground="{DynamicResource TextMuted}" FontStyle="Italic"
+                                   TextWrapping="Wrap" Margin="0,2,0,0"
+                                   Visibility="{Binding TemperaturesNeedDriver, Converter={StaticResource FlexVis}}"
+                                   Text="CPU and motherboard temperatures need the PawnIO driver, which SysManager does not install."/>
                     </StackPanel>
 
                     <ItemsControl ItemsSource="{Binding Temperatures}">

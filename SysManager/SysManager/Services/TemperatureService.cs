@@ -12,7 +12,8 @@ namespace SysManager.Services;
 
 /// <summary>
 /// Reads temperatures from all available sensors.
-/// With admin: LibreHardwareMonitor gives ALL temps (CPU, GPU, Disk, Motherboard).
+/// With admin: LibreHardwareMonitor gives the GPU and disk temps, and the CPU and motherboard temps when the
+/// separately installed PawnIO driver is there.
 /// Without admin: NVIDIA GPU (via NvAPIWrapper) + Disk SMART temps only.
 /// </summary>
 public sealed class TemperatureService : IDisposable
@@ -20,8 +21,9 @@ public sealed class TemperatureService : IDisposable
     private readonly DiskHealthService _diskHealth;
     private readonly bool _skipHardwareInit;
 
-    // LibreHardwareMonitor's Computer.Open() loads a ring0 kernel driver and
-    // enumerates all hardware — far too heavy to do on every 2s poll. Open it once
+    // LibreHardwareMonitor's Computer.Open() enumerates all hardware and, when the
+    // PawnIO driver is installed, loads its CPU and motherboard modules into it — far
+    // too heavy to do on every 2s poll. Open it once
     // (lazily, on the first elevated read) and keep it alive for the service
     // lifetime; each poll then only calls Update(). The lock serialises the
     // not-thread-safe native sensor access — both the LibreHardwareMonitor path
@@ -72,7 +74,7 @@ public sealed class TemperatureService : IDisposable
     /// Creates the reader. No hardware is touched until the first read.
     /// </summary>
     /// <param name="diskHealth">Source of the SMART/temperature walk.</param>
-    /// <param name="skipHardwareInit">Set by tests so no kernel driver is loaded.</param>
+    /// <param name="skipHardwareInit">Set by tests so no hardware is opened.</param>
     /// <param name="timeProvider">
     /// Clock for the storage-temperature time-to-live. Optional with a System default, like
     /// <paramref name="skipHardwareInit"/>, so the ten existing construction sites are unaffected while a test
@@ -113,11 +115,49 @@ public sealed class TemperatureService : IDisposable
             await Task.Run(() => ReadNvidiaGpuTemperatures(readings)).ConfigureAwait(false);
             if (includeStorage)
                 await ReadDiskTemperaturesAsync(readings).ConfigureAwait(false);
-
-            readings.Add(new TemperatureReading("CPU", "CPU Package", null, RequiresAdmin: true));
         }
 
+        AddCpuPlaceholder(readings, isAdmin, CpuDriverInstalled.Value);
         return readings;
+    }
+
+    /// <summary>
+    /// Adds the CPU row that says why there is no CPU temperature, when none was read.
+    /// </summary>
+    /// <remarks>
+    /// LibreHardwareMonitor 0.9.6 ships no driver of its own: it reads the CPU and the motherboard through the
+    /// PawnIO driver, which is installed separately and which SysManager does not install. Without it an elevated
+    /// read returned no CPU row at all, so the CPU temperature that running as administrator promised was simply
+    /// gone after the relaunch (#2828). The driver is named whether or not SysManager is elevated, since
+    /// elevation alone cannot help; with the driver there, a read that is not elevated says administrator.
+    /// </remarks>
+    internal static void AddCpuPlaceholder(List<TemperatureReading> readings, bool isElevated, bool cpuDriverInstalled)
+    {
+        if (readings.Any(r => r.Component == "CPU" && r.TemperatureC.HasValue)) return;
+
+        if (!cpuDriverInstalled)
+            readings.Add(new TemperatureReading("CPU", "CPU Package", null, RequiresDriver: true));
+        else if (!isElevated)
+            readings.Add(new TemperatureReading("CPU", "CPU Package", null, RequiresAdmin: true));
+    }
+
+    // LibreHardwareMonitor reads PawnIO's uninstall entry once, in PawnIo's static constructor, so the answer
+    // cannot change while SysManager runs and is read once here too.
+    private static readonly Lazy<bool> CpuDriverInstalled = new(ReadCpuDriverInstalled);
+
+    private static bool ReadCpuDriverInstalled()
+    {
+        try
+        {
+            return LibreHardwareMonitor.PawnIo.PawnIo.IsInstalled;
+        }
+        catch (TypeInitializationException ex)
+        {
+            // The registry read in PawnIo's static constructor failed. LibreHardwareMonitor's own CPU code goes
+            // through the same type, so it cannot reach the driver either: report it as missing.
+            Log.Debug("Could not tell whether the PawnIO driver is installed: {Error}", ex.Message);
+            return false;
+        }
     }
 
     private void ReadViaLibreHardwareMonitor(List<TemperatureReading> readings, bool includeStorage = true)
@@ -127,7 +167,7 @@ public sealed class TemperatureService : IDisposable
             if (_disposed) return;
             try
             {
-                // Open the kernel-level monitor once and reuse it; subsequent polls
+                // Open the hardware monitor once and reuse it; subsequent polls
                 // only Update() the already-enumerated hardware. Attempted at most ONCE per session:
                 // ??= latches on success only, so a failing open used to be retried on every 2s poll.
                 if (!_lhmInitTried)
@@ -149,151 +189,198 @@ public sealed class TemperatureService : IDisposable
                     ? ((_cachedWmiDiskNames ??= GetDiskNamesFromWmi()) ?? [])
                     : [];
 
-                foreach (var hardware in _computer.Hardware)
-                {
-                    hardware.Update();
-
-                    foreach (var subHardware in hardware.SubHardware)
-                        subHardware.Update();
-
-                    // Topology once per session, not once per hardware item per 2s poll — see
-                    // _loggedSensorTopology. The diagnostic value is "what sensors does this machine
-                    // expose", which is answered by the first read and unchanged by the 30th.
-                    if (!_loggedSensorTopology)
-                    {
-                        Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
-                            hardware.HardwareType, hardware.Name,
-                            hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
-                    }
-
-                    var component = hardware.HardwareType switch
-                    {
-                        HardwareType.Cpu => "CPU",
-                        HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel => "GPU",
-                        HardwareType.Storage => "Storage",
-                        HardwareType.Motherboard => "Motherboard",
-                        _ => null
-                    };
-
-                    if (component is null) continue;
-
-                    var tempSensors = hardware.Sensors
-                        .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
-                        .ToList();
-
-                    // Also check sub-hardware (e.g. motherboard chips)
-                    foreach (var sub in hardware.SubHardware)
-                    {
-                        tempSensors.AddRange(sub.Sensors
-                            .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0));
-                    }
-
-                    if (component == "CPU")
-                    {
-                        // Take "CPU Package" or first available
-                        var packageSensor = tempSensors.FirstOrDefault(s =>
-                            s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
-
-                        if (packageSensor is not null)
-                        {
-                            readings.Add(new TemperatureReading("CPU", $"CPU Package ({hardware.Name})",
-                                packageSensor.Value));
-                        }
-
-                        // Add highest core temp if different from package
-                        var maxCore = tempSensors
-                            .Where(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase))
-                            .MaxBy(s => s.Value);
-                        if (maxCore is not null && !ReferenceEquals(maxCore, packageSensor))
-                        {
-                            readings.Add(new TemperatureReading("CPU", $"Hottest Core ({maxCore.Name})",
-                                maxCore.Value));
-                        }
-                    }
-                    else if (component == "GPU")
-                    {
-                        var gpuTemp = tempSensors.FirstOrDefault(s =>
-                            s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
-                            s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
-
-                        if (gpuTemp is not null)
-                        {
-                            readings.Add(new TemperatureReading("GPU Core",
-                                hardware.Name, gpuTemp.Value));
-                        }
-
-                        var hotSpot = tempSensors.FirstOrDefault(s =>
-                            s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) ||
-                            s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase));
-                        if (hotSpot is not null)
-                        {
-                            readings.Add(new TemperatureReading("GPU Hot Spot",
-                                hardware.Name, hotSpot.Value));
-                        }
-                    }
-                    else if (component == "Storage")
-                    {
-                        if (!includeStorage) continue;
-                        var diskTemp = tempSensors.FirstOrDefault();
-                        if (diskTemp is not null)
-                        {
-                            var name = hardware.Name;
-
-                            // LHM often returns empty or cryptic names for storage
-                            var namedByLhm = !(string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit));
-                            if (!namedByLhm)
-                            {
-                                // Try matching by index from WMI disk list
-                                var storageIndex = readings.Count(r => r.Component == "Storage");
-                                name = storageIndex < diskNames.Count
-                                    ? diskNames[storageIndex]
-                                    : $"Drive {storageIndex + 1}";
-                            }
-
-                            // The flag travels with the reading instead of being re-derived downstream. The
-                            // enricher used to overwrite EVERY storage name by list position, clobbering both
-                            // a good LHM name and the WMI model just substituted above.
-                            readings.Add(new TemperatureReading("Storage", name, diskTemp.Value,
-                                NameIsPlaceholder: !namedByLhm));
-                        }
-                    }
-                    else if (component == "Motherboard")
-                    {
-                        foreach (var sub in hardware.SubHardware)
-                        {
-                            var chipTemp = sub.Sensors
-                                .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
-                                .FirstOrDefault();
-                            if (chipTemp is not null)
-                            {
-                                readings.Add(new TemperatureReading("Motherboard", $"{sub.Name}", chipTemp.Value));
-                            }
-                        }
-                    }
-                }
-
-                // Set only after the loop completed, so a read that threw partway through can log the
-                // remaining hardware on its next attempt rather than losing it for the session.
-                _loggedSensorTopology = true;
+                ReadHardware(_computer.Hardware, readings, includeStorage, diskNames);
             }
             catch (Exception ex)
             {
-                // Broad on purpose: LibreHardwareMonitor reads each sensor through its own drivers, which fail with
-                // whatever the hardware layer reports, and a failed read must leave the rest of the poll intact.
+                // Broad on purpose: LibreHardwareMonitor reads each sensor through PawnIO, a GPU vendor's library or
+                // Windows, which fail with whatever the hardware layer reports, and a failed read must leave the rest
+                // of the poll intact.
                 Log.Debug("LibreHardwareMonitor failed: {Error}", ex.Message);
             }
         }
     }
 
     /// <summary>
+    /// Reads the temperatures of <paramref name="hardwareItems"/> into <paramref name="readings"/>.
+    /// </summary>
+    /// <remarks>
+    /// Called with <see cref="_sensorLock"/> held. Internal so a test can hand it stand-in hardware: the real list
+    /// comes from a <see cref="Computer"/>, which needs administrator rights and real sensors.
+    /// </remarks>
+    internal void ReadHardware(IEnumerable<IHardware> hardwareItems, List<TemperatureReading> readings,
+        bool includeStorage, IReadOnlyList<string> diskNames)
+    {
+        foreach (var hardware in hardwareItems)
+        {
+            // The fast path does not read storage, so it does not update it either. Updating a disk is a SMART
+            // pass-through on every NVMe, SATA and USB drive, which the 10-second sampler paid for and then threw
+            // away whenever SysManager ran elevated, with its window hidden too (#2828).
+            var skipped = !includeStorage && hardware.HardwareType == HardwareType.Storage;
+            if (!skipped)
+            {
+                hardware.Update();
+
+                foreach (var subHardware in hardware.SubHardware)
+                    subHardware.Update();
+            }
+
+            // Topology once per session, not once per hardware item per 2s poll — see
+            // _loggedSensorTopology. The diagnostic value is "what sensors does this machine
+            // expose", which is answered by the first read and unchanged by the 30th.
+            if (!_loggedSensorTopology)
+            {
+                Log.Debug("LHM: {Type} '{Name}' — {SensorCount} temp sensors",
+                    hardware.HardwareType, hardware.Name,
+                    hardware.Sensors.Count(s => s.SensorType == SensorType.Temperature));
+            }
+
+            if (skipped) continue;
+
+            var component = hardware.HardwareType switch
+            {
+                HardwareType.Cpu => "CPU",
+                HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel => "GPU",
+                HardwareType.Storage => "Storage",
+                HardwareType.Motherboard => "Motherboard",
+                _ => null
+            };
+
+            if (component is null) continue;
+
+            var tempSensors = hardware.Sensors
+                .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
+                .ToList();
+
+            // Also check sub-hardware (e.g. motherboard chips)
+            foreach (var sub in hardware.SubHardware)
+            {
+                tempSensors.AddRange(sub.Sensors
+                    .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0));
+            }
+
+            if (component == "CPU")
+            {
+                AddCpuReadings(hardware.Name, tempSensors, readings);
+            }
+            else if (component == "GPU")
+            {
+                var gpuTemp = tempSensors.FirstOrDefault(s =>
+                    s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
+                    s.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)) ?? tempSensors.FirstOrDefault();
+
+                if (gpuTemp is not null)
+                {
+                    readings.Add(new TemperatureReading("GPU Core",
+                        hardware.Name, gpuTemp.Value));
+                }
+
+                var hotSpot = tempSensors.FirstOrDefault(s =>
+                    s.Name.Contains("Hot Spot", StringComparison.OrdinalIgnoreCase) ||
+                    s.Name.Contains("Junction", StringComparison.OrdinalIgnoreCase));
+                if (hotSpot is not null)
+                {
+                    readings.Add(new TemperatureReading("GPU Hot Spot",
+                        hardware.Name, hotSpot.Value));
+                }
+            }
+            else if (component == "Storage")
+            {
+                var diskTemp = tempSensors.FirstOrDefault();
+                if (diskTemp is not null)
+                {
+                    var name = hardware.Name;
+
+                    // LHM often returns empty or cryptic names for storage
+                    var namedByLhm = !(string.IsNullOrWhiteSpace(name) || name.Length <= 3 || name.All(char.IsDigit));
+                    if (!namedByLhm)
+                    {
+                        // Try matching by index from WMI disk list
+                        var storageIndex = readings.Count(r => r.Component == "Storage");
+                        name = storageIndex < diskNames.Count
+                            ? diskNames[storageIndex]
+                            : $"Drive {storageIndex + 1}";
+                    }
+
+                    // The flag travels with the reading instead of being re-derived downstream. The
+                    // enricher used to overwrite EVERY storage name by list position, clobbering both
+                    // a good LHM name and the WMI model just substituted above.
+                    readings.Add(new TemperatureReading("Storage", name, diskTemp.Value,
+                        NameIsPlaceholder: !namedByLhm));
+                }
+            }
+            else if (component == "Motherboard")
+            {
+                foreach (var sub in hardware.SubHardware)
+                {
+                    var chipTemp = sub.Sensors
+                        .Where(s => s.SensorType == SensorType.Temperature && s.Value.HasValue && s.Value > 0)
+                        .FirstOrDefault();
+                    if (chipTemp is not null)
+                    {
+                        readings.Add(new TemperatureReading("Motherboard", $"{sub.Name}", chipTemp.Value));
+                    }
+                }
+            }
+        }
+
+        // Set only after the loop completed, so a read that threw partway through can log the
+        // remaining hardware on its next attempt rather than losing it for the session.
+        _loggedSensorTopology = true;
+    }
+
+    /// <summary>
+    /// Adds the CPU's package temperature and its hottest core, read from <paramref name="sensors"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not every Temperature sensor LibreHardwareMonitor reports for a CPU says how hot it is. Intel processors get
+    /// one "Distance to TjMax" per core, TjMax minus that core's temperature, and a Zen or Zen+ processor with an
+    /// offset gets "Core (Tctl)", its fan-control value, beside the real "Core (Tdie)". "Hottest Core" was the
+    /// highest of every sensor named Core, so a 38 °C CPU with a TjMax of 100 showed 62 °C, and Resource History,
+    /// which records the higher of the two CPU rows, never drew its CPU line below that (#2828). Neither is read.
+    /// <para>The hottest core is picked among the cores themselves rather than taken from "Core Max", which has the
+    /// same value but does not say which core it is, and "Core Average" is never the hottest.</para>
+    /// </remarks>
+    private static void AddCpuReadings(string cpuName, List<ISensor> sensors, List<TemperatureReading> readings)
+    {
+        var chip = sensors.Where(s => !IsNotTheChipTemperature(s.Name)).ToList();
+
+        // Take "CPU Package" or first available
+        var packageSensor = chip.FirstOrDefault(s =>
+            s.Name.Contains("Package", StringComparison.OrdinalIgnoreCase)) ?? chip.FirstOrDefault();
+
+        if (packageSensor is not null)
+        {
+            readings.Add(new TemperatureReading("CPU", $"CPU Package ({cpuName})", packageSensor.Value));
+        }
+
+        // Add highest core temp if different from package
+        var maxCore = chip
+            .Where(s => s.Name.Contains("Core", StringComparison.OrdinalIgnoreCase)
+                        && !s.Name.Contains("Max", StringComparison.OrdinalIgnoreCase)
+                        && !s.Name.Contains("Average", StringComparison.OrdinalIgnoreCase))
+            .MaxBy(s => s.Value);
+        if (maxCore is not null && !ReferenceEquals(maxCore, packageSensor))
+        {
+            readings.Add(new TemperatureReading("CPU", $"Hottest Core ({maxCore.Name})", maxCore.Value));
+        }
+    }
+
+    /// <summary>Whether a CPU sensor of type Temperature is something other than how hot the chip is.</summary>
+    private static bool IsNotTheChipTemperature(string name) =>
+        name.Contains("Distance to TjMax", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("(Tctl)", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Opens LibreHardwareMonitor once, or returns null and gives up for the rest of the session.
     /// </summary>
     /// <remarks>
-    /// <c>Open()</c> loads a ring0 driver, reads SMBIOS and builds the CPU, motherboard and storage groups.
-    /// All of that is fault-prone under HVCI, Secure Boot, a locked driver or a WMI fault. The previous shape
+    /// <c>Open()</c> reads SMBIOS, builds the CPU, motherboard and storage groups, and loads LibreHardwareMonitor's
+    /// modules into the PawnIO driver when it is installed. All of that is fault-prone under HVCI, Secure Boot, a
+    /// locked driver or a WMI fault. The previous shape
     /// was <c>_computer ??= OpenComputer()</c> with no try/catch inside, so a failure left <c>_computer</c>
-    /// null and the next Dashboard poll re-ran the heaviest possible init two seconds later — a kernel-driver
-    /// load and a full hardware enumeration every two seconds for the life of the process, with one Debug
+    /// null and the next Dashboard poll re-ran the heaviest possible init two seconds later — the driver work
+    /// and a full hardware enumeration every two seconds for the life of the process, with one Debug
     /// line each time. The half-opened Computer was also dropped without <c>Close()</c>, abandoning whatever
     /// Open() had already claimed.
     /// <para>Same one-shot guard the NvAPI path below already uses (<c>_nvApiInitTried</c>) for exactly this
@@ -316,8 +403,8 @@ public sealed class TemperatureService : IDisposable
         }
         catch (Exception ex)
         {
-            // Broad on purpose: Open() reaches a kernel driver, SMBIOS and WMI, and the useful outcome is the
-            // same whatever it throws — give up cleanly rather than retry a driver load 30 times a minute.
+            // Broad on purpose: Open() reaches the PawnIO driver, SMBIOS and WMI, and the useful outcome is the
+            // same whatever it throws — give up cleanly rather than retry all of it 30 times a minute.
             Log.Debug("LibreHardwareMonitor could not be opened, giving up for this session: {Error}", ex.Message);
             try { computer.Close(); }
             catch (Exception closeEx)
@@ -338,8 +425,8 @@ public sealed class TemperatureService : IDisposable
             try { _computer?.Close(); }
             catch (Exception ex)
             {
-                // Broad on purpose: Close() releases LibreHardwareMonitor's drivers, and disposing goes on whatever
-                // that throws.
+                // Broad on purpose: Close() releases what LibreHardwareMonitor opened, its PawnIO handles among them,
+                // and disposing goes on whatever that throws.
                 Log.Debug(ex, "LibreHardwareMonitor close failed");
             }
             _computer = null;

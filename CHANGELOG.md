@@ -10,6 +10,31 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.82] - 2026-10-23
+
+**The Dashboard says when the processor's temperature needs the PawnIO driver instead of losing it after a restart
+as administrator, Hottest Core is a core's own temperature, and the background history no longer queries every
+disk every 10 seconds.**
+
+### Fixed
+
+- **Running as administrator took the processor's temperature away instead of adding it.** The sensor library
+  SysManager uses reads the processor and the motherboard through PawnIO, a driver other monitoring tools install
+  and SysManager does not. Without it, the Temperatures card asked you to run as administrator for the processor,
+  and after the restart the processor row was gone without a word. The row now says "Requires driver" whenever
+  PawnIO is missing, as administrator too, and the card says why. The button reads "Run as admin for more
+  sensors", the administrator banner no longer says every sensor has full access, and Resource History's empty
+  chart names the driver too. Since 1.17.0.
+- **Hottest Core could show a distance instead of a temperature.** With PawnIO installed, an Intel processor also
+  reports, for each core, how far it is below its maximum temperature, and the card took the highest of those
+  together with the real readings: a processor at 38 °C showed 62 °C, and Resource History's processor line never
+  dropped below that. Some first- and second-generation Ryzen processors report a fan-control value 10 to 27 °C
+  above the real temperature beside it, and the card showed that value. Only the cores' own temperatures are read
+  now, and Hottest Core names the core. Since 1.17.0.
+- **The background history queried every disk every 10 seconds while SysManager ran as administrator.** It records
+  no disk temperatures, but every disk was asked for its readings before they were thrown away, also with the
+  window hidden. The disks are left alone now unless the Dashboard asks for them. Since 1.47.0.
+
 ## [1.130.81] - 2026-10-23
 
 **Right-click Menu's switches now match what Explorer does: an add-on listed for both files and folders switches as

@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.86] - 2026-10-23
+
+**Installing an update now checks the file again, right before it replaces SysManager, against the checksum that
+was verified — so what gets installed is what was checked.**
+
+### Fixed
+
+- **The check and the install were two separate reads of the file.** SysManager verified the downloaded build
+  against its published checksum, then handed the file to the part that does the replacing, which opened it again
+  by name — from a folder your own account can write to — and installed whatever it found there, with
+  administrator rights if SysManager had them. Nothing tied the two reads together, so anything that replaced the
+  file in between would have been installed unchecked. The verified checksum now travels with the handover: the
+  installer opens the file itself, blocks other programs from writing to it, checks it against that checksum, and
+  copies from that same open file. A build that does not match, or a handover with no usable checksum, installs
+  nothing and says so in the log. The same applies to **Go back to the previous version**, which now passes the
+  checksum it recorded when the copy was made. Since 1.42.11.
+
 ## [1.130.85] - 2026-10-23
 
 **About: a download that stops arriving now gives up and says so, you can cancel one, and a check that cannot

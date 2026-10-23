@@ -19,7 +19,7 @@ namespace SysManager.Tests;
 public class UpdateApplierTests
 {
     /// <summary>
-    /// The updates directory every <see cref="UpdateApplier.ApplyCopy"/> call in this file must be
+    /// The updates directory every <see cref="UpdateApplier.ApplyCopyFromPath(string, string, int, int, string?)"/> call in this file must be
     /// pointed at. Omitting it is not a harmless default: ApplyCopy retains the outgoing build, and
     /// with no override that copy lands in the REAL <c>%LocalAppData%\SysManager\updates</c> and
     /// overwrites the developer's own rollback build with a temp fixture (#1772).
@@ -32,54 +32,77 @@ public class UpdateApplierTests
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
     }
 
+    /// <summary>A SHA-256-shaped value, which is the only shape the hash argument may take.</summary>
+    private const string AnyHash = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+
     [Fact]
     public void BuildArguments_RoundTripsThroughTryParse()
     {
         const string target = @"C:\Program Files\SysManager\SysManager.exe";
-        var argString = UpdateApplier.BuildArguments(target, 4321);
+        var argString = UpdateApplier.BuildArguments(target, 4321, AnyHash);
 
         // The OS splits the command line and strips the quotes around the path,
         // so simulate that by parsing the unquoted tokens the way Main receives them.
-        var args = new[] { UpdateApplier.ApplyUpdateArg, target, "4321" };
-        Assert.True(UpdateApplier.TryParseArgs(args, out var parsedTarget, out var pid));
+        var args = new[] { UpdateApplier.ApplyUpdateArg, target, "4321", AnyHash };
+        Assert.True(UpdateApplier.TryParseArgs(args, out var parsedTarget, out var pid, out var hash));
         Assert.Equal(target, parsedTarget);
         Assert.Equal(4321, pid);
+        // The hash travels with the launch, because the applier re-checks the bytes it installs against it (#2832).
+        Assert.Equal(AnyHash, hash);
 
-        // The built string carries the sentinel and a quoted path.
+        // The built string carries the sentinel, a quoted path and the hash.
         Assert.StartsWith(UpdateApplier.ApplyUpdateArg, argString);
         Assert.Contains($"\"{target}\"", argString);
+        Assert.EndsWith(AnyHash, argString);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-hash")]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE")]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEFA")]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEG")]
+    public void BuildArguments_RejectsAHashThatIsNotOne(string hash)
+    {
+        // Refused on the way out as well as on the way in: a launch with no usable checksum is an install the
+        // applier cannot check, which is the whole of #2832. Sixty-three digits, sixty-five, and one that is
+        // not hexadecimal.
+        Assert.Throws<InvalidOperationException>(
+            () => UpdateApplier.BuildArguments(@"C:\x.exe", 1, hash));
     }
 
     [Fact]
     public void BuildArguments_RejectsQuoteInPath()
     {
         Assert.Throws<InvalidOperationException>(
-            () => UpdateApplier.BuildArguments(@"C:\evil"" & calc & "".exe", 1));
+            () => UpdateApplier.BuildArguments(@"C:\evil"" & calc & "".exe", 1, AnyHash));
     }
 
     public static IEnumerable<object[]> MalformedArgs() => new[]
     {
         new object[] { Array.Empty<string>() },                          // empty
-        new object[] { new[] { "--apply-update" } },                     // missing target + pid
-        new object[] { new[] { "--apply-update", @"C:\x.exe" } },        // missing pid
-        new object[] { new[] { "--other", @"C:\x.exe", "123" } },        // wrong sentinel
-        new object[] { new[] { "--apply-update", @"C:\x.exe", "0" } },   // non-positive pid
-        new object[] { new[] { "--apply-update", @"C:\x.exe", "abc" } }, // non-numeric pid
-        new object[] { new[] { "--apply-update", "", "123" } },          // blank target
+        new object[] { new[] { "--apply-update" } },                      // missing target + pid
+        new object[] { new[] { "--apply-update", @"C:\x.exe" } },         // missing pid
+        new object[] { new[] { "--apply-update", @"C:\x.exe", "123" } },  // missing hash
+        new object[] { new[] { "--other", @"C:\x.exe", "123", AnyHash } },         // wrong sentinel
+        new object[] { new[] { "--apply-update", @"C:\x.exe", "0", AnyHash } },    // non-positive pid
+        new object[] { new[] { "--apply-update", @"C:\x.exe", "abc", AnyHash } },  // non-numeric pid
+        new object[] { new[] { "--apply-update", "", "123", AnyHash } },            // blank target
+        new object[] { new[] { "--apply-update", @"C:\x.exe", "123", "nope" } },  // hash is not a SHA-256
     };
 
     [Theory]
     [MemberData(nameof(MalformedArgs))]
     public void TryParseArgs_RejectsMalformedInput(string[] args)
     {
-        Assert.False(UpdateApplier.TryParseArgs(args, out _, out _));
+        Assert.False(UpdateApplier.TryParseArgs(args, out _, out _, out _));
     }
 
     [Fact]
     public void TryParseArgs_IsCaseInsensitiveOnSentinel()
     {
-        var args = new[] { "--APPLY-UPDATE", @"C:\x.exe", "7" };
-        Assert.True(UpdateApplier.TryParseArgs(args, out var target, out var pid));
+        var args = new[] { "--APPLY-UPDATE", @"C:\x.exe", "7", AnyHash };
+        Assert.True(UpdateApplier.TryParseArgs(args, out var target, out var pid, out _));
         Assert.Equal(@"C:\x.exe", target);
         Assert.Equal(7, pid);
     }
@@ -95,7 +118,7 @@ public class UpdateApplierTests
             File.WriteAllText(source, "NEW-BUILD");
             File.WriteAllText(target, "OLD-BUILD");
 
-            var ok = UpdateApplier.ApplyCopy(
+            var ok = UpdateApplier.ApplyCopyFromPath(
                 source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
 
             Assert.True(ok);
@@ -150,7 +173,7 @@ public class UpdateApplierTests
 
             using (var hold = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                var ok = UpdateApplier.ApplyCopy(
+                var ok = UpdateApplier.ApplyCopyFromPath(
                     source, target, maxAttempts: 2, delayMs: 0, updatesDir: Updates(dir));
 
                 Assert.False(ok);
@@ -178,7 +201,7 @@ public class UpdateApplierTests
             var target = Path.Combine(dir.FullName, "current.exe");
             File.WriteAllText(source, "NEW-BUILD");
 
-            var ok = UpdateApplier.ApplyCopy(
+            var ok = UpdateApplier.ApplyCopyFromPath(
                 source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
 
             Assert.True(ok);
@@ -205,7 +228,7 @@ public class UpdateApplierTests
             // loop (it would otherwise misread FileNotFoundException as a transient lock).
             // delayMs is large on purpose — if the guard regressed and the loop ran, the
             // test would hang noticeably rather than return instantly.
-            var ok = UpdateApplier.ApplyCopy(
+            var ok = UpdateApplier.ApplyCopyFromPath(
                 source, target, maxAttempts: 10, delayMs: 10_000, updatesDir: Updates(dir));
 
             // A failed copy must never destroy the working executable.
@@ -240,7 +263,7 @@ public class UpdateApplierTests
             File.WriteAllText(target, "OLD-BUILD");
 
             UpdateApplier.PreserveCurrentBuild(target, updates);
-            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: updates));
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: updates));
 
             // The update landed…
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
@@ -315,7 +338,7 @@ public class UpdateApplierTests
 
             // Same blocked directory: the update must survive the retention failing INSIDE ApplyCopy,
             // not merely when PreserveCurrentBuild is called separately beforehand.
-            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: blocked));
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, updatesDir: blocked));
             Assert.Equal("NEW-BUILD", File.ReadAllText(target));
         }
         finally { dir.Delete(recursive: true); }
@@ -351,7 +374,7 @@ public class UpdateApplierTests
             File.WriteAllText(target, "OLD-BUILD");
 
             // No separate PreserveCurrentBuild call — ApplyCopy's own retention must do the work.
-            Assert.True(UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0, updatesDir: updates));
+            Assert.True(UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 1, delayMs: 0, updatesDir: updates));
 
             Assert.Equal("OLD-BUILD", File.ReadAllText(UpdateApplier.PreviousBuildPath(updates)));
         }
@@ -377,7 +400,7 @@ public class UpdateApplierTests
             File.WriteAllText(source, "NEW-BUILD");
             File.WriteAllText(target, "OLD-BUILD");
 
-            UpdateApplier.ApplyCopy(source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
+            UpdateApplier.ApplyCopyFromPath(source, target, maxAttempts: 1, delayMs: 0, updatesDir: Updates(dir));
         }
         finally { dir.Delete(recursive: true); }
 
@@ -560,11 +583,106 @@ public class UpdateApplierTests
             var before = Sha256(victim);
 
             // A pid that cannot exist, so Run does not wait: this is exactly what an attacker supplies.
-            UpdateApplier.Run(victim, 999999);
+            UpdateApplier.Run(victim, 999999, AnyHash);
 
             Assert.True(File.Exists(victim));
             Assert.Equal(before, Sha256(victim));
             Assert.False(File.Exists(victim + ".new"));   // not even a staging file was written
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    // ── The bytes installed are the bytes whose hash was checked (#2832) ───────────────────────────
+    // The launching app verified a hash on a handle it then closed, and the applier read the file by
+    // NAME out of %LOCALAPPDATA%\SysManager\updates — a folder the user can write to — installing and
+    // starting whatever that name meant at the second read, elevated. Run now opens its own deny-write
+    // handle, hashes THAT, and installs from it.
+
+    /// <summary>
+    /// A build that does not match the hash it was launched with installs nothing.
+    /// </summary>
+    /// <remarks>
+    /// Run hashes the process's own executable, which in a test is the test host — so any real SHA-256 that is
+    /// not the test host's proves the refusal. The target is a copy of this executable, so the only thing left
+    /// to refuse on is the hash: <c>IsValidApplyTarget</c> is satisfied and would otherwise let the write
+    /// through. Asserted on the target's bytes AND on the absence of a staging file, so a refusal that happened
+    /// after a partial write would still fail.
+    /// </remarks>
+    [Fact]
+    public void Run_WhenThisBuildDoesNotMatchItsHash_InstallsNothing()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierHash_");
+        try
+        {
+            // A target that passes the product check: a copy of the running executable.
+            var self = Environment.ProcessPath!;
+            var target = Path.Combine(dir.FullName, Path.GetFileName(self));
+            File.Copy(self, target);
+            var before = Sha256(target);
+
+            // A pid that cannot exist, so nothing waits. AnyHash is a well-formed SHA-256 that is not this
+            // executable's, which is exactly the swapped-file case.
+            UpdateApplier.Run(target, 999999, AnyHash);
+
+            Assert.Equal(before, Sha256(target));
+            Assert.False(File.Exists(target + ".new"), "a staging file was written before the hash was checked");
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>
+    /// A launch with no usable checksum installs nothing either.
+    /// </summary>
+    /// <remarks>
+    /// <c>TryParseArgs</c> already refuses these, so this is the second gate: Run is the only thing that
+    /// writes, so Run is what must refuse, and a future second caller cannot get round it.
+    /// </remarks>
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-hash")]
+    [InlineData("0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE")]
+    public void Run_WithNoUsableHash_InstallsNothing(string hash)
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierHash_");
+        try
+        {
+            var self = Environment.ProcessPath!;
+            var target = Path.Combine(dir.FullName, Path.GetFileName(self));
+            File.Copy(self, target);
+            var before = Sha256(target);
+
+            UpdateApplier.Run(target, 999999, hash);
+
+            Assert.Equal(before, Sha256(target));
+            Assert.False(File.Exists(target + ".new"));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    /// <summary>
+    /// The staged bytes come from the handed stream, not from any path.
+    /// </summary>
+    /// <remarks>
+    /// The property the fix rests on: whoever holds a verified handle can install exactly those bytes. Driven
+    /// with a stream whose contents exist nowhere on disk, so a copy that went by name could not possibly pass.
+    /// </remarks>
+    [Fact]
+    public void ApplyCopy_FromAStream_InstallsThoseBytes()
+    {
+        var dir = Directory.CreateTempSubdirectory("ApplierStream_");
+        try
+        {
+            var target = Path.Combine(dir.FullName, "SysManager.exe");
+            File.WriteAllText(target, "the old build");
+            var bytes = System.Text.Encoding.UTF8.GetBytes("the verified build");
+
+            using var source = new MemoryStream(bytes);
+            // Read to the end first: the copy must rewind the stream itself, because the applier hands over one
+            // it has just hashed, and hashing leaves the position at the end.
+            source.Position = source.Length;
+
+            Assert.True(UpdateApplier.ApplyCopy(source, target, updatesDir: Updates(dir)));
+            Assert.Equal("the verified build", File.ReadAllText(target));
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -609,7 +727,7 @@ public class UpdateApplierTests
             UpdateApplier.PreserveCurrentBuild(current, updates);
 
             Assert.True(
-                UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason),
+                UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _),
                 reason);
             using (stream)
             {
@@ -638,7 +756,7 @@ public class UpdateApplierTests
 
             File.WriteAllText(UpdateApplier.PreviousBuildPath(updates), "attacker payload");
 
-            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _));
             Assert.Null(stream);   // nothing left open on a refusal
             Assert.Contains("changed", reason);
         }
@@ -662,7 +780,7 @@ public class UpdateApplierTests
             if (hashContent is not null)
                 File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), hashContent);
 
-            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _));
             Assert.Null(stream);
             Assert.NotEqual("", reason);   // and it says why, so the UI never refuses silently
         }
@@ -677,7 +795,7 @@ public class UpdateApplierTests
         {
             var updates = Directory.CreateDirectory(Updates(dir)).FullName;
 
-            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason));
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var reason, out _));
             Assert.Null(stream);
             Assert.NotEqual("", reason);
         }
@@ -706,7 +824,7 @@ public class UpdateApplierTests
             if (hashContent is not null)
                 File.WriteAllText(UpdateApplier.PreviousBuildHashPath(updates), hashContent);
 
-            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out _));
+            Assert.False(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out _, out _));
             Assert.Null(stream);
 
             File.Delete(previous);   // throws IOException if the handle is still open
@@ -730,7 +848,10 @@ public class UpdateApplierTests
             File.WriteAllText(current, "the outgoing build");
             UpdateApplier.PreserveCurrentBuild(current, updates);
 
-            Assert.True(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var why), why);
+            Assert.True(UpdateApplier.TryOpenVerifiedPreviousBuild(updates, out var stream, out var why, out var hash), why);
+            // The checksum it proved the copy against comes back with the handle: the rollback launch carries it,
+            // so the applier can check the same bytes on a handle of its own (#2832).
+            Assert.Equal(File.ReadAllText(UpdateApplier.PreviousBuildHashPath(updates)).Trim(), hash);
             using (stream)
             {
                 Assert.NotNull(stream);

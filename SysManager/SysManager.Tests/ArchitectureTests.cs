@@ -11984,6 +11984,84 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"new\s+NvidiaGpuReader\s*\(", RegexOptions.Compiled)]
     private static partial Regex NvidiaReaderConstruction();
 
+    /// <summary>
+    /// The update applier installs the bytes it verified: it checks its own executable against the checksum it
+    /// was launched with, and stages from that same open handle rather than reading the path again.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two used to be separate reads. <c>InstallUpdateAsync</c> hashed the download on a
+    /// <c>FileShare.Read</c> handle, launched it, and closed the handle in its <c>finally</c>; the applier then
+    /// took <c>Environment.ProcessPath</c> as a string and copied it <c>File.Copy</c>-by-name out of
+    /// <c>%LocalAppData%\SysManager\updates</c> — a folder the user can write to — moving whatever that name
+    /// meant at that moment over SysManager.exe and starting it with the applier's token, so elevated when
+    /// SysManager was elevated. Nothing tied what was installed to what was checked (#2832).</para>
+    /// <para>Nothing else can catch a regression here. Both shapes compile, both work on a developer machine
+    /// where no one swaps the file between the two reads, and the difference is invisible to a unit test of
+    /// either half on its own. So the contract is mechanical: <c>Run</c> hashes a handle it opened and hands
+    /// that handle on, and the path-taking <c>ApplyCopy</c> overload — which exists for the staging, retry and
+    /// retention tests — is never reached from the applier's own path.</para>
+    /// <para>Read from source with comments stripped, because the remarks in that file name both overloads and
+    /// describe the defect, so a guard that read its own prose would pass on code that had it back.</para>
+    /// </remarks>
+    [Fact]
+    public void TheApplier_InstallsTheBytesItVerified()
+    {
+        var source = WithoutComments(File.ReadAllText(
+            Path.Combine(TestPaths.AppProject(), "Services", "UpdateApplier.cs")));
+
+        // The hash has to arrive with the launch and be required, on both sides of the command line.
+        Assert.Contains("public static string BuildArguments(string targetExe, int pid, string verifiedHash)",
+            source, StringComparison.Ordinal);
+        Assert.Contains("if (!IsSha256(verifiedHash))", source, StringComparison.Ordinal);
+        Assert.Contains("if (!IsSha256(args[3])) return false;", source, StringComparison.Ordinal);
+
+        var run = MemberSlice(source, "public static void Run(string targetExe, int oldPid, string expectedHash)");
+        Assert.False(string.IsNullOrWhiteSpace(run),
+            "Run was not found — the slice is empty, so every check below would pass without reading code.");
+
+        // It opens its own handle, deny-write, and hashes THAT rather than the path.
+        Assert.Contains("new FileStream(sourceExe, FileMode.Open, FileAccess.Read, FileShare.Read)", run,
+            StringComparison.Ordinal);
+        Assert.Contains("SHA256.HashData(verified)", run, StringComparison.Ordinal);
+        Assert.Contains("if (!IsSha256(expectedHash))", run, StringComparison.Ordinal);
+
+        // And a mismatch returns before anything is installed. Asserted as the comparison plus a return inside
+        // its block, not merely that the words appear: a mismatch that only logged would read the same.
+        var mismatch = run.IndexOf("actual.Equals(expectedHash", StringComparison.Ordinal);
+        Assert.True(mismatch > 0, "Run no longer compares its own hash with the one it was launched with.");
+        var afterMismatch = run[mismatch..];
+        var handedOn = afterMismatch.IndexOf("SwapAndRelaunch(", StringComparison.Ordinal);
+        Assert.True(handedOn > 0, "Run no longer hands the verified handle on.");
+        Assert.Contains("return;", afterMismatch[..handedOn], StringComparison.Ordinal);
+
+        // The install reads from the handle.
+        var swap = MemberSlice(source,
+            "private static void SwapAndRelaunch(FileStream verified, string targetExe, int oldPid)");
+        Assert.False(string.IsNullOrWhiteSpace(swap), "SwapAndRelaunch was not found.");
+        Assert.Contains("ApplyCopy(verified, targetExe)", swap, StringComparison.Ordinal);
+
+        // And the by-name form is CALLED nowhere in this file — it exists for the staging, retry and retention
+        // tests only. Asserted over the whole file rather than inside Run: a second read added anywhere on the
+        // applier's path installs a file nothing verified, and a slice of one member would not see it. The one
+        // permitted mention is its own declaration.
+        const string byName = "ApplyCopyFromPath";
+        var mentions = source.Split(byName).Length - 1;
+        var declaration = source.Contains("internal static bool " + byName + "(", StringComparison.Ordinal) ? 1 : 0;
+        Assert.Equal(1, declaration);
+        Assert.Equal(declaration, mentions);
+
+        // The staging copy itself must come from the stream. File.Copy anywhere in the staging path would be a
+        // read by name, which is the whole defect.
+        // One declaration to land on: the path-taking form is ApplyCopyFromPath, so this marker is unambiguous.
+        // It was not, and the slice found the wrong method — which is also what made the retry-loop guard report
+        // its loop missing.
+        var stage = MemberSlice(source, "internal static bool ApplyCopy(");
+        Assert.False(string.IsNullOrWhiteSpace(stage), "ApplyCopy was not found.");
+        Assert.Contains("Stream source", stage, StringComparison.Ordinal);
+        Assert.Contains("source.CopyTo(stagingFile)", stage, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Copy(", stage, StringComparison.Ordinal);
+    }
+
     [GeneratedRegex(@"bool\s+_restorePoint\w*Attempted\w*\s*;", RegexOptions.Compiled)]
     private static partial Regex RestorePointAttemptFlag();
 

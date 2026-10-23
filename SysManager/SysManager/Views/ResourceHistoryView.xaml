@@ -111,7 +111,7 @@
                                         TooltipTextPaint="{Binding TooltipTextPaint}"
                                         TooltipBackgroundPaint="{Binding TooltipBackgroundPaint}"/>
                     <v:EmptyState Grid.Row="1" Glyph="&#xE9CA;" Title="No temperature data"
-                                  Message="CPU/GPU temperatures need supported sensors (and admin for CPU). The chart fills in once readings are available."
+                                  Message="CPU/GPU temperatures need supported sensors, and the CPU's also needs administrator rights and the PawnIO driver, which SysManager does not install. The chart fills in once readings are available."
                                   Visibility="{Binding HasTemperatureData, Converter={StaticResource FlexVis}, ConverterParameter=Inverse}"/>
                 </Grid>
             </Border>

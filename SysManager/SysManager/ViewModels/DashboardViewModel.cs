@@ -129,6 +129,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// </remarks>
     [ObservableProperty] private bool _temperaturesUnavailable;
 
+    /// <summary>
+    /// True once a temperature read has completed with no CPU temperature because the PawnIO driver is missing.
+    /// </summary>
+    /// <remarks>
+    /// Shows the card's line that says so. Without it, running as administrator promised the CPU temperature and
+    /// the relaunch took the CPU row away without a word (#2828).
+    /// </remarks>
+    [ObservableProperty] private bool _temperaturesNeedDriver;
+
     // ── Temperatures ─────────────────────────────────────────────────────
     public BulkObservableCollection<TemperatureReading> Temperatures { get; } = new();
 
@@ -584,6 +593,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
         // unit test. The state would then be assertable nowhere, which is how the elevation branches in
         // #2102 ended up unpinned.
         TemperaturesUnavailable = readings.Count == 0;
+        TemperaturesNeedDriver = readings.Any(r => r.RequiresDriver);
 
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             Temperatures.ReplaceWith(readings));

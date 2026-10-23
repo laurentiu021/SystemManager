@@ -1668,8 +1668,12 @@ Key services:
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
-  only the NVIDIA GPU and the disks' SMART temperatures. It does not poll: the Dashboard asks
-  every 2 s while it is visible, and the Resource History sampler every 10 s.
+  only the NVIDIA GPU and the disks' SMART temperatures. LibreHardwareMonitor reads the CPU and
+  motherboard through the separately installed PawnIO driver, and without it the CPU row is a
+  "Requires driver" placeholder, elevated or not. `ReadHardware` takes the hardware list, so tests
+  hand it stand-ins; it leaves out sensors that are not the chip's temperature (Intel's Distance to
+  TjMax, an offset Zen Tctl) and does not update storage when storage is not asked for. It does not
+  poll: the Dashboard asks every 2 s while it is visible, and the Resource History sampler every 10 s.
 - `ActivityLogService` — persists the last 200 user actions (60 before Recent Changes read them over as
   long as 90 days, #1507) to a JSON file for the Dashboard's recent-activity card and Recent Changes: 22
   kinds of action, from 29 call sites. The six destructive operations (deep cleanup, browser clean,

@@ -2,6 +2,8 @@
 // Author: laurentiu021 · https://github.com/laurentiu021/SystemManager
 // License: MIT
 
+using LibreHardwareMonitor.Hardware;
+using NSubstitute;
 using SysManager.Models;
 using SysManager.Services;
 
@@ -9,13 +11,15 @@ namespace SysManager.Tests;
 
 /// <summary>
 /// Tests for <see cref="TemperatureService.ApplyStorageNames"/> — the storage-name substitution that used to
-/// display one drive's temperature under another drive's name.
+/// display one drive's temperature under another drive's name — and for what the service makes of the sensors
+/// it is handed and of a missing CPU temperature.
 /// </summary>
 /// <remarks>
-/// The other three fixes in the same change are not reachable from a unit test and are not pretended to be:
-/// opening LibreHardwareMonitor loads a kernel driver, the WMI disk-name query needs live WMI, and the
-/// storage-temperature time-to-live sits behind <see cref="DiskHealthService"/>, which is sealed with a
-/// non-virtual CollectAsync.
+/// The other three fixes in the same change as the storage names are not reachable from a unit test and are
+/// not pretended to be: opening LibreHardwareMonitor needs administrator rights and real hardware, the WMI
+/// disk-name query needs live WMI, and the storage-temperature time-to-live sits behind
+/// <see cref="DiskHealthService"/>, which is sealed with a non-virtual CollectAsync. What is read from the
+/// hardware once it is open is reachable: <see cref="TemperatureService.ReadHardware"/> takes stand-in hardware.
 /// </remarks>
 public class TemperatureServiceTests
 {
@@ -141,5 +145,187 @@ public class TemperatureServiceTests
             "a TTL near the 2 s poll interval would not reduce the WMI work it exists to reduce");
         Assert.True(TemperatureService.DiskTemperatureTtl <= TimeSpan.FromMinutes(2),
             "a drive warming up must still appear within a sensible time");
+    }
+
+    // ---------- what is read from the hardware (#2828) ----------
+
+    private static ISensor Temperature(string name, float value)
+    {
+        var sensor = Substitute.For<ISensor>();
+        sensor.Name.Returns(name);
+        sensor.SensorType.Returns(SensorType.Temperature);
+        sensor.Value.Returns(value);
+        return sensor;
+    }
+
+    private static IHardware Hardware(HardwareType type, string name, params ISensor[] sensors)
+    {
+        var hardware = Substitute.For<IHardware>();
+        hardware.HardwareType.Returns(type);
+        hardware.Name.Returns(name);
+        hardware.Sensors.Returns(sensors);
+        hardware.SubHardware.Returns(Array.Empty<IHardware>());
+        return hardware;
+    }
+
+    private static List<TemperatureReading> Read(bool includeStorage, params IHardware[] hardware)
+    {
+        using var service = new TemperatureService(new DiskHealthService(), skipHardwareInit: true);
+        List<TemperatureReading> readings = [];
+        service.ReadHardware(hardware, readings, includeStorage, []);
+        return readings;
+    }
+
+    /// <summary>
+    /// An Intel processor's "Distance to TjMax" sensors are never read as a temperature.
+    /// </summary>
+    /// <remarks>
+    /// LibreHardwareMonitor reports one per core, of type Temperature, valued TjMax minus the core's temperature.
+    /// "Hottest Core" was the highest of every sensor named Core, so these cores at 38 and 40 under a TjMax of
+    /// 100 showed 62 °C. Built the way LibreHardwareMonitor builds an Intel hybrid CPU: Core Max and Core Average
+    /// first, then the cores, the package, and the distances.
+    /// </remarks>
+    [Fact]
+    public void ReadHardware_IntelDistanceToTjMax_IsNotTheHottestCore()
+    {
+        var cpu = Hardware(HardwareType.Cpu, "Test CPU",
+            Temperature("Core Max", 40), Temperature("Core Average", 39),
+            Temperature("P-Core #1", 38), Temperature("P-Core #2", 40),
+            Temperature("CPU Package", 41),
+            Temperature("P-Core #1 Distance to TjMax", 62), Temperature("P-Core #2 Distance to TjMax", 60));
+
+        var readings = Read(includeStorage: false, cpu);
+
+        Assert.Equal(2, readings.Count);
+        Assert.Equal("CPU Package (Test CPU)", readings[0].SensorName);
+        Assert.Equal(41.0, readings[0].TemperatureC);
+        // The core by its own name: Core Max is the same value but does not say which core it is.
+        Assert.Equal("Hottest Core (P-Core #2)", readings[1].SensorName);
+        Assert.Equal(40.0, readings[1].TemperatureC);
+    }
+
+    /// <summary>
+    /// With no package sensor, the CPU row is a core, not a distance.
+    /// </summary>
+    /// <remarks>
+    /// The package falls back to the first sensor, and the distances are the case from the report: cores at 40
+    /// and distances at 60 must give 40, which is also what Resource History records as the higher of the rows.
+    /// </remarks>
+    [Fact]
+    public void ReadHardware_NoPackageSensor_FallsBackToACoreNotADistance()
+    {
+        var cpu = Hardware(HardwareType.Cpu, "Test CPU",
+            Temperature("CPU Core #1 Distance to TjMax", 60), Temperature("CPU Core #1", 40),
+            Temperature("CPU Core #2 Distance to TjMax", 65), Temperature("CPU Core #2", 35));
+
+        var readings = Read(includeStorage: false, cpu);
+
+        Assert.All(readings, r => Assert.DoesNotContain("Distance", r.SensorName, StringComparison.Ordinal));
+        Assert.Equal(40.0, readings.Where(r => r.Component == "CPU").Max(r => r.TemperatureC));
+    }
+
+    /// <summary>
+    /// A Zen or Zen+ processor's "Core (Tctl)" is its fan-control value, not its temperature.
+    /// </summary>
+    /// <remarks>
+    /// On those processors Tctl carries an offset of 10 to 27 °C over the die, and LibreHardwareMonitor then
+    /// reports "Core (Tdie)" beside it. The package fell back to Tctl, which was also the hottest "Core", so the
+    /// card showed the offset value. A processor without the offset reports one "Core (Tctl/Tdie)", which stays.
+    /// </remarks>
+    [Fact]
+    public void ReadHardware_AmdTctlWithAnOffset_ReadsTdie()
+    {
+        var offset = Hardware(HardwareType.Cpu, "Zen CPU", Temperature("Core (Tctl)", 70), Temperature("Core (Tdie)", 50));
+        var plain = Hardware(HardwareType.Cpu, "Zen 2 CPU", Temperature("Core (Tctl/Tdie)", 55));
+
+        var readings = Read(includeStorage: false, offset, plain);
+
+        Assert.Equal(new (string, double?)[] { ("CPU Package (Zen CPU)", 50.0), ("CPU Package (Zen 2 CPU)", 55.0) },
+            readings.Select(r => (r.SensorName, r.TemperatureC)).ToArray());
+    }
+
+    /// <summary>
+    /// The fast path does not update storage, and the full read still does.
+    /// </summary>
+    /// <remarks>
+    /// The background sampler asks for no storage, and the loop used to call Update() on every disk before
+    /// throwing the reading away: a SMART pass-through on every drive every 10 seconds whenever SysManager ran
+    /// elevated, window hidden or not.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ReadHardware_UpdatesStorage_OnlyWhenStorageIsRead(bool includeStorage)
+    {
+        var cpu = Hardware(HardwareType.Cpu, "Test CPU", Temperature("CPU Package", 45));
+        var disk = Hardware(HardwareType.Storage, "Samsung SSD 990 PRO 2TB", Temperature("Temperature", 38));
+
+        var readings = Read(includeStorage, cpu, disk);
+
+        cpu.Received(1).Update();
+        disk.Received(includeStorage ? 1 : 0).Update();
+        Assert.Equal(includeStorage, readings.Any(r => r.Component == "Storage"));
+    }
+
+    // ---------- the CPU row when there is no CPU temperature (#2828) ----------
+
+    /// <summary>
+    /// Without the PawnIO driver the CPU row says so, elevated or not, and without elevation it says administrator.
+    /// </summary>
+    /// <remarks>
+    /// LibreHardwareMonitor reads the CPU and the motherboard through PawnIO, installed separately. Elevated
+    /// without it, the read had no CPU row at all, so the CPU temperature that running as administrator promised
+    /// disappeared. Elevated with the driver and still no CPU temperature, nothing is added, as before.
+    /// </remarks>
+    [Theory]
+    [InlineData(true, false, "Requires driver")]
+    [InlineData(false, false, "Requires driver")]
+    [InlineData(false, true, "Requires admin")]
+    [InlineData(true, true, null)]
+    public void AddCpuPlaceholder_NoCpuTemperature_SaysWhatIsMissing(bool isElevated, bool driverInstalled,
+        string? expected)
+    {
+        List<TemperatureReading> readings = [new("GPU Core", "Test GPU", 47.0)];
+
+        TemperatureService.AddCpuPlaceholder(readings, isElevated, driverInstalled);
+
+        var cpu = readings.Where(r => r.Component == "CPU").ToList();
+        if (expected is null)
+        {
+            Assert.Empty(cpu);
+            return;
+        }
+
+        var row = Assert.Single(cpu);
+        Assert.Null(row.TemperatureC);
+        Assert.Equal(expected, row.DisplayValue);
+        Assert.Equal(!driverInstalled, row.RequiresDriver);
+    }
+
+    /// <summary>
+    /// A CPU temperature that was read is never joined by a placeholder.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public void AddCpuPlaceholder_CpuTemperatureRead_AddsNothing(bool isElevated, bool driverInstalled)
+    {
+        List<TemperatureReading> readings = [new("CPU", "CPU Package (Test CPU)", 45.0)];
+
+        TemperatureService.AddCpuPlaceholder(readings, isElevated, driverInstalled);
+
+        Assert.Single(readings);
+    }
+
+    /// <summary>
+    /// "Requires driver" wins over "Requires admin": elevation alone cannot read the CPU without the driver.
+    /// </summary>
+    [Fact]
+    public void DisplayValue_RequiresDriver_TakesPrecedenceOverRequiresAdmin()
+    {
+        var reading = new TemperatureReading("CPU", "CPU Package", null, RequiresAdmin: true, RequiresDriver: true);
+
+        Assert.Equal("Requires driver", reading.DisplayValue);
     }
 }

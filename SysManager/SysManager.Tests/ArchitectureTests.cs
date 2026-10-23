@@ -11617,8 +11617,8 @@ public partial class ArchitectureTests
 
     /// <summary>
     /// No log statement sits unguarded inside a hardware-enumeration loop that a poll re-enters.
-    /// <para><c>TemperatureService.ReadViaLibreHardwareMonitor</c> logged one line per hardware item
-    /// per call, and the Dashboard polls it every 2 seconds
+    /// <para><c>TemperatureService.ReadViaLibreHardwareMonitor</c>, whose loop is now
+    /// <c>ReadHardware</c>, logged one line per hardware item per call, and the Dashboard polls it every 2 seconds
     /// (<c>DashboardViewModel.StartTemperaturePolling</c>, <c>Task.Delay(2000)</c>) — so a machine with
     /// four LHM devices produced four Debug lines every two seconds for as long as the app ran. The
     /// v1.65.6 release smoke-check dumps the last 40 log lines when a launch fails; all 40 were that
@@ -11629,9 +11629,9 @@ public partial class ArchitectureTests
     /// and NvAPI init for exactly that reason — so it is logged once per session behind a flag. This
     /// asserts the flag exists, guards the log, and is only set after the loop completes, because
     /// setting it before would lose the remaining hardware if a read threw partway through.</para>
-    /// <para>Cannot be a behavioural test: the LHM path needs administrator rights and real sensors,
-    /// so <c>ReadAllAsync</c> returns early under <c>skipHardwareInit</c> in every test. The shape of
-    /// the fix is assertable from source; the behaviour is not.</para>
+    /// <para>A source check: <c>ReadAllAsync</c> returns early under <c>skipHardwareInit</c> in every test,
+    /// and while <c>ReadHardware</c> takes stand-in hardware (<c>TemperatureServiceTests</c>), what this pins
+    /// is a line in the app's log, which those tests do not capture.</para>
     /// </summary>
     [Fact]
     public void TheSensorTopologyLog_RunsOncePerSession_NotOncePerPoll()
@@ -11644,7 +11644,7 @@ public partial class ArchitectureTests
 
         // The poll loop is the thing that makes an unguarded log expensive, so pin that it is still a
         // loop: if the enumeration were ever restructured, this guard should be revisited, not passed.
-        var loopAt = source.IndexOf("foreach (var hardware in _computer.Hardware)", StringComparison.Ordinal);
+        var loopAt = source.IndexOf("foreach (var hardware in hardwareItems)", StringComparison.Ordinal);
         Assert.True(loopAt > 0, "the LHM hardware loop was not found — fix this guard, do not delete it.");
 
         var logAt = source.IndexOf("LHM: {Type}", StringComparison.Ordinal);

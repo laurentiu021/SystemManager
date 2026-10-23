@@ -1160,7 +1160,7 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   30 days); the usage chart (CPU / RAM / GPU %) and a separate temperature chart
   (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth. GPU usage is
   read from NVIDIA cards only; temperatures need sensors Windows can read, and the CPU's needs
-  administrator rights
+  administrator rights and the PawnIO driver, which SysManager does not install
 - **Configurable retention** — keep 7, 14, or 30 days of history; older samples
   are pruned automatically. If the setting cannot be read, nothing newer than 30 days
   is pruned until it can be, or until you choose again
@@ -2123,7 +2123,9 @@ offers, "rate us" prompts:
   indicator dots. GPU usage is read from NVIDIA cards only.
 - **Temperatures** — every sensor Windows can read, refreshed every 2 seconds while the tab is
   visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
-  temperatures are available, and the card says so
+  temperatures are available, and the card says so. The processor and motherboard temperatures
+  also need the PawnIO driver, which SysManager does not install: without it the processor shows
+  "Requires driver", as administrator too, and the card says why
 - **Recent Activity** — the five most recent things SysManager changed on this PC, with how long
   ago, kept current while the Dashboard is shown: cleanups, deletes, uninstalls, the Dashboard's Update All Apps, privacy and DNS changes,
   restore points, shredded files, game mode, and what Undo Changes put back. Not every tab writes

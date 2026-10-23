@@ -19,16 +19,22 @@ namespace SysManager.Models;
 /// list position, so a name LibreHardwareMonitor reported correctly was clobbered with whatever name happened
 /// to sit at the same ordinal in an independently-ordered WMI list.
 /// </param>
+/// <param name="RequiresDriver">
+/// True when the value is null because the PawnIO driver, through which the CPU and the motherboard are read,
+/// is not installed. Running as administrator does not help then, so it takes precedence over
+/// <paramref name="RequiresAdmin"/>.
+/// </param>
 public sealed record TemperatureReading(
     string Component,
     string SensorName,
     double? TemperatureC,
     bool RequiresAdmin = false,
-    bool NameIsPlaceholder = false)
+    bool NameIsPlaceholder = false,
+    bool RequiresDriver = false)
 {
     public string DisplayValue => TemperatureC.HasValue
         ? $"{TemperatureC.Value:F0}°C"
-        : RequiresAdmin ? "Requires admin" : "N/A";
+        : RequiresDriver ? "Requires driver" : RequiresAdmin ? "Requires admin" : "N/A";
 
     public string ColorHex => TemperatureC switch
     {

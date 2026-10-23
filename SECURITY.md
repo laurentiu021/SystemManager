@@ -169,11 +169,13 @@ What the app can and cannot do by design:
   carry a valid Authenticode signature from Ookla whose chain validates with online
   revocation, and it is checked again on every run, because it is cached in a folder
   your account can write to.
-- **A kernel driver for temperatures, only as administrator**: when SysManager runs
-  elevated, the Dashboard and Resource History read temperatures through the bundled
-  LibreHardwareMonitor library, which loads its own kernel-mode driver to reach the
-  CPU, motherboard and storage sensors. Without administrator rights it loads nothing
-  and reads only NVIDIA GPU and disk temperatures.
+- **A kernel driver for temperatures, only as administrator, and only if you installed it**:
+  when SysManager runs elevated, the Dashboard and Resource History read temperatures through
+  the bundled LibreHardwareMonitor library. It reaches the CPU and motherboard sensors only
+  through the PawnIO driver, which SysManager neither ships nor installs: when another monitoring
+  tool has installed PawnIO, LibreHardwareMonitor loads its own small modules into it, and without
+  PawnIO those two are not read. Disk temperatures come through Windows' own storage calls.
+  Without administrator rights it opens nothing and reads only NVIDIA GPU and disk temperatures.
 - **Unattended cleanup**: `SysManager.exe --cleanup` deletes temporary files more than a week
   old from your TEMP and Windows TEMP folders without asking, and Scheduled Maintenance can run it
   on a schedule. The schedule is one task for each Windows account,

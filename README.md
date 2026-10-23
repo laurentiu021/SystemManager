@@ -1873,8 +1873,9 @@ offers, "rate us" prompts:
   Windows gave its process ID to another program, Start changes nothing and says the game had
   already closed, and neither raising, restoring nor waiting for the game ever reaches that program
 - **System-wide optimizations** — Ultimate Performance power plan, reduced visual
-  effects, finest (~0.5 ms) timer resolution, freeing standby memory, pausing Windows
-  Search indexing, and silencing notifications — each ticked individually
+  effects, finest (~0.5 ms) timer resolution (for games that ask Windows for a fine timer,
+  see Timer Resolution), freeing standby memory, pausing Windows Search indexing, and
+  silencing notifications — each ticked individually
 - **Fully reversible & snapshot-based** — the original state (power plan, visual
   effects, indexing, notifications) is captured before any change and restored exactly;
   SysManager also tries a System Restore point first (best-effort, needs administrator)
@@ -1904,12 +1905,15 @@ offers, "rate us" prompts:
   profiles are planned for a later update
 
 ### Timer Resolution
-- **Lower input latency for games** — requests the finest Windows timer
+- **A finer timer for games that ask for one** — requests the finest Windows timer
   resolution (≈0.5 ms) instead of the ~15.6 ms default, via the ntdll
-  `NtSetTimerResolution` API
+  `NtSetTimerResolution` API. Since Windows 10 version 2004 this reaches only programs that
+  ask Windows for a fine timer themselves, as many games do, and they then get the finest
+  timer any program asked for. Windows 11 stops honoring such a request while the program's
+  windows are hidden, so SysManager asks Windows to keep honoring its own, also while a
+  full-screen game covers it or it sits in the notification area
 - **Current/finest/default readout** — read when the tab opens, after each change and on
-  **Refresh** (or F5), always as the *effective* resolution (Windows 11 may stop honoring a
-  request while the window is minimized), so the number shown is the real one
+  **Refresh** (or F5), always as the *effective* resolution, so the number shown is the real one
 - **One-click enable / restore** — fully reversible; the request is released
   when you restore it or when SysManager exits — closing the window to the notification area
   keeps it. No admin required

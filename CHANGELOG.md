@@ -10,6 +10,23 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.83] - 2026-10-23
+
+**Timer Resolution keeps its finer timer while a game covers SysManager on Windows 11, and the tab says which
+programs a finer timer reaches.**
+
+### Fixed
+
+- **On Windows 11 the finer timer could lapse exactly while the game it was for was running.** Windows 11 stops
+  honoring a timer request from a program whose windows are hidden, minimized or covered, which is SysManager's
+  state for as long as a full-screen game runs or while it sits in the notification area, and the tab measured the
+  timer only while it was in front. Turning the timer on now first asks Windows to keep honoring SysManager's
+  request while it is out of view, and restoring the default gives that choice back to Windows. Game mode's timer
+  step does the same. Since 1.35.0.
+- **The tab promised lower input latency in every game.** Since Windows 10 version 2004 a finer timer reaches only
+  programs that ask Windows for a fine timer themselves, as many games do, which then get the finest timer any
+  program asked for. The tab's description, and the README for it and for game mode, now say so. Since 1.35.0.
+
 ## [1.130.82] - 2026-10-23
 
 **The Dashboard says when the processor's temperature needs the PawnIO driver instead of losing it after a restart

@@ -12,27 +12,36 @@ namespace SysManager.Services;
 /// Controls the Windows multimedia timer resolution via the ntdll
 /// <c>NtQueryTimerResolution</c> / <c>NtSetTimerResolution</c> APIs.
 ///
-/// A finer timer resolution (e.g. 0.5 ms instead of the ~15.6 ms default) reduces
-/// input latency for games at the cost of higher power draw. The request is a
+/// A finer timer resolution (e.g. 0.5 ms instead of the ~15.6 ms default) can reduce
+/// input latency in games, at the cost of higher power draw. The request is a
 /// per-process contribution that Windows reverts when this process exits, so it is
 /// fully reversible and needs no admin rights.
 ///
 /// IMPORTANT lifetime caveat (Windows 10 2004+ / Windows 11): a request is honored
-/// for the requesting process but is no longer a system-wide global override, and on
-/// Windows 11 it can stop being honored while this app's window is occluded/minimized.
-/// We therefore always re-query the EFFECTIVE resolution after a set rather than
+/// for the requesting process but is no longer a system-wide global override. Since
+/// Windows 10 2004 it reaches only processes that request a timer themselves, which
+/// then get the finest any process asked for, and by default Windows 11 stops honoring
+/// it while this app's windows are hidden, minimized or covered, so Enable opts out of
+/// that first. We still re-query the EFFECTIVE resolution after a set rather than
 /// trusting the requested value.
 /// </summary>
 public sealed partial class TimerResolutionService : ITimerResolutionService
 {
+    private readonly ITimerResolutionNative _native;
     private bool _enabledByApp;
+
+    /// <summary>Creates the service over the real ntdll and kernel32 calls.</summary>
+    public TimerResolutionService() : this(new NtTimer()) { }
+
+    /// <summary>Creates the service over <paramref name="native"/>, so a test sees what Windows is asked, in order.</summary>
+    internal TimerResolutionService(ITimerResolutionNative native) => _native = native;
 
     /// <summary>Read the achievable range and the resolution currently in effect.</summary>
     public TimerResolutionStatus Query()
     {
         try
         {
-            int status = NativeMethods.NtQueryTimerResolution(out uint coarsest, out uint finest, out uint current);
+            var (status, coarsest, finest, current) = _native.Query();
             if (status != NativeMethods.StatusSuccess)
             {
                 Log.Debug("NtQueryTimerResolution failed: NTSTATUS 0x{Status:X8}", status);
@@ -62,9 +71,18 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
 
         try
         {
-            int set = NativeMethods.NtSetTimerResolution(target, true, out _);
+            // Windows 11 stops honoring a timer request from a process whose windows are hidden, minimized or covered,
+            // which is SysManager's state for as long as a full-screen game runs, so the request lapsed exactly while
+            // the game it was made for ran (#2830). Asked first, so the request is kept from the moment it is made.
+            KeepRequestWhileHidden(true);
+
+            int set = _native.Set(target, true);
             if (set != NativeMethods.StatusSuccess)
+            {
                 Log.Debug("NtSetTimerResolution(enable) failed: NTSTATUS 0x{Status:X8}", set);
+                // Nothing is requested, unless an earlier Enable's request still is.
+                if (!_enabledByApp) KeepRequestWhileHidden(false);
+            }
             else
                 _enabledByApp = true;
         }
@@ -87,9 +105,12 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
         try
         {
             // SetResolution=false releases this process's prior request.
-            int rel = NativeMethods.NtSetTimerResolution(status.CoarsestHundredNs, false, out _);
+            int rel = _native.Set(status.CoarsestHundredNs, false);
             if (rel != NativeMethods.StatusSuccess)
                 Log.Debug("NtSetTimerResolution(disable) failed: NTSTATUS 0x{Status:X8}", rel);
+
+            // With nothing requested, Windows decides again how this process's timers are treated while it is hidden.
+            KeepRequestWhileHidden(false);
         }
         catch (DllNotFoundException ex)
         {
@@ -99,10 +120,89 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
         return Query();
     }
 
+    /// <summary>Asks Windows to keep, or no longer keep, this process's timer request while it is hidden.</summary>
+    /// <remarks>
+    /// A Windows version without this throttling may refuse the flag, so a refusal is logged and nothing else: the
+    /// request itself goes ahead either way.
+    /// </remarks>
+    private void KeepRequestWhileHidden(bool keep)
+    {
+        var error = _native.KeepRequestWhileHidden(keep);
+        if (error != 0)
+            Log.Debug("SetProcessInformation(ProcessPowerThrottling, keep: {Keep}) failed: Win32 error {Error}", keep, error);
+    }
+
+    /// <summary>
+    /// The native calls behind the service: the timer query and request, and whether Windows keeps this process's
+    /// request while its windows are hidden.
+    /// </summary>
+    internal interface ITimerResolutionNative
+    {
+        /// <summary>NtQueryTimerResolution: its NTSTATUS and the (coarsest, finest, current) intervals, in 100 ns.</summary>
+        (int Status, uint Coarsest, uint Finest, uint Current) Query();
+
+        /// <summary>NtSetTimerResolution: makes (<paramref name="setResolution"/> true) or releases the request. NTSTATUS.</summary>
+        int Set(uint desiredTime, bool setResolution);
+
+        /// <summary>
+        /// SetProcessInformation with ProcessPowerThrottling: true keeps the request while the windows are hidden, false
+        /// leaves it to Windows. 0, or the Win32 error.
+        /// </summary>
+        int KeepRequestWhileHidden(bool keep);
+    }
+
+    /// <summary>The real calls: ntdll's timer resolution and kernel32's power throttling of this process.</summary>
+    private sealed class NtTimer : ITimerResolutionNative
+    {
+        public (int Status, uint Coarsest, uint Finest, uint Current) Query()
+        {
+            int status = NativeMethods.NtQueryTimerResolution(out uint coarsest, out uint finest, out uint current);
+            return (status, coarsest, finest, current);
+        }
+
+        public int Set(uint desiredTime, bool setResolution)
+            => NativeMethods.NtSetTimerResolution(desiredTime, setResolution, out _);
+
+        public int KeepRequestWhileHidden(bool keep)
+        {
+            // Keep: control the timer-resolution mechanism and switch its throttling off, which Microsoft's
+            // SetProcessInformation documentation gives as "always honor timer resolution requests". Let go: control
+            // no mechanism, which hands every one of them back to Windows. SysManager sets no other mechanism.
+            var state = new NativeMethods.ProcessPowerThrottlingState
+            {
+                Version = NativeMethods.ProcessPowerThrottlingCurrentVersion,
+                ControlMask = keep ? NativeMethods.ProcessPowerThrottlingIgnoreTimerResolution : 0,
+                StateMask = 0,
+            };
+            return NativeMethods.SetProcessInformation(NativeMethods.GetCurrentProcess(),
+                NativeMethods.ProcessPowerThrottling, ref state, (uint)Marshal.SizeOf<NativeMethods.ProcessPowerThrottlingState>())
+                ? 0
+                : Marshal.GetLastPInvokeError();
+        }
+    }
+
     private static partial class NativeMethods
     {
         /// <summary>STATUS_SUCCESS.</summary>
         public const int StatusSuccess = 0;
+
+        /// <summary>PROCESS_INFORMATION_CLASS.ProcessPowerThrottling.</summary>
+        public const int ProcessPowerThrottling = 4;
+
+        /// <summary>PROCESS_POWER_THROTTLING_CURRENT_VERSION.</summary>
+        public const uint ProcessPowerThrottlingCurrentVersion = 1;
+
+        /// <summary>PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION.</summary>
+        public const uint ProcessPowerThrottlingIgnoreTimerResolution = 0x4;
+
+        /// <summary>PROCESS_POWER_THROTTLING_STATE.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ProcessPowerThrottlingState
+        {
+            public uint Version;
+            public uint ControlMask;
+            public uint StateMask;
+        }
 
         // NTSTATUS NtQueryTimerResolution(PULONG MinimumResolution, PULONG MaximumResolution,
         //                                 PULONG CurrentResolution)
@@ -123,5 +223,19 @@ public sealed partial class TimerResolutionService : ITimerResolutionService
             uint desiredTime,
             [MarshalAs(UnmanagedType.U1)] bool setResolution,
             out uint actualTime);
+
+        // HANDLE GetCurrentProcess(void): a pseudo-handle that needs no closing.
+        [LibraryImport("kernel32.dll")]
+        internal static partial nint GetCurrentProcess();
+
+        // BOOL SetProcessInformation(HANDLE hProcess, PROCESS_INFORMATION_CLASS ProcessInformationClass,
+        //                            LPVOID ProcessInformation, DWORD ProcessInformationSize)
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool SetProcessInformation(
+            nint process,
+            int processInformationClass,
+            ref ProcessPowerThrottlingState processInformation,
+            uint processInformationSize);
     }
 }

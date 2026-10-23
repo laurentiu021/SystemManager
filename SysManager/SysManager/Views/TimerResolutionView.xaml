@@ -25,7 +25,7 @@
         <!-- Header -->
         <StackPanel Grid.Row="1" Margin="0,0,0,16">
             <TextBlock Text="Timer Resolution" Style="{StaticResource Display}"/>
-            <TextBlock Text="Request a finer Windows timer for lower input latency in games. Fully reversible — released when you turn it off or close the app."
+            <TextBlock Text="Request Windows' finest timer. Games that ask Windows for a fine timer themselves, as many do, then get this finer one, which can lower input latency. Fully reversible — released when you turn it off or close the app."
                        Style="{StaticResource Subtle}" Margin="0,4,0,0" TextWrapping="Wrap"/>
         </StackPanel>
 

@@ -39,8 +39,11 @@ public interface IUpdateService
     /// <summary>Fetches the newest published release, or null on failure / cancellation.</summary>
     Task<UpdateService.ReleaseInfo?> GetLatestAsync(CancellationToken ct = default);
 
-    /// <summary>Fetches the most recent releases newest-first, or an empty list on failure.</summary>
-    Task<IReadOnlyList<UpdateService.ReleaseInfo>> GetRecentAsync(int count = 10, CancellationToken ct = default);
+    /// <summary>
+    /// Fetches the most recent releases newest-first: an empty list when there are none, or null when GitHub could
+    /// not be read — which the caller must not show as "no release notes" (#2831).
+    /// </summary>
+    Task<IReadOnlyList<UpdateService.ReleaseInfo>?> GetRecentAsync(int count = 10, CancellationToken ct = default);
 
     /// <summary>
     /// Downloads the release asset with progress reporting. Returns the path to the

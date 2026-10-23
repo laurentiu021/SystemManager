@@ -5317,9 +5317,10 @@ public partial class ArchitectureTests
         // (file, method, flag, how many assignments the method must contain, why that number)
         (string File, string Method, string Flag, int Assignments, string Why)[] wiring =
         [
-            ("ViewModels/AboutViewModel.cs", "LoadHistoryAsync", "HistoryUnavailable", 3,
-             "the success path plus BOTH catch blocks — a missed catch leaves the section silent on the "
-             + "failure it exists to explain"),
+            ("ViewModels/AboutViewModel.cs", "LoadHistoryAsync", "HistoryUnavailable", 4,
+             "the success path, BOTH catch blocks, and the reply the service could not read — a missed one "
+             + "leaves the section silent on the failure it exists to explain. The fourth is the one that must "
+             + "NOT also assign the notes: it reports the failure and leaves the ones on screen (#2831)"),
             ("ViewModels/DashboardViewModel.cs", "LoadHealthScoreAsync", "HealthHasNothingToImprove", 1,
              "set beside HasHealthScore, so the good-news line and the score appear together"),
             ("ViewModels/DashboardViewModel.cs", "RefreshTemperaturesAsync", "TemperaturesUnavailable", 1,

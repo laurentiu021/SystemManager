@@ -124,15 +124,20 @@ public class UpdateServiceTests
         Assert.Null(r);
     }
 
+    /// <summary>A cancelled read answers "could not be read", which is null, not an empty list.</summary>
+    /// <remarks>
+    /// The two are different answers now: an empty list means the repository has no releases, and About would
+    /// replace the notes on screen with nothing for it, where null leaves them and says GitHub could not be
+    /// reached (#2831).
+    /// </remarks>
     [Fact]
-    public async Task GetRecentAsync_ReturnsEmptyOnCancel()
+    public async Task GetRecentAsync_OnCancel_SaysItCouldNotBeRead()
     {
         var svc = new UpdateService();
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         var list = await svc.GetRecentAsync(5, cts.Token);
-        Assert.NotNull(list);
-        Assert.Empty(list);
+        Assert.Null(list);
     }
 
     [Fact]

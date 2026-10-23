@@ -680,7 +680,12 @@ Key services:
   tab's startup check run had to call `api.github.com` for real. An internal
   constructor takes the HTTP handler, so a test can make GitHub's reply fail in a
   given way with no network, and both release reads take the ways a reply that has
-  arrived can fail to read from one list, `IsUnreadableReply` (#2663). `DiscardDownload` deletes
+  arrived can fail to read from one list, `IsUnreadableReply` (#2663). `GetRecentAsync` answers null for
+  a reply it could not read, so About can tell that from a repository with no releases and keep the notes
+  already on screen (#2831). The body reads of a download are bounded by a no-data clock on an injected
+  `TimeProvider`, re-armed after every chunk, so a connection that goes quiet mid-file ends the download
+  instead of leaving it waiting for as long as SysManager is open; a test drives that clock, and the
+  download directory is injectable so it never writes to the developer's own cache. `DiscardDownload` deletes
   a download Install refused, with the hash stored beside it, because the cache hands a file back
   whenever it matches that stored hash, which is its own.
 - `UpdateApplier` — runs on relaunch to swap the freshly-downloaded exe over the

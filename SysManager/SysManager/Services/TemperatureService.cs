@@ -26,11 +26,12 @@ public sealed class TemperatureService : IDisposable
     // too heavy to do on every 2s poll. Open it once
     // (lazily, on the first elevated read) and keep it alive for the service
     // lifetime; each poll then only calls Update(). The lock serialises the
-    // not-thread-safe native sensor access — both the LibreHardwareMonitor path
-    // (admin) and the NvAPI path (non-admin, incl. its init-once fields) — in case
-    // more than one caller polls at once (the 2s temperature poll, the user's
+    // not-thread-safe native sensor access of the LibreHardwareMonitor path (admin), in
+    // case more than one caller polls at once (the 2s temperature poll, the user's
     // Refresh command, and the always-on 10s resource sampler all share this service).
+    // NVIDIA's API has its own single owner and its own lock — see INvidiaGpuReader.
     private readonly Lock _sensorLock = new();
+    private readonly INvidiaGpuReader? _nvidia;
     private Computer? _computer;
     private bool _disposed;
 
@@ -75,17 +76,23 @@ public sealed class TemperatureService : IDisposable
     /// </summary>
     /// <param name="diskHealth">Source of the SMART/temperature walk.</param>
     /// <param name="skipHardwareInit">Set by tests so no hardware is opened.</param>
+    /// <param name="nvidia">
+    /// The app's one reader of NVIDIA's API, which the container always passes (#2829). Null reads no NVIDIA GPU,
+    /// which is what a test without that driver would get anyway, and keeps this class from ever building a reader
+    /// of its own — a second one would set that global API up again, unsynchronised with the app's.
+    /// </param>
     /// <param name="timeProvider">
     /// Clock for the storage-temperature time-to-live. Optional with a System default, like
     /// <paramref name="skipHardwareInit"/>, so the ten existing construction sites are unaffected while a test
     /// can still drive the TTL without sleeping.
     /// </param>
     public TemperatureService(DiskHealthService diskHealth, bool skipHardwareInit = false,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null, INvidiaGpuReader? nvidia = null)
     {
         _diskHealth = diskHealth;
         _skipHardwareInit = skipHardwareInit;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _nvidia = nvidia;
     }
 
     /// <summary>
@@ -550,65 +557,21 @@ public sealed class TemperatureService : IDisposable
         return names;
     }
 
-    // NvAPI init is one-time. Re-running NVIDIA.Initialize() + GetPhysicalGPUs() on every poll
-    // re-does the setup and, on a non-NVIDIA machine, throws (and swallows) an exception on every
-    // tick — the temperature poll runs about every 2 s. We initialize at most once, remember
-    // whether any NVIDIA GPU is present, and skip the whole read thereafter when none is.
-    private bool _nvApiInitTried;
-    private bool _nvApiAvailable;
-
+    /// <summary>
+    /// Adds a reading per NVIDIA GPU, through the app's one reader of that API.
+    /// </summary>
+    /// <remarks>
+    /// This used to set NVIDIA's global API up itself, with its own init-once fields, as the Dashboard's 300 ms loop
+    /// and the Resource History sampler's 10 s loop also did — three unsynchronised set-ups of a native API that is
+    /// not documented as thread-safe, where a losing race switched one component's GPU reading off for the whole
+    /// session (#2829). The reader owns the set-up, the handles and the lock over them.
+    /// </remarks>
     private void ReadNvidiaGpuTemperatures(List<TemperatureReading> readings)
     {
-        // Serialise under the same lock as the LHM path: NVIDIA.Initialize()/GetPhysicalGPUs()
-        // is a global native call that isn't documented thread-safe, and the init-once fields
-        // below are shared, non-volatile state. Concurrent non-admin callers (2s poll + user
-        // Refresh + 10s sampler) could otherwise both init at once and a losing thread could
-        // latch _nvApiAvailable=false permanently, silently dropping GPU temps for the session.
-        lock (_sensorLock)
-        {
-            if (_disposed) return;
+        if (_disposed || _nvidia is null) return;
 
-            if (!_nvApiInitTried)
-            {
-                _nvApiInitTried = true;
-                try
-                {
-                    NvAPIWrapper.NVIDIA.Initialize();
-                    _nvApiAvailable = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs().Length > 0;
-                }
-                // No NVIDIA GPU / driver present is the normal case on AMD/Intel systems — record it
-                // once so later polls skip silently instead of throwing an exception every tick.
-                catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { _nvApiAvailable = false; }
-                catch (DllNotFoundException) { _nvApiAvailable = false; }
-                catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
-                {
-                    _nvApiAvailable = false;
-                    Log.Debug("NVIDIA API init failed: {Error}", ex.Message);
-                }
-            }
-
-            if (!_nvApiAvailable) return;
-
-            try
-            {
-                foreach (var gpu in NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs())
-                {
-                    var sensor = gpu.ThermalInformation.ThermalSensors
-                        .FirstOrDefault(s => s.CurrentTemperature > 0);
-                    if (sensor is not null)
-                    {
-                        readings.Add(new TemperatureReading("GPU", gpu.FullName,
-                            sensor.CurrentTemperature));
-                    }
-                }
-            }
-            // A transient read failure (e.g. a driver reset) must not crash the poll — skip this tick.
-            catch (NvAPIWrapper.Native.Exceptions.NVIDIAApiException) { /* transient GPU read failure */ }
-            catch (Exception ex) when (ex is TypeInitializationException or InvalidOperationException)
-            {
-                Log.Debug("NVIDIA GPU temperature read failed: {Error}", ex.Message);
-            }
-        }
+        foreach (var gpu in _nvidia.ReadTemperatures())
+            readings.Add(new TemperatureReading("GPU", gpu.Name, gpu.TemperatureC));
     }
 
     /// <summary>How long a non-admin storage temperature read is reused before collecting again.</summary>

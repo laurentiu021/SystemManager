@@ -429,7 +429,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-five are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-six are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
@@ -440,7 +440,9 @@ the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`, `IDisplayProfileService` (DisplayProfileService, which also passes on Windows' display-change
 notification),
 `IFeatureParentsService` (FeatureParentsService, the DISM API's list of what a feature needs, for Windows
-Features), `IFileLockService`, `INotificationBlockerService`, `ISettingsWatchdogService`, `ITimerResolutionService`,
+Features), `IFileLockService`, `INotificationBlockerService`, `INvidiaGpuReader` (NvidiaGpuReader, the one owner of
+NVIDIA's API for the Dashboard, the Resource History sampler and the temperature read),
+`ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
 Dashboard's quick test; it forwards to the concrete singleton the network tabs take), `IAudioMixerService`, `INavigationService`
@@ -1670,6 +1672,12 @@ Key services:
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).
+- `NvidiaGpuReader` — the app's only caller of NVIDIA's API. It sets that global API up once, holds the GPU
+  handles and reads load, memory and temperature off them under one lock, for the Dashboard's 300 ms poll, the
+  Resource History sampler's 10 s one and the temperature read. A read that fails drops the handles and the next
+  read two seconds later enumerates again, so a driver reset no longer leaves a number that has stopped moving
+  shown as live (#2829). The API itself sits behind an internal seam, so the set-up, the caching and the
+  replacement are tested with stand-ins.
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
   only the NVIDIA GPU and the disks' SMART temperatures. LibreHardwareMonitor reads the CPU and

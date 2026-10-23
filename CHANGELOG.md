@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.84] - 2026-10-23
+
+**One part of SysManager now talks to the graphics card's own interface, so a graphics driver restart no longer
+leaves the Dashboard showing a GPU number that has stopped changing, and the GPU readings can no longer go missing
+for the rest of a session.**
+
+### Fixed
+
+- **After a graphics driver restart the Dashboard's GPU percentage froze and was still shown as live.** It asked
+  the card for a reading through a reference it had taken once at startup, which NVIDIA throws away whenever the
+  card or the display is reconfigured, by a driver restart (Win+Ctrl+Shift+B), a driver update, or plugging in a
+  monitor. From then on every reading failed silently, the number kept the last value it had read, and the log
+  filled with about 10,000 lines an hour, which pushes out the history a bug report needs. The reference is now
+  replaced two seconds after a failed reading, and until there is one the percentage reads zero instead of
+  standing still. Since 1.42.12.
+- **The Dashboard, the background history and the temperature card could each lose their GPU reading for the
+  session.** All three set up the graphics card's interface themselves, at almost the same moment on start-up, and
+  that interface is not built to be set up from several places at once: whichever lost the race switched its own
+  GPU reading off until SysManager was restarted. One part of the app now owns that interface and the other three
+  ask it, so there is one set-up and nothing to lose. Since 1.47.0.
+- **The card was looked up again on every reading.** The background history did it every 10 seconds and the
+  temperature card every 2, each asking the interface for the list of graphics cards before reading one. That
+  lookup now happens once and the result is shared, and it is repeated only after a reading fails. Since 1.47.0.
+
 ## [1.130.83] - 2026-10-23
 
 **Timer Resolution keeps its finer timer while a game covers SysManager on Windows 11, and the tab says which

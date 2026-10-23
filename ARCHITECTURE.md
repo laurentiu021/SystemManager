@@ -1192,10 +1192,13 @@ Key services:
   hidden with `LegacyDisable`) and `shellex\ContextMenuHandlers` COM
   extensions (a class id, resolved to a friendly name and its server DLL).
   Both are hideable, by different mechanisms — a verb through `LegacyDisable`
-  with an HKCU override fallback, a COM handler through the machine-wide
-  `Shell Extensions\Blocked` list, which needs elevation. Takes injectable
+  with an HKCU override fallback, used only when Windows refuses the write and removed
+  again once it holds nothing else, and a COM handler through the machine-wide
+  `Shell Extensions\Blocked` list, which needs elevation. A handler reads as blocked from that
+  list or the per-user one, and allowing it removes it from both (#2822). Takes injectable
   stand-ins for `HKEY_CLASSES_ROOT`, `HKEY_LOCAL_MACHINE` and `HKEY_CURRENT_USER`, so the scan,
-  the block/unblock writes and the menu style are testable against a disposable hive. The menu style
+  the block/unblock writes, the verb writes and the menu style are testable against a disposable
+  hive. The menu style
   (`IsClassicMenuEnabled`, `EnableClassicMenu`, `DisableClassicMenu`) is on `IContextMenuService`, and
   a preset whose style write Windows refuses changes nothing and restarts no Explorer (#2804).
 - `BackupRegistry` exports the affected key to `%LocalAppData%\SysManager\Backups\ContextMenu`

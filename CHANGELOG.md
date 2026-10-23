@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.81] - 2026-10-23
+
+**Right-click Menu's switches now match what Explorer does: an add-on listed for both files and folders switches as
+one, one blocked for your account shows as off, turning an entry back on leaves nothing behind, and a preset leaves
+Windows' File ownership entries on.**
+
+### Fixed
+
+- **Switching off an add-on's Files row took it off folders too, while its Folders row still said On.** Windows
+  blocks an add-on everywhere at once, but only the row you clicked changed, and the counts with it, until a
+  Refresh. The add-on's other rows now switch with it. Since 1.102.0.
+- **An add-on blocked for your account only showed as on.** Windows also reads a per-user list of blocked add-ons,
+  which other tools write, and the tab read only the machine-wide one, so the add-on stayed out of the menu while
+  its switch said On, and switching it off and on again changed nothing. That list is read now, and switching the
+  add-on back on clears it there too, which needs no administrator rights. Since 1.102.0.
+- **Turning an entry back on could leave a key behind, and switching off one that was gone reported success.** For
+  an entry Windows protects, the switch hides it with a key for your account only, and turning it back on kept
+  that key, which outlived the program's own entry once the program was uninstalled. It is removed now once it
+  holds nothing else. Switching off an entry whose key was gone created a key for it and said it had worked; it now
+  says it could not, and turning such an entry on works. Since 1.16.0.
+- **Win10 Default and Win11 Default switched off Windows' own File ownership entries.** Windows labels them with a
+  text from one of its own files rather than a plain name, which the tab did not read, so they counted as
+  third-party, and no preset turned them back on. They count as Windows' now. Since 1.16.0.
+
 ## [1.130.80] - 2026-10-23
 
 **Restarting Windows Explorer from SysManager, run as administrator, no longer restarts the desktop of other people

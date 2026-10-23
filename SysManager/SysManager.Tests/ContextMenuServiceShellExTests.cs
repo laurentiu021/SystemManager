@@ -47,6 +47,9 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     /// </remarks>
     private readonly RegistryKey _machine;
 
+    /// <summary>Stands in for HKEY_CURRENT_USER: its Blocked list, and the per-user keys over HKCR.</summary>
+    private readonly RegistryKey _user;
+
     // A class name unique to this test run, used by the tests that assert LegacyDisable is NOT the
     // mechanism for a handler. If that ever regresses, the HKCU fallback writes under
     // Software\Classes\<this>, which Dispose then removes — so a regression is caught by an assertion
@@ -57,12 +60,14 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     {
         _root = Registry.CurrentUser.CreateSubKey(_treeName + @"\Classes", writable: true)!;
         _machine = Registry.CurrentUser.CreateSubKey(_treeName + @"\Machine", writable: true)!;
+        _user = Registry.CurrentUser.CreateSubKey(_treeName + @"\User", writable: true)!;
     }
 
     public void Dispose()
     {
         _root.Dispose();
         _machine.Dispose();
+        _user.Dispose();
         try { Registry.CurrentUser.DeleteSubKeyTree(_treeName, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
         try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + _refusalClass, throwOnMissingSubKey: false); } catch { /* best-effort cleanup */ }
     }
@@ -72,6 +77,20 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     {
         using var key = _machine.CreateSubKey(BlockedListPath, writable: true)!;
         key.SetValue(clsid, name, RegistryValueKind.String);
+    }
+
+    /// <summary>Puts a CLSID on the fake user's Blocked list, the way a "this user only" tool does.</summary>
+    private void GivenBlockedForUser(string clsid, string name = "Blocked for this user")
+    {
+        using var key = _user.CreateSubKey(BlockedListPath, writable: true)!;
+        key.SetValue(clsid, name, RegistryValueKind.String);
+    }
+
+    /// <summary>The per-user Blocked-list value for a CLSID, or null when it is not blocked there.</summary>
+    private object? UserBlockedValue(string clsid)
+    {
+        using var key = _user.OpenSubKey(BlockedListPath);
+        return key?.GetValue(clsid);
     }
 
     /// <summary>The Blocked-list value for a CLSID, or null when it is not blocked.</summary>
@@ -107,9 +126,9 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         cmd.SetValue("", command);
     }
 
-    // Both hives are the fakes, so a scan asserts what the test set up and nothing the developer's
-    // machine happens to have blocked.
-    private ContextMenuService Service() => new(_root, _machine);
+    // Every hive is a fake, so a scan asserts what the test set up and nothing the developer's machine
+    // happens to have blocked, for itself or for the user running the suite.
+    private ContextMenuService Service() => new(_root, _machine, _user);
 
     private List<ContextMenuEntry> Scan() => Service().ScanEntries();
 
@@ -471,7 +490,7 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
         // would pass either way. So the value it would delete is put there first: surviving the call is
         // the evidence that the handler went down the Blocked-list path instead.
         var handlerKeyPath = $@"Software\Classes\{_refusalClass}\shellex\ContextMenuHandlers\TestArchiver";
-        using (var seeded = Registry.CurrentUser.CreateSubKey(handlerKeyPath, writable: true)!)
+        using (var seeded = _user.CreateSubKey(handlerKeyPath, writable: true)!)
             seeded.SetValue("LegacyDisable", "", RegistryValueKind.String);
 
         var entry = AHandlerRow();
@@ -479,9 +498,63 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
 
         Assert.True(Service().EnableEntry(entry));
 
-        using var after = Registry.CurrentUser.OpenSubKey(handlerKeyPath);
+        using var after = _user.OpenSubKey(handlerKeyPath);
         Assert.NotNull(after);
         Assert.NotNull(after.GetValue("LegacyDisable"));
+    }
+
+    /// <summary>
+    /// An add-on blocked on the per-user list shows as off, as Explorer treats it (#2822).
+    /// </summary>
+    /// <remarks>
+    /// Explorer honours <c>HKCU\…\Shell Extensions\Blocked</c> as well as the machine-wide list, and other tools
+    /// write the "this user only" one. Read from HKLM alone, such an add-on showed as on while Explorer hid it.
+    /// </remarks>
+    [Fact]
+    public void ScanEntries_ReadsAHandlerBlockedOnlyForThisUser_AsBlocked()
+    {
+        GivenHandler("*", "TestArchiver", Archiver);
+        GivenComClass(Archiver, "Test Archiver Shell Extension", @"C:\Program Files\TestArchiver\ext.dll");
+        GivenBlockedForUser(Archiver);
+
+        Assert.False(Assert.Single(Scan()).IsEnabled);
+    }
+
+    /// <summary>
+    /// Allowing an add-on takes it off the per-user list too, without opening the machine-wide one (#2822).
+    /// </summary>
+    /// <remarks>
+    /// Allowing deleted only a machine-wide value, so an add-on blocked for the user stayed out of the menu while
+    /// the tab said it was allowed. The per-user list needs no elevation, and with nothing machine-wide to remove
+    /// HKLM is not written, which is why no machine list exists after this one.
+    /// </remarks>
+    [Fact]
+    public void EnableEntry_AllowsAHandlerBlockedForThisUser_FromThatList()
+    {
+        GivenBlockedForUser(Archiver);
+        GivenBlockedForUser(Sync, "Someone else's choice");
+        var entry = AHandlerRow();
+        entry.IsEnabled = false;
+
+        Assert.True(Service().EnableEntry(entry));
+
+        Assert.True(entry.IsEnabled);
+        Assert.Null(UserBlockedValue(Archiver));
+        Assert.Equal("Someone else's choice", UserBlockedValue(Sync));
+        Assert.Null(_machine.OpenSubKey(BlockedListPath));
+    }
+
+    /// <summary>An add-on blocked on both lists comes off both.</summary>
+    [Fact]
+    public void EnableEntry_AllowsAHandlerBlockedOnBothLists_FromBoth()
+    {
+        GivenBlocked(Archiver);
+        GivenBlockedForUser(Archiver);
+
+        Assert.True(Service().EnableEntry(AHandlerRow()));
+
+        Assert.Null(BlockedValue(Archiver));
+        Assert.Null(UserBlockedValue(Archiver));
     }
 
     [Theory]
@@ -505,15 +578,17 @@ public sealed class ContextMenuServiceShellExTests : IDisposable
     /// Proves nothing was written to the handler's own key, not merely that the call reported success.
     /// </summary>
     /// <remarks>
-    /// The verb path writes through <c>Registry.ClassesRoot</c>, not the injected root, and falls back to
-    /// <c>HKCU\Software\Classes</c> when HKCR is not writable — which it is not for a class that does not
-    /// exist. So a handler wrongly sent down that path leaves a key behind under a name unique to this
-    /// test run, and that key's absence is the assertion.
+    /// The verb path writes the injected HKCR stand-in and, when that refuses, a per-user key under the
+    /// injected HKCU stand-in's <c>Software\Classes</c>. So a handler wrongly sent down that path leaves a key
+    /// behind under a name unique to this test run in one of the two, and its absence from both is the
+    /// assertion.
     /// </remarks>
     private void AssertNoFallbackKeyWasCreated()
     {
-        using var leftover = Registry.CurrentUser.OpenSubKey(@"Software\Classes\" + _refusalClass);
+        using var leftover = _user.OpenSubKey(@"Software\Classes\" + _refusalClass);
         Assert.Null(leftover);
+        using var written = _root.OpenSubKey(_refusalClass);
+        Assert.Null(written);
     }
 
     // ---- Every location the scan emits has to be reachable from the filter ----

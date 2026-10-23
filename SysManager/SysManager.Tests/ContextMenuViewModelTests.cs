@@ -221,6 +221,54 @@ public class ContextMenuViewModelTests
         else service.Received(1).DisableEntry(entry);
     }
 
+    /// <summary>
+    /// Switching one row of an add-on registered in two places switches its other row too, and the counts follow
+    /// (#2822).
+    /// </summary>
+    /// <remarks>
+    /// A handler is blocked by its CLSID, which takes the add-on off every place it is registered, but only the
+    /// clicked row changed: switching off 7-Zip's Files row removed it from folders too while its Folders row
+    /// still said On, until a Refresh.
+    /// </remarks>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ToggleEntry_OnAHandler_SwitchesItsOtherRowsWithTheSameClsid(bool desiredState)
+    {
+        const string clsid = "{11111111-2222-3333-4444-555555555555}";
+        ContextMenuEntry Handler(string location, string clsidOf) => new()
+        {
+            Kind = ContextMenuEntryKind.Handler,
+            Clsid = clsidOf,
+            Name = "Test Archiver",
+            Command = @"C:\Program Files\TestArchiver\ext.dll",
+            RegistryPath = $@"HKCR\{location}\shellex\ContextMenuHandlers\TestArchiver",
+            Location = location,
+            IsEnabled = !desiredState,
+        };
+        var files = Handler("Files", clsid);
+        var folders = Handler("Folders", clsid.ToUpperInvariant());
+        var other = Handler("Desktop", "{99999999-8888-7777-6666-555555555555}");
+
+        var service = Substitute.For<IContextMenuService>();
+        service.ScanEntries().Returns([files, folders, other]);
+        service.EnableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        service.DisableEntry(Arg.Any<ContextMenuEntry>()).Returns(true);
+        var vm = new ContextMenuViewModel(service);
+        await vm.InitializationComplete;
+
+        files.IsEnabled = desiredState;   // the user just switched this row
+        using var dialog = new DialogAnswer(false);
+        await vm.ToggleEntryCommand.ExecuteAsync(files);
+
+        Assert.Equal(desiredState, folders.IsEnabled);
+        Assert.Equal(!desiredState, other.IsEnabled);
+        Assert.Equal(desiredState ? 2 : 1, vm.EnabledCount);
+        Assert.Equal(desiredState ? 1 : 2, vm.DisabledCount);
+        if (desiredState) service.Received(1).EnableEntry(files);
+        else service.Received(1).DisableEntry(files);
+    }
+
     [Fact]
     public async Task ToggleEntry_WithSomethingThatIsNotAnEntry_DoesNothing()
     {

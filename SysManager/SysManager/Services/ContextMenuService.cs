@@ -141,6 +141,11 @@ public sealed partial class ContextMenuService : IContextMenuService
                         var isLabel = !string.IsNullOrWhiteSpace(label);
                         var displayName = string.IsNullOrWhiteSpace(label) ? entryName : label;
 
+                        // A verb with no (Default) can be labelled through MUIVerb instead, and Windows labels some of
+                        // its own that way, with an indirect string from one of its modules ("File ownership" is
+                        // @efscore.dll,-101). Unread, those counted as third-party, which a preset switches off (#2822).
+                        var muiVerb = isLabel ? null : entryKey.GetValue("MUIVerb")?.ToString();
+
                         // Check if LegacyDisable exists (entry is hidden)
                         var isEnabled = entryKey.GetValue("LegacyDisable") is null;
 
@@ -161,7 +166,7 @@ public sealed partial class ContextMenuService : IContextMenuService
                             Location = location,
                             Source = source,
                             IsEnabled = isEnabled,
-                            IsSystemEntry = IsSystemEntry(displayName),
+                            IsSystemEntry = IsSystemEntry(displayName) || IsWindowsIndirectString(muiVerb),
                             Explanation = GetExplanation(entryName, command)
                         });
                     }
@@ -287,31 +292,36 @@ public sealed partial class ContextMenuService : IContextMenuService
     }
 
     /// <summary>
-    /// The CLSIDs Windows has been told not to load, read from the machine-wide Blocked list.
+    /// The CLSIDs Windows has been told not to load, read from the machine-wide Blocked list and the
+    /// per-user one.
     /// </summary>
     /// <remarks>
     /// The key is absent on a machine where nothing has ever been blocked, which is the common case and
     /// not an error — an empty set is the right answer for it.
-    /// <para>Value names that are not CLSIDs are ignored rather than trusted. The list is HKLM and so is
-    /// not user-writable, but a non-CLSID name there cannot correspond to a row either, and matching one
-    /// loosely could only ever mark the wrong handler as blocked.</para>
+    /// <para>Explorer also honours <c>HKCU\…\Shell Extensions\Blocked</c>, the "this user only" list other
+    /// tools write. Read from HKLM alone, an add-on blocked there showed as on while Explorer hid it (#2822).</para>
+    /// <para>Value names that are not CLSIDs are ignored rather than trusted. A non-CLSID name cannot
+    /// correspond to a row, and matching one loosely could only ever mark the wrong handler as blocked.</para>
     /// </remarks>
     internal HashSet<string> ReadBlockedClsids()
     {
         var blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        try
+        foreach (var hive in new[] { _localMachine, _currentUser })
         {
-            using var key = _localMachine.OpenSubKey(BlockedListPath, writable: false);
-            if (key is null) return blocked;
+            try
+            {
+                using var key = hive.OpenSubKey(BlockedListPath, writable: false);
+                if (key is null) continue;
 
-            foreach (var name in key.GetValueNames())
-                if (ClsidPattern().IsMatch(name))
-                    blocked.Add(name);
+                foreach (var name in key.GetValueNames())
+                    if (ClsidPattern().IsMatch(name))
+                        blocked.Add(name);
+            }
+            catch (SecurityException ex) { Log.Debug("Blocked list inaccessible in {Hive}: {Error}", hive.Name, ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Debug("Blocked list access denied in {Hive}: {Error}", hive.Name, ex.Message); }
+            catch (IOException ex) { Log.Debug("Blocked list I/O error in {Hive}: {Error}", hive.Name, ex.Message); }
         }
-        catch (SecurityException ex) { Log.Debug("Blocked list inaccessible: {Error}", ex.Message); }
-        catch (UnauthorizedAccessException ex) { Log.Debug("Blocked list access denied: {Error}", ex.Message); }
-        catch (IOException ex) { Log.Debug("Blocked list I/O error: {Error}", ex.Message); }
 
         return blocked;
     }
@@ -395,7 +405,8 @@ public sealed partial class ContextMenuService : IContextMenuService
     private static partial Regex ClsidPattern();
 
     /// <summary>
-    /// Adds or removes a shell extension's CLSID in the machine-wide Blocked list.
+    /// Adds a shell extension's CLSID to the machine-wide Blocked list, or removes it from that list and the
+    /// per-user one.
     /// </summary>
     /// <remarks>
     /// The reason a handler cannot go through <c>LegacyDisable</c> like a verb: Explorer honours that
@@ -436,16 +447,33 @@ public sealed partial class ContextMenuService : IContextMenuService
             return true;
         }
 
-        using var existing = _localMachine.OpenSubKey(BlockedListPath, writable: true);
-        if (existing is null)
+        // The per-user list first: removing from it needs no elevation, so an add-on blocked only there is
+        // allowed again without HKLM being opened for writing at all. Explorer reads both lists, and allowing
+        // from HKLM alone left it hidden while the tab said it was allowed (#2822).
+        bool blockedForUser;
+        using (var user = _currentUser.OpenSubKey(BlockedListPath, writable: false))
+            blockedForUser = user?.GetValue(entry.Clsid) is not null;
+        if (blockedForUser)
         {
-            // Nothing has ever been blocked on this machine, so the handler is already not blocked. The
-            // caller asked for a state that is already true, which is a success, not a failure.
-            Log.Debug("Nothing to unblock for {Name} — the Blocked list does not exist", entry.Name);
+            BackupRegistry($@"HKCU\{BlockedListPath}");
+            using var userList = _currentUser.OpenSubKey(BlockedListPath, writable: true);
+            userList?.DeleteValue(entry.Clsid, throwOnMissingValue: false);
+            Log.Information("Shell extension unblocked for this user: {Name} ({Clsid})", entry.Name, entry.Clsid);
+        }
+
+        bool blockedForMachine;
+        using (var machine = _localMachine.OpenSubKey(BlockedListPath, writable: false))
+            blockedForMachine = machine?.GetValue(entry.Clsid) is not null;
+        if (!blockedForMachine)
+        {
+            // Not on the machine-wide list (perhaps no list exists at all), so the handler is already not
+            // blocked there. The caller asked for a state that is already true, which is a success.
+            Log.Debug("Nothing to unblock machine-wide for {Name}", entry.Name);
             return true;
         }
 
-        existing.DeleteValue(entry.Clsid, throwOnMissingValue: false);
+        using var existing = _localMachine.OpenSubKey(BlockedListPath, writable: true);
+        existing?.DeleteValue(entry.Clsid, throwOnMissingValue: false);
         Log.Information("Shell extension unblocked: {Name} ({Clsid})", entry.Name, entry.Clsid);
         return true;
     }
@@ -531,8 +559,8 @@ public sealed partial class ContextMenuService : IContextMenuService
 
     /// <summary>
     /// Enables a context menu entry by removing the <c>LegacyDisable</c>
-    /// value from the shell subkey. Falls back to HKCU override if HKCR
-    /// is not writable.
+    /// value from the shell subkey and from any HKCU override over it, and
+    /// removing that override once it holds nothing else.
     /// </summary>
     public bool EnableEntry(ContextMenuEntry entry)
     {
@@ -552,7 +580,8 @@ public sealed partial class ContextMenuService : IContextMenuService
                 return true;
             }
 
-            Log.Warning("Cannot enable context menu entry — key not found: {Path}", entry.RegistryPath);
+            Log.Warning("Cannot enable context menu entry — it is still hidden by a key Windows protects: {Path}",
+                entry.RegistryPath);
             return false;
         }
         catch (SecurityException ex)
@@ -573,48 +602,76 @@ public sealed partial class ContextMenuService : IContextMenuService
     }
 
     /// <summary>
-    /// Attempts to set or remove LegacyDisable on the entry.
-    /// First tries HKCR (works for user-installed entries). If that fails
-    /// with access denied (system-owned/TrustedInstaller), falls back to
-    /// creating an override in HKCU\Software\Classes which Windows merges
-    /// into HKCR at runtime.
+    /// Sets or removes LegacyDisable on the entry, and reports whether the verb ends up the way it was asked.
     /// </summary>
-    private static bool TrySetLegacyDisable(string relativePath, bool set)
+    /// <remarks>
+    /// Hiding writes the verb's own key, and only when Windows refuses that write (a key owned by
+    /// TrustedInstaller) a per-user key over it in <c>HKCU\Software\Classes</c>, which Windows merges into
+    /// HKCR. A verb whose key is gone is not hidden: the HKCR open returns null rather than throwing, and the
+    /// fallback used to create a brand-new per-user key for it and report success (#2822).
+    /// <para>Showing removes LegacyDisable from the verb's own key and from the per-user key over it, then
+    /// deletes that per-user key once it holds nothing else. Left behind, it outlived the verb it hid: once the
+    /// program that owned the machine-wide verb was uninstalled, it was a verb with no command. A verb that is
+    /// gone is shown, since nothing hides it.</para>
+    /// </remarks>
+    private bool TrySetLegacyDisable(string relativePath, bool set)
     {
-        // Attempt 1: write directly to HKCR (works for user/app entries)
+        var overridePath = @"Software\Classes\" + relativePath;
+        return set ? Hide(relativePath, overridePath) : Show(relativePath, overridePath);
+    }
+
+    private bool Hide(string relativePath, string overridePath)
+    {
         try
         {
-            using var key = Registry.ClassesRoot.OpenSubKey(relativePath, writable: true);
-            if (key is not null)
-            {
-                if (set)
-                    key.SetValue("LegacyDisable", "", RegistryValueKind.String);
-                else
-                    key.DeleteValue("LegacyDisable", throwOnMissingValue: false);
-                return true;
-            }
-        }
-        catch (SecurityException ex) { Log.Debug(ex, "Context menu HKLM write blocked (security) — falling back to HKCU"); }
-        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Context menu HKLM write denied — falling back to HKCU"); }
+            using var key = _classesRoot.OpenSubKey(relativePath, writable: true);
+            if (key is null) return false;
 
-        // Attempt 2: HKCU override (for system-owned entries in HKLM)
-        var hkcuPath = @"Software\Classes\" + relativePath;
-
-        if (set)
-        {
-            using var hkcuKey = Registry.CurrentUser.CreateSubKey(hkcuPath);
-            if (hkcuKey is null) return false;
-            hkcuKey.SetValue("LegacyDisable", "", RegistryValueKind.String);
+            key.SetValue("LegacyDisable", "", RegistryValueKind.String);
+            return true;
         }
-        else
-        {
-            using var hkcuKey = Registry.CurrentUser.OpenSubKey(hkcuPath, writable: true);
-            if (hkcuKey is null) return false;
-            hkcuKey.DeleteValue("LegacyDisable", throwOnMissingValue: false);
-        }
+        catch (SecurityException ex) { Log.Debug(ex, "Context menu verb key protected (security) — hiding it for this user"); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Context menu verb key write denied — hiding it for this user"); }
 
+        using var userKey = _currentUser.CreateSubKey(overridePath, writable: true);
+        if (userKey is null) return false;
+        userKey.SetValue("LegacyDisable", "", RegistryValueKind.String);
         Log.Debug("Used HKCU override for {Path}", relativePath);
         return true;
+    }
+
+    private bool Show(string relativePath, string overridePath)
+    {
+        try
+        {
+            using var key = _classesRoot.OpenSubKey(relativePath, writable: true);
+            key?.DeleteValue("LegacyDisable", throwOnMissingValue: false);
+        }
+        catch (SecurityException ex) { Log.Debug(ex, "Context menu verb key protected (security) — clearing this user's override"); }
+        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Context menu verb key write denied — clearing this user's override"); }
+
+        bool overrideIsEmpty;
+        using (var userKey = _currentUser.OpenSubKey(overridePath, writable: true))
+        {
+            userKey?.DeleteValue("LegacyDisable", throwOnMissingValue: false);
+            overrideIsEmpty = userKey is { ValueCount: 0, SubKeyCount: 0 };
+        }
+        if (overrideIsEmpty)
+        {
+            // Tidying only: the verb is shown with or without the empty key, so a refusal is logged, not reported.
+            try
+            {
+                _currentUser.DeleteSubKey(overridePath, throwOnMissingSubKey: false);
+                Log.Debug("Removed the empty HKCU override for {Path}", relativePath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
+            {
+                Log.Debug(ex, "Could not remove the empty HKCU override for {Path}", relativePath);
+            }
+        }
+
+        using var shown = _classesRoot.OpenSubKey(relativePath, writable: false);
+        return shown?.GetValue("LegacyDisable") is null;
     }
 
     /// <summary>
@@ -1036,6 +1093,26 @@ public sealed partial class ContextMenuService : IContextMenuService
     private static bool IsSystemEntry(string rawName)
     {
         return rawName.StartsWith('@') || rawName.StartsWith('.');
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is an indirect string, <c>@module,-id</c>, from one of Windows' own
+    /// modules: a bare file name, which Windows loads from its own folder, or a path inside the Windows folder.
+    /// </summary>
+    /// <remarks>
+    /// A packaged app's resource (<c>@{Package?ms-resource://…}</c>) and a module anywhere else are not Windows'.
+    /// </remarks>
+    internal static bool IsWindowsIndirectString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !value.StartsWith('@')) return false;
+
+        var comma = value.LastIndexOf(',');
+        if (comma < 2) return false;
+
+        var module = value[1..comma].Trim().Trim('"');
+        if (module.Length == 0 || module.StartsWith('{')) return false;
+
+        return module.IndexOfAny(['\\', '/', ':', '%']) < 0 || IsWindowsOwned(module);
     }
 
     /// <summary>

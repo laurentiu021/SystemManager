@@ -1930,7 +1930,10 @@ Key utility classes that don't fit neatly into Services or ViewModels (not an ex
   shares. Shared by Right-Click Menu (applying a menu style) and System Fixes (a frozen
   taskbar, a rebuilt icon cache) so the kill loop has one source of truth — it ends each
   instance individually, so one unkillable process cannot abort the loop and leave the
-  user with no shell. `Stop`/`Start` are exposed separately from `Restart` because the
+  user with no shell, and only the instances in SysManager's own session: run as
+  administrator it could end another signed-in account's Explorer too (#2821). The loop
+  takes its processes and the session as arguments, so a test pins which ones it ends
+  with stand-in processes. `Stop`/`Start` are exposed separately from `Restart` because the
   cache delete has to happen *between* them: Explorer holds those files open, so a delete
   with the shell running removes only the files that are not the problem. Both callers
   hold the `OperationCategory.Shell` lock, since two overlapping restarts can leave the

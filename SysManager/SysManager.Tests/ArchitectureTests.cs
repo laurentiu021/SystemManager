@@ -19099,7 +19099,7 @@ public partial class ArchitectureTests
     /// took the path would kill this machine's desktop, so there is no execution to observe. The
     /// alternative is trusting whoever adds the third caller to remember, which is the class of thing
     /// that has to be mechanical.</para>
-    /// <para>Scoped to <see cref="SysManager.Helpers.ExplorerShell.Stop"/> and
+    /// <para>Scoped to <see cref="SysManager.Helpers.ExplorerShell.Stop()"/> and
     /// <see cref="SysManager.Helpers.ExplorerShell.Restart"/>. <see cref="SysManager.Helpers.ExplorerShell.Start"/>
     /// alone is NOT gated: relaunching a shell that is already running is a no-op, and the fail-safe relaunch
     /// inside a <c>finally</c> must never be blocked by a lock — leaving the user without a desktop is the outcome

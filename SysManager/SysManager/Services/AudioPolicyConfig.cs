@@ -18,8 +18,12 @@ namespace SysManager.Services;
 /// turned on before #2584 because it was asked of the COM class <c>870af99c-…</c>, the policy-config client, which
 /// answers only to the default-device interface (see <see cref="PolicyConfigClient"/>).</item>
 /// <item>The IID and method layout are the community-reverse-engineered values (the same ones the MIT-licensed
-/// EarTrumpet ships). Windows 10 21H2 and later, and Windows 11, expose it as <c>ab3d4648-…</c>. Windows 10 before
-/// 21H2 used <c>2a59116d-…</c>; those builds are out of support, and there routing stays off.</item>
+/// EarTrumpet ships). Only the Windows 11 identifier, <c>ab3d4648-…</c>, is asked for: EarTrumpet uses it from
+/// build 21390, a Windows 11 development build, and the <c>2a59116d-…</c> below it on every Windows 10, including
+/// 21H2 and 22H2 (builds 19044 and 19045). The downlevel one is deliberately not bound — it cannot be confirmed
+/// on the hardware this is developed and tested on, and an unverifiable binding of an undocumented interface
+/// that writes another process's audio routing is worse than not offering it (#2807). So on Windows 10
+/// <see cref="TryCreate"/> returns null and the row offers Windows' own per-app sound settings instead.</item>
 /// <item>Everything is feature-detected and guarded: <see cref="TryCreate"/> returns null if the factory can't be
 /// reached or bound, the write returns false and the read returns null on any failure. Callers treat that as "fall
 /// back to guiding the user to Windows sound settings" or "the route is unknown", so a build where this shape
@@ -33,7 +37,8 @@ internal static partial class AudioPolicyConfigFactory
     // The Windows Runtime class whose activation factory is the routing interface.
     private const string ActivatableClassId = "Windows.Media.Internal.AudioPolicyConfig";
 
-    // IAudioPolicyConfigFactory as Windows 10 21H2 and later, and Windows 11, expose it.
+    // IAudioPolicyConfigFactory as Windows 11 exposes it. Windows 10's own identifier is not asked for — see
+    // the remarks above.
     private static readonly Guid IID_IAudioPolicyConfigFactory = new("ab3d4648-e242-459f-b02f-541c70306324");
 
     // Endpoint-string wrappers IAudioPolicyConfigFactory expects around a plain Core Audio endpoint id.

@@ -444,8 +444,9 @@ Edit Windows environment variables without the cramped built-in dialog:
 - **Real names and icons** — resolved from each audio session's process (with a safe
   fallback for protected processes), including the Windows "system sounds" session
 - **Per-app output routing** — send one app to your headset and another to your speakers.
-  On Windows 10 21H2 and later, and on Windows 11, each app gets an output-device picker in the
-  row; where Windows lacks the routing interface, the row shows a "Choose output device…" button
+  **On Windows 11** each app gets an output-device picker in the row. Windows 10 keeps the
+  interface behind a different identifier, which SysManager does not ask for, so there — and
+  anywhere else Windows does not offer it — the row shows a "Choose output device…" button
   that opens Windows' per-app sound settings so you're never left without a path. The picker
   shows the device Windows sends each app to, read again every ten seconds along with the device
   list, so a change made in Windows' own settings shows up too, and a route is still shown after

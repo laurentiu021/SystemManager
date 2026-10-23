@@ -1480,7 +1480,10 @@ Key services:
   output device). It is the activation factory of the Windows Runtime class
   `Windows.Media.Internal.AudioPolicyConfig`, reached through `RoGetActivationFactory`; routing never
   turned on until #2584 because it was asked of the policy-config client's COM class, which answers to
-  neither routing IID. The interface derives from `IInspectable`, which .NET's built-in COM interop no
+  neither routing IID. Only Windows 11's identifier (`ab3d4648-…`) is bound; Windows 10's (`2a59116d-…`) is
+  deliberately left alone, since an undocumented interface that writes another process's audio routing cannot be
+  offered on a build it was never confirmed on, so Windows 10 gets the guided fallback (#2807).
+  The interface derives from `IInspectable`, which .NET's built-in COM interop no
   longer projects, so it is declared on `IUnknown` with `IInspectable`'s three methods as its first
   slots, and the device id travels as an `HSTRING`. Feature-detected (`TryCreate` returns null when it
   can't bind), guarded (any failure returns false or null), and its endpoint-id wrap and unwrap are

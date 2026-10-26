@@ -66,20 +66,16 @@ dotnet run --project SysManager/SysManager/SysManager.csproj
 dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj -c Release
 ```
 
-**Check the formatting** — CI runs this on all four projects and fails the PR on any
+**Check the formatting** — CI runs this against the solution and fails the PR on any
 difference. A clean build does not catch it, so run it before you push. Line endings come
 from `.gitattributes` (CRLF, and LF for YAML), so a clone gets the ones this check expects
 whatever your `core.autocrlf` is:
 
 ```powershell
-# All four, because CI checks all four — a single-project run passes while the PR fails.
-foreach ($p in @(
-    'SysManager/SysManager/SysManager.csproj',
-    'SysManager/SysManager.Tests/SysManager.Tests.csproj',
-    'SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj',
-    'SysManager/SysManager.UITests/SysManager.UITests.csproj')) {
-  dotnet format $p --verify-no-changes
-}
+# Against the sln, because CI checks the sln — covers all four projects it lists in one
+# invocation rather than a project-at-a-time loop, which is a thing to keep correct if
+# `dotnet format` ever runs on a single project while debugging a specific violation.
+dotnet format SysManager/SysManager.sln --verify-no-changes
 # drop --verify-no-changes to let it fix the files in place
 ```
 

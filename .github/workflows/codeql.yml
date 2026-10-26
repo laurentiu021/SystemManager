@@ -12,6 +12,15 @@ permissions:
   contents: read
   security-events: write
 
+# No concurrency block at all meant a new push to a PR left the previous analysis of that same PR running
+# alongside the new one, burning the runner minutes of a scan whose result was about to be superseded. See
+# ci.yml's block for why main (the schedule trigger's ref too) groups by SHA instead of ref — the scheduled
+# Monday run and a same-day push must not cancel each other, and distinct SHAs never share a group anyway
+# (#2862).
+concurrency:
+  group: codeql-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # See the same block in ci.yml. This workflow runs dotnet but no tests, so the SDK's opt-out is the one that
 # applies (#2806).
 env:

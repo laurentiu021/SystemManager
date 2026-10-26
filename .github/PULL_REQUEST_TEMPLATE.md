@@ -26,8 +26,8 @@ what the rest of this checklist asks of you.
 
 - [ ] Branch created from `main` (not working on main directly)
 - [ ] Code compiles with 0 errors
-- [ ] `dotnet format <project> --verify-no-changes` passes on all four projects — CI checks all four
-      and rejects formatting drift, which a clean build does not catch (CONTRIBUTING has the loop)
+- [ ] `dotnet format SysManager/SysManager.sln --verify-no-changes` passes — CI checks the sln (all
+      four projects) and rejects formatting drift, which a clean build does not catch
 - [ ] Tests added/updated and passing locally
 - [ ] Author headers on all new/modified files — the three-line `// SysManager · <ClassName>` block in
       `.cs`, the one-line `<!-- SysManager · Author: … -->` comment in `.xaml`; copy it from the top of

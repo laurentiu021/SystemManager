@@ -101,9 +101,10 @@ Coverage is collected automatically on CI by `Microsoft.Testing.Extensions.CodeC
 The same CI job uploads test results to Codecov's test analytics, which reads JUnit XML
 and no other format. The run therefore emits two reports: TRX for the CI artifact, and
 JUnit for the upload. A guard step checks the JUnit report exists, has a `<testsuites>`
-root, and holds at least 4000 test cases before the upload runs, because the CLI uploads
-an unreadable report just as happily as a readable one and Codecov never reports the
-rejection back.
+root, and holds at least 8700 test cases (90% of the 9134 measured on 2026-10-26, the
+same floor `--minimum-expected-tests` enforces on the runner itself) before the upload
+runs, because the CLI uploads an unreadable report just as happily as a readable one and
+Codecov never reports the rejection back.
 
 ## Test infrastructure
 

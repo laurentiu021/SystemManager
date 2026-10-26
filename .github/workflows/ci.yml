@@ -9,9 +9,17 @@ on:
 permissions:
   contents: read
 
+#
+# PR pushes group by ref: a new push to the same branch should cancel the stale run checking an old
+# commit, same as before. Main pushes group by SHA instead of ref — every push to main shares the SAME
+# ref (refs/heads/main), so grouping by ref there meant a merge landing while the PREVIOUS main run was
+# still in its UI, integration or tag-published stage cancelled that run outright, and with several
+# releases a day it could be the run FOR THE COMMIT THAT WAS JUST RELEASED. Grouping by SHA gives every
+# main push its own group, so cancel-in-progress is also scoped to pull_request only — on main there is
+# never a second run in the same group to cancel (#2862).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The app sends nothing anywhere, and neither should the tools that build it. xUnit v3 test
 # projects are Microsoft.Testing.Platform applications, and that platform ships a telemetry
@@ -104,31 +112,36 @@ jobs:
       # the same .editorconfig governs the test projects, so otherwise their style
       # could drift past CI silently.
       #
-      # `shell: bash` with an explicit failure sweep, NOT four bare lines. A multi-line `run:` uses the
-      # default shell, where only the LAST command's exit code decides the step — so a project that
-      # failed formatting printed its errors as annotations and the step still went green. That is how
-      # five real violations (DuplicateFileViewModelTests, DarkModeViewModelTests, AboutViewModel)
-      # reached main across several PRs while every run looked clean: the UITests project happened to
-      # pass last. Each project's status is now captured and the step fails if ANY of them did.
-      - name: Check formatting
+      # Every project that should be checked is IN the solution, so the one-liner below actually covers
+      # it. Without this, a fifth project added later and never added to SysManager.sln would silently
+      # stop being format-checked — the loop this replaced named its four paths explicitly and would
+      # have had the same blind spot the day a project was added and the list was not (#2862).
+      - name: Check every project is in the solution
         shell: bash
         run: |
-          failed=""
-          for proj in \
-            SysManager/SysManager/SysManager.csproj \
-            SysManager/SysManager.Tests/SysManager.Tests.csproj \
-            SysManager/SysManager.IntegrationTests/SysManager.IntegrationTests.csproj \
-            SysManager/SysManager.UITests/SysManager.UITests.csproj
-          do
-            if ! dotnet format "$proj" --verify-no-changes --verbosity diagnostic; then
-              failed="$failed $proj"
+          missing=""
+          for proj in $(find SysManager -mindepth 2 -maxdepth 2 -name "*.csproj"); do
+            name=$(basename "$proj")
+            if ! grep -q "$name" SysManager/SysManager.sln; then
+              missing="$missing $proj"
             fi
           done
-          if [ -n "$failed" ]; then
-            echo "::error::Formatting violations in:$failed — run 'dotnet format <project>' to fix."
+          if [ -n "$missing" ]; then
+            echo "::error::Not listed in SysManager.sln, so 'dotnet format SysManager/SysManager.sln' below never checks it:$missing"
             exit 1
           fi
-          echo "All four projects are correctly formatted."
+          echo "Every .csproj under SysManager/ is in the solution."
+
+      # One invocation against the solution file, not four against each project — SysManager.sln lists
+      # exactly the four projects the old loop named by hand, and format checking all four through it
+      # loads the workspace once instead of once per test project re-loading the app project it
+      # references. The loop this replaced already fixed its own `shell: bash` failure-capture bug
+      # (only the LAST command's exit code decided a multi-line `run:` under the default shell, which is
+      # how five real violations reached main while every run looked clean) — `--verify-no-changes`
+      # against the sln fails on ANY project's violation the same mechanical way, with one dotnet
+      # invocation deciding the step's own exit code directly (#2862).
+      - name: Check formatting
+        run: dotnet format SysManager/SysManager.sln --verify-no-changes --verbosity diagnostic
 
       # The release workflow derives its notes from the CHANGELOG section matching the TAG that
       # auto-release computed from the commit type (feat: -> minor, fix: -> patch). If the csproj
@@ -357,8 +370,10 @@ jobs:
       #
       # --minimum-expected-tests is the floor that used to have no equivalent: the runner itself fails
       # the run when fewer tests execute than that, so a change that stops DISCOVERING tests can no
-      # longer pass as a green run of nothing. 5000 against a real count of ~5160 leaves room to delete
-      # a class without editing CI, while still catching any collapse.
+      # longer pass as a green run of nothing. The real count measured from this job's own JUnit report
+      # on 2026-10-26 was 9134 — 5000 had drifted to 55% of it, below even the ~5471 test METHODS, so a
+      # run in which theory rows stopped expanding would have passed. 8700 is 95% of 9134: close enough
+      # to catch a real collapse, with room to delete a few tests without editing CI (#2862).
       #
       # --hangdump: this is the job that gates every merge, and until now a hung unit test ran silently
       # to this job's 25-minute ceiling with nothing naming it — the step below that claimed to cover
@@ -373,7 +388,7 @@ jobs:
           dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release --no-build
           --results-directory TestResults
-          --minimum-expected-tests 5000
+          --minimum-expected-tests 8700
           --hangdump --hangdump-timeout 5m
           --report-xunit-trx --report-xunit-trx-filename unit-results.trx
           --report-xunit-junit --report-xunit-junit-filename unit-results.junit.xml
@@ -492,8 +507,11 @@ jobs:
           fi
           cases=$({ grep -o "<testcase " "$report" || true; } | wc -l)
           echo "JUnit report: $(wc -c < "$report") bytes, $cases test cases."
-          if [ "$cases" -lt 4000 ]; then
-            echo "::error::the JUnit report holds only $cases test cases, under the floor of 4000. Either the run was truncated or the junit logger stopped recording; a report this small would upload cleanly and tell Codecov nothing."
+          # 8700, the same number --minimum-expected-tests above uses — this is the identical suite,
+          # measured through a different report format, so the two floors move together rather than
+          # drifting apart the way 4000 (44% of the real 9134 measured 2026-10-26) had (#2862).
+          if [ "$cases" -lt 8700 ]; then
+            echo "::error::the JUnit report holds only $cases test cases, under the floor of 8700. Either the run was truncated or the junit logger stopped recording; a report this small would upload cleanly and tell Codecov nothing."
             exit 1
           fi
 
@@ -575,8 +593,11 @@ jobs:
   ui-tests:
     name: UI automation tests
     runs-on: windows-latest
-    needs: build-and-test
     timeout-minutes: 30
+    # No `needs: build-and-test`: this job restores and builds everything itself below and takes
+    # nothing from that job's output or artifacts, so the dependency only ever delayed this job's
+    # verdict by build-and-test's own runtime — a PR was usually mergeable before this result existed
+    # at all (#2862). Runs concurrently with it instead.
     # UI tests need a desktop session; windows-latest provides one.
     # Skip on PRs from forks, since secrets won't be available anyway.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
@@ -642,9 +663,10 @@ jobs:
       # two are not the same finding: a failure means the job worked and found something, while a
       # collapsed count means this job's green says nothing at all. Nothing distinguished them until
       # now, so a runner or package change that stopped finding tests would have looked like a clean
-      # pass. The floor sits between the 64 test METHODS in the project and the 136 cases they expand
-      # to, so it catches theory rows silently stopping being enumerated as well as an outright
-      # truncation, while leaving room for tests to be legitimately deleted.
+      # pass. 140 is 93% of the 150 test results this job's own TRX measured on 2026-10-26 — moved from
+      # "between the method count and the case count" (64 and 136 when last written, 75 and 150 by the
+      # same measurement) to a straight 90%-of-cases floor, matching the unit and integration floors, so
+      # the three track the suite the same way (#2862).
       #
       # Counted from the report rather than with the runner's own --minimum-expected-tests, which is
       # what the blocking unit job uses: the step above is deliberately continue-on-error, so the
@@ -663,8 +685,8 @@ jobs:
           fi
           cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
           echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
-          if [ "$cases" -lt 100 ]; then
-            echo "::error::the UI suite recorded only $cases results, under the floor of 100. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+          if [ "$cases" -lt 140 ]; then
+            echo "::error::the UI suite recorded only $cases results, under the floor of 140. Tests stopped being discovered rather than failing, so this job's result is meaningless."
             exit 1
           fi
 
@@ -703,8 +725,10 @@ jobs:
   integration-tests:
     name: Integration tests (non-blocking)
     runs-on: windows-latest
-    needs: build-and-test
     timeout-minutes: 30
+    # No `needs: build-and-test`, same reasoning as ui-tests above: this job restores and builds
+    # everything itself and takes nothing from that job's output, so the dependency only delayed this
+    # job's verdict by build-and-test's own runtime (#2862).
     # Fork PRs have no secrets and no reason to run a live-system suite.
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
 
@@ -809,8 +833,9 @@ jobs:
 
       # Same reasoning as "Verify the UI suite actually ran" above, including why the floor is counted
       # here rather than passed to the runner: a failure is a warning, an empty or collapsed run is an
-      # error. The floor sits between the 497 test METHODS in the project and the 623 cases they expand
-      # to.
+      # error. 850 is 93% of the 915 test results this job's own TRX measured on 2026-10-26 — same move
+      # as the UI floor above, from "between 497 methods and 623 cases" (stale: 745 methods by the same
+      # measurement) to a straight 90%-of-cases floor (#2862).
       - name: Verify the integration suite actually ran
         if: ${{ !cancelled() }}
         shell: bash
@@ -823,8 +848,8 @@ jobs:
           fi
           cases=$({ grep -o "<UnitTestResult " "$report" || true; } | wc -l)
           echo "TRX report: $(wc -c < "$report") bytes, $cases test results."
-          if [ "$cases" -lt 550 ]; then
-            echo "::error::the integration suite recorded only $cases results, under the floor of 550. Tests stopped being discovered rather than failing, so this job's result is meaningless."
+          if [ "$cases" -lt 850 ]; then
+            echo "::error::the integration suite recorded only $cases results, under the floor of 850. Tests stopped being discovered rather than failing, so this job's result is meaningless."
             exit 1
           fi
 

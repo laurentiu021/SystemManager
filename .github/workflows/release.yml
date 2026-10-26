@@ -153,13 +153,39 @@ jobs:
       # Microsoft.Testing.Platform arguments; see the same step in ci.yml for why. The floor is here too
       # rather than only there, because a release can be dispatched manually without passing through a PR
       # — a gate that lets a run of nothing through is not a gate.
+      #
+      # --hangdump: same reason as ci.yml's unit job (#2847) — without it, a hung test here ends this
+      # job at its 30-minute timeout-minutes and names nothing, on the gate a manually-dispatched
+      # release passes through with no PR involved at all.
       - name: Run unit tests (must pass)
+        id: unit-tests
         run: >
           dotnet test --project SysManager/SysManager.Tests/SysManager.Tests.csproj
           -c Release
           --results-directory TestResults
           --minimum-expected-tests 5000
+          --hangdump --hangdump-timeout 5m
           --report-xunit-trx --report-xunit-trx-filename unit-results.trx
+
+      # Same step as ci.yml's unit job, for the same reason: this job's timeout-minutes cancels it on a
+      # hang, which satisfies neither a normal failure check nor the implicit success() default, so
+      # nothing named the hung test here either (#2847).
+      - name: Name the hung unit test if the run was killed
+        if: ${{ cancelled() }}
+        shell: bash
+        run: |
+          echo "The unit run did not finish and the job was cancelled — almost certainly this job's"
+          echo "timeout-minutes. The hang dump names the test that was still running:"
+          found=0
+          for log in TestResults/*hang.log; do
+            [ -s "$log" ] || continue
+            found=1
+            echo "::warning::hang in $(basename "$log"): $(tr -d '\r' < "$log" | tr '\n' ' ')"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No *hang.log was written, so --hangdump did not fire and the cancellation came from something other than a stuck test. Written instead:"
+            ls -la TestResults || true
+          fi
 
       - name: Publish single-file exe
         shell: pwsh

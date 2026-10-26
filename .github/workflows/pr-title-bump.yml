@@ -1,0 +1,73 @@
+name: PR title matches its version bump
+
+# CONTRIBUTING says the PR title decides whether merging releases: feat!:/fix!: major, feat: minor,
+# fix: patch, anything else no release. Nothing read github.event.pull_request.title before this, and
+# ci.yml's `pull_request` trigger has no `edited` type — a title changed after the PR was opened (CONTRIBUTING
+# explicitly invites that: "the prefix can be adjusted before the squash merge") was never re-checked against
+# anything. "Check the version is the one the merge will tag" in ci.yml accepts ANY of the three legal bumps,
+# by its own comment, "because a PR's commit type is not reliably available here" — this workflow is what
+# makes it available, in its own file rather than a new job in ci.yml, so `edited` here does not also
+# re-trigger build-and-test, the UI suite and the integration suite on every title keystroke (#2847).
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-bump-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Title bump matches csproj
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # tags are the whole point of this check
+
+      - name: Check the title's required bump against csproj
+        shell: bash
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -o pipefail
+
+          # Mirrors ci.yml's "Check the version is the one the merge will tag" deliberately — same tag
+          # selection, same bump arithmetic — so the two cannot drift apart on what "next" means.
+          MATCHES=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          TAG=${MATCHES%%$'\n'*}
+          if [ -z "$TAG" ]; then
+            echo "No release tag found — nothing to compute a bump from, skipping."
+            exit 0
+          fi
+
+          CSPROJ=$(grep -oPm1 '(?<=<Version>)[^<]+' SysManager/SysManager/SysManager.csproj)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${TAG#v}"
+          PATCH_NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          MINOR_NEXT="${MAJOR}.$((MINOR + 1)).0"
+          MAJOR_NEXT="$((MAJOR + 1)).0.0"
+
+          if [[ "$TITLE" =~ ^(feat|fix)(\(.+\))?!: ]]; then
+            REQUIRED="$MAJOR_NEXT"; KIND="a breaking (!) bump"
+          elif [[ "$TITLE" =~ ^feat(\(.+\))?: ]]; then
+            REQUIRED="$MINOR_NEXT"; KIND="a feat: bump"
+          elif [[ "$TITLE" =~ ^fix(\(.+\))?: ]]; then
+            REQUIRED="$PATCH_NEXT"; KIND="a fix: bump"
+          else
+            REQUIRED="${TAG#v}"; KIND="no release (its prefix is not feat:/fix:/feat!:/fix!:)"
+          fi
+
+          if [ "$CSPROJ" = "$REQUIRED" ]; then
+            echo "Title \"$TITLE\" requires $KIND ($REQUIRED), and csproj Version is $CSPROJ. Match."
+            exit 0
+          fi
+
+          echo "::error::The PR title (\"$TITLE\") requires $KIND, which is version $REQUIRED from the newest tag $TAG, but csproj Version is $CSPROJ. Either set csproj Version AND the newest CHANGELOG header to $REQUIRED, or change the PR title's prefix to match what this PR actually does."
+          exit 1

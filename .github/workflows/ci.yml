@@ -48,30 +48,38 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      # The key must hash every file that decides WHICH packages get restored. Under central package
-      # management a .csproj carries no versions at all — they are all in Directory.Packages.props, and
-      # Directory.Build.props adds a PackageReference of its own (Microsoft.SourceLink.GitHub). Hashing
-      # only .csproj therefore misses every version change.
+      # The key hashes every file that decides WHICH packages get restored, and NOTHING else. Under
+      # central package management a .csproj carries no package versions at all — they are all in
+      # Directory.Packages.props, and Directory.Build.props adds a PackageReference of its own
+      # (Microsoft.SourceLink.GitHub). **/*.csproj is deliberately NOT in this list: SysManager.csproj's
+      # own <Version> is the app's build number, not a package version, and it changes on every single
+      # release — so including it rotated the key on every fix:/feat: merge for a reason that had
+      # nothing to do with what gets restored (#2847). Hashing only .csproj (the ORIGINAL key, before
+      # #2434 added the two props files below) missed every actual version change, which is the
+      # opposite mistake; the fix is to hash the files that are true, not to hash more of them.
       #
       # The failure is quiet rather than wrong: an unchanged key is an exact hit, the save below is
       # skipped, and restore downloads the new version anyway. But it is never cached, so it is re-downloaded
-      # on every run until some unrelated .csproj edit rotates the key. Dependabot's grouped version bumps
-      # are precisely this shape, so it accumulates.
+      # on every run until some edit to one of the files below rotates the key. Dependabot's grouped version
+      # bumps are precisely this shape, so it accumulates.
       #
       # global.json is intentionally absent: it pins the SDK, not the package set, and actions/setup-dotnet
       # already governs that in the step above.
       #
       # Restored on every run, saved only on a push to main (#2434). A cache saved from a pull-request run is
       # scoped to refs/pull/N/merge, so nothing but a re-run of that same pull request can read it; the next
-      # pull request restores main's newest entry through restore-keys. Yet every fix/feat pull request missed
-      # the key — its version bump changes a .csproj — and uploaded ~705 MB from this required job: 598 s of a
-      # 19-minute run on 2026-09-24, against the 25-minute ceiling above.
+      # pull request restores main's newest entry through restore-keys. Before #2434 added the props files,
+      # every fix/feat pull request missed the key — its version bump changed the ONLY hashed file — and
+      # uploaded ~705 MB from this required job: 598 s of a 19-minute run on 2026-09-24, against the
+      # 25-minute ceiling above. #2847 removed **/*.csproj afterwards because #2434's fix kept the same
+      # mistake alongside its own: SysManager.csproj's version bump still rotated the key on every release,
+      # it just no longer MISSED a real package-version change while doing it.
       - name: Restore the NuGet package cache
         id: nuget-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/Directory.Build.props') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/Directory.Build.props') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -351,6 +359,14 @@ jobs:
       # the run when fewer tests execute than that, so a change that stops DISCOVERING tests can no
       # longer pass as a green run of nothing. 5000 against a real count of ~5160 leaves room to delete
       # a class without editing CI, while still catching any collapse.
+      #
+      # --hangdump: this is the job that gates every merge, and until now a hung unit test ran silently
+      # to this job's 25-minute ceiling with nothing naming it — the step below that claimed to cover
+      # that case actually belonged to the integration job, a separate job entirely (#2847). Same
+      # extension and timeout as integration-tests uses. No continue-on-error here: unlike that job,
+      # this one must still fail normally on a real test failure, and the step below already fires on
+      # both a failure and a cancellation through its own `if:`, which overrides the implicit
+      # success()-only default regardless.
       - name: Run unit tests
         id: unit-tests
         run: >
@@ -358,6 +374,7 @@ jobs:
           -c Release --no-build
           --results-directory TestResults
           --minimum-expected-tests 5000
+          --hangdump --hangdump-timeout 5m
           --report-xunit-trx --report-xunit-trx-filename unit-results.trx
           --report-xunit-junit --report-xunit-junit-filename unit-results.junit.xml
           --coverage --coverage-output-format cobertura
@@ -373,8 +390,8 @@ jobs:
       # non-gracefully; that is not a broken test and should not read like one (#2283).
       #
       # This covers a non-zero EXIT. The kill case is a different shape and is covered by "Name the hung
-      # test if the run was killed" below, which keys on `cancelled()`: a timeout kill matches neither
-      # `outcome == 'failure'` nor `!cancelled()`, so one step cannot do both.
+      # unit test if the run was killed" below, which keys on `cancelled()`: a timeout kill matches
+      # neither `outcome == 'failure'` nor `!cancelled()`, so one step cannot do both.
       - name: Name the kind of unit-test failure
         if: ${{ steps.unit-tests.outcome == 'failure' && !cancelled() }}
         shell: bash
@@ -393,6 +410,28 @@ jobs:
             echo "::warning::$((cases - passed)) of $cases unit tests did not pass. This job is blocking, so the failure names itself in the log above — look there for the test names."
           else
             echo "::warning::All $cases unit tests PASSED and the run still exited non-zero, so this is an infrastructure or teardown failure rather than a test failure. Do not go looking for a broken test. Exit code 7 means the test host exited non-gracefully (see https://aka.ms/testingplatform/exitcodes); a re-run of the same commit usually passes."
+          fi
+
+      # The third kind of failure, same as integration-tests: a HANG, which this job's own
+      # timeout-minutes ends by cancelling the job. That satisfies neither `outcome == 'failure'` nor
+      # `!cancelled()` above, so this is the step that used to be missing entirely for the unit suite —
+      # the comment above claimed it existed here and did not (#2847). --hangdump already wrote the
+      # answer: a 92-byte log per hung process naming the test that was running when the timeout fired.
+      - name: Name the hung unit test if the run was killed
+        if: ${{ cancelled() }}
+        shell: bash
+        run: |
+          echo "The unit run did not finish and the job was cancelled — almost certainly this job's"
+          echo "timeout-minutes. The hang dump names the test that was still running:"
+          found=0
+          for log in TestResults/*hang.log; do
+            [ -s "$log" ] || continue
+            found=1
+            echo "::warning::hang in $(basename "$log"): $(tr -d '\r' < "$log" | tr '\n' ' ')"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::warning::No *hang.log was written, so --hangdump did not fire and the cancellation came from something other than a stuck test. Written instead:"
+            ls -la TestResults || true
           fi
 
       # Skip Codecov on fork PRs: forked pull requests have no access to repository
@@ -503,7 +542,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=$(grep -oE '<Version>[^<]+' SysManager/SysManager/SysManager.csproj | head -n1 | sed 's/<Version>//')
+          # No `| head -n1 | sed`: under pipefail, `head` closing the pipe after its first line can
+          # SIGPIPE whatever is still writing upstream — the same class of bug auto-release.yml's "Get
+          # latest tag" step explains in detail (#2847). The whole match set goes into a variable first
+          # and the first line comes off it with parameter expansion, no pipe left to close early.
+          MATCHES=$(grep -oE '<Version>[^<]+' SysManager/SysManager/SysManager.csproj || true)
+          FIRST=${MATCHES%%$'\n'*}
+          VERSION=${FIRST#<Version>}
           echo "csproj version: $VERSION"
 
           # A chore:/docs:/ci:/test: merge does not release, so csproj legitimately still points at
@@ -519,7 +564,11 @@ jobs:
             sleep 30
           done
 
-          NEWEST=$(git tag --list 'v*.*.*' --sort=-v:refname | head -n1)
+          # Same reason as above: the tag list only grows, and this is exactly the pipe that first
+          # surfaced the SIGPIPE failure in auto-release.yml once it grew past ~100 entries — here it
+          # would replace the error carrying the recovery command with a bare non-zero exit (#2847).
+          TAGS=$(git tag --list 'v*.*.*' --sort=-v:refname || true)
+          NEWEST=${TAGS%%$'\n'*}
           echo "::error::csproj is at $VERSION but there is no v$VERSION tag (newest is $NEWEST). Auto-release did not tag this merge — check whether its run was CANCELLED rather than failed (a displaced queued run reports as cancelled). Recover with: git tag -a v$VERSION -m \"SysManager $VERSION\" <merge-sha> && git push origin v$VERSION — release.yml triggers on v*.*.* and publishes normally."
           exit 1
 

@@ -69,8 +69,7 @@ public sealed class FixedDriveService
             scope.Connect();
             var media = new Dictionary<string, (string Media, string Bus)>(StringComparer.OrdinalIgnoreCase);
 
-            using var search = new ManagementObjectSearcher(scope,
-                new ObjectQuery("SELECT DeviceId, MediaType, BusType FROM MSFT_PhysicalDisk"));
+            using var search = Wmi.Searcher(scope, "SELECT DeviceId, MediaType, BusType FROM MSFT_PhysicalDisk");
             using var physCollection = search.Get();
             foreach (ManagementObject mo in physCollection)
             {
@@ -89,8 +88,8 @@ public sealed class FixedDriveService
             var letterToDisk = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                using var partSearch = new ManagementObjectSearcher(scope,
-                    new ObjectQuery("SELECT DriveLetter, DiskNumber FROM MSFT_Partition WHERE DriveLetter IS NOT NULL"));
+                using var partSearch = Wmi.Searcher(scope,
+                    "SELECT DriveLetter, DiskNumber FROM MSFT_Partition WHERE DriveLetter IS NOT NULL");
                 using var partCollection = partSearch.Get();
                 foreach (ManagementObject mo in partCollection)
                 {

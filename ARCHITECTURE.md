@@ -596,11 +596,15 @@ Key services:
   sentence about runs under half of it (only the latest, several in a row, or one earlier). Pure and static
   like `SpeedVerdictAnalyzer`; a run that measured no download is not counted.
 - `SystemInfoService` — OS / CPU / RAM / uptime snapshot. Static hardware (OS caption,
-  CPU model, disk models, DIMM inventory) is queried once via WMI and cached; the three
+  CPU model, disk models, DIMM inventory) is queried once via `Helpers/Wmi` and cached; the three
   DYNAMIC values are syscalls, because the Landing tab polls this every 300 ms —
   `GetSystemTimes` deltas for CPU load, `GlobalMemoryStatusEx` for memory,
   `Environment.TickCount64` for uptime. The syscalls are constructor-injected, so the
-  delta arithmetic is unit-testable without a real machine.
+  delta arithmetic is unit-testable without a real machine. The first caller after launch to find the
+  static cache empty is the one that runs the four WMI queries, claimed so nobody else joins it; every
+  OTHER concurrent caller — the Dashboard's poll, the tray tooltip, the Resource History sampler all start
+  by awaiting the same first snapshot — reads whatever is cached right now and moves straight to its own
+  syscalls, never waiting on someone else's round trip (#2845).
 - `BiosService` — read-only BIOS/firmware + motherboard info (Win32_BIOS,
   Win32_BaseBoard, UEFI/Secure-Boot registry) plus a pure manufacturer
   support-URL resolver for BIOS updates; never flashes firmware. Consumed by
@@ -799,6 +803,11 @@ Key services:
   was named three ways on System Health. A list still picks the word for a value with no name, because
   the chkdsk list hides an empty label while the SMART card needs one. `StorageLabelsTests` fails if
   another source file maps bus types itself.
+- `Helpers/Wmi` — builds every `ManagementObjectSearcher` in the app, with a bounded read (15 s default,
+  the reliability history keeps its own longer one). WMI's own default timeout is infinite, and a provider
+  that stops answering — a failing disk, a dropped USB bridge, a degraded Storage Spaces pool — is an
+  ordinary fault, not an exotic one; with no limit it held a reader open for as long as SysManager stayed
+  open (#2845).
 - `Helpers/TreemapLayout` — squarified treemap layout (Bruls, Huizing and van Wijk): one rectangle per
   weight, areas in proportion, as square as the order allows, tiling the bounds without a gap. Pure.
 - `Helpers/SizeObserver` — attached properties that push an element's laid-out size into a binding,

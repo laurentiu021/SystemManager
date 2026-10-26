@@ -7,6 +7,7 @@ using System.Management;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -53,9 +54,9 @@ public sealed class WmiReliabilityHistory : IReliabilityHistory
         var records = new List<ReliabilityRecord>();
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                new ManagementScope(@"\\.\root\cimv2"), new ObjectQuery(query),
-                new EnumerationOptions { Timeout = ReadTimeout, ReturnImmediately = true, Rewindable = false });
+            // Its own longer limit through the shared helper: this reads a year of records, so a slow answer
+            // here is work rather than a provider that has stopped answering (#2845).
+            using var searcher = Wmi.Searcher(query, ReadTimeout);
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {

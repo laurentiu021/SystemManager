@@ -16780,47 +16780,80 @@ public partial class ArchitectureTests
     private static partial Regex BusyAssignment();
 
     /// <summary>
-    /// The snapshot cache lock may hold only the one-time cached queries, never a per-poll one.
+    /// Neither <c>lock (_cacheLock)</c> block in <c>SystemInfoService</c> may hold a WMI round trip.
     /// </summary>
     /// <remarks>
-    /// <c>SystemInfoService.Capture</c> takes <c>_cacheLock</c> to serialise four <c>??=</c> caches, each of
-    /// which runs its WMI query once per process. The dynamic CPU-load query ran inside that block too, so
-    /// every concurrent <c>CaptureAsync</c> queued behind a WMI round-trip it had no interest in — and the
-    /// Dashboard polls this at 300 ms, so the queue was rarely empty. That query is now a syscall
-    /// (<c>NoWmiRunsOnTheSnapshotPollPath</c> keeps it one), but the rule still holds for whatever is added
-    /// next.
-    /// <para>The rule is expressed as a shape rather than as two method names: inside the block, a
-    /// <c>Query…</c> call must sit on a line that also caches its result with <c>??=</c>. That catches a
-    /// third dynamic query added later, which a name list could not.</para>
+    /// <c>SystemInfoService.Capture</c> used to take <c>_cacheLock</c> across all four <c>??=</c> caches,
+    /// running their WMI queries while the lock was held — so every concurrent <c>CaptureAsync</c> (the
+    /// Dashboard's 300 ms poll, the notification-area tooltip, the Resource History sampler all start by
+    /// awaiting the same first snapshot) queued behind whichever provider answered slowest, for numbers
+    /// that are plain syscalls with no interest in WMI at all (#2845). The fix claims the fill under a brief
+    /// lock, runs the four queries with NO lock held, then publishes under a second brief lock — so this
+    /// guard has two blocks to check, not one, and the WMI seam calls must appear in NEITHER of them.
+    /// <para>The rule is expressed as a shape rather than as two method names: a <c>_query…()</c> seam call
+    /// anywhere inside either block is the offense, regardless of whether a <c>??=</c> sits on the same
+    /// line. That catches the exact regression this issue was filed over — the queries moving back inside
+    /// the lock — rather than only a narrower rewording of it.</para>
     /// </remarks>
     [Fact]
-    public void TheSnapshotCacheLock_HoldsOnlyCachedQueries()
+    public void NeitherSnapshotCacheLock_EverRunsAWmiQuery()
     {
         var source = WithoutComments(File.ReadAllText(
             Path.Combine(TestPaths.AppProject(), "Services", "SystemInfoService.cs")));
-        var block = BalancedBlock(source, "lock (_cacheLock)");
+        var blocks = AllBalancedBlocks(source, "lock (_cacheLock)");
 
-        // Vacuity floor. An empty or mis-sliced block would satisfy every assertion below without reading
-        // the code, and the four caches are what identify this block as the right one.
-        var cached = block.Split('\n').Count(l => l.Contains("??=", StringComparison.Ordinal));
-        Assert.True(cached >= 4,
-            $"only {cached} cached queries were found inside lock (_cacheLock) (block length "
-            + $"{block.Length}) — the slice is not the cache block, so this guard proves nothing.");
+        // Vacuity floor. An empty list, or blocks with nothing in them, would satisfy every assertion below
+        // without reading the code — the claim-and-read block and the publish block are both expected, and
+        // the four caches are what identify the publish block as the right one.
+        Assert.True(blocks.Count >= 2,
+            $"only {blocks.Count} lock (_cacheLock) blocks were found — the claim-and-read block and the "
+            + "publish block are both expected, so this guard proves nothing.");
+        var published = blocks.SelectMany(b => b.Split('\n')).Count(l => l.Contains("??=", StringComparison.Ordinal));
+        Assert.True(published >= 4,
+            $"only {published} '??=' cache publishes were found across the lock (_cacheLock) blocks — the "
+            + "slice is not the cache block, so this guard proves nothing.");
 
-        var offenders = block.Split('\n')
-            .Where(l => QueryCallInLock().IsMatch(l) && !l.Contains("??=", StringComparison.Ordinal))
+        var offenders = blocks
+            .SelectMany(b => b.Split('\n'))
+            .Where(l => QuerySeamCallInLock().IsMatch(l))
             .Select(l => l.Trim())
             .ToList();
 
         Assert.True(offenders.Count == 0,
-            "these queries run while holding _cacheLock, so every other CaptureAsync caller waits for them. "
-            + "The lock exists for the ??= caches; a per-poll query belongs after the block, beside the "
-            + "Sample* calls:\n  " + string.Join("\n  ", offenders));
+            "a WMI query seam runs while holding _cacheLock, so every other CaptureAsync caller waits for "
+            + "it again. The round trips belong OUTSIDE both lock blocks, between the claim and the "
+            + "publish:\n  " + string.Join("\n  ", offenders));
+
+        // Positive half: the seam calls must still exist somewhere in the file (outside both lock blocks,
+        // per the absence check above) — otherwise deleting the whole fill would pass for the wrong reason.
+        foreach (var seam in new[] { "_queryOsStatic()", "_queryCpuStatic()", "_queryDisks()", "_queryMemoryModules()" })
+            Assert.True(source.Contains(seam, StringComparison.Ordinal),
+                $"'{seam}' is gone from SystemInfoService — the static cache is no longer filled at all, "
+                + "which would satisfy the no-query-under-lock rule for the wrong reason.");
     }
 
-    /// <summary>A call to one of the service's own Query* methods.</summary>
-    [GeneratedRegex(@"\bQuery[A-Z]\w*\(")]
-    private static partial Regex QueryCallInLock();
+    /// <summary>Every <c>lock (opener)</c> block's body, in source order — <see cref="BalancedBlock"/> finds only the first.</summary>
+    private static List<string> AllBalancedBlocks(string source, string opener)
+    {
+        var blocks = new List<string>();
+        var at = 0;
+        while (true)
+        {
+            var found = source.IndexOf(opener, at, StringComparison.Ordinal);
+            if (found < 0) break;
+            var open = source.IndexOf('{', found + opener.Length);
+            if (open < 0) break;
+            var close = SourceBraces.MatchingBrace(source, open);
+            if (close < 0) break;
+            blocks.Add(source[(open + 1)..close]);
+            at = close + 1;
+        }
+        return blocks;
+    }
+
+    /// <summary>A call to one of <c>SystemInfoService</c>'s injected <c>_query...</c> seams.</summary>
+    [GeneratedRegex(@"_query[A-Z]\w*\(")]
+    private static partial Regex QuerySeamCallInLock();
 
     /// <summary>
     /// The three values the 300 ms snapshot poll refreshes must come from syscalls, never from WMI.

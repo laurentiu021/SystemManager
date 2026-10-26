@@ -287,7 +287,7 @@ public sealed class SystemReportService
         List<GpuReportInfo> gpus = [];
         try
         {
-            using var searcher = new ManagementObjectSearcher(
+            using var searcher = Wmi.Searcher(
                 "SELECT Name, AdapterRAM, DriverVersion, PNPDeviceID FROM Win32_VideoController");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
@@ -317,8 +317,7 @@ public sealed class SystemReportService
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT Manufacturer, Product FROM Win32_BaseBoard");
+            using var searcher = Wmi.Searcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {
@@ -342,7 +341,7 @@ public sealed class SystemReportService
         List<NetworkAdapterInfo> adapters = [];
         try
         {
-            using var searcher = new ManagementObjectSearcher(
+            using var searcher = Wmi.Searcher(
                 "SELECT Description, IPAddress, MACAddress, DHCPEnabled FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = TRUE");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)

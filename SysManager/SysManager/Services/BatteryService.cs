@@ -4,6 +4,7 @@
 
 using System.Management;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -60,7 +61,7 @@ public sealed class BatteryService
     {
         var info = new BatteryInfo();
 
-        using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Battery");
+        using var searcher = Wmi.Searcher("SELECT * FROM Win32_Battery");
         using var results = searcher.Get();
 
         foreach (ManagementObject obj in results)
@@ -93,8 +94,7 @@ public sealed class BatteryService
         // ── BatteryStaticData (design capacity) ──
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                @"root\WMI", "SELECT DesignedCapacity FROM BatteryStaticData");
+            using var searcher = Wmi.Searcher(@"root\WMI", "SELECT DesignedCapacity FROM BatteryStaticData");
             using var results = searcher.Get();
 
             foreach (ManagementObject obj in results)
@@ -113,7 +113,7 @@ public sealed class BatteryService
         // ── BatteryFullChargedCapacity (current max) ──
         try
         {
-            using var searcher = new ManagementObjectSearcher(
+            using var searcher = Wmi.Searcher(
                 @"root\WMI", "SELECT FullChargedCapacity FROM BatteryFullChargedCapacity");
             using var results = searcher.Get();
 
@@ -133,8 +133,7 @@ public sealed class BatteryService
         // ── BatteryCycleCount ──
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                @"root\WMI", "SELECT CycleCount FROM BatteryCycleCount");
+            using var searcher = Wmi.Searcher(@"root\WMI", "SELECT CycleCount FROM BatteryCycleCount");
             using var results = searcher.Get();
 
             foreach (ManagementObject obj in results)

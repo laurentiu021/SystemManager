@@ -39,9 +39,18 @@ public sealed partial class SystemInfoService
     private IReadOnlyList<MemoryModule>? _cachedModules;
     private readonly Lock _cacheLock = new();
 
+    // Claimed by whichever caller finds the cache still empty, so the four WMI round trips below run on
+    // that ONE caller's thread and nobody else's — a concurrent caller sees this already true and skips
+    // straight to the syscalls instead of joining the wait (#2845).
+    private bool _fillInFlight;
+
     private readonly Func<SystemTimes?> _systemTimes;
     private readonly Func<PhysicalMemory?> _physicalMemory;
     private readonly Func<long> _millisecondsSinceBoot;
+    private readonly Func<OsInfo?> _queryOsStatic;
+    private readonly Func<CpuInfo?> _queryCpuStatic;
+    private readonly Func<List<DiskInfo>?> _queryDisks;
+    private readonly Func<IReadOnlyList<MemoryModule>?> _queryMemoryModules;
 
     // Guards the CPU delta's previous sample. Separate from _cacheLock, and safe to hold across the work it
     // covers because that work is one cheap syscall — the reason the CPU query was moved OUT of _cacheLock
@@ -57,18 +66,30 @@ public sealed partial class SystemInfoService
     /// <param name="systemTimes">Idle/kernel/user tick totals since boot, or null if the syscall failed.</param>
     /// <param name="physicalMemory">Total and available physical bytes, or null if the syscall failed.</param>
     /// <param name="millisecondsSinceBoot">Monotonic milliseconds since the system started.</param>
+    /// <param name="queryOsStatic">Replaces the real <c>Win32_OperatingSystem</c> read (#2845's query seam).</param>
+    /// <param name="queryCpuStatic">Replaces the real <c>Win32_Processor</c> read.</param>
+    /// <param name="queryDisks">Replaces the real disk enumeration.</param>
+    /// <param name="queryMemoryModules">Replaces the real <c>Win32_PhysicalMemory</c> read.</param>
     /// <remarks>
     /// The CPU baseline is seeded HERE rather than on the first capture, so the first number the user sees is
     /// a real measurement over the interval between construction and that capture. Seeding lazily would have
     /// made the first reading the since-boot average — correct, but not what the machine is doing right now.
     /// </remarks>
     internal SystemInfoService(Func<SystemTimes?> systemTimes, Func<PhysicalMemory?> physicalMemory,
-                              Func<long> millisecondsSinceBoot)
+                              Func<long> millisecondsSinceBoot,
+                              Func<OsInfo?>? queryOsStatic = null,
+                              Func<CpuInfo?>? queryCpuStatic = null,
+                              Func<List<DiskInfo>?>? queryDisks = null,
+                              Func<IReadOnlyList<MemoryModule>?>? queryMemoryModules = null)
     {
         _systemTimes = systemTimes;
         _physicalMemory = physicalMemory;
         _millisecondsSinceBoot = millisecondsSinceBoot;
         _previousTimes = systemTimes();
+        _queryOsStatic = queryOsStatic ?? QueryOsStatic;
+        _queryCpuStatic = queryCpuStatic ?? QueryCpuStatic;
+        _queryDisks = queryDisks ?? QueryDisks;
+        _queryMemoryModules = queryMemoryModules ?? QueryMemoryModules;
     }
 
     /// <summary>Idle, kernel and user tick totals since boot, in 100-nanosecond units.</summary>
@@ -86,45 +107,60 @@ public sealed partial class SystemInfoService
 
     private SystemSnapshot Capture()
     {
-        OsInfo osStatic;
-        CpuInfo cpuStatic;
-        List<DiskInfo> disks;
-        IReadOnlyList<MemoryModule> modules;
+        OsInfo? osStatic;
+        CpuInfo? cpuStatic;
+        List<DiskInfo>? disks;
+        IReadOnlyList<MemoryModule>? modules;
+        bool iAmFilling;
 
         lock (_cacheLock)
         {
-            // Each Query* returns null on a WMI FAULT (not on a genuine empty result), so the
-            // ??= caches ONLY a successful query and RE-QUERIES on the next poll after a
-            // transient hiccup. Without this, a WMI fault on the very first CaptureAsync (likely
-            // under the startup thundering-herd → RPC-server-too-busy) would cache the fallback
-            // defaults for the whole process lifetime — permanently showing "Unknown CPU" /
-            // "Windows" / no disks / no RAM even after WMI recovered milliseconds later.
-            // A transient default is used for the CURRENT snapshot only and is never cached.
-            _cachedOs ??= QueryOsStatic();
-            osStatic = _cachedOs ?? new OsInfo("Windows", "", "", TimeSpan.Zero, "");
+            osStatic = _cachedOs;
+            cpuStatic = _cachedCpuStatic;
+            disks = _cachedDisks;
+            modules = _cachedModules;
 
-            // CPU name/cores/threads/clock are static; only the load is dynamic, and it comes from
-            // GetSystemTimes below rather than a second Win32_Processor query.
-            _cachedCpuStatic ??= QueryCpuStatic();
-            cpuStatic = _cachedCpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0);
-
-            // Disk info is static (models don't change at runtime).
-            _cachedDisks ??= QueryDisks();
-            disks = _cachedDisks ?? [];
-
-            // Physical memory modules (bank/manufacturer/capacity/speed/part) are static
-            // hardware — enumerate the DIMMs once. Only the dynamic totals refresh below,
-            // so the Dashboard's 300 ms vitals poll no longer re-queries Win32_PhysicalMemory.
-            _cachedModules ??= QueryMemoryModules();
-            modules = _cachedModules ?? [];
+            // Claim the fill only if the cache still needs it AND nobody else is already running it. A
+            // concurrent caller that sees _fillInFlight already true below falls straight through to the
+            // syscalls with whatever is cached right now (a transient default, on the very first poll) —
+            // it never queues up behind this thread's WMI round trips (#2845).
+            iAmFilling = (osStatic is null || cpuStatic is null || disks is null || modules is null)
+                         && !_fillInFlight;
+            if (iAmFilling) _fillInFlight = true;
         }
 
-        // Outside the lock. The lock exists to serialise the ??= caches and the dynamic values need none of
-        // it — while the CPU query was inside, every concurrent CaptureAsync waited on a round-trip it had no
-        // interest in. The Dashboard polls this at 300 ms, so the wait was frequent.
-        var cpu = cpuStatic with { LoadPercent = SampleCpuLoad() };
-        var os = osStatic with { Uptime = TimeSpan.FromMilliseconds(_millisecondsSinceBoot()) };
-        return new SystemSnapshot(os, cpu, SampleMemory(modules), disks, DateTime.Now);
+        if (iAmFilling)
+        {
+            // The four round trips run here, with NO lock held — a concurrent Capture() reading the cache
+            // right now does not wait on any of this. Each Query* returns null on a WMI FAULT (not on a
+            // genuine empty result), so a transient hiccup (likely under the startup thundering-herd →
+            // RPC-server-too-busy) is retried on a LATER poll instead of being cached as the permanent
+            // "Unknown CPU" / "Windows" / no disks / no RAM answer.
+            osStatic ??= _queryOsStatic();
+            cpuStatic ??= _queryCpuStatic();
+            disks ??= _queryDisks();
+            modules ??= _queryMemoryModules();
+
+            lock (_cacheLock)
+            {
+                _cachedOs ??= osStatic;
+                _cachedCpuStatic ??= cpuStatic;
+                _cachedDisks ??= disks;
+                _cachedModules ??= modules;
+                _fillInFlight = false;
+            }
+        }
+
+        // A transient default is used for THIS snapshot only and is never cached — Capture() above already
+        // decided what gets published.
+        var os = (osStatic ?? new OsInfo("Windows", "", "", TimeSpan.Zero, ""))
+            with
+        { Uptime = TimeSpan.FromMilliseconds(_millisecondsSinceBoot()) };
+
+        // CPU name/cores/threads/clock are static; only the load is dynamic, and it comes from
+        // GetSystemTimes rather than a second Win32_Processor query — and never waits on the lock above.
+        var cpu = (cpuStatic ?? new CpuInfo("Unknown", 0, 0, 0, 0)) with { LoadPercent = SampleCpuLoad() };
+        return new SystemSnapshot(os, cpu, SampleMemory(modules ?? []), disks ?? [], DateTime.Now);
     }
 
     /// <summary>
@@ -260,7 +296,7 @@ public sealed partial class SystemInfoService
             // No LastBootUpTime: this result is CACHED for the process lifetime, so an uptime parsed here
             // would be frozen at first-query time — and Capture overwrites it from the monotonic clock on
             // every snapshot anyway. Selecting and parsing it was work whose result could never be read.
-            using var searcher = new ManagementObjectSearcher("SELECT Caption,Version,BuildNumber,OSArchitecture FROM Win32_OperatingSystem");
+            using var searcher = Wmi.Searcher("SELECT Caption,Version,BuildNumber,OSArchitecture FROM Win32_OperatingSystem");
             using var osCollection = searcher.Get();
             foreach (ManagementObject mo in osCollection)
             {
@@ -288,7 +324,7 @@ public sealed partial class SystemInfoService
     {
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
+            using var searcher = Wmi.Searcher("SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
             using var cpuCollection = searcher.Get();
             foreach (ManagementObject mo in cpuCollection)
             {
@@ -321,7 +357,7 @@ public sealed partial class SystemInfoService
         List<MemoryModule> modules = [];
         try
         {
-            using var s = new ManagementObjectSearcher(
+            using var s = Wmi.Searcher(
                 "SELECT BankLabel,DeviceLocator,Manufacturer,Capacity,Speed,ConfiguredClockSpeed,PartNumber "
                 + "FROM Win32_PhysicalMemory");
             using var modCollection = s.Get();
@@ -364,8 +400,8 @@ public sealed partial class SystemInfoService
         {
             var scope = new ManagementScope(@"\\.\root\Microsoft\Windows\Storage");
             scope.Connect();
-            var query = new ObjectQuery("SELECT FriendlyName,MediaType,BusType,Size,HealthStatus,OperationalStatus FROM MSFT_PhysicalDisk");
-            using var searcher = new ManagementObjectSearcher(scope, query);
+            using var searcher = Wmi.Searcher(scope,
+                "SELECT FriendlyName,MediaType,BusType,Size,HealthStatus,OperationalStatus FROM MSFT_PhysicalDisk");
             using var diskCollection = searcher.Get();
             foreach (ManagementObject mo in diskCollection)
             {
@@ -399,7 +435,7 @@ public sealed partial class SystemInfoService
             // propagate out of Capture() and surface as an error — mirroring every other method.
             try
             {
-                using var s = new ManagementObjectSearcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
+                using var s = Wmi.Searcher("SELECT Model,Size,Status FROM Win32_DiskDrive");
                 using var fallbackCollection = s.Get();
                 foreach (ManagementObject mo in fallbackCollection)
                 {

@@ -33,8 +33,8 @@ public sealed class DiskHealthService
             // identity — GetRelated (used in EnrichWithReliability to walk the
             // reliability-counter association) needs it; without it the object has an
             // empty relative path and GetRelated throws InvalidOperationException.
-            using var searcher = new ManagementObjectSearcher(scope,
-                new ObjectQuery("SELECT __PATH, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk"));
+            using var searcher = Wmi.Searcher(scope,
+                "SELECT __PATH, FriendlyName, MediaType, BusType, Size, HealthStatus FROM MSFT_PhysicalDisk");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {
@@ -101,10 +101,14 @@ public sealed class DiskHealthService
             // Spaces topologies, and virtual disks simply expose no counter — so it
             // is NOT logged as a warning (that produced hundreds of WRN lines per
             // session on the ~2s temperature poll).
+            //
+            // The last argument is the enumeration options, which was null — meaning WMI's default, whose
+            // timeout is INFINITE. This is the per-disk SMART walk, so a drive whose provider has stopped
+            // answering held every caller behind it for as long as SysManager stayed open (#2845).
             using var related = disk.GetRelated(
                 "MSFT_StorageReliabilityCounter",
                 "MSFT_PhysicalDiskToStorageReliabilityCounter",
-                null, null, null, null, false, null);
+                null, null, null, null, false, Wmi.Options());
             foreach (ManagementObject mo in related)
             {
                 using (mo)

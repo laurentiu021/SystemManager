@@ -752,15 +752,8 @@ public sealed partial class PerformanceService : IDisposable
         List<string> devices = [];
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                new ManagementScope(@"\\.\root\cimv2"),
-                new ObjectQuery("SELECT PNPDeviceID FROM Win32_VideoController"),
-                new System.Management.EnumerationOptions
-                {
-                    Timeout = AdapterReadTimeout,
-                    ReturnImmediately = true,
-                    Rewindable = false,
-                });
+            using var searcher = Wmi.Searcher(
+                "SELECT PNPDeviceID FROM Win32_VideoController", AdapterReadTimeout);
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {

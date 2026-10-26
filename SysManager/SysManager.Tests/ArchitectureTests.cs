@@ -11955,12 +11955,15 @@ public partial class ArchitectureTests
                 consumers++;
         }
 
-        // The floor: the three consumers plus the container. The designer graph is NOT among them — it builds the
-        // concrete reader and passes it on, so it never names the interface, which the construction checks below
-        // cover instead. Below this floor the patterns have stopped matching the real code and a pass proves nothing.
-        Assert.True(consumers >= 4,
-            $"only {consumers} files name INvidiaGpuReader — the three consumers and the container were expected, "
-            + "so this guard is no longer reading the real graph.");
+        // The floor: the one remaining consumer plus the container. It was three consumers until #2857 moved GPU
+        // LOAD and VRAM to IGpuTelemetry — the Dashboard and the Resource History sampler read the vendor-neutral
+        // counters now, and TemperatureService is the only thing left that needs NVIDIA's API at all. The designer
+        // graph is NOT among them: it builds the concrete reader and passes it on, so it never names the interface,
+        // which the construction checks below cover instead. Below this floor the patterns have stopped matching
+        // the real code and a pass proves nothing.
+        Assert.True(consumers >= 2,
+            $"only {consumers} files name INvidiaGpuReader — the temperature consumer and the container were "
+            + "expected, so this guard is no longer reading the real graph.");
 
         Assert.Equal(["Services/NvidiaGpuReader.cs"], apiFiles);
 
@@ -11969,12 +11972,14 @@ public partial class ArchitectureTests
         var registration = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs")));
         Assert.Contains("AddSingleton<INvidiaGpuReader, NvidiaGpuReader>()", registration, StringComparison.Ordinal);
 
-        // And the designer graph builds ONE and hands it on, rather than one per consumer.
+        // And the designer graph builds ONE and hands it on, rather than one per consumer. Two hand-offs now
+        // rather than three: both remaining ones are a TemperatureService, the Dashboard's and the Resource
+        // History service's, since those two tabs read their GPU LOAD through IGpuTelemetry instead (#2857).
         var designer = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
         Assert.Single(NvidiaReaderConstruction().Matches(designer));
-        Assert.True(designer.Split("nvidia: nvidia").Length - 1 >= 3,
-            "the designer graph must pass its one reader to all three consumers (the Dashboard, its temperature "
-            + "service and the Resource History service), or that graph has readers of its own after all.");
+        Assert.True(designer.Split("nvidia: nvidia").Length - 1 >= 2,
+            "the designer graph must pass its one reader to every consumer that still needs it, or that graph "
+            + "has readers of its own after all.");
 
         Assert.True(offenders.Count == 0,
             "NVIDIA's API must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
@@ -11983,6 +11988,69 @@ public partial class ArchitectureTests
     /// <summary>Captures a construction of the concrete reader, which only the wiring sites may do.</summary>
     [GeneratedRegex(@"new\s+NvidiaGpuReader\s*\(", RegexOptions.Compiled)]
     private static partial Regex NvidiaReaderConstruction();
+
+    /// <summary>Captures a construction of the concrete GPU telemetry service.</summary>
+    [GeneratedRegex(@"new\s+GpuTelemetryService\s*\(", RegexOptions.Compiled)]
+    private static partial Regex GpuTelemetryConstruction();
+
+    /// <summary>
+    /// The GPU telemetry service has one owner too: it holds an OPEN PDH query between reads.
+    /// </summary>
+    /// <remarks>
+    /// <c>Utilization Percentage</c> is a rate, so each reading is measured against the previous collection on
+    /// the same query — which is why the query stays open and the service is a singleton. A second instance
+    /// would open a second query and measure its own intervals, so two consumers reading "the GPU" would
+    /// disagree about how busy it is, and the open handles would accumulate one per instance. Same contract as
+    /// <see cref="TheNvidiaReader_IsTheOnlyOwnerOfThatApi"/>, for the service that replaced its load reading
+    /// (#2857).
+    /// </remarks>
+    [Fact]
+    public void TheGpuTelemetryService_IsTheOnlyOwnerOfItsQuery()
+    {
+        var appDir = TestPaths.AppProject();
+
+        // Files allowed to construct it, and why. Every other file takes IGpuTelemetry.
+        var mayConstruct = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ServiceRegistration.cs"] = "registers the app's single instance",
+            ["ViewModels/MainWindowViewModel.cs"] = "the designer graph's equivalent wiring, with no container",
+            ["Services/GpuTelemetryService.cs"] = "declares it",
+        };
+
+        var offenders = new List<string>();
+        var consumers = 0;
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
+        {
+            var relative = Path.GetRelativePath(appDir, file).Replace(Path.DirectorySeparatorChar, '/');
+            var code = WithoutComments(File.ReadAllText(file));
+
+            if (GpuTelemetryConstruction().IsMatch(code) && !mayConstruct.ContainsKey(relative))
+                offenders.Add($"{relative} builds its own GpuTelemetryService. Take IGpuTelemetry instead — a "
+                    + "second instance opens a second PDH query and measures its own intervals.");
+
+            if (code.Contains("IGpuTelemetry", StringComparison.Ordinal)
+                && relative is not ("Services/IGpuTelemetry.cs" or "Services/GpuTelemetryService.cs"))
+                consumers++;
+        }
+
+        // The floor: the Dashboard, the Resource History service and the container. Below it the patterns have
+        // stopped matching the real code and a pass proves nothing.
+        Assert.True(consumers >= 3,
+            $"only {consumers} files name IGpuTelemetry — the Dashboard, the Resource History service and the "
+            + "container were expected, so this guard is no longer reading the real graph.");
+
+        var registration = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ServiceRegistration.cs")));
+        Assert.Contains("AddSingleton<IGpuTelemetry, GpuTelemetryService>()", registration, StringComparison.Ordinal);
+
+        // The designer graph builds ONE and hands it on, rather than one per consumer.
+        var designer = WithoutComments(File.ReadAllText(Path.Combine(appDir, "ViewModels", "MainWindowViewModel.cs")));
+        Assert.Single(GpuTelemetryConstruction().Matches(designer));
+
+        Assert.True(offenders.Count == 0,
+            "the GPU telemetry service must have exactly one owner:\n  - " + string.Join("\n  - ", offenders));
+    }
 
     /// <summary>
     /// The update applier installs the bytes it verified: it checks its own executable against the checksum it

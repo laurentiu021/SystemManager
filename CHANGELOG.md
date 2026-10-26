@@ -10,6 +10,36 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.0] - 2026-10-26
+
+**GPU usage and video memory now work on Intel and AMD graphics, not just NVIDIA — the Dashboard and Resource
+History read the same counters Task Manager does.**
+
+### Added
+
+- **GPU usage for every vendor.** The Dashboard's GPU tile and the Resource History chart read load and video
+  memory from the counters Windows publishes for all graphics hardware, the ones Task Manager's own GPU column
+  draws. On a machine with more than one card, the busiest one is shown — on a laptop with switchable graphics
+  that is whichever card the app in front of you actually landed on. The figure is each engine type's share
+  added up and then the busiest engine type, which is how Task Manager arrives at its number too, so the two
+  agree.
+
+### Fixed
+
+- **GPU usage read 0% on every Intel and AMD GPU.** Usage and video memory came only from NVIDIA's own API, so
+  on any other card the Dashboard showed "GPU 0%" with an empty bar — a number that reads as an idle GPU, on
+  most of the laptops this app is aimed at. The card's name was shown and nothing else was wrong, which made it
+  look like a measurement rather than a gap.
+- **A GPU that cannot be measured now says "N/A" instead of 0%.** "Nothing can read this" and "this GPU is
+  idle" are different answers, and 0% is a legible number that means the second one. A machine with no usable
+  GPU counters — no WDDM 2.x driver, or one between driver states — now says so.
+
+### Changed
+
+- The GPU temperature still comes from NVIDIA cards only, unchanged, and it is still the only GPU temperature
+  readable without administrator rights. Giving it the same vendor-neutral treatment needs a different Windows
+  interface and is a separate change.
+
 ## [1.130.88] - 2026-10-26
 
 **Six more WMI reads — the About tab's "copy environment info" and a Dashboard fallback — are now bounded

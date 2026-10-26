@@ -429,7 +429,7 @@ to scroll.
 
 Thin wrappers around the underlying platform. Each service is designed to be
 unit-testable. Services that a view-model needs to substitute in tests sit behind
-an interface seam. Thirty-six are registered against their implementation in `ServiceRegistration.cs` and
+an interface seam. Thirty-seven are registered against their implementation in `ServiceRegistration.cs` and
 constructor-injected: `IPowerShellRunner` (PowerShellRunner), `IWingetService` (WingetService),
 `ITuneUpService` (TuneUpService, the Dashboard's Quick Tune-Up and Quick Cleanup),
 `ISlowdownService` (SlowdownService, the Dashboard's "Why is it slow?" check),
@@ -440,8 +440,10 @@ the Quick Tune-Up measure and empty), `IContextMenuService`, `ILeftoverService`,
 `ICpuAffinityService`, `IDisplayProfileService` (DisplayProfileService, which also passes on Windows' display-change
 notification),
 `IFeatureParentsService` (FeatureParentsService, the DISM API's list of what a feature needs, for Windows
-Features), `IFileLockService`, `INotificationBlockerService`, `INvidiaGpuReader` (NvidiaGpuReader, the one owner of
-NVIDIA's API for the Dashboard, the Resource History sampler and the temperature read),
+Features), `IFileLockService`, `IGpuTelemetry` (GpuTelemetryService, every vendor's GPU load and VRAM from
+Windows' own counters, for the Dashboard and the Resource History sampler),
+`INotificationBlockerService`, `INvidiaGpuReader` (NvidiaGpuReader, the one owner of
+NVIDIA's API, now for the GPU temperature only),
 `ISettingsWatchdogService`, `ITimerResolutionService`,
 `IUpdateService`, `IWindowsThemeService`, `IWindowsUpdateService` (WindowsUpdateService,
 shared by the Windows Update tab and the Dashboard's check), `ISpeedTestService` (SpeedTestService, for the
@@ -1691,12 +1693,27 @@ Key services:
 - `AppIconService` — downloads and caches application favicons for the Bulk Installer, only once the user
   turns it on: the switch is off by default, kept in `icon-fetch.json` and carried by a profile export.
   `SetNetworkFetchEnabled` returns whether the choice was saved, and the tab says when it was not (#2833).
-- `NvidiaGpuReader` — the app's only caller of NVIDIA's API. It sets that global API up once, holds the GPU
-  handles and reads load, memory and temperature off them under one lock, for the Dashboard's 300 ms poll, the
-  Resource History sampler's 10 s one and the temperature read. A read that fails drops the handles and the next
-  read two seconds later enumerates again, so a driver reset no longer leaves a number that has stopped moving
-  shown as live (#2829). The API itself sits behind an internal seam, so the set-up, the caching and the
-  replacement are tested with stand-ins.
+- `GpuTelemetryService` — every GPU's load and video memory, for every vendor, from the counters Windows
+  publishes and Task Manager draws: `\GPU Engine(*)\Utilization Percentage` and
+  `\GPU Adapter Memory(*)\Dedicated Usage`, read through **PDH** (`pdh.dll`) rather than
+  `System.Diagnostics.PerformanceCounter` — that API reads the legacy registry-based counter system and is
+  blind to the GPU counters, so an implementation built on it reports nothing and shows 0%, which is the bug
+  this service exists to fix (#2857). A counter instance carries a LUID and no name, so **DXGI**
+  (`CreateDXGIFactory1` → `EnumAdapters1` → `GetDesc1`) supplies each card's name and total dedicated memory;
+  the LUID text the two produce matches exactly. The adapter's figure is each engine type's instances summed,
+  then the busiest engine type — Task Manager's own arithmetic, since 3D and video decode run in parallel and
+  adding them would report over 100% on a card that is not saturated. A software adapter (Microsoft Basic
+  Render Driver) is never listed, and no hardware adapter at all means NO reading rather than a zeroed one, so
+  the Dashboard can say "N/A" instead of a confident 0%. Singleton: the PDH query stays open because each rate
+  reading is measured against the previous collection on it. Both native surfaces sit behind internal seams,
+  so the aggregation is tested without a GPU.
+- `NvidiaGpuReader` — the app's only caller of NVIDIA's API, and the GPU TEMPERATURE is all it still answers:
+  load and memory moved to `GpuTelemetryService` above, which answers for every vendor. It sets that global API
+  up once, holds the GPU handles and reads off them under one lock. A read that fails drops the handles and the
+  next read two seconds later enumerates again, so a driver reset no longer leaves a number that has stopped
+  moving shown as live (#2829). The API itself sits behind an internal seam, so the set-up, the caching and the
+  replacement are tested with stand-ins. This type retires when the GPU temperature gets a vendor-neutral
+  reading of its own (`D3DKMTQueryAdapterInfo`, an undocumented native surface left for its own change).
 - `TemperatureService` — aggregates CPU, GPU, and disk temperatures from
   LibreHardwareMonitor (admin) and NvAPIWrapper (non-admin NVIDIA); without admin it reads
   only the NVIDIA GPU and the disks' SMART temperatures. LibreHardwareMonitor reads the CPU and

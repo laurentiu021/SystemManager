@@ -36,7 +36,7 @@ public sealed class ResourceHistoryService : IDisposable
 
     private readonly SystemInfoService _sys;
     private readonly TemperatureService _temps;
-    private readonly INvidiaGpuReader? _nvidia;
+    private readonly IGpuTelemetry? _gpu;
     private readonly SemaphoreSlim _fileLock = new(1, 1);
     private readonly string _dataDir;
     private readonly string _dataPath;
@@ -63,11 +63,11 @@ public sealed class ResourceHistoryService : IDisposable
     /// process could redirect it away from the real profile.</para>
     /// </summary>
     public ResourceHistoryService(SystemInfoService sys, TemperatureService temps, string? configDir = null,
-        INvidiaGpuReader? nvidia = null)
+        IGpuTelemetry? gpu = null)
     {
         _sys = sys;
         _temps = temps;
-        _nvidia = nvidia;
+        _gpu = gpu;
         _dataDir = configDir ?? Path.Join(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysManager");
         _dataPath = Path.Join(_dataDir, "resource-history.ndjson");
@@ -164,16 +164,16 @@ public sealed class ResourceHistoryService : IDisposable
             gpuPercent, cpuTemp, gpuTemp);
     }
 
-    /// <summary>The first NVIDIA GPU's load, or null when there is none to read.</summary>
+    /// <summary>The busiest GPU's load, or null when nothing can measure one.</summary>
     /// <remarks>
-    /// Through the app's one reader of NVIDIA's API. This used to set that global API up itself, unlocked and with
-    /// its own init-once flags, as the Dashboard and the temperature read also did; both loops come out of the same
-    /// first <see cref="SystemInfoService.CaptureAsync"/>, so they set it up at almost the same moment and a losing
-    /// race switched this sampler's GPU column off for the session (#2829).
+    /// Windows' own GPU counters, so the column is populated on every vendor rather than only on NVIDIA, where
+    /// an Intel or AMD machine recorded a null for every sample it ever took (#2857). Null still means "no
+    /// reading" — the chart leaves a gap rather than drawing a zero, which this file's own sample format has
+    /// always allowed for.
     /// </remarks>
     private double? ReadGpuUsage()
     {
-        var gpus = _nvidia?.ReadUsage() ?? [];
+        var gpus = _gpu?.ReadUsage() ?? [];
         return gpus.Count > 0 ? gpus[0].UsagePercent : null;
     }
 

@@ -1159,8 +1159,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
   only the live moment
 - **Scrollable timeline** — pick a range (last hour, 6 hours, 24 hours, 7 days,
   30 days); the usage chart (CPU / RAM / GPU %) and a separate temperature chart
-  (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth. GPU usage is
-  read from NVIDIA cards only; temperatures need sensors Windows can read, and the CPU's needs
+  (CPU / GPU °C) redraw to fit, downsampled so even a 30-day view stays smooth. GPU usage is read
+  for every vendor, from the same counters Task Manager uses; the GPU temperature still needs an
+  NVIDIA card, and temperatures generally need sensors Windows can read, with the CPU's also needing
   administrator rights and the PawnIO driver, which SysManager does not install
 - **Configurable retention** — keep 7, 14, or 30 days of history; older samples
   are pruned automatically. If the setting cannot be read, nothing newer than 30 days
@@ -2125,7 +2126,9 @@ offers, "rate us" prompts:
   and where the details are
 - **Real-time vitals** — CPU, RAM, and GPU usage refreshed at 300 ms while
   the tab is visible (polling pauses automatically when it isn't), with live
-  indicator dots. GPU usage is read from NVIDIA cards only.
+  indicator dots. GPU usage and video memory are read for every vendor — NVIDIA, AMD and Intel —
+  from the counters Windows publishes and Task Manager draws, for the busiest card in the machine.
+  A machine whose GPU cannot be measured at all shows "N/A" rather than 0%.
 - **Temperatures** — every sensor Windows can read, refreshed every 2 seconds while the tab is
   visible. Without administrator rights only the NVIDIA graphics card and the disks' own (SMART)
   temperatures are available, and the card says so. The processor and motherboard temperatures

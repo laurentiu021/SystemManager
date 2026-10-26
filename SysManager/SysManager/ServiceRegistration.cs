@@ -30,8 +30,15 @@ public static class ServiceRegistration
         services.AddSingleton<IUpdateService, UpdateService>();
         services.AddSingleton<ShortcutCleanerService>();
         services.AddSingleton<DiskHealthService>();
-        // One owner of NVIDIA's global API for the whole app: the Dashboard's 300 ms loop, the Resource History
-        // sampler and the temperature read all go through it, so its set-up happens once, under one lock (#2829).
+        // GPU load and VRAM for EVERY vendor, from Windows' own counters: on an Intel or AMD adapter the
+        // NVIDIA-only reading below left the Dashboard showing "GPU 0%" with an empty bar, which reads as an
+        // idle GPU on most of the laptops this app is aimed at (#2857). Singleton because it holds an open PDH
+        // query whose previous collection is the baseline for the next rate reading.
+        services.AddSingleton<IGpuTelemetry, GpuTelemetryService>();
+        // One owner of NVIDIA's global API for the whole app. It reads TEMPERATURE only now — usage and VRAM
+        // moved to the vendor-neutral counters above. Still NVIDIA-only, and still the only non-admin GPU
+        // temperature this app has: the vendor-neutral replacement for it (D3DKMTQueryAdapterInfo) is a
+        // separate, undocumented native surface and is deliberately not attempted here (#2857).
         services.AddSingleton<INvidiaGpuReader, NvidiaGpuReader>();
         services.AddSingleton<TemperatureService>(sp => new TemperatureService(
             sp.GetRequiredService<DiskHealthService>(), nvidia: sp.GetRequiredService<INvidiaGpuReader>()));
@@ -124,7 +131,7 @@ public static class ServiceRegistration
         services.AddSingleton<CrashMarkerService>();
         services.AddSingleton<ResourceHistoryService>(sp => new ResourceHistoryService(
             sp.GetRequiredService<SystemInfoService>(), sp.GetRequiredService<TemperatureService>(),
-            nvidia: sp.GetRequiredService<INvidiaGpuReader>()));
+            gpu: sp.GetRequiredService<IGpuTelemetry>()));
         services.AddSingleton<BandwidthHistoryService>();
         services.AddSingleton<ISettingsWatchdogService, SettingsWatchdogService>();
         services.AddSingleton<MaintenanceSchedulerService>();

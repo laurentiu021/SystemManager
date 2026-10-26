@@ -805,8 +805,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
         var processes = new ProcessManagerService();
         var startup = new StartupService();
         // One reader for the three that read NVIDIA's API, as the container gives the app (#2829). This is the
-        // no-container path, so it is built here rather than resolved.
+        // no-container path, so it is built here rather than resolved. NVIDIA is the TEMPERATURE reader now;
+        // load and VRAM come from the vendor-neutral counters beside it (#2857).
         var nvidia = new NvidiaGpuReader();
+        var gpuTelemetry = new GpuTelemetryService();
 
         return new Dictionary<Type, object>
         {
@@ -815,7 +817,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(DashboardViewModel)] = new DashboardViewModel(sysInfo, tuneUp, healthScore, new TemperatureService(diskHealth, nvidia: nvidia), winget, new CrashMarkerService(), new MemoryTestService(), designerNavigation, windowsUpdate, speedTest, speedHistory,
                 new UpdateCheckPreferenceService(lookRecords),
                 slowdown: new SlowdownService(processes, sysInfo, startup, bootAnalyzer), gaming: gamingProfiles,
-                nvidia: nvidia),
+                gpu: gpuTelemetry),
             [typeof(AppUpdatesViewModel)] = new AppUpdatesViewModel(winget),
             [typeof(WindowsUpdateViewModel)] = new WindowsUpdateViewModel(runner, windowsUpdate, new WindowsUpdatePolicyService()),
             [typeof(SystemHealthViewModel)] = new SystemHealthViewModel(sysInfo, diskHealth, new MemoryTestService(), fixedDrives, runner, new BiosService()),
@@ -868,7 +870,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable,
             [typeof(TaskSchedulerViewModel)] = new TaskSchedulerViewModel(new TaskSchedulerService(new PowerShellRunner())),
             [typeof(DarkModeViewModel)] = new DarkModeViewModel(new WindowsThemeService()),
             [typeof(StandbyMemoryViewModel)] = new StandbyMemoryViewModel(new StandbyMemoryService()),
-            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth, nvidia: nvidia), nvidia: nvidia)),
+            [typeof(ResourceHistoryViewModel)] = new ResourceHistoryViewModel(new ResourceHistoryService(sysInfo, new TemperatureService(diskHealth, nvidia: nvidia), gpu: gpuTelemetry)),
             [typeof(BandwidthMonitorViewModel)] = new BandwidthMonitorViewModel(new BandwidthHistoryService()),
             [typeof(SettingsWatchdogViewModel)] = new SettingsWatchdogViewModel(watchdog),
             [typeof(CliInterfaceViewModel)] = new CliInterfaceViewModel(),

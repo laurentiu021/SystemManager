@@ -74,12 +74,12 @@ public sealed partial class DashboardViewModel : ViewModelBase
     private CancellationTokenSource? _slowdownCts;
     private CancellationTokenSource? _pollingCts;
 
-    // The adapter name of a GPU that is not NVIDIA's is static for a session, so it is resolved by a
-    // single WMI query rather than on every 300 ms tick. NVIDIA's API, its set-up and its handles
-    // belong to the app's one INvidiaGpuReader, which caches the handles for the same reason and
-    // replaces them when a read fails (#2829).
+    // GPU load and VRAM come from Windows' own counters for every vendor (#2857). The WMI name lookup
+    // below is the fallback for when nothing can be measured at all — no WDDM 2.x counters, or a machine
+    // between driver states — where the adapter's NAME is still worth showing and is static for a session,
+    // so one query answers it rather than one per 300 ms tick.
     private bool _gpuNameResolved;
-    private readonly INvidiaGpuReader? _nvidia;
+    private readonly IGpuTelemetry? _gpu;
 
     // ── Real-time vitals (300ms polling) ──────────────────────────────────
     [ObservableProperty] private double _cpuPercent;
@@ -90,9 +90,23 @@ public sealed partial class DashboardViewModel : ViewModelBase
     [ObservableProperty] private double _ramTotalGB;
     [ObservableProperty] private double _ramAvailableGB;
     [ObservableProperty] private string _ramType = "";
-    [ObservableProperty] private double _gpuPercent;
+    // Nullable, because "nothing can measure this GPU" and "this GPU is idle" are different answers and
+    // 0% is a legible number that means the second one. Null drives the "N/A" text and leaves the bar at
+    // zero; it is what a machine with no usable GPU counters now shows instead of a confident 0% (#2857).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GpuPercentDisplay))]
+    private double? _gpuPercent;
     [ObservableProperty] private string _gpuName = "";
     [ObservableProperty] private string _gpuVram = "";
+
+    /// <summary>The GPU figure as the tile shows it: a percentage, or "N/A" when there is no reading.</summary>
+    /// <remarks>
+    /// One property rather than a bound number with a "%" literal beside it in XAML: with a nullable source
+    /// that pair renders a bare "%" on its own when the value is null, which reads like a broken tile.
+    /// </remarks>
+    public string GpuPercentDisplay => GpuPercent is { } percent
+        ? string.Create(CultureInfo.InvariantCulture, $"{percent:F0}%")
+        : "N/A";
 
     // ── System info (static, refreshed on scan) ──────────────────────────
     [ObservableProperty] private string _osLine = "";
@@ -231,10 +245,9 @@ public sealed partial class DashboardViewModel : ViewModelBase
     /// Times the minute after which Recent activity is read again while the tab is shown. Null is the system clock; a
     /// test gives one whose timers fire when it says.
     /// </param>
-    /// <param name="nvidia">
-    /// The app's one reader of NVIDIA's API, which the container always passes (#2829). Null reads no NVIDIA GPU,
-    /// which is what a test without that driver would get anyway, and keeps this class from ever building a reader
-    /// of its own — a second one would set that global API up again, unsynchronised with the app's.
+    /// <param name="gpu">
+    /// The app's one GPU-telemetry reader, which the container always passes (#2857). Null reads no GPU at all,
+    /// which is what a machine with no usable GPU counters gets anyway, and shows "N/A" rather than 0%.
     /// </param>
     public DashboardViewModel(SystemInfoService sys, ITuneUpService tuneUp,
         HealthScoreService healthScore, TemperatureService temps, IWingetService winget,
@@ -242,11 +255,11 @@ public sealed partial class DashboardViewModel : ViewModelBase
         IWindowsUpdateService windowsUpdate, ISpeedTestService speedTest, SpeedTestHistoryService speedHistory,
         UpdateCheckPreferenceService updateCheck,
         IAppBlockerService? appBlocker = null, ISlowdownService? slowdown = null, IGamingProfileService? gaming = null,
-        EventLogService? eventLog = null, TimeProvider? clock = null, INvidiaGpuReader? nvidia = null)
+        EventLogService? eventLog = null, TimeProvider? clock = null, IGpuTelemetry? gpu = null)
     {
         _eventLog = eventLog ?? new EventLogService();
         _clock = clock ?? TimeProvider.System;
-        _nvidia = nvidia;
+        _gpu = gpu;
         _navigation = navigation;
         _windowsUpdate = windowsUpdate;
         _speedTest = speedTest;
@@ -410,20 +423,20 @@ public sealed partial class DashboardViewModel : ViewModelBase
     internal static string UptimeText(TimeSpan uptime) => $"Uptime {uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
 
     /// <summary>
-    /// Shows the first NVIDIA GPU's load, name and memory, or the adapter's name alone when there is no NVIDIA
-    /// reading to show.
+    /// Shows the busiest GPU's load, name and memory, or the adapter's name alone when nothing can measure it.
     /// </summary>
     /// <remarks>
-    /// This used to enumerate the GPU once and keep the handle for the life of the process. NVIDIA invalidates a
-    /// handle when the GPU or the display is reconfigured, for example after a driver reset or a driver update
-    /// installed while Windows runs, after which every 300 ms tick threw, the catch only logged — about 10,000 lines
-    /// an hour — and <see cref="GpuPercent"/> kept the last value it had read while the dot beside it still said
-    /// live (#2829). The reader hands back no reading until it has working handles again, so the number goes to zero
-    /// and the name falls back to the one Windows reports rather than standing still.
+    /// <para>The reading is vendor-neutral now: Windows' own GPU counters, the ones Task Manager draws, so an
+    /// Intel or AMD adapter reports a real number instead of the 0% an NVIDIA-only reading left behind (#2857).
+    /// The busiest adapter is shown rather than the first, which on a laptop with switchable graphics is
+    /// whichever card the foreground app actually landed on.</para>
+    /// <para>When there is NO reading — no WDDM 2.x counters, or a machine between driver states — the load goes
+    /// to null and the tile says "N/A" rather than a confident 0%, and the name falls back to the one Windows
+    /// reports, which is static for the session and so costs one WMI query rather than one per tick.</para>
     /// </remarks>
     private void UpdateGpuUsage()
     {
-        var gpus = _nvidia?.ReadUsage() ?? [];
+        var gpus = _gpu?.ReadUsage() ?? [];
         if (gpus.Count > 0)
         {
             var gpu = gpus[0];
@@ -431,15 +444,15 @@ public sealed partial class DashboardViewModel : ViewModelBase
             {
                 GpuPercent = gpu.UsagePercent;
                 GpuName = gpu.Name;
-                GpuVram = string.Create(CultureInfo.InvariantCulture,
-                    $"{gpu.MemoryUsedGB:F1} / {gpu.MemoryTotalGB:F1} GB VRAM");
+                GpuVram = gpu.MemoryTotalGB > 0
+                    ? string.Create(CultureInfo.InvariantCulture,
+                        $"{gpu.MemoryUsedGB:F1} / {gpu.MemoryTotalGB:F1} GB VRAM")
+                    : "";
             });
             return;
         }
 
-        // Nothing from NVIDIA: either this is an AMD or Intel adapter, or NVIDIA's handles are being replaced. The
-        // load stays unreadable — it needs a vendor API — and the name is static, so one WMI query answers it.
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => GpuPercent = 0);
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => GpuPercent = null);
         if (!_gpuNameResolved)
             UpdateGpuNameFromWmi();
     }

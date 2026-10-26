@@ -482,9 +482,10 @@
                                        DockPanel.Dock="Left" VerticalAlignment="Center"/>
                             <Ellipse Width="6" Height="6" Fill="{DynamicResource MetricPurple}" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                         </DockPanel>
-                        <TextBlock Style="{StaticResource MetricLarge}" FontWeight="Bold" Foreground="{DynamicResource MetricPurple}">
-                            <Run Text="{Binding GpuPercent, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="%"/>
-                        </TextBlock>
+                        <!-- One bound string, not a number plus a "%" literal: GpuPercent is nullable now, and
+                             the pair rendered a bare "%" on its own when there was no reading (#2857). -->
+                        <TextBlock Text="{Binding GpuPercentDisplay, Mode=OneWay}" Style="{StaticResource MetricLarge}"
+                                   FontWeight="Bold" Foreground="{DynamicResource MetricPurple}"/>
                         <TextBlock Text="{Binding GpuName}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}"
                                    TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
                         <TextBlock Text="{Binding GpuVram}" Style="{StaticResource Caption}" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"/>

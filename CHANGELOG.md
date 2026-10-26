@@ -10,6 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.87] - 2026-10-26
+
+**The System Health tiles no longer wait on each other to load — a slow disk no longer holds up the CPU and
+memory numbers, on the Dashboard, the tray tooltip or the history chart.**
+
+### Fixed
+
+- **WMI reads had no time limit, and the first one held a lock that CPU and memory waited behind.** Every WMI
+  search in the app but two used the default timeout, which is infinite, so a provider that stopped answering —
+  a failing disk, a dropped USB bridge, a degraded Storage Spaces pool — could hold a reader open for as long as
+  SysManager stayed open. On the Dashboard that was visible at start-up: its 300 ms poll, the notification-area
+  tooltip and the Resource History sampler all begin by awaiting the same first system snapshot, and the static
+  hardware (OS caption, CPU model, disk models, DIMM inventory) that snapshot fills was queried under a lock held
+  across all four WMI round trips — so every one of those callers waited on whichever provider answered slowest,
+  for processor and memory numbers that are plain system calls and never touch WMI at all. Every `ManagementObjectSearcher`
+  now goes through one helper that bounds the read to 15 seconds (the reliability history keeps its own longer
+  one, since a year of records is work rather than a stall), and the static cache is now filled by whichever
+  caller finds it empty first, claimed so nobody else joins the wait — every other concurrent caller reads
+  whatever is cached right now and moves straight to its own syscalls. Since 0.3.0.
+
 ## [1.130.86] - 2026-10-23
 
 **Installing an update now checks the file again, right before it replaces SysManager, against the checksum that

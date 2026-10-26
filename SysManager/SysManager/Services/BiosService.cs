@@ -5,6 +5,7 @@
 using System.Management;
 using Microsoft.Win32;
 using Serilog;
+using SysManager.Helpers;
 using SysManager.Models;
 
 namespace SysManager.Services;
@@ -25,7 +26,7 @@ public sealed class BiosService
 
         try
         {
-            using var searcher = new ManagementObjectSearcher(
+            using var searcher = Wmi.Searcher(
                 "SELECT SMBIOSBIOSVersion, Manufacturer, ReleaseDate FROM Win32_BIOS");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
@@ -45,7 +46,7 @@ public sealed class BiosService
 
         try
         {
-            using var searcher = new ManagementObjectSearcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
+            using var searcher = Wmi.Searcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
             using var collection = searcher.Get();
             foreach (ManagementObject mo in collection)
             {

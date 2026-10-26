@@ -534,8 +534,7 @@ public sealed class TemperatureService : IDisposable
         List<string> names = [];
         try
         {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT Model FROM Win32_DiskDrive ORDER BY Index");
+            using var searcher = Wmi.Searcher("SELECT Model FROM Win32_DiskDrive ORDER BY Index");
             using var results = searcher.Get();
             foreach (ManagementObject mo in results)
             {

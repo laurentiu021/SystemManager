@@ -175,4 +175,130 @@ public class SystemInfoServiceTests
 
         Assert.Equal(2, service.SampleMemory(modules).Modules.Count);
     }
+
+    // ---- static-cache fill vs. the dynamic syscalls (#2845) ----
+
+    /// <summary>
+    /// A caller that arrives while another is stuck inside the disk query gets its CPU/RAM numbers anyway,
+    /// rather than queuing up behind the stall.
+    /// </summary>
+    /// <remarks>
+    /// This is the fault #2845 was filed over: the 300 ms Dashboard loop, the notification-area tooltip and
+    /// the Resource History sampler all start by awaiting the same first <c>CaptureAsync</c>, and the static
+    /// caches used to be filled under a lock held across all four WMI round trips — so every one of them
+    /// waited on whichever provider answered slowest, for numbers (<c>GetSystemTimes</c>,
+    /// <c>GlobalMemoryStatusEx</c>) that never touch WMI at all. Here the disk query is made to hang forever;
+    /// a second, concurrent capture must still come back with a usable load percentage and RAM total. It
+    /// gets the "Unknown"/placeholder static fields for that one pass — the one caller actually doing the
+    /// query is still in it — which is the trade this fix makes: deferred, not blocked.
+    /// </remarks>
+    [Fact]
+    public async Task Capture_WhenTheDiskQueryNeverReturns_CpuAndRamStillArriveForAConcurrentCaller()
+    {
+        var diskQueryStarted = new ManualResetEventSlim(false);
+        var diskGate = new ManualResetEventSlim(false);
+
+        var service = new SystemInfoService(
+            Times(At(0, 0, 0), At(50, 100, 100), At(50, 100, 100)),
+            () => new SystemInfoService.PhysicalMemory(8UL * 1024 * 1024 * 1024, 2UL * 1024 * 1024 * 1024),
+            () => 1234,
+            queryOsStatic: () => new OsInfo("Windows 11", "10.0", "22631", TimeSpan.Zero, "64-bit"),
+            queryCpuStatic: () => new CpuInfo("Test CPU", 8, 16, 3600, 0),
+            queryDisks: () =>
+            {
+                diskQueryStarted.Set();
+                diskGate.Wait(); // released only after the assertions below — simulates a stalled provider
+                return [];
+            },
+            queryMemoryModules: () => []);
+
+        var hungCapture = service.CaptureAsync();
+        Assert.True(diskQueryStarted.Wait(TimeSpan.FromSeconds(5)),
+            "the first caller never reached the disk query — there is nothing here to prove a concurrent "
+            + "caller skips waiting on");
+
+        // Bounded: a caller that joined the lock across the WMI round trip, instead of skipping it, hangs
+        // here rather than completing.
+        var concurrent = await WithBoundedWait(service.CaptureAsync(), "the concurrent capture");
+        Assert.False(double.IsNaN(concurrent.Cpu.LoadPercent));
+        Assert.InRange(concurrent.Cpu.LoadPercent, 0, 100);
+        Assert.Equal(8.0, concurrent.Memory.TotalGB, precision: 6);
+        // The placeholder, not the real query result: the thread that owns the fill hasn't published yet.
+        Assert.Equal("Unknown", concurrent.Cpu.Name);
+
+        diskGate.Set();
+        var hung = await WithBoundedWait(hungCapture, "the hung capture, after its gate was released");
+        Assert.Equal("Test CPU", hung.Cpu.Name); // the owning caller's own query result, not lost
+    }
+
+    /// <summary>Concurrent callers that find the fill already claimed do not each start their own.</summary>
+    /// <remarks>
+    /// Without the claim, every caller that finds a null field during the start-up thundering herd runs its
+    /// own four WMI round trips — exactly as many, just no longer serialised behind one lock. The claim turns
+    /// that into one fill, found by whichever caller happens to get there first.
+    /// </remarks>
+    [Fact]
+    public async Task Capture_ConcurrentFirstCalls_RunTheDiskQueryOnlyOnce()
+    {
+        var diskQueryStarted = new ManualResetEventSlim(false);
+        var diskGate = new ManualResetEventSlim(false);
+        var diskQueryCount = 0;
+
+        var service = new SystemInfoService(
+            Times(At(0, 0, 0), At(50, 100, 100), At(50, 100, 100), At(50, 100, 100)),
+            () => new SystemInfoService.PhysicalMemory(8UL * 1024 * 1024 * 1024, 2UL * 1024 * 1024 * 1024),
+            () => 1234,
+            queryOsStatic: () => new OsInfo("Windows 11", "10.0", "22631", TimeSpan.Zero, "64-bit"),
+            queryCpuStatic: () => new CpuInfo("Test CPU", 8, 16, 3600, 0),
+            queryDisks: () =>
+            {
+                Interlocked.Increment(ref diskQueryCount);
+                diskQueryStarted.Set();
+                diskGate.Wait();
+                return [];
+            },
+            queryMemoryModules: () => []);
+
+        var hungCapture = service.CaptureAsync();
+        Assert.True(diskQueryStarted.Wait(TimeSpan.FromSeconds(5)),
+            "the first caller never reached the disk query — there is nothing here to prove a second claim "
+            + "is refused");
+
+        await WithBoundedWait(service.CaptureAsync(), "a second concurrent capture");
+        await WithBoundedWait(service.CaptureAsync(), "a third concurrent capture");
+
+        diskGate.Set();
+        await WithBoundedWait(hungCapture, "the hung capture, after its gate was released");
+
+        Assert.Equal(1, diskQueryCount);
+    }
+
+    /// <summary>A query that faults once is retried on the next call, rather than caching "Unknown" forever.</summary>
+    [Fact]
+    public async Task Capture_WhenAQueryFaultsOnce_RetriesOnTheNextCall()
+    {
+        var attempt = 0;
+        var service = new SystemInfoService(
+            Times(At(0, 0, 0), At(50, 100, 100), At(50, 100, 100)),
+            () => new SystemInfoService.PhysicalMemory(8UL * 1024 * 1024 * 1024, 2UL * 1024 * 1024 * 1024),
+            () => 1234,
+            queryOsStatic: () => new OsInfo("Windows 11", "10.0", "22631", TimeSpan.Zero, "64-bit"),
+            queryCpuStatic: () => ++attempt == 1 ? null : new CpuInfo("Test CPU", 8, 16, 3600, 0),
+            queryDisks: () => [],
+            queryMemoryModules: () => []);
+
+        var first = await service.CaptureAsync();
+        Assert.Equal("Unknown", first.Cpu.Name); // the fault's transient default, not cached
+
+        var second = await service.CaptureAsync();
+        Assert.Equal("Test CPU", second.Cpu.Name); // retried rather than stuck on the first fault
+    }
+
+    private static async Task<SystemSnapshot> WithBoundedWait(Task<SystemSnapshot> task, string what)
+    {
+        var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.True(ReferenceEquals(finished, task),
+            $"{what} did not complete within the bound — it is blocked on something it should not be.");
+        return await task;
+    }
 }

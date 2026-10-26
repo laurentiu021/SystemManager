@@ -10,6 +10,21 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.130.88] - 2026-10-26
+
+**Six more WMI reads — the About tab's "copy environment info" and a Dashboard fallback — are now bounded
+the same way #2845 bounded the rest.**
+
+### Fixed
+
+- **#2845's fix missed six call sites because they spelled the type's full name.** That fix routed every
+  `ManagementObjectSearcher` through one helper with a time limit, found by searching the file for the literal
+  text `"new ManagementObjectSearcher"` — which does not match `new System.Management.ManagementObjectSearcher(`,
+  the fully-qualified form five reads in the About tab's "copy environment info" and one of the Dashboard's GPU
+  name fallback used. Those six kept WMI's unbounded default timeout through the whole release that claimed to
+  have fixed it. All six now go through the same bounded helper, and a new architecture test checks every
+  `.cs` file in the app for either spelling, so a third one cannot hide from a plain-text search again.
+
 ## [1.130.87] - 2026-10-26
 
 **The System Health tiles no longer wait on each other to load — a slow disk no longer holds up the CPU and

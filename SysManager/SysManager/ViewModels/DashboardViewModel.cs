@@ -448,8 +448,7 @@ public sealed partial class DashboardViewModel : ViewModelBase
     {
         try
         {
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                "SELECT Name FROM Win32_VideoController");
+            using var searcher = Wmi.Searcher("SELECT Name FROM Win32_VideoController");
             using var collection = searcher.Get();
             foreach (System.Management.ManagementObject mo in collection)
             {

@@ -686,7 +686,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             // CPU
             try
             {
-                using var cpuSearch = new System.Management.ManagementObjectSearcher(
+                using var cpuSearch = Wmi.Searcher(
                     "SELECT Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed FROM Win32_Processor");
                 using var cpuResults = cpuSearch.Get();
                 foreach (System.Management.ManagementObject mo in cpuResults)
@@ -708,7 +708,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             // RAM
             try
             {
-                using var memSearch = new System.Management.ManagementObjectSearcher(
+                using var memSearch = Wmi.Searcher(
                     "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
                 using var memResults = memSearch.Get();
                 foreach (System.Management.ManagementObject mo in memResults)
@@ -726,7 +726,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             // GPU
             try
             {
-                using var gpuSearch = new System.Management.ManagementObjectSearcher(
+                using var gpuSearch = Wmi.Searcher(
                     "SELECT Name,DriverVersion,AdapterRAM,PNPDeviceID FROM Win32_VideoController");
                 using var gpuResults = gpuSearch.Get();
                 foreach (System.Management.ManagementObject mo in gpuResults)
@@ -759,7 +759,7 @@ public sealed partial class AboutViewModel : ViewModelBase
             // Display
             try
             {
-                using var dispSearch = new System.Management.ManagementObjectSearcher(
+                using var dispSearch = Wmi.Searcher(
                     "SELECT CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate FROM Win32_VideoController");
                 using var dispResults = dispSearch.Get();
                 foreach (System.Management.ManagementObject mo in dispResults)
@@ -806,8 +806,7 @@ public sealed partial class AboutViewModel : ViewModelBase
         try
         {
             // WMI Caption gives a friendly name like "Microsoft Windows 11 Pro"
-            using var searcher = new System.Management.ManagementObjectSearcher(
-                "SELECT Caption,BuildNumber FROM Win32_OperatingSystem");
+            using var searcher = Wmi.Searcher("SELECT Caption,BuildNumber FROM Win32_OperatingSystem");
             using var results = searcher.Get();
             foreach (System.Management.ManagementObject mo in results)
                 using (mo)

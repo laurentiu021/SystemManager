@@ -16855,6 +16855,53 @@ public partial class ArchitectureTests
     [GeneratedRegex(@"_query[A-Z]\w*\(")]
     private static partial Regex QuerySeamCallInLock();
 
+    /// <summary>Constructing a <c>ManagementObjectSearcher</c> directly, by either name it can be written with.</summary>
+    [GeneratedRegex(@"\bnew\s+(?:System\.Management\.)?ManagementObjectSearcher\s*\(")]
+    private static partial Regex RawManagementObjectSearcherConstruction();
+
+    /// <summary>
+    /// Every <c>ManagementObjectSearcher</c> in the app is built through <c>Helpers/Wmi</c>, with no exception.
+    /// </summary>
+    /// <remarks>
+    /// #2845 converted every call site this test's own author could find with a plain-text search for
+    /// <c>"new ManagementObjectSearcher"</c> — which does not match <c>new System.Management.ManagementObjectSearcher(</c>,
+    /// the fully-qualified form five sites in <c>AboutViewModel.cs</c> and one in <c>DashboardViewModel.cs</c> used.
+    /// Those six kept WMI's unbounded default timeout through the whole release that claimed to have fixed it,
+    /// found only by grepping again for a GPU-telemetry change that happened to touch the same file (#2857). The
+    /// regex here matches both spellings so a third one cannot hide from this guard the way the second one hid
+    /// from a plain string search.
+    /// </remarks>
+    [Fact]
+    public void EveryManagementObjectSearcher_GoesThroughTheSharedWmiHelper()
+    {
+        var appDir = TestPaths.AppProject();
+        var wmiHelper = Path.Combine(appDir, "Helpers", "Wmi.cs");
+
+        // Vacuity floor: Wmi.cs itself must still be the real helper — an empty or mis-read file at this
+        // path would satisfy the "no offenders elsewhere" assertion below for free. Checked by the bare
+        // type name rather than by the construction regex: Wmi.cs builds its searchers with target-typed
+        // `new(...)`, which never spells "ManagementObjectSearcher" right after "new" at all.
+        var helperSource = WithoutComments(File.ReadAllText(wmiHelper));
+        Assert.True(helperSource.Contains("ManagementObjectSearcher", StringComparison.Ordinal),
+            "Wmi.cs no longer mentions ManagementObjectSearcher, so this guard is not reading the file it "
+            + "depends on to prove anything.");
+
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(appDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                     .Where(f => !string.Equals(f, wmiHelper, StringComparison.OrdinalIgnoreCase)))
+        {
+            var code = WithoutComments(File.ReadAllText(file));
+            if (RawManagementObjectSearcherConstruction().IsMatch(code))
+                offenders.Add(Path.GetRelativePath(appDir, file));
+        }
+
+        Assert.True(offenders.Count == 0,
+            "these files construct a ManagementObjectSearcher directly instead of through Wmi.Searcher(...), "
+            + "so that read has no time limit (#2845):\n  " + string.Join("\n  ", offenders));
+    }
+
     /// <summary>
     /// The three values the 300 ms snapshot poll refreshes must come from syscalls, never from WMI.
     /// </summary>

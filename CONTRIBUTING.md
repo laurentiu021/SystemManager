@@ -258,6 +258,11 @@ must do neither — the PR template splits the checklist along exactly that line
 Don't worry about getting it right on a first contribution; say what your change
 does and the prefix can be adjusted before the squash merge.
 
+A workflow checks this automatically: it re-runs every time the title is
+edited and compares the required bump against `SysManager.csproj`, so a title
+and a version bump that disagree are caught on the PR instead of after
+auto-release refuses the merge.
+
 ## Pull request process
 
 1. **Fork** the repo and create a branch from `main`:

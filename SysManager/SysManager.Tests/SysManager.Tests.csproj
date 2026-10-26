@@ -11,6 +11,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <!-- Same reason the integration project carries it: a hung test used to end the job at its
+         timeout with nothing naming which test was running (#2847). -->
+    <PackageReference Include="Microsoft.Testing.Extensions.HangDump" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="NetArchTest.Rules" />
     <PackageReference Include="xunit.v3" />

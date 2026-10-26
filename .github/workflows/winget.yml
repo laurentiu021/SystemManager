@@ -155,7 +155,10 @@ jobs:
 
           # gh prints the reply to a refused token as well, so the status line decides. Read as headers, a
           # 401 has no scope list and no expiry, and was reported as a fine-grained token that never expires.
-          status=$(printf '%s\n' "$headers" | head -n 1 | tr -d '\r')
+          # Parameter expansion rather than `| head -n 1`, the same class of fix as #2847: $headers can run
+          # to 40 lines, and this is under pipefail (no `|| true` after it to swallow a SIGPIPE).
+          status_line=${headers%%$'\n'*}
+          status=$(printf '%s' "$status_line" | tr -d '\r')
           case "$status" in
             "HTTP/"*" 2"[0-9][0-9]*) ;;
             *)

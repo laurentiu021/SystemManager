@@ -46,8 +46,11 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          # Extract first line (PR title after squash merge)
-          FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
+          # Extract first line (PR title after squash merge). Parameter expansion, not `echo | head`:
+          # see "Get latest tag" below for why a pipe into `head` under pipefail is the one to avoid —
+          # COMMIT_MSG carries the whole PR description, and 43 of the last 400 commits on main ran
+          # over 4 KB (#2847).
+          FIRST_LINE=${COMMIT_MSG%%$'\n'*}
           echo "commit_msg=$FIRST_LINE"
 
           # CI-001: Check for breaking changes (! suffix) before minor/patch
@@ -128,10 +131,13 @@ jobs:
             echo "::error::The CHANGELOG.md entry for $VERSION is empty. Add the notes under its header, then re-run. No tag was created."
             exit 1
           fi
-          # The date has to be TODAY in UTC, because the tag pushed in the next step is what triggers
-          # release.yml, and release.yml copies this block verbatim into the release body and the
-          # announcement. A hand-written date is a prediction, and it is wrong whenever preparation and
-          # merge fall on different UTC days — which already published yesterday's date twice.
+          # The date has to be TODAY in UTC. release.yml no longer copies this header verbatim — since
+          # #1806 it rewrites the date to the day the release actually publishes before using it in the
+          # release body and the announcement, which is why a hand-written date wrong by one day no
+          # longer reaches either of those. What release.yml does NOT correct is this file: it
+          # deliberately leaves CHANGELOG.md as committed rather than pushing a date-fix commit of its
+          # own, so a wrong date here would sit in the repository's own history permanently, disagreeing
+          # with the release it describes, even though the published surfaces read correctly (#2847).
           #
           # Not checkable on the pull request: CI passing at 23:50 says nothing about a merge at 00:05.
           # Here the tag does not exist yet, so refusing costs a one-line edit and a re-run.
@@ -145,7 +151,7 @@ jobs:
           fi
 
           if [ "$ENTRY_DATE" != "$TODAY" ]; then
-            echo "::error::The CHANGELOG.md entry for $VERSION is dated $ENTRY_DATE, but this release publishes today, $TODAY (UTC). release.yml copies that header verbatim into the release body and the announcement, so it would publish the wrong date on both. Change the header to '## [$VERSION] - $TODAY' and re-run. No tag was created."
+            echo "::error::The CHANGELOG.md entry for $VERSION is dated $ENTRY_DATE, but this release publishes today, $TODAY (UTC). release.yml rewrites the published date on its own, so the release body and announcement will be correct either way — but this file would keep saying $ENTRY_DATE forever, disagreeing with the release it describes. Change the header to '## [$VERSION] - $TODAY' and re-run. No tag was created."
             exit 1
           fi
 

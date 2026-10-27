@@ -936,7 +936,14 @@ Key services:
 - `UninstallerService` — winget-based uninstall + registry UninstallString
   fallback for local apps not in winget. Uninstall execution is standard-session
   only; validated local commands use the shell runner so their own manifests own
-  any UAC request instead of inheriting SysManager elevation. After a local uninstaller
+  any UAC request instead of inheriting SysManager elevation. `UninstallAsync` accepts winget's LOCAL ids
+  (`MSIX\<PackageFullName>` for a packaged app, `ARP\Machine|User\<arch>\<key>` for a registry entry)
+  through `WingetId.IsLocalUninstallId`, a rule SEPARATE from the general `WingetId.IsValid` allowlist that
+  guards every other winget command line — those ids need a backslash, which that allowlist rightly refuses.
+  Without it, the apps winget lists this way could be ticked and confirmed and then never removed: 103 of 182
+  installed apps on the machine the shapes were derived from (#2849). An id that fits neither rule is refused
+  before winget starts, with a sentence pointing at Windows' own Settings > Apps page rather than the
+  parameter name. After a local uninstaller
   returns, `IsStillRegistered` checks that Windows no longer lists the app before the tab
   calls it removed: the exit code belongs to the launched process, and an NSIS uninstaller
   hands over to a copy of itself and exits at once. The uninstall roots it reads are

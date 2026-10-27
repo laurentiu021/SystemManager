@@ -93,9 +93,14 @@ public sealed partial class UninstallerService
     /// </summary>
     public async Task<int> UninstallAsync(string packageId, CancellationToken ct = default)
     {
-        // Validate packageId before interpolating it into the winget command line.
-        if (!WingetId.IsValid(packageId))
-            throw new ArgumentException("Invalid package ID.", nameof(packageId));
+        // Validate packageId before interpolating it into the winget command line. A LOCAL id
+        // (MSIX\… or ARP\Machine\X64\…) is accepted here and nowhere else: winget prints those for
+        // apps no source matches, and `winget uninstall --id` takes them, but they need a backslash
+        // that the general allowlist rightly refuses for every other command line (#2849).
+        if (!WingetId.IsValid(packageId) && !WingetId.IsLocalUninstallId(packageId))
+            throw new ArgumentException(
+                "Windows does not give this app an identifier SysManager can pass to winget safely, "
+                + "so it has to be removed from Windows' own Settings > Apps page.", nameof(packageId));
 
         EnsureStandardIntegrity();
 

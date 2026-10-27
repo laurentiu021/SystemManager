@@ -410,25 +410,59 @@ jobs:
 
           $exeName = [System.IO.Path]::GetFileNameWithoutExtension($exe)
           $launched = $null
+          $runasReturned = $false
           try {
-              Start-Process -FilePath 'runas.exe' `
-                            -ArgumentList '/trustlevel:0x20000', "`"$exe`"" `
-                            -Wait -NoNewWindow
-              Start-Sleep -Seconds 25
-              $launched = Get-Process -Name $exeName -ErrorAction SilentlyContinue |
-                          Select-Object -First 1
+              # BOUNDED, and with stdin already at end-of-input. Two faults were found here the hard
+              # way, both worth keeping written down:
+              #
+              #   * the first version used `-Wait` inside a try/catch and took the job to its
+              #     30-minute ceiling on v1.131.3, with no step output at all: runas blocks waiting
+              #     for input an Actions step cannot give it, and a try/catch cannot catch a HANG.
+              #     Only a timeout can, which is what WaitForExit(ms) is here for.
+              #   * 'NUL' is not a path Start-Process accepts for -RedirectStandardInput: the launch
+              #     fails and -PassThru hands back $null, so every release would have warned and
+              #     skipped this check forever. An empty real file is what works.
+              #
+              # runas's exit code is deliberately NOT consulted: Start-Process -PassThru leaves
+              # ExitCode null here even after the process has exited (measured), so a check on it
+              # would always read "failed" and make this gate permanently vacuous. What the gate
+              # trusts instead is the OBSERVABLE outcome below — a running process and a log that
+              # says "Elevated: false". If runas did not do its job, neither of those appears.
+              $emptyStdin = Join-Path $env:RUNNER_TEMP 'empty-stdin.txt'
+              New-Item -ItemType File -Path $emptyStdin -Force | Out-Null
+
+              $runas = Start-Process -FilePath 'runas.exe' `
+                                     -ArgumentList '/trustlevel:0x20000', "`"$exe`"" `
+                                     -PassThru -WindowStyle Hidden `
+                                     -RedirectStandardInput $emptyStdin
+              if ($null -eq $runas) {
+                  Write-Host "::warning::runas could not be started at all. The un-elevated start was NOT verified for this release."
+              }
+              elseif (-not $runas.WaitForExit(20000)) {
+                  $runas.Kill()
+                  $runas.WaitForExit(5000) | Out-Null
+                  Write-Host "::warning::runas did not return within 20s, so it was stopped. The un-elevated start was NOT verified for this release."
+              }
+              else {
+                  $runasReturned = $true
+                  Start-Sleep -Seconds 25
+                  $launched = Get-Process -Name $exeName -ErrorAction SilentlyContinue |
+                              Select-Object -First 1
+              }
           }
           catch {
               Write-Host "::warning::Could not start the exe with a filtered token: $($_.Exception.Message). The un-elevated start was NOT verified for this release."
           }
 
-          $unelevatedLog = if (Test-Path $logs) {
+          $unelevatedLog = if ($runasReturned -and (Test-Path $logs)) {
               Get-ChildItem $logs -Filter '*.log' |
               Sort-Object LastWriteTime -Descending | Select-Object -First 1
           } else { $null }
 
           if (-not $unelevatedLog) {
-              Write-Host "::warning::The un-elevated start produced no log, so it could not be checked. Nothing here says the release is bad; it says this gate did not run."
+              if ($runasReturned) {
+                  Write-Host "::warning::The un-elevated start produced no log, so it could not be checked. Nothing here says the release is bad; it says this gate did not run."
+              }
           }
           else {
               $tail = Get-Content $unelevatedLog.FullName

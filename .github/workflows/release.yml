@@ -121,7 +121,15 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json pins, not "whatever 10.0 is newest today". A self-contained publish
+          # embeds the runtime the SDK carries, so a floating SDK meant two builds of the SAME TAG
+          # could differ: a re-dispatch after a .NET servicing release replaced the published exe and
+          # its .sha256 under the same URL, while the winget manifest already submitted kept the
+          # first build's hash — and anyone who saved the first hash, as README's verification steps
+          # invite, saw a mismatch. README calls the build reproducible, so it has to be (#2848).
+          # setup-dotnet DOWNLOADS the pinned version, so this does not depend on the runner image
+          # happening to carry it.
+          global-json-file: global.json
 
       - name: Extract tag version
         id: version
@@ -254,73 +262,13 @@ jobs:
           "hash=$hash" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "SHA256: $hash"
 
-      # The shipped exe is self-contained and single-file, so its contents are opaque:
-      # neither the binary nor its .sha256 says which dependencies are embedded. The SBOM
-      # is the machine-readable answer. Generated AFTER publish and with the same
-      # framework/runtime, so it reads the graph that was actually published rather than
-      # a RID-agnostic restore.
-      #
-      # Note this is a restore-graph inventory, not a byte-level manifest of the exe:
-      # verified against a real win-x64 publish, 71 components resolve, of which 14 are
-      # RID-specific placeholder packages (Linux/macOS/Android variants of
-      # System.IO.Ports and SkiaSharp/HarfBuzz native assets, all empty '_._' on this
-      # RID) plus System.IO.Hashing, a build-time transitive of SourceLink that never
-      # reaches the output. They are kept rather than filtered because a
-      # vulnerability-feed consumer wants the resolved set, and hand-maintaining an
-      # exclusion list would silently rot as the graph changes.
-      - name: Generate CycloneDX SBOM
-        shell: pwsh
-        run: |
-          $ver = "${{ steps.version.outputs.version }}"
-          # Version-pinned like every action in this workflow — an unpinned tool is an
-          # unreviewed dependency in the release path.
-          dotnet tool install --global CycloneDX --version 6.2.0
-          if ($LASTEXITCODE -ne 0) { throw "Failed to install the CycloneDX tool." }
-          dotnet-CycloneDX SysManager/SysManager/SysManager.csproj `
-            --output publish `
-            --filename "SysManager-v${ver}.sbom.json" `
-            --output-format Json `
-            --framework net10.0-windows `
-            --runtime win-x64 `
-            --exclude-dev `
-            --set-name SysManager `
-            --set-version $ver
-          if ($LASTEXITCODE -ne 0) { throw "SBOM generation failed." }
-          $sbom = "publish/SysManager-v${ver}.sbom.json"
-          if (-not (Test-Path $sbom)) { throw "Missing $sbom" }
-          $components = (Get-Content $sbom -Raw | ConvertFrom-Json).components.Count
-          if (-not $components) { throw "SBOM contains no components — refusing to publish an empty inventory." }
-          Write-Host "SBOM written with $components components."
-
-      # Binds this exact binary digest to this repository, workflow and commit in the
-      # public Sigstore transparency log. The .sha256 file cannot do this: it ships from
-      # the same release as the exe, so both share one trust root. Anyone can verify with
-      #   gh attestation verify SysManager-v<version>.exe --repo laurentiu021/SystemManager
-      # Deliberately placed BEFORE the release is created, so a failure here aborts the
-      # run instead of leaving a published release without provenance.
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
-
-      # Nothing above this point has ever RUN the artifact being published. The unit tests
-      # exercise the code, but they load assemblies into a test host — they do not start the
-      # single-file, self-contained, compressed exe that users actually download. Those are
-      # different failure surfaces: a missing native library extracted from the bundle, a
-      # startup path that throws before the first frame, or a resource that resolves in a
-      # normal build but not from a packed one, all pass every test and then fail on launch.
-      # That shipped once already, which is why the standing rule is that a release is not
-      # trusted until the published binary has been seen alive.
-      #
-      # windows-latest provides a desktop session (the ui-tests job in ci.yml relies on the
-      # same thing), so the exe can be started here — the one place in the pipeline where the
-      # real artifact exists and nothing has been published yet. A failure aborts the run
-      # before the release, the winget submission and the announcement, instead of after.
-      #
-      # Deliberately a smoke check, not a UI test: start it, hold it, confirm the process is
-      # still alive and that it left no crash marker, then close it. No assertions about what
-      # is on screen — ci.yml's FlaUI job owns that, and duplicating it here would make the
-      # release depend on UI timing.
+      # BEFORE the SBOM and the attestation, deliberately. This step can still reject the build
+      # ("Runtime version drift", a startup fault, a crash marker), and it used to run after
+      # "Attest build provenance" — so a binary this gate refused already had a provenance statement
+      # in the public Sigstore transparency log and in the repository's attestation store, for an exe
+      # that never shipped. Same reasoning the version-stamp check above already gives for its own
+      # position: making that claim about a build and retracting it afterwards is far worse than
+      # never making it (#2848).
       - name: Smoke-check the published exe
         shell: pwsh
         env:
@@ -437,6 +385,159 @@ jobs:
 
           Write-Host "The published exe started, stayed alive for 25s and logged no error."
 
+          # ── Again, WITHOUT elevation ────────────────────────────────────────────────────
+          # The run above is elevated: Start-Process inherits the runner's token, and the GitHub
+          # Windows runner is an administrator. Start-up takes different code without it —
+          # TemperatureService reads NVIDIA, WMI disk temperatures and a CPU placeholder instead of
+          # LibreHardwareMonitor, and PowerShellRunner and MainWindowViewModel branch on elevation
+          # too — so a fault confined to an ordinary double-click start, which is what the people
+          # this app is for actually do, passed this gate every time. The log tail above says
+          # "Elevated: true", which is how it was spotted (#2848).
+          #
+          # runas /trustlevel:0x20000 launches with a filtered token. It needs no password, but it is
+          # an environment capability this gate cannot verify in advance, so the two outcomes are
+          # separated on purpose:
+          #   * it starts un-elevated and then crashes, logs ERR/FTL, or leaves a crash marker
+          #     -> FATAL, which is the whole point of adding this;
+          #   * it cannot be started un-elevated at all, or the log does not confirm the token was
+          #     filtered -> a visible WARNING and nothing more, because blocking every release on a
+          #     runner limitation would be worse than the gap this closes.
+          # The "Elevated: false" assertion is what stops this from being vacuous: without it, a
+          # filtered launch that silently ran elevated anyway would re-check the path already
+          # covered and report success.
+          Remove-Item $marker -ErrorAction SilentlyContinue
+          Remove-Item (Join-Path $logs '*.log') -ErrorAction SilentlyContinue
+
+          $exeName = [System.IO.Path]::GetFileNameWithoutExtension($exe)
+          $launched = $null
+          try {
+              Start-Process -FilePath 'runas.exe' `
+                            -ArgumentList '/trustlevel:0x20000', "`"$exe`"" `
+                            -Wait -NoNewWindow
+              Start-Sleep -Seconds 25
+              $launched = Get-Process -Name $exeName -ErrorAction SilentlyContinue |
+                          Select-Object -First 1
+          }
+          catch {
+              Write-Host "::warning::Could not start the exe with a filtered token: $($_.Exception.Message). The un-elevated start was NOT verified for this release."
+          }
+
+          $unelevatedLog = if (Test-Path $logs) {
+              Get-ChildItem $logs -Filter '*.log' |
+              Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          } else { $null }
+
+          if (-not $unelevatedLog) {
+              Write-Host "::warning::The un-elevated start produced no log, so it could not be checked. Nothing here says the release is bad; it says this gate did not run."
+          }
+          else {
+              $tail = Get-Content $unelevatedLog.FullName
+              Write-Host "--- tail of the un-elevated $($unelevatedLog.Name) ---"
+              $tail | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
+              Write-Host "--- end of log ---"
+
+              # Did the token filtering actually take? If not, this proved nothing.
+              $sawUnelevated = @($tail | Where-Object { $_ -match 'Elevated:\s*false' }).Count -gt 0
+              if (-not $sawUnelevated) {
+                  Write-Host "::warning::The log does not report 'Elevated: false', so the filtered token did not take effect and the un-elevated path was NOT verified."
+              }
+              else {
+                  # From here the findings are real, so they are fatal.
+                  $unelevatedFaults = @($tail | Where-Object { $_ -match '\[(ERR|FTL)\]' })
+                  if ($unelevatedFaults.Count -gt 0) {
+                      Write-Host "--- error and fatal lines from the un-elevated start ---"
+                      $unelevatedFaults | ForEach-Object { Write-Host $_ }
+                      throw "Started WITHOUT elevation, the published exe logged " +
+                            "$($unelevatedFaults.Count) error or fatal line(s). That is the way the " +
+                            "people this app is for start it, so this release must not be published."
+                  }
+                  if (Test-Path $marker) {
+                      Write-Host "--- last-crash.json from the un-elevated start ---"
+                      Get-Content $marker -Raw | Write-Host
+                      throw "Started WITHOUT elevation, the published exe recorded a crash. It " +
+                            "survives an elevated start, which is why this was invisible before."
+                  }
+                  if (-not $launched) {
+                      throw "Started WITHOUT elevation, the published exe was gone within 25 " +
+                            "seconds and left no crash marker. It starts when elevated, so this " +
+                            "release must not be published."
+                  }
+                  Write-Host "The published exe also started un-elevated, stayed alive and logged no error."
+              }
+          }
+
+          if ($launched) {
+              $launched.Kill()
+              $launched.WaitForExit(10000) | Out-Null
+          }
+
+      # The shipped exe is self-contained and single-file, so its contents are opaque:
+      # neither the binary nor its .sha256 says which dependencies are embedded. The SBOM
+      # is the machine-readable answer. Generated AFTER publish and with the same
+      # framework/runtime, so it reads the graph that was actually published rather than
+      # a RID-agnostic restore.
+      #
+      # Note this is a restore-graph inventory, not a byte-level manifest of the exe:
+      # verified against a real win-x64 publish, 71 components resolve, of which 14 are
+      # RID-specific placeholder packages (Linux/macOS/Android variants of
+      # System.IO.Ports and SkiaSharp/HarfBuzz native assets, all empty '_._' on this
+      # RID) plus System.IO.Hashing, a build-time transitive of SourceLink that never
+      # reaches the output. They are kept rather than filtered because a
+      # vulnerability-feed consumer wants the resolved set, and hand-maintaining an
+      # exclusion list would silently rot as the graph changes.
+      - name: Generate CycloneDX SBOM
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          # Version-pinned like every action in this workflow — an unpinned tool is an
+          # unreviewed dependency in the release path.
+          dotnet tool install --global CycloneDX --version 6.2.0
+          if ($LASTEXITCODE -ne 0) { throw "Failed to install the CycloneDX tool." }
+          dotnet-CycloneDX SysManager/SysManager/SysManager.csproj `
+            --output publish `
+            --filename "SysManager-v${ver}.sbom.json" `
+            --output-format Json `
+            --framework net10.0-windows `
+            --runtime win-x64 `
+            --exclude-dev `
+            --set-name SysManager `
+            --set-version $ver
+          if ($LASTEXITCODE -ne 0) { throw "SBOM generation failed." }
+          $sbom = "publish/SysManager-v${ver}.sbom.json"
+          if (-not (Test-Path $sbom)) { throw "Missing $sbom" }
+          $components = (Get-Content $sbom -Raw | ConvertFrom-Json).components.Count
+          if (-not $components) { throw "SBOM contains no components — refusing to publish an empty inventory." }
+          Write-Host "SBOM written with $components components."
+
+      # Binds this exact binary digest to this repository, workflow and commit in the
+      # public Sigstore transparency log. The .sha256 file cannot do this: it ships from
+      # the same release as the exe, so both share one trust root. Anyone can verify with
+      #   gh attestation verify SysManager-v<version>.exe --repo laurentiu021/SystemManager
+      # Deliberately placed BEFORE the release is created, so a failure here aborts the
+      # run instead of leaving a published release without provenance.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: publish/SysManager-v${{ steps.version.outputs.version }}.exe
+
+      # Nothing above this point has ever RUN the artifact being published. The unit tests
+      # exercise the code, but they load assemblies into a test host — they do not start the
+      # single-file, self-contained, compressed exe that users actually download. Those are
+      # different failure surfaces: a missing native library extracted from the bundle, a
+      # startup path that throws before the first frame, or a resource that resolves in a
+      # normal build but not from a packed one, all pass every test and then fail on launch.
+      # That shipped once already, which is why the standing rule is that a release is not
+      # trusted until the published binary has been seen alive.
+      #
+      # windows-latest provides a desktop session (the ui-tests job in ci.yml relies on the
+      # same thing), so the exe can be started here — the one place in the pipeline where the
+      # real artifact exists and nothing has been published yet. A failure aborts the run
+      # before the release, the winget submission and the announcement, instead of after.
+      #
+      # Deliberately a smoke check, not a UI test: start it, hold it, confirm the process is
+      # still alive and that it left no crash marker, then close it. No assertions about what
+      # is on screen — ci.yml's FlaUI job owns that, and duplicating it here would make the
+      # release depend on UI timing.
       - name: Extract release notes from CHANGELOG
         id: notes
         shell: pwsh
@@ -566,7 +667,11 @@ jobs:
           certificate is actually issued.
 
           This program will not transfer any information to other networked systems unless
-          specifically requested by the user or the person installing or operating it. Full
+          specifically requested by the user or the person installing or operating it. Two checks
+          run on their own when SysManager starts: the version check against the GitHub Releases
+          API, at most once a day, and the Dashboard's app-updates alert, which asks winget. The
+          About tab can switch off either. Everything else that uses the network runs only when you
+          use it. Full
           [privacy policy](https://github.com/laurentiu021/SystemManager/blob/main/SECURITY.md#privacy).
 
           ### Verify where this binary came from
@@ -597,6 +702,55 @@ jobs:
           }
           Add-Content release-notes.md $notes -Encoding utf8
 
+      # The guard against replacing a binary people already have. This workflow is re-dispatchable
+      # and rebuilds from scratch, and the publish step below is not additive — it overwrites an
+      # asset of the same name, under the same URL. So a re-run whose bytes differ would hand a
+      # DIFFERENT exe to everyone from then on, while the winget manifest already submitted keeps
+      # the first build's InstallerSha256 and anyone who saved the first hash (README's verification
+      # steps invite exactly that) sees a mismatch they cannot explain.
+      #
+      # Pinning the SDK above removes the cause that was actually observed; this refuses the symptom
+      # whatever the cause, which is the half that keeps being true after the next unrelated change.
+      # On the normal path — a tag that has no release yet — there is nothing to compare and the step
+      # says so and moves on.
+      - name: If this release already exists, the bytes must match what it published
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REBUILT: ${{ steps.hash.outputs.hash }}
+        run: |
+          $asset = "SysManager-v$env:VERSION.exe.sha256"
+          $published = $null
+          try {
+              gh release download $env:TAG --pattern $asset --dir published 2>$null
+              $file = Join-Path 'published' $asset
+              if (Test-Path $file) {
+                  # The file is "<hash> *<name>"; take the hash and compare case-insensitively.
+                  $published = ((Get-Content $file -Raw) -split '\s+')[0].Trim()
+              }
+          }
+          catch {
+              # No release yet, or no such asset on it: the normal path for a new tag.
+          }
+
+          if (-not $published) {
+              Write-Host "No published .sha256 for $env:TAG — this release is new, nothing to compare."
+              exit 0
+          }
+
+          Write-Host "published $published"
+          Write-Host "rebuilt   $env:REBUILT"
+          if ($published -ne $env:REBUILT) {
+              throw "This tag already published an exe with SHA256 $published, and this run built " +
+                    "$($env:REBUILT). Publishing would silently replace a binary people may already " +
+                    "have, and leave the winget manifest pointing at the old hash. Find out why the " +
+                    "bytes changed — the SDK pin in global.json exists to stop exactly this — rather " +
+                    "than overwriting it."
+          }
+          Write-Host "The rebuilt exe is byte-identical to the one already published."
+
       - name: Create GitHub Release
         id: release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
@@ -606,6 +760,10 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
+          # The step above is what makes re-publishing safe: it has already refused a rebuild whose
+          # bytes differ from what this tag published, so reaching here means the assets are the
+          # same ones. Left additive on purpose rather than set to fail on an existing file, because
+          # a re-dispatch must still be able to repair a release whose upload was interrupted.
           files: |
             publish/SysManager-v${{ steps.version.outputs.version }}.exe
             publish/SysManager-v${{ steps.version.outputs.version }}.exe.sha256

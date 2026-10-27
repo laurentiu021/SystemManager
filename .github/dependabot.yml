@@ -92,3 +92,19 @@ updates:
         update-types:
           - "minor"
           - "patch"
+
+  # Keep the pinned .NET SDK current. global.json pins an EXACT version with
+  # "rollForward": "disable", so that a release built twice from the same tag cannot embed two
+  # different runtimes (#2848) — which also means nothing else would ever raise it. This is what
+  # turns the pin from a freeze into a reviewed bump.
+  - package-ecosystem: "dotnet-sdk"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 1
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci"
+      include: "scope"

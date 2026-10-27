@@ -54,7 +54,9 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json pins; release.yml's copy of this step explains why it is not
+          # "whatever 10.0 is newest today" (#2848).
+          global-json-file: global.json
 
       # The key hashes every file that decides WHICH packages get restored, and NOTHING else. Under
       # central package management a .csproj carries no package versions at all — they are all in
@@ -609,7 +611,9 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json pins; release.yml's copy of this step explains why it is not
+          # "whatever 10.0 is newest today" (#2848).
+          global-json-file: global.json
 
       - name: Restore
         run: |
@@ -739,7 +743,9 @@ jobs:
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          # The SDK global.json pins; release.yml's copy of this step explains why it is not
+          # "whatever 10.0 is newest today" (#2848).
+          global-json-file: global.json
 
       - name: Restore
         run: |

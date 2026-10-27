@@ -10,6 +10,34 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.3] - 2026-10-27
+
+**Release builds are now checked the way you actually start SysManager — without administrator rights — and a
+rebuild can no longer quietly replace a download with different bytes.**
+
+### Fixed
+
+- **The release gate only ever started SysManager as an administrator.** The check that proves a published
+  build runs launched it with the build machine's own administrator rights, and start-up takes different code
+  without them — temperatures, PowerShell and parts of the main window all behave differently. A fault that
+  only happened on a normal double-click, which is how everyone reading this starts it, passed that check
+  every time. Each release is now started both ways, and a fault in the ordinary start stops it from being
+  published.
+- **A build was publicly vouched for before the last check that could still reject it.** The signed
+  provenance record — the one `gh attestation verify` reads — was created before the step that starts the exe
+  and compares the version it reports. A build that step refused already had a public record claiming it was
+  genuine, for a file that never shipped. Nothing is vouched for now until every check has passed.
+- **Rebuilding a release could change the file under the same download link.** The exact .NET build tools were
+  not pinned, so a release rebuilt on a later day could embed a newer runtime and produce a different file —
+  replacing the published download while the Windows Package Manager entry still carried the first file's
+  checksum. Anyone who had saved that checksum, which the README suggests doing, would see a mismatch they
+  could not explain. The build tools are now pinned exactly, and a rebuild that produces different bytes is
+  refused rather than published.
+- **The release page promised more privacy than the README does.** Both say SysManager sends nothing anywhere
+  unless asked, but only the README added that two checks do run on their own at start-up — the update check
+  and the app-updates alert, either of which can be switched off in About. The release page, where people
+  decide whether to download at all, left that out. It now says the same thing.
+
 ## [1.131.2] - 2026-10-27
 
 **If something goes wrong while SysManager is opening, it now closes properly and starting it again works —

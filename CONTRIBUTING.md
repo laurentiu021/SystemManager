@@ -39,7 +39,11 @@ follows, and what to expect when you open a pull request.
 **Prerequisites**
 
 - Windows 10 or later (WPF + Windows APIs won't build elsewhere).
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+- The exact [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) `global.json`
+  pins. It sets `"rollForward": "disable"`, so a different patch of the 10.0 SDK will refuse to
+  build rather than quietly produce different bytes — `dotnet --list-sdks` shows what you have,
+  and the version to match is in `global.json`. Dependabot raises that pin, so it does not go
+  stale.
 - Git 2.40+.
 - A Windows account with admin rights (needed to test elevated features;
   the app itself runs fine unelevated for everything else).

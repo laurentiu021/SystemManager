@@ -2835,7 +2835,11 @@ dotnet publish SysManager/SysManager/SysManager.csproj `
 ```
 
 `publish.ps1` is what the release workflow runs. It also passes
-`-p:ContinuousIntegrationBuild=true -p:Deterministic=true`, so its build is reproducible.
+`-p:ContinuousIntegrationBuild=true -p:Deterministic=true`, so its build is reproducible —
+on the same SDK, which `global.json` pins exactly (`"rollForward": "disable"`). A self-contained
+publish embeds the runtime its SDK carries, so that pin is what makes two builds of one tag
+produce the same bytes; the release workflow also refuses to replace a published exe with a
+different hash.
 
 The resulting `SysManager.exe` lands in `publish/` and runs standalone on any
 Windows 10 / 11 x64 machine.

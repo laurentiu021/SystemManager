@@ -26,6 +26,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // From here on, a UI fault is survivable: there is a window to go back to. Until this fires,
+        // App.OnUi ends the process with a crash marker instead of handling the exception and leaving a
+        // SysManager with no window, no tray icon, and the single-instance mutex still held (#2863).
+        Loaded += (_, _) => App.MainWindowLoaded = true;
+
         // Ensure ViewModel disposal even if OnClosed is not called (e.g. app shutdown)
         if (Application.Current != null)
             Application.Current.Exit += OnApplicationExit;

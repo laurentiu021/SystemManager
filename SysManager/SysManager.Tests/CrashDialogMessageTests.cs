@@ -91,4 +91,57 @@ public class CrashDialogMessageTests
         Assert.Contains(LogService.LogDir, text);
         Assert.DoesNotContain(".log", text);
     }
+
+    // ---- the startup variant (#2863) ----
+
+    /// <summary>
+    /// The startup message must NOT claim the app is still running, which is the sentence the running
+    /// variant opens with.
+    /// </summary>
+    /// <remarks>
+    /// That claim was shown in exactly the case where it was least true: a fault while the window was
+    /// being built left no window and no tray icon, so "still running" described a process the user could
+    /// only reach through Task Manager.
+    /// </remarks>
+    [Fact]
+    public void TheStartupMessageDoesNotSayTheAppIsStillRunning()
+    {
+        var text = App.BuildStartupFailureMessage(new InvalidOperationException("a view model threw"));
+
+        Assert.DoesNotContain("still running", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("could not start", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheStartupMessageSaysWhereTheDetailsWentAndThatRetryingIsWorthIt()
+    {
+        var text = App.BuildStartupFailureMessage(new InvalidOperationException("a view model threw"));
+
+        Assert.Contains(LogService.LogDir, text);
+        Assert.Contains("a view model threw", text);
+        // The next launch works now that the process ends, so saying so is actionable rather than a
+        // dead end for someone who cannot read a stack trace.
+        Assert.Contains("again", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TheStartupMessagePrefersTheInnerExceptionAndSurvivesANull()
+    {
+        var wrapped = App.BuildStartupFailureMessage(
+            new InvalidOperationException("generic wrapper", new ArgumentException("the real cause")));
+        Assert.Contains("the real cause", wrapped);
+
+        var none = App.BuildStartupFailureMessage(null);
+        Assert.Contains("An unexpected error occurred.", none);
+        Assert.Contains(LogService.LogDir, none);
+    }
+
+    [Fact]
+    public void TheStartupMessageNamesTheFolderNotAFile()
+    {
+        var text = App.BuildStartupFailureMessage(new InvalidOperationException("x"));
+
+        Assert.Contains(LogService.LogDir, text);
+        Assert.DoesNotContain(".log", text);
+    }
 }

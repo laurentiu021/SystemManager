@@ -75,6 +75,61 @@ public class UninstallerServiceTests
             Arg.Any<System.Text.Encoding?>());
     }
 
+    /// <summary>
+    /// A LOCAL id — the kind winget prints for an app no source matches — reaches winget instead of being
+    /// refused before the process starts.
+    /// </summary>
+    /// <remarks>
+    /// The assertion that matters, and the one whose absence let a reverted fix pass: testing
+    /// <c>WingetId.IsLocalUninstallId</c> on its own proves the RULE and says nothing about whether
+    /// <c>UninstallAsync</c> consults it. On the machine this was derived from, 103 of 182 installed apps had
+    /// an id of this shape, every one of which could be ticked, confirmed, and then not removed (#2849).
+    /// </remarks>
+    [Theory]
+    [InlineData(@"MSIX\Microsoft.WindowsCalculator_11.2210.0.0_x64__8wekyb3d8bbwe")]
+    [InlineData(@"ARP\Machine\X64\{90160000-008C-0000-1000-0000000FF1CE}")]
+    [InlineData(@"ARP\User\X64\SomeRegistryKey")]
+    public async Task UninstallAsync_PassesAWingetLocalIdThroughToWinget(string localId)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        runner.RunProcessAsync("winget", Arg.Any<string>(), Arg.Any<CancellationToken>(),
+                               Arg.Any<System.Text.Encoding?>())
+            .Returns(0);
+        var service = new UninstallerService(runner, () => false);
+
+        var exitCode = await service.UninstallAsync(localId);
+
+        Assert.Equal(0, exitCode);
+        await runner.Received(1).RunProcessAsync(
+            "winget",
+            // Quoted and whole: the id carries backslashes, so a command line that lost the quotes or
+            // truncated at the first separator would be a different package — or none.
+            Arg.Is<string>(args => args != null
+                && args.Contains($"--id \"{localId}\"", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>(),
+            Arg.Any<System.Text.Encoding?>());
+    }
+
+    /// <summary>
+    /// An id that is neither a source id nor a local one is still refused before winget starts, with a
+    /// sentence a person can act on rather than the parameter name.
+    /// </summary>
+    [Theory]
+    [InlineData(@"MSIX\pkg""; calc.exe")]
+    [InlineData(@"ARP\Machine\X64\key\")]
+    [InlineData("pkg && calc")]
+    public async Task UninstallAsync_RefusesAnIdItCannotPassSafely(string badId)
+    {
+        var runner = Substitute.For<IPowerShellRunner>();
+        var service = new UninstallerService(runner, () => false);
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => service.UninstallAsync(badId));
+
+        Assert.Contains("Settings", error.Message, StringComparison.Ordinal);
+        await runner.DidNotReceiveWithAnyArgs()
+            .RunProcessAsync(default!, default!, default, default);
+    }
+
     [Fact]
     public async Task UninstallLocalAsync_WhenNotElevated_UsesShellRunnerForOwnedUac()
     {

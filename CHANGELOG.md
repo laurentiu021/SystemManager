@@ -10,6 +10,25 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.1] - 2026-10-27
+
+**Store apps and many installed programs can now actually be uninstalled — they used to be listed, tickable,
+and then refused with "Invalid package ID".**
+
+### Fixed
+
+- **Most Store apps, and many ordinary programs, could be ticked for removal and then never removed.** Windows
+  gives some apps no public identifier, so winget lists them under a local one instead — `MSIX\…` for a Store
+  or packaged app, `ARP\…` for a program known only by its registry entry. SysManager checks every identifier
+  before it goes anywhere near a command line, and that check had no room for the backslash those use, so the
+  Uninstaller let them be ticked, asked for confirmation with "This cannot be undone", and then failed each one
+  with "Error: Invalid package ID. (Parameter 'packageId')". On the machine this was traced on, 103 of 182
+  installed apps had an identifier of that kind. Those identifiers are now recognised, with their own rule
+  rather than by loosening the check that protects everything else, and winget removes them the same way it
+  removes anything else.
+- **An app SysManager genuinely cannot remove now says what to do instead.** It used to show the raw
+  programmer's error text; it now says the app has to be removed from Windows' own Settings > Apps page.
+
 ## [1.131.0] - 2026-10-26
 
 **GPU usage and video memory now work on Intel and AMD graphics, not just NVIDIA — the Dashboard and Resource

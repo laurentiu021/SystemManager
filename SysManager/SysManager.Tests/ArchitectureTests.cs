@@ -7209,6 +7209,17 @@ public partial class ArchitectureTests
                 offenders.Add($"{view} — no longer says how many checks run when SysManager starts");
         }
 
+        // The release body too. It ends with the same "will not transfer any information … unless
+        // specifically requested" sentence the README carries, but WITHOUT the qualifier naming the two
+        // checks that do run on their own — on the page where someone decides whether to download at
+        // all, which is the worst place for the promise to read stronger than it is. This guard read
+        // every other surface and not that one (#2848).
+        var releaseWorkflow = Path.Combine(root, ".github", "workflows", "release.yml");
+        Assert.True(File.Exists(releaseWorkflow),
+            "release.yml not found — the guard would pass vacuously on the surface it was extended to cover");
+        if (CheckCounts("release.yml", Collapse(File.ReadAllText(releaseWorkflow))) == 0)
+            offenders.Add("release.yml — the release body no longer says how many checks run when SysManager starts");
+
         Assert.True(offenders.Count == 0,
             $"SECURITY.md says {count} checks run on their own when SysManager starts. These say otherwise, or no "
             + "longer say it:\n  " + string.Join("\n  ", offenders));

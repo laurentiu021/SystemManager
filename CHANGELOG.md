@@ -10,6 +10,24 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.2] - 2026-10-27
+
+**If something goes wrong while SysManager is opening, it now closes properly and starting it again works —
+instead of leaving an invisible copy running that blocked every later attempt.**
+
+### Fixed
+
+- **A fault while SysManager was opening left it running with no window and no way to reach it.** The error
+  box said "SysManager is still running", which was true and useless: there was no window, and the tray icon
+  is only created once the window exists, so there was nothing to click and nothing to exit from. The
+  invisible process also kept the lock that stops two copies running, so every later attempt simply handed
+  over to it and closed — nothing appeared, no matter how many times you tried. The only ways out were Task
+  Manager or restarting Windows. Nothing was recorded either, so the next start could not even say what had
+  happened. Now a fault before the window has opened closes the process, says "SysManager could not start"
+  with where the details were saved, and records the fault so the next start can report it — and that next
+  start works normally. A fault after the window is open behaves as before: it tells you and keeps running,
+  because there is a window to go back to.
+
 ## [1.131.1] - 2026-10-27
 
 **Store apps and many installed programs can now actually be uninstalled — they used to be listed, tickable,

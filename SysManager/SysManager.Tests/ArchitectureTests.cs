@@ -20569,7 +20569,10 @@ public partial class ArchitectureTests
         // Reviewed: each of these says why beside it.
         var reviewed = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            ["App.xaml.cs"] = 3,
+            // 5 rather than 3 since #2863: the startup-failure path raises a last-resort dialog and asks
+            // WPF to shut down, both inside a process whose startup has just failed, so either can surface
+            // a fault from anything half-built — and neither may stop the guaranteed exit that is the fix.
+            ["App.xaml.cs"] = 5,
             ["Services/EtwBandwidthSource.cs"] = 1,
             ["Services/GamingProfileService.cs"] = 3,
             ["Services/OperationLockService.cs"] = 1,

@@ -490,20 +490,76 @@ public partial class App : Application
         return security;
     }
 
+    /// <summary>
+    /// True once the main window has finished loading, so a UI fault after it is survivable.
+    /// </summary>
+    /// <remarks>
+    /// Set from <c>MainWindow</c>'s <c>Loaded</c> event, which is the first moment the user has a window
+    /// that works. <c>OnSourceInitialized</c> is deliberately NOT the signal: it runs earlier, and a window
+    /// that got a handle but never finished loading is not one anybody can use (#2863).
+    /// </remarks>
+    internal static bool MainWindowLoaded { get; set; }
+
+    /// <summary>What <see cref="OnUi"/> should do about an exception that reached the dispatcher.</summary>
+    internal enum UiFaultAction
+    {
+        /// <summary>Expected teardown noise — log it and carry on.</summary>
+        Swallow,
+
+        /// <summary>Tell the user, keep the app running. The window exists, so there is something to go back to.</summary>
+        ShowAndKeepRunning,
+
+        /// <summary>The window never loaded: record a crash and end the process.</summary>
+        FailStartup,
+    }
+
+    /// <summary>
+    /// Decides what a dispatcher exception means, from the exception and whether the window ever loaded.
+    /// </summary>
+    /// <remarks>
+    /// <para>Pure, so the whole decision — including the ORDER of its arms — is unit-testable without
+    /// raising a real dispatcher exception. The order is the part that matters: the teardown swallows come
+    /// FIRST, because a service being disposed while an async operation is still in flight is expected and
+    /// must not be mistaken for a startup fault and kill the process.</para>
+    /// <para>Before this existed, <see cref="OnUi"/> handled every exception and returned, with no idea
+    /// whether a window existed. A throw while <c>MainWindow</c> was being built — its
+    /// <c>MainWindowViewModel</c> is constructed by the XAML, which resolves several view models eagerly —
+    /// showed "SysManager is still running", left no window (the tray is only initialised from
+    /// <c>OnSourceInitialized</c>, which never ran), wrote no crash marker (only the domain handler did),
+    /// and kept the single-instance mutex. Every later launch then handed over to that process and exited,
+    /// so the app could not be started again without Task Manager: a fault that was strictly worse than a
+    /// crash (#2863).</para>
+    /// </remarks>
+    internal static UiFaultAction DecideUiFault(Exception? exception, bool mainWindowLoaded)
+    {
+        // Disposed/cancelled during shutdown — CTS/services being disposed while async operations are
+        // still in flight is expected. Ahead of the startup check on purpose, per the remarks above.
+        if (exception is ObjectDisposedException)
+            return UiFaultAction.Swallow;
+        if (exception is InvalidOperationException
+            && exception.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase))
+            return UiFaultAction.Swallow;
+        if (exception?.InnerException is ObjectDisposedException)
+            return UiFaultAction.Swallow;
+        if (exception is OperationCanceledException)
+            return UiFaultAction.Swallow;
+
+        return mainWindowLoaded ? UiFaultAction.ShowAndKeepRunning : UiFaultAction.FailStartup;
+    }
+
     private static void OnUi(object s, DispatcherUnhandledExceptionEventArgs e)
     {
-        LogService.Logger?.Error(e.Exception, "UI thread exception");
         e.Handled = true;
+        var action = DecideUiFault(e.Exception, MainWindowLoaded);
 
-        // Swallow disposed/cancelled exceptions during shutdown — CTS/services
-        // being disposed while async operations are still in flight is expected.
-        if (e.Exception is ObjectDisposedException)
+        if (action == UiFaultAction.FailStartup)
+        {
+            FailStartup(e.Exception);
             return;
-        if (e.Exception is InvalidOperationException && e.Exception.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase))
-            return;
-        if (e.Exception.InnerException is ObjectDisposedException)
-            return;
-        if (e.Exception is OperationCanceledException)
+        }
+
+        LogService.Logger?.Error(e.Exception, "UI thread exception");
+        if (action == UiFaultAction.Swallow)
             return;
 
         // Prevent cascading dialogs: if one is already showing, swallow silently.
@@ -558,6 +614,90 @@ public partial class App : Application
 
             If this keeps happening, that folder is what to attach when reporting it.
             """;
+    }
+
+    /// <summary>
+    /// The text shown when SysManager faulted before its window ever loaded.
+    /// </summary>
+    /// <remarks>
+    /// A separate message from <see cref="BuildCrashMessage"/> because that one says the app "is still
+    /// running", which is the opposite of what is about to happen — and was shown in exactly the case where
+    /// it was least true, with no window and no tray icon left behind (#2863). Same constraints: literals,
+    /// the exception text and one static property only, since the fault may have come from anywhere in
+    /// startup, including DI and the theme.
+    /// </remarks>
+    internal static string BuildStartupFailureMessage(Exception? ex)
+    {
+        var detail = ex?.InnerException?.Message is { Length: > 0 } inner
+            ? inner
+            : ex?.Message;
+        if (string.IsNullOrWhiteSpace(detail))
+            detail = "An unexpected error occurred.";
+
+        return $"""
+            SysManager could not start, and is closing.
+
+            {detail}
+
+            Technical details were saved to:
+            {LogService.LogDir}
+
+            Starting SysManager again should work. If it does not, that folder is what to attach when
+            reporting it.
+            """;
+    }
+
+    /// <summary>
+    /// Records a fault that happened before the window loaded, tells the user, and ends the process.
+    /// </summary>
+    /// <remarks>
+    /// Ending the process is the fix, not a side effect: handling the exception and carrying on left a
+    /// SysManager with no window, no tray icon and the single-instance mutex still held, which no later
+    /// launch could get past (#2863). The marker is written here as well as from the domain handler —
+    /// handling the exception means that handler never sees it, so this is the only chance to leave the
+    /// next start something to report.
+    /// <para>Order matters: the log line and the marker are both written BEFORE the dialog and the exit,
+    /// so neither depends on the user pressing OK or on the shutdown completing.</para>
+    /// </remarks>
+    private static void FailStartup(Exception? exception)
+    {
+        LogService.Logger?.Fatal(exception, "Startup failed before the main window loaded");
+        WriteCrashMarker(exception);
+
+        // One dialog at most, as the running path does: a cascade here would be shown by a process that
+        // is already on its way out.
+        if (System.Threading.Interlocked.CompareExchange(ref _errorDialogActive, 1, 0) == 0)
+        {
+            try
+            {
+                MessageBox.Show(BuildStartupFailureMessage(exception), "SysManager could not start",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            // Deliberately broad, and the same reasoning as WriteCrashMarker's: this runs in a process
+            // that is about to end, and a fault raising the dialog must not stop the exit below — that
+            // would restore the very hang this method exists to prevent.
+            catch (Exception dialogFailure)
+            {
+                LogService.Logger?.Debug("Could not show the startup failure dialog: {Error}", dialogFailure.Message);
+            }
+        }
+
+        // RequestShutdown first so WPF unwinds normally when it can; Environment.Exit is the guarantee.
+        // The log line and the marker are already on disk, and Serilog's file sink is unbuffered, so
+        // nothing diagnostic is lost by not waiting for a clean shutdown that may never arrive.
+        try
+        {
+            RequestShutdown();
+        }
+        // Deliberately broad: Shutdown() runs WPF's exit path, which raises Exit on the application and
+        // can therefore surface a fault from anything subscribed to it — and the startup that just failed
+        // is exactly when one of those is half-built. Whatever it throws, the Exit below must still run;
+        // that guaranteed exit is the entire fix, so nothing here may stand in front of it.
+        catch (Exception shutdownFailure)
+        {
+            LogService.Logger?.Debug("Shutdown request failed during startup failure: {Error}", shutdownFailure.Message);
+        }
+        Environment.Exit(1);
     }
 
     private static void OnDomain(object s, UnhandledExceptionEventArgs e)

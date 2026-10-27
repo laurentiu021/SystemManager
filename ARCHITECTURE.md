@@ -1605,9 +1605,23 @@ Key services:
   file copied from another machine), are dropped. It carries no stack trace — only the exception's type
   and message, the message scrubbed of the user name the way the log is (#2605), since an IO
   exception's message usually holds the full path. It exists to answer "did the last run crash?", not to
-  duplicate the log. Never written from `OnUi`, which handles the exception and keeps running. Same
-  shape as the persisted-preference services above: injectable directory, pure unit-tested `Parse`,
-  file IO that never throws.
+  duplicate the log. `App.OnUi` writes it in ONE case: a fault before the main window loaded, where
+  handling the exception and carrying on is what the marker would otherwise have no chance to record —
+  see `App.DecideUiFault` below. For a fault after the window loaded it is still not written, because the
+  app keeps running and there is no crash to report. Same shape as the persisted-preference services
+  above: injectable directory, pure unit-tested `Parse`, file IO that never throws.
+- `App.DecideUiFault` — the pure decision behind the dispatcher handler: teardown noise is swallowed, a
+  fault after the main window loaded is shown and survived, and a fault BEFORE it ends the process with a
+  crash marker. The handler used to set `e.Handled = true` for everything with no idea whether a window
+  existed, so a throw while `MainWindow` was being built (its `MainWindowViewModel` is constructed by the
+  XAML, which resolves several view models eagerly) said "SysManager is still running", left no window, no
+  tray icon — the tray is only initialised from `OnSourceInitialized`, which never ran — no crash marker,
+  and the single-instance mutex still held, so every later launch handed over to that process and exited.
+  The app could not be started again without Task Manager: strictly worse than a crash (#2863). The arms
+  are ORDERED, and the order is asserted: the disposal and cancellation swallows come first, so ordinary
+  teardown noise during startup is not mistaken for a fault and does not kill the process. `MainWindow`'s
+  `Loaded` event sets `App.MainWindowLoaded`; `OnSourceInitialized` is deliberately not the signal, since a
+  window that got a handle but never finished loading is not one anybody can use.
 - `GamingProfileService` (`IGamingProfileService`) — a pure ORCHESTRATOR behind the Gaming
   Profile tab: it composes the already-audited services (`PerformanceService`,
   `ITimerResolutionService`, `ICpuAffinityService`, `StandbyMemoryService`,

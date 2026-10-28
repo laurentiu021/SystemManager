@@ -670,10 +670,11 @@ public sealed class DeepCleanupService
     {
         if (File.Exists(path) && !Directory.Exists(path))
         {
-            // Guarded like a traversal root: a symlink here would make the caller delete its target,
-            // outside the bucket's tree. IsReparsePoint fails safe on an access error. The walk below
-            // applies the same rule to every file it finds — they used to disagree (#2376).
-            if (!SafeFileWalk.IsReparsePoint(path) && Matches(path, patterns)) yield return path;
+            // Guarded like a traversal root: a symlink here, or one anywhere above it, would make the
+            // caller delete its target, outside the bucket's tree. IsReachedThroughLink fails safe on an
+            // access error. The walk below applies the same rule to every file it finds — they used to
+            // disagree (#2376), and the single-file case used to be leaf-only too (#2814).
+            if (!SafeFileWalk.IsReachedThroughLink(path) && Matches(path, patterns)) yield return path;
             yield break;
         }
 

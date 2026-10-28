@@ -329,7 +329,14 @@ public sealed partial class FileShredderService
         // No SkippedLinks sink here, deliberately: this walk skips a SUBSET of what the file walk skips
         // (directories only, not link files), so reporting from it as well would under-count and
         // double-count at the same time.
-        foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions()))
+        foreach (var dir in SafeFileWalk.DirectoriesDeepestFirst(folderPath, ct, new SafeWalkOptions
+        {
+            // The ONE caller that must still walk a root reached through a link: the user picked
+            // this folder by name and asked for it to be destroyed. What keeps that safe is
+            // ValidatePath's protected-roots check on the CANONICAL path, not a refusal — a
+            // refusal here would report a completed shred that destroyed nothing (#2814).
+            RefuseRootReachedThroughLink = false,
+        }))
         {
             TryRemoveIfEmpty(dir);
         }

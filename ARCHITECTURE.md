@@ -774,13 +774,24 @@ Key services:
   exactly why four of the five copies never enclosed their own iteration. `SafeWalkOptions` is a
   record rather than optional parameters so no caller can bind an exclusion path to the search
   pattern by position. `ExcludeRootChildren` skips a name directly in whatever root is walked, which is how the
-  temp sweeps leave the `.net` extraction folder of `%WinDir%\Temp` alone as well as the user's. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
+  temp sweeps leave the `.net` extraction folder of `%WinDir%\Temp` alone as well as the user's.
+  The traversal root is guarded by `IsReachedThroughLink`, not the plain `IsReparsePoint` the rest of
+  the walk uses: `File.GetAttributes` resolves every link in a path's PARENT folders before it reports
+  anything, so a junction standing in for an ancestor of the root (e.g. a browser's own vendor folder)
+  read as an ordinary folder under the leaf-only test, and the walk entered the link's target (#2814).
+  `IsReachedThroughLink` resolves the root with `GetFinalPathNameByHandle`, which collapses the whole
+  chain, and refuses when the canonical path differs from the one asked for. `SafeWalkOptions.RefuseRootReachedThroughLink`
+  defaults to true; File Shredder alone turns it off, because its root is chosen and named by the user
+  and its safety net is `ValidatePath`'s own protected-roots check on the canonical path, not a refusal
+  to act — refusing there would report a completed shred that destroyed nothing. Three read-only scanners (`DiskAnalyzerService`, `DuplicateFileService`,
   `LargeFileScanner`) still keep their own loop: they prune the traversal by a path predicate, and
   one needs an access-denied tally, neither of which `SafeWalkOptions` carries. That exemption is a
   named list in `ArchitectureTests`, and it is **partial and asserted**: each exempted scanner must
   still test its traversal root through `SafeFileWalk.IsReparsePoint`, because the root is the one
-  the user picks and a link there sends the whole scan somewhere else. The guard fails if an
-  exempted file stops walking a tree (a stale name nobody would remove) or stops guarding its root.
+  the user picks and a link there sends the whole scan somewhere else — these three still carry the
+  leaf-only gap #2814 closed for the shared walk and Browser Cleaner (tracked separately, #3001). The
+  guard fails if an exempted file stops walking a tree (a stale name nobody would remove) or stops
+  guarding its root.
 - `Helpers/FileIdentity` — which file a handle is open on: its volume's serial number and the 128-bit ID
   `GetFileInformationByHandleEx` returns, the same for every hard link to the file, and `LinksOf`, how many
   names the file has. Duplicate Finder leaves a file's other names out of its groups with the first, and File

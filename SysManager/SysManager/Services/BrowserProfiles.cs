@@ -88,7 +88,11 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
         string browser, string userDataRel)
     {
         var userDataAbs = Path.Combine(localAppData, userDataRel);
-        if (!Directory.Exists(userDataAbs) || SafeFileWalk.IsReparsePoint(userDataAbs)) yield break;
+        // Whole-path check, not just the last segment: a junction standing in for an ancestor of
+        // userDataAbs (e.g. the browser's own vendor folder) is otherwise invisible here, and the
+        // profiles it leads to would be listed and later measured/deleted by BrowserCleanerService,
+        // whose own full-path check closes the destructive half of this — this closes the listing (#2814).
+        if (!Directory.Exists(userDataAbs) || SafeFileWalk.IsReachedThroughLink(userDataAbs)) yield break;
 
         string[] candidates;
         try { candidates = Directory.GetDirectories(userDataAbs); }
@@ -296,7 +300,10 @@ internal sealed class BrowserProfiles(string localAppData, string roamingAppData
         foreach (var root in roots)
         {
             var profilesAbs = Path.Combine(root, FirefoxProfilesRel);
-            if (!Directory.Exists(profilesAbs) || SafeFileWalk.IsReparsePoint(profilesAbs)) continue;
+            // Whole-path check: a junction standing in for Mozilla\Firefox (an ancestor of
+            // profilesAbs) is invisible to a last-segment-only test, same gap as Chromium's
+            // userDataAbs check above (#2814).
+            if (!Directory.Exists(profilesAbs) || SafeFileWalk.IsReachedThroughLink(profilesAbs)) continue;
 
             string[] profileDirs;
             try { profileDirs = Directory.GetDirectories(profilesAbs); }

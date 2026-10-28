@@ -928,4 +928,63 @@ public class FileShredderServiceTests
         Assert.NotNull(report.Notice);
         Assert.Contains("write error", report.Notice, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ---------- compressed/sparse/encrypted files are not overwritten in place (#2824 point 1) ----------
+
+    [Theory]
+    [InlineData(FileAttributes.Encrypted, "encrypted")]
+    [InlineData(FileAttributes.Compressed, "compressed")]
+    [InlineData(FileAttributes.SparseFile, "a sparse file")]
+    [InlineData(FileAttributes.Encrypted | FileAttributes.Compressed, "encrypted")] // encrypted wins when both apply
+    [InlineData(FileAttributes.Normal, null)]
+    [InlineData(FileAttributes.ReadOnly | FileAttributes.Archive, null)]
+    public void DescribeWhyNotOverwritable_MatchesTheAttribute(FileAttributes attrs, string? expected) =>
+        Assert.Equal(expected, FileShredderService.DescribeWhyNotOverwritable(attrs));
+
+    [Fact]
+    public async Task ShredFileAsync_EncryptedFile_Refuses_AndLeavesItIntact()
+    {
+        // The end-to-end proof that a REAL EFS-encrypted file trips the same check the Theory above proves
+        // in isolation: File.Encrypt is the one of the three (compressed/sparse/encrypted) settable through
+        // a plain BCL call, with no external process or P/Invoke needed to set it up.
+        var path = Path.Combine(Path.GetTempPath(), "smtest_encrypted_" + Guid.NewGuid().ToString("N") + ".dat");
+        const string content = "data that must survive the refusal";
+        await File.WriteAllTextAsync(path, content);
+
+        try
+        {
+            File.Encrypt(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or PlatformNotSupportedException)
+        {
+            // EFS can be unavailable (policy, non-NTFS temp redirection, a Windows edition without it).
+            // Reported rather than silently passed, the same idiom Symlinks.Require* uses for a link.
+            Assert.Skip("this machine could not EFS-encrypt a file: " + ex.Message);
+        }
+
+        if (!File.GetAttributes(path).HasFlag(FileAttributes.Encrypted))
+            Assert.Skip("File.Encrypt did not set the Encrypted attribute on this machine");
+
+        try
+        {
+            var svc = NewService();
+            var ex = await Assert.ThrowsAsync<IOException>(
+                () => svc.ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None));
+
+            Assert.Contains("encrypted", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(path), "an encrypted file must be refused before anything is written");
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            // Guarded: if ShredFileAsync did NOT refuse (the regression this test exists to catch), the
+            // file is already gone, and an unconditional Decrypt/Delete here would mask that real failure
+            // behind an unrelated FileNotFoundException instead of reporting it.
+            if (File.Exists(path))
+            {
+                File.Decrypt(path);
+                File.Delete(path);
+            }
+        }
+    }
 }

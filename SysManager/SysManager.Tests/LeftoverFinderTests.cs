@@ -278,6 +278,17 @@ public sealed class LeftoverFinderTests : IDisposable
         Assert.Equal("is reached through a link", LeftoverFinder.Refusal(Path.Combine(link, "Acme Notes"), _env));
     }
 
+    [Theory]
+    // Fails CLOSED in both failure cases, not just the one a real junction can exercise (#2825):
+    [InlineData(@"C:\Apps\Acme Notes", null, null, "is reached through a link SysManager could not resolve")]
+    [InlineData(@"C:\Apps\Acme Notes", @"\\nas\share\Acme Notes", null, "is reached through a link to a location off this PC's own drives")]
+    [InlineData(@"C:\Apps\Acme Notes", @"C:\Apps\Acme Notes", null, "is reached through a link SysManager could not resolve")]
+    [InlineData(@"C:\Apps\Acme Notes", @"C:\Elsewhere\Acme Notes", @"C:\Elsewhere\Acme Notes", "is reached through a link")]
+    [InlineData(@"C:\Apps\Acme Notes", @"C:\Apps\Acme Notes", @"C:\Apps\Acme Notes", null)]
+    public void LinkRefusal_FailsClosedOnEitherUnresolvableCase(
+        string full, string? final, string? resolved, string? expected) =>
+        Assert.Equal(expected, LeftoverFinder.LinkRefusal(full, final, resolved));
+
     [Fact]
     public void ANameAnotherInstalledAppAnswersTo_IsRefused()
     {
@@ -397,5 +408,57 @@ public sealed class LeftoverFinderTests : IDisposable
 
         Assert.Equal(100, LeftoverFinder.DistinctBytes([inner, outer, twin, key]));
         Assert.Equal(60, LeftoverFinder.DistinctBytes([inner, key]));
+    }
+
+    // ── An incomplete uninstall list must not widen what is offered (#2825 point 3) ──────────
+
+    [Fact]
+    public void WhenTheUninstallListCouldNotBeReadWhole_OnlyTheInstallLocationIsOffered()
+    {
+        // UninstallEntries.ReadAll reports Complete=false when a whole uninstall key could not be read, and
+        // RegisteredApps() used to drop that flag on the floor: steps 2-4 of Find all decide "may belong to
+        // another installed app" from that same list, so a publisher folder or another app's install folder
+        // could be offered as this app's leftover when the list that would have refused it is the one that
+        // could not be read.
+        _env.RegisteredComplete = false;
+        var install = TempLeftoverEnvironment.Folder(ProgramFiles("Acme Notes"));
+        TempLeftoverEnvironment.Folder(Roaming("Acme Notes"));   // step 2's named-folder match
+
+        var findings = Find(Probe(installLocation: install));
+
+        var certain = Assert.Single(findings.Items);
+        Assert.Equal(install, certain.Location);
+        Assert.Equal(LeftoverConfidence.Certain, certain.Confidence);
+        Assert.Contains(
+            "Not offered: the list of installed programs could not be fully read, so nothing beyond the "
+            + "removed app's own install folder is offered this time.",
+            findings.NotOffered);
+    }
+
+    [Fact]
+    public void WhenTheUninstallListCouldNotBeReadWhole_UserFolderReportingStillRuns()
+    {
+        // Independent of the registered-apps list, so this must not be swallowed by the early return.
+        _env.RegisteredComplete = false;
+        TempLeftoverEnvironment.Folder(Path.Combine(_env.Documents, "Acme Notes"));
+
+        var findings = Find(Probe());
+
+        Assert.Contains(
+            $"Not offered: {Path.Combine(_env.Documents, "Acme Notes")} is in Documents, which SysManager never offers.",
+            findings.NotOffered);
+    }
+
+    [Fact]
+    public void WhenTheUninstallListIsComplete_StepsBeyondTheInstallLocationStillRun()
+    {
+        // The other half: Complete=true (the default) must not accidentally trip the new early return.
+        var install = TempLeftoverEnvironment.Folder(ProgramFiles("Acme Notes"));
+        TempLeftoverEnvironment.Folder(Roaming("Acme Notes"));
+
+        var findings = Find(Probe(installLocation: install));
+
+        Assert.Equal(2, findings.Items.Count);
+        Assert.Contains(findings.Items, i => i.Confidence == LeftoverConfidence.Probably);
     }
 }

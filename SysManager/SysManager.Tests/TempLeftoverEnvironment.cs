@@ -43,6 +43,12 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
     /// <summary>What <see cref="RegisteredApps"/> reports: the uninstall entries Windows would hold.</summary>
     public List<UninstallProbe> Registered { get; } = [];
 
+    /// <summary>
+    /// What <see cref="RegisteredApps"/> reports as whole-read. True by default, so a test that does not care
+    /// about this (#2825) is not required to set it.
+    /// </summary>
+    public bool RegisteredComplete { get; set; } = true;
+
     /// <summary>The kind of drive each root reports. The temp tree's own root starts out fixed.</summary>
     public Dictionary<string, DriveType> DriveTypes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -68,7 +74,7 @@ public sealed class TempLeftoverEnvironment : ILeftoverEnvironment, IDisposable
 
     public bool RegistryKeyExists(string currentUserSubKey) => RegistryKeys.Contains(currentUserSubKey);
 
-    public IReadOnlyList<UninstallProbe> RegisteredApps() => Registered;
+    public (IReadOnlyList<UninstallProbe> Apps, bool Complete) RegisteredApps() => (Registered, RegisteredComplete);
 
     /// <summary>A root nobody set reports <see cref="DriveType.NoRootDirectory"/>, which is never this PC's own drive.</summary>
     public DriveType DriveTypeOf(string root) =>

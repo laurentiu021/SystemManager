@@ -404,4 +404,34 @@ public sealed class LeftoverServiceTests : IDisposable
         var folder = Assert.Single(group.Folders);
         Assert.Equal((@"C:\B", LeftoverConfidence.Guess, ""), (folder.Path, folder.Confidence, folder.Publisher));
     }
+
+    // ── An incomplete uninstall list must defer the re-offer, not guess (#2825 point 3) ──────
+
+    [Fact]
+    public void WhenTheUninstallListCouldNotBeReadWhole_PendingLeftoversAreDeferred_NotReOffered()
+    {
+        // On this path OthersStillInstalled([], _env) is the ONLY list deciding whether a remembered app is
+        // still installed, or a folder is shared with one — there is no Uninstaller list behind it here. An
+        // incomplete read must not re-offer anything this time, rather than risk re-offering a folder another
+        // installed app still owns.
+        var install = TempLeftoverEnvironment.Folder(Path.Combine(_env.ProgramFiles, "Acme Notes"), bytes: 7);
+        var group = new LeftoverGroup
+        {
+            AppName = "Acme Notes",
+            Publisher = "Acme",
+            Items = [Folder(install, needsAdmin: true)],
+        };
+        var service = Service();
+        service.RememberPending([group]);
+        _env.IsElevated = true;
+
+        _env.RegisteredComplete = false;
+        Assert.Empty(service.LoadPending());
+
+        // The stored record survives the deferred call untouched, so a later attempt with a readable list
+        // still finds it rather than having silently consumed or dropped it.
+        _env.RegisteredComplete = true;
+        var pending = Assert.Single(service.LoadPending());
+        Assert.Equal("Acme Notes", pending.AppName);
+    }
 }

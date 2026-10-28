@@ -240,8 +240,14 @@ internal static class SystemPaths
         if (Normalise(subtree) is not { Length: > 0 } root) return false;
         if (Normalise(candidate) is not { Length: > 0 } full) return false;
 
+        // A drive root is the one path Normalise cannot trim a trailing separator from — TrimEndingDirectorySeparator
+        // is root-aware and leaves "D:\" as "D:\" rather than the ambiguous "D:" (current directory on D:). Appending
+        // another separator unconditionally then built the prefix "D:\\", which nothing under the root ever starts
+        // with: IsInsideSubtree(@"D:\Games\App", @"D:\") read false, so a user folder moved to a drive root protected
+        // nothing beneath it (#2825).
+        var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
         return full.Equals(root, StringComparison.OrdinalIgnoreCase)
-            || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            || full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Absolute path with any trailing separator removed, or null when it cannot be formed.</summary>

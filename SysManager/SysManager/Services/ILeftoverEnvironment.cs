@@ -56,13 +56,17 @@ public interface ILeftoverEnvironment
 
     /// <summary>
     /// Every uninstall entry Windows holds, for this user and for the machine, including the ones the Uninstaller's
-    /// list hides, such as drivers and runtimes.
+    /// list hides, such as drivers and runtimes, and whether the read was whole.
     /// </summary>
     /// <remarks>
     /// These decide what is shared. The list on screen leaves out system components, and a folder or a publisher
     /// name a hidden driver package still uses is exactly what must not be offered as a leftover.
+    /// <para><c>Complete</c> is false when a whole uninstall key could not be read, so an installed app's folder,
+    /// key or publisher name can be missing from <c>Apps</c> — the exact shape "shared with another app" checks
+    /// cannot see through. A caller that finds it false must not trust an absence from <c>Apps</c> to mean an app
+    /// is gone (#2825).</para>
     /// </remarks>
-    IReadOnlyList<UninstallProbe> RegisteredApps();
+    (IReadOnlyList<UninstallProbe> Apps, bool Complete) RegisteredApps();
 
     /// <summary>What kind of drive <paramref name="root"/> (for example <c>C:\</c>) is.</summary>
     DriveType DriveTypeOf(string root);
@@ -121,8 +125,12 @@ public sealed class SystemLeftoverEnvironment : ILeftoverEnvironment
     }
 
     /// <summary>Every entry <see cref="UninstallEntries"/> reads, hidden components and updates included.</summary>
-    public IReadOnlyList<UninstallProbe> RegisteredApps() =>
-        [.. UninstallEntries.ReadAll().Entries.Select(e => new UninstallProbe(e.Name, e.Publisher, "", e.InstallLocation, e.UninstallCommand))];
+    public (IReadOnlyList<UninstallProbe> Apps, bool Complete) RegisteredApps()
+    {
+        var list = UninstallEntries.ReadAll();
+        return ([.. list.Entries.Select(e => new UninstallProbe(e.Name, e.Publisher, "", e.InstallLocation, e.UninstallCommand))],
+            list.Complete);
+    }
 
     public DriveType DriveTypeOf(string root)
     {

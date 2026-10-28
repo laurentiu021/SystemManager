@@ -1436,6 +1436,9 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - A write error partway through an overwrite (a full disk, a removed drive) still finishes the job —
   the file is truncated and removed rather than left half-overwritten under its original name — and
   says so plainly instead of reporting it as left untouched
+- **Warns when an item sits inside a OneDrive-synced folder.** Overwriting and deleting it locally
+  still syncs to OneDrive, whose own version history and recycle bin can keep the original — the same
+  kind of plain warning the tab already gives for SSDs
 - Confirmation dialog before irreversible shred
 
 ### Ping

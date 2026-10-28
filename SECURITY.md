@@ -102,7 +102,9 @@ What the app can and cannot do by design:
   A compressed, sparse or encrypted file is refused rather than overwritten, because
   NTFS writes those to new disk clusters instead of in place. A write error partway
   through an overwrite (a full disk, a removed drive) still truncates and removes the
-  file rather than leaving it half-overwritten at its original name.
+  file rather than leaving it half-overwritten at its original name. An item inside a
+  OneDrive-synced folder is warned about, not refused: the overwrite and delete still
+  happen locally, but OneDrive's own version history and recycle bin can keep a copy.
 - Delete files in the cleanup categories you tick (Deep Cleanup, Quick Cleanup, Quick
   Tune-Up). Each category is a fixed list of folders; junctions and symlinks are never
   followed, the folders single-file .NET apps unpack into under TEMP are left alone, and

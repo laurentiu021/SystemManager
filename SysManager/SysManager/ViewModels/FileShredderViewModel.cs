@@ -50,6 +50,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         if (dialog.ShowDialog() != true) return;
 
         var skipped = new List<string>();
+        var underCloudSync = new List<string>();
+        var cloudRoots = OneDriveRoots();
 
         foreach (var filePath in dialog.FileNames)
         {
@@ -66,6 +68,7 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                     SizeBytes = info.Length,
                     IsFolder = false
                 });
+                if (SystemPaths.IsInsideAnySubtree(filePath, cloudRoots)) underCloudSync.Add(info.Name);
             }
             catch (IOException ex)
             {
@@ -82,7 +85,8 @@ public sealed partial class FileShredderViewModel : ViewModelBase
             }
         }
 
-        StatusMessage = DescribeSkipped(skipped);
+        StatusMessage = string.Join(" ",
+            new[] { DescribeSkipped(skipped), DescribeCloudSyncWarning(underCloudSync) }.Where(s => s.Length > 0));
     }
 
     /// <summary>
@@ -98,6 +102,35 @@ public sealed partial class FileShredderViewModel : ViewModelBase
         _ => $"Could not add {skipped.Count} of the items you picked ({string.Join(", ", skipped)}) — "
              + "they could not be read, so they are NOT in the list below."
     };
+
+    /// <summary>
+    /// Warns that an item queued for shredding sits inside a cloud-synced folder (OneDrive): the
+    /// overwrite and delete happen locally, OneDrive syncs both, but its own version history and
+    /// recycle bin can still keep the original — the tab already warns about SSD wear-levelling the
+    /// same way for the same reason (#2824).
+    /// <para>Named separately so the wording is assertable without a real OneDrive folder.</para>
+    /// </summary>
+    internal static string DescribeCloudSyncWarning(IReadOnlyList<string> underCloudSync) => underCloudSync.Count switch
+    {
+        0 => string.Empty,
+        1 => $"\"{underCloudSync[0]}\" is inside a OneDrive-synced folder — OneDrive's own version "
+             + "history and recycle bin may still keep a copy after this overwrites and deletes it locally.",
+        _ => $"{underCloudSync.Count} of the items you picked ({string.Join(", ", underCloudSync)}) are "
+             + "inside a OneDrive-synced folder — OneDrive's own version history and recycle bin may "
+             + "still keep a copy after this overwrites and deletes them locally."
+    };
+
+    /// <summary>
+    /// OneDrive's local sync roots on this machine, or empty entries where a kind is not set up.
+    /// <see cref="SysManager.Helpers.SystemPaths.IsInsideAnySubtree"/> already treats null/blank
+    /// entries as excluding nothing, so no filtering is needed here.
+    /// </summary>
+    private static string?[] OneDriveRoots() =>
+    [
+        Environment.GetEnvironmentVariable("OneDrive"),
+        Environment.GetEnvironmentVariable("OneDriveConsumer"),
+        Environment.GetEnvironmentVariable("OneDriveCommercial"),
+    ];
 
     [RelayCommand(CanExecute = nameof(CanEditQueue))]
     private void AddFolder()
@@ -126,7 +159,9 @@ public sealed partial class FileShredderViewModel : ViewModelBase
                 SizeBytes = size,
                 IsFolder = true
             });
-            StatusMessage = string.Empty;
+            StatusMessage = SystemPaths.IsInsideAnySubtree(folderPath, OneDriveRoots())
+                ? DescribeCloudSyncWarning([dirInfo.Name])
+                : string.Empty;
         }
         catch (UnauthorizedAccessException ex)
         {

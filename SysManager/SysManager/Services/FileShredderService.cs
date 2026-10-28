@@ -295,21 +295,28 @@ public sealed partial class FileShredderService
         {
             // Thrown only now, after the delete above has actually run: a caller catching this can trust
             // the file is already gone, the same guarantee a normal return gives.
-            Log.Warning(writeFault,
-                "Write error partway through a pass after the overwrite had begun; truncated and removed with {PassesRun} of {Total} pass(es) completed: {Path}",
-                passesRun, totalPasses, filePath);
+            // No {Path} and no attached exception object: writeFault.Message (e.g. "Access to the path
+            // '...' is denied") is exactly the evidence a shred is meant to remove, and it would survive
+            // into the log — the sink renders a logged exception's full text, not just this template's
+            // tokens (#2796). Type + HResult is enough to diagnose a write fault without naming the file.
+            Log.Warning(
+                "Write error partway through a pass after the overwrite had begun; truncated and removed "
+                + "with {PassesRun} of {Total} pass(es) completed. {ExceptionType} (HResult {HResult})",
+                passesRun, totalPasses, writeFault.GetType().Name, writeFault.HResult);
             throw new PartialShredException(passesRun,
                 $"A write error stopped the overwrite after {passesRun} of {totalPasses} pass(es), but the data "
                 + "already written is unrecoverable — the file was removed rather than left half-overwritten.",
                 writeFault);
         }
 
+        // No {Path}: the name and location of a file the user asked to destroy must not survive into a
+        // log kept for weeks and bundled into a bug report (#2796).
         if (passesRun < totalPasses)
             Log.Information(
-                "File shredded with {Passes} of {Total} passes after cancellation, then removed: {Path}",
-                passesRun, totalPasses, filePath);
+                "File shredded with {Passes} of {Total} passes after cancellation, then removed.",
+                passesRun, totalPasses);
         else
-            Log.Information("File shredded successfully: {Path} ({Method})", filePath, method);
+            Log.Information("File shredded successfully ({Method}).", method);
 
         return passesRun;
     }
@@ -383,11 +390,16 @@ public sealed partial class FileShredderService
         }
         catch (IOException ex)
         {
-            Log.Debug(ex, "Could not overwrite a named stream, leaving it for the delete to remove: {Stream}", streamPath);
+            // No {Stream} and no attached exception — the stream path names the file it belongs to (#2796).
+            Log.Debug(
+                "Could not overwrite a named stream, leaving it for the delete to remove. {ExceptionType} (HResult {HResult})",
+                ex.GetType().Name, ex.HResult);
         }
         catch (UnauthorizedAccessException ex)
         {
-            Log.Debug(ex, "Access denied overwriting a named stream, leaving it for the delete to remove: {Stream}", streamPath);
+            Log.Debug(
+                "Access denied overwriting a named stream, leaving it for the delete to remove. {ExceptionType} (HResult {HResult})",
+                ex.GetType().Name, ex.HResult);
         }
     }
 
@@ -465,18 +477,26 @@ public sealed partial class FileShredderService
                 // stopped the overwrite after it had begun, and ShredFileAsync already finished the
                 // truncate-and-delete before throwing. Counting it as failed would make a folder shred
                 // report the file as still on disk when it is not.
-                Log.Warning(ex, "Write error partway through, file destroyed with fewer passes: {Path}", files[i]);
+                // No {Path} and no attached exception in any of the three arms below: the file name is
+                // exactly the evidence a shred is meant to remove (#2796).
+                Log.Warning(
+                    "Write error partway through, file destroyed with fewer passes. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
                 shredded++;
                 partiallyOverwritten++;
             }
             catch (UnauthorizedAccessException ex)
             {
-                Log.Warning(ex, "Access denied while shredding file: {Path}", files[i]);
+                Log.Warning(
+                    "Access denied while shredding a file. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
                 failedFiles.Add(files[i]);
             }
             catch (IOException ex)
             {
-                Log.Warning(ex, "I/O error while shredding file: {Path}", files[i]);
+                Log.Warning(
+                    "I/O error while shredding a file. {ExceptionType} (HResult {HResult})",
+                    ex.GetType().Name, ex.HResult);
                 failedFiles.Add(files[i]);
             }
 
@@ -490,9 +510,10 @@ public sealed partial class FileShredderService
             // pruning parts of its structure would change the tree the user still has for no benefit, and
             // an IOException here would replace "you cancelled, N files are gone" with a message about
             // locked files. The report carries both numbers instead.
+            // No {Path}: the folder's name and location must not survive into the log (#2796).
             Log.Information(
-                "Folder shred cancelled after {Shredded} of {Total} file(s): {Path} ({Method})",
-                shredded, totalFiles, folderPath, method);
+                "Folder shred cancelled after {Shredded} of {Total} file(s) ({Method}).",
+                shredded, totalFiles, method);
 
             return new ShredFolderReport
             {
@@ -555,11 +576,12 @@ public sealed partial class FileShredderService
             FilesPartiallyOverwritten = partiallyOverwritten,
         };
 
+        // No {Path} here either, same reason (#2796).
         if (skippedLinks.Count > 0)
-            Log.Information("Folder shredded, {Skipped} link(s) left alone: {Path} ({Method})",
-                skippedLinks.Count, folderPath, method);
+            Log.Information("Folder shredded, {Skipped} link(s) left alone ({Method}).",
+                skippedLinks.Count, method);
         else
-            Log.Information("Folder shredded successfully: {Path} ({Method})", folderPath, method);
+            Log.Information("Folder shredded successfully ({Method}).", method);
 
         return report;
     }
@@ -576,8 +598,16 @@ public sealed partial class FileShredderService
             if (!Directory.EnumerateFileSystemEntries(dir).Any())
                 Directory.Delete(dir, recursive: false);
         }
-        catch (IOException ex) { Log.Debug(ex, "Shredder: could not remove directory {Dir}", dir); }
-        catch (UnauthorizedAccessException ex) { Log.Debug(ex, "Shredder: access denied removing directory {Dir}", dir); }
+        // No {Dir} and no attached exception — a directory left over from a shred names the folder the
+        // user asked to destroy (#2796).
+        catch (IOException ex)
+        {
+            Log.Debug("Shredder: could not remove directory. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug("Shredder: access denied removing directory. {ExceptionType} (HResult {HResult})", ex.GetType().Name, ex.HResult);
+        }
     }
 
     private static void ValidatePath(string path)

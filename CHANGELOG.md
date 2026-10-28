@@ -10,25 +10,26 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
-## [1.131.16] - 2026-10-28
+## [1.132.0] - 2026-10-28
 
 **Dashboard quick actions can now be cancelled mid-run, System Logs and Disk Analyzer put an actual
 button next to their admin-rights messages instead of only naming the problem, and copying a path or
 revealing a file that is no longer there now says so instead of doing nothing.**
 
+### Added
+- A Cancel button beside the Dashboard's quick-action progress bar, for as long as the action runs,
+  wired to Escape the same way every other cancellable operation is. None of the four (Quick Cleanup,
+  Update All Apps, Check Windows Updates, Run Speed Test) could be stopped before this short of closing
+  the tab; Update All Apps passes the token through to each package so it stops between apps rather
+  than mid-download.
+- A "Run as administrator" button on the Security log's elevation notice in System Logs, and on a Disk
+  Analyzer folder Windows refused to list. Both used to only name the problem, with nothing on the page
+  to act on it.
+
 ### Fixed
-- The Dashboard's four quick actions (Quick Cleanup, Update All Apps, Check Windows Updates, Run Speed
-  Test) had no way to stop once started short of closing the tab. A Cancel button now sits beside the
-  progress bar for as long as the action runs, wired to Escape the same way every other cancellable
-  operation is; Update All Apps passes the token through to each package so it stops between apps
-  rather than mid-download. Quick Cleanup, Update All Apps and Check Windows Updates only ever reported
-  two fixed milestones, not real progress, so their bar is now indeterminate; Run Speed Test keeps its
-  continuously updating percentage.
-- The Security log in System Logs said it needed administrator rights but gave no way to act on that
-  from the page. It now shows the same admin banner every other elevation-gated tab uses, with a button
-  that restarts SysManager elevated.
-- A Disk Analyzer folder Windows refused to list said why, but offered nothing to do about it. Its
-  empty state now has a "Run as administrator" button next to that message.
+- Quick Cleanup, Update All Apps and Check Windows Updates only ever reported two fixed milestones, not
+  real progress, so their bar showed fake progress instead of being indeterminate; Run Speed Test keeps
+  its continuously updating percentage.
 - "Show in Explorer" on Large Files, Duplicate Finder and Disk Analyzer did nothing, silently, for a
   file or folder that had been moved or deleted since the scan, with no way to tell that from the
   window simply opening behind another one. All three now say so.

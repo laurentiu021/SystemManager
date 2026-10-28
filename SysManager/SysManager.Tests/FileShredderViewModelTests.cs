@@ -257,6 +257,35 @@ public class FileShredderViewModelTests
         Assert.Contains("NOT", message, StringComparison.Ordinal);
     }
 
+    // ---------- a OneDrive-synced item is warned about, not silently queued (#2824 point 3) ----------
+
+    [Fact]
+    public void CloudSyncWarning_WhenNothingIsUnderSync_IsEmptySoNoStaleWarningRemains()
+    {
+        Assert.Equal(string.Empty, FileShredderViewModel.DescribeCloudSyncWarning([]));
+    }
+
+    [Fact]
+    public void CloudSyncWarning_ForOneItem_NamesItAndMentionsVersionHistoryAndRecycleBin()
+    {
+        var message = FileShredderViewModel.DescribeCloudSyncWarning(["notes.docx"]);
+
+        Assert.Contains("notes.docx", message, StringComparison.Ordinal);
+        Assert.Contains("OneDrive", message, StringComparison.Ordinal);
+        Assert.Contains("version", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("recycle bin", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CloudSyncWarning_ForSeveralItems_ReportsTheCountAndEveryName()
+    {
+        var message = FileShredderViewModel.DescribeCloudSyncWarning(["a.docx", "b.docx"]);
+
+        Assert.Contains("2", message, StringComparison.Ordinal);
+        Assert.Contains("a.docx", message, StringComparison.Ordinal);
+        Assert.Contains("b.docx", message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The message is only useful if it reaches the screen, and the defect was precisely that a
     /// failure never did. Both add paths must therefore assign StatusMessage on the failure branch —
@@ -286,6 +315,35 @@ public class FileShredderViewModelTests
 
         Assert.True(offenders.Count == 0,
             "an item the user picked can vanish from the shred queue with nothing said on screen:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// Both add paths must actually call the cloud-sync check on the SUCCESS branch, not just define
+    /// <see cref="FileShredderViewModel.DescribeCloudSyncWarning"/> and leave it unreferenced — asserted
+    /// against the source because a real OneDrive-synced folder is not something a unit test can set up.
+    /// </summary>
+    [Fact]
+    public void BothAddPaths_CheckEveryQueuedItemAgainstOneDriveSync()
+    {
+        var source = File.ReadAllText(TestPaths.AppFile("ViewModels", "FileShredderViewModel.cs"));
+
+        var offenders = new List<string>();
+        foreach (var command in new[] { "private void AddFiles()", "private void AddFolder()" })
+        {
+            var start = source.IndexOf(command, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"{command} not found — update this guard.");
+            var body = source[start..source.IndexOf("\n    }", start, StringComparison.Ordinal)];
+
+            // IsInsideAnySubtree is the actual per-item/per-folder containment CHECK, not just a mention
+            // of OneDriveRoots() — AddFiles reads OneDriveRoots() once outside its loop, so matching on
+            // that name alone would stay green even if the per-item check line were deleted.
+            if (!body.Contains("IsInsideAnySubtree", StringComparison.Ordinal))
+                offenders.Add($"{command}: does not check against OneDrive's sync roots");
+        }
+
+        Assert.True(offenders.Count == 0,
+            "an item queued for shredding can sit inside a OneDrive-synced folder with no warning shown:\n  "
             + string.Join("\n  ", offenders));
     }
     // ---------- the reason a shred failed has to reach the screen ----------

@@ -10,6 +10,19 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.7] - 2026-10-28
+
+**File Shredder now warns when an item you queue sits inside a OneDrive-synced folder.**
+
+### Fixed
+
+- **Shredding a file inside a OneDrive-synced folder gave no indication that OneDrive keeps its own
+  copies.** The overwrite and delete still happen locally and securely, but OneDrive syncs both
+  changes, and its own version history and recycle bin can still hold the original — the tab already
+  warns about SSD wear-levelling for the same reason (a different mechanism keeping a copy the
+  overwrite cannot reach) but said nothing about a cloud-synced folder. Adding a file or folder from
+  inside OneDrive now shows the same kind of plain warning.
+
 ## [1.131.6] - 2026-10-28
 
 **File Shredder now refuses a compressed, sparse or encrypted file instead of overwriting bytes that

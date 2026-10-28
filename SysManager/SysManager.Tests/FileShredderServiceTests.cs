@@ -987,4 +987,71 @@ public class FileShredderServiceTests
             }
         }
     }
+
+    // ---------- named streams are overwritten, not just dropped by the delete (#2824 point 2) ----------
+
+    [Theory]
+    [InlineData("::$DATA", false)]                 // the unnamed stream — never touched here
+    [InlineData(":Zone.Identifier:$DATA", true)]
+    [InlineData(":MyCustomStream:$DATA", true)]
+    [InlineData(":$EA", false)]                     // a non-$DATA stream type, not file data
+    [InlineData("", false)]
+    public void IsNamedDataStream_MatchesOnlyANamedDataStream(string streamName, bool expected) =>
+        Assert.Equal(expected, FileShredderService.IsNamedDataStream(streamName));
+
+    /// <summary>Records every buffer its overridden <c>WriteAsync</c> is asked to write, then writes it for real.</summary>
+    private sealed class RecordingStream(string path, int bufferSize, List<byte[]> writes)
+        : FileStream(path, FileMode.Open, FileAccess.Write, FileShare.None, bufferSize,
+                      FileOptions.WriteThrough | FileOptions.SequentialScan)
+    {
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            writes.Add(buffer.ToArray());
+            return base.WriteAsync(buffer, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_WithANamedStream_OverwritesItBeforeTheDeleteRemovesEverything()
+    {
+        // Regression: before this fix, a named stream was never opened at all — File.Delete removed it
+        // unoverwritten right alongside the main file. A downloaded file's Zone.Identifier stream
+        // records where it came from; this proves the pass writes actually reach that stream's bytes
+        // (via a recording FileStream, since the content cannot be inspected once the file is gone),
+        // not just that the file disappears, which would have been true even without the fix.
+        var path = Path.Combine(Path.GetTempPath(), "smtest_adsoverwrite_" + Guid.NewGuid().ToString("N") + ".dat");
+        var adsPath = path + ":Zone.Identifier";
+        await File.WriteAllTextAsync(path, "main stream content");
+        await File.WriteAllTextAsync(adsPath, "https://example.invalid/downloaded-from-here");
+
+        List<byte[]> streamWrites = [];
+        var svc = new FileShredderService(candidate =>
+            candidate.StartsWith(adsPath, StringComparison.OrdinalIgnoreCase)
+                ? new RecordingStream(candidate, 64 * 1024, streamWrites)
+                : new FileStream(candidate, FileMode.Open, FileAccess.Write, FileShare.None, 64 * 1024,
+                                  FileOptions.WriteThrough | FileOptions.SequentialScan));
+
+        await svc.ShredFileAsync(path, ShredMethod.Quick, null, CancellationToken.None);
+
+        Assert.False(File.Exists(path), "the file (with every stream) must be gone");
+        Assert.NotEmpty(streamWrites);
+        // Quick is a single 0x00 pass: every byte written to the named stream must be zero, proving a
+        // real overwrite pass ran rather than the stream being passed through untouched.
+        Assert.All(streamWrites, write => Assert.All(write, b => Assert.Equal((byte)0, b)));
+    }
+
+    [Fact]
+    public async Task ShredFileAsync_WithNoNamedStreams_StillShredsNormally()
+    {
+        // The other half: a file with no named streams besides the unnamed one must not be affected by
+        // the new enumeration step at all.
+        var svc = NewService();
+        var path = Path.Combine(Path.GetTempPath(), "smtest_noads_" + Guid.NewGuid().ToString("N") + ".dat");
+        await File.WriteAllTextAsync(path, "nothing but the one stream");
+
+        var passesRun = await svc.ShredFileAsync(path, ShredMethod.Standard, null, CancellationToken.None);
+
+        Assert.Equal(3, passesRun);
+        Assert.False(File.Exists(path));
+    }
 }

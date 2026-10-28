@@ -266,6 +266,12 @@ public sealed partial class FileShredderService
             await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         } // `await using` disposes the exclusive handle here, releasing FileShare.None for Delete.
 
+        // Named streams (e.g. the Zone.Identifier Windows adds to every downloaded file, recording
+        // where it came from) share the unnamed one's bytes on disk but are a SEPARATE handle — the
+        // overwrite above never touches them, and File.Delete below removes them unoverwritten right
+        // alongside the file (#2824).
+        await OverwriteNamedStreamsAsync(filePath, patterns).ConfigureAwait(false);
+
         // The file contents are already securely overwritten and truncated to zero at
         // this point, so the shred guarantee holds even if the directory-entry removal
         // fails. Surface a delete failure as a clear IOException rather than letting a
@@ -306,6 +312,83 @@ public sealed partial class FileShredderService
             Log.Information("File shredded successfully: {Path} ({Method})", filePath, method);
 
         return passesRun;
+    }
+
+    /// <summary>
+    /// Overwrites every NAMED stream on <paramref name="filePath"/> with <paramref name="patterns"/> —
+    /// never the unnamed <c>::$DATA</c> one, which the caller already handled. Best-effort: a stream
+    /// that cannot be opened is left for the delete that follows to remove, same as the main stream
+    /// would be if this were a normal file the shred could not reach at all.
+    /// </summary>
+    /// <remarks>
+    /// Measured: opening a named stream with <see cref="FileShare.None"/> succeeds even while the
+    /// unnamed stream is held exclusively — they are independent handles on disk sharing one directory
+    /// entry — so this runs AFTER the main <c>await using</c> block above has already disposed that
+    /// handle, not because it has to, but because there is no reason to hold two exclusive handles open
+    /// at once. Enumeration and overwrite both run to completion unconditionally — no cancellation
+    /// token is threaded in here: by the time this is reached the main data is already unrecoverable,
+    /// these streams are typically a few hundred bytes (Windows' own <c>Zone.Identifier</c> is one line
+    /// of text), and the delete that follows removes every stream together regardless of how far this
+    /// got (#2824).
+    /// </remarks>
+    private async Task OverwriteNamedStreamsAsync(string filePath, byte?[] patterns)
+    {
+        using var handle = NativeMethods.FindFirstStream(filePath, 0, out var data, 0);
+        if (handle.IsInvalid) return; // no streams besides the unnamed one, or enumeration unsupported here
+
+        do
+        {
+            if (IsNamedDataStream(data.cStreamName))
+                await OverwriteOneStreamAsync(filePath + data.cStreamName, patterns).ConfigureAwait(false);
+        } while (NativeMethods.FindNextStream(handle, out data));
+    }
+
+    /// <summary>
+    /// True for a named <c>$DATA</c> stream such as <c>:Zone.Identifier:$DATA</c> — never the unnamed
+    /// <c>::$DATA</c>, and never one of the rarer non-<c>$DATA</c> stream types this does not try to
+    /// overwrite (their content is not file data in the sense a secure erase promises to reach).
+    /// </summary>
+    internal static bool IsNamedDataStream(string streamName) =>
+        streamName != "::$DATA" && streamName.EndsWith(":$DATA", StringComparison.Ordinal);
+
+    /// <summary>Overwrites one already-identified stream in place, then truncates it to zero.</summary>
+    private async Task OverwriteOneStreamAsync(string streamPath, byte?[] patterns)
+    {
+        try
+        {
+            await using var stream = _openExclusiveWrite(streamPath);
+            var length = stream.Length;
+            var buffer = new byte[(int)Math.Min(BufferSize, Math.Max(length, 1))];
+
+            foreach (var pattern in patterns)
+            {
+                stream.Position = 0;
+                if (pattern is null) RandomNumberGenerator.Fill(buffer);
+                else Array.Fill(buffer, pattern.Value);
+
+                var bytesRemaining = length;
+                while (bytesRemaining > 0)
+                {
+                    var writeSize = (int)Math.Min(buffer.Length, bytesRemaining);
+                    if (pattern is null) RandomNumberGenerator.Fill(buffer.AsSpan(0, writeSize));
+                    await stream.WriteAsync(buffer.AsMemory(0, writeSize), CancellationToken.None).ConfigureAwait(false);
+                    bytesRemaining -= writeSize;
+                }
+
+                await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            stream.SetLength(0);
+            await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (IOException ex)
+        {
+            Log.Debug(ex, "Could not overwrite a named stream, leaving it for the delete to remove: {Stream}", streamPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Log.Debug(ex, "Access denied overwriting a named stream, leaving it for the delete to remove: {Stream}", streamPath);
+        }
     }
 
     /// <summary>
@@ -682,5 +765,36 @@ public sealed partial class FileShredderService
             [Out] char[] lpszFilePath,
             uint cchFilePath,
             uint dwFlags);
+
+        // FindFirstStreamW/FindNextStreamW stay classic [DllImport]: WIN32_FIND_STREAM_DATA carries a
+        // fixed-size string, which [LibraryImport] would need a hand-written marshaller for — the same
+        // trade-off RecycleBinHelper's SHFileOperationW makes.
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "FindFirstStreamW")]
+        internal static extern SafeFindStreamHandle FindFirstStream(
+            string lpFileName, uint infoLevel, out WIN32_FIND_STREAM_DATA lpFindStreamData, uint flags);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode, EntryPoint = "FindNextStreamW")]
+        internal static extern bool FindNextStream(
+            SafeFindStreamHandle hFindStream, out WIN32_FIND_STREAM_DATA lpFindStreamData);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        internal static extern bool FindClose(IntPtr handle);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct WIN32_FIND_STREAM_DATA
+        {
+            public long StreamSize;
+
+            // MAX_PATH (260) + 36, the documented maximum: a colon, a stream name up to MAX_PATH, a
+            // colon, and ":$DATA" or one of the other type suffixes.
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 296)]
+            public string cStreamName;
+        }
+    }
+
+    /// <summary>A <c>FindFirstStreamW</c> search handle, closed via <c>FindClose</c> like a file-find handle.</summary>
+    private sealed class SafeFindStreamHandle() : SafeHandleZeroOrMinusOneIsInvalid(ownsHandle: true)
+    {
+        protected override bool ReleaseHandle() => NativeMethods.FindClose(handle);
     }
 }

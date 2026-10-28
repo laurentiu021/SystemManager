@@ -1439,6 +1439,10 @@ Answers "what is actually using my space?" by listing the biggest files in one p
 - **Warns when an item sits inside a OneDrive-synced folder.** Overwriting and deleting it locally
   still syncs to OneDrive, whose own version history and recycle bin can keep the original — the same
   kind of plain warning the tab already gives for SSDs
+- **Overwrites a file's named streams, not just its main content.** Windows adds a `Zone.Identifier`
+  stream to every file downloaded from the internet, recording where it came from, and `File.Delete`
+  removes streams like it unoverwritten alongside the file — now every named stream is overwritten
+  with the same passes first
 - Confirmation dialog before irreversible shred
 
 ### Ping

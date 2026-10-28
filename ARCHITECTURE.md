@@ -972,9 +972,12 @@ Key services:
   folder its entry named, read before uninstalling), Probably (a folder named after the app directly under
   AppData, Local AppData or ProgramData), its own key (`HKCU\Software\<Publisher>\<App>`) and Guess (a
   publisher folder in AppData when no installed app shares the publisher). Refuses Windows, the roots, the
-  user's own folders, SysManager's, names Windows and many apps share, links, non-fixed drives, and any
-  folder an installed app still lives in — judged against every uninstall entry Windows holds, hidden ones
-  included, not only the list on screen.
+  user's own folders (on a drive root too, not only below one), SysManager's, names Windows and many apps
+  share, links reached through any part of the path — a network share or an unresolvable final path refuses
+  rather than passing unrefused — non-fixed drives, and any folder an installed app still lives in — judged
+  against every uninstall entry Windows holds, hidden ones included, not only the list on screen. When that
+  list could not be read whole, only the install location is offered; everything else waits for a read that
+  can be trusted (#2825).
 - `PerformanceService` — power plan, visual effects, Game Mode, Xbox
   Game Bar (its overlay and per-game recording read as two values), NVIDIA GPU,
   processor state, restore point creation, RAM

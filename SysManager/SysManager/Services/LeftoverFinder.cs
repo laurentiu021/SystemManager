@@ -74,7 +74,7 @@ public static partial class LeftoverFinder
         ArgumentNullException.ThrowIfNull(env);
         ArgumentNullException.ThrowIfNull(stillInstalled);
 
-        var others = OthersStillInstalled(stillInstalled, env);
+        var (others, othersComplete) = OthersStillInstalled(stillInstalled, env);
         var items = new List<LeftoverItem>();
         var notOffered = new List<string>();
         var names = AppNames(probe);
@@ -88,12 +88,39 @@ public static partial class LeftoverFinder
 
         // 1. The folder the uninstall entry named. Not looked at at all unless it is on one of this PC's own
         // drives: a path on a network share can take a minute to answer, and has no Recycle Bin anyway.
+        // The ONLY step that still runs when the uninstall list could not be read whole: this folder came from
+        // the removed app's OWN entry, known before it was removed, not from the (possibly incomplete) list of
+        // what else is installed.
         if (Normalize(probe.InstallLocation) is { } installLocation
             && IsOnOwnFixedDrive(installLocation, env)
             && Directory.Exists(installLocation))
         {
             AddFolder(items, notOffered, installLocation, LeftoverConfidence.Certain, "",
                 Refusal(installLocation, env) ?? SharedWith(installLocation, others, env), env);
+        }
+
+        // The user's own folders are searched only to say what was seen there and left alone — independent of
+        // the uninstall list, so this runs whether or not it could be read whole.
+        foreach (var (folderName, folderPath) in env.UserFolders)
+        {
+            if (Normalize(folderPath) is not { } folder) continue;
+            foreach (var name in names)
+            {
+                if (Normalize(Path.Combine(folder, name)) is { } path && Directory.Exists(path))
+                    notOffered.Add($"Not offered: {path} is in {folderName}, which SysManager never offers.");
+            }
+        }
+
+        // Steps 2-4 all decide "may belong to another installed app" from `others`, so none of them can run
+        // safely when the list it comes from is missing entries: a publisher folder or another app's install
+        // folder could then be offered as this app's leftover (#2825). The removed app's own install folder
+        // above is unaffected — it never depended on this list.
+        if (!othersComplete)
+        {
+            notOffered.Add(
+                "Not offered: the list of installed programs could not be fully read, so nothing beyond the "
+                + "removed app's own install folder is offered this time.");
+            return new LeftoverFindings(items, notOffered);
         }
 
         // 2. A folder named exactly after the app. Each path is normalized as it is built, so "App." and "App " name
@@ -107,17 +134,6 @@ public static partial class LeftoverFinder
                     ?? SharedWith(path, others, env)
                     ?? (IsShared(name, others) ? "may belong to another installed app" : null);
                 AddFolder(items, notOffered, path, LeftoverConfidence.Probably, "", why, env);
-            }
-        }
-
-        // The user's own folders are searched only to say what was seen there and left alone.
-        foreach (var (folderName, folderPath) in env.UserFolders)
-        {
-            if (Normalize(folderPath) is not { } folder) continue;
-            foreach (var name in names)
-            {
-                if (Normalize(Path.Combine(folder, name)) is { } path && Directory.Exists(path))
-                    notOffered.Add($"Not offered: {path} is in {folderName}, which SysManager never offers.");
             }
         }
 
@@ -161,11 +177,16 @@ public static partial class LeftoverFinder
     }
 
     /// <summary>
-    /// The apps that still count as installed: the Uninstaller's list, and every uninstall entry Windows holds.
+    /// The apps that still count as installed: the Uninstaller's list, and every uninstall entry Windows holds —
+    /// with whether that second list was read whole, carried through so a caller can tell an app is gone from an
+    /// app that merely did not make it into an incomplete read (#2825).
     /// </summary>
-    internal static IReadOnlyList<UninstallProbe> OthersStillInstalled(
-        IReadOnlyCollection<UninstallProbe> stillInstalled, ILeftoverEnvironment env) =>
-        [.. stillInstalled, .. env.RegisteredApps()];
+    internal static (IReadOnlyList<UninstallProbe> Others, bool Complete) OthersStillInstalled(
+        IReadOnlyCollection<UninstallProbe> stillInstalled, ILeftoverEnvironment env)
+    {
+        var (registered, complete) = env.RegisteredApps();
+        return ([.. stillInstalled, .. registered], complete);
+    }
 
     /// <summary>
     /// Why <paramref name="path"/> is never offered, as the end of a sentence, or null when it may be.
@@ -210,11 +231,33 @@ public static partial class LeftoverFinder
 
         if (SafeFileWalk.IsReparsePoint(full))
             return "is a link to another folder";
-        if (FileShredderService.ResolveFinalPath(full) is { } final
-            && Normalize(final) is { } resolved
-            && !string.Equals(resolved, full, StringComparison.OrdinalIgnoreCase))
-            return "is reached through a link";
 
+        var final = FileShredderService.ResolveFinalPath(full);
+        return LinkRefusal(full, final, final is null ? null : Normalize(final));
+    }
+
+    /// <summary>
+    /// Why a path whose canonical form is <paramref name="final"/> (or null when it could not be resolved at
+    /// all) and whose <see cref="Normalize"/>d form is <paramref name="resolved"/> (or null) is reached
+    /// through a link rather than being <paramref name="full"/> itself, or null when it is not.
+    /// </summary>
+    /// <remarks>
+    /// Takes the two already-computed values as parameters, rather than calling <c>ResolveFinalPath</c> and
+    /// <c>Normalize</c> itself, so every combination — including the two failure cases a real network share
+    /// or an unreadable final path would be awkward to set up for a test — is directly testable.
+    /// <para>Fails CLOSED, not open: the previous form only refused when BOTH values were non-null, so a
+    /// link reached through could pass unrefused in either failure case — <c>ResolveFinalPath</c> returns
+    /// null when the handle or its final name cannot be read, and <c>Normalize</c> returns null for every
+    /// network path "by design" (it would otherwise reach out to the share to expand a short name). A
+    /// directory symbolic link to a NAS share then measured across the network, and sent something that has
+    /// no Recycle Bin there (#2825).</para>
+    /// </remarks>
+    internal static string? LinkRefusal(string full, string? final, string? resolved)
+    {
+        if (final is null) return "is reached through a link SysManager could not resolve";
+        if (IsNetworkOrDevicePath(final)) return "is reached through a link to a location off this PC's own drives";
+        if (resolved is null) return "is reached through a link SysManager could not resolve";
+        if (!string.Equals(resolved, full, StringComparison.OrdinalIgnoreCase)) return "is reached through a link";
         return null;
     }
 

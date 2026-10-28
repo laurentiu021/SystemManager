@@ -200,6 +200,12 @@ public class SystemPathsTests
     [InlineData(@"C:\Temp\.net\SysManager\", @"C:\Temp\.net\SysManager", true)]
     [InlineData(@"C:\Temp\other\lib.dll", @"C:\Temp\.net\SysManager", false)]
     [InlineData(@"C:\Temp\.net\sysmanager\lib.dll", @"C:\Temp\.net\SysManager", true)]  // case-insensitive
+    // A drive root (#2825): Path.TrimEndingDirectorySeparator is root-aware and leaves "D:\" as "D:\"
+    // rather than the ambiguous "D:", so appending a separator unconditionally built the prefix "D:\\" —
+    // which nothing under the root ever starts with.
+    [InlineData(@"D:\Games\App", @"D:\", true)]
+    [InlineData(@"D:\", @"D:\", true)]
+    [InlineData(@"D:\Games\App", @"C:\", false)]
     public void IsInsideSubtree_ComparesOnADirectoryBoundary(string candidate, string subtree, bool expected)
     {
         Assert.Equal(expected, SystemPaths.IsInsideSubtree(candidate, subtree));

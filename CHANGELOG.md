@@ -10,6 +10,30 @@ That paragraph is not decoration: the release workflow copies each entry verbati
 the GitHub release body and the announcement discussion, so it is the first thing a
 prospective user reads. CI fails a pull request whose newest entry is missing it.
 
+## [1.131.9] - 2026-10-28
+
+**Uninstaller's leftover search now protects a user folder moved to a drive root, refuses a link it
+cannot fully verify instead of offering it, and stops widening what it offers when the list of
+installed programs could not be read whole.**
+
+### Fixed
+
+- **A user folder moved to the root of a drive protected nothing beneath it.** Documents, Downloads
+  and the other user folders are never offered — but the comparison that enforces it could not match
+  anything below a drive root, so moving one of those folders to `D:\` (a common choice on a second
+  drive) meant nothing on that drive counted as inside it any more, and a removed app's leftover
+  folder there could be offered ticked.
+- **A link to a network share, or one whose real location could not be read, was offered instead of
+  refused.** The guard against a link above the candidate only refused when it could resolve the link
+  fully; either failure case — a share, or a path it could not read at all — let it through instead,
+  and the folder was then measured across the network and sent to the Recycle Bin, which a network
+  location does not have.
+- **An uninstall list that could not be read in full counted as "nothing else is installed."** When a
+  whole registry key could not be read, a publisher folder or another app's install folder could be
+  offered as the leftover of the app just removed, because the list that would have refused it is the
+  one that failed to read. Now only the removed app's own install folder is offered when that happens;
+  everything else waits for a read that can be trusted.
+
 ## [1.131.8] - 2026-10-28
 
 **File Shredder now overwrites a file's named streams, including the Zone.Identifier stream Windows

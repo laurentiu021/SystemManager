@@ -263,7 +263,17 @@ public sealed class LeftoverService : ILeftoverService
 
             // The record is only ever read in a session that runs as administrator, which has never seen the
             // Uninstaller's list; the uninstall entries Windows holds are what decides whether a folder is in use now.
-            var others = LeftoverFinder.OthersStillInstalled([], _env);
+            var (others, complete) = LeftoverFinder.OthersStillInstalled([], _env);
+            if (!complete)
+            {
+                // This IS the only list on this path (there is no Uninstaller list behind it here), so an
+                // incomplete read must refuse to re-offer anything this time rather than risk re-offering a
+                // folder another installed app still owns, or a group whose app was reinstalled (#2825). The
+                // stored record is left untouched — WriteStored below is never reached — so this is retried
+                // whole the next time the list can be read.
+                Log.Warning("Uninstaller leftovers: could not read the installed-programs list completely; deferring pending leftovers");
+                return [];
+            }
             var groups = new List<LeftoverGroup>();
             var kept = new List<StoredGroup>();
             foreach (var group in stored)
